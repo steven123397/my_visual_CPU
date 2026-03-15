@@ -1,0 +1,39 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Build outputs
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+
+# Project binaries and generated test images
+/myCPU/mycpu
+/myCPU/tests/asm/*.elf
+/myCPU/tests/asm/*.bin
+
+# Logs and coverage
+*.log
+coverage/
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+
+# Future OS / image artifacts
+*.img
+*.iso
+*.fs
+*.kernel
+
+# IDE metadata
+.idea/
+.vscode/
