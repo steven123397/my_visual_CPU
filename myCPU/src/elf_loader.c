@@ -29,7 +29,10 @@ uint64_t elf_load(Memory *mem, const char *path) {
     if (!f) { perror(path); exit(1); }
 
     Elf64_Ehdr ehdr;
-    fread(&ehdr, sizeof(ehdr), 1, f);
+    if (fread(&ehdr, sizeof(ehdr), 1, f) != 1) {
+        fprintf(stderr, "Failed to read ELF header: %s\n", path);
+        exit(1);
+    }
 
     if (memcmp(ehdr.e_ident, ELF_MAGIC, 4) != 0) {
         fprintf(stderr, "Not an ELF file\n"); exit(1);
@@ -41,7 +44,10 @@ uint64_t elf_load(Memory *mem, const char *path) {
     for (int i = 0; i < ehdr.e_phnum; i++) {
         Elf64_Phdr phdr;
         fseek(f, ehdr.e_phoff + i * ehdr.e_phentsize, SEEK_SET);
-        fread(&phdr, sizeof(phdr), 1, f);
+        if (fread(&phdr, sizeof(phdr), 1, f) != 1) {
+            fprintf(stderr, "Failed to read ELF program header: %s\n", path);
+            exit(1);
+        }
         if (phdr.p_type != PT_LOAD || phdr.p_filesz == 0) continue;
 
         if (phdr.p_paddr < MEM_BASE || phdr.p_paddr + phdr.p_memsz > MEM_BASE + MEM_SIZE) {
@@ -50,7 +56,10 @@ uint64_t elf_load(Memory *mem, const char *path) {
         }
 
         fseek(f, phdr.p_offset, SEEK_SET);
-        fread(mem->data + (phdr.p_paddr - MEM_BASE), 1, phdr.p_filesz, f);
+        if (fread(mem->data + (phdr.p_paddr - MEM_BASE), 1, phdr.p_filesz, f) != phdr.p_filesz) {
+            fprintf(stderr, "Failed to read ELF segment: %s\n", path);
+            exit(1);
+        }
         // Zero BSS
         if (phdr.p_memsz > phdr.p_filesz)
             memset(mem->data + (phdr.p_paddr - MEM_BASE) + phdr.p_filesz,

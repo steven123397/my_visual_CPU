@@ -77,6 +77,10 @@ void mem_load_binary(Memory *mem, const char *path, uint64_t addr) {
     if (addr < MEM_BASE || addr + sz > MEM_BASE + MEM_SIZE) {
         fprintf(stderr, "binary too large\n"); exit(1);
     }
-    fread(mem->data + (addr - MEM_BASE), 1, sz, f);
+    size_t nread = fread(mem->data + (addr - MEM_BASE), 1, sz, f);
+    if (nread != (size_t)sz) {
+        fprintf(stderr, "short read while loading binary: %s\n", path);
+        exit(1);
+    }
     fclose(f);
 }

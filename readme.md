@@ -1,33 +1,37 @@
 # myCPU — RISC-V 模拟器
 
-用 C 实现的 RV64IMC 模拟器，支持裸机程序执行、UART 串口输出、M-mode 异常/中断处理。
+当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始 C 核心语义为主，已支持裸机程序执行、UART 串口输出和 M-mode 异常/中断处理。
 
 ## 目录结构
 
 ```
 myCPU/
 ├── src/
-│   ├── main.c          # 入口，CLI 参数，加载镜像，主循环
+│   ├── main.cpp        # C++ 入口，CLI 参数与 Machine 启动
 │   ├── cpu.c/h         # 寄存器、PC、fetch-decode-execute
 │   ├── memory.c/h      # 物理内存 + MMIO 分发
 │   ├── decode.c/h      # 指令解码
 │   ├── trap.c/h        # 异常/中断入口与返回
-│   └── elf_loader.c    # ELF64 解析与加载
+│   ├── elf_loader.c    # ELF64 解析与加载
+│   ├── mem/            # C++ Ram/Bus 骨架
+│   └── platform/       # C++ Machine 骨架
 ├── tests/asm/          # 汇编测试程序
 └── Makefile
 ```
 
 ## 模块关系与运行流程
 
-模拟器从命令行读取镜像路径，初始化内存与 CPU，然后进入单步执行循环。整体调用关系如下：
+模拟器从命令行读取镜像路径，通过 `Machine` 组装平台对象，然后进入单步执行循环。整体调用关系如下：
 
 ```text
-main.c
-  ├── mem_init()                    初始化 128MB 主内存和 MMIO 状态
-  ├── elf_load()/mem_load_binary()  加载 ELF 或平坦二进制
-  ├── cpu_init()                    初始化寄存器、PC、CSR
-  └── while (!halted)
-        └── cpu_step()
+main.cpp
+  └── Machine
+        ├── Ram                      初始化 128MB 主内存和 MMIO 状态
+        ├── Bus                      显式传递内存访问依赖
+        ├── elf_load()/load_binary   加载 ELF 或平坦二进制
+        ├── cpu_init()               初始化寄存器、PC、CSR
+        └── while (!halted)
+              └── cpu_step(cpu, mem)
               ├── 更新 mtime / 检查定时器中断
               ├── mem_read()        取指
               ├── decode()          指令译码
@@ -40,7 +44,9 @@ main.c
 
 从模块职责看：
 
-- `main.c` 负责 CLI 参数、镜像加载和主循环驱动。
+- `main.cpp` 负责 CLI 参数解析和启动 `Machine`。
+- `platform/machine.*` 负责组装 CPU、Ram、Bus，并驱动主执行循环。
+- `mem/ram.*` 和 `mem/bus.*` 提供第一阶段 C++ 平台骨架，用显式对象替代全局内存依赖。
 - `cpu.c` 负责寄存器、PC、CSR 和指令执行。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存和 MMIO 分发。
@@ -118,14 +124,32 @@ make test
 
 ### `myCPU/src/`
 
-- `main.c`
-  程序入口。负责解析 `-b` 参数、初始化 `Memory`、加载 ELF 或平坦二进制、初始化 `CPU`，并循环调用 `cpu_step()` 直到停机。
+- `main.cpp`
+  程序入口。负责解析 `-b` 参数、创建 `Machine`，并根据镜像类型调用 `load_elf()` 或 `load_binary()` 后启动执行。
+
+- `platform/machine.h`
+  `Machine` 类声明。聚合 `CPU`、`Ram` 和 `Bus`，为后续平台化重构提供统一入口。
+
+- `platform/machine.cpp`
+  `Machine` 实现。当前负责镜像加载、`cpu_init()` 调用和执行循环，仍复用现有 C 核心语义。
+
+- `mem/ram.h`
+  `Ram` 类声明。负责 `Memory` 生命周期管理，替代原先在入口中手动 `malloc/free` 的做法。
+
+- `mem/ram.cpp`
+  `Ram` 实现。内部调用现有 `mem_init()/mem_free()` 初始化与释放内存状态。
+
+- `mem/bus.h`
+  `Bus` 类声明。作为第一阶段总线适配层，向上暴露统一的 load/store 接口。
+
+- `mem/bus.cpp`
+  `Bus` 实现。当前仍转发到现有 `memory.c` 的 RAM/MMIO 逻辑，为后续设备拆分保留统一访问入口。
 
 - `cpu.h`
-  CPU 状态和接口定义，包含 32 个通用寄存器、`pc`、CSR 空间、周期计数和停机标志。
+  CPU 状态和接口定义，包含 32 个通用寄存器、`pc`、CSR 空间、周期计数和停机标志；`cpu_step()` 现在显式接收 `Memory*`。
 
 - `cpu.c`
-  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()`、`check_interrupts()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行。
+  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()`、`check_interrupts()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行；不再依赖全局 `g_mem`。
 
 - `decode.h`
   `Insn` 指令结构定义，供译码阶段和执行阶段共享。
@@ -157,4 +181,4 @@ make test
 
 这个项目当前已经是一个可运行的 RISC-V 裸机模拟器雏形，不只是代码框架。它适合用于理解 ISA、寄存器、取指译码执行流程、异常中断和 MMIO 的基本机制，也能运行简单的汇编裸机程序。
 
-不过它还不是完整系统平台。当前实现以 4 字节指令取指为主，尚未看到压缩指令 `C` 扩展的执行支持；分页/MMU、操作系统运行支撑等内容也还没有展开。因此更准确地说，它现在是一个偏教学和验证用途的最小 RISC-V 模拟器。
+不过它还不是完整系统平台。当前实现以 4 字节指令取指为主，尚未看到压缩指令 `C` 扩展的执行支持；分页/MMU、操作系统运行支撑等内容也还没有展开。因此更准确地说，它现在是一个偏教学和验证用途的最小 RISC-V 模拟器，并且正在向更模块化的 C++ 架构演进。

@@ -1,7 +1,11 @@
-CC      = gcc
-CFLAGS  = -O2 -Wall -Wextra -g
-SRCS    = src/main.c src/cpu.c src/memory.c src/decode.c src/trap.c src/elf_loader.c
-TARGET  = mycpu
+CC       = gcc
+CXX      = g++
+CFLAGS   = -O2 -Wall -Wextra -g -std=c11
+CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
+C_SRCS   = src/cpu.c src/memory.c src/decode.c src/trap.c src/elf_loader.c
+CPP_SRCS = src/main.cpp src/mem/ram.cpp src/mem/bus.cpp src/platform/machine.cpp
+OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
+TARGET   = mycpu
 
 # RISC-V toolchain (adjust prefix if needed)
 RV_CC   = riscv64-unknown-elf-gcc
@@ -14,8 +18,14 @@ RV_FLAGS = -march=rv64im -mabi=lp64
 
 all: $(TARGET)
 
-$(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) -o $@ $^
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+src/%.o: src/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+src/%.o: src/%.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Build ELF test binaries
 tests/asm/%.elf: tests/asm/%.S
@@ -32,4 +42,4 @@ test: $(TARGET) tests/asm/hello.elf tests/asm/sum.elf
 	./$(TARGET) tests/asm/sum.elf
 
 clean:
-	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin
+	rm -f $(TARGET) $(OBJS) tests/asm/*.elf tests/asm/*.bin

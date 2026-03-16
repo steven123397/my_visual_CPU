@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 
-extern Memory *g_mem;
-
 #define CAUSE_ILLEGAL_INSN  2
 #define CAUSE_BREAKPOINT    3
 #define CAUSE_ECALL_M       11
@@ -33,7 +31,7 @@ static inline void set_rd(CPU *cpu, uint8_t rd, uint64_t val) {
     if (rd) cpu->x[rd] = val;
 }
 
-static void execute(CPU *cpu, Insn *in) {
+static void execute(CPU *cpu, Memory *mem, Insn *in) {
     uint64_t pc   = cpu->pc;
     uint64_t rs1v = cpu->x[in->rs1];
     uint64_t rs2v = cpu->x[in->rs2];
@@ -69,13 +67,13 @@ static void execute(CPU *cpu, Insn *in) {
         uint64_t addr = rs1v + (uint64_t)imm;
         uint64_t val;
         switch (in->funct3) {
-        case 0: val = (int64_t)(int8_t) mem_read(g_mem, addr, 1); break;
-        case 1: val = (int64_t)(int16_t)mem_read(g_mem, addr, 2); break;
-        case 2: val = (int64_t)(int32_t)mem_read(g_mem, addr, 4); break;
-        case 3: val =                   mem_read(g_mem, addr, 8); break;
-        case 4: val =          (uint8_t)mem_read(g_mem, addr, 1); break;
-        case 5: val =         (uint16_t)mem_read(g_mem, addr, 2); break;
-        case 6: val =         (uint32_t)mem_read(g_mem, addr, 4); break;
+        case 0: val = (int64_t)(int8_t) mem_read(mem, addr, 1); break;
+        case 1: val = (int64_t)(int16_t)mem_read(mem, addr, 2); break;
+        case 2: val = (int64_t)(int32_t)mem_read(mem, addr, 4); break;
+        case 3: val =                   mem_read(mem, addr, 8); break;
+        case 4: val =          (uint8_t)mem_read(mem, addr, 1); break;
+        case 5: val =         (uint16_t)mem_read(mem, addr, 2); break;
+        case 6: val =         (uint32_t)mem_read(mem, addr, 4); break;
         default: trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw); return;
         }
         set_rd(cpu, in->rd, val);
@@ -84,10 +82,10 @@ static void execute(CPU *cpu, Insn *in) {
     case 0x23: {
         uint64_t addr = rs1v + (uint64_t)imm;
         switch (in->funct3) {
-        case 0: mem_write(g_mem, addr, rs2v, 1); break;
-        case 1: mem_write(g_mem, addr, rs2v, 2); break;
-        case 2: mem_write(g_mem, addr, rs2v, 4); break;
-        case 3: mem_write(g_mem, addr, rs2v, 8); break;
+        case 0: mem_write(mem, addr, rs2v, 1); break;
+        case 1: mem_write(mem, addr, rs2v, 2); break;
+        case 2: mem_write(mem, addr, rs2v, 4); break;
+        case 3: mem_write(mem, addr, rs2v, 8); break;
         default: trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw); return;
         }
         break;
@@ -160,8 +158,8 @@ static void execute(CPU *cpu, Insn *in) {
         if (in->funct7 == 1) {
             switch (in->funct3) {
             case 0: val = (int64_t)(int32_t)(rs1v * rs2v); break;
-            case 4: val = rs2v ? (int64_t)((int32_t)rs1v / (int32_t)rs2v) : ~0UL; break;
-            case 5: val = rs2v ? (int64_t)(int32_t)((uint32_t)rs1v / (uint32_t)rs2v) : ~0UL; break;
+            case 4: val = rs2v ? (uint64_t)(int64_t)((int32_t)rs1v / (int32_t)rs2v) : UINT64_MAX; break;
+            case 5: val = rs2v ? (uint64_t)(int64_t)(int32_t)((uint32_t)rs1v / (uint32_t)rs2v) : UINT64_MAX; break;
             case 6: val = rs2v ? (int64_t)((int32_t)rs1v % (int32_t)rs2v) : (int64_t)(int32_t)rs1v; break;
             case 7: val = rs2v ? (int64_t)(int32_t)((uint32_t)rs1v % (uint32_t)rs2v) : (int64_t)(int32_t)rs1v; break;
             default: trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw); return;
@@ -222,17 +220,17 @@ static void check_interrupts(CPU *cpu) {
     }
 }
 
-void cpu_step(CPU *cpu) {
-    g_mem->mtime++;
-    if (g_mem->mtime >= g_mem->mtimecmp) {
+void cpu_step(CPU *cpu, Memory *mem) {
+    mem->mtime++;
+    if (mem->mtime >= mem->mtimecmp) {
         csr_write(cpu, CSR_MIP, csr_read(cpu, CSR_MIP) | MIE_MTIE);
     }
     check_interrupts(cpu);
 
-    uint32_t raw = (uint32_t)mem_read(g_mem, cpu->pc, 4);
+    uint32_t raw = (uint32_t)mem_read(mem, cpu->pc, 4);
     Insn insn;
     decode(raw, &insn);
-    execute(cpu, &insn);
+    execute(cpu, mem, &insn);
 
     cpu->x[0] = 0;
     cpu->cycle++;

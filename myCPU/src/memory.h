@@ -8,7 +8,7 @@
 #define CLINT_BASE 0x02000000UL
 #define CLINT_SIZE 0x10000
 
-typedef struct {
+typedef struct Memory {
     uint8_t *data;
     uint64_t mtime;
     uint64_t mtimecmp;
