@@ -37,6 +37,3 @@ coverage/
 # IDE metadata
 .idea/
 .vscode/
-
-# Local assistant/project guidance
-AGENTS.md
