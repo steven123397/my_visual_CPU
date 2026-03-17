@@ -10,13 +10,13 @@ Machine::Machine() : bus_(ram_) {}
 
 void Machine::load_elf(const std::string& path) {
     const uint64_t entry = elf_load(bus_.raw_memory(), path.c_str());
-    cpu_init(&cpu_, entry);
+    cpu_init(cpu_, entry);
     loaded_ = true;
 }
 
 void Machine::load_binary(const std::string& path, uint64_t addr) {
     bus_.load_binary(path.c_str(), addr);
-    cpu_init(&cpu_, addr);
+    cpu_init(cpu_, addr);
     loaded_ = true;
 }
 
@@ -25,7 +25,7 @@ void Machine::run() {
         throw std::runtime_error("machine image not loaded");
     }
 
-    while (!cpu_.halted) {
-        cpu_step(&cpu_, bus_.raw_memory());
+    while (!cpu_.core().halted()) {
+        cpu_step(cpu_, bus_.raw_memory());
     }
 }

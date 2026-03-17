@@ -2,7 +2,7 @@
 
 ## Project scope
 
-This repository currently contains `myCPU`, a small RISC-V simulator written in C. It already supports:
+This repository currently contains `myCPU`, a small RISC-V simulator that began as a C prototype and is now in an incremental C++ refactor. It already supports:
 
 - ELF64 and flat binary loading
 - RV64 integer execution for a minimal bare-metal environment
@@ -22,7 +22,12 @@ What exists now:
 - A direct fetch-decode-execute loop
 - A simple physical memory model plus minimal MMIO
 - Basic exception and interrupt handling
-- Assembly smoke tests
+- A `Machine + Ram + Bus` C++ platform skeleton around the reference path
+- A first `CoreState + CsrFile` state split inside the CPU path
+- Assembly regression tests with output checking for:
+  - basic UART output
+  - control flow (`beq` / `jal` / `jalr` / backward branches)
+  - CSR access and `ecall` / `mret` smoke coverage
 
 What does not yet exist:
 
@@ -36,6 +41,8 @@ Additional current planning notes:
 - The existing `myCPU` prototype was authored by the project owner and should be treated as completed prior work, not as a hypothetical design.
 - Before large new architectural features are added, the codebase should be restructured from the current small C prototype into a modular C++ codebase that can support significantly higher system complexity.
 - This C-to-C++ transition must be justified by structural gains such as module boundaries, type safety, state management, ownership clarity, and backend extensibility, not by language preference alone.
+- The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram` and the first `CoreState + CsrFile` split are now landed and should be treated as current baseline, not future proposal.
+- The immediate next structural step is to continue separating trap and interrupt routing from the central CPU step path into a clearer controller boundary.
 - When producing summaries, proposals, or report-style material for this project, describe the current implementation as an already working simulator prototype and the C++ refactor as the next enabling engineering step.
 
 ## Primary direction
@@ -203,11 +210,17 @@ Minimum expectations:
 - Add regression tests for device MMIO behavior
 - Add reference-vs-backend comparisons once multiple execution models exist
 
+Current baseline expectation for local validation:
+
+- Keep `make test` green
+- Treat the existing `hello`, `sum`, `control_flow`, and `csr_trap` assembly regressions as required guardrails when touching the reference path
+- If a refactor changes observable UART output or causes hangs, update tests only when the behavior change is intentional and justified
+
 If a feature is too complex to test, the design is probably still too large.
 
 ## Codebase evolution notes
 
-The current codebase is small and C-oriented. That is acceptable for Phase 1.
+The current codebase is still small, but it is no longer purely C-oriented. It now mixes a C reference semantic core with incremental C++ structure around platform assembly and state ownership. That is acceptable for Phase 1.
 
 If the project grows into:
 
@@ -227,6 +240,13 @@ Do not perform a cosmetic C-to-C++ rewrite with no structural gain. Any migratio
 
 For the current project stage, this migration is no longer only a distant option; it is now part of the intended roadmap before the simulator grows substantially in complexity. The migration should still be incremental and should preserve a working functional reference path throughout.
 
+What is already landed in that migration:
+
+- `Machine`, `Bus`, and `Ram` provide the first explicit platform assembly layer
+- CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
+- Trap logic is still simple, but it should now evolve from the current function-based form toward a clearer controller boundary
+- The repository still intentionally keeps a simple architectural reference execution path
+
 When planning the C++ restructuring, favor boundaries such as:
 
 - architectural state / CPU core state
@@ -244,14 +264,19 @@ When planning the C++ restructuring, favor boundaries such as:
 - Favor correctness and observability over speed.
 - Document architectural assumptions in code and docs.
 - Add new modules rather than inflating one giant `cpu.c`.
+- Preserve the existing `CoreState + CsrFile` split and deepen it rather than collapsing state back into a monolithic CPU object.
+- Keep the reference execution path simple; do not introduce backend abstractions before there is a concrete second execution model to justify them.
+- Treat the current assembly regression suite as part of the architectural contract for the reference path.
 - Avoid speculative abstractions unless a second real use case exists.
 
 ## Documentation and reporting guidance
 
 - When writing report-style content, clearly distinguish:
   - completed prior work already implemented by the project owner
-  - the immediate next engineering task of C++ restructuring
+  - completed C++ restructuring work already landed in the repository
+  - the immediate next engineering task of continued C++ restructuring
   - later functional milestones such as privilege support, MMU, and OS bring-up
 - Describe the current project honestly as a working functional simulator prototype, not as a mere idea.
 - Do not claim support for ISA or platform features unless they are actually implemented and validated.
 - When discussing the C++ migration in documents, frame it as a structural response to growing architectural complexity, not as a cosmetic language rewrite.
+- At the current repository state, describe `Machine` / `Bus` / `Ram` and the `CoreState + CsrFile` split as already completed incremental steps, and `TrapController` / semantics extraction as the next structural targets.

@@ -8,11 +8,12 @@
 myCPU/
 ├── src/
 │   ├── main.cpp        # C++ 入口，CLI 参数与 Machine 启动
-│   ├── cpu.c/h         # 寄存器、PC、fetch-decode-execute
+│   ├── cpu.cpp/h       # CPU 外观接口 + 参考执行路径
 │   ├── memory.c/h      # 物理内存 + MMIO 分发
 │   ├── decode.c/h      # 指令解码
-│   ├── trap.c/h        # 异常/中断入口与返回
+│   ├── trap.cpp/h      # 异常/中断入口与返回
 │   ├── elf_loader.c    # ELF64 解析与加载
+│   ├── arch/           # CoreState / CsrFile 状态边界
 │   ├── mem/            # C++ Ram/Bus 骨架
 │   └── platform/       # C++ Machine 骨架
 ├── tests/asm/          # 汇编测试程序
@@ -29,7 +30,7 @@ main.cpp
         ├── Ram                      初始化 128MB 主内存和 MMIO 状态
         ├── Bus                      显式传递内存访问依赖
         ├── elf_load()/load_binary   加载 ELF 或平坦二进制
-        ├── cpu_init()               初始化寄存器、PC、CSR
+        ├── cpu_init()               初始化 CoreState、CsrFile
         └── while (!halted)
               └── cpu_step(cpu, mem)
               ├── 更新 mtime / 检查定时器中断
@@ -46,11 +47,13 @@ main.cpp
 
 - `main.cpp` 负责 CLI 参数解析和启动 `Machine`。
 - `platform/machine.*` 负责组装 CPU、Ram、Bus，并驱动主执行循环。
+- `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
+- `arch/csr_file.*` 负责 CSR 存储，以及 `cycle/time` 等特殊 CSR 读取规则。
 - `mem/ram.*` 和 `mem/bus.*` 提供第一阶段 C++ 平台骨架，用显式对象替代全局内存依赖。
-- `cpu.c` 负责寄存器、PC、CSR 和指令执行。
+- `cpu.cpp/h` 负责把 `CoreState + CsrFile` 接回现有参考执行路径。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存和 MMIO 分发。
-- `trap.c` 负责异常/中断入口与返回。
+- `trap.cpp/h` 负责异常/中断入口与返回。
 - `elf_loader.c` 负责 ELF64 装载。
 
 一次指令执行的数据流可以概括为：
@@ -87,9 +90,11 @@ make
 需要 RISC-V 交叉编译工具链：
 
 ```bash
-sudo apt install gcc-riscv64-unknown-elf
+sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
+
+`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。
 
 ## 内存映射
 
@@ -146,10 +151,22 @@ make test
   `Bus` 实现。当前仍转发到现有 `memory.c` 的 RAM/MMIO 逻辑，为后续设备拆分保留统一访问入口。
 
 - `cpu.h`
-  CPU 状态和接口定义，包含 32 个通用寄存器、`pc`、CSR 空间、周期计数和停机标志；`cpu_step()` 现在显式接收 `Memory*`。
+  CPU 外观接口定义。当前聚合 `CoreState` 和 `CsrFile`，对外继续保留 `cpu_init()/cpu_step()/csr_read()/csr_write()` 这条参考执行路径。
 
-- `cpu.c`
-  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()`、`check_interrupts()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行；不再依赖全局 `g_mem`。
+- `cpu.cpp`
+  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()`、`check_interrupts()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行；当前通过 `CoreState + CsrFile` 管理 CPU 状态。
+
+- `arch/core_state.h`
+  `CoreState` 声明。封装 32 个通用寄存器、`pc`、周期计数和停机状态，为后续继续拆语义和执行后端提供稳定状态边界。
+
+- `arch/core_state.cpp`
+  `CoreState` 实现。负责状态复位、寄存器读写、PC 更新、周期推进和停机标志维护。
+
+- `arch/csr_file.h`
+  `CsrFile` 声明。封装 CSR 地址常量、`mstatus/mie/mip` 位定义以及 CSR 存储接口。
+
+- `arch/csr_file.cpp`
+  `CsrFile` 实现。负责 CSR 状态复位、普通 CSR 读写，以及 `cycle/time` 这类特殊读取规则。
 
 - `decode.h`
   `Insn` 指令结构定义，供译码阶段和执行阶段共享。
@@ -166,7 +183,7 @@ make test
 - `trap.h`
   异常/中断入口与返回接口声明。
 
-- `trap.c`
+- `trap.cpp`
   M-mode 陷入处理实现。`trap_enter()` 负责保存现场、写入 `mepc/mcause/mtval` 并跳转到 `mtvec`；`trap_return()` 负责从 `mepc` 恢复执行。
 
 - `elf_loader.c`
@@ -176,6 +193,8 @@ make test
 
 - `hello.S`：通过 UART MMIO 输出 `Hello, RISC-V!\n` 的最小样例。
 - `sum.S`：计算 `1+2+...+10` 并输出 `55` 的整数运算与分支样例。
+- `control_flow.S`：验证 `beq`、`jal`、`jalr` 和反向分支回跳的控制流回归样例。
+- `csr_trap.S`：验证 CSR 读写、立即数 CSR 指令以及 `ecall`/`mret` 的基础陷入返回路径。
 
 ## 当前项目定位
 

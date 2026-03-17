@@ -1,40 +1,26 @@
 #pragma once
-#include <stdint.h>
-#include <stdbool.h>
 
-typedef struct Memory Memory;
+#include <cstdint>
 
-// CSR addresses
-#define CSR_MSTATUS  0x300
-#define CSR_MISA     0x301
-#define CSR_MIE      0x304
-#define CSR_MTVEC    0x305
-#define CSR_MSCRATCH 0x340
-#define CSR_MEPC     0x341
-#define CSR_MCAUSE   0x342
-#define CSR_MTVAL    0x343
-#define CSR_MIP      0x344
-#define CSR_CYCLE    0xC00
-#define CSR_TIME     0xC01
+#include "arch/core_state.h"
+#include "arch/csr_file.h"
 
-// mstatus bits
-#define MSTATUS_MIE  (1UL << 3)
-#define MSTATUS_MPIE (1UL << 7)
+struct Memory;
 
-// mie/mip bits
-#define MIE_MSIE (1UL << 3)
-#define MIE_MTIE (1UL << 7)
-#define MIE_MEIE (1UL << 11)
+class CPU {
+public:
+    CoreState& core();
+    const CoreState& core() const;
 
-typedef struct {
-    uint64_t x[32];
-    uint64_t pc;
-    uint64_t csr[4096];
-    uint64_t cycle;
-    bool halted;
-} CPU;
+    CsrFile& csr();
+    const CsrFile& csr() const;
 
-void cpu_init(CPU *cpu, uint64_t entry);
-void cpu_step(CPU *cpu, Memory *mem);
-uint64_t csr_read(CPU *cpu, uint32_t addr);
-void csr_write(CPU *cpu, uint32_t addr, uint64_t val);
+private:
+    CoreState core_{};
+    CsrFile csr_{};
+};
+
+void cpu_init(CPU& cpu, uint64_t entry);
+void cpu_step(CPU& cpu, Memory* mem);
+uint64_t csr_read(const CPU& cpu, uint32_t addr);
+void csr_write(CPU& cpu, uint32_t addr, uint64_t val);

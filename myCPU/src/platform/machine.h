@@ -3,9 +3,7 @@
 #include <stdint.h>
 #include <string>
 
-extern "C" {
 #include "../cpu.h"
-}
 
 #include "../mem/bus.h"
 #include "../mem/ram.h"

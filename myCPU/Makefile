@@ -2,10 +2,13 @@ CC       = gcc
 CXX      = g++
 CFLAGS   = -O2 -Wall -Wextra -g -std=c11
 CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
-C_SRCS   = src/cpu.c src/memory.c src/decode.c src/trap.c src/elf_loader.c
-CPP_SRCS = src/main.cpp src/mem/ram.cpp src/mem/bus.cpp src/platform/machine.cpp
+C_SRCS   = src/memory.c src/decode.c src/elf_loader.c
+CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/mem/ram.cpp src/mem/bus.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 TARGET   = mycpu
+ASM_TESTS = hello sum control_flow csr_trap
+ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
+TEST_TIMEOUT ?= 2s
 
 # RISC-V toolchain (adjust prefix if needed)
 RV_CC   = riscv64-unknown-elf-gcc
@@ -16,7 +19,7 @@ RV_FLAGS = -march=rv64im -mabi=lp64
 RV_ELF_LDFLAGS = -nostdlib -Wl,-Ttext-segment=0x80000000
 RV_REQUIRED_TOOLS = $(RV_CC) $(RV_OBJCOPY)
 
-.PHONY: all clean test check-riscv-toolchain
+.PHONY: all clean test check-riscv-toolchain $(ASM_TESTS:%=test-%)
 
 all: $(TARGET)
 
@@ -37,11 +40,34 @@ tests/asm/%.elf: tests/asm/%.S | check-riscv-toolchain
 tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 	$(RV_OBJCOPY) -O binary $< $@
 
-test: $(TARGET) tests/asm/hello.elf tests/asm/sum.elf
-	@echo "=== hello ==="
-	./$(TARGET) tests/asm/hello.elf
-	@echo "=== sum (expect: 55) ==="
-	./$(TARGET) tests/asm/sum.elf
+test: $(TARGET) $(ASM_ELFS) $(ASM_TESTS:%=test-%)
+
+test-%: $(TARGET) tests/asm/%.elf
+	@case "$*" in \
+		hello) expected='Hello, RISC-V!' ;; \
+		sum) expected='55' ;; \
+		control_flow) expected='OK' ;; \
+		csr_trap) expected='CSR' ;; \
+		*) echo "Unknown asm test: $*" >&2; exit 1 ;; \
+	esac; \
+	echo "=== $* ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) tests/asm/$*.elf 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: $*" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	if [ "$$output" != "$$expected" ]; then \
+		echo "Unexpected output for $*" >&2; \
+		printf 'Expected: %s\n' "$$expected" >&2; \
+		printf 'Actual: %s\n' "$$output" >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$output"
 
 check-riscv-toolchain:
 	@missing=0; \
