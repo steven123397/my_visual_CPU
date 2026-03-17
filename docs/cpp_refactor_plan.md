@@ -26,7 +26,7 @@
 
 ### 2.1 `cpu.c` 职责过重
 
-当前 [cpu.c](/home/liangjiaqi/projects/myCPU/src/cpu.c) 同时承担了：
+当前 [cpu.c](../myCPU/src/cpu.c) 同时承担了：
 
 - 架构状态读写
 - CSR 访问
@@ -44,14 +44,14 @@
 
 会迅速把 `cpu.c` 变成难以维护的中心文件。
 
-### 2.2 全局状态不清晰
+### 2.2 外围入口已完成第一步解耦，但状态边界仍需继续收紧
 
-当前 [main.c](/home/liangjiaqi/projects/myCPU/src/main.c) 使用全局 `g_mem` 让 CPU 执行阶段访问内存。这个方式在原型中简单直接，但会带来：
+当前 [main.cpp](../myCPU/src/main.cpp) 已经通过 `Machine` 组织加载和运行流程，`g_mem` 这类全局内存入口也已经从执行路径中移除。这一步已经带来了明确的结构收益，但下一阶段仍然要继续把边界收紧，避免新的隐式耦合重新出现：
 
-- 状态依赖不显式
-- 后续多核扩展困难
-- 测试注入困难
-- 设备和总线接口不容易抽象
+- `Machine` 仍然直接驱动 `cpu_step()` 和现有 C 核心语义
+- `Bus` 目前还是对 `memory.c` 的薄适配层
+- CPU、CSR、trap 状态还没有拆成更明确的对象
+- 后续多核、MMU、设备扩展仍然需要更清晰的依赖注入
 
 ### 2.3 指令语义与执行控制混在一起
 
@@ -67,7 +67,7 @@
 
 ### 2.4 设备平台缺少统一抽象
 
-当前 [memory.c](/home/liangjiaqi/projects/myCPU/src/memory.c) 用地址判断直接分发 RAM / UART / CLINT。这对两个简单设备足够，但不适合继续扩展到：
+当前 [memory.c](../myCPU/src/memory.c) 用地址判断直接分发 RAM / UART / CLINT。这对两个简单设备足够，但不适合继续扩展到：
 
 - PLIC
 - block device
@@ -241,7 +241,7 @@ public:
 - `medeleg/mideleg` 处理
 - 设置 `epc/cause/tval/status` 等寄存器
 
-现在的 [trap.c](/home/liangjiaqi/projects/myCPU/src/trap.c) 逻辑很适合作为这个组件的起点，但要从“函数”升级为“依赖显式的对象”。
+现在的 [trap.c](../myCPU/src/trap.c) 逻辑很适合作为这个组件的起点，但要从“函数”升级为“依赖显式的对象”。
 
 示意：
 
@@ -269,7 +269,7 @@ public:
 - 仅负责把原始指令转换成结构化结果
 - 不负责执行副作用
 
-现在 [decode.c](/home/liangjiaqi/projects/myCPU/src/decode.c) 已经比较接近这个目标。C++ 重构中建议保持译码器纯函数化：
+现在 [decode.c](../myCPU/src/decode.c) 已经比较接近这个目标。C++ 重构中建议保持译码器纯函数化：
 
 ```cpp
 DecodedInsn decode32(uint32_t raw);
@@ -472,7 +472,9 @@ main.cpp
 
 为了避免“大爆炸式重写”，建议按以下阶段推进。
 
-### 阶段 0：先建立 C++ 构建骨架
+当前仓库已经完成了阶段 0 和阶段 1 的第一步落地：`main.cpp`、`Machine`、`Bus`、`Ram` 已经存在，运行路径也已经摆脱全局 `g_mem`。下面的路线按“已完成基础、继续深化边界”的视角更新。
+
+### 阶段 0：先建立 C++ 构建骨架（已完成）
 
 目标：
 
@@ -490,30 +492,27 @@ main.cpp
 
 - 仓库能同时编译旧 C 实现和新 C++ 骨架
 
-### 阶段 1：先迁移外围，不碰核心语义
+### 阶段 1：先迁移外围，不碰核心语义（已部分完成）
 
-优先迁移：
+当前状态：
 
-- `Memory`
-- `ELF loader`
-- `main`
+- 已有 `main.cpp`
+- 已有 `Machine`
+- 已有 `Bus`
+- 已有 `Ram`
+- `cpu_step()` 已显式接收 `Memory*`
+- 运行路径已经摆脱全局 `g_mem`
 
-原因：
+这一阶段剩余的主要工作：
 
-- 这些模块边界相对清楚
-- 风险低
-- 可以先移除 `g_mem`
-
-建议动作：
-
-- 引入 `Ram`
-- 引入 `Bus`
-- 把 `elf_loader.c` 改成 `loader::ElfLoader`
-- `main` 改为通过 `Machine` 组装运行
+- 继续把 `elf_loader.c` 收敛到更明确的 loader 边界
+- 让 `Bus` 从 `memory.c` 适配层逐步演进为真正的平台总线
+- 保持现有参考执行路径可构建、可运行
 
 完成标志：
 
-- 在不改变现有 ISA 语义的情况下，完成“无全局内存指针”的运行路径
+- 在不改变现有 ISA 语义的情况下，外围对象边界继续稳定收敛
+- `Bus` 和 loader 的职责不再只是对旧 C 模块的命名包装
 
 ### 阶段 2：拆分架构状态与 trap / CSR
 
@@ -630,8 +629,8 @@ main.cpp
 如果要开始真正动手，建议按下面顺序提交小 patch：
 
 1. 新建 `include/mycpu/` 和 `src/` 下的 C++ 骨架文件
-2. 引入 `Machine`、`Bus`、`Ram`，先复用旧逻辑
-3. 把 `main.c` 迁到 `main.cpp`
+2. 巩固 `Machine`、`Bus`、`Ram` 的边界，继续减少对旧 C 适配层的直接耦合
+3. 保持 `main.cpp` 只承担 CLI 和启动职责
 4. 把 `elf_loader.c` 迁到 `ElfLoader`
 5. 把 `CPU` 拆成 `CoreState` 和 `CsrFile`
 6. 把 `trap.c` 迁成 `TrapController`
@@ -688,13 +687,13 @@ main.cpp
 
 ## 13. 最直接的下一步
 
-如果按照“最小风险、最大结构收益”的原则，建议第一个真正开始的实现任务是：
+如果按照“最小风险、最大结构收益”的原则，在当前仓库状态下最直接的下一步实现任务是：
 
-**先引入 `Machine + Bus + Ram`，把 `main.c` 和 `elf_loader.c` 迁入 C++，同时消除全局 `g_mem`。**
+**保持现有 `Machine + Bus + Ram` 参考路径不变，先把 `CPU` 状态拆成 `CoreState + CsrFile`，再为 `TrapController` 建立明确对象边界。**
 
 原因：
 
-- 这是最容易形成结构收益的一步
-- 对现有指令语义影响最小
-- 为后续 `CoreState/CsrFile/TrapController` 拆分扫清路径
+- `Machine + Bus + Ram` 这一步已经完成，不需要再重复作为起点
+- `CPU` 状态边界仍然是当前最集中的复杂度来源
+- 这一步能直接为 supervisor、MMU 和更细的 trap/CSR 语义拆分铺路
 - 做完后仓库仍然保持一个简单、可运行的参考执行器

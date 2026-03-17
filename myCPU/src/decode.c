@@ -29,11 +29,11 @@ void decode(uint32_t raw, Insn *insn) {
         insn->imm = (int64_t)(int32_t)(raw & 0xFFFFF000);
         break;
     case 0x6F: // J-type
-        insn->imm = (int64_t)(int32_t)(
-            ((raw & 0x80000000)) |
-            ((raw & 0xFF000)) |
-            ((raw & 0x100000) >> 9) |
-            ((raw & 0x7FE00000) >> 20)) >> 11;
+        insn->imm =
+            ((int64_t)(int32_t)(raw & 0x80000000) >> 11) |
+            (int64_t)(raw & 0x000FF000) |
+            ((int64_t)(raw & 0x00100000) >> 9) |
+            ((int64_t)(raw & 0x7FE00000) >> 20);
         break;
     default:
         insn->imm = 0;

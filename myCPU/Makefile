@@ -13,8 +13,10 @@ RV_AS   = riscv64-unknown-elf-as
 RV_LD   = riscv64-unknown-elf-ld
 RV_OBJCOPY = riscv64-unknown-elf-objcopy
 RV_FLAGS = -march=rv64im -mabi=lp64
+RV_ELF_LDFLAGS = -nostdlib -Wl,-Ttext-segment=0x80000000
+RV_REQUIRED_TOOLS = $(RV_CC) $(RV_OBJCOPY)
 
-.PHONY: all clean test
+.PHONY: all clean test check-riscv-toolchain
 
 all: $(TARGET)
 
@@ -28,11 +30,11 @@ src/%.o: src/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Build ELF test binaries
-tests/asm/%.elf: tests/asm/%.S
-	$(RV_CC) $(RV_FLAGS) -nostdlib -Ttext=0x80000000 -o $@ $<
+tests/asm/%.elf: tests/asm/%.S | check-riscv-toolchain
+	$(RV_CC) $(RV_FLAGS) $(RV_ELF_LDFLAGS) -o $@ $<
 
 # Build flat binary from ELF
-tests/asm/%.bin: tests/asm/%.elf
+tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 	$(RV_OBJCOPY) -O binary $< $@
 
 test: $(TARGET) tests/asm/hello.elf tests/asm/sum.elf
@@ -40,6 +42,19 @@ test: $(TARGET) tests/asm/hello.elf tests/asm/sum.elf
 	./$(TARGET) tests/asm/hello.elf
 	@echo "=== sum (expect: 55) ==="
 	./$(TARGET) tests/asm/sum.elf
+
+check-riscv-toolchain:
+	@missing=0; \
+	for tool in $(RV_REQUIRED_TOOLS); do \
+		if ! command -v $$tool >/dev/null 2>&1; then \
+			echo "Missing required RISC-V tool: $$tool" >&2; \
+			missing=1; \
+		fi; \
+	done; \
+	if [ $$missing -ne 0 ]; then \
+		echo "Install on Ubuntu: sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf" >&2; \
+		exit 1; \
+	fi
 
 clean:
 	rm -f $(TARGET) $(OBJS) tests/asm/*.elf tests/asm/*.bin
