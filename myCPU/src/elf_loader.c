@@ -14,8 +14,8 @@ typedef struct {
     uint16_t e_type, e_machine;
     uint32_t e_version;
     uint64_t e_entry, e_phoff, e_shoff;
-    uint32_t e_flags, e_ehsize;
-    uint16_t e_phentsize, e_phnum;
+    uint32_t e_flags;
+    uint16_t e_ehsize, e_phentsize, e_phnum;
     uint16_t e_shentsize, e_shnum, e_shstrndx;
 } Elf64_Ehdr;
 
@@ -23,6 +23,9 @@ typedef struct {
     uint32_t p_type, p_flags;
     uint64_t p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align;
 } Elf64_Phdr;
+
+_Static_assert(sizeof(Elf64_Ehdr) == 64, "Elf64_Ehdr layout mismatch");
+_Static_assert(sizeof(Elf64_Phdr) == 56, "Elf64_Phdr layout mismatch");
 
 uint64_t elf_load(Memory *mem, const char *path) {
     FILE *f = fopen(path, "rb");
@@ -39,6 +42,14 @@ uint64_t elf_load(Memory *mem, const char *path) {
     }
     if (ehdr.e_ident[4] != 2) { // EI_CLASS != ELFCLASS64
         fprintf(stderr, "Not ELF64\n"); exit(1);
+    }
+    if (ehdr.e_ehsize != sizeof(Elf64_Ehdr)) {
+        fprintf(stderr, "Unexpected ELF header size: %u\n", ehdr.e_ehsize);
+        exit(1);
+    }
+    if (ehdr.e_phentsize != sizeof(Elf64_Phdr)) {
+        fprintf(stderr, "Unexpected program header size: %u\n", ehdr.e_phentsize);
+        exit(1);
     }
 
     for (int i = 0; i < ehdr.e_phnum; i++) {

@@ -6,7 +6,7 @@ C_SRCS   = src/memory.c src/decode.c src/elf_loader.c
 CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/mem/ram.cpp src/mem/bus.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 TARGET   = mycpu
-ASM_TESTS = hello sum control_flow csr_trap
+ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 TEST_TIMEOUT ?= 2s
 
@@ -19,7 +19,7 @@ RV_FLAGS = -march=rv64im -mabi=lp64
 RV_ELF_LDFLAGS = -nostdlib -Wl,-Ttext-segment=0x80000000
 RV_REQUIRED_TOOLS = $(RV_CC) $(RV_OBJCOPY)
 
-.PHONY: all clean test check-riscv-toolchain $(ASM_TESTS:%=test-%)
+.PHONY: all clean test check-riscv-toolchain FORCE
 
 all: $(TARGET)
 
@@ -42,12 +42,18 @@ tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 
 test: $(TARGET) $(ASM_ELFS) $(ASM_TESTS:%=test-%)
 
-test-%: $(TARGET) tests/asm/%.elf
+FORCE:
+
+test-%: FORCE $(TARGET) tests/asm/%.elf
 	@case "$*" in \
 		hello) expected='Hello, RISC-V!' ;; \
 		sum) expected='55' ;; \
 		control_flow) expected='OK' ;; \
 		csr_trap) expected='CSR' ;; \
+		timer_interrupt) expected='TMR' ;; \
+		mtvec_modes) expected='MTV' ;; \
+		trap_state) expected='STS' ;; \
+		exception_traps) expected='EXC' ;; \
 		*) echo "Unknown asm test: $*" >&2; exit 1 ;; \
 	esac; \
 	echo "=== $* ==="; \

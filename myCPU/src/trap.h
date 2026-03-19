@@ -2,7 +2,22 @@
 
 #include <cstdint>
 
-#include "cpu.h"
+#include "arch/core_state.h"
+#include "arch/csr_file.h"
 
-void trap_enter(CPU& cpu, uint64_t cause, uint64_t tval);
-void trap_return(CPU& cpu);
+class TrapController {
+public:
+    TrapController(CoreState& core, CsrFile& csr);
+
+    void enter_exception(uint64_t cause, uint64_t tval);
+    void enter_interrupt(uint64_t cause);
+    void return_from_mret();
+    void raise_timer_interrupt();
+    void service_pending_interrupts();
+
+private:
+    void enter_trap(uint64_t cause, uint64_t tval);
+
+    CoreState& core_;
+    CsrFile& csr_;
+};

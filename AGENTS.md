@@ -24,10 +24,15 @@ What exists now:
 - Basic exception and interrupt handling
 - A `Machine + Ram + Bus` C++ platform skeleton around the reference path
 - A first `CoreState + CsrFile` state split inside the CPU path
+- A first `TrapController` boundary for trap / interrupt routing inside the CPU path
 - Assembly regression tests with output checking for:
   - basic UART output
   - control flow (`beq` / `jal` / `jalr` / backward branches)
   - CSR access and `ecall` / `mret` smoke coverage
+  - CLINT timer interrupt delivery and `mret` return
+  - `mtvec` direct / vectored mode routing
+  - M-mode trap-state behavior (`mstatus` / `mepc`)
+  - `ebreak` and illegal-instruction exception behavior
 
 What does not yet exist:
 
@@ -41,8 +46,8 @@ Additional current planning notes:
 - The existing `myCPU` prototype was authored by the project owner and should be treated as completed prior work, not as a hypothetical design.
 - Before large new architectural features are added, the codebase should be restructured from the current small C prototype into a modular C++ codebase that can support significantly higher system complexity.
 - This C-to-C++ transition must be justified by structural gains such as module boundaries, type safety, state management, ownership clarity, and backend extensibility, not by language preference alone.
-- The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram` and the first `CoreState + CsrFile` split are now landed and should be treated as current baseline, not future proposal.
-- The immediate next structural step is to continue separating trap and interrupt routing from the central CPU step path into a clearer controller boundary.
+- The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram`, the first `CoreState + CsrFile` split, and a first `TrapController` boundary are now landed and should be treated as current baseline, not future proposal.
+- The immediate next structural step is to continue the platform-side split: move `Bus` beyond a thin adapter, separate `UART` / `CLINT` / `Ram` into clearer device boundaries, and reduce the stacked MMIO dispatch currently living in `memory.c`.
 - When producing summaries, proposals, or report-style material for this project, describe the current implementation as an already working simulator prototype and the C++ refactor as the next enabling engineering step.
 
 ## Primary direction
@@ -213,7 +218,7 @@ Minimum expectations:
 Current baseline expectation for local validation:
 
 - Keep `make test` green
-- Treat the existing `hello`, `sum`, `control_flow`, and `csr_trap` assembly regressions as required guardrails when touching the reference path
+- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, and `exception_traps` assembly regressions as required guardrails when touching the reference path
 - If a refactor changes observable UART output or causes hangs, update tests only when the behavior change is intentional and justified
 
 If a feature is too complex to test, the design is probably still too large.
@@ -244,7 +249,7 @@ What is already landed in that migration:
 
 - `Machine`, `Bus`, and `Ram` provide the first explicit platform assembly layer
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
-- Trap logic is still simple, but it should now evolve from the current function-based form toward a clearer controller boundary
+- Trap logic now has a first explicit `TrapController` boundary, with current regression coverage around trap entry, return, timer interrupts, `mtvec` modes, and basic M-mode exception semantics
 - The repository still intentionally keeps a simple architectural reference execution path
 
 When planning the C++ restructuring, favor boundaries such as:
@@ -279,4 +284,4 @@ When planning the C++ restructuring, favor boundaries such as:
 - Describe the current project honestly as a working functional simulator prototype, not as a mere idea.
 - Do not claim support for ISA or platform features unless they are actually implemented and validated.
 - When discussing the C++ migration in documents, frame it as a structural response to growing architectural complexity, not as a cosmetic language rewrite.
-- At the current repository state, describe `Machine` / `Bus` / `Ram` and the `CoreState + CsrFile` split as already completed incremental steps, and `TrapController` / semantics extraction as the next structural targets.
+- At the current repository state, describe `Machine` / `Bus` / `Ram`, the `CoreState + CsrFile` split, and the first `TrapController` boundary as already completed incremental steps; describe bus/device decomposition and later semantics extraction as the next structural targets.

@@ -1,7 +1,5 @@
 #include "cpu.h"
 
-#include "trap.h"
-
 extern "C" {
 #include "decode.h"
 #include "memory.h"
@@ -12,7 +10,6 @@ namespace {
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 constexpr uint64_t CAUSE_BREAKPOINT = 3;
 constexpr uint64_t CAUSE_ECALL_M = 11;
-constexpr uint64_t CAUSE_TIMER_INT = 0x8000000000000007ULL;
 
 void set_rd(CPU& cpu, uint8_t rd, uint64_t value) {
     cpu.core().write_gpr(rd, value);
@@ -63,7 +60,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
             taken = rs1v >= rs2v;
             break;
         default:
-            trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
             return;
         }
         if (taken) {
@@ -97,7 +94,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
             val = static_cast<uint32_t>(mem_read(mem, addr, 4));
             break;
         default:
-            trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
             return;
         }
         set_rd(cpu, in->rd, val);
@@ -119,7 +116,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
             mem_write(mem, addr, rs2v, 8);
             break;
         default:
-            trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
             return;
         }
         break;
@@ -153,7 +150,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
             val = rs1v & static_cast<uint64_t>(imm);
             break;
         default:
-            trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
             return;
         }
         set_rd(cpu, in->rd, val);
@@ -175,7 +172,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
                 : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) >> shamt)));
             break;
         default:
-            trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
             return;
         }
         set_rd(cpu, in->rd, val);
@@ -211,7 +208,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
                 val = rs2v ? rs1v % rs2v : rs1v;
                 break;
             default:
-                trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
                 return;
             }
         } else {
@@ -241,7 +238,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
                 val = rs1v & rs2v;
                 break;
             default:
-                trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
                 return;
             }
         }
@@ -269,7 +266,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
                 val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) % static_cast<uint32_t>(rs2v)))) : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v)));
                 break;
             default:
-                trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
                 return;
             }
         } else {
@@ -286,7 +283,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
                     : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) >> shamt)));
                 break;
             default:
-                trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
                 return;
             }
         }
@@ -303,15 +300,15 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
                     core.set_halted(true);
                     return;
                 }
-                trap_enter(cpu, CAUSE_ECALL_M, 0);
+                cpu.trap().enter_exception(CAUSE_ECALL_M, 0);
                 return;
             }
             if (in->raw == 0x00100073) {
-                trap_enter(cpu, CAUSE_BREAKPOINT, pc);
+                cpu.trap().enter_exception(CAUSE_BREAKPOINT, pc);
                 return;
             }
             if (in->raw == 0x30200073) {
-                trap_return(cpu);
+                cpu.trap().return_from_mret();
                 return;
             }
             break;
@@ -346,7 +343,7 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
             csr_write(cpu, csr_addr, old & ~static_cast<uint64_t>(in->rs1));
             break;
         default:
-            trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
             return;
         }
         break;
@@ -354,27 +351,16 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
     case 0x0F:
         break;
     default:
-        trap_enter(cpu, CAUSE_ILLEGAL_INSN, in->raw);
+        cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
         return;
     }
 
     core.set_pc(next_pc);
 }
 
-void check_interrupts(CPU& cpu) {
-    if (!(csr_read(cpu, CSR_MSTATUS) & MSTATUS_MIE)) {
-        return;
-    }
-
-    const uint64_t mie = csr_read(cpu, CSR_MIE);
-    const uint64_t mip = csr_read(cpu, CSR_MIP);
-    if ((mie & MIE_MTIE) && (mip & MIE_MTIE)) {
-        csr_write(cpu, CSR_MIP, mip & ~MIE_MTIE);
-        trap_enter(cpu, CAUSE_TIMER_INT, 0);
-    }
-}
-
 }  // namespace
+
+CPU::CPU() : trap_(core_, csr_) {}
 
 CoreState& CPU::core() {
     return core_;
@@ -390,6 +376,14 @@ CsrFile& CPU::csr() {
 
 const CsrFile& CPU::csr() const {
     return csr_;
+}
+
+TrapController& CPU::trap() {
+    return trap_;
+}
+
+const TrapController& CPU::trap() const {
+    return trap_;
 }
 
 void cpu_init(CPU& cpu, uint64_t entry) {
@@ -409,9 +403,9 @@ void csr_write(CPU& cpu, uint32_t addr, uint64_t val) {
 void cpu_step(CPU& cpu, Memory* mem) {
     mem->mtime++;
     if (mem->mtime >= mem->mtimecmp) {
-        csr_write(cpu, CSR_MIP, csr_read(cpu, CSR_MIP) | MIE_MTIE);
+        cpu.trap().raise_timer_interrupt();
     }
-    check_interrupts(cpu);
+    cpu.trap().service_pending_interrupts();
 
     const uint32_t raw = static_cast<uint32_t>(mem_read(mem, cpu.core().pc(), 4));
     Insn insn;

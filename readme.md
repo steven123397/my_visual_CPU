@@ -11,7 +11,7 @@ myCPU/
 │   ├── cpu.cpp/h       # CPU 外观接口 + 参考执行路径
 │   ├── memory.c/h      # 物理内存 + MMIO 分发
 │   ├── decode.c/h      # 指令解码
-│   ├── trap.cpp/h      # 异常/中断入口与返回
+│   ├── trap.cpp/h      # TrapController：异常/中断路由与返回
 │   ├── elf_loader.c    # ELF64 解析与加载
 │   ├── arch/           # CoreState / CsrFile 状态边界
 │   ├── mem/            # C++ Ram/Bus 骨架
@@ -33,13 +33,13 @@ main.cpp
         ├── cpu_init()               初始化 CoreState、CsrFile
         └── while (!halted)
               └── cpu_step(cpu, mem)
-              ├── 更新 mtime / 检查定时器中断
+              ├── 更新 mtime / 通过 TrapController 检查定时器中断
               ├── mem_read()        取指
               ├── decode()          指令译码
               ├── execute()         执行指令
               │     ├── mem_read()/mem_write()   访问主内存或 MMIO
               │     ├── csr_read()/csr_write()   访问 CSR
-              │     └── trap_enter()/trap_return()
+              │     └── TrapController 处理 trap 进入/返回
               └── cycle++
 ```
 
@@ -50,10 +50,10 @@ main.cpp
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
 - `arch/csr_file.*` 负责 CSR 存储，以及 `cycle/time` 等特殊 CSR 读取规则。
 - `mem/ram.*` 和 `mem/bus.*` 提供第一阶段 C++ 平台骨架，用显式对象替代全局内存依赖。
-- `cpu.cpp/h` 负责把 `CoreState + CsrFile` 接回现有参考执行路径。
+- `cpu.cpp/h` 负责把 `CoreState + CsrFile + TrapController` 接回现有参考执行路径。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存和 MMIO 分发。
-- `trap.cpp/h` 负责异常/中断入口与返回。
+- `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret` 返回和定时器中断路由。
 - `elf_loader.c` 负责 ELF64 装载。
 
 一次指令执行的数据流可以概括为：
@@ -151,10 +151,10 @@ make test
   `Bus` 实现。当前仍转发到现有 `memory.c` 的 RAM/MMIO 逻辑，为后续设备拆分保留统一访问入口。
 
 - `cpu.h`
-  CPU 外观接口定义。当前聚合 `CoreState` 和 `CsrFile`，对外继续保留 `cpu_init()/cpu_step()/csr_read()/csr_write()` 这条参考执行路径。
+  CPU 外观接口定义。当前聚合 `CoreState`、`CsrFile` 和 `TrapController`，对外继续保留 `cpu_init()/cpu_step()/csr_read()/csr_write()` 这条参考执行路径。
 
 - `cpu.cpp`
-  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()`、`check_interrupts()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行；当前通过 `CoreState + CsrFile` 管理 CPU 状态。
+  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行；当前通过 `CoreState + CsrFile + TrapController` 管理 CPU 状态与 trap 路由。
 
 - `arch/core_state.h`
   `CoreState` 声明。封装 32 个通用寄存器、`pc`、周期计数和停机状态，为后续继续拆语义和执行后端提供稳定状态边界。
@@ -181,10 +181,10 @@ make test
   内存和 MMIO 实现。`mem_read()/mem_write()` 会先判断是否访问 UART 或 CLINT，否则落到主内存；`mem_load_binary()` 用于把平坦二进制直接装入指定地址。
 
 - `trap.h`
-  异常/中断入口与返回接口声明。
+  `TrapController` 声明。封装异常进入、中断进入、`mret` 返回以及待处理中断检查接口。
 
 - `trap.cpp`
-  M-mode 陷入处理实现。`trap_enter()` 负责保存现场、写入 `mepc/mcause/mtval` 并跳转到 `mtvec`；`trap_return()` 负责从 `mepc` 恢复执行。
+  `TrapController` 实现。负责保存现场、写入 `mepc/mcause/mtval`、根据 `mtvec` 进入 trap、处理定时器中断挂起位，并在 `mret` 时从 `mepc` 恢复执行。
 
 - `elf_loader.c`
   简化版 ELF64 加载器。检查 ELF 文件头，遍历程序头装载 `PT_LOAD` 段，把段内容写入模拟内存，并对 BSS 区域清零。
@@ -195,6 +195,10 @@ make test
 - `sum.S`：计算 `1+2+...+10` 并输出 `55` 的整数运算与分支样例。
 - `control_flow.S`：验证 `beq`、`jal`、`jalr` 和反向分支回跳的控制流回归样例。
 - `csr_trap.S`：验证 CSR 读写、立即数 CSR 指令以及 `ecall`/`mret` 的基础陷入返回路径。
+- `timer_interrupt.S`：验证 CLINT 定时器中断、`mtvec` 向量入口以及 `mret` 返回后的继续执行。
+- `mtvec_modes.S`：验证 `mtvec` direct/vectored 两种模式下，异常和定时器中断命中正确的 trap 入口。
+- `trap_state.S`：验证 trap 进入/返回时 `mstatus` 的 `MIE/MPIE` 状态变化，以及 `mepc` 的保存与恢复。
+- `exception_traps.S`：验证 `ebreak` 与非法指令 trap 的 `mcause`、`mepc`、`mtval` 行为。
 
 ## 当前项目定位
 
