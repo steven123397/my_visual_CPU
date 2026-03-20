@@ -1,7 +1,6 @@
 #pragma once
 
 class ElfLoader;
-class BinaryLoader;
 
 extern "C" {
 #include "../memory.h"
@@ -20,7 +19,6 @@ public:
 
 private:
     friend class ElfLoader;
-    friend class BinaryLoader;
 
     Memory mem_{};
 };

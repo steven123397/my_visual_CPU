@@ -17,4 +17,3 @@ void mem_init(Memory *mem);
 void mem_free(Memory *mem);
 uint64_t mem_read(Memory *mem, uint64_t addr, int size);
 void mem_write(Memory *mem, uint64_t addr, uint64_t val, int size);
-void mem_load_binary(Memory *mem, const char *path, uint64_t addr);
