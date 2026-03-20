@@ -402,11 +402,7 @@ void csr_write(CPU& cpu, uint32_t addr, uint64_t val) {
 }
 
 void cpu_step(CPU& cpu, Bus& bus) {
-    const BusTickResult tick = bus.tick();
-    if (tick.timer_interrupt_pending) {
-        cpu.trap().raise_timer_interrupt();
-    }
-    cpu.trap().service_pending_interrupts();
+    cpu.trap().handle_platform_events(bus.tick());
 
     const uint32_t raw = static_cast<uint32_t>(bus.load(cpu.core().pc(), 4));
     Insn insn;

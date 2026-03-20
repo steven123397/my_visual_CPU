@@ -1,0 +1,8 @@
+#pragma once
+
+#define MEM_BASE   0x80000000UL
+#define MEM_SIZE   (128 * 1024 * 1024)
+#define UART_BASE  0x10000000UL
+#define UART_SIZE  8
+#define CLINT_BASE 0x02000000UL
+#define CLINT_SIZE 0x10000

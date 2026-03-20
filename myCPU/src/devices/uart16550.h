@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "device.h"
-#include "../memory.h"
+#include "../platform/address_map.h"
 
 class Uart16550 : public Device {
 public:

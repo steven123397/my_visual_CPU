@@ -2,7 +2,7 @@ CC       = gcc
 CXX      = g++
 CFLAGS   = -O2 -Wall -Wextra -g -std=c11
 CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
-C_SRCS   = src/memory.c src/decode.c src/elf_loader.c
+C_SRCS   = src/memory.c src/decode.c
 CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/mem/ram.cpp src/mem/bus.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 DEPS     = $(OBJS:.o=.d)
@@ -115,6 +115,7 @@ check-riscv-toolchain:
 	fi
 
 clean:
-	rm -f $(TARGET) $(OBJS) $(DEPS) tests/asm/*.elf tests/asm/*.bin
+	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin
+	find src -type f \( -name '*.o' -o -name '*.d' \) -delete
 
 -include $(DEPS)

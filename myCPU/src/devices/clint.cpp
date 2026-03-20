@@ -23,7 +23,9 @@ void Clint::store(uint64_t addr, uint64_t value, int /*size*/) {
     }
 }
 
-bool Clint::tick() {
+PlatformEvents Clint::tick() {
     ++mtime_;
-    return mtime_ >= mtimecmp_;
+    return PlatformEvents{
+        .timer_interrupt_pending = (mtime_ >= mtimecmp_),
+    };
 }

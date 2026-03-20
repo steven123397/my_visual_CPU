@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "../platform/platform_events.h"
+
 class Device {
 public:
     Device(uint64_t base, uint64_t size)
@@ -15,6 +17,9 @@ public:
 
     virtual uint64_t load(uint64_t addr, int size) = 0;
     virtual void store(uint64_t addr, uint64_t value, int size) = 0;
+    virtual PlatformEvents tick() {
+        return {};
+    }
 
 private:
     uint64_t base_;

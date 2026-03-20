@@ -3,10 +3,7 @@
 #include <cstring>
 #include <exception>
 
-extern "C" {
-#include "memory.h"
-}
-
+#include "platform/address_map.h"
 #include "platform/machine.h"
 
 static void usage(const char* prog) {

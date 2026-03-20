@@ -28,6 +28,13 @@ void TrapController::return_from_mret() {
     core_.set_pc(csr_.read(CSR_MEPC, core_));
 }
 
+void TrapController::handle_platform_events(const PlatformEvents& events) {
+    if (events.timer_interrupt_pending) {
+        raise_timer_interrupt();
+    }
+    service_pending_interrupts();
+}
+
 void TrapController::raise_timer_interrupt() {
     const uint64_t mip = csr_.read(CSR_MIP, core_);
     csr_.write(CSR_MIP, mip | MIE_MTIE);

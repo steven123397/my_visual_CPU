@@ -1,7 +1,12 @@
 #include "bus.h"
 
-Bus::Bus(Ram& ram, Clint& clint)
-    : ram_(ram), clint_(clint) {}
+#include <cstdio>
+
+#include "ram.h"
+
+Bus::Bus(Ram& ram) {
+    attach(ram);
+}
 
 void Bus::attach(Device& device) {
     devices_.push_back(&device);
@@ -20,7 +25,8 @@ uint64_t Bus::load(uint64_t addr, int size) {
     if (Device* device = find_device(addr)) {
         return device->load(addr, size);
     }
-    return ram_.load(addr, size);
+    std::fprintf(stderr, "bus load: unmapped addr 0x%lx size %d\n", addr, size);
+    return 0;
 }
 
 void Bus::store(uint64_t addr, uint64_t value, int size) {
@@ -28,11 +34,13 @@ void Bus::store(uint64_t addr, uint64_t value, int size) {
         device->store(addr, value, size);
         return;
     }
-    ram_.store(addr, value, size);
+    std::fprintf(stderr, "bus store: unmapped addr 0x%lx size %d value 0x%lx\n", addr, size, value);
 }
 
-BusTickResult Bus::tick() {
-    return BusTickResult{
-        .timer_interrupt_pending = clint_.tick(),
-    };
+PlatformEvents Bus::tick() {
+    PlatformEvents events;
+    for (Device* device : devices_) {
+        events.merge(device->tick());
+    }
+    return events;
 }

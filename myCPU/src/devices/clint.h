@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "device.h"
-#include "../memory.h"
+#include "../platform/address_map.h"
 
 class Clint : public Device {
 public:
@@ -11,8 +11,7 @@ public:
 
     uint64_t load(uint64_t addr, int size) override;
     void store(uint64_t addr, uint64_t value, int size) override;
-
-    bool tick();
+    PlatformEvents tick() override;
 
 private:
     uint64_t mtime_{0};

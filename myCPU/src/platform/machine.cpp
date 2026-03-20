@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-Machine::Machine() : bus_(ram_, clint_) {
+Machine::Machine() : bus_(ram_) {
     bus_.attach(uart_);
     bus_.attach(clint_);
 }
