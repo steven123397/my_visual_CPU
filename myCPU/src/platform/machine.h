@@ -5,6 +5,8 @@
 
 #include "../cpu.h"
 
+#include "../devices/clint.h"
+#include "../devices/uart16550.h"
 #include "../mem/bus.h"
 #include "../mem/ram.h"
 
@@ -19,6 +21,8 @@ public:
 private:
     CPU cpu_{};
     Ram ram_;
+    Uart16550 uart_;
+    Clint clint_;
     Bus bus_;
     bool loaded_{false};
 };

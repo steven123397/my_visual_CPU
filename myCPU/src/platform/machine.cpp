@@ -6,10 +6,10 @@ extern "C" {
 uint64_t elf_load(Memory* mem, const char* path);
 }
 
-Machine::Machine() : bus_(ram_) {}
+Machine::Machine() : bus_(ram_, uart_, clint_) {}
 
 void Machine::load_elf(const std::string& path) {
-    const uint64_t entry = elf_load(bus_.raw_memory(), path.c_str());
+    const uint64_t entry = elf_load(bus_.raw_ram(), path.c_str());
     cpu_init(cpu_, entry);
     loaded_ = true;
 }
@@ -26,6 +26,6 @@ void Machine::run() {
     }
 
     while (!cpu_.core().halted()) {
-        cpu_step(cpu_, bus_.raw_memory());
+        cpu_step(cpu_, bus_);
     }
 }

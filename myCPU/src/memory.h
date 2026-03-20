@@ -5,13 +5,12 @@
 #define MEM_BASE   0x80000000UL
 #define MEM_SIZE   (128 * 1024 * 1024)  // 128MB
 #define UART_BASE  0x10000000UL
+#define UART_SIZE  8
 #define CLINT_BASE 0x02000000UL
 #define CLINT_SIZE 0x10000
 
 typedef struct Memory {
     uint8_t *data;
-    uint64_t mtime;
-    uint64_t mtimecmp;
 } Memory;
 
 void mem_init(Memory *mem);

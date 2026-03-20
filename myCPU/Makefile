@@ -3,8 +3,9 @@ CXX      = g++
 CFLAGS   = -O2 -Wall -Wextra -g -std=c11
 CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
 C_SRCS   = src/memory.c src/decode.c src/elf_loader.c
-CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/mem/ram.cpp src/mem/bus.cpp src/platform/machine.cpp
+CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/mem/ram.cpp src/mem/bus.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
+DEPS     = $(OBJS:.o=.d)
 TARGET   = mycpu
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
@@ -27,10 +28,10 @@ $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 src/%.o: src/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 src/%.o: src/%.cpp
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -MMD -MP -c -o $@ $<
 
 # Build ELF test binaries
 tests/asm/%.elf: tests/asm/%.S | check-riscv-toolchain
@@ -89,4 +90,6 @@ check-riscv-toolchain:
 	fi
 
 clean:
-	rm -f $(TARGET) $(OBJS) tests/asm/*.elf tests/asm/*.bin
+	rm -f $(TARGET) $(OBJS) $(DEPS) tests/asm/*.elf tests/asm/*.bin
+
+-include $(DEPS)

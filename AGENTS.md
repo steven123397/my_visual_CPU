@@ -22,9 +22,10 @@ What exists now:
 - A direct fetch-decode-execute loop
 - A simple physical memory model plus minimal MMIO
 - Basic exception and interrupt handling
-- A `Machine + Ram + Bus` C++ platform skeleton around the reference path
+- A `Machine + Ram + Uart16550 + Clint + Bus` C++ platform skeleton around the reference path
 - A first `CoreState + CsrFile` state split inside the CPU path
 - A first `TrapController` boundary for trap / interrupt routing inside the CPU path
+- CPU fetch/load/store paths routed through `Bus` instead of directly through the legacy `Memory*` interface
 - Assembly regression tests with output checking for:
   - basic UART output
   - control flow (`beq` / `jal` / `jalr` / backward branches)
@@ -46,8 +47,8 @@ Additional current planning notes:
 - The existing `myCPU` prototype was authored by the project owner and should be treated as completed prior work, not as a hypothetical design.
 - Before large new architectural features are added, the codebase should be restructured from the current small C prototype into a modular C++ codebase that can support significantly higher system complexity.
 - This C-to-C++ transition must be justified by structural gains such as module boundaries, type safety, state management, ownership clarity, and backend extensibility, not by language preference alone.
-- The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram`, the first `CoreState + CsrFile` split, and a first `TrapController` boundary are now landed and should be treated as current baseline, not future proposal.
-- The immediate next structural step is to continue the platform-side split: move `Bus` beyond a thin adapter, separate `UART` / `CLINT` / `Ram` into clearer device boundaries, and reduce the stacked MMIO dispatch currently living in `memory.c`.
+- The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` device objects, the first `CoreState + CsrFile` split, and a first `TrapController` boundary are now landed and should be treated as current baseline, not future proposal.
+- The immediate next structural step is to continue tightening the platform-side split: preserve `Bus` as the CPU-facing access path, deepen device/platform boundaries, and keep shrinking the remaining legacy responsibilities around raw RAM access and image loading.
 - When producing summaries, proposals, or report-style material for this project, describe the current implementation as an already working simulator prototype and the C++ refactor as the next enabling engineering step.
 
 ## Primary direction
@@ -248,8 +249,10 @@ For the current project stage, this migration is no longer only a distant option
 What is already landed in that migration:
 
 - `Machine`, `Bus`, and `Ram` provide the first explicit platform assembly layer
+- `Uart16550` and `Clint` now exist as explicit device objects behind `Bus`
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
 - Trap logic now has a first explicit `TrapController` boundary, with current regression coverage around trap entry, return, timer interrupts, `mtvec` modes, and basic M-mode exception semantics
+- CPU fetch/load/store now routes through `Bus`, so RAM/device dispatch is no longer hard-coded in the CPU step path
 - The repository still intentionally keeps a simple architectural reference execution path
 
 When planning the C++ restructuring, favor boundaries such as:
@@ -284,4 +287,4 @@ When planning the C++ restructuring, favor boundaries such as:
 - Describe the current project honestly as a working functional simulator prototype, not as a mere idea.
 - Do not claim support for ISA or platform features unless they are actually implemented and validated.
 - When discussing the C++ migration in documents, frame it as a structural response to growing architectural complexity, not as a cosmetic language rewrite.
-- At the current repository state, describe `Machine` / `Bus` / `Ram`, the `CoreState + CsrFile` split, and the first `TrapController` boundary as already completed incremental steps; describe bus/device decomposition and later semantics extraction as the next structural targets.
+- At the current repository state, describe `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` devices, the `CoreState + CsrFile` split, and the first `TrapController` boundary as already completed incremental steps; describe further platform cleanup and later semantics extraction as the next structural targets.

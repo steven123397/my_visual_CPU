@@ -1,8 +1,9 @@
 #include "cpu.h"
 
+#include "mem/bus.h"
+
 extern "C" {
 #include "decode.h"
-#include "memory.h"
 }
 
 namespace {
@@ -15,7 +16,7 @@ void set_rd(CPU& cpu, uint8_t rd, uint64_t value) {
     cpu.core().write_gpr(rd, value);
 }
 
-void execute(CPU& cpu, Memory* mem, Insn* in) {
+void execute(CPU& cpu, Bus& bus, Insn* in) {
     CoreState& core = cpu.core();
     const uint64_t pc = core.pc();
     const uint64_t rs1v = core.read_gpr(in->rs1);
@@ -73,25 +74,25 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
         uint64_t val = 0;
         switch (in->funct3) {
         case 0:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int8_t>(mem_read(mem, addr, 1))));
+            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int8_t>(bus.load(addr, 1))));
             break;
         case 1:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int16_t>(mem_read(mem, addr, 2))));
+            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int16_t>(bus.load(addr, 2))));
             break;
         case 2:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(mem_read(mem, addr, 4))));
+            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(bus.load(addr, 4))));
             break;
         case 3:
-            val = mem_read(mem, addr, 8);
+            val = bus.load(addr, 8);
             break;
         case 4:
-            val = static_cast<uint8_t>(mem_read(mem, addr, 1));
+            val = static_cast<uint8_t>(bus.load(addr, 1));
             break;
         case 5:
-            val = static_cast<uint16_t>(mem_read(mem, addr, 2));
+            val = static_cast<uint16_t>(bus.load(addr, 2));
             break;
         case 6:
-            val = static_cast<uint32_t>(mem_read(mem, addr, 4));
+            val = static_cast<uint32_t>(bus.load(addr, 4));
             break;
         default:
             cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
@@ -104,16 +105,16 @@ void execute(CPU& cpu, Memory* mem, Insn* in) {
         const uint64_t addr = rs1v + static_cast<uint64_t>(imm);
         switch (in->funct3) {
         case 0:
-            mem_write(mem, addr, rs2v, 1);
+            bus.store(addr, rs2v, 1);
             break;
         case 1:
-            mem_write(mem, addr, rs2v, 2);
+            bus.store(addr, rs2v, 2);
             break;
         case 2:
-            mem_write(mem, addr, rs2v, 4);
+            bus.store(addr, rs2v, 4);
             break;
         case 3:
-            mem_write(mem, addr, rs2v, 8);
+            bus.store(addr, rs2v, 8);
             break;
         default:
             cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
@@ -400,17 +401,17 @@ void csr_write(CPU& cpu, uint32_t addr, uint64_t val) {
     cpu.csr().write(addr, val);
 }
 
-void cpu_step(CPU& cpu, Memory* mem) {
-    mem->mtime++;
-    if (mem->mtime >= mem->mtimecmp) {
+void cpu_step(CPU& cpu, Bus& bus) {
+    bus.tick();
+    if (bus.timer_pending()) {
         cpu.trap().raise_timer_interrupt();
     }
     cpu.trap().service_pending_interrupts();
 
-    const uint32_t raw = static_cast<uint32_t>(mem_read(mem, cpu.core().pc(), 4));
+    const uint32_t raw = static_cast<uint32_t>(bus.load(cpu.core().pc(), 4));
     Insn insn;
     decode(raw, &insn);
-    execute(cpu, mem, &insn);
+    execute(cpu, bus, &insn);
 
     cpu.core().advance_cycle();
 }

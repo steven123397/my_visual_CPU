@@ -9,12 +9,13 @@ myCPU/
 ├── src/
 │   ├── main.cpp        # C++ 入口，CLI 参数与 Machine 启动
 │   ├── cpu.cpp/h       # CPU 外观接口 + 参考执行路径
-│   ├── memory.c/h      # 物理内存 + MMIO 分发
+│   ├── memory.c/h      # 主内存 backing + 镜像装载支持
 │   ├── decode.c/h      # 指令解码
 │   ├── trap.cpp/h      # TrapController：异常/中断路由与返回
 │   ├── elf_loader.c    # ELF64 解析与加载
 │   ├── arch/           # CoreState / CsrFile 状态边界
 │   ├── mem/            # C++ Ram/Bus 骨架
+│   ├── devices/        # UART / CLINT 设备对象
 │   └── platform/       # C++ Machine 骨架
 ├── tests/asm/          # 汇编测试程序
 └── Makefile
@@ -27,17 +28,18 @@ myCPU/
 ```text
 main.cpp
   └── Machine
-        ├── Ram                      初始化 128MB 主内存和 MMIO 状态
-        ├── Bus                      显式传递内存访问依赖
+        ├── Ram                      初始化 128MB 主内存
+        ├── Uart16550 / Clint        独立设备对象
+        ├── Bus                      分发 RAM 与设备访问
         ├── elf_load()/load_binary   加载 ELF 或平坦二进制
         ├── cpu_init()               初始化 CoreState、CsrFile
         └── while (!halted)
-              └── cpu_step(cpu, mem)
-              ├── 更新 mtime / 通过 TrapController 检查定时器中断
-              ├── mem_read()        取指
+              └── cpu_step(cpu, bus)
+              ├── Bus::tick() / 通过 TrapController 检查定时器中断
+              ├── bus.load()        取指
               ├── decode()          指令译码
               ├── execute()         执行指令
-              │     ├── mem_read()/mem_write()   访问主内存或 MMIO
+              │     ├── bus.load()/bus.store()   访问主内存或设备
               │     ├── csr_read()/csr_write()   访问 CSR
               │     └── TrapController 处理 trap 进入/返回
               └── cycle++
@@ -49,10 +51,11 @@ main.cpp
 - `platform/machine.*` 负责组装 CPU、Ram、Bus，并驱动主执行循环。
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
 - `arch/csr_file.*` 负责 CSR 存储，以及 `cycle/time` 等特殊 CSR 读取规则。
-- `mem/ram.*` 和 `mem/bus.*` 提供第一阶段 C++ 平台骨架，用显式对象替代全局内存依赖。
+- `mem/ram.*` 和 `mem/bus.*` 提供平台总线与 RAM 边界。
+- `devices/uart16550.*` 和 `devices/clint.*` 提供独立 MMIO 设备对象。
 - `cpu.cpp/h` 负责把 `CoreState + CsrFile + TrapController` 接回现有参考执行路径。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
-- `memory.c` 负责主内存和 MMIO 分发。
+- `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
 - `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret` 返回和定时器中断路由。
 - `elf_loader.c` 负责 ELF64 装载。
 
@@ -139,22 +142,34 @@ make test
   `Machine` 实现。当前负责镜像加载、`cpu_init()` 调用和执行循环，仍复用现有 C 核心语义。
 
 - `mem/ram.h`
-  `Ram` 类声明。负责 `Memory` 生命周期管理，替代原先在入口中手动 `malloc/free` 的做法。
+  `Ram` 类声明。负责主内存生命周期和 RAM 范围内的 load/store。
 
 - `mem/ram.cpp`
-  `Ram` 实现。内部调用现有 `mem_init()/mem_free()` 初始化与释放内存状态。
+  `Ram` 实现。内部调用现有 `mem_init()/mem_free()` 管理 RAM backing，并封装平坦二进制装载。
 
 - `mem/bus.h`
-  `Bus` 类声明。作为第一阶段总线适配层，向上暴露统一的 load/store 接口。
+  `Bus` 类声明。聚合 `Ram`、`Uart16550` 和 `Clint`，向上暴露统一的 load/store/tick 接口。
 
 - `mem/bus.cpp`
-  `Bus` 实现。当前仍转发到现有 `memory.c` 的 RAM/MMIO 逻辑，为后续设备拆分保留统一访问入口。
+  `Bus` 实现。负责地址分发、设备访问以及 CLINT tick 状态推进。
+
+- `devices/uart16550.h`
+  `Uart16550` 类声明。封装最小 16550 串口寄存器访问与 stdout 输出行为。
+
+- `devices/uart16550.cpp`
+  `Uart16550` 实现。当前支持最小发送路径和 `LSR` 就绪读取。
+
+- `devices/clint.h`
+  `Clint` 类声明。封装 `mtime/mtimecmp`、定时器 tick 和 MMIO 访问接口。
+
+- `devices/clint.cpp`
+  `Clint` 实现。负责定时器状态推进、`mtime/mtimecmp` 读写和待处理中断判定。
 
 - `cpu.h`
-  CPU 外观接口定义。当前聚合 `CoreState`、`CsrFile` 和 `TrapController`，对外继续保留 `cpu_init()/cpu_step()/csr_read()/csr_write()` 这条参考执行路径。
+  CPU 外观接口定义。当前聚合 `CoreState`、`CsrFile` 和 `TrapController`，并通过 `Bus` 访问平台内存与设备。
 
 - `cpu.cpp`
-  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行；当前通过 `CoreState + CsrFile + TrapController` 管理 CPU 状态与 trap 路由。
+  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行；当前通过 `Bus` 访问平台，通过 `CoreState + CsrFile + TrapController` 管理 CPU 状态与 trap 路由。
 
 - `arch/core_state.h`
   `CoreState` 声明。封装 32 个通用寄存器、`pc`、周期计数和停机状态，为后续继续拆语义和执行后端提供稳定状态边界。
@@ -175,10 +190,10 @@ make test
   译码器实现。根据 opcode 判断 I/S/B/U/J 等格式，提取 `rd/rs1/rs2`、`funct3/funct7` 和符号扩展后的立即数。
 
 - `memory.h`
-  地址空间和 `Memory` 结构定义，包含主内存、UART、CLINT 的基地址，以及 `mtime/mtimecmp` 状态。
+  地址空间常量和 `Memory` 结构定义，作为 RAM backing 和 ELF/flat binary 装载使用。
 
 - `memory.c`
-  内存和 MMIO 实现。`mem_read()/mem_write()` 会先判断是否访问 UART 或 CLINT，否则落到主内存；`mem_load_binary()` 用于把平坦二进制直接装入指定地址。
+  RAM 访问实现。`mem_read()/mem_write()` 只处理主内存范围，`mem_load_binary()` 用于把平坦二进制直接装入指定地址。
 
 - `trap.h`
   `TrapController` 声明。封装异常进入、中断进入、`mret` 返回以及待处理中断检查接口。
