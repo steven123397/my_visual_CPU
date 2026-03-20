@@ -26,6 +26,14 @@ after_illegal:
     li   t1, 2
     bne  t0, t1, fail
 
+reserved_system_point:
+    .word 0x12300073
+
+after_reserved_system:
+    csrr t0, mscratch
+    li   t1, 3
+    bne  t0, t1, fail
+
     li   t0, 'E'
     sb   t0, 0(s0)
     li   t0, 'X'
@@ -64,8 +72,14 @@ handle_breakpoint:
 handle_illegal:
     csrr t0, mepc
     la   t1, illegal_point
-    bne  t0, t1, trap_fail
+    beq  t0, t1, handle_illegal_insn
 
+    la   t1, reserved_system_point
+    beq  t0, t1, handle_reserved_system
+
+    j    trap_fail
+
+handle_illegal_insn:
     csrr t0, mtval
     li   t1, 1
     slli t1, t1, 32
@@ -73,6 +87,19 @@ handle_illegal:
     bne  t0, t1, trap_fail
 
     li   t0, 2
+    csrw mscratch, t0
+
+    csrr t0, mepc
+    addi t0, t0, 4
+    csrw mepc, t0
+    mret
+
+handle_reserved_system:
+    csrr t0, mtval
+    li   t1, 0x12300073
+    bne  t0, t1, trap_fail
+
+    li   t0, 3
     csrw mscratch, t0
 
     csrr t0, mepc

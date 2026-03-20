@@ -1,5 +1,6 @@
 #include "cpu.h"
 
+#include "exec/system_ops.h"
 #include "mem/bus.h"
 
 extern "C" {
@@ -9,8 +10,6 @@ extern "C" {
 namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
-constexpr uint64_t CAUSE_BREAKPOINT = 3;
-constexpr uint64_t CAUSE_ECALL_M = 11;
 
 void set_rd(CPU& cpu, uint8_t rd, uint64_t value) {
     cpu.core().write_gpr(rd, value);
@@ -292,59 +291,7 @@ void execute(CPU& cpu, Bus& bus, Insn* in) {
         break;
     }
     case 0x73: {
-        const uint32_t csr_addr = in->raw >> 20;
-        uint64_t old = 0;
-        switch (in->funct3) {
-        case 0:
-            if (in->raw == 0x00000073) {
-                if (core.read_gpr(17) == 93) {
-                    core.set_halted(true);
-                    return;
-                }
-                cpu.trap().enter_exception(CAUSE_ECALL_M, 0);
-                return;
-            }
-            if (in->raw == 0x00100073) {
-                cpu.trap().enter_exception(CAUSE_BREAKPOINT, pc);
-                return;
-            }
-            if (in->raw == 0x30200073) {
-                cpu.trap().return_from_mret();
-                return;
-            }
-            break;
-        case 1:
-            old = csr_read(cpu, csr_addr);
-            set_rd(cpu, in->rd, old);
-            csr_write(cpu, csr_addr, rs1v);
-            break;
-        case 2:
-            old = csr_read(cpu, csr_addr);
-            set_rd(cpu, in->rd, old);
-            csr_write(cpu, csr_addr, old | rs1v);
-            break;
-        case 3:
-            old = csr_read(cpu, csr_addr);
-            set_rd(cpu, in->rd, old);
-            csr_write(cpu, csr_addr, old & ~rs1v);
-            break;
-        case 5:
-            old = csr_read(cpu, csr_addr);
-            set_rd(cpu, in->rd, old);
-            csr_write(cpu, csr_addr, in->rs1);
-            break;
-        case 6:
-            old = csr_read(cpu, csr_addr);
-            set_rd(cpu, in->rd, old);
-            csr_write(cpu, csr_addr, old | in->rs1);
-            break;
-        case 7:
-            old = csr_read(cpu, csr_addr);
-            set_rd(cpu, in->rd, old);
-            csr_write(cpu, csr_addr, old & ~static_cast<uint64_t>(in->rs1));
-            break;
-        default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
+        if (!execute_system_instruction(cpu, *in)) {
             return;
         }
         break;

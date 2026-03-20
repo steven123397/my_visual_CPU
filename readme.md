@@ -12,12 +12,13 @@ myCPU/
 │   ├── memory.c/h      # 主内存 backing 与底层访存辅助
 │   ├── decode.c/h      # 指令解码
 │   ├── trap.cpp/h      # TrapController：异常/中断路由与返回
-│   ├── elf_loader.c    # ELF64 解析与加载
 │   ├── arch/           # CoreState / CsrFile 状态边界
+│   ├── exec/           # 指令语义分块（当前包含 system/CSR 路径）
+│   ├── platform/       # C++ Machine 骨架与平台地址映射
 │   ├── mem/            # C++ Ram/Bus 骨架
 │   ├── devices/        # UART / CLINT 设备对象
-│   ├── loader/         # C++ 镜像装载边界
-│   └── platform/       # C++ Machine 骨架
+│   ├── loader/         # C++ ELF / flat binary 镜像装载边界
+│   └── ...
 ├── tests/asm/          # 汇编测试程序
 └── Makefile
 ```
@@ -50,17 +51,18 @@ main.cpp
 
 - `main.cpp` 负责 CLI 参数解析和启动 `Machine`。
 - `platform/machine.*` 负责组装 CPU、Ram、Bus，并驱动主执行循环。
+- `platform/address_map.h` 负责平台地址映射常量，避免设备层依赖 legacy `Memory` 头。
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
 - `arch/csr_file.*` 负责 CSR 存储，以及 `cycle/time` 等特殊 CSR 读取规则。
 - `mem/ram.*` 和 `mem/bus.*` 提供平台总线与 RAM 边界。
 - `devices/uart16550.*` 和 `devices/clint.*` 提供独立 MMIO 设备对象。
 - `devices/device.h` 提供统一设备接口，供 `Bus` 附加和分发。
-- `loader/elf_loader.*` 和 `loader/binary_loader.*` 提供镜像装载边界。
+- `loader/elf_loader.*` 和 `loader/binary_loader.*` 提供镜像装载边界，直接通过 `Ram` 接口写入镜像内容。
 - `cpu.cpp/h` 负责把 `CoreState + CsrFile + TrapController` 接回现有参考执行路径。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
 - `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret` 返回和定时器中断路由。
-- `elf_loader.c` 负责 ELF64 装载。
+- `exec/system_ops.*` 负责系统指令和 CSR 指令语义，避免 `cpu.cpp` 持续膨胀。
 
 一次指令执行的数据流可以概括为：
 
@@ -144,17 +146,20 @@ make test
 - `platform/machine.cpp`
   `Machine` 实现。当前负责镜像加载、`cpu_init()` 调用和执行循环，镜像装载通过 `ElfLoader/BinaryLoader` 完成，执行阶段仍复用现有参考语义。
 
+- `platform/address_map.h`
+  平台地址映射常量定义。集中声明 RAM、UART、CLINT 的基地址与大小，供入口、设备和 legacy 内存 backing 共享。
+
 - `mem/ram.h`
-  `Ram` 类声明。负责主内存生命周期和 RAM 范围内的 load/store。
+  `Ram` 类声明。负责主内存生命周期、RAM 范围内的 load/store，以及供 loader 使用的 bulk write/fill 接口。
 
 - `mem/ram.cpp`
-  `Ram` 实现。内部调用现有 `mem_init()/mem_free()` 管理 RAM backing，并保持为纯内存 backing。
+  `Ram` 实现。内部调用现有 `mem_init()/mem_free()` 管理 RAM backing，并通过显式 RAM 接口暴露单点和批量写入能力。
 
 - `mem/bus.h`
-  `Bus` 类声明。维护设备映射表，并向上暴露统一的 load/store/tick 接口；`tick()` 返回平台事件而不是暴露具体设备状态。
+  `Bus` 类声明。维护统一设备映射表，并向上暴露统一的 load/store/tick 接口；`tick()` 返回平台事件而不是暴露具体设备状态。
 
 - `mem/bus.cpp`
-  `Bus` 实现。负责设备附加、地址分发以及平台 tick 结果汇总。
+  `Bus` 实现。负责设备附加、地址分发以及平台 tick 结果汇总；RAM 也作为总线设备接入，不再保留专门的 RAM 分支。
 
 - `devices/device.h`
   设备基类声明。定义统一的 `contains/load/store` 接口，供平台总线附加和寻址。
@@ -175,13 +180,13 @@ make test
   `ElfLoader` 类声明。定义 ELF 镜像装载接口。
 
 - `loader/elf_loader.cpp`
-  `ElfLoader` 实现。调用底层 ELF64 loader，把程序段装入 `Ram` backing，并返回入口地址。
+  `ElfLoader` 实现。解析最小 ELF64 头和程序头，把可加载段通过 `Ram` 接口写入内存，并返回入口地址。
 
 - `loader/binary_loader.h`
   `BinaryLoader` 类声明。定义平坦二进制装载接口。
 
 - `loader/binary_loader.cpp`
-  `BinaryLoader` 实现。调用底层 flat binary loader，把镜像装入指定地址。
+  `BinaryLoader` 实现。校验镜像大小后，把平坦二进制通过 `Ram` 接口装入指定地址。
 
 - `cpu.h`
   CPU 外观接口定义。当前聚合 `CoreState`、`CsrFile` 和 `TrapController`，并通过 `Bus` 访问平台内存与设备。
@@ -201,6 +206,12 @@ make test
 - `arch/csr_file.cpp`
   `CsrFile` 实现。负责 CSR 状态复位、普通 CSR 读写，以及 `cycle/time` 这类特殊读取规则。
 
+- `exec/system_ops.h`
+  系统/CSR 指令执行接口声明。当前承接 `opcode 0x73` 的语义执行入口。
+
+- `exec/system_ops.cpp`
+  系统/CSR 指令执行实现。负责 `ecall`、`ebreak`、`mret` 以及 CSR 读改写语义，并通过 `TrapController` 进入 trap 路径。
+
 - `decode.h`
   `Insn` 指令结构定义，供译码阶段和执行阶段共享。
 
@@ -208,10 +219,10 @@ make test
   译码器实现。根据 opcode 判断 I/S/B/U/J 等格式，提取 `rd/rs1/rs2`、`funct3/funct7` 和符号扩展后的立即数。
 
 - `memory.h`
-  地址空间常量和 `Memory` 结构定义，作为 RAM backing 和 ELF/flat binary 装载使用。
+  `Memory` 结构和 legacy RAM backing 接口定义，包括底层单点/批量读写辅助；平台地址常量已拆到 `platform/address_map.h`。
 
 - `memory.c`
-  RAM 访问实现。`mem_read()/mem_write()` 只处理主内存范围，`mem_load_binary()` 用于把平坦二进制直接装入指定地址。
+  RAM 访问实现。提供底层单点读写与批量写入/填零辅助，供 `Ram` 封装后复用。
 
 - `trap.h`
   `TrapController` 声明。封装异常进入、中断进入、`mret` 返回以及待处理中断检查接口。
@@ -219,8 +230,6 @@ make test
 - `trap.cpp`
   `TrapController` 实现。负责保存现场、写入 `mepc/mcause/mtval`、根据 `mtvec` 进入 trap、处理定时器中断挂起位，并在 `mret` 时从 `mepc` 恢复执行。
 
-- `elf_loader.c`
-  简化版 ELF64 加载器。检查 ELF 文件头，遍历程序头装载 `PT_LOAD` 段，把段内容写入模拟内存，并对 BSS 区域清零。
 
 ### `myCPU/tests/asm/`
 
