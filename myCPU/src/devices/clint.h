@@ -2,16 +2,17 @@
 
 #include <cstdint>
 
+#include "device.h"
 #include "../memory.h"
 
-class Clint {
+class Clint : public Device {
 public:
-    bool contains(uint64_t addr) const;
-    uint64_t load(uint64_t addr, int size) const;
-    void store(uint64_t addr, uint64_t value, int size);
+    Clint();
 
-    void tick();
-    bool timer_pending() const;
+    uint64_t load(uint64_t addr, int size) override;
+    void store(uint64_t addr, uint64_t value, int size) override;
+
+    bool tick();
 
 private:
     uint64_t mtime_{0};

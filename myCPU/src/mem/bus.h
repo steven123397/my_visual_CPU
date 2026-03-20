@@ -1,26 +1,30 @@
 #pragma once
 
 #include <stdint.h>
+#include <vector>
 
 #include "../devices/clint.h"
-#include "../devices/uart16550.h"
+#include "../devices/device.h"
 #include "ram.h"
+
+struct BusTickResult {
+    bool timer_interrupt_pending{false};
+};
 
 class Bus {
 public:
-    Bus(Ram& ram, Uart16550& uart, Clint& clint);
+    Bus(Ram& ram, Clint& clint);
+
+    void attach(Device& device);
 
     uint64_t load(uint64_t addr, int size);
     void store(uint64_t addr, uint64_t value, int size);
-    void load_binary(const char* path, uint64_t addr);
-    void tick();
-    bool timer_pending() const;
-
-    Memory* raw_ram();
-    const Memory* raw_ram() const;
+    BusTickResult tick();
 
 private:
+    Device* find_device(uint64_t addr);
+
     Ram& ram_;
-    Uart16550& uart_;
     Clint& clint_;
+    std::vector<Device*> devices_;
 };

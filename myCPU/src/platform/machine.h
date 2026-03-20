@@ -7,6 +7,8 @@
 
 #include "../devices/clint.h"
 #include "../devices/uart16550.h"
+#include "../loader/binary_loader.h"
+#include "../loader/elf_loader.h"
 #include "../mem/bus.h"
 #include "../mem/ram.h"
 
@@ -23,6 +25,8 @@ private:
     Ram ram_;
     Uart16550 uart_;
     Clint clint_;
+    ElfLoader elf_loader_;
+    BinaryLoader binary_loader_;
     Bus bus_;
     bool loaded_{false};
 };

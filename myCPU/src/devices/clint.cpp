@@ -1,10 +1,8 @@
 #include "clint.h"
 
-bool Clint::contains(uint64_t addr) const {
-    return addr >= CLINT_BASE && addr < CLINT_BASE + CLINT_SIZE;
-}
+Clint::Clint() : Device(CLINT_BASE, CLINT_SIZE) {}
 
-uint64_t Clint::load(uint64_t addr, int /*size*/) const {
+uint64_t Clint::load(uint64_t addr, int /*size*/) {
     const uint64_t offset = addr - CLINT_BASE;
     if (offset == 0xBFF8) {
         return mtime_;
@@ -25,10 +23,7 @@ void Clint::store(uint64_t addr, uint64_t value, int /*size*/) {
     }
 }
 
-void Clint::tick() {
+bool Clint::tick() {
     ++mtime_;
-}
-
-bool Clint::timer_pending() const {
     return mtime_ >= mtimecmp_;
 }

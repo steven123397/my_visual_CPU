@@ -9,13 +9,14 @@ myCPU/
 ├── src/
 │   ├── main.cpp        # C++ 入口，CLI 参数与 Machine 启动
 │   ├── cpu.cpp/h       # CPU 外观接口 + 参考执行路径
-│   ├── memory.c/h      # 主内存 backing + 镜像装载支持
+│   ├── memory.c/h      # 主内存 backing 与底层访存辅助
 │   ├── decode.c/h      # 指令解码
 │   ├── trap.cpp/h      # TrapController：异常/中断路由与返回
 │   ├── elf_loader.c    # ELF64 解析与加载
 │   ├── arch/           # CoreState / CsrFile 状态边界
 │   ├── mem/            # C++ Ram/Bus 骨架
 │   ├── devices/        # UART / CLINT 设备对象
+│   ├── loader/         # C++ 镜像装载边界
 │   └── platform/       # C++ Machine 骨架
 ├── tests/asm/          # 汇编测试程序
 └── Makefile
@@ -31,11 +32,11 @@ main.cpp
         ├── Ram                      初始化 128MB 主内存
         ├── Uart16550 / Clint        独立设备对象
         ├── Bus                      分发 RAM 与设备访问
-        ├── elf_load()/load_binary   加载 ELF 或平坦二进制
+        ├── ElfLoader / BinaryLoader     加载 ELF 或平坦二进制
         ├── cpu_init()               初始化 CoreState、CsrFile
         └── while (!halted)
               └── cpu_step(cpu, bus)
-              ├── Bus::tick() / 通过 TrapController 检查定时器中断
+              ├── Bus::tick() 返回平台事件 / 通过 TrapController 检查定时器中断
               ├── bus.load()        取指
               ├── decode()          指令译码
               ├── execute()         执行指令
@@ -53,6 +54,8 @@ main.cpp
 - `arch/csr_file.*` 负责 CSR 存储，以及 `cycle/time` 等特殊 CSR 读取规则。
 - `mem/ram.*` 和 `mem/bus.*` 提供平台总线与 RAM 边界。
 - `devices/uart16550.*` 和 `devices/clint.*` 提供独立 MMIO 设备对象。
+- `devices/device.h` 提供统一设备接口，供 `Bus` 附加和分发。
+- `loader/elf_loader.*` 和 `loader/binary_loader.*` 提供镜像装载边界。
 - `cpu.cpp/h` 负责把 `CoreState + CsrFile + TrapController` 接回现有参考执行路径。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
@@ -139,19 +142,22 @@ make test
   `Machine` 类声明。聚合 `CPU`、`Ram` 和 `Bus`，为后续平台化重构提供统一入口。
 
 - `platform/machine.cpp`
-  `Machine` 实现。当前负责镜像加载、`cpu_init()` 调用和执行循环，仍复用现有 C 核心语义。
+  `Machine` 实现。当前负责镜像加载、`cpu_init()` 调用和执行循环，镜像装载通过 `ElfLoader/BinaryLoader` 完成，执行阶段仍复用现有参考语义。
 
 - `mem/ram.h`
   `Ram` 类声明。负责主内存生命周期和 RAM 范围内的 load/store。
 
 - `mem/ram.cpp`
-  `Ram` 实现。内部调用现有 `mem_init()/mem_free()` 管理 RAM backing，并封装平坦二进制装载。
+  `Ram` 实现。内部调用现有 `mem_init()/mem_free()` 管理 RAM backing，并保持为纯内存 backing。
 
 - `mem/bus.h`
-  `Bus` 类声明。聚合 `Ram`、`Uart16550` 和 `Clint`，向上暴露统一的 load/store/tick 接口。
+  `Bus` 类声明。维护设备映射表，并向上暴露统一的 load/store/tick 接口；`tick()` 返回平台事件而不是暴露具体设备状态。
 
 - `mem/bus.cpp`
-  `Bus` 实现。负责地址分发、设备访问以及 CLINT tick 状态推进。
+  `Bus` 实现。负责设备附加、地址分发以及平台 tick 结果汇总。
+
+- `devices/device.h`
+  设备基类声明。定义统一的 `contains/load/store` 接口，供平台总线附加和寻址。
 
 - `devices/uart16550.h`
   `Uart16550` 类声明。封装最小 16550 串口寄存器访问与 stdout 输出行为。
@@ -163,7 +169,19 @@ make test
   `Clint` 类声明。封装 `mtime/mtimecmp`、定时器 tick 和 MMIO 访问接口。
 
 - `devices/clint.cpp`
-  `Clint` 实现。负责定时器状态推进、`mtime/mtimecmp` 读写和待处理中断判定。
+  `Clint` 实现。负责定时器状态推进、`mtime/mtimecmp` 读写，并在 tick 时返回是否产生待处理中断。
+
+- `loader/elf_loader.h`
+  `ElfLoader` 类声明。定义 ELF 镜像装载接口。
+
+- `loader/elf_loader.cpp`
+  `ElfLoader` 实现。调用底层 ELF64 loader，把程序段装入 `Ram` backing，并返回入口地址。
+
+- `loader/binary_loader.h`
+  `BinaryLoader` 类声明。定义平坦二进制装载接口。
+
+- `loader/binary_loader.cpp`
+  `BinaryLoader` 实现。调用底层 flat binary loader，把镜像装入指定地址。
 
 - `cpu.h`
   CPU 外观接口定义。当前聚合 `CoreState`、`CsrFile` 和 `TrapController`，并通过 `Bus` 访问平台内存与设备。

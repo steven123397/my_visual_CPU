@@ -10,9 +10,7 @@ constexpr uint32_t UART_LSR_THRE = 0x20;
 
 }  // namespace
 
-bool Uart16550::contains(uint64_t addr) const {
-    return addr >= UART_BASE && addr < UART_BASE + 8;
-}
+Uart16550::Uart16550() : Device(UART_BASE, UART_SIZE) {}
 
 uint64_t Uart16550::load(uint64_t addr, int /*size*/) {
     const uint32_t offset = static_cast<uint32_t>(addr - UART_BASE);

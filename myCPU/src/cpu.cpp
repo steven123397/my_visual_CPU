@@ -402,8 +402,8 @@ void csr_write(CPU& cpu, uint32_t addr, uint64_t val) {
 }
 
 void cpu_step(CPU& cpu, Bus& bus) {
-    bus.tick();
-    if (bus.timer_pending()) {
+    const BusTickResult tick = bus.tick();
+    if (tick.timer_interrupt_pending) {
         cpu.trap().raise_timer_interrupt();
     }
     cpu.trap().service_pending_interrupts();

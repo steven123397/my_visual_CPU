@@ -2,11 +2,13 @@
 
 #include <cstdint>
 
+#include "device.h"
 #include "../memory.h"
 
-class Uart16550 {
+class Uart16550 : public Device {
 public:
-    bool contains(uint64_t addr) const;
-    uint64_t load(uint64_t addr, int size);
-    void store(uint64_t addr, uint64_t value, int size);
+    Uart16550();
+
+    uint64_t load(uint64_t addr, int size) override;
+    void store(uint64_t addr, uint64_t value, int size) override;
 };

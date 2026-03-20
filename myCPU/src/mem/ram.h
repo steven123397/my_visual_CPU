@@ -1,5 +1,8 @@
 #pragma once
 
+class ElfLoader;
+class BinaryLoader;
+
 extern "C" {
 #include "../memory.h"
 }
@@ -14,11 +17,10 @@ public:
 
     uint64_t load(uint64_t addr, int size);
     void store(uint64_t addr, uint64_t value, int size);
-    void load_binary(const char* path, uint64_t addr);
-
-    Memory* raw_memory();
-    const Memory* raw_memory() const;
 
 private:
+    friend class ElfLoader;
+    friend class BinaryLoader;
+
     Memory mem_{};
 };
