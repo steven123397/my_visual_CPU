@@ -220,7 +220,7 @@ Minimum expectations:
 Current baseline expectation for local validation:
 
 - Keep `make test` green
-- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, and `exception_traps` assembly regressions as required guardrails when touching the reference path
+- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, and `exception_traps` assembly regressions, plus the flat-binary `hello` load path, as required guardrails when touching the reference path
 - If a refactor changes observable UART output or causes hangs, update tests only when the behavior change is intentional and justified
 
 If a feature is too complex to test, the design is probably still too large.

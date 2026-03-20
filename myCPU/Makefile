@@ -9,6 +9,7 @@ DEPS     = $(OBJS:.o=.d)
 TARGET   = mycpu
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
+FLAT_BIN_TESTS = hello
 TEST_TIMEOUT ?= 2s
 
 # RISC-V toolchain (adjust prefix if needed)
@@ -41,7 +42,7 @@ tests/asm/%.elf: tests/asm/%.S | check-riscv-toolchain
 tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 	$(RV_OBJCOPY) -O binary $< $@
 
-test: $(TARGET) $(ASM_ELFS) $(ASM_TESTS:%=test-%)
+test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(ASM_TESTS:%=test-%) $(FLAT_BIN_TESTS:%=test-flat-%)
 
 FORCE:
 
@@ -70,6 +71,30 @@ test-%: FORCE $(TARGET) tests/asm/%.elf
 	fi; \
 	if [ "$$output" != "$$expected" ]; then \
 		echo "Unexpected output for $*" >&2; \
+		printf 'Expected: %s\n' "$$expected" >&2; \
+		printf 'Actual: %s\n' "$$output" >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-flat-%: FORCE $(TARGET) tests/asm/%.bin
+	@case "$*" in \
+		hello) expected='Hello, RISC-V!' ;; \
+		*) echo "Unknown flat-binary test: $*" >&2; exit 1 ;; \
+	esac; \
+	echo "=== $* (flat) ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) -b 80000000 tests/asm/$*.bin 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: $* (flat)" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	if [ "$$output" != "$$expected" ]; then \
+		echo "Unexpected output for $* (flat)" >&2; \
 		printf 'Expected: %s\n' "$$expected" >&2; \
 		printf 'Actual: %s\n' "$$output" >&2; \
 		exit 1; \
