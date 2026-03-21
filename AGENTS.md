@@ -8,6 +8,7 @@ This repository currently contains `myCPU`, a small RISC-V simulator that began 
 - RV64 integer execution for a minimal bare-metal environment
 - CSR access
 - M-mode trap handling
+- initial M/S/U privilege groundwork
 - UART MMIO output
 - CLINT timer interrupt basics
 
@@ -22,6 +23,7 @@ What exists now:
 - A direct fetch-decode-execute loop
 - A simple physical memory model plus minimal MMIO
 - Basic exception and interrupt handling
+- Initial M/S/U privilege groundwork, including `MPP` tracking, `sret`, and minimal supervisor exception delegation via `medeleg`
 - A `Machine + Ram + Uart16550 + Clint + Bus` C++ platform skeleton around the reference path
 - Explicit `ElfLoader + BinaryLoader` C++ loader boundaries above raw RAM backing
 - A first `CoreState + CsrFile` state split inside the CPU path
@@ -36,8 +38,9 @@ What exists now:
   - CSR access and `ecall` / `mret` smoke coverage
   - CLINT timer interrupt delivery and `mret` return
   - `mtvec` direct / vectored mode routing
-  - M-mode trap-state behavior (`mstatus` / `mepc`)
-  - `ebreak` and illegal-instruction exception behavior
+- M-mode trap-state behavior (`mstatus` / `mepc`)
+- `ebreak` and illegal-instruction exception behavior
+- privilege transitions across `U/S/M`, `sret`, minimal supervisor exception delegation, and CSR access-control guardrails
 
 What does not yet exist:
 
@@ -258,6 +261,7 @@ What is already landed in that migration:
 - ELF and flat-binary loading now write through explicit `Ram` interfaces rather than reaching into raw `Memory` state from loader code
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
 - Trap logic now has a first explicit `TrapController` boundary, with current regression coverage around trap entry, return, timer interrupts, `mtvec` modes, and basic M-mode exception semantics
+- Privilege groundwork now includes `MPP` tracking, `ecall` cause separation by privilege, `sret`, minimal `medeleg`-based supervisor exception delegation, and CSR privilege/read-only access checks
 - CPU fetch/load/store now routes through `Bus`, and platform tick events now flow through `TrapController`, so RAM/device dispatch and timer-event routing are no longer hard-coded in the CPU step path
 - Instruction-family splits now exist for integer, control-flow, memory, and system/CSR execution, so semantic extraction has started without introducing multi-backend abstraction yet
 - The repository still intentionally keeps a simple architectural reference execution path

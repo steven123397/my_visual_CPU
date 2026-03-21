@@ -5,6 +5,7 @@ void CoreState::reset(uint64_t entry) {
     pc_ = entry;
     cycle_ = 0;
     halted_ = false;
+    privilege_mode_ = PrivilegeMode::Machine;
 }
 
 uint64_t CoreState::read_gpr(uint32_t idx) const {
@@ -39,4 +40,12 @@ bool CoreState::halted() const {
 
 void CoreState::set_halted(bool halted) {
     halted_ = halted;
+}
+
+PrivilegeMode CoreState::privilege_mode() const {
+    return privilege_mode_;
+}
+
+void CoreState::set_privilege_mode(PrivilegeMode mode) {
+    privilege_mode_ = mode;
 }

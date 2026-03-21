@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始 C 核心语义为主，已支持裸机程序执行、UART 串口输出和 M-mode 异常/中断处理。
+当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始 C 核心语义为主，已支持裸机程序执行、UART 串口输出、M-mode 异常/中断处理，以及第一批 supervisor 特权语义地基。
 
 ## 目录结构
 
@@ -53,7 +53,7 @@ main.cpp
 - `platform/machine.*` 负责组装 CPU、Ram、Bus，并驱动主执行循环。
 - `platform/address_map.h` 负责平台地址映射常量，避免设备层依赖 legacy `Memory` 头。
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
-- `arch/csr_file.*` 负责 CSR 存储，以及 `cycle/time` 等特殊 CSR 读取规则。
+- `arch/csr_file.*` 负责已实现 CSR 集合、`cycle/time` 等特殊读取规则，以及 `sstatus/sie/sip` 对 `mstatus/mie/mip` 的别名视图。
 - `mem/ram.*` 和 `mem/bus.*` 提供平台总线与 RAM 边界。
 - `devices/uart16550.*` 和 `devices/clint.*` 提供独立 MMIO 设备对象。
 - `devices/device.h` 提供统一设备接口，供 `Bus` 附加和分发。
@@ -61,7 +61,7 @@ main.cpp
 - `cpu.cpp/h` 负责把 `CoreState + CsrFile + TrapController` 接回现有参考执行路径。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
-- `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret` 返回和定时器中断路由。
+- `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret/sret` 返回、定时器中断路由，以及当前最小 `medeleg` 异常委托路径。
 - `exec/integer_ops.*`、`exec/control_flow_ops.*`、`exec/memory_ops.*`、`exec/system_ops.*` 负责按指令族拆分参考语义，避免 `cpu.cpp` 持续膨胀。
 
 一次指令执行的数据流可以概括为：
@@ -102,7 +102,7 @@ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
 
-`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归。
+`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`csr_access_control` 这类特权/CSR 回归。
 
 ## 内存映射
 
@@ -119,6 +119,9 @@ make test
 - ELF64 程序加载
 - CSR 指令（CSRRW/CSRRS/CSRRC 及立即数变体）
 - M-mode 异常与中断（ECALL、EBREAK、MRET）
+- 第一批 M/S/U 特权语义：`MPP` 跟踪、`ecall` cause 区分、`sret` 返回
+- 基于 `medeleg` 的最小 supervisor 异常委托
+- CSR 特权级/只读属性检查，非法访问触发 illegal-instruction trap
 - UART MMIO（写入直接输出到 stdout）
 - CLINT 定时器中断
 - `ecall` a7=93 退出约定
