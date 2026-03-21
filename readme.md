@@ -61,7 +61,7 @@ main.cpp
 - `cpu.cpp/h` 负责把 `CoreState + CsrFile + TrapController` 接回现有参考执行路径。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
-- `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret/sret` 返回、定时器中断路由，以及当前最小 `medeleg` 异常委托路径。
+- `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret/sret` 返回、定时器中断路由，以及当前最小 `medeleg/mideleg` supervisor trap 委托路径。
 - `exec/integer_ops.*`、`exec/control_flow_ops.*`、`exec/memory_ops.*`、`exec/system_ops.*` 负责按指令族拆分参考语义，避免 `cpu.cpp` 持续膨胀。
 
 一次指令执行的数据流可以概括为：
@@ -102,7 +102,7 @@ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
 
-`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`csr_access_control` 这类特权/CSR 回归。
+`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control` 这类特权/CSR 回归。
 
 ## 内存映射
 
@@ -121,6 +121,7 @@ make test
 - M-mode 异常与中断（ECALL、EBREAK、MRET）
 - 第一批 M/S/U 特权语义：`MPP` 跟踪、`ecall` cause 区分、`sret` 返回
 - 基于 `medeleg` 的最小 supervisor 异常委托
+- 基于 `mideleg` 的最小 supervisor 定时器中断递送
 - CSR 特权级/只读属性检查，非法访问触发 illegal-instruction trap
 - UART MMIO（写入直接输出到 stdout）
 - CLINT 定时器中断
@@ -260,6 +261,7 @@ make test
 - `csr_trap.S`：验证 CSR 读写、立即数 CSR 指令以及 `ecall`/`mret` 的基础陷入返回路径。
 - `timer_interrupt.S`：验证 CLINT 定时器中断、`mtvec` 向量入口以及 `mret` 返回后的继续执行。
 - `mtvec_modes.S`：验证 `mtvec` direct/vectored 两种模式下，异常和定时器中断命中正确的 trap 入口。
+- `supervisor_timer_interrupt.S`：验证 `mideleg` 驱动的 supervisor timer interrupt 递送、`stvec` 向量入口以及 `sret` 返回。
 - `trap_state.S`：验证 trap 进入/返回时 `mstatus` 的 `MIE/MPIE` 状态变化，以及 `mepc` 的保存与恢复。
 - `exception_traps.S`：验证 `ebreak` 与非法指令 trap 的 `mcause`、`mepc`、`mtval` 行为。
 - `loads_signed_unsigned.S`：验证 `LB/LBU`、`LH/LHU`、`LW/LWU`、`LD` 的符号扩展与零扩展语义。

@@ -3,7 +3,16 @@
 namespace {
 
 constexpr uint64_t CAUSE_INT_BIT = 1ULL << 63;
-constexpr uint64_t CAUSE_TIMER_INT = 0x8000000000000007ULL;
+constexpr uint64_t CAUSE_SUPERVISOR_TIMER_INT = CAUSE_INT_BIT | 5ULL;
+constexpr uint64_t CAUSE_MACHINE_TIMER_INT = CAUSE_INT_BIT | 7ULL;
+
+uint64_t interrupt_cause_code(uint64_t cause) {
+    return cause & ~CAUSE_INT_BIT;
+}
+
+bool is_interrupt_cause(uint64_t cause) {
+    return (cause & CAUSE_INT_BIT) != 0;
+}
 
 uint64_t encode_privilege_mode(PrivilegeMode mode) {
     return static_cast<uint64_t>(mode);
@@ -27,6 +36,29 @@ uint64_t trap_vector_base(uint64_t tvec, uint64_t cause) {
         return (tvec & ~3ULL) + 4 * (cause & ~CAUSE_INT_BIT);
     }
     return tvec & ~3ULL;
+}
+
+bool machine_interrupts_enabled(const CoreState& core, uint64_t mstatus) {
+    switch (core.privilege_mode()) {
+    case PrivilegeMode::Machine:
+        return (mstatus & MSTATUS_MIE) != 0;
+    case PrivilegeMode::Supervisor:
+    case PrivilegeMode::User:
+        return true;
+    }
+    return false;
+}
+
+bool supervisor_interrupts_enabled(const CoreState& core, uint64_t mstatus) {
+    switch (core.privilege_mode()) {
+    case PrivilegeMode::Machine:
+        return false;
+    case PrivilegeMode::Supervisor:
+        return (mstatus & MSTATUS_SIE) != 0;
+    case PrivilegeMode::User:
+        return true;
+    }
+    return false;
 }
 
 }  // namespace
@@ -76,28 +108,40 @@ void TrapController::handle_platform_events(const PlatformEvents& events) {
 }
 
 void TrapController::raise_timer_interrupt() {
+    const uint64_t mideleg = csr_.read(CSR_MIDELEG, core_);
     const uint64_t mip = csr_.read(CSR_MIP, core_);
-    csr_.write(CSR_MIP, mip | MIE_MTIE);
+    if (mideleg & MIE_STIE) {
+        csr_.write(CSR_MIP, (mip | MIE_STIE) & ~MIE_MTIE);
+        return;
+    }
+    csr_.write(CSR_MIP, (mip | MIE_MTIE) & ~MIE_STIE);
 }
 
 void TrapController::service_pending_interrupts() {
-    if (!(csr_.read(CSR_MSTATUS, core_) & MSTATUS_MIE)) {
+    const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
+    const uint64_t mie = csr_.read(CSR_MIE, core_);
+    const uint64_t mip = csr_.read(CSR_MIP, core_);
+    const uint64_t mideleg = csr_.read(CSR_MIDELEG, core_);
+
+    if ((mie & MIE_MTIE) && (mip & MIE_MTIE) && machine_interrupts_enabled(core_, mstatus)) {
+        csr_.write(CSR_MIP, mip & ~MIE_MTIE);
+        enter_interrupt(CAUSE_MACHINE_TIMER_INT);
         return;
     }
 
-    const uint64_t mie = csr_.read(CSR_MIE, core_);
-    const uint64_t mip = csr_.read(CSR_MIP, core_);
-    if ((mie & MIE_MTIE) && (mip & MIE_MTIE)) {
-        csr_.write(CSR_MIP, mip & ~MIE_MTIE);
-        enter_interrupt(CAUSE_TIMER_INT);
+    if ((mideleg & MIE_STIE) && (mie & MIE_STIE) && (mip & MIE_STIE) && supervisor_interrupts_enabled(core_, mstatus)) {
+        csr_.write(CSR_MIP, mip & ~MIE_STIE);
+        enter_interrupt(CAUSE_SUPERVISOR_TIMER_INT);
     }
 }
 
 void TrapController::enter_trap(uint64_t cause, uint64_t tval) {
     const bool delegated_to_supervisor =
         core_.privilege_mode() != PrivilegeMode::Machine &&
-        !(cause & CAUSE_INT_BIT) &&
-        (csr_.read(CSR_MEDELEG, core_) & (1ULL << cause));
+        ((is_interrupt_cause(cause) &&
+          (csr_.read(CSR_MIDELEG, core_) & (1ULL << interrupt_cause_code(cause)))) ||
+         (!is_interrupt_cause(cause) &&
+          (csr_.read(CSR_MEDELEG, core_) & (1ULL << cause))));
 
     if (delegated_to_supervisor) {
         uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
