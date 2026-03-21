@@ -102,7 +102,7 @@ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
 
-`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。
+`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归。
 
 ## 内存映射
 
@@ -259,6 +259,11 @@ make test
 - `mtvec_modes.S`：验证 `mtvec` direct/vectored 两种模式下，异常和定时器中断命中正确的 trap 入口。
 - `trap_state.S`：验证 trap 进入/返回时 `mstatus` 的 `MIE/MPIE` 状态变化，以及 `mepc` 的保存与恢复。
 - `exception_traps.S`：验证 `ebreak` 与非法指令 trap 的 `mcause`、`mepc`、`mtval` 行为。
+- `loads_signed_unsigned.S`：验证 `LB/LBU`、`LH/LHU`、`LW/LWU`、`LD` 的符号扩展与零扩展语义。
+- `alu_word.S`：验证 `ADDIW/SLLIW/SRLIW/SRAIW` 与 `ADDW/SUBW/SLLW/SRLW/SRAW` 的 32 位结果截断和符号扩展。
+- `branches_signed_unsigned.S`：验证 `BLT/BGE` 与 `BLTU/BGEU` 在相同输入下的 signed/unsigned 语义差异。
+- `muldiv.S`：验证 `RV64M` 乘除、取模以及除零边界行为。
+- `fence_noop.S`：固定当前 `FENCE/FENCE.I` 在参考模型中的 no-op 行为。
 
 ## 当前项目定位
 
