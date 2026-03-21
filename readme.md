@@ -13,7 +13,7 @@ myCPU/
 │   ├── decode.c/h      # 指令解码
 │   ├── trap.cpp/h      # TrapController：异常/中断路由与返回
 │   ├── arch/           # CoreState / CsrFile 状态边界
-│   ├── exec/           # 指令语义分块（当前包含 system/CSR 路径）
+│   ├── exec/           # 指令语义分块（integer / control-flow / memory / system）
 │   ├── platform/       # C++ Machine 骨架与平台地址映射
 │   ├── mem/            # C++ Ram/Bus 骨架
 │   ├── devices/        # UART / CLINT 设备对象
@@ -62,7 +62,7 @@ main.cpp
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
 - `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret` 返回和定时器中断路由。
-- `exec/system_ops.*` 负责系统指令和 CSR 指令语义，避免 `cpu.cpp` 持续膨胀。
+- `exec/integer_ops.*`、`exec/control_flow_ops.*`、`exec/memory_ops.*`、`exec/system_ops.*` 负责按指令族拆分参考语义，避免 `cpu.cpp` 持续膨胀。
 
 一次指令执行的数据流可以概括为：
 
@@ -192,7 +192,7 @@ make test
   CPU 外观接口定义。当前聚合 `CoreState`、`CsrFile` 和 `TrapController`，并通过 `Bus` 访问平台内存与设备。
 
 - `cpu.cpp`
-  核心执行器。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()` 和 `cpu_step()`，覆盖算术、分支、访存、乘除、CSR 和系统指令执行；当前通过 `Bus` 访问平台，通过 `CoreState + CsrFile + TrapController` 管理 CPU 状态与 trap 路由。
+  CPU 调度入口。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()` 和 `cpu_step()`，当前主要负责取操作数、按 opcode 分发到各个 `exec/` 模块，并通过 `CoreState + CsrFile + TrapController` 管理 CPU 状态与 trap 路由。
 
 - `arch/core_state.h`
   `CoreState` 声明。封装 32 个通用寄存器、`pc`、周期计数和停机状态，为后续继续拆语义和执行后端提供稳定状态边界。
@@ -205,6 +205,24 @@ make test
 
 - `arch/csr_file.cpp`
   `CsrFile` 实现。负责 CSR 状态复位、普通 CSR 读写，以及 `cycle/time` 这类特殊读取规则。
+
+- `exec/integer_ops.h`
+  整数指令族执行接口声明。承接 `LUI/AUIPC`、整数立即数、整数寄存器、`W` 变体和当前 `FENCE` no-op 路径。
+
+- `exec/integer_ops.cpp`
+  整数指令族执行实现。负责 RV64I/RV64M 中的整数算术、比较、移位和 `W` 类语义。
+
+- `exec/control_flow_ops.h`
+  控制流指令执行接口声明。承接跳转与条件分支语义。
+
+- `exec/control_flow_ops.cpp`
+  控制流指令执行实现。负责 `JAL`、`JALR` 以及各类条件分支的目标地址与 next-pc 更新。
+
+- `exec/memory_ops.h`
+  访存指令执行接口声明。承接 load/store 语义。
+
+- `exec/memory_ops.cpp`
+  访存指令执行实现。负责带符号/无符号 load 和各宽度 store，并通过 `Bus` 访问 RAM 或设备。
 
 - `exec/system_ops.h`
   系统/CSR 指令执行接口声明。当前承接 `opcode 0x73` 的语义执行入口。

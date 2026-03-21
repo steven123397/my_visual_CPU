@@ -26,7 +26,7 @@ What exists now:
 - Explicit `ElfLoader + BinaryLoader` C++ loader boundaries above raw RAM backing
 - A first `CoreState + CsrFile` state split inside the CPU path
 - A first `TrapController` boundary for trap / interrupt routing inside the CPU path
-- A first instruction-semantics extraction for `opcode 0x73` system/CSR handling outside the monolithic CPU execution file
+- Instruction semantics are now split by family into explicit execution modules for integer, control-flow, memory, and system/CSR handling outside the monolithic CPU execution file
 - CPU fetch/load/store paths routed through `Bus` instead of directly through the legacy `Memory*` interface
 - `Bus::tick()` now aggregates device-driven platform events instead of hard-coding CLINT state in the CPU step path
 - `Ram` now exposes explicit bulk write/fill interfaces for image loading and participates in bus dispatch as a normal attached device
@@ -259,7 +259,7 @@ What is already landed in that migration:
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
 - Trap logic now has a first explicit `TrapController` boundary, with current regression coverage around trap entry, return, timer interrupts, `mtvec` modes, and basic M-mode exception semantics
 - CPU fetch/load/store now routes through `Bus`, and platform tick events now flow through `TrapController`, so RAM/device dispatch and timer-event routing are no longer hard-coded in the CPU step path
-- A first small instruction-family split now exists for system/CSR execution, so semantic extraction has started without introducing multi-backend abstraction yet
+- Instruction-family splits now exist for integer, control-flow, memory, and system/CSR execution, so semantic extraction has started without introducing multi-backend abstraction yet
 - The repository still intentionally keeps a simple architectural reference execution path
 
 When planning the C++ restructuring, favor boundaries such as:

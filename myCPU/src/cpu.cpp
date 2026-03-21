@@ -1,5 +1,8 @@
 #include "cpu.h"
 
+#include "exec/control_flow_ops.h"
+#include "exec/integer_ops.h"
+#include "exec/memory_ops.h"
 #include "exec/system_ops.h"
 #include "mem/bus.h"
 
@@ -11,10 +14,6 @@ namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
-void set_rd(CPU& cpu, uint8_t rd, uint64_t value) {
-    cpu.core().write_gpr(rd, value);
-}
-
 void execute(CPU& cpu, Bus& bus, Insn* in) {
     CoreState& core = cpu.core();
     const uint64_t pc = core.pc();
@@ -25,279 +24,35 @@ void execute(CPU& cpu, Bus& bus, Insn* in) {
 
     switch (in->opcode) {
     case 0x37:
-        set_rd(cpu, in->rd, static_cast<uint64_t>(imm));
-        break;
     case 0x17:
-        set_rd(cpu, in->rd, pc + static_cast<uint64_t>(imm));
+    case 0x13:
+    case 0x1B:
+    case 0x33:
+    case 0x3B:
+    case 0x0F:
+        if (!execute_integer_instruction(cpu, *in, rs1v, rs2v, imm, pc)) {
+            return;
+        }
         break;
     case 0x6F:
-        set_rd(cpu, in->rd, next_pc);
-        next_pc = pc + static_cast<uint64_t>(imm);
-        break;
     case 0x67:
-        set_rd(cpu, in->rd, next_pc);
-        next_pc = (rs1v + static_cast<uint64_t>(imm)) & ~1ULL;
-        break;
-    case 0x63: {
-        int taken = 0;
-        switch (in->funct3) {
-        case 0:
-            taken = rs1v == rs2v;
-            break;
-        case 1:
-            taken = rs1v != rs2v;
-            break;
-        case 4:
-            taken = static_cast<int64_t>(rs1v) < static_cast<int64_t>(rs2v);
-            break;
-        case 5:
-            taken = static_cast<int64_t>(rs1v) >= static_cast<int64_t>(rs2v);
-            break;
-        case 6:
-            taken = rs1v < rs2v;
-            break;
-        case 7:
-            taken = rs1v >= rs2v;
-            break;
-        default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
-            return;
-        }
-        if (taken) {
-            next_pc = pc + static_cast<uint64_t>(imm);
-        }
-        break;
-    }
-    case 0x03: {
-        const uint64_t addr = rs1v + static_cast<uint64_t>(imm);
-        uint64_t val = 0;
-        switch (in->funct3) {
-        case 0:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int8_t>(bus.load(addr, 1))));
-            break;
-        case 1:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int16_t>(bus.load(addr, 2))));
-            break;
-        case 2:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(bus.load(addr, 4))));
-            break;
-        case 3:
-            val = bus.load(addr, 8);
-            break;
-        case 4:
-            val = static_cast<uint8_t>(bus.load(addr, 1));
-            break;
-        case 5:
-            val = static_cast<uint16_t>(bus.load(addr, 2));
-            break;
-        case 6:
-            val = static_cast<uint32_t>(bus.load(addr, 4));
-            break;
-        default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
-            return;
-        }
-        set_rd(cpu, in->rd, val);
-        break;
-    }
-    case 0x23: {
-        const uint64_t addr = rs1v + static_cast<uint64_t>(imm);
-        switch (in->funct3) {
-        case 0:
-            bus.store(addr, rs2v, 1);
-            break;
-        case 1:
-            bus.store(addr, rs2v, 2);
-            break;
-        case 2:
-            bus.store(addr, rs2v, 4);
-            break;
-        case 3:
-            bus.store(addr, rs2v, 8);
-            break;
-        default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
+    case 0x63:
+        if (!execute_control_flow_instruction(cpu, *in, rs1v, rs2v, imm, pc, next_pc)) {
             return;
         }
         break;
-    }
-    case 0x13: {
-        uint64_t val = 0;
-        const uint8_t shamt = static_cast<uint8_t>(in->rs2 | ((in->funct7 & 1U) << 5));
-        switch (in->funct3) {
-        case 0:
-            val = rs1v + static_cast<uint64_t>(imm);
-            break;
-        case 1:
-            val = rs1v << shamt;
-            break;
-        case 2:
-            val = static_cast<int64_t>(rs1v) < imm;
-            break;
-        case 3:
-            val = rs1v < static_cast<uint64_t>(imm);
-            break;
-        case 4:
-            val = rs1v ^ static_cast<uint64_t>(imm);
-            break;
-        case 5:
-            val = (in->funct7 & 0x20U) ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) >> shamt) : (rs1v >> shamt);
-            break;
-        case 6:
-            val = rs1v | static_cast<uint64_t>(imm);
-            break;
-        case 7:
-            val = rs1v & static_cast<uint64_t>(imm);
-            break;
-        default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
+    case 0x03:
+    case 0x23:
+        if (!execute_memory_instruction(cpu, bus, *in, rs1v, rs2v, imm)) {
             return;
         }
-        set_rd(cpu, in->rd, val);
         break;
-    }
-    case 0x1B: {
-        uint64_t val = 0;
-        const uint8_t shamt = in->rs2;
-        switch (in->funct3) {
-        case 0:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v + static_cast<uint64_t>(imm))));
-            break;
-        case 1:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) << shamt)));
-            break;
-        case 5:
-            val = (in->funct7 & 0x20U)
-                ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<int32_t>(rs1v) >> shamt)))
-                : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) >> shamt)));
-            break;
-        default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
-            return;
-        }
-        set_rd(cpu, in->rd, val);
-        break;
-    }
-    case 0x33: {
-        uint64_t val = 0;
-        const uint8_t shamt = static_cast<uint8_t>(rs2v & 63U);
-        if (in->funct7 == 1) {
-            switch (in->funct3) {
-            case 0:
-                val = rs1v * rs2v;
-                break;
-            case 1:
-                val = static_cast<uint64_t>((static_cast<__int128>(static_cast<int64_t>(rs1v)) * static_cast<int64_t>(rs2v)) >> 64);
-                break;
-            case 2:
-                val = static_cast<uint64_t>((static_cast<__int128>(static_cast<int64_t>(rs1v)) * rs2v) >> 64);
-                break;
-            case 3:
-                val = static_cast<uint64_t>((static_cast<__uint128_t>(rs1v) * rs2v) >> 64);
-                break;
-            case 4:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) / static_cast<int64_t>(rs2v)) : ~0ULL;
-                break;
-            case 5:
-                val = rs2v ? rs1v / rs2v : ~0ULL;
-                break;
-            case 6:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) % static_cast<int64_t>(rs2v)) : rs1v;
-                break;
-            case 7:
-                val = rs2v ? rs1v % rs2v : rs1v;
-                break;
-            default:
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
-                return;
-            }
-        } else {
-            switch (in->funct3) {
-            case 0:
-                val = (in->funct7 & 0x20U) ? (rs1v - rs2v) : (rs1v + rs2v);
-                break;
-            case 1:
-                val = rs1v << shamt;
-                break;
-            case 2:
-                val = static_cast<int64_t>(rs1v) < static_cast<int64_t>(rs2v);
-                break;
-            case 3:
-                val = rs1v < rs2v;
-                break;
-            case 4:
-                val = rs1v ^ rs2v;
-                break;
-            case 5:
-                val = (in->funct7 & 0x20U) ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) >> shamt) : (rs1v >> shamt);
-                break;
-            case 6:
-                val = rs1v | rs2v;
-                break;
-            case 7:
-                val = rs1v & rs2v;
-                break;
-            default:
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
-                return;
-            }
-        }
-        set_rd(cpu, in->rd, val);
-        break;
-    }
-    case 0x3B: {
-        uint64_t val = 0;
-        const uint8_t shamt = static_cast<uint8_t>(rs2v & 31U);
-        if (in->funct7 == 1) {
-            switch (in->funct3) {
-            case 0:
-                val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v * rs2v)));
-                break;
-            case 4:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v) / static_cast<int32_t>(rs2v))) : UINT64_MAX;
-                break;
-            case 5:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) / static_cast<uint32_t>(rs2v)))) : UINT64_MAX;
-                break;
-            case 6:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v) % static_cast<int32_t>(rs2v))) : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v)));
-                break;
-            case 7:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) % static_cast<uint32_t>(rs2v)))) : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v)));
-                break;
-            default:
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
-                return;
-            }
-        } else {
-            switch (in->funct3) {
-            case 0:
-                val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>((in->funct7 & 0x20U) ? (rs1v - rs2v) : (rs1v + rs2v))));
-                break;
-            case 1:
-                val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) << shamt)));
-                break;
-            case 5:
-                val = (in->funct7 & 0x20U)
-                    ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<int32_t>(rs1v) >> shamt)))
-                    : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) >> shamt)));
-                break;
-            default:
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
-                return;
-            }
-        }
-        set_rd(cpu, in->rd, val);
-        break;
-    }
     case 0x73: {
         if (!execute_system_instruction(cpu, *in)) {
             return;
         }
         break;
     }
-    case 0x0F:
-        break;
     default:
         cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
         return;
