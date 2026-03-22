@@ -22,7 +22,7 @@ public:
     bool store(Bus& bus, uint64_t addr, uint64_t value, int size);
 
 private:
-    bool translate(uint64_t vaddr, AccessType type, uint64_t& paddr);
+    bool translate(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr);
     bool access(Bus& bus, uint64_t vaddr, int size, AccessType type, uint64_t& value);
     void raise_access_fault(AccessType type, uint64_t addr);
     void raise_page_fault(AccessType type, uint64_t addr);

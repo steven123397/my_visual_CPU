@@ -19,6 +19,9 @@ constexpr uint64_t SATP_MODE_MASK = 0xFULL << SATP_MODE_SHIFT;
 constexpr uint64_t SATP_MODE_BARE = 0ULL;
 constexpr uint64_t SATP_MODE_SV39 = 8ULL;
 constexpr uint64_t SATP_PPN_MASK = (1ULL << 44) - 1;
+constexpr uint64_t SV39_VADDR_BITS = 39;
+constexpr uint64_t SV39_PAGE_SIZE = 4096;
+constexpr uint64_t SV39_PAGE_OFFSET_MASK = SV39_PAGE_SIZE - 1;
 
 constexpr uint64_t PTE_V = 1ULL << 0;
 constexpr uint64_t PTE_R = 1ULL << 1;
@@ -31,6 +34,7 @@ constexpr uint64_t PTE_D = 1ULL << 7;
 constexpr int SV39_LEVELS = 3;
 constexpr int SV39_PTESIZE = 8;
 constexpr uint64_t SV39_VPN_MASK = 0x1FF;
+constexpr uint64_t PTE_PPN_MASK = (1ULL << 44) - 1;
 
 uint64_t access_fault_cause(AccessType type) {
     switch (type) {
@@ -56,6 +60,25 @@ uint64_t page_fault_cause(AccessType type) {
     return CAUSE_LOAD_PAGE_FAULT;
 }
 
+bool is_sv39_canonical(uint64_t vaddr) {
+    const uint64_t sign = (vaddr >> 38) & 1ULL;
+    const uint64_t upper = vaddr >> SV39_VADDR_BITS;
+    const uint64_t expected_upper = sign ? ((1ULL << (64 - SV39_VADDR_BITS)) - 1ULL) : 0ULL;
+    return upper == expected_upper;
+}
+
+uint64_t size_mask(int size) {
+    if (size >= 8) {
+        return ~0ULL;
+    }
+    return (1ULL << (size * 8)) - 1ULL;
+}
+
+int page_chunk_size(uint64_t addr, int remaining) {
+    const int until_boundary = static_cast<int>(SV39_PAGE_SIZE - (addr & SV39_PAGE_OFFSET_MASK));
+    return remaining < until_boundary ? remaining : until_boundary;
+}
+
 }  // namespace
 
 AddressSpace::AddressSpace(CoreState& core, CsrFile& csr, TrapController& trap)
@@ -75,29 +98,32 @@ bool AddressSpace::load(Bus& bus, uint64_t addr, int size, uint64_t& value) {
 }
 
 bool AddressSpace::store(Bus& bus, uint64_t addr, uint64_t value, int size) {
-    uint64_t paddr = 0;
-    const uint64_t satp = csr_.read(0x180, core_);
-    const uint64_t mode = (satp & SATP_MODE_MASK) >> SATP_MODE_SHIFT;
+    uint64_t current_addr = addr;
+    uint64_t remaining_value = value;
+    int remaining = size;
 
-    if (mode == SATP_MODE_BARE || core_.privilege_mode() == PrivilegeMode::Machine) {
-        paddr = addr;
-    } else if (mode == SATP_MODE_SV39) {
-        if (!walk_page_table(bus, addr, AccessType::Store, paddr)) {
+    while (remaining > 0) {
+        const int chunk = page_chunk_size(current_addr, remaining);
+        uint64_t paddr = 0;
+        if (!translate(bus, current_addr, AccessType::Store, paddr)) {
             return false;
         }
-    } else {
-        paddr = addr;
-    }
 
-    if (!bus.try_store(paddr, value, size)) {
-        raise_access_fault(AccessType::Store, addr);
-        return false;
+        const uint64_t chunk_value = remaining_value & size_mask(chunk);
+        if (!bus.try_store(paddr, chunk_value, chunk)) {
+            raise_access_fault(AccessType::Store, current_addr);
+            return false;
+        }
+
+        current_addr += static_cast<uint64_t>(chunk);
+        remaining_value >>= chunk * 8;
+        remaining -= chunk;
     }
     return true;
 }
 
-bool AddressSpace::translate(uint64_t vaddr, AccessType /*type*/, uint64_t& paddr) {
-    const uint64_t satp = csr_.read(0x180, core_);
+bool AddressSpace::translate(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr) {
+    const uint64_t satp = csr_.read(CSR_SATP, core_);
     const uint64_t mode = (satp & SATP_MODE_MASK) >> SATP_MODE_SHIFT;
 
     if (mode == SATP_MODE_BARE || core_.privilege_mode() == PrivilegeMode::Machine) {
@@ -110,27 +136,37 @@ bool AddressSpace::translate(uint64_t vaddr, AccessType /*type*/, uint64_t& padd
         return true;
     }
 
-    return true;
+    if (!is_sv39_canonical(vaddr)) {
+        raise_page_fault(type, vaddr);
+        return false;
+    }
+
+    return walk_page_table(bus, vaddr, type, paddr);
 }
 
 bool AddressSpace::access(Bus& bus, uint64_t vaddr, int size, AccessType type, uint64_t& value) {
-    uint64_t paddr = 0;
-    const uint64_t satp = csr_.read(0x180, core_);
-    const uint64_t mode = (satp & SATP_MODE_MASK) >> SATP_MODE_SHIFT;
+    value = 0;
+    uint64_t current_addr = vaddr;
+    int remaining = size;
+    int shift = 0;
 
-    if (mode == SATP_MODE_BARE || core_.privilege_mode() == PrivilegeMode::Machine) {
-        paddr = vaddr;
-    } else if (mode == SATP_MODE_SV39) {
-        if (!walk_page_table(bus, vaddr, type, paddr)) {
+    while (remaining > 0) {
+        const int chunk = page_chunk_size(current_addr, remaining);
+        uint64_t paddr = 0;
+        if (!translate(bus, current_addr, type, paddr)) {
             return false;
         }
-    } else {
-        paddr = vaddr;
-    }
 
-    if (!bus.try_load(paddr, size, value)) {
-        raise_access_fault(type, vaddr);
-        return false;
+        uint64_t chunk_value = 0;
+        if (!bus.try_load(paddr, chunk, chunk_value)) {
+            raise_access_fault(type, current_addr);
+            return false;
+        }
+
+        value |= (chunk_value & size_mask(chunk)) << shift;
+        current_addr += static_cast<uint64_t>(chunk);
+        remaining -= chunk;
+        shift += chunk * 8;
     }
     return true;
 }
@@ -144,7 +180,7 @@ void AddressSpace::raise_page_fault(AccessType type, uint64_t addr) {
 }
 
 bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr) {
-    const uint64_t satp = csr_.read(0x180, core_);
+    const uint64_t satp = csr_.read(CSR_SATP, core_);
     uint64_t ppn = satp & SATP_PPN_MASK;
 
     const uint64_t vpn[3] = {
@@ -223,7 +259,7 @@ bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, ui
                 bus.try_store(pte_addr, updated_pte, SV39_PTESIZE);
             }
 
-            const uint64_t pte_ppn = (pte >> 10) & ((1ULL << 44) - 1);
+            const uint64_t pte_ppn = (pte >> 10) & PTE_PPN_MASK;
             const uint64_t page_offset = vaddr & ((1ULL << (12 + level * 9)) - 1);
 
             // For 4KB pages (level 0), no misalignment check needed
@@ -245,7 +281,7 @@ bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, ui
             return true;
         }
 
-        ppn = (pte >> 10) & ((1ULL << 44) - 1);
+        ppn = (pte >> 10) & PTE_PPN_MASK;
     }
 
     raise_page_fault(type, vaddr);
