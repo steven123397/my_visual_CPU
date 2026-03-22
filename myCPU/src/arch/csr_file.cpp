@@ -12,6 +12,7 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_SSTATUS:
     case CSR_SIE:
     case CSR_STVEC:
+    case CSR_SCOUNTEREN:
     case CSR_SSCRATCH:
     case CSR_SEPC:
     case CSR_SCAUSE:
@@ -24,6 +25,9 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_MIDELEG:
     case CSR_MIE:
     case CSR_MTVEC:
+    case CSR_MCOUNTEREN:
+    case CSR_MCYCLE:
+    case CSR_MINSTRET:
     case CSR_MSCRATCH:
     case CSR_MEPC:
     case CSR_MCAUSE:
@@ -31,6 +35,7 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_MIP:
     case CSR_CYCLE:
     case CSR_TIME:
+    case CSR_INSTRET:
         return true;
     default:
         return false;
@@ -45,8 +50,11 @@ void CsrFile::reset() {
 
 uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
     addr &= 0xFFF;
-    if (addr == CSR_CYCLE || addr == CSR_TIME) {
+    if (addr == CSR_CYCLE || addr == CSR_TIME || addr == CSR_MCYCLE) {
         return core.cycle();
+    }
+    if (addr == CSR_INSTRET || addr == CSR_MINSTRET) {
+        return core.instret();
     }
     if (addr == CSR_SSTATUS) {
         return regs_[CSR_MSTATUS] & SSTATUS_MASK;
@@ -62,7 +70,7 @@ uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
 
 void CsrFile::write(uint32_t addr, uint64_t value) {
     addr &= 0xFFF;
-    if (addr == CSR_CYCLE || addr == CSR_TIME) {
+    if (addr == CSR_CYCLE || addr == CSR_TIME || addr == CSR_INSTRET || addr == CSR_MCYCLE || addr == CSR_MINSTRET) {
         return;
     }
     if (addr == CSR_SSTATUS) {
@@ -78,6 +86,19 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
         return;
     }
     regs_[addr] = value;
+}
+
+void CsrFile::write(uint32_t addr, uint64_t value, CoreState& core) {
+    addr &= 0xFFF;
+    if (addr == CSR_MCYCLE) {
+        core.set_cycle(value);
+        return;
+    }
+    if (addr == CSR_MINSTRET) {
+        core.set_instret(value);
+        return;
+    }
+    write(addr, value);
 }
 
 bool CsrFile::is_implemented(uint32_t addr) const {

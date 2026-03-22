@@ -8,6 +8,7 @@ class CoreState;
 constexpr uint32_t CSR_SSTATUS = 0x100;
 constexpr uint32_t CSR_SIE = 0x104;
 constexpr uint32_t CSR_STVEC = 0x105;
+constexpr uint32_t CSR_SCOUNTEREN = 0x106;
 constexpr uint32_t CSR_SSCRATCH = 0x140;
 constexpr uint32_t CSR_SEPC = 0x141;
 constexpr uint32_t CSR_SCAUSE = 0x142;
@@ -20,6 +21,9 @@ constexpr uint32_t CSR_MEDELEG = 0x302;
 constexpr uint32_t CSR_MIDELEG = 0x303;
 constexpr uint32_t CSR_MIE = 0x304;
 constexpr uint32_t CSR_MTVEC = 0x305;
+constexpr uint32_t CSR_MCOUNTEREN = 0x306;
+constexpr uint32_t CSR_MCYCLE = 0xB00;
+constexpr uint32_t CSR_MINSTRET = 0xB02;
 constexpr uint32_t CSR_MSCRATCH = 0x340;
 constexpr uint32_t CSR_MEPC = 0x341;
 constexpr uint32_t CSR_MCAUSE = 0x342;
@@ -27,6 +31,7 @@ constexpr uint32_t CSR_MTVAL = 0x343;
 constexpr uint32_t CSR_MIP = 0x344;
 constexpr uint32_t CSR_CYCLE = 0xC00;
 constexpr uint32_t CSR_TIME = 0xC01;
+constexpr uint32_t CSR_INSTRET = 0xC02;
 
 constexpr uint64_t MSTATUS_SIE = 1ULL << 1;
 constexpr uint64_t MSTATUS_MIE = 1ULL << 3;
@@ -50,6 +55,7 @@ public:
     void reset();
     uint64_t read(uint32_t addr, const CoreState& core) const;
     void write(uint32_t addr, uint64_t value);
+    void write(uint32_t addr, uint64_t value, CoreState& core);
     bool is_implemented(uint32_t addr) const;
 
 private:

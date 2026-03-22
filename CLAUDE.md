@@ -23,7 +23,7 @@ What exists now:
 - A direct fetch-decode-execute loop
 - A simple physical memory model plus minimal MMIO
 - Basic exception and interrupt handling
-- Initial M/S/U privilege groundwork, including `MPP` tracking, `sret`, minimal supervisor exception delegation via `medeleg`, minimal supervisor timer interrupt delivery via `mideleg`, and `sstatus.SUM` / `sstatus.MXR` handling relevant to supervisor virtual-memory access
+- Initial M/S/U privilege groundwork, including `MPP` tracking, `sret`, minimal supervisor exception delegation via `medeleg`, minimal supervisor timer interrupt delivery via `mideleg`, machine-counter CSR support for `mcycle` / `minstret`, `mcounteren` / `scounteren` gating for `cycle` / `time` / `instret`, retired-instruction counting for `instret`, and `sstatus.SUM` / `sstatus.MXR` handling relevant to supervisor virtual-memory access
 - A `Machine + Ram + Uart16550 + Clint + Bus` C++ platform skeleton around the reference path
 - Explicit `ElfLoader + BinaryLoader` C++ loader boundaries above raw RAM backing
 - A first `CoreState + CsrFile` state split inside the CPU path
@@ -44,7 +44,7 @@ What exists now:
   - Sv39 virtual memory: identity mapping, page faults on unmapped addresses, non-canonical and cross-page edge faults, `sstatus.MXR` / `sstatus.SUM` access semantics, stale-translation invalidation via `sfence.vma`, and leaf-PTE `A/D` maintenance across TLB hits
 - M-mode trap-state behavior (`mstatus` / `mepc`)
 - `ebreak` and illegal-instruction exception behavior
-- privilege transitions across `U/S/M`, `sret`, minimal supervisor exception delegation, and CSR access-control guardrails
+- privilege transitions across `U/S/M`, `sret`, minimal supervisor exception delegation, CSR access-control guardrails, machine-counter CSR support for `mcycle` / `minstret`, retired-instruction counting for `instret`, and `mcounteren` / `scounteren` gating for `cycle` / `time` / `instret`
 - Sv39 virtual memory with 3-level page table walk, a minimal Sv39 TLB, canonical-address checks, permission checks (R/W/X/U plus `SUM` / `MXR` effects), superpage support (4KB/2MB/1GB), page fault handling, cross-page fault handling, and A/D bit updates
 - `satp` CSR support for bare-mode and Sv39 mode switching
 - `sfence.vma` instruction with minimal legal-encoding acceptance and full local TLB invalidation
@@ -232,7 +232,7 @@ Minimum expectations:
 Current baseline expectation for local validation:
 
 - Keep `make test` green
-- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, `exception_traps`, `access_faults`, `loads_signed_unsigned`, `alu_word`, `branches_signed_unsigned`, `muldiv`, `fence_noop`, `privilege_transitions`, `sret_transitions`, `supervisor_exception_delegation`, `supervisor_timer_interrupt`, `csr_access_control`, `sv39_basic`, `sv39_page_fault`, `sv39_edge_faults`, `sv39_sum_mxr`, `sv39_tlb_flush`, and `sv39_tlb_ad_bits` assembly regressions, plus the flat-binary `hello` load path, as required guardrails when touching the reference path
+- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, `exception_traps`, `access_faults`, `loads_signed_unsigned`, `alu_word`, `branches_signed_unsigned`, `muldiv`, `fence_noop`, `privilege_transitions`, `sret_transitions`, `supervisor_exception_delegation`, `supervisor_timer_interrupt`, `csr_access_control`, `counteren_access_control`, `instret_counting`, `machine_counter_csrs`, `sv39_basic`, `sv39_page_fault`, `sv39_edge_faults`, `sv39_sum_mxr`, `sv39_tlb_flush`, and `sv39_tlb_ad_bits` assembly regressions, plus the flat-binary `hello` load path, as required guardrails when touching the reference path
 - If a refactor changes observable UART output or causes hangs, update tests only when the behavior change is intentional and justified
 
 If a feature is too complex to test, the design is probably still too large.
@@ -267,7 +267,7 @@ What is already landed in that migration:
 - ELF and flat-binary loading now write through explicit `Ram` interfaces rather than reaching into raw `Memory` state from loader code
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
 - Trap logic now has a first explicit `TrapController` boundary, with current regression coverage around trap entry, return, timer interrupts, `mtvec` modes, basic M-mode exception semantics, and minimal supervisor timer interrupt delivery
-- Privilege groundwork now includes `MPP` tracking, `ecall` cause separation by privilege, `sret`, minimal `medeleg`-based supervisor exception delegation, `mideleg`-based supervisor timer interrupt delivery, CSR privilege/read-only access checks, and `sstatus.SUM` / `sstatus.MXR` handling for supervisor virtual-memory access
+- Privilege groundwork now includes `MPP` tracking, `ecall` cause separation by privilege, `sret`, minimal `medeleg`-based supervisor exception delegation, `mideleg`-based supervisor timer interrupt delivery, CSR privilege/read-only access checks, machine-counter CSR support for `mcycle` / `minstret`, `mcounteren` / `scounteren` gating for `cycle` / `time` / `instret`, retired-instruction counting for `instret`, and `sstatus.SUM` / `sstatus.MXR` handling for supervisor virtual-memory access
 - `AddressSpace` boundary now exists between CPU fetch/load/store and the physical `Bus`, supporting both bare-mode passthrough and Sv39 virtual memory with 3-level page table walk, a minimal TLB, canonical-address checks, permission checks, superpage support, cross-page fault handling, page fault handling, and A/D bit updates
 - CPU fetch/load/store now routes through `Bus`, and platform tick events now flow through `TrapController`, so RAM/device dispatch and timer-event routing are no longer hard-coded in the CPU step path
 - Instruction-family splits now exist for integer, control-flow, memory, and system/CSR execution, so semantic extraction has started without introducing multi-backend abstraction yet

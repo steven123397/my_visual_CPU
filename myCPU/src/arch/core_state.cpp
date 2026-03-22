@@ -4,6 +4,7 @@ void CoreState::reset(uint64_t entry) {
     gpr_.fill(0);
     pc_ = entry;
     cycle_ = 0;
+    instret_ = 0;
     halted_ = false;
     privilege_mode_ = PrivilegeMode::Machine;
 }
@@ -32,6 +33,22 @@ uint64_t CoreState::cycle() const {
 
 void CoreState::advance_cycle(uint64_t delta) {
     cycle_ += delta;
+}
+
+void CoreState::set_cycle(uint64_t value) {
+    cycle_ = value;
+}
+
+uint64_t CoreState::instret() const {
+    return instret_;
+}
+
+void CoreState::advance_instret(uint64_t delta) {
+    instret_ += delta;
+}
+
+void CoreState::set_instret(uint64_t value) {
+    instret_ = value;
 }
 
 bool CoreState::halted() const {

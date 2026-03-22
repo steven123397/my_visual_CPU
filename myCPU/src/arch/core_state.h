@@ -21,6 +21,10 @@ public:
 
     uint64_t cycle() const;
     void advance_cycle(uint64_t delta = 1);
+    void set_cycle(uint64_t value);
+    uint64_t instret() const;
+    void advance_instret(uint64_t delta = 1);
+    void set_instret(uint64_t value);
 
     bool halted() const;
     void set_halted(bool halted);
@@ -32,6 +36,7 @@ private:
     std::array<uint64_t, 32> gpr_{};
     uint64_t pc_{0};
     uint64_t cycle_{0};
+    uint64_t instret_{0};
     bool halted_{false};
     PrivilegeMode privilege_mode_{PrivilegeMode::Machine};
 };

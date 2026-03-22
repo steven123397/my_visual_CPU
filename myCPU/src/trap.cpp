@@ -81,7 +81,7 @@ void TrapController::return_from_mret() {
     mstatus = (mstatus & ~MSTATUS_MIE) | (mpie << 3);
     mstatus |= MSTATUS_MPIE;
     mstatus &= ~MSTATUS_MPP_MASK;
-    csr_.write(CSR_MSTATUS, mstatus);
+    csr_.write(CSR_MSTATUS, mstatus, core_);
 
     core_.set_privilege_mode(next_mode);
     core_.set_pc(csr_.read(CSR_MEPC, core_));
@@ -94,7 +94,7 @@ void TrapController::return_from_sret() {
     mstatus = (mstatus & ~MSTATUS_SIE) | (spie << 1);
     mstatus |= MSTATUS_SPIE;
     mstatus &= ~MSTATUS_SPP;
-    csr_.write(CSR_MSTATUS, mstatus);
+    csr_.write(CSR_MSTATUS, mstatus, core_);
 
     core_.set_privilege_mode(next_mode);
     core_.set_pc(csr_.read(CSR_SEPC, core_));
@@ -111,10 +111,10 @@ void TrapController::raise_timer_interrupt() {
     const uint64_t mideleg = csr_.read(CSR_MIDELEG, core_);
     const uint64_t mip = csr_.read(CSR_MIP, core_);
     if (mideleg & MIE_STIE) {
-        csr_.write(CSR_MIP, (mip | MIE_STIE) & ~MIE_MTIE);
+        csr_.write(CSR_MIP, (mip | MIE_STIE) & ~MIE_MTIE, core_);
         return;
     }
-    csr_.write(CSR_MIP, (mip | MIE_MTIE) & ~MIE_STIE);
+    csr_.write(CSR_MIP, (mip | MIE_MTIE) & ~MIE_STIE, core_);
 }
 
 void TrapController::service_pending_interrupts() {
@@ -124,13 +124,13 @@ void TrapController::service_pending_interrupts() {
     const uint64_t mideleg = csr_.read(CSR_MIDELEG, core_);
 
     if ((mie & MIE_MTIE) && (mip & MIE_MTIE) && machine_interrupts_enabled(core_, mstatus)) {
-        csr_.write(CSR_MIP, mip & ~MIE_MTIE);
+        csr_.write(CSR_MIP, mip & ~MIE_MTIE, core_);
         enter_interrupt(CAUSE_MACHINE_TIMER_INT);
         return;
     }
 
     if ((mideleg & MIE_STIE) && (mie & MIE_STIE) && (mip & MIE_STIE) && supervisor_interrupts_enabled(core_, mstatus)) {
-        csr_.write(CSR_MIP, mip & ~MIE_STIE);
+        csr_.write(CSR_MIP, mip & ~MIE_STIE, core_);
         enter_interrupt(CAUSE_SUPERVISOR_TIMER_INT);
     }
 }
@@ -153,11 +153,11 @@ void TrapController::enter_trap(uint64_t cause, uint64_t tval) {
         } else {
             mstatus &= ~MSTATUS_SPP;
         }
-        csr_.write(CSR_MSTATUS, mstatus);
+        csr_.write(CSR_MSTATUS, mstatus, core_);
 
-        csr_.write(CSR_SEPC, core_.pc());
-        csr_.write(CSR_SCAUSE, cause);
-        csr_.write(CSR_STVAL, tval);
+        csr_.write(CSR_SEPC, core_.pc(), core_);
+        csr_.write(CSR_SCAUSE, cause, core_);
+        csr_.write(CSR_STVAL, tval, core_);
 
         core_.set_privilege_mode(PrivilegeMode::Supervisor);
         core_.set_pc(trap_vector_base(csr_.read(CSR_STVEC, core_), cause));
@@ -169,11 +169,11 @@ void TrapController::enter_trap(uint64_t cause, uint64_t tval) {
     mstatus = (mstatus & ~MSTATUS_MPIE) | (mie << 7);
     mstatus &= ~MSTATUS_MIE;
     mstatus = (mstatus & ~MSTATUS_MPP_MASK) | (encode_privilege_mode(core_.privilege_mode()) << MSTATUS_MPP_SHIFT);
-    csr_.write(CSR_MSTATUS, mstatus);
+    csr_.write(CSR_MSTATUS, mstatus, core_);
 
-    csr_.write(CSR_MEPC, core_.pc());
-    csr_.write(CSR_MCAUSE, cause);
-    csr_.write(CSR_MTVAL, tval);
+    csr_.write(CSR_MEPC, core_.pc(), core_);
+    csr_.write(CSR_MCAUSE, cause, core_);
+    csr_.write(CSR_MTVAL, tval, core_);
 
     core_.set_privilege_mode(PrivilegeMode::Machine);
     core_.set_pc(trap_vector_base(csr_.read(CSR_MTVEC, core_), cause));

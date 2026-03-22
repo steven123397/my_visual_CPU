@@ -14,7 +14,7 @@ namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
-void execute(CPU& cpu, Bus& bus, Insn* in) {
+bool execute(CPU& cpu, Bus& bus, Insn* in) {
     CoreState& core = cpu.core();
     const uint64_t pc = core.pc();
     const uint64_t rs1v = core.read_gpr(in->rs1);
@@ -31,34 +31,37 @@ void execute(CPU& cpu, Bus& bus, Insn* in) {
     case 0x3B:
     case 0x0F:
         if (!execute_integer_instruction(cpu, *in, rs1v, rs2v, imm, pc)) {
-            return;
+            return false;
         }
         break;
     case 0x6F:
     case 0x67:
     case 0x63:
         if (!execute_control_flow_instruction(cpu, *in, rs1v, rs2v, imm, pc, next_pc)) {
-            return;
+            return false;
         }
         break;
     case 0x03:
     case 0x23:
         if (!execute_memory_instruction(cpu, bus, *in, rs1v, rs2v, imm)) {
-            return;
+            return false;
         }
         break;
     case 0x73: {
-        if (!execute_system_instruction(cpu, *in)) {
-            return;
+        bool retired = false;
+        if (!execute_system_instruction(cpu, *in, retired)) {
+            return retired;
         }
-        break;
+        core.set_pc(next_pc);
+        return retired;
     }
     default:
         cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
-        return;
+        return false;
     }
 
     core.set_pc(next_pc);
+    return true;
 }
 
 }  // namespace
@@ -101,7 +104,7 @@ void cpu_init(CPU& cpu, uint64_t entry) {
     cpu.core().reset(entry);
     cpu.csr().reset();
     cpu.address_space().flush_tlb();
-    cpu.csr().write(CSR_MISA, (2ULL << 62) | (1ULL << 8) | (1ULL << 12) | (1ULL << 0) | (1ULL << 2));
+    cpu.csr().write(CSR_MISA, (2ULL << 62) | (1ULL << 8) | (1ULL << 12) | (1ULL << 0) | (1ULL << 2), cpu.core());
 }
 
 uint64_t csr_read(const CPU& cpu, uint32_t addr) {
@@ -109,7 +112,7 @@ uint64_t csr_read(const CPU& cpu, uint32_t addr) {
 }
 
 void csr_write(CPU& cpu, uint32_t addr, uint64_t val) {
-    cpu.csr().write(addr, val);
+    cpu.csr().write(addr, val, cpu.core());
 }
 
 void cpu_step(CPU& cpu, Bus& bus) {
@@ -122,7 +125,9 @@ void cpu_step(CPU& cpu, Bus& bus) {
     }
     Insn insn;
     decode(raw, &insn);
-    execute(cpu, bus, &insn);
+    if (execute(cpu, bus, &insn)) {
+        cpu.core().advance_instret();
+    }
 
     cpu.core().advance_cycle();
 }

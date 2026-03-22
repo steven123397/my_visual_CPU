@@ -33,6 +33,38 @@ bool csr_instruction_writes(const Insn& insn) {
     }
 }
 
+uint64_t counter_access_mask(uint32_t addr) {
+    switch (addr & 0xFFF) {
+    case CSR_CYCLE:
+        return 1ULL << 0;
+    case CSR_TIME:
+        return 1ULL << 1;
+    case CSR_INSTRET:
+        return 1ULL << 2;
+    default:
+        return 0;
+    }
+}
+
+bool counter_read_allowed(const CPU& cpu, uint32_t addr) {
+    const uint64_t mask = counter_access_mask(addr);
+    if (mask == 0) {
+        return true;
+    }
+
+    switch (cpu.core().privilege_mode()) {
+    case PrivilegeMode::Machine:
+        return true;
+    case PrivilegeMode::Supervisor:
+        return (cpu.csr().read(CSR_MCOUNTEREN, cpu.core()) & mask) != 0;
+    case PrivilegeMode::User:
+        return (cpu.csr().read(CSR_MCOUNTEREN, cpu.core()) & mask) != 0 &&
+               (cpu.csr().read(CSR_SCOUNTEREN, cpu.core()) & mask) != 0;
+    }
+
+    return false;
+}
+
 bool csr_access_allowed(const CPU& cpu, uint32_t addr, bool write) {
     if (!cpu.csr().is_implemented(addr)) {
         return false;
@@ -44,24 +76,30 @@ bool csr_access_allowed(const CPU& cpu, uint32_t addr, bool write) {
         return false;
     }
 
+    if (!write && !counter_read_allowed(cpu, addr)) {
+        return false;
+    }
+
     const bool read_only = ((addr >> 10) & 0x3) == 0x3;
     return !write || !read_only;
 }
 
 }  // namespace
 
-bool execute_system_instruction(CPU& cpu, const Insn& insn) {
+bool execute_system_instruction(CPU& cpu, const Insn& insn, bool& retired) {
     CoreState& core = cpu.core();
     const uint64_t pc = core.pc();
     const uint32_t csr_addr = insn.raw >> 20;
     const uint64_t rs1v = core.read_gpr(insn.rs1);
     uint64_t old = 0;
+    retired = false;
 
     switch (insn.funct3) {
     case 0:
         if (insn.raw == 0x00000073) {
             if (core.read_gpr(17) == 93) {
                 core.set_halted(true);
+                retired = true;
             } else {
                 uint64_t cause = CAUSE_ECALL_M;
                 switch (core.privilege_mode()) {
@@ -89,6 +127,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
                 return false;
             }
             cpu.trap().return_from_mret();
+            retired = true;
             return false;
         }
         if (insn.raw == 0x10200073) {
@@ -97,6 +136,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
                 return false;
             }
             cpu.trap().return_from_sret();
+            retired = true;
             return false;
         }
         if (is_sfence_vma(insn)) {
@@ -105,6 +145,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
                 return false;
             }
             cpu.address_space().flush_tlb();
+            retired = true;
             return true;
         }
         cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
@@ -117,6 +158,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
         old = csr_read(cpu, csr_addr);
         write_rd(cpu, insn.rd, old);
         csr_write(cpu, csr_addr, rs1v);
+        retired = true;
         return true;
     case 2:
         if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
@@ -126,6 +168,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
         old = csr_read(cpu, csr_addr);
         write_rd(cpu, insn.rd, old);
         csr_write(cpu, csr_addr, old | rs1v);
+        retired = true;
         return true;
     case 3:
         if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
@@ -135,6 +178,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
         old = csr_read(cpu, csr_addr);
         write_rd(cpu, insn.rd, old);
         csr_write(cpu, csr_addr, old & ~rs1v);
+        retired = true;
         return true;
     case 5:
         if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
@@ -144,6 +188,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
         old = csr_read(cpu, csr_addr);
         write_rd(cpu, insn.rd, old);
         csr_write(cpu, csr_addr, insn.rs1);
+        retired = true;
         return true;
     case 6:
         if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
@@ -153,6 +198,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
         old = csr_read(cpu, csr_addr);
         write_rd(cpu, insn.rd, old);
         csr_write(cpu, csr_addr, old | insn.rs1);
+        retired = true;
         return true;
     case 7:
         if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
@@ -162,6 +208,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
         old = csr_read(cpu, csr_addr);
         write_rd(cpu, insn.rd, old);
         csr_write(cpu, csr_addr, old & ~static_cast<uint64_t>(insn.rs1));
+        retired = true;
         return true;
     default:
         cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
