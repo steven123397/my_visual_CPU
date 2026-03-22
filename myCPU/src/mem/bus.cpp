@@ -1,7 +1,5 @@
 #include "bus.h"
 
-#include <cstdio>
-
 #include "ram.h"
 
 Bus::Bus(Ram& ram) {
@@ -12,29 +10,40 @@ void Bus::attach(Device& device) {
     devices_.push_back(&device);
 }
 
-Device* Bus::find_device(uint64_t addr) {
+Device* Bus::find_device(uint64_t addr, int size) {
     for (Device* device : devices_) {
-        if (device->contains(addr)) {
+        if (device->contains(addr, static_cast<uint64_t>(size))) {
             return device;
         }
     }
     return nullptr;
 }
 
-uint64_t Bus::load(uint64_t addr, int size) {
-    if (Device* device = find_device(addr)) {
-        return device->load(addr, size);
+bool Bus::try_load(uint64_t addr, int size, uint64_t& value) {
+    if (Device* device = find_device(addr, size)) {
+        value = device->load(addr, size);
+        return true;
     }
-    std::fprintf(stderr, "bus load: unmapped addr 0x%lx size %d\n", addr, size);
-    return 0;
+    value = 0;
+    return false;
+}
+
+bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
+    if (Device* device = find_device(addr, size)) {
+        device->store(addr, value, size);
+        return true;
+    }
+    return false;
+}
+
+uint64_t Bus::load(uint64_t addr, int size) {
+    uint64_t value = 0;
+    try_load(addr, size, value);
+    return value;
 }
 
 void Bus::store(uint64_t addr, uint64_t value, int size) {
-    if (Device* device = find_device(addr)) {
-        device->store(addr, value, size);
-        return;
-    }
-    std::fprintf(stderr, "bus store: unmapped addr 0x%lx size %d value 0x%lx\n", addr, size, value);
+    try_store(addr, value, size);
 }
 
 PlatformEvents Bus::tick() {

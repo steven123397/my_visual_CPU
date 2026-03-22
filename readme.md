@@ -55,6 +55,7 @@ main.cpp
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
 - `arch/csr_file.*` 负责已实现 CSR 集合、`cycle/time` 等特殊读取规则，以及 `sstatus/sie/sip` 对 `mstatus/mie/mip` 的别名视图。
 - `mem/ram.*` 和 `mem/bus.*` 提供平台总线与 RAM 边界。
+- `mem/address_space.*` 负责 CPU 侧地址访问边界，当前提供 bare-mode 直通访问与 instruction/load/store access-fault 路由。
 - `devices/uart16550.*` 和 `devices/clint.*` 提供独立 MMIO 设备对象。
 - `devices/device.h` 提供统一设备接口，供 `Bus` 附加和分发。
 - `loader/elf_loader.*` 和 `loader/binary_loader.*` 提供镜像装载边界，直接通过 `Ram` 接口写入镜像内容。
@@ -102,7 +103,7 @@ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
 
-`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control` 这类特权/CSR 回归。
+`make test` 会构建汇编样例，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults` 这类特权/异常回归。
 
 ## 内存映射
 
@@ -122,6 +123,7 @@ make test
 - 第一批 M/S/U 特权语义：`MPP` 跟踪、`ecall` cause 区分、`sret` 返回
 - 基于 `medeleg` 的最小 supervisor 异常委托
 - 基于 `mideleg` 的最小 supervisor 定时器中断递送
+- bare-mode `AddressSpace` 访问边界，以及 unmapped fetch/load/store 的 access-fault trap
 - CSR 特权级/只读属性检查，非法访问触发 illegal-instruction trap
 - UART MMIO（写入直接输出到 stdout）
 - CLINT 定时器中断
@@ -164,6 +166,12 @@ make test
 
 - `mem/bus.cpp`
   `Bus` 实现。负责设备附加、地址分发以及平台 tick 结果汇总；RAM 也作为总线设备接入，不再保留专门的 RAM 分支。
+
+- `mem/address_space.h`
+  `AddressSpace` 类声明。定义 CPU 侧 fetch/load/store 访问入口，为后续 `satp`、Sv39 和 TLB 引入独立地址翻译边界。
+
+- `mem/address_space.cpp`
+  `AddressSpace` 实现。当前先提供 bare-mode 直通访问，并把 unmapped fetch/load/store 转换成对应的 access-fault trap。
 
 - `devices/device.h`
   设备基类声明。定义统一的 `contains/load/store` 接口，供平台总线附加和寻址。

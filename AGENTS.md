@@ -28,6 +28,7 @@ What exists now:
 - Explicit `ElfLoader + BinaryLoader` C++ loader boundaries above raw RAM backing
 - A first `CoreState + CsrFile` state split inside the CPU path
 - A first `TrapController` boundary for trap / interrupt routing inside the CPU path
+- A first `AddressSpace` boundary between CPU fetch/load/store and the physical `Bus`, currently in bare-mode passthrough form with access-fault routing
 - Instruction semantics are now split by family into explicit execution modules for integer, control-flow, memory, and system/CSR handling outside the monolithic CPU execution file
 - CPU fetch/load/store paths routed through `Bus` instead of directly through the legacy `Memory*` interface
 - `Bus::tick()` now aggregates device-driven platform events instead of hard-coding CLINT state in the CPU step path
@@ -38,6 +39,7 @@ What exists now:
   - CSR access and `ecall` / `mret` smoke coverage
   - CLINT timer interrupt delivery and `mret` return
   - supervisor timer interrupt delegation via `mideleg`, `stvec`, and `sret`
+  - unmapped instruction/load/store access-fault behavior
   - `mtvec` direct / vectored mode routing
 - M-mode trap-state behavior (`mstatus` / `mepc`)
 - `ebreak` and illegal-instruction exception behavior
@@ -56,7 +58,8 @@ Additional current planning notes:
 - Before large new architectural features are added, the codebase should be restructured from the current small C prototype into a modular C++ codebase that can support significantly higher system complexity.
 - This C-to-C++ transition must be justified by structural gains such as module boundaries, type safety, state management, ownership clarity, and backend extensibility, not by language preference alone.
 - The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` device objects, explicit `ElfLoader` / `BinaryLoader` image-loading boundaries, the first `CoreState + CsrFile` split, and a first `TrapController` boundary are now landed and should be treated as current baseline, not future proposal.
-- The immediate next structural step is to continue tightening the platform-side split: preserve `Bus` as the CPU-facing access path, deepen device/platform boundaries, and keep shrinking the remaining legacy responsibilities around raw RAM access and image loading.
+- The immediate next structural step is to continue tightening the platform-side split: preserve `Bus` as the physical CPU-facing access path, deepen device/platform boundaries, and keep shrinking the remaining legacy responsibilities around raw RAM access and image loading.
+- The latest landed structural step is a first bare-mode `AddressSpace` boundary in front of `Bus`; the immediate next functional step should build on that hook by adding `satp`/Sv39-oriented translation and page-fault behavior instead of expanding direct bus access paths again.
 - When producing summaries, proposals, or report-style material for this project, describe the current implementation as an already working simulator prototype and the C++ refactor as the next enabling engineering step.
 
 ## Primary direction
@@ -227,7 +230,7 @@ Minimum expectations:
 Current baseline expectation for local validation:
 
 - Keep `make test` green
-- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, `exception_traps`, `loads_signed_unsigned`, `alu_word`, `branches_signed_unsigned`, `muldiv`, `fence_noop`, `privilege_transitions`, `sret_transitions`, `supervisor_exception_delegation`, `supervisor_timer_interrupt`, and `csr_access_control` assembly regressions, plus the flat-binary `hello` load path, as required guardrails when touching the reference path
+- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, `exception_traps`, `access_faults`, `loads_signed_unsigned`, `alu_word`, `branches_signed_unsigned`, `muldiv`, `fence_noop`, `privilege_transitions`, `sret_transitions`, `supervisor_exception_delegation`, `supervisor_timer_interrupt`, and `csr_access_control` assembly regressions, plus the flat-binary `hello` load path, as required guardrails when touching the reference path
 - If a refactor changes observable UART output or causes hangs, update tests only when the behavior change is intentional and justified
 
 If a feature is too complex to test, the design is probably still too large.
@@ -263,6 +266,7 @@ What is already landed in that migration:
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
 - Trap logic now has a first explicit `TrapController` boundary, with current regression coverage around trap entry, return, timer interrupts, `mtvec` modes, basic M-mode exception semantics, and minimal supervisor timer interrupt delivery
 - Privilege groundwork now includes `MPP` tracking, `ecall` cause separation by privilege, `sret`, minimal `medeleg`-based supervisor exception delegation, `mideleg`-based supervisor timer interrupt delivery, and CSR privilege/read-only access checks
+- A first `AddressSpace` boundary now exists between CPU fetch/load/store and the physical `Bus`, with current bare-mode passthrough plus explicit instruction/load/store access-fault routing
 - CPU fetch/load/store now routes through `Bus`, and platform tick events now flow through `TrapController`, so RAM/device dispatch and timer-event routing are no longer hard-coded in the CPU step path
 - Instruction-family splits now exist for integer, control-flow, memory, and system/CSR execution, so semantic extraction has started without introducing multi-backend abstraction yet
 - The repository still intentionally keeps a simple architectural reference execution path
@@ -299,4 +303,4 @@ When planning the C++ restructuring, favor boundaries such as:
 - Describe the current project honestly as a working functional simulator prototype, not as a mere idea.
 - Do not claim support for ISA or platform features unless they are actually implemented and validated.
 - When discussing the C++ migration in documents, frame it as a structural response to growing architectural complexity, not as a cosmetic language rewrite.
-- At the current repository state, describe `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` devices, explicit `ElfLoader` / `BinaryLoader` loader boundaries, the `CoreState + CsrFile` split, and the first `TrapController` boundary as already completed incremental steps; describe further platform cleanup and later semantics extraction as the next structural targets.
+- At the current repository state, describe `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` devices, explicit `ElfLoader` / `BinaryLoader` loader boundaries, the `CoreState + CsrFile` split, the first `TrapController` boundary, and the first bare-mode `AddressSpace` boundary as already completed incremental steps; describe `satp`/Sv39-oriented address translation and later platform/MMU cleanup as the next structural targets.

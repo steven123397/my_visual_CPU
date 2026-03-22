@@ -21,25 +21,45 @@ bool execute_memory_instruction(CPU& cpu, Bus& bus, const Insn& insn, uint64_t r
         uint64_t val = 0;
         switch (insn.funct3) {
         case 0:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int8_t>(bus.load(addr, 1))));
+            if (!cpu.address_space().load(bus, addr, 1, val)) {
+                return false;
+            }
+            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int8_t>(val)));
             break;
         case 1:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int16_t>(bus.load(addr, 2))));
+            if (!cpu.address_space().load(bus, addr, 2, val)) {
+                return false;
+            }
+            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int16_t>(val)));
             break;
         case 2:
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(bus.load(addr, 4))));
+            if (!cpu.address_space().load(bus, addr, 4, val)) {
+                return false;
+            }
+            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(val)));
             break;
         case 3:
-            val = bus.load(addr, 8);
+            if (!cpu.address_space().load(bus, addr, 8, val)) {
+                return false;
+            }
             break;
         case 4:
-            val = static_cast<uint8_t>(bus.load(addr, 1));
+            if (!cpu.address_space().load(bus, addr, 1, val)) {
+                return false;
+            }
+            val = static_cast<uint8_t>(val);
             break;
         case 5:
-            val = static_cast<uint16_t>(bus.load(addr, 2));
+            if (!cpu.address_space().load(bus, addr, 2, val)) {
+                return false;
+            }
+            val = static_cast<uint16_t>(val);
             break;
         case 6:
-            val = static_cast<uint32_t>(bus.load(addr, 4));
+            if (!cpu.address_space().load(bus, addr, 4, val)) {
+                return false;
+            }
+            val = static_cast<uint32_t>(val);
             break;
         default:
             cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
@@ -51,17 +71,13 @@ bool execute_memory_instruction(CPU& cpu, Bus& bus, const Insn& insn, uint64_t r
     case 0x23:
         switch (insn.funct3) {
         case 0:
-            bus.store(addr, rs2v, 1);
-            return true;
+            return cpu.address_space().store(bus, addr, rs2v, 1);
         case 1:
-            bus.store(addr, rs2v, 2);
-            return true;
+            return cpu.address_space().store(bus, addr, rs2v, 2);
         case 2:
-            bus.store(addr, rs2v, 4);
-            return true;
+            return cpu.address_space().store(bus, addr, rs2v, 4);
         case 3:
-            bus.store(addr, rs2v, 8);
-            return true;
+            return cpu.address_space().store(bus, addr, rs2v, 8);
         default:
             cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
             return false;

@@ -12,7 +12,20 @@ public:
     virtual ~Device() = default;
 
     bool contains(uint64_t addr) const {
-        return addr >= base_ && addr < base_ + size_;
+        return contains(addr, 1);
+    }
+
+    bool contains(uint64_t addr, uint64_t size) const {
+        if (addr < base_) {
+            return false;
+        }
+
+        const uint64_t offset = addr - base_;
+        if (offset > size_) {
+            return false;
+        }
+
+        return size <= (size_ - offset);
     }
 
     virtual uint64_t load(uint64_t addr, int size) = 0;

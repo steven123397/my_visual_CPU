@@ -63,7 +63,7 @@ void execute(CPU& cpu, Bus& bus, Insn* in) {
 
 }  // namespace
 
-CPU::CPU() : trap_(core_, csr_) {}
+CPU::CPU() : trap_(core_, csr_), address_space_(core_, csr_, trap_) {}
 
 CoreState& CPU::core() {
     return core_;
@@ -89,6 +89,14 @@ const TrapController& CPU::trap() const {
     return trap_;
 }
 
+AddressSpace& CPU::address_space() {
+    return address_space_;
+}
+
+const AddressSpace& CPU::address_space() const {
+    return address_space_;
+}
+
 void cpu_init(CPU& cpu, uint64_t entry) {
     cpu.core().reset(entry);
     cpu.csr().reset();
@@ -106,7 +114,11 @@ void csr_write(CPU& cpu, uint32_t addr, uint64_t val) {
 void cpu_step(CPU& cpu, Bus& bus) {
     cpu.trap().handle_platform_events(bus.tick());
 
-    const uint32_t raw = static_cast<uint32_t>(bus.load(cpu.core().pc(), 4));
+    uint32_t raw = 0;
+    if (!cpu.address_space().fetch32(bus, raw)) {
+        cpu.core().advance_cycle();
+        return;
+    }
     Insn insn;
     decode(raw, &insn);
     execute(cpu, bus, &insn);

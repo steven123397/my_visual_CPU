@@ -4,6 +4,7 @@
 
 #include "arch/core_state.h"
 #include "arch/csr_file.h"
+#include "mem/address_space.h"
 #include "trap.h"
 
 class Bus;
@@ -25,10 +26,14 @@ public:
     TrapController& trap();
     const TrapController& trap() const;
 
+    AddressSpace& address_space();
+    const AddressSpace& address_space() const;
+
 private:
     CoreState core_{};
     CsrFile csr_{};
     TrapController trap_;
+    AddressSpace address_space_;
 };
 
 void cpu_init(CPU& cpu, uint64_t entry);
