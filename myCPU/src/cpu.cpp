@@ -100,6 +100,7 @@ const AddressSpace& CPU::address_space() const {
 void cpu_init(CPU& cpu, uint64_t entry) {
     cpu.core().reset(entry);
     cpu.csr().reset();
+    cpu.address_space().flush_tlb();
     cpu.csr().write(CSR_MISA, (2ULL << 62) | (1ULL << 8) | (1ULL << 12) | (1ULL << 0) | (1ULL << 2));
 }
 

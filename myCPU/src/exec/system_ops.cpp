@@ -104,6 +104,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
                 cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
                 return false;
             }
+            cpu.address_space().flush_tlb();
             return true;
         }
         cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);

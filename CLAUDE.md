@@ -41,18 +41,17 @@ What exists now:
   - supervisor timer interrupt delegation via `mideleg`, `stvec`, and `sret`
   - unmapped instruction/load/store access-fault behavior
   - `mtvec` direct / vectored mode routing
-  - Sv39 virtual memory: identity mapping, page faults on unmapped addresses, non-canonical and cross-page edge faults, `sstatus.MXR` / `sstatus.SUM` access semantics
+  - Sv39 virtual memory: identity mapping, page faults on unmapped addresses, non-canonical and cross-page edge faults, `sstatus.MXR` / `sstatus.SUM` access semantics, stale-translation invalidation via `sfence.vma`, and leaf-PTE `A/D` maintenance across TLB hits
 - M-mode trap-state behavior (`mstatus` / `mepc`)
 - `ebreak` and illegal-instruction exception behavior
 - privilege transitions across `U/S/M`, `sret`, minimal supervisor exception delegation, and CSR access-control guardrails
-- Sv39 virtual memory with 3-level page table walk, canonical-address checks, permission checks (R/W/X/U plus `SUM` / `MXR` effects), superpage support (4KB/2MB/1GB), page fault handling, cross-page fault handling, and A/D bit updates
+- Sv39 virtual memory with 3-level page table walk, a minimal Sv39 TLB, canonical-address checks, permission checks (R/W/X/U plus `SUM` / `MXR` effects), superpage support (4KB/2MB/1GB), page fault handling, cross-page fault handling, and A/D bit updates
 - `satp` CSR support for bare-mode and Sv39 mode switching
-- `sfence.vma` instruction with minimal legal-encoding acceptance (currently no-op, for future TLB invalidation)
+- `sfence.vma` instruction with minimal legal-encoding acceptance and full local TLB invalidation
 
 What does not yet exist:
 
 - Full privileged architecture support (complete CSR coverage)
-- TLB support for virtual memory
 - A realistic device platform for OS bring-up (PLIC, storage devices)
 - Pipeline, cache, multicore, or out-of-order models
 
@@ -63,7 +62,7 @@ Additional current planning notes:
 - This C-to-C++ transition must be justified by structural gains such as module boundaries, type safety, state management, ownership clarity, and backend extensibility, not by language preference alone.
 - The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` device objects, explicit `ElfLoader` / `BinaryLoader` image-loading boundaries, the first `CoreState + CsrFile` split, and a first `TrapController` boundary are now landed and should be treated as current baseline, not future proposal.
 - The immediate next structural step is to continue tightening the platform-side split: preserve `Bus` as the physical CPU-facing access path, deepen device/platform boundaries, and keep shrinking the remaining legacy responsibilities around raw RAM access and image loading.
-- Sv39 virtual memory is now implemented with 3-level page table walk, permission checks, and page fault handling. The immediate next functional step is to add TLB support for performance, expand CSR coverage for full supervisor execution, and add realistic device platform components (PLIC, storage) for OS bring-up.
+- Sv39 virtual memory is now implemented with 3-level page table walk, a minimal TLB, permission checks, and page fault handling. The immediate next functional step is to expand CSR coverage for full supervisor execution and add realistic device platform components (PLIC, storage) for OS bring-up.
 - When producing summaries, proposals, or report-style material for this project, describe the current implementation as an already working simulator prototype and the C++ refactor as the next enabling engineering step.
 
 ## Primary direction
@@ -96,7 +95,6 @@ Planned work:
 - Add `sret`, supervisor traps, and privilege transitions
 - Add virtual memory with Sv39 page tables
 - Add page faults and access faults
-- Add TLB support
 - Expand device platform:
   - UART
   - CLINT
@@ -234,7 +232,7 @@ Minimum expectations:
 Current baseline expectation for local validation:
 
 - Keep `make test` green
-- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, `exception_traps`, `access_faults`, `loads_signed_unsigned`, `alu_word`, `branches_signed_unsigned`, `muldiv`, `fence_noop`, `privilege_transitions`, `sret_transitions`, `supervisor_exception_delegation`, `supervisor_timer_interrupt`, `csr_access_control`, `sv39_basic`, `sv39_page_fault`, `sv39_edge_faults`, and `sv39_sum_mxr` assembly regressions, plus the flat-binary `hello` load path, as required guardrails when touching the reference path
+- Treat the existing `hello`, `sum`, `control_flow`, `csr_trap`, `timer_interrupt`, `mtvec_modes`, `trap_state`, `exception_traps`, `access_faults`, `loads_signed_unsigned`, `alu_word`, `branches_signed_unsigned`, `muldiv`, `fence_noop`, `privilege_transitions`, `sret_transitions`, `supervisor_exception_delegation`, `supervisor_timer_interrupt`, `csr_access_control`, `sv39_basic`, `sv39_page_fault`, `sv39_edge_faults`, `sv39_sum_mxr`, `sv39_tlb_flush`, and `sv39_tlb_ad_bits` assembly regressions, plus the flat-binary `hello` load path, as required guardrails when touching the reference path
 - If a refactor changes observable UART output or causes hangs, update tests only when the behavior change is intentional and justified
 
 If a feature is too complex to test, the design is probably still too large.
@@ -270,7 +268,7 @@ What is already landed in that migration:
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
 - Trap logic now has a first explicit `TrapController` boundary, with current regression coverage around trap entry, return, timer interrupts, `mtvec` modes, basic M-mode exception semantics, and minimal supervisor timer interrupt delivery
 - Privilege groundwork now includes `MPP` tracking, `ecall` cause separation by privilege, `sret`, minimal `medeleg`-based supervisor exception delegation, `mideleg`-based supervisor timer interrupt delivery, CSR privilege/read-only access checks, and `sstatus.SUM` / `sstatus.MXR` handling for supervisor virtual-memory access
-- `AddressSpace` boundary now exists between CPU fetch/load/store and the physical `Bus`, supporting both bare-mode passthrough and Sv39 virtual memory with 3-level page table walk, canonical-address checks, permission checks, superpage support, cross-page fault handling, page fault handling, and A/D bit updates
+- `AddressSpace` boundary now exists between CPU fetch/load/store and the physical `Bus`, supporting both bare-mode passthrough and Sv39 virtual memory with 3-level page table walk, a minimal TLB, canonical-address checks, permission checks, superpage support, cross-page fault handling, page fault handling, and A/D bit updates
 - CPU fetch/load/store now routes through `Bus`, and platform tick events now flow through `TrapController`, so RAM/device dispatch and timer-event routing are no longer hard-coded in the CPU step path
 - Instruction-family splits now exist for integer, control-flow, memory, and system/CSR execution, so semantic extraction has started without introducing multi-backend abstraction yet
 - The repository still intentionally keeps a simple architectural reference execution path
@@ -307,4 +305,4 @@ When planning the C++ restructuring, favor boundaries such as:
 - Describe the current project honestly as a working functional simulator prototype, not as a mere idea.
 - Do not claim support for ISA or platform features unless they are actually implemented and validated.
 - When discussing the C++ migration in documents, frame it as a structural response to growing architectural complexity, not as a cosmetic language rewrite.
-- At the current repository state, describe `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` devices, explicit `ElfLoader` / `BinaryLoader` loader boundaries, the `CoreState + CsrFile` split, the `TrapController` boundary, and the `AddressSpace` boundary with Sv39 virtual memory support, edge-fault coverage, and minimal `SUM` / `MXR` handling as already completed incremental steps; describe TLB support, expanded CSR coverage, and realistic device platform components (PLIC, storage) as the next structural targets for OS bring-up.
+- At the current repository state, describe `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` devices, explicit `ElfLoader` / `BinaryLoader` loader boundaries, the `CoreState + CsrFile` split, the `TrapController` boundary, and the `AddressSpace` boundary with Sv39 virtual memory support, a minimal TLB, edge-fault coverage, and minimal `SUM` / `MXR` handling as already completed incremental steps; describe expanded CSR coverage and realistic device platform components (PLIC, storage) as the next structural targets for OS bring-up.
