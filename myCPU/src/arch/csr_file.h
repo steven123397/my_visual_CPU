@@ -13,6 +13,7 @@ constexpr uint32_t CSR_SEPC = 0x141;
 constexpr uint32_t CSR_SCAUSE = 0x142;
 constexpr uint32_t CSR_STVAL = 0x143;
 constexpr uint32_t CSR_SIP = 0x144;
+constexpr uint32_t CSR_SATP = 0x180;
 constexpr uint32_t CSR_MSTATUS = 0x300;
 constexpr uint32_t CSR_MISA = 0x301;
 constexpr uint32_t CSR_MEDELEG = 0x302;

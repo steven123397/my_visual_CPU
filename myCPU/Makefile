@@ -7,7 +7,7 @@ CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arc
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 DEPS     = $(OBJS:.o=.d)
 TARGET   = mycpu
-ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control
+ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control sv39_basic sv39_page_fault
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 FLAT_BIN_TESTS = hello
 TEST_TIMEOUT ?= 2s
@@ -67,6 +67,8 @@ test-%: FORCE $(TARGET) tests/asm/%.elf
 		supervisor_exception_delegation) expected='SDG' ;; \
 		supervisor_timer_interrupt) expected='STI' ;; \
 		csr_access_control) expected='CSR' ;; \
+		sv39_basic) expected='SV39' ;; \
+		sv39_page_fault) expected='PFLT' ;; \
 		*) echo "Unknown asm test: $*" >&2; exit 1 ;; \
 	esac; \
 	echo "=== $* ==="; \

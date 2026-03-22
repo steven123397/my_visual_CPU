@@ -17,6 +17,7 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_SCAUSE:
     case CSR_STVAL:
     case CSR_SIP:
+    case CSR_SATP:
     case CSR_MSTATUS:
     case CSR_MISA:
     case CSR_MEDELEG:

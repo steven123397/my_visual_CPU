@@ -95,6 +95,13 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
             cpu.trap().return_from_sret();
             return false;
         }
+        if (insn.raw == 0x12000073) {
+            if (core.privilege_mode() == PrivilegeMode::User) {
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
+                return false;
+            }
+            return true;
+        }
         cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
         return false;
     case 1:

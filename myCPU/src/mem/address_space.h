@@ -22,9 +22,11 @@ public:
     bool store(Bus& bus, uint64_t addr, uint64_t value, int size);
 
 private:
-    bool translate(uint64_t vaddr, AccessType type, uint64_t& paddr) const;
+    bool translate(uint64_t vaddr, AccessType type, uint64_t& paddr);
     bool access(Bus& bus, uint64_t vaddr, int size, AccessType type, uint64_t& value);
     void raise_access_fault(AccessType type, uint64_t addr);
+    void raise_page_fault(AccessType type, uint64_t addr);
+    bool walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr);
 
     CoreState& core_;
     CsrFile& csr_;
