@@ -27,7 +27,7 @@ after_illegal:
     bne  t0, t1, fail
 
 reserved_system_point:
-    .word 0x12300073
+    .word 0x10400073
 
 after_reserved_system:
     csrr t0, mscratch
@@ -96,7 +96,7 @@ handle_illegal_insn:
 
 handle_reserved_system:
     csrr t0, mtval
-    li   t1, 0x12300073
+    li   t1, 0x10400073
     bne  t0, t1, trap_fail
 
     li   t0, 3

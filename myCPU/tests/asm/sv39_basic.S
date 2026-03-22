@@ -33,8 +33,9 @@ _start:
     or   t0, t0, t1
     csrw satp, t0
 
-    # 执行 sfence.vma 刷新 TLB
-    sfence.vma
+    # 当前还没有 TLB，但应接受合法的 sfence.vma 变体编码
+    .word 0x12008073       # sfence.vma x1, x0
+    .word 0x12200073       # sfence.vma x0, x2
 
     # 切换到 S-mode
     li   t0, 0x800        # MPP = S (01 << 11)

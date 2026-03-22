@@ -14,6 +14,10 @@ void write_rd(CPU& cpu, uint8_t rd, uint64_t value) {
     cpu.core().write_gpr(rd, value);
 }
 
+bool is_sfence_vma(const Insn& insn) {
+    return (insn.raw & 0xFE007FFFU) == 0x12000073U;
+}
+
 bool csr_instruction_writes(const Insn& insn) {
     switch (insn.funct3) {
     case 1:
@@ -95,7 +99,7 @@ bool execute_system_instruction(CPU& cpu, const Insn& insn) {
             cpu.trap().return_from_sret();
             return false;
         }
-        if (insn.raw == 0x12000073) {
+        if (is_sfence_vma(insn)) {
             if (core.privilege_mode() == PrivilegeMode::User) {
                 cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
                 return false;
