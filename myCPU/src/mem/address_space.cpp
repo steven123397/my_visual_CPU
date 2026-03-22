@@ -79,6 +79,16 @@ int page_chunk_size(uint64_t addr, int remaining) {
     return remaining < until_boundary ? remaining : until_boundary;
 }
 
+bool can_access_user_page(AccessType type, PrivilegeMode mode, uint64_t mstatus) {
+    if (mode == PrivilegeMode::User) {
+        return true;
+    }
+    if (type == AccessType::Instruction) {
+        return false;
+    }
+    return (mstatus & MSTATUS_SUM) != 0;
+}
+
 }  // namespace
 
 AddressSpace::AddressSpace(CoreState& core, CsrFile& csr, TrapController& trap)
@@ -211,18 +221,20 @@ bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, ui
             const bool writable = pte & PTE_W;
             const bool executable = pte & PTE_X;
             const bool user_accessible = pte & PTE_U;
+            const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
+            const PrivilegeMode mode = core_.privilege_mode();
 
             if (writable && !readable) {
                 raise_page_fault(type, vaddr);
                 return false;
             }
 
-            const bool is_user_mode = core_.privilege_mode() == PrivilegeMode::User;
+            const bool is_user_mode = mode == PrivilegeMode::User;
             if (is_user_mode && !user_accessible) {
                 raise_page_fault(type, vaddr);
                 return false;
             }
-            if (!is_user_mode && user_accessible) {
+            if (!is_user_mode && user_accessible && !can_access_user_page(type, mode, mstatus)) {
                 raise_page_fault(type, vaddr);
                 return false;
             }
@@ -235,7 +247,7 @@ bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, ui
                 }
                 break;
             case AccessType::Load:
-                if (!readable) {
+                if (!readable && !((mstatus & MSTATUS_MXR) && executable)) {
                     raise_page_fault(type, vaddr);
                     return false;
                 }

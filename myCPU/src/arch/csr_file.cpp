@@ -4,7 +4,7 @@
 
 namespace {
 
-constexpr uint64_t SSTATUS_MASK = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_SPP;
+constexpr uint64_t SSTATUS_MASK = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_SPP | MSTATUS_SUM | MSTATUS_MXR;
 constexpr uint64_t SIE_MASK = MIE_SSIE | MIE_STIE | MIE_SEIE;
 
 bool is_supported_csr(uint32_t addr) {

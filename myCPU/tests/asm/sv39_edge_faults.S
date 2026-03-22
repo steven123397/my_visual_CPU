@@ -64,7 +64,6 @@ supervisor_main:
     li   s1, 0
     li   s2, 'N'
 
-canonical_fault_setup:
     li   t0, 0x0000008080000000
 canonical_fault_point:
     ld   t1, 0(t0)
@@ -73,7 +72,6 @@ canonical_fault_point:
 after_canonical_fault:
     addi s1, s1, 1
 
-cross_page_fault_setup:
     li   t0, 0x80000ffc
 cross_page_fault_point:
     ld   t1, 0(t0)

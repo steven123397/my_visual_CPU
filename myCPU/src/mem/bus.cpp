@@ -36,16 +36,6 @@ bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
     return false;
 }
 
-uint64_t Bus::load(uint64_t addr, int size) {
-    uint64_t value = 0;
-    try_load(addr, size, value);
-    return value;
-}
-
-void Bus::store(uint64_t addr, uint64_t value, int size) {
-    try_store(addr, value, size);
-}
-
 PlatformEvents Bus::tick() {
     PlatformEvents events;
     for (Device* device : devices_) {

@@ -33,6 +33,8 @@ constexpr uint64_t MSTATUS_MIE = 1ULL << 3;
 constexpr uint64_t MSTATUS_SPIE = 1ULL << 5;
 constexpr uint64_t MSTATUS_MPIE = 1ULL << 7;
 constexpr uint64_t MSTATUS_SPP = 1ULL << 8;
+constexpr uint64_t MSTATUS_SUM = 1ULL << 18;
+constexpr uint64_t MSTATUS_MXR = 1ULL << 19;
 constexpr uint64_t MSTATUS_MPP_SHIFT = 11;
 constexpr uint64_t MSTATUS_MPP_MASK = 0x3ULL << MSTATUS_MPP_SHIFT;
 

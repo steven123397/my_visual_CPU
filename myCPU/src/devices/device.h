@@ -11,10 +11,6 @@ public:
 
     virtual ~Device() = default;
 
-    bool contains(uint64_t addr) const {
-        return contains(addr, 1);
-    }
-
     bool contains(uint64_t addr, uint64_t size) const {
         if (addr < base_) {
             return false;

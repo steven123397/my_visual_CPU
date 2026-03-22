@@ -16,8 +16,6 @@ public:
 
     bool try_load(uint64_t addr, int size, uint64_t& value);
     bool try_store(uint64_t addr, uint64_t value, int size);
-    uint64_t load(uint64_t addr, int size);
-    void store(uint64_t addr, uint64_t value, int size);
     PlatformEvents tick();
 
 private:
