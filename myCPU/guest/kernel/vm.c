@@ -20,6 +20,7 @@
 #define VM_MAX_KERNEL_MAPPINGS 16U
 #define VM_MAX_KERNEL_FAULT_RANGES 16U
 #define VM_MAX_USER_REGIONS 16U
+#define VM_MAX_LEGACY_USER_REGIONS 16U
 #define VM_MAX_FAULT_ACTIONS 16U
 #define VM_USER_VADDR_BASE ((uintptr_t)0)
 #define VM_USER_VADDR_LIMIT ((uintptr_t)MEM_BASE)
@@ -39,15 +40,6 @@ struct VmFaultRange {
     uint64_t flags;
 };
 
-struct VmUserRegion {
-    bool valid;
-    uintptr_t vaddr;
-    size_t size;
-    uint64_t flags;
-    bool has_fault_backing;
-    uintptr_t fault_paddr;
-};
-
 typedef enum VmFaultAction {
     VM_FAULT_ACTION_SKIP_INSTRUCTION = 0,
     VM_FAULT_ACTION_RESUME_AT_SLOT,
@@ -64,7 +56,8 @@ struct VmFaultActionRule {
 
 static struct VmFaultRange kernel_mappings[VM_MAX_KERNEL_MAPPINGS];
 static struct VmFaultRange kernel_fault_ranges[VM_MAX_KERNEL_FAULT_RANGES];
-static struct VmUserRegion user_regions[VM_MAX_USER_REGIONS];
+static vm_user_region_t* user_regions[VM_MAX_USER_REGIONS];
+static vm_user_region_t legacy_user_regions[VM_MAX_LEGACY_USER_REGIONS];
 static struct VmFaultActionRule fault_actions[VM_MAX_FAULT_ACTIONS];
 
 static void flush_tlb_if_enabled(void);
@@ -332,13 +325,20 @@ static bool range_overlaps_fault_ranges(const struct VmFaultRange* ranges,
     return false;
 }
 
+static bool user_region_descriptor_valid(const vm_user_region_t* region) {
+    return region != NULL && region->registered &&
+           page_span_args_valid(region->vaddr, region->size) &&
+           user_flags_valid(region->flags) &&
+           vm_range_is_user(region->vaddr, region->size);
+}
+
 static bool range_overlaps_user_regions(uintptr_t vaddr, size_t size) {
     size_t i = 0;
 
     for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
-        const struct VmUserRegion* region = &user_regions[i];
+        const vm_user_region_t* region = user_regions[i];
 
-        if (!region->valid) {
+        if (!user_region_descriptor_valid(region)) {
             continue;
         }
 
@@ -374,62 +374,89 @@ static struct VmFaultRange* find_free_fault_range_slot(struct VmFaultRange* rang
     return NULL;
 }
 
-static struct VmUserRegion* ensure_user_region(uintptr_t vaddr,
-                                               size_t size,
-                                               uint64_t flags,
-                                               bool* created) {
+static vm_user_region_t** find_free_user_region_slot(void) {
     size_t i = 0;
-    struct VmUserRegion* free_slot = NULL;
-
-    if (root_table == NULL || !page_span_args_valid(vaddr, size) ||
-        !user_flags_valid(flags) || !vm_range_is_user(vaddr, size) ||
-        range_overlaps_kernel_globals(vaddr, size)) {
-        return NULL;
-    }
-
-    if (created != NULL) {
-        *created = false;
-    }
 
     for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
-        struct VmUserRegion* region = &user_regions[i];
+        if (user_regions[i] == NULL) {
+            return &user_regions[i];
+        }
+    }
 
-        if (!region->valid) {
+    return NULL;
+}
+
+static bool register_user_region(vm_user_region_t* region) {
+    vm_user_region_t** slot = NULL;
+
+    if (root_table == NULL || region == NULL || region->registered ||
+        !page_span_args_valid(region->vaddr, region->size) ||
+        !user_flags_valid(region->flags) ||
+        !vm_range_is_user(region->vaddr, region->size) ||
+        range_overlaps_kernel_globals(region->vaddr, region->size) ||
+        range_overlaps_user_regions(region->vaddr, region->size)) {
+        return false;
+    }
+
+    slot = find_free_user_region_slot();
+    if (slot == NULL) {
+        return false;
+    }
+
+    region->registered = true;
+    region->has_fault_backing = false;
+    region->fault_paddr = 0;
+    *slot = region;
+    return true;
+}
+
+static vm_user_region_t* find_legacy_user_region(uintptr_t vaddr,
+                                                 size_t size,
+                                                 uint64_t flags) {
+    size_t i = 0;
+    vm_user_region_t* free_slot = NULL;
+
+    for (i = 0; i < VM_MAX_LEGACY_USER_REGIONS; ++i) {
+        vm_user_region_t* region = &legacy_user_regions[i];
+
+        if (!region->registered) {
             if (free_slot == NULL) {
                 free_slot = region;
             }
             continue;
         }
 
-        if (!ranges_overlap(vaddr, size, region->vaddr, region->size)) {
-            continue;
+        if (range_matches(vaddr, size, region->vaddr, region->size) &&
+            region->flags == flags) {
+            return region;
         }
-
-        if (!range_matches(vaddr, size, region->vaddr, region->size) ||
-            region->flags != flags) {
-            return NULL;
-        }
-
-        return region;
     }
 
     if (free_slot == NULL) {
         return NULL;
     }
 
-    if (created != NULL) {
-        *created = true;
+    free_slot->vaddr = vaddr;
+    free_slot->size = size;
+    free_slot->flags = flags;
+    free_slot->registered = false;
+    free_slot->has_fault_backing = false;
+    free_slot->fault_paddr = 0;
+
+    if (!register_user_region(free_slot)) {
+        return NULL;
     }
+
     return free_slot;
 }
 
-static const struct VmUserRegion* find_user_region_containing(uintptr_t vaddr) {
+static vm_user_region_t* find_user_region_containing(uintptr_t vaddr) {
     size_t i = 0;
 
     for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
-        const struct VmUserRegion* region = &user_regions[i];
+        vm_user_region_t* region = user_regions[i];
 
-        if (!region->valid) {
+        if (!user_region_descriptor_valid(region)) {
             continue;
         }
 
@@ -624,7 +651,16 @@ bool vm_init(void) {
     }
 
     for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
-        user_regions[i].valid = false;
+        user_regions[i] = NULL;
+    }
+
+    for (i = 0; i < VM_MAX_LEGACY_USER_REGIONS; ++i) {
+        legacy_user_regions[i].vaddr = 0;
+        legacy_user_regions[i].size = 0;
+        legacy_user_regions[i].flags = 0;
+        legacy_user_regions[i].registered = false;
+        legacy_user_regions[i].has_fault_backing = false;
+        legacy_user_regions[i].fault_paddr = 0;
     }
 
     for (i = 0; i < VM_MAX_FAULT_ACTIONS; ++i) {
@@ -685,30 +721,79 @@ bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t
     return map_kernel_global_range(vaddr, paddr, size, flags);
 }
 
-bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
-    bool created = false;
-    struct VmUserRegion* region = NULL;
-
-    region = ensure_user_region(vaddr, size, flags, &created);
-    if (region == NULL || !mapped_range_args_valid(vaddr, paddr, size)) {
+bool vm_user_region_init(vm_user_region_t* region,
+                         uintptr_t vaddr,
+                         size_t size,
+                         uint64_t flags) {
+    if (region == NULL) {
         return false;
     }
 
-    if (!map_range_pages_internal(vaddr, paddr, size, flags)) {
+    region->vaddr = vaddr;
+    region->size = size;
+    region->flags = flags;
+    region->registered = false;
+    region->has_fault_backing = false;
+    region->fault_paddr = 0;
+
+    return register_user_region(region);
+}
+
+bool vm_user_region_map(vm_user_region_t* region, uintptr_t paddr) {
+    if (!user_region_descriptor_valid(region) ||
+        !mapped_range_args_valid(region->vaddr, paddr, region->size)) {
         return false;
     }
 
-    if (created) {
-        region->valid = true;
-        region->vaddr = vaddr;
-        region->size = size;
-        region->flags = flags;
-        region->has_fault_backing = false;
-        region->fault_paddr = 0;
+    if (!map_range_pages_internal(region->vaddr, paddr, region->size, region->flags)) {
+        return false;
     }
 
     flush_tlb_if_enabled();
     return true;
+}
+
+bool vm_user_region_set_fault_backing(vm_user_region_t* region, uintptr_t paddr) {
+    if (!user_region_descriptor_valid(region) || region->has_fault_backing ||
+        !mapped_range_args_valid(region->vaddr, paddr, region->size)) {
+        return false;
+    }
+
+    region->has_fault_backing = true;
+    region->fault_paddr = paddr;
+    return true;
+}
+
+bool vm_user_region_unmap_page(vm_user_region_t* region, uintptr_t vaddr) {
+    if (!user_region_descriptor_valid(region) ||
+        !vm_user_region_contains(region, vaddr, MEMORY_PAGE_SIZE) ||
+        !unmap_page_internal(vaddr)) {
+        return false;
+    }
+
+    flush_tlb_if_enabled();
+    return true;
+}
+
+bool vm_user_region_contains(const vm_user_region_t* region,
+                             uintptr_t vaddr,
+                             size_t size) {
+    if (!user_region_descriptor_valid(region)) {
+        return false;
+    }
+
+    return range_within_window(vaddr, size, region->vaddr,
+                               region->vaddr + (uintptr_t)region->size);
+}
+
+bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
+    vm_user_region_t* region = find_legacy_user_region(vaddr, size, flags);
+
+    if (region == NULL) {
+        return false;
+    }
+
+    return vm_user_region_map(region, paddr);
 }
 
 bool vm_unmap_page(uintptr_t vaddr) {
@@ -759,27 +844,13 @@ bool vm_register_user_fault_range(uintptr_t vaddr,
                                   uintptr_t paddr,
                                   size_t size,
                                   uint64_t flags) {
-    bool created = false;
-    struct VmUserRegion* region = NULL;
+    vm_user_region_t* region = find_legacy_user_region(vaddr, size, flags);
 
-    region = ensure_user_region(vaddr, size, flags, &created);
-    if (region == NULL || !mapped_range_args_valid(vaddr, paddr, size) ||
-        region->has_fault_backing) {
+    if (region == NULL) {
         return false;
     }
 
-    if (created) {
-        region->valid = true;
-        region->vaddr = vaddr;
-        region->size = size;
-        region->flags = flags;
-        region->has_fault_backing = false;
-        region->fault_paddr = 0;
-    }
-
-    region->has_fault_backing = true;
-    region->fault_paddr = paddr;
-    return true;
+    return vm_user_region_set_fault_backing(region, paddr);
 }
 
 static bool register_fault_action(uint64_t cause,
@@ -848,7 +919,7 @@ bool vm_register_fault_resume_slot(uint64_t cause,
 }
 
 bool vm_handle_page_fault(uint64_t cause, uint64_t epc, uint64_t tval) {
-    const struct VmUserRegion* user_region = NULL;
+    const vm_user_region_t* user_region = NULL;
     const struct VmFaultRange* range = NULL;
     const struct VmFaultActionRule* action = NULL;
     const uintptr_t fault_page = align_down_page((uintptr_t)tval);

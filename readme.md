@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个带 early allocator、最小 PMM、guest-side Sv39 页表层、VM-owned page-fault policy/handling、显式 kernel/user 地址窗口 helper、kernel-global 映射跟踪、user-owned region ownership 与可选 fault backing 的 supervisor runtime 骨架。
+当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个带 early allocator、最小 PMM、guest-side Sv39 页表层、VM-owned page-fault policy/handling、显式 kernel/user 地址窗口 helper、kernel-global 映射跟踪、`vm_user_region_t` user-owned region 对象层、以及第一批真实 U-mode bring-up 路径的 supervisor runtime 骨架。
 
 ## 目录结构
 
@@ -105,7 +105,7 @@ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
 
-`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults`、`csr_semantic_consistency` 这类特权/异常/CSR 语义一致性回归，`plic_*` / `storage_device_basic` / `supervisor_platform_smoke` / `clint_split_access` 这类平台回归，`sv39_*` 这类虚拟内存/TLB 回归，以及覆盖 guest-side demand paging、recoverable fault policy、VM 已启用后 `vm_map_range` / `vm_unmap_page` 自动维护本地 TLB 一致性、当前 user `< MEM_BASE` / kernel `[MEM_BASE, MEM_BASE + MEM_SIZE)` 地址窗口 helper、kernel-global 与 user-owned VM ownership split、以及通过 `sstatus.SUM` 消费真正 user-mapped alias 页的 `guest_supervisor_demo` bring-up 回归。
+`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults`、`csr_semantic_consistency` 这类特权/异常/CSR 语义一致性回归，`plic_*` / `storage_device_basic` / `supervisor_platform_smoke` / `clint_split_access` 这类平台回归，`sv39_*` 这类虚拟内存/TLB 回归，以及覆盖 guest-side demand paging、recoverable fault policy、VM 已启用后 `vm_map_range` / `vm_unmap_page` 自动维护本地 TLB 一致性、当前 user `< MEM_BASE` / kernel `[MEM_BASE, MEM_BASE + MEM_SIZE)` 地址窗口 helper、kernel-global 与 user-owned VM ownership split、`vm_user_region_t` 对象层、以及真实 U-mode 执行、delegated user page fault、delegated user `ecall`、delegated timer interrupt return 与 user stack / trap stack 切换的 `guest_supervisor_demo` bring-up 回归。
 
 ## 内存映射
 
@@ -138,7 +138,7 @@ make test
 - `time` CSR 与 CLINT `mtime` 保持一致，guest 侧 CSR/MMIO 看到同一平台时间源
 - PLIC machine/supervisor external interrupt 最小路径
 - host-backed block-oriented MMIO storage device
-- 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt/exception handler、VM-owned page-fault policy/handling，以及 linker-backed early allocator + bitmap-backed PMM + guest-side Sv39 page-table builder + kernel-global 映射跟踪 + user-owned region ownership 与可选 fault backing + recoverable fault policy registration + page-granular kernel mapping / fault handling + VM 启用后的 map/unmap 本地 TLB 同步 + 当前 user `< MEM_BASE` / kernel `[MEM_BASE, MEM_BASE + MEM_SIZE)` split helper 与 `SUM` 驱动的 supervisor-side user-page 访问验证
+- 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt/exception handler、VM-owned page-fault policy/handling，以及 linker-backed early allocator + bitmap-backed PMM + guest-side Sv39 page-table builder + kernel-global 映射跟踪 + `vm_user_region_t` user-owned region 对象层与可选 fault backing + recoverable fault policy registration + page-granular kernel mapping / fault handling + VM 启用后的 map/unmap 本地 TLB 同步 + 当前 user `< MEM_BASE` / kernel `[MEM_BASE, MEM_BASE + MEM_SIZE)` split helper + 真实 U-mode 执行、delegated trap return、real user stack 和 dedicated supervisor trap stack 的 bring-up 验证
 - `ecall` a7=93 退出约定
 
 ## 源码文件说明
@@ -156,7 +156,7 @@ make test
 ### `myCPU/guest/`
 
 - `include/`：guest 平台层、trap、timer、memory、pmm、vm 等最小内核接口。
-- `kernel/`：`console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小 guest 侧模块实现，当前已覆盖页粒度 kernel mapping、VM-owned page-fault dispatch/policy、kernel-global 映射跟踪、user-owned region ownership 与可选 fault backing、可恢复 page-fault 注册、较严格的 `vm_map_range` / `vm_unmap_page` 语义、VM 启用后成功 map/unmap 自动维护本地 TLB 一致性、当前 user `< MEM_BASE` / kernel `[MEM_BASE, MEM_BASE + MEM_SIZE)` 地址窗口 helper，以及 `SUM` 驱动的 supervisor-side user-page 访问辅助。
+- `kernel/`：`console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小 guest 侧模块实现，当前已覆盖页粒度 kernel mapping、VM-owned page-fault dispatch/policy、kernel-global 映射跟踪、`vm_user_region_t` user-owned region 对象层与可选 fault backing、可恢复 page-fault 注册、较严格的 `vm_map_range` / `vm_unmap_page` 语义、VM 启用后成功 map/unmap 自动维护本地 TLB 一致性、当前 user `< MEM_BASE` / kernel `[MEM_BASE, MEM_BASE + MEM_SIZE)` 地址窗口 helper，以及 `SUM` 驱动的 supervisor-side user-page 访问辅助。
 - `lib/platform.S`：共享 guest MMIO 平台库入口。
 - `supervisor_demo/`：最小 supervisor runtime、linker script 和 bring-up demo。
 

@@ -9,6 +9,15 @@
 #define VM_PAGE_EXEC (1ULL << 3)
 #define VM_PAGE_USER (1ULL << 4)
 
+typedef struct VmUserRegion {
+    uintptr_t vaddr;
+    size_t size;
+    uint64_t flags;
+    bool registered;
+    bool has_fault_backing;
+    uintptr_t fault_paddr;
+} vm_user_region_t;
+
 bool vm_init(void);
 bool vm_map_identity_1g(uintptr_t base, uint64_t flags);
 /* Generic map helpers dispatch ownership through VM_PAGE_USER. */
@@ -18,13 +27,23 @@ bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t
 bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
 /* Only user-owned pages may be unmapped through the public VM API. */
 bool vm_unmap_page(uintptr_t vaddr);
+bool vm_user_region_init(vm_user_region_t* region,
+                         uintptr_t vaddr,
+                         size_t size,
+                         uint64_t flags);
+bool vm_user_region_map(vm_user_region_t* region, uintptr_t paddr);
+bool vm_user_region_set_fault_backing(vm_user_region_t* region, uintptr_t paddr);
+bool vm_user_region_unmap_page(vm_user_region_t* region, uintptr_t vaddr);
+bool vm_user_region_contains(const vm_user_region_t* region,
+                             uintptr_t vaddr,
+                             size_t size);
 bool vm_range_is_kernel(uintptr_t vaddr, size_t size);
 bool vm_range_is_user(uintptr_t vaddr, size_t size);
 uintptr_t vm_kernel_base(void);
 uintptr_t vm_kernel_limit(void);
 uintptr_t vm_user_base(void);
 uintptr_t vm_user_limit(void);
-/* Generic fault-range registration is kernel-global; user ranges use the user API. */
+/* Generic fault-range registration is kernel-global; user regions should use objects. */
 bool vm_register_fault_range(uintptr_t vaddr,
                              uintptr_t paddr,
                              size_t size,
