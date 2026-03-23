@@ -17,7 +17,9 @@
 #define SV39_PTE_FLAG_MASK \
     (VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXEC | VM_PAGE_USER)
 #define SV39_PPN_MASK ((1ULL << 44) - 1ULL)
-#define VM_MAX_FAULT_RANGES 16U
+#define VM_MAX_KERNEL_MAPPINGS 16U
+#define VM_MAX_KERNEL_FAULT_RANGES 16U
+#define VM_MAX_USER_REGIONS 16U
 #define VM_MAX_FAULT_ACTIONS 16U
 #define VM_USER_VADDR_BASE ((uintptr_t)0)
 #define VM_USER_VADDR_LIMIT ((uintptr_t)MEM_BASE)
@@ -37,6 +39,15 @@ struct VmFaultRange {
     uint64_t flags;
 };
 
+struct VmUserRegion {
+    bool valid;
+    uintptr_t vaddr;
+    size_t size;
+    uint64_t flags;
+    bool has_fault_backing;
+    uintptr_t fault_paddr;
+};
+
 typedef enum VmFaultAction {
     VM_FAULT_ACTION_SKIP_INSTRUCTION = 0,
     VM_FAULT_ACTION_RESUME_AT_SLOT,
@@ -51,8 +62,12 @@ struct VmFaultActionRule {
     volatile uintptr_t* resume_pc_slot;
 };
 
-static struct VmFaultRange fault_ranges[VM_MAX_FAULT_RANGES];
+static struct VmFaultRange kernel_mappings[VM_MAX_KERNEL_MAPPINGS];
+static struct VmFaultRange kernel_fault_ranges[VM_MAX_KERNEL_FAULT_RANGES];
+static struct VmUserRegion user_regions[VM_MAX_USER_REGIONS];
 static struct VmFaultActionRule fault_actions[VM_MAX_FAULT_ACTIONS];
+
+static void flush_tlb_if_enabled(void);
 
 static size_t vpn_index(uintptr_t vaddr, unsigned level) {
     return (size_t)((vaddr >> (SV39_PAGE_SHIFT + level * SV39_LEVEL_BITS)) &
@@ -88,10 +103,23 @@ static bool range_within_window(uintptr_t base,
     return base >= window_base && end <= window_limit;
 }
 
-static bool range_is_page_aligned(uintptr_t vaddr, uintptr_t paddr, size_t size) {
-    return (vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           (paddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           (size & (MEMORY_PAGE_SIZE - 1U)) == 0;
+static bool page_span_args_valid(uintptr_t base, size_t size) {
+    if (size == 0 ||
+        (base & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
+        (size & (MEMORY_PAGE_SIZE - 1U)) != 0) {
+        return false;
+    }
+
+    return !range_overflows(base, size);
+}
+
+static bool mapped_range_args_valid(uintptr_t vaddr, uintptr_t paddr, size_t size) {
+    if (!page_span_args_valid(vaddr, size) ||
+        (paddr & (MEMORY_PAGE_SIZE - 1U)) != 0) {
+        return false;
+    }
+
+    return !range_overflows(paddr, size);
 }
 
 static bool flags_valid(uint64_t flags) {
@@ -110,12 +138,19 @@ static bool flags_valid(uint64_t flags) {
     return true;
 }
 
-static bool range_args_valid(uintptr_t vaddr, uintptr_t paddr, size_t size) {
-    if (size == 0 || !range_is_page_aligned(vaddr, paddr, size)) {
-        return false;
-    }
+static bool user_flags_valid(uint64_t flags) {
+    return flags_valid(flags) && (flags & VM_PAGE_USER) != 0;
+}
 
-    return !range_overflows(vaddr, size) && !range_overflows(paddr, size);
+static bool kernel_flags_valid(uint64_t flags) {
+    return flags_valid(flags) && (flags & VM_PAGE_USER) == 0;
+}
+
+static bool range_matches(uintptr_t base_a,
+                          size_t size_a,
+                          uintptr_t base_b,
+                          size_t size_b) {
+    return base_a == base_b && size_a == size_b;
 }
 
 static bool page_fault_cause_valid(uint64_t cause) {
@@ -220,7 +255,8 @@ static bool map_page_internal(uintptr_t vaddr, uintptr_t paddr, uint64_t flags) 
     bool conflict = false;
     uint64_t* slot = NULL;
 
-    if (!range_args_valid(vaddr, paddr, MEMORY_PAGE_SIZE) || !flags_valid(flags)) {
+    if (!mapped_range_args_valid(vaddr, paddr, MEMORY_PAGE_SIZE) ||
+        !flags_valid(flags)) {
         return false;
     }
 
@@ -275,6 +311,137 @@ static bool ranges_overlap(uintptr_t start_a,
     return start_a < end_b && start_b < end_a;
 }
 
+static bool range_overlaps_fault_ranges(const struct VmFaultRange* ranges,
+                                        size_t count,
+                                        uintptr_t vaddr,
+                                        size_t size) {
+    size_t i = 0;
+
+    for (i = 0; i < count; ++i) {
+        const struct VmFaultRange* range = &ranges[i];
+
+        if (!range->valid) {
+            continue;
+        }
+
+        if (ranges_overlap(vaddr, size, range->vaddr, range->size)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool range_overlaps_user_regions(uintptr_t vaddr, size_t size) {
+    size_t i = 0;
+
+    for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
+        const struct VmUserRegion* region = &user_regions[i];
+
+        if (!region->valid) {
+            continue;
+        }
+
+        if (ranges_overlap(vaddr, size, region->vaddr, region->size)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool range_overlaps_kernel_globals(uintptr_t vaddr, size_t size) {
+    return range_overlaps_fault_ranges(kernel_mappings,
+                                       VM_MAX_KERNEL_MAPPINGS,
+                                       vaddr,
+                                       size) ||
+           range_overlaps_fault_ranges(kernel_fault_ranges,
+                                       VM_MAX_KERNEL_FAULT_RANGES,
+                                       vaddr,
+                                       size);
+}
+
+static struct VmFaultRange* find_free_fault_range_slot(struct VmFaultRange* ranges,
+                                                       size_t count) {
+    size_t i = 0;
+
+    for (i = 0; i < count; ++i) {
+        if (!ranges[i].valid) {
+            return &ranges[i];
+        }
+    }
+
+    return NULL;
+}
+
+static struct VmUserRegion* ensure_user_region(uintptr_t vaddr,
+                                               size_t size,
+                                               uint64_t flags,
+                                               bool* created) {
+    size_t i = 0;
+    struct VmUserRegion* free_slot = NULL;
+
+    if (root_table == NULL || !page_span_args_valid(vaddr, size) ||
+        !user_flags_valid(flags) || !vm_range_is_user(vaddr, size) ||
+        range_overlaps_kernel_globals(vaddr, size)) {
+        return NULL;
+    }
+
+    if (created != NULL) {
+        *created = false;
+    }
+
+    for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
+        struct VmUserRegion* region = &user_regions[i];
+
+        if (!region->valid) {
+            if (free_slot == NULL) {
+                free_slot = region;
+            }
+            continue;
+        }
+
+        if (!ranges_overlap(vaddr, size, region->vaddr, region->size)) {
+            continue;
+        }
+
+        if (!range_matches(vaddr, size, region->vaddr, region->size) ||
+            region->flags != flags) {
+            return NULL;
+        }
+
+        return region;
+    }
+
+    if (free_slot == NULL) {
+        return NULL;
+    }
+
+    if (created != NULL) {
+        *created = true;
+    }
+    return free_slot;
+}
+
+static const struct VmUserRegion* find_user_region_containing(uintptr_t vaddr) {
+    size_t i = 0;
+
+    for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
+        const struct VmUserRegion* region = &user_regions[i];
+
+        if (!region->valid) {
+            continue;
+        }
+
+        if (vaddr >= region->vaddr &&
+            vaddr < region->vaddr + (uintptr_t)region->size) {
+            return region;
+        }
+    }
+
+    return NULL;
+}
+
 static bool fault_range_allows_access(uint64_t flags, uint64_t cause) {
     switch (cause) {
     case RISCV_EXC_INSN_PAGE_FAULT:
@@ -288,11 +455,11 @@ static bool fault_range_allows_access(uint64_t flags, uint64_t cause) {
     }
 }
 
-static const struct VmFaultRange* find_fault_range(uintptr_t fault_page) {
+static const struct VmFaultRange* find_kernel_fault_range(uintptr_t fault_page) {
     size_t i = 0;
 
-    for (i = 0; i < VM_MAX_FAULT_RANGES; ++i) {
-        const struct VmFaultRange* range = &fault_ranges[i];
+    for (i = 0; i < VM_MAX_KERNEL_FAULT_RANGES; ++i) {
+        const struct VmFaultRange* range = &kernel_fault_ranges[i];
 
         if (!range->valid) {
             continue;
@@ -305,6 +472,101 @@ static const struct VmFaultRange* find_fault_range(uintptr_t fault_page) {
     }
 
     return NULL;
+}
+
+static bool map_range_pages_internal(uintptr_t vaddr,
+                                     uintptr_t paddr,
+                                     size_t size,
+                                     uint64_t flags) {
+    size_t offset = 0;
+    size_t mapped = 0;
+
+    if (root_table == NULL ||
+        !mapped_range_args_valid(vaddr, paddr, size) ||
+        !flags_valid(flags)) {
+        return false;
+    }
+
+    while (offset < size) {
+        if (!can_map_page(vaddr + offset)) {
+            return false;
+        }
+        offset += MEMORY_PAGE_SIZE;
+    }
+
+    offset = 0;
+    while (offset < size) {
+        if (!map_page_internal(vaddr + offset, paddr + offset, flags)) {
+            size_t rollback = 0;
+
+            while (rollback < mapped) {
+                unmap_page_internal(vaddr + rollback);
+                rollback += MEMORY_PAGE_SIZE;
+            }
+            return false;
+        }
+
+        mapped += MEMORY_PAGE_SIZE;
+        offset += MEMORY_PAGE_SIZE;
+    }
+
+    return true;
+}
+
+static bool map_kernel_global_range(uintptr_t vaddr,
+                                    uintptr_t paddr,
+                                    size_t size,
+                                    uint64_t flags) {
+    struct VmFaultRange* record = NULL;
+
+    if (root_table == NULL ||
+        !mapped_range_args_valid(vaddr, paddr, size) ||
+        !kernel_flags_valid(flags) ||
+        range_overlaps_kernel_globals(vaddr, size) ||
+        range_overlaps_user_regions(vaddr, size)) {
+        return false;
+    }
+
+    record = find_free_fault_range_slot(kernel_mappings, VM_MAX_KERNEL_MAPPINGS);
+    if (record == NULL || !map_range_pages_internal(vaddr, paddr, size, flags)) {
+        return false;
+    }
+
+    record->valid = true;
+    record->vaddr = vaddr;
+    record->paddr = paddr;
+    record->size = size;
+    record->flags = flags;
+    flush_tlb_if_enabled();
+    return true;
+}
+
+static bool register_kernel_fault_range(uintptr_t vaddr,
+                                        uintptr_t paddr,
+                                        size_t size,
+                                        uint64_t flags) {
+    struct VmFaultRange* record = NULL;
+
+    if (root_table == NULL ||
+        !mapped_range_args_valid(vaddr, paddr, size) ||
+        !kernel_flags_valid(flags) ||
+        range_overlaps_kernel_globals(vaddr, size) ||
+        range_overlaps_user_regions(vaddr, size)) {
+        return false;
+    }
+
+    record =
+        find_free_fault_range_slot(kernel_fault_ranges, VM_MAX_KERNEL_FAULT_RANGES);
+    if (record == NULL) {
+        return false;
+    }
+
+    record->valid = true;
+    record->vaddr = vaddr;
+    record->paddr = paddr;
+    record->size = size;
+    record->flags = flags;
+    return true;
 }
 
 static void flush_tlb_if_enabled(void) {
@@ -353,8 +615,16 @@ bool vm_init(void) {
                  (((uint64_t)(root_table_pa >> SV39_PAGE_SHIFT)) & SV39_PPN_MASK);
     enabled = false;
 
-    for (i = 0; i < VM_MAX_FAULT_RANGES; ++i) {
-        fault_ranges[i].valid = false;
+    for (i = 0; i < VM_MAX_KERNEL_MAPPINGS; ++i) {
+        kernel_mappings[i].valid = false;
+    }
+
+    for (i = 0; i < VM_MAX_KERNEL_FAULT_RANGES; ++i) {
+        kernel_fault_ranges[i].valid = false;
+    }
+
+    for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
+        user_regions[i].valid = false;
     }
 
     for (i = 0; i < VM_MAX_FAULT_ACTIONS; ++i) {
@@ -366,10 +636,13 @@ bool vm_init(void) {
 
 bool vm_map_identity_1g(uintptr_t base, uint64_t flags) {
     const size_t index = vpn_index(base, 2);
+    struct VmFaultRange* record = NULL;
 
     if (root_table == NULL ||
         (base & (SV39_SUPERPAGE_SIZE_1G - 1U)) != 0 ||
-        !flags_valid(flags)) {
+        !kernel_flags_valid(flags) ||
+        range_overlaps_kernel_globals(base, SV39_SUPERPAGE_SIZE_1G) ||
+        range_overlaps_user_regions(base, SV39_SUPERPAGE_SIZE_1G)) {
         return false;
     }
 
@@ -377,79 +650,69 @@ bool vm_map_identity_1g(uintptr_t base, uint64_t flags) {
         return false;
     }
 
+    record = find_free_fault_range_slot(kernel_mappings, VM_MAX_KERNEL_MAPPINGS);
+    if (record == NULL) {
+        return false;
+    }
+
     root_table[index] = pte_from_pa(base, SV39_PTE_VALID | flags);
+    record->valid = true;
+    record->vaddr = base;
+    record->paddr = base;
+    record->size = SV39_SUPERPAGE_SIZE_1G;
+    record->flags = flags;
     flush_tlb_if_enabled();
     return true;
 }
 
 bool vm_map_page(uintptr_t vaddr, uintptr_t paddr, uint64_t flags) {
-    if (root_table == NULL) {
-        return false;
-    }
-
-    if (!map_page_internal(vaddr, paddr, flags)) {
-        return false;
-    }
-
-    flush_tlb_if_enabled();
-    return true;
+    return vm_map_range(vaddr, paddr, MEMORY_PAGE_SIZE, flags);
 }
 
 bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
-    size_t offset = 0;
-    size_t mapped = 0;
+    if ((flags & VM_PAGE_USER) != 0) {
+        return vm_map_user_range(vaddr, paddr, size, flags);
+    }
 
-    if (root_table == NULL ||
-        !range_args_valid(vaddr, paddr, size) ||
-        !flags_valid(flags)) {
+    return map_kernel_global_range(vaddr, paddr, size, flags);
+}
+
+bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
+    if (!vm_range_is_kernel(vaddr, size)) {
         return false;
     }
 
-    while (offset < size) {
-        if (!can_map_page(vaddr + offset)) {
-            return false;
-        }
-        offset += MEMORY_PAGE_SIZE;
+    return map_kernel_global_range(vaddr, paddr, size, flags);
+}
+
+bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
+    bool created = false;
+    struct VmUserRegion* region = NULL;
+
+    region = ensure_user_region(vaddr, size, flags, &created);
+    if (region == NULL || !mapped_range_args_valid(vaddr, paddr, size)) {
+        return false;
     }
 
-    offset = 0;
-    while (offset < size) {
-        if (!map_page_internal(vaddr + offset, paddr + offset, flags)) {
-            size_t rollback = 0;
+    if (!map_range_pages_internal(vaddr, paddr, size, flags)) {
+        return false;
+    }
 
-            while (rollback < mapped) {
-                unmap_page_internal(vaddr + rollback);
-                rollback += MEMORY_PAGE_SIZE;
-            }
-            return false;
-        }
-
-        mapped += MEMORY_PAGE_SIZE;
-        offset += MEMORY_PAGE_SIZE;
+    if (created) {
+        region->valid = true;
+        region->vaddr = vaddr;
+        region->size = size;
+        region->flags = flags;
+        region->has_fault_backing = false;
+        region->fault_paddr = 0;
     }
 
     flush_tlb_if_enabled();
     return true;
 }
 
-bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
-    if ((flags & VM_PAGE_USER) != 0 || !vm_range_is_kernel(vaddr, size)) {
-        return false;
-    }
-
-    return vm_map_range(vaddr, paddr, size, flags);
-}
-
-bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
-    if ((flags & VM_PAGE_USER) == 0 || !vm_range_is_user(vaddr, size)) {
-        return false;
-    }
-
-    return vm_map_range(vaddr, paddr, size, flags);
-}
-
 bool vm_unmap_page(uintptr_t vaddr) {
-    if (!unmap_page_internal(vaddr)) {
+    if (find_user_region_containing(vaddr) == NULL || !unmap_page_internal(vaddr)) {
         return false;
     }
 
@@ -485,51 +748,38 @@ bool vm_register_fault_range(uintptr_t vaddr,
                              uintptr_t paddr,
                              size_t size,
                              uint64_t flags) {
-    size_t i = 0;
-    struct VmFaultRange* free_slot = NULL;
-
-    if (root_table == NULL ||
-        !range_args_valid(vaddr, paddr, size) ||
-        !flags_valid(flags)) {
+    if ((flags & VM_PAGE_USER) != 0) {
         return false;
     }
 
-    for (i = 0; i < VM_MAX_FAULT_RANGES; ++i) {
-        struct VmFaultRange* range = &fault_ranges[i];
-
-        if (!range->valid) {
-            if (free_slot == NULL) {
-                free_slot = range;
-            }
-            continue;
-        }
-
-        if (ranges_overlap(vaddr, size, range->vaddr, range->size)) {
-            return false;
-        }
-    }
-
-    if (free_slot == NULL) {
-        return false;
-    }
-
-    free_slot->valid = true;
-    free_slot->vaddr = vaddr;
-    free_slot->paddr = paddr;
-    free_slot->size = size;
-    free_slot->flags = flags;
-    return true;
+    return register_kernel_fault_range(vaddr, paddr, size, flags);
 }
 
 bool vm_register_user_fault_range(uintptr_t vaddr,
                                   uintptr_t paddr,
                                   size_t size,
                                   uint64_t flags) {
-    if ((flags & VM_PAGE_USER) == 0 || !vm_range_is_user(vaddr, size)) {
+    bool created = false;
+    struct VmUserRegion* region = NULL;
+
+    region = ensure_user_region(vaddr, size, flags, &created);
+    if (region == NULL || !mapped_range_args_valid(vaddr, paddr, size) ||
+        region->has_fault_backing) {
         return false;
     }
 
-    return vm_register_fault_range(vaddr, paddr, size, flags);
+    if (created) {
+        region->valid = true;
+        region->vaddr = vaddr;
+        region->size = size;
+        region->flags = flags;
+        region->has_fault_backing = false;
+        region->fault_paddr = 0;
+    }
+
+    region->has_fault_backing = true;
+    region->fault_paddr = paddr;
+    return true;
 }
 
 static bool register_fault_action(uint64_t cause,
@@ -598,6 +848,7 @@ bool vm_register_fault_resume_slot(uint64_t cause,
 }
 
 bool vm_handle_page_fault(uint64_t cause, uint64_t epc, uint64_t tval) {
+    const struct VmUserRegion* user_region = NULL;
     const struct VmFaultRange* range = NULL;
     const struct VmFaultActionRule* action = NULL;
     const uintptr_t fault_page = align_down_page((uintptr_t)tval);
@@ -609,7 +860,21 @@ bool vm_handle_page_fault(uint64_t cause, uint64_t epc, uint64_t tval) {
         return false;
     }
 
-    range = find_fault_range(fault_page);
+    user_region = find_user_region_containing(fault_page);
+    if (user_region != NULL && user_region->has_fault_backing &&
+        fault_range_allows_access(user_region->flags, cause)) {
+        offset = fault_page - user_region->vaddr;
+        if (!map_page_internal(fault_page,
+                               user_region->fault_paddr + offset,
+                               user_region->flags)) {
+            return false;
+        }
+
+        vm_flush_tlb();
+        return true;
+    }
+
+    range = find_kernel_fault_range(fault_page);
     if (range != NULL && fault_range_allows_access(range->flags, cause)) {
         offset = fault_page - range->vaddr;
         if (!map_page_internal(fault_page, range->paddr + offset, range->flags)) {

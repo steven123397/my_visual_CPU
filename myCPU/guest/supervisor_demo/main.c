@@ -168,6 +168,11 @@ void kernel_main(void) {
                             memory_text_end() - memory_text_start()) ||
         vm_range_is_kernel(alias_vaddr, MEMORY_PAGE_SIZE) ||
         !vm_map_identity_1g(0, VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXEC) ||
+        vm_register_user_fault_range(0,
+                                     (uintptr_t)remap_page,
+                                     MEMORY_PAGE_SIZE,
+                                     VM_PAGE_READ | VM_PAGE_WRITE |
+                                         VM_PAGE_USER) ||
         vm_map_kernel_range(alias_vaddr,
                             (uintptr_t)remap_page,
                             MEMORY_PAGE_SIZE,
@@ -200,10 +205,15 @@ void kernel_main(void) {
                                 (uintptr_t)backing_page,
                                 MEMORY_PAGE_SIZE,
                                 VM_PAGE_READ) ||
+        vm_unmap_page(memory_text_start()) ||
         !vm_map_user_range(alias_vaddr,
                            (uintptr_t)backing_page,
                            MEMORY_PAGE_SIZE,
                            VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_USER) ||
+        vm_register_fault_range(alias_vaddr,
+                                (uintptr_t)remap_page,
+                                MEMORY_PAGE_SIZE,
+                                VM_PAGE_READ | VM_PAGE_WRITE) ||
         !vm_register_user_fault_range(alias_vaddr,
                                       (uintptr_t)remap_page,
                                       MEMORY_PAGE_SIZE,

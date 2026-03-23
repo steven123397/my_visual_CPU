@@ -11,10 +11,12 @@
 
 bool vm_init(void);
 bool vm_map_identity_1g(uintptr_t base, uint64_t flags);
+/* Generic map helpers dispatch ownership through VM_PAGE_USER. */
 bool vm_map_page(uintptr_t vaddr, uintptr_t paddr, uint64_t flags);
 bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
 bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
 bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
+/* Only user-owned pages may be unmapped through the public VM API. */
 bool vm_unmap_page(uintptr_t vaddr);
 bool vm_range_is_kernel(uintptr_t vaddr, size_t size);
 bool vm_range_is_user(uintptr_t vaddr, size_t size);
@@ -22,6 +24,7 @@ uintptr_t vm_kernel_base(void);
 uintptr_t vm_kernel_limit(void);
 uintptr_t vm_user_base(void);
 uintptr_t vm_user_limit(void);
+/* Generic fault-range registration is kernel-global; user ranges use the user API. */
 bool vm_register_fault_range(uintptr_t vaddr,
                              uintptr_t paddr,
                              size_t size,
