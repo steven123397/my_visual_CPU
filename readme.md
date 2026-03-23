@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个带 early allocator、最小 PMM、guest-side Sv39 页表层、S-mode page fault bring-up 和页粒度 kernel mapping 的 supervisor runtime 骨架。
+当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个带 early allocator、最小 PMM、guest-side Sv39 页表层、专用 guest VM/trap page-fault 路径、fault-range-backed 缺页映射和页粒度 kernel mapping 的 supervisor runtime 骨架。
 
 ## 目录结构
 
@@ -105,7 +105,7 @@ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
 
-`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults` 这类特权/异常回归，`plic_*` / `storage_device_basic` / `supervisor_platform_smoke` 这类平台回归，`sv39_*` 这类虚拟内存/TLB 回归，以及 `guest_supervisor_demo` 这类 guest bring-up 骨架回归。
+`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults` 这类特权/异常回归，`plic_*` / `storage_device_basic` / `supervisor_platform_smoke` 这类平台回归，`sv39_*` 这类虚拟内存/TLB 回归，以及覆盖 guest-side page-fault delegation、fault-range-backed remap、严格 `vm_map_range` / `vm_unmap_page` 语义检查的 `guest_supervisor_demo` bring-up 回归。
 
 ## 内存映射
 
@@ -136,7 +136,7 @@ make test
 - CLINT 定时器中断
 - PLIC machine/supervisor external interrupt 最小路径
 - host-backed block-oriented MMIO storage device
-- 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt/exception handler，以及 linker-backed early allocator + bitmap-backed PMM + guest-side Sv39 page-table builder + page-granular kernel mapping / fault handling
+- 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt/exception handler、专用 page-fault handler 路径，以及 linker-backed early allocator + bitmap-backed PMM + guest-side Sv39 page-table builder + fault-range-backed page-fault handling + page-granular kernel mapping / fault handling
 - `ecall` a7=93 退出约定
 
 ## 源码文件说明
@@ -154,7 +154,7 @@ make test
 ### `myCPU/guest/`
 
 - `include/`：guest 平台层、trap、timer、memory、pmm、vm 等最小内核接口。
-- `kernel/`：`console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小 guest 侧模块实现，当前已覆盖页粒度 kernel mapping、page fault dispatch 和 `sfence.vma` 刷新入口。
+- `kernel/`：`console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小 guest 侧模块实现，当前已覆盖页粒度 kernel mapping、专用 page-fault dispatch、fault-range-backed 缺页映射、较严格的 `vm_map_range` / `vm_unmap_page` 语义，以及 `sfence.vma` 刷新入口。
 - `lib/platform.S`：共享 guest MMIO 平台库入口。
 - `supervisor_demo/`：最小 supervisor runtime、linker script 和 bring-up demo。
 

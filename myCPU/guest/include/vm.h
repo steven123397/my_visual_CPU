@@ -13,7 +13,14 @@ bool vm_init(void);
 bool vm_map_identity_1g(uintptr_t base, uint64_t flags);
 bool vm_map_page(uintptr_t vaddr, uintptr_t paddr, uint64_t flags);
 bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
+bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
+bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
 bool vm_unmap_page(uintptr_t vaddr);
+bool vm_register_fault_range(uintptr_t vaddr,
+                             uintptr_t paddr,
+                             size_t size,
+                             uint64_t flags);
+bool vm_handle_page_fault(uint64_t cause, uint64_t epc, uint64_t tval);
 void vm_flush_tlb(void);
 bool vm_enable(void);
 

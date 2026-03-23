@@ -15,7 +15,6 @@
 
 struct PageFaultContext {
     uintptr_t alias_vaddr;
-    uintptr_t alias_paddr;
     uintptr_t rodata_addr;
     uintptr_t exec_addr;
 };
@@ -69,12 +68,13 @@ static void external_interrupt_handler(uint64_t cause, void* context) {
     external_irq_seen = 1;
 }
 
-static void page_fault_handler(uint64_t cause,
-                               uint64_t epc,
-                               uint64_t tval,
-                               void* context) {
+static trap_page_fault_result_t page_fault_handler(uint64_t cause,
+                                                   uint64_t epc,
+                                                   uint64_t tval,
+                                                   void* context) {
     const struct PageFaultContext* fault_context =
         (const struct PageFaultContext*)context;
+    uintptr_t resume_pc = 0;
 
     if (fault_context == NULL) {
         panic_shutdown();
@@ -82,33 +82,27 @@ static void page_fault_handler(uint64_t cause,
 
     if (cause == RISCV_EXC_LOAD_PAGE_FAULT &&
         tval == fault_context->alias_vaddr) {
-        if (!vm_map_page(fault_context->alias_vaddr,
-                         fault_context->alias_paddr,
-                         VM_PAGE_READ | VM_PAGE_WRITE)) {
-            panic_shutdown();
-        }
-        vm_flush_tlb();
         load_page_fault_seen = 1;
-        return;
+        return TRAP_PAGE_FAULT_RESULT_UNHANDLED;
     }
 
     if (cause == RISCV_EXC_STORE_PAGE_FAULT &&
         tval == fault_context->rodata_addr) {
         store_page_fault_seen = 1;
-        riscv_write_sepc(epc + 4U);
-        return;
+        return TRAP_PAGE_FAULT_RESULT_SKIP_INSTRUCTION;
     }
 
     if (cause == RISCV_EXC_INSN_PAGE_FAULT &&
         tval == fault_context->exec_addr &&
         instruction_fault_resume_pc != 0) {
+        resume_pc = instruction_fault_resume_pc;
         instruction_page_fault_seen = 1;
-        riscv_write_sepc(instruction_fault_resume_pc);
         instruction_fault_resume_pc = 0;
-        return;
+        return TRAP_PAGE_FAULT_RESULT_RESUME_AT(resume_pc);
     }
 
-    panic_shutdown();
+    (void)epc;
+    return TRAP_PAGE_FAULT_RESULT_UNHANDLED;
 }
 
 void kernel_main(void) {
@@ -116,6 +110,7 @@ void kernel_main(void) {
     uint32_t* alias_page = NULL;
     uint32_t* backing_page = NULL;
     uint32_t* nx_page = NULL;
+    uint32_t* range_probe_page = NULL;
     uint8_t* storage_buffer = NULL;
     uint8_t* storage_page = NULL;
     void* early_allocation = NULL;
@@ -132,14 +127,7 @@ void kernel_main(void) {
         !trap_install_interrupt_handler(RISCV_SUPERVISOR_EXTERNAL_INTERRUPT,
                                         external_interrupt_handler,
                                         NULL) ||
-        !trap_install_exception_handler(RISCV_EXC_INSN_PAGE_FAULT,
-                                        page_fault_handler,
-                                        &page_fault_context) ||
-        !trap_install_exception_handler(RISCV_EXC_LOAD_PAGE_FAULT,
-                                        page_fault_handler,
-                                        &page_fault_context) ||
-        !trap_install_exception_handler(RISCV_EXC_STORE_PAGE_FAULT,
-                                        page_fault_handler,
+        !trap_install_page_fault_handler(page_fault_handler,
                                         &page_fault_context)) {
         panic_shutdown();
     }
@@ -201,39 +189,69 @@ void kernel_main(void) {
 
     backing_page = (uint32_t*)pmm_alloc_page();
     nx_page = (uint32_t*)pmm_alloc_page();
+    range_probe_page = (uint32_t*)pmm_alloc_page();
     if (backing_page == NULL ||
         nx_page == NULL ||
-        pmm_free_pages() + 2U != pmm_total_pages() ||
-        pmm_used_pages() != 2U ||
+        range_probe_page == NULL ||
+        pmm_free_pages() + 3U != pmm_total_pages() ||
+        pmm_used_pages() != 3U ||
         !vm_init() ||
         vm_root_table() == 0 ||
         (vm_root_table() & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
         vm_satp_value() !=
             (RISCV_SATP_MODE_SV39 | ((uint64_t)vm_root_table() >> 12)) ||
         !vm_map_identity_1g(0, VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXEC) ||
-        !vm_map_range(memory_text_start(),
-                      memory_text_start(),
-                      memory_text_end() - memory_text_start(),
-                      VM_PAGE_READ | VM_PAGE_EXEC) ||
-        !vm_map_range(memory_rodata_start(),
-                      memory_rodata_start(),
-                      memory_rodata_end() - memory_rodata_start(),
-                      VM_PAGE_READ) ||
-        !vm_map_range(memory_data_start(),
-                      memory_data_start(),
-                      pmm_managed_start() - memory_data_start(),
-                      VM_PAGE_READ | VM_PAGE_WRITE) ||
-        !vm_map_range(pmm_managed_start(),
-                      pmm_managed_start(),
-                      pmm_managed_end() - pmm_managed_start(),
-                      VM_PAGE_READ | VM_PAGE_WRITE) ||
+        vm_map_kernel_range(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE,
+                            (uintptr_t)range_probe_page,
+                            MEMORY_PAGE_SIZE,
+                            VM_PAGE_WRITE) ||
+        vm_map_user_range(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE,
+                          (uintptr_t)range_probe_page,
+                          MEMORY_PAGE_SIZE,
+                          VM_PAGE_READ) ||
+        !vm_map_kernel_range(memory_text_start(),
+                             memory_text_start(),
+                             memory_text_end() - memory_text_start(),
+                             VM_PAGE_READ | VM_PAGE_EXEC) ||
+        !vm_map_kernel_range(memory_rodata_start(),
+                             memory_rodata_start(),
+                             memory_rodata_end() - memory_rodata_start(),
+                             VM_PAGE_READ) ||
+        !vm_map_kernel_range(memory_data_start(),
+                             memory_data_start(),
+                             pmm_managed_start() - memory_data_start(),
+                             VM_PAGE_READ | VM_PAGE_WRITE) ||
+        !vm_map_kernel_range(pmm_managed_start(),
+                             pmm_managed_start(),
+                             pmm_managed_end() - pmm_managed_start(),
+                             VM_PAGE_READ | VM_PAGE_WRITE) ||
+        vm_register_fault_range(TEST_ALIAS_VADDR + 1U,
+                                (uintptr_t)backing_page,
+                                MEMORY_PAGE_SIZE,
+                                VM_PAGE_READ) ||
         !vm_map_page(TEST_ALIAS_VADDR,
                      (uintptr_t)backing_page,
-                     VM_PAGE_READ | VM_PAGE_WRITE)) {
+                     VM_PAGE_READ | VM_PAGE_WRITE) ||
+        !vm_register_fault_range(TEST_ALIAS_VADDR,
+                                 (uintptr_t)backing_page,
+                                 MEMORY_PAGE_SIZE,
+                                 VM_PAGE_READ | VM_PAGE_WRITE) ||
+        vm_register_fault_range(TEST_ALIAS_VADDR,
+                                (uintptr_t)backing_page,
+                                MEMORY_PAGE_SIZE,
+                                VM_PAGE_READ | VM_PAGE_WRITE) ||
+        vm_map_range(TEST_ALIAS_VADDR,
+                     (uintptr_t)backing_page,
+                     MEMORY_PAGE_SIZE * 2U,
+                     VM_PAGE_READ | VM_PAGE_WRITE) ||
+        !vm_map_page(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE,
+                     (uintptr_t)range_probe_page,
+                     VM_PAGE_READ | VM_PAGE_WRITE) ||
+        !vm_unmap_page(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE) ||
+        vm_unmap_page(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE)) {
         panic_shutdown();
     }
     page_fault_context.alias_vaddr = TEST_ALIAS_VADDR;
-    page_fault_context.alias_paddr = (uintptr_t)backing_page;
     page_fault_context.rodata_addr = (uintptr_t)&rodata_marker;
     page_fault_context.exec_addr = (uintptr_t)nx_page;
 
