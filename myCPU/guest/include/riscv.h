@@ -11,6 +11,7 @@
 #define RISCV_SIP_STIP (1ULL << 5)
 #define RISCV_SIE_STIE (1ULL << 5)
 #define RISCV_SIE_SEIE (1ULL << 9)
+#define RISCV_SSTATUS_SUM (1ULL << 18)
 #define RISCV_SATP_MODE_SV39 (8ULL << 60)
 
 static inline uint64_t riscv_read_scause(void) {
@@ -31,6 +32,12 @@ static inline uint64_t riscv_read_sepc(void) {
     return value;
 }
 
+static inline uint64_t riscv_read_sstatus(void) {
+    uint64_t value;
+    __asm__ volatile("csrr %0, sstatus" : "=r"(value));
+    return value;
+}
+
 static inline void riscv_write_sepc(uint64_t value) {
     __asm__ volatile("csrw sepc, %0" :: "r"(value) : "memory");
 }
@@ -47,6 +54,14 @@ static inline void riscv_write_satp(uint64_t value) {
 
 static inline void riscv_clear_sip_bits(uint64_t value) {
     __asm__ volatile("csrc sip, %0" :: "r"(value));
+}
+
+static inline void riscv_set_sstatus_bits(uint64_t value) {
+    __asm__ volatile("csrs sstatus, %0" :: "r"(value) : "memory");
+}
+
+static inline void riscv_clear_sstatus_bits(uint64_t value) {
+    __asm__ volatile("csrc sstatus, %0" :: "r"(value) : "memory");
 }
 
 static inline void riscv_sfence_vma(void) {

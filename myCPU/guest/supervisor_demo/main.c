@@ -11,8 +11,6 @@
 #include "trap.h"
 #include "vm.h"
 
-#define TEST_ALIAS_VADDR 0x40000000UL
-
 static volatile uint64_t timer_irq_seen = 0;
 static volatile uint64_t external_irq_seen = 0;
 static volatile uintptr_t instruction_fault_resume_pc = 0;
@@ -61,6 +59,9 @@ static void external_interrupt_handler(uint64_t cause, void* context) {
 
 void kernel_main(void) {
     uintptr_t early_cursor = 0;
+    uintptr_t user_base = 0;
+    uintptr_t user_limit = 0;
+    uintptr_t alias_vaddr = 0;
     uint32_t* alias_page = NULL;
     uint32_t* backing_page = NULL;
     uint32_t* remap_page = NULL;
@@ -73,6 +74,9 @@ void kernel_main(void) {
     early_allocation = memory_alloc(96, 64);
     platform_plic_supervisor_init();
     trap_init();
+    user_base = vm_user_base();
+    user_limit = vm_user_limit();
+    alias_vaddr = user_limit - MEMORY_PAGE_SIZE;
 
     if (!trap_install_interrupt_handler(RISCV_SUPERVISOR_TIMER_INTERRUPT,
                                         timer_interrupt_handler,
@@ -98,6 +102,11 @@ void kernel_main(void) {
         ((uintptr_t)&rodata_marker) < memory_rodata_start() ||
         ((uintptr_t)&rodata_marker) >= memory_rodata_end() ||
         early_allocation == NULL ||
+        user_base != 0 ||
+        user_limit != memory_kernel_start() ||
+        alias_vaddr < user_base ||
+        alias_vaddr >= user_limit ||
+        (alias_vaddr & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
         (((uintptr_t)early_allocation) & 63U) != 0 ||
         (memory_text_start() & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
         (memory_text_end() & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
@@ -151,15 +160,26 @@ void kernel_main(void) {
         (vm_root_table() & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
         vm_satp_value() !=
             (RISCV_SATP_MODE_SV39 | ((uint64_t)vm_root_table() >> 12)) ||
+        vm_kernel_base() != memory_kernel_start() ||
+        vm_kernel_limit() != memory_heap_limit() ||
+        !vm_range_is_user(alias_vaddr, MEMORY_PAGE_SIZE) ||
+        vm_range_is_user(memory_text_start(), MEMORY_PAGE_SIZE) ||
+        !vm_range_is_kernel(memory_text_start(),
+                            memory_text_end() - memory_text_start()) ||
+        vm_range_is_kernel(alias_vaddr, MEMORY_PAGE_SIZE) ||
         !vm_map_identity_1g(0, VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXEC) ||
-        vm_map_kernel_range(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE,
+        vm_map_kernel_range(alias_vaddr,
                             (uintptr_t)remap_page,
                             MEMORY_PAGE_SIZE,
                             VM_PAGE_WRITE) ||
-        vm_map_user_range(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE,
+        vm_map_user_range(alias_vaddr,
                           (uintptr_t)remap_page,
                           MEMORY_PAGE_SIZE,
                           VM_PAGE_READ) ||
+        vm_map_user_range(memory_text_start(),
+                          memory_text_start(),
+                          memory_text_end() - memory_text_start(),
+                          VM_PAGE_READ | VM_PAGE_EXEC | VM_PAGE_USER) ||
         !vm_map_kernel_range(memory_text_start(),
                              memory_text_start(),
                              memory_text_end() - memory_text_start(),
@@ -176,17 +196,23 @@ void kernel_main(void) {
                              pmm_managed_start(),
                              pmm_managed_end() - pmm_managed_start(),
                              VM_PAGE_READ | VM_PAGE_WRITE) ||
-        vm_register_fault_range(TEST_ALIAS_VADDR + 1U,
+        vm_register_fault_range(alias_vaddr + 1U,
                                 (uintptr_t)backing_page,
                                 MEMORY_PAGE_SIZE,
                                 VM_PAGE_READ) ||
-        !vm_map_page(TEST_ALIAS_VADDR,
-                     (uintptr_t)backing_page,
-                     VM_PAGE_READ | VM_PAGE_WRITE) ||
-        !vm_register_fault_range(TEST_ALIAS_VADDR,
-                                 (uintptr_t)remap_page,
-                                 MEMORY_PAGE_SIZE,
-                                 VM_PAGE_READ | VM_PAGE_WRITE) ||
+        !vm_map_user_range(alias_vaddr,
+                           (uintptr_t)backing_page,
+                           MEMORY_PAGE_SIZE,
+                           VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_USER) ||
+        !vm_register_user_fault_range(alias_vaddr,
+                                      (uintptr_t)remap_page,
+                                      MEMORY_PAGE_SIZE,
+                                      VM_PAGE_READ | VM_PAGE_WRITE |
+                                          VM_PAGE_USER) ||
+        vm_register_user_fault_range(alias_vaddr,
+                                     (uintptr_t)remap_page,
+                                     MEMORY_PAGE_SIZE,
+                                     VM_PAGE_READ | VM_PAGE_WRITE) ||
         !vm_register_fault_skip(RISCV_EXC_STORE_PAGE_FAULT,
                                 (uintptr_t)&rodata_marker,
                                 sizeof(rodata_marker)) ||
@@ -194,19 +220,17 @@ void kernel_main(void) {
                                        (uintptr_t)nx_page,
                                        MEMORY_PAGE_SIZE,
                                        &instruction_fault_resume_pc) ||
-        vm_register_fault_range(TEST_ALIAS_VADDR,
+        vm_register_user_fault_range(alias_vaddr,
                                 (uintptr_t)remap_page,
                                 MEMORY_PAGE_SIZE,
-                                VM_PAGE_READ | VM_PAGE_WRITE) ||
-        vm_map_range(TEST_ALIAS_VADDR,
-                     (uintptr_t)backing_page,
-                     MEMORY_PAGE_SIZE * 2U,
-                     VM_PAGE_READ | VM_PAGE_WRITE) ||
-        !vm_map_page(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE,
-                     (uintptr_t)remap_page,
-                     VM_PAGE_READ | VM_PAGE_WRITE) ||
-        !vm_unmap_page(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE) ||
-        vm_unmap_page(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE)) {
+                                VM_PAGE_READ | VM_PAGE_WRITE |
+                                    VM_PAGE_USER) ||
+        !vm_map_user_range(alias_vaddr - MEMORY_PAGE_SIZE,
+                           (uintptr_t)remap_page,
+                           MEMORY_PAGE_SIZE,
+                           VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_USER) ||
+        !vm_unmap_page(alias_vaddr - MEMORY_PAGE_SIZE) ||
+        vm_unmap_page(alias_vaddr - MEMORY_PAGE_SIZE)) {
         panic_shutdown();
     }
 
@@ -221,7 +245,14 @@ void kernel_main(void) {
     if (!vm_is_enabled() || riscv_read_satp() != vm_satp_value()) {
         panic_shutdown();
     }
-    alias_page = (uint32_t*)TEST_ALIAS_VADDR;
+    if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0) {
+        panic_shutdown();
+    }
+    riscv_set_sstatus_bits(RISCV_SSTATUS_SUM);
+    if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) == 0) {
+        panic_shutdown();
+    }
+    alias_page = (uint32_t*)alias_vaddr;
     if (alias_page[0] != 0x11223344U) {
         panic_shutdown();
     }
@@ -234,7 +265,7 @@ void kernel_main(void) {
         panic_shutdown();
     }
 
-    if (!vm_unmap_page(TEST_ALIAS_VADDR)) {
+    if (!vm_unmap_page(alias_vaddr)) {
         panic_shutdown();
     }
     if (alias_page[0] != 0xA1B2C3D4U) {
@@ -253,6 +284,10 @@ void kernel_main(void) {
     }
     provoke_instruction_page_fault((uintptr_t)nx_page);
     if (instruction_fault_resume_pc != 0) {
+        panic_shutdown();
+    }
+    riscv_clear_sstatus_bits(RISCV_SSTATUS_SUM);
+    if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0) {
         panic_shutdown();
     }
     storage_page = (uint8_t*)pmm_alloc_page();

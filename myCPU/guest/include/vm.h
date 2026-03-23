@@ -16,10 +16,20 @@ bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags)
 bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
 bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
 bool vm_unmap_page(uintptr_t vaddr);
+bool vm_range_is_kernel(uintptr_t vaddr, size_t size);
+bool vm_range_is_user(uintptr_t vaddr, size_t size);
+uintptr_t vm_kernel_base(void);
+uintptr_t vm_kernel_limit(void);
+uintptr_t vm_user_base(void);
+uintptr_t vm_user_limit(void);
 bool vm_register_fault_range(uintptr_t vaddr,
                              uintptr_t paddr,
                              size_t size,
                              uint64_t flags);
+bool vm_register_user_fault_range(uintptr_t vaddr,
+                                  uintptr_t paddr,
+                                  size_t size,
+                                  uint64_t flags);
 bool vm_register_fault_skip(uint64_t cause, uintptr_t vaddr, size_t size);
 bool vm_register_fault_resume_slot(uint64_t cause,
                                    uintptr_t vaddr,

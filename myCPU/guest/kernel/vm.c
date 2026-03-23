@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "platform_mmio.h"
 #include "memory.h"
 #include "pmm.h"
 #include "riscv.h"
@@ -18,6 +19,10 @@
 #define SV39_PPN_MASK ((1ULL << 44) - 1ULL)
 #define VM_MAX_FAULT_RANGES 16U
 #define VM_MAX_FAULT_ACTIONS 16U
+#define VM_USER_VADDR_BASE ((uintptr_t)0)
+#define VM_USER_VADDR_LIMIT ((uintptr_t)MEM_BASE)
+#define VM_KERNEL_VADDR_BASE ((uintptr_t)MEM_BASE)
+#define VM_KERNEL_VADDR_LIMIT ((uintptr_t)MEM_BASE + (uintptr_t)MEM_SIZE)
 
 static uint64_t* root_table = NULL;
 static uintptr_t root_table_pa = 0;
@@ -68,6 +73,19 @@ static bool range_overflows(uintptr_t base, size_t size) {
 
 static bool span_args_valid(uintptr_t base, size_t size) {
     return size != 0 && !range_overflows(base, size);
+}
+
+static bool range_within_window(uintptr_t base,
+                                size_t size,
+                                uintptr_t window_base,
+                                uintptr_t window_limit) {
+    const uintptr_t end = base + (uintptr_t)size;
+
+    if (!span_args_valid(base, size)) {
+        return false;
+    }
+
+    return base >= window_base && end <= window_limit;
 }
 
 static bool range_is_page_aligned(uintptr_t vaddr, uintptr_t paddr, size_t size) {
@@ -415,7 +433,7 @@ bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags)
 }
 
 bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
-    if ((flags & VM_PAGE_USER) != 0) {
+    if ((flags & VM_PAGE_USER) != 0 || !vm_range_is_kernel(vaddr, size)) {
         return false;
     }
 
@@ -423,7 +441,7 @@ bool vm_map_kernel_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t
 }
 
 bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
-    if ((flags & VM_PAGE_USER) == 0) {
+    if ((flags & VM_PAGE_USER) == 0 || !vm_range_is_user(vaddr, size)) {
         return false;
     }
 
@@ -437,6 +455,30 @@ bool vm_unmap_page(uintptr_t vaddr) {
 
     flush_tlb_if_enabled();
     return true;
+}
+
+bool vm_range_is_kernel(uintptr_t vaddr, size_t size) {
+    return range_within_window(vaddr, size, VM_KERNEL_VADDR_BASE, VM_KERNEL_VADDR_LIMIT);
+}
+
+bool vm_range_is_user(uintptr_t vaddr, size_t size) {
+    return range_within_window(vaddr, size, VM_USER_VADDR_BASE, VM_USER_VADDR_LIMIT);
+}
+
+uintptr_t vm_kernel_base(void) {
+    return VM_KERNEL_VADDR_BASE;
+}
+
+uintptr_t vm_kernel_limit(void) {
+    return VM_KERNEL_VADDR_LIMIT;
+}
+
+uintptr_t vm_user_base(void) {
+    return VM_USER_VADDR_BASE;
+}
+
+uintptr_t vm_user_limit(void) {
+    return VM_USER_VADDR_LIMIT;
 }
 
 bool vm_register_fault_range(uintptr_t vaddr,
@@ -477,6 +519,17 @@ bool vm_register_fault_range(uintptr_t vaddr,
     free_slot->size = size;
     free_slot->flags = flags;
     return true;
+}
+
+bool vm_register_user_fault_range(uintptr_t vaddr,
+                                  uintptr_t paddr,
+                                  size_t size,
+                                  uint64_t flags) {
+    if ((flags & VM_PAGE_USER) == 0 || !vm_range_is_user(vaddr, size)) {
+        return false;
+    }
+
+    return vm_register_fault_range(vaddr, paddr, size, flags);
 }
 
 static bool register_fault_action(uint64_t cause,
