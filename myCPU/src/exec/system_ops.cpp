@@ -80,6 +80,10 @@ bool csr_access_allowed(const CPU& cpu, uint32_t addr, bool write) {
         return false;
     }
 
+    if (write && addr == CSR_MISA) {
+        return false;
+    }
+
     const bool read_only = ((addr >> 10) & 0x3) == 0x3;
     return !write || !read_only;
 }

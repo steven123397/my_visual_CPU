@@ -55,9 +55,9 @@ main.cpp
 - `platform/machine.*` 负责组装 CPU、Ram、Bus、PLIC、storage 等平台对象，并驱动主执行循环。
 - `platform/address_map.h` 负责平台地址映射常量，避免设备层依赖 legacy `Memory` 头。
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
-- `arch/csr_file.*` 负责已实现 CSR 集合、`cycle/time` 等特殊读取规则，以及 `sstatus/sie/sip` 对 `mstatus/mie/mip` 的别名视图。
+- `arch/csr_file.*` 负责已实现 CSR 集合、`misa/satp/time` 这类带架构约束的特殊语义，以及 `sstatus/sie/sip` 对 `mstatus/mie/mip` 的别名视图。
 - `mem/ram.*` 和 `mem/bus.*` 提供平台总线与 RAM 边界。
-- `mem/address_space.*` 负责 CPU 侧地址访问边界，当前提供 bare-mode 直通、Sv39 三级页表遍历、最小 TLB、`satp` 切换、`sfence.vma` 刷新，以及 instruction/load/store 的 fault 路由。
+- `mem/address_space.*` 负责 CPU 侧地址访问边界，当前提供 bare-mode 直通、Sv39 三级页表遍历、最小 TLB、受限 `satp` 模式切换、`sfence.vma` 刷新，以及 instruction/load/store 的 fault 路由。
 - `devices/uart16550.*`、`devices/clint.*`、`devices/plic.*` 和 `devices/simple_storage.*` 提供独立 MMIO 设备对象。
 - `devices/device.h` 提供统一设备接口，供 `Bus` 附加和分发。
 - `loader/elf_loader.*` 和 `loader/binary_loader.*` 提供镜像装载边界，直接通过 `Ram` 接口写入镜像内容。
@@ -105,7 +105,7 @@ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
 
-`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults` 这类特权/异常回归，`plic_*` / `storage_device_basic` / `supervisor_platform_smoke` 这类平台回归，`sv39_*` 这类虚拟内存/TLB 回归，以及覆盖 guest-side page-fault delegation、fault-range-backed remap、严格 `vm_map_range` / `vm_unmap_page` 语义检查的 `guest_supervisor_demo` bring-up 回归。
+`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults`、`csr_semantic_consistency` 这类特权/异常/CSR 语义一致性回归，`plic_*` / `storage_device_basic` / `supervisor_platform_smoke` / `clint_split_access` 这类平台回归，`sv39_*` 这类虚拟内存/TLB 回归，以及覆盖 guest-side page-fault delegation、fault-range-backed remap、严格 `vm_map_range` / `vm_unmap_page` 语义检查的 `guest_supervisor_demo` bring-up 回归。
 
 ## 内存映射
 
@@ -128,12 +128,14 @@ make test
 - 基于 `medeleg` 的最小 supervisor 异常委托
 - 基于 `mideleg` 的最小 supervisor 定时器/外部中断递送
 - **Sv39 虚拟内存**：3 级页表遍历、页错误、权限检查、大页支持、最小 TLB、A/D bit 维护
-- `satp` CSR 支持（MODE 字段控制 bare/Sv39 模式切换）
+- `satp` CSR 支持（MODE 字段按 WARL 约束到 bare/Sv39；不支持值不会以“读得出分页模式、实际却 bare” 的形式泄漏）
 - `sfence.vma` 指令（当前执行本地 TLB 全量失效）
 - `AddressSpace` 访问边界，以及 unmapped fetch/load/store 的 access-fault trap
 - CSR 特权级/只读属性检查，非法访问触发 illegal-instruction trap
+- `misa` 作为固定实现能力视图对 guest 只读暴露，不允许软件改写 ISA 声明
 - UART MMIO（写入直接输出到 stdout）
-- CLINT 定时器中断
+- CLINT 定时器中断，以及 `mtime/mtimecmp` 的 1/2/4/8 字节 MMIO 访问
+- `time` CSR 与 CLINT `mtime` 保持一致，guest 侧 CSR/MMIO 看到同一平台时间源
 - PLIC machine/supervisor external interrupt 最小路径
 - host-backed block-oriented MMIO storage device
 - 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt/exception handler、专用 page-fault handler 路径，以及 linker-backed early allocator + bitmap-backed PMM + guest-side Sv39 page-table builder + fault-range-backed page-fault handling + page-granular kernel mapping / fault handling
@@ -188,7 +190,7 @@ make test
   `AddressSpace` 类声明。定义 CPU 侧 fetch/load/store 访问入口，提供虚拟地址到物理地址的转换边界。
 
 - `mem/address_space.cpp`
-  `AddressSpace` 实现。支持 bare-mode 直通和 Sv39 三级页表遍历。M-mode 始终使用物理地址；S/U-mode 根据 `satp.MODE` 决定是否启用分页。页表遍历包含权限检查（R/W/X/U 位）、大页对齐检查，以及 instruction/load/store page fault 触发。
+  `AddressSpace` 实现。支持 bare-mode 直通和 Sv39 三级页表遍历。M-mode 始终使用物理地址；S/U-mode 根据受限 `satp.MODE` 决定是否启用分页。页表遍历包含权限检查（R/W/X/U 位）、大页对齐检查，以及 instruction/load/store page fault 触发。
 
 - `devices/device.h`
   设备基类声明。定义统一的 `contains/load/store` 接口，供平台总线附加和寻址。
@@ -203,7 +205,7 @@ make test
   `Clint` 类声明。封装 `mtime/mtimecmp`、定时器 tick 和 MMIO 访问接口。
 
 - `devices/clint.cpp`
-  `Clint` 实现。负责定时器状态推进、`mtime/mtimecmp` 读写，并在 tick 时返回是否产生待处理中断。
+  `Clint` 实现。负责定时器状态推进、`mtime/mtimecmp` 读写、分宽度 MMIO 访问，并在 tick 时返回是否产生待处理中断。
 
 - `devices/plic.h` / `devices/plic.cpp`
   最小 PLIC 设备实现。当前支持 machine/supervisor context、UART THRE source、claim/complete 与 pending/enable/threshold 路径。
@@ -239,7 +241,7 @@ make test
   `CsrFile` 声明。封装 CSR 地址常量、`mstatus/mie/mip` 位定义以及 CSR 存储接口。
 
 - `arch/csr_file.cpp`
-  `CsrFile` 实现。负责 CSR 状态复位、普通 CSR 读写，以及 `cycle/time` 这类特殊读取规则。
+  `CsrFile` 实现。负责 CSR 状态复位、普通 CSR 读写，以及固定 `misa` 视图、受限 `satp` WARL 语义和 `time -> CLINT mtime` 这类特殊规则。
 
 - `exec/integer_ops.h`
   整数指令族执行接口声明。承接 `LUI/AUIPC`、整数立即数、整数寄存器、`W` 变体和当前 `FENCE` no-op 路径。
@@ -295,6 +297,7 @@ make test
 - `supervisor_timer_interrupt.S`：验证 `mideleg` 驱动的 supervisor timer interrupt 递送、`stvec` 向量入口以及 `sret` 返回。
 - `plic_supervisor_external_interrupt.S`：验证 PLIC 驱动的 supervisor external interrupt 递送与 claim/complete。
 - `storage_device_basic.S`：验证块化 MMIO storage 的 read/write/error 路径。
+- `clint_split_access.S`：验证 CLINT `mtime/mtimecmp` 的 8/4/2/1 字节拆分访问与定时器触发一致性。
 - `supervisor_platform_smoke.S`：验证 guest 平台层对 UART/PLIC/storage 契约的最小消费。
 - `trap_state.S`：验证 trap 进入/返回时 `mstatus` 的 `MIE/MPIE` 状态变化，以及 `mepc` 的保存与恢复。
 - `exception_traps.S`：验证 `ebreak` 与非法指令 trap 的 `mcause`、`mepc`、`mtval` 行为。
@@ -303,6 +306,7 @@ make test
 - `branches_signed_unsigned.S`：验证 `BLT/BGE` 与 `BLTU/BGEU` 在相同输入下的 signed/unsigned 语义差异。
 - `muldiv.S`：验证 `RV64M` 乘除、取模以及除零边界行为。
 - `fence_noop.S`：固定当前 `FENCE/FENCE.I` 在参考模型中的 no-op 行为。
+- `csr_semantic_consistency.S`：验证 `misa` 只读语义、`satp.MODE` 受限 WARL 语义，以及 `time` CSR 与 CLINT `mtime` 的一致性。
 
 ## 当前项目定位
 

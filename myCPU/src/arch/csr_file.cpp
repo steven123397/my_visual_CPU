@@ -1,12 +1,20 @@
 #include "csr_file.h"
 
 #include "core_state.h"
+#include "../devices/clint.h"
 
 namespace {
 
 constexpr uint64_t SSTATUS_MASK = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_SPP | MSTATUS_SUM | MSTATUS_MXR;
 constexpr uint64_t SIE_MASK = MIE_SSIE | MIE_STIE | MIE_SEIE;
 constexpr uint64_t MIP_MIE_MASK = MIE_SSIE | MIE_MSIE | MIE_STIE | MIE_MTIE | MIE_SEIE | MIE_MEIE;
+constexpr uint64_t SATP_MODE_SHIFT = 60;
+constexpr uint64_t SATP_MODE_MASK = 0xFULL << SATP_MODE_SHIFT;
+constexpr uint64_t SATP_MODE_BARE = 0ULL;
+constexpr uint64_t SATP_MODE_SV39 = 8ULL;
+constexpr uint64_t SATP_PPN_MASK = (1ULL << 44) - 1ULL;
+constexpr uint64_t MISA_IMPLEMENTED_VALUE =
+    (2ULL << 62) | (1ULL << 12) | (1ULL << 8) | (1ULL << 2) | (1ULL << 0);
 constexpr uint64_t MEDELEG_MASK =
     (1ULL << 1) |   // instruction access fault
     (1ULL << 2) |   // illegal instruction
@@ -59,12 +67,20 @@ bool is_supported_csr(uint32_t addr) {
 
 void CsrFile::reset() {
     regs_.fill(0);
+    regs_[CSR_MISA] = MISA_IMPLEMENTED_VALUE;
+}
+
+void CsrFile::bind_clint(const Clint* clint) {
+    clint_ = clint;
 }
 
 uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
     addr &= 0xFFF;
-    if (addr == CSR_CYCLE || addr == CSR_TIME || addr == CSR_MCYCLE) {
+    if (addr == CSR_CYCLE || addr == CSR_MCYCLE) {
         return core.cycle();
+    }
+    if (addr == CSR_TIME) {
+        return clint_ ? clint_->mtime() : core.cycle();
     }
     if (addr == CSR_INSTRET || addr == CSR_MINSTRET) {
         return core.instret();
@@ -98,8 +114,20 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
     if (addr == CSR_CYCLE || addr == CSR_TIME || addr == CSR_INSTRET || addr == CSR_MCYCLE || addr == CSR_MINSTRET) {
         return;
     }
+    if (addr == CSR_MISA) {
+        return;
+    }
     if (addr == CSR_SSTATUS) {
         regs_[CSR_MSTATUS] = (regs_[CSR_MSTATUS] & ~SSTATUS_MASK) | (value & SSTATUS_MASK);
+        return;
+    }
+    if (addr == CSR_SATP) {
+        const uint64_t mode = (value & SATP_MODE_MASK) >> SATP_MODE_SHIFT;
+        if (mode == SATP_MODE_SV39) {
+            regs_[CSR_SATP] = (SATP_MODE_SV39 << SATP_MODE_SHIFT) | (value & SATP_PPN_MASK);
+            return;
+        }
+        regs_[CSR_SATP] = SATP_MODE_BARE;
         return;
     }
     if (addr == CSR_MEDELEG) {

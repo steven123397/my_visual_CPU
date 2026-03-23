@@ -248,8 +248,8 @@ bool AddressSpace::translate(Bus& bus, uint64_t vaddr, AccessType type, uint64_t
     }
 
     if (mode != SATP_MODE_SV39) {
-        paddr = vaddr;
-        return true;
+        raise_page_fault(type, vaddr);
+        return false;
     }
 
     if (!is_sv39_canonical(vaddr)) {

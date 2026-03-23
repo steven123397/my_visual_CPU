@@ -3,6 +3,7 @@
 #include <stdexcept>
 
 Machine::Machine() : uart_(plic_), bus_(ram_) {
+    cpu_.csr().bind_clint(&clint_);
     bus_.attach(uart_);
     bus_.attach(storage_);
     bus_.attach(clint_);

@@ -25,12 +25,16 @@
 | `0x4000` | 64 | `MTIMECMP` | 定时器比较值 |
 | `0xBFF8` | 64 | `MTIME` | 单调递增平台时间基准 |
 
+当前实现对这两个 64 位寄存器接受寄存器窗口内的 `1/2/4/8` 字节访问；这意味着客体既可以用 RV64 风格的 64 位整寄存器访问，也可以用更接近传统驱动习惯的 32 位分段访问。
+
 ### 驱动约定
 
 1. 读取 `MTIME`
 2. 写 `MTIMECMP = MTIME + delta`
 3. 等待 supervisor timer interrupt 或 machine timer interrupt 递送
 4. 处理中断后把 `MTIMECMP` 设到未来值，或设成全 `1` 以临时关闭
+
+当前模拟器中的 `time` CSR 也与 CLINT 的 `MTIME` 绑定，而不是单独使用 CPU cycle 计数，因此软件不会看到互相分叉的两套“平台时间”。
 
 ### 当前限制
 
@@ -185,7 +189,7 @@
 - `platform_storage_read_block`
 - `platform_shutdown`
 
-这些入口的目标不是成为最终内核 ABI，而是先固定“客体侧如何消费当前 MMIO 契约”的最小驱动层。当前 guest 层已经拆出了 `console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小模块，并用统一 trap dispatch 加注册式 interrupt/exception handler 把 supervisor external interrupt、supervisor timer interrupt 和最小 page fault 路径收口到同一条入口；同时最小 demo 已经通过 linker symbol 暴露的内存布局接通了 early bump allocator，在其上建立了 bitmap-backed physical page manager，并进一步接上了 guest-side Sv39 page-table builder、`satp` 切换、`sfence.vma` 驱动的 alias remap/unmap，以及 text/rodata/data 的页粒度权限映射验证。下一阶段应把当前 demo-local fault policy 继续抽到更正式的 guest VM/trap 层，并据此演进到更完整的 kernel/user address-space 管理。当前有两类消费方：
+这些入口的目标不是成为最终内核 ABI，而是先固定“客体侧如何消费当前 MMIO 契约”的最小驱动层。当前 guest 层已经拆出了 `console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小模块，并用统一 trap dispatch、注册式 interrupt/exception handler 和专用 page-fault handler 路径，把 supervisor external interrupt、supervisor timer interrupt 和可恢复的 page fault 路径收口到同一条入口；同时最小 demo 已经通过 linker symbol 暴露的内存布局接通了 early bump allocator，在其上建立了 bitmap-backed physical page manager，并进一步接上了 guest-side Sv39 page-table builder、`satp` 切换、fault-range-backed page-fault handling、较严格的 `vm_map_range` / `vm_unmap_page` 语义，以及 text/rodata/data 的页粒度内核权限映射验证和第一批 kernel/user range-split helper。下一阶段应继续把当前仍然偏 demo-scoped 的 fault registration 演进为更正式的 VM-owned region/policy 层，并据此推进更完整的 kernel/user address-space 管理。当前有两类消费方：
 
 - 汇编 smoke coverage 见 [supervisor_platform_smoke.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm/supervisor_platform_smoke.S)
 - 最小 C-based supervisor runtime/demo 见 [start.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/start.S) 和 [main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/main.c)
