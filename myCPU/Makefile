@@ -10,7 +10,7 @@ ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_sta
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 FLAT_BIN_TESTS = hello
 GUEST_SUPERVISOR_DEMO = guest/supervisor_demo.elf
-GUEST_SRCS = guest/lib/platform.S guest/kernel/console.c guest/kernel/panic.c guest/kernel/storage.c guest/kernel/timer.c guest/kernel/trap.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
+GUEST_SRCS = guest/lib/platform.S guest/kernel/console.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/storage.c guest/kernel/timer.c guest/kernel/trap.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
 DEPS     = $(OBJS:.o=.d) $(GUEST_OBJS:.o=.d)

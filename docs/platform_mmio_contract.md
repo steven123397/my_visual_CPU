@@ -185,7 +185,7 @@
 - `platform_storage_read_block`
 - `platform_shutdown`
 
-这些入口的目标不是成为最终内核 ABI，而是先固定“客体侧如何消费当前 MMIO 契约”的最小驱动层。当前 guest 层已经拆出了 `console` / `storage` / `timer` / `trap` 这些最小模块，并用统一 trap dispatch 把 supervisor external interrupt 与 supervisor timer interrupt 收口到同一条入口。当前有两类消费方：
+这些入口的目标不是成为最终内核 ABI，而是先固定“客体侧如何消费当前 MMIO 契约”的最小驱动层。当前 guest 层已经拆出了 `console` / `storage` / `timer` / `trap` / `memory` 这些最小模块，并用统一 trap dispatch 加注册式 interrupt handler 把 supervisor external interrupt 与 supervisor timer interrupt 收口到同一条入口；同时最小 demo 已经通过 linker symbol 暴露的内存布局接通了一个 bump allocator，并在其上暴露了最小 page allocator。当前有两类消费方：
 
 - 汇编 smoke coverage 见 [supervisor_platform_smoke.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm/supervisor_platform_smoke.S)
 - 最小 C-based supervisor runtime/demo 见 [start.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/start.S) 和 [main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/main.c)
