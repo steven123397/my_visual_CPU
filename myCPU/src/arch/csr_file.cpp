@@ -6,6 +6,19 @@ namespace {
 
 constexpr uint64_t SSTATUS_MASK = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_SPP | MSTATUS_SUM | MSTATUS_MXR;
 constexpr uint64_t SIE_MASK = MIE_SSIE | MIE_STIE | MIE_SEIE;
+constexpr uint64_t MIP_MIE_MASK = MIE_SSIE | MIE_MSIE | MIE_STIE | MIE_MTIE | MIE_SEIE | MIE_MEIE;
+constexpr uint64_t MEDELEG_MASK =
+    (1ULL << 1) |   // instruction access fault
+    (1ULL << 2) |   // illegal instruction
+    (1ULL << 3) |   // breakpoint
+    (1ULL << 5) |   // load access fault
+    (1ULL << 7) |   // store/AMO access fault
+    (1ULL << 8) |   // environment call from U-mode
+    (1ULL << 9) |   // environment call from S-mode
+    (1ULL << 12) |  // instruction page fault
+    (1ULL << 13) |  // load page fault
+    (1ULL << 15);   // store/AMO page fault
+constexpr uint64_t MIDELEG_MASK = SIE_MASK;
 
 bool is_supported_csr(uint32_t addr) {
     switch (addr & 0xFFF) {
@@ -59,11 +72,23 @@ uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
     if (addr == CSR_SSTATUS) {
         return regs_[CSR_MSTATUS] & SSTATUS_MASK;
     }
+    if (addr == CSR_MEDELEG) {
+        return regs_[CSR_MEDELEG] & MEDELEG_MASK;
+    }
+    if (addr == CSR_MIDELEG) {
+        return regs_[CSR_MIDELEG] & MIDELEG_MASK;
+    }
+    if (addr == CSR_MIE) {
+        return regs_[CSR_MIE] & MIP_MIE_MASK;
+    }
+    if (addr == CSR_MIP) {
+        return regs_[CSR_MIP] & MIP_MIE_MASK;
+    }
     if (addr == CSR_SIE) {
-        return regs_[CSR_MIE] & SIE_MASK;
+        return regs_[CSR_MIE] & regs_[CSR_MIDELEG] & SIE_MASK;
     }
     if (addr == CSR_SIP) {
-        return regs_[CSR_MIP] & SIE_MASK;
+        return regs_[CSR_MIP] & regs_[CSR_MIDELEG] & SIE_MASK;
     }
     return regs_[addr];
 }
@@ -77,12 +102,30 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
         regs_[CSR_MSTATUS] = (regs_[CSR_MSTATUS] & ~SSTATUS_MASK) | (value & SSTATUS_MASK);
         return;
     }
+    if (addr == CSR_MEDELEG) {
+        regs_[CSR_MEDELEG] = value & MEDELEG_MASK;
+        return;
+    }
+    if (addr == CSR_MIDELEG) {
+        regs_[CSR_MIDELEG] = value & MIDELEG_MASK;
+        return;
+    }
+    if (addr == CSR_MIE) {
+        regs_[CSR_MIE] = value & MIP_MIE_MASK;
+        return;
+    }
+    if (addr == CSR_MIP) {
+        regs_[CSR_MIP] = value & MIP_MIE_MASK;
+        return;
+    }
     if (addr == CSR_SIE) {
-        regs_[CSR_MIE] = (regs_[CSR_MIE] & ~SIE_MASK) | (value & SIE_MASK);
+        const uint64_t mask = regs_[CSR_MIDELEG] & SIE_MASK;
+        regs_[CSR_MIE] = (regs_[CSR_MIE] & ~mask) | (value & mask);
         return;
     }
     if (addr == CSR_SIP) {
-        regs_[CSR_MIP] = (regs_[CSR_MIP] & ~SIE_MASK) | (value & SIE_MASK);
+        const uint64_t mask = regs_[CSR_MIDELEG] & SIE_MASK;
+        regs_[CSR_MIP] = (regs_[CSR_MIP] & ~mask) | (value & mask);
         return;
     }
     regs_[addr] = value;
