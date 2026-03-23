@@ -5,11 +5,15 @@ CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
 C_SRCS   = src/memory.c src/decode.c
 CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
-DEPS     = $(OBJS:.o=.d)
 TARGET   = mycpu
-ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_tlb_flush sv39_tlb_ad_bits
+ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_tlb_flush sv39_tlb_ad_bits
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 FLAT_BIN_TESTS = hello
+GUEST_SUPERVISOR_DEMO = guest/supervisor_demo.elf
+GUEST_SRCS = guest/lib/platform.S guest/kernel/console.c guest/kernel/panic.c guest/kernel/storage.c guest/kernel/timer.c guest/kernel/trap.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
+GUEST_OBJS = $(GUEST_SRCS:.S=.o)
+GUEST_OBJS := $(GUEST_OBJS:.c=.o)
+DEPS     = $(OBJS:.o=.d) $(GUEST_OBJS:.o=.d)
 TEST_TIMEOUT ?= 2s
 
 # RISC-V toolchain (adjust prefix if needed)
@@ -17,6 +21,8 @@ RV_CC   = riscv64-unknown-elf-gcc
 RV_OBJCOPY = riscv64-unknown-elf-objcopy
 RV_FLAGS = -march=rv64im -mabi=lp64
 RV_ELF_LDFLAGS = -nostdlib -Wl,-Ttext-segment=0x80000000
+GUEST_RV_CFLAGS = $(RV_FLAGS) -mcmodel=medany -mno-relax -msmall-data-limit=0 -ffreestanding -fno-builtin -fno-stack-protector -fno-pie -MMD -MP -g -O2 -Wall -Wextra
+GUEST_RV_LDFLAGS = -nostdlib -nostartfiles -static -no-pie -Wl,-T,guest/supervisor_demo/link.ld
 RV_REQUIRED_TOOLS = $(RV_CC) $(RV_OBJCOPY)
 
 .PHONY: all clean test check-riscv-toolchain FORCE
@@ -36,11 +42,20 @@ src/%.o: src/%.cpp
 tests/asm/%.elf: tests/asm/%.S | check-riscv-toolchain
 	$(RV_CC) $(RV_FLAGS) $(RV_ELF_LDFLAGS) -o $@ $<
 
+guest/%.o: guest/%.S | check-riscv-toolchain
+	$(RV_CC) $(GUEST_RV_CFLAGS) -Iguest/include -Iinclude -c -o $@ $<
+
+guest/%.o: guest/%.c | check-riscv-toolchain
+	$(RV_CC) $(GUEST_RV_CFLAGS) -std=c11 -Iguest/include -Iinclude -c -o $@ $<
+
+$(GUEST_SUPERVISOR_DEMO): $(GUEST_OBJS)
+	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
+
 # Build flat binary from ELF
 tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 	$(RV_OBJCOPY) -O binary $< $@
 
-test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(ASM_TESTS:%=test-%) $(FLAT_BIN_TESTS:%=test-flat-%)
+test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(GUEST_SUPERVISOR_DEMO) $(ASM_TESTS:%=test-%) test-guest-supervisor_demo $(FLAT_BIN_TESTS:%=test-flat-%)
 
 FORCE:
 
@@ -74,6 +89,7 @@ test-%: FORCE $(TARGET) tests/asm/%.elf
 		plic_machine_external_interrupt) expected='PME' ;; \
 		plic_supervisor_external_interrupt) expected='PSE' ;; \
 		storage_device_basic) expected='DSK'; extra_args='--disk tests/data/storage_basic.txt' ;; \
+		supervisor_platform_smoke) expected='DRV'; extra_args='--disk tests/data/storage_basic.txt' ;; \
 		sv39_basic) expected='SV39' ;; \
 		sv39_page_fault) expected='PFLT' ;; \
 		sv39_edge_faults) expected='EDG' ;; \
@@ -125,6 +141,27 @@ test-flat-%: FORCE $(TARGET) tests/asm/%.bin
 	fi; \
 	printf '%s\n' "$$output"
 
+test-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
+	@expected='KRN'; \
+	echo "=== guest_supervisor_demo ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_SUPERVISOR_DEMO) 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: guest_supervisor_demo" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	if [ "$$output" != "$$expected" ]; then \
+		echo "Unexpected output for guest_supervisor_demo" >&2; \
+		printf 'Expected: %s\n' "$$expected" >&2; \
+		printf 'Actual: %s\n' "$$output" >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$output"
+
 check-riscv-toolchain:
 	@missing=0; \
 	for tool in $(RV_REQUIRED_TOOLS); do \
@@ -139,7 +176,7 @@ check-riscv-toolchain:
 	fi
 
 clean:
-	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin
-	find src -type f \( -name '*.o' -o -name '*.d' \) -delete
+	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin $(GUEST_SUPERVISOR_DEMO)
+	find src guest -type f \( -name '*.o' -o -name '*.d' \) -delete
 
 -include $(DEPS)

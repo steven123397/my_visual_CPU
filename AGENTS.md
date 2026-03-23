@@ -41,6 +41,7 @@ What exists now:
   - supervisor timer interrupt delegation via `mideleg`, `stvec`, and `sret`
   - PLIC-backed machine/supervisor external interrupt delivery and claim/complete via a minimal UART THRE interrupt source
   - host-backed simple storage image attachment through a minimal block-oriented MMIO storage device with `LBA` / `block_count` / `command` / `status` registers and a fixed data window
+  - a first shared guest-side supervisor platform layer plus smoke/demo coverage that consumes the shared MMIO contract for UART output, supervisor PLIC setup/claim/complete, supervisor timer handling through CLINT `mtime` / `mtimecmp`, block-0 storage reads, and a minimal C-based supervisor runtime with unified trap dispatch
   - interrupt CSR alias constraints for `mie` / `mip` / `sie` / `sip`, plus delegation edge behavior around `medeleg` / `mideleg`
   - unmapped instruction/load/store access-fault behavior
   - `mtvec` direct / vectored mode routing
@@ -264,6 +265,7 @@ What is already landed in that migration:
 
 - `Machine`, `Bus`, and `Ram` provide the first explicit platform assembly layer
 - `Uart16550`, `Clint`, a first minimal `Plic`, and a host-backed block-oriented `SimpleStorage` device now exist as explicit device objects behind `Bus`
+- A shared MMIO platform contract now exists in code/docs, along with a reusable guest-side platform library, an assembly shim consumed by tests, and a first minimal supervisor demo that exercises storage, supervisor external interrupts, supervisor timer interrupts, and unified trap dispatch from S-mode
 - Image loading now passes through explicit `ElfLoader` / `BinaryLoader` modules, keeping `Ram` focused on backing storage
 - ELF and flat-binary loading now write through explicit `Ram` interfaces rather than reaching into raw `Memory` state from loader code
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists

@@ -14,6 +14,29 @@
 | `0x0c000000` | `0x300000` | PLIC |
 | `0x80000000` | `128 MiB` | RAM |
 
+## CLINT
+
+当前只接通了最小的 machine timer 子集，供机器态和经 `mideleg` 委派后的 supervisor timer interrupt 路径使用。
+
+### 已实现寄存器
+
+| 偏移 | 宽度 | 名称 | 说明 |
+|---:|---:|---|---|
+| `0x4000` | 64 | `MTIMECMP` | 定时器比较值 |
+| `0xBFF8` | 64 | `MTIME` | 单调递增平台时间基准 |
+
+### 驱动约定
+
+1. 读取 `MTIME`
+2. 写 `MTIMECMP = MTIME + delta`
+3. 等待 supervisor timer interrupt 或 machine timer interrupt 递送
+4. 处理中断后把 `MTIMECMP` 设到未来值，或设成全 `1` 以临时关闭
+
+### 当前限制
+
+- 只有单 hart，因此没有 per-hart `mtimecmp` 数组。
+- 目前只服务定时器中断，不覆盖 software interrupt 语义。
+
 ## PLIC
 
 当前实现的是一个非常小的 PLIC 子集，只覆盖现在真正接通的路径。
@@ -139,3 +162,30 @@
 2. `plic` / `simple_storage` 的最小驱动层
 
 这样后续即使把 `SimpleStorage` 再升级成更像真实块设备，或者给它补中断完成路径，也只会改驱动层，不会污染更高层的块缓存或文件系统代码。
+
+## Guest Platform Layer
+
+客体侧最小平台驱动接口现在已经从纯测试辅助代码提升成了可复用的 guest 平台层：
+
+- 共享汇编驱动实现位于 [platform_drivers.inc](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/include/platform_drivers.inc)
+- C 侧声明位于 [platform.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/include/platform.h)
+- 可链接的 guest 平台库入口位于 [platform.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/lib/platform.S)
+- 测试侧的 [platform_drivers.inc](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm/include/platform_drivers.inc) 现在只是转发到共享实现，避免双份维护
+
+当前提供的最小入口包括：
+
+- `platform_uart_putc`
+- `platform_uart_enable_thre_irq`
+- `platform_uart_disable_irq`
+- `platform_plic_supervisor_init`
+- `platform_plic_supervisor_claim`
+- `platform_plic_supervisor_complete`
+- `platform_clint_read_mtime`
+- `platform_clint_write_mtimecmp`
+- `platform_storage_read_block`
+- `platform_shutdown`
+
+这些入口的目标不是成为最终内核 ABI，而是先固定“客体侧如何消费当前 MMIO 契约”的最小驱动层。当前 guest 层已经拆出了 `console` / `storage` / `timer` / `trap` 这些最小模块，并用统一 trap dispatch 把 supervisor external interrupt 与 supervisor timer interrupt 收口到同一条入口。当前有两类消费方：
+
+- 汇编 smoke coverage 见 [supervisor_platform_smoke.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm/supervisor_platform_smoke.S)
+- 最小 C-based supervisor runtime/demo 见 [start.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/start.S) 和 [main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/main.c)
