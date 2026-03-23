@@ -105,7 +105,7 @@ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 ```
 
-`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults`、`csr_semantic_consistency` 这类特权/异常/CSR 语义一致性回归，`plic_*` / `storage_device_basic` / `supervisor_platform_smoke` / `clint_split_access` 这类平台回归，`sv39_*` 这类虚拟内存/TLB 回归，以及覆盖 guest-side demand paging、recoverable fault policy、fault-range-backed remap、严格 `vm_map_range` / `vm_unmap_page` 语义检查的 `guest_supervisor_demo` bring-up 回归。
+`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前除综合回归外，还包含 `loads_signed_unsigned`、`alu_word`、`branches_signed_unsigned`、`muldiv`、`fence_noop` 这类更细粒度的指令族回归，以及 `privilege_transitions`、`sret_transitions`、`supervisor_exception_delegation`、`supervisor_timer_interrupt`、`csr_access_control`、`access_faults`、`csr_semantic_consistency` 这类特权/异常/CSR 语义一致性回归，`plic_*` / `storage_device_basic` / `supervisor_platform_smoke` / `clint_split_access` 这类平台回归，`sv39_*` 这类虚拟内存/TLB 回归，以及覆盖 guest-side demand paging、recoverable fault policy、fault-range-backed remap、以及 VM 已启用后 `vm_map_range` / `vm_unmap_page` 自动维护本地 TLB 一致性的 `guest_supervisor_demo` bring-up 回归。
 
 ## 内存映射
 
@@ -138,7 +138,7 @@ make test
 - `time` CSR 与 CLINT `mtime` 保持一致，guest 侧 CSR/MMIO 看到同一平台时间源
 - PLIC machine/supervisor external interrupt 最小路径
 - host-backed block-oriented MMIO storage device
-- 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt/exception handler、VM-owned page-fault policy/handling，以及 linker-backed early allocator + bitmap-backed PMM + guest-side Sv39 page-table builder + fault-range-backed page-fault handling + recoverable fault policy registration + page-granular kernel mapping / fault handling
+- 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt/exception handler、VM-owned page-fault policy/handling，以及 linker-backed early allocator + bitmap-backed PMM + guest-side Sv39 page-table builder + fault-range-backed page-fault handling + recoverable fault policy registration + page-granular kernel mapping / fault handling + VM 启用后的 map/unmap 本地 TLB 同步
 - `ecall` a7=93 退出约定
 
 ## 源码文件说明
@@ -156,7 +156,7 @@ make test
 ### `myCPU/guest/`
 
 - `include/`：guest 平台层、trap、timer、memory、pmm、vm 等最小内核接口。
-- `kernel/`：`console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小 guest 侧模块实现，当前已覆盖页粒度 kernel mapping、VM-owned page-fault dispatch/policy、fault-range-backed 缺页映射、可恢复 page-fault 注册、较严格的 `vm_map_range` / `vm_unmap_page` 语义，以及 `sfence.vma` 刷新入口。
+- `kernel/`：`console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小 guest 侧模块实现，当前已覆盖页粒度 kernel mapping、VM-owned page-fault dispatch/policy、fault-range-backed 缺页映射、可恢复 page-fault 注册、较严格的 `vm_map_range` / `vm_unmap_page` 语义、以及 VM 启用后成功 map/unmap 自动维护本地 TLB 一致性。
 - `lib/platform.S`：共享 guest MMIO 平台库入口。
 - `supervisor_demo/`：最小 supervisor runtime、linker script 和 bring-up demo。
 

@@ -215,6 +215,23 @@ static bool map_page_internal(uintptr_t vaddr, uintptr_t paddr, uint64_t flags) 
     return true;
 }
 
+static bool unmap_page_internal(uintptr_t vaddr) {
+    bool conflict = false;
+    uint64_t* slot = NULL;
+
+    if (root_table == NULL || (vaddr & (MEMORY_PAGE_SIZE - 1U)) != 0) {
+        return false;
+    }
+
+    slot = lookup_level0_slot(vaddr, false, &conflict);
+    if (slot == NULL || conflict || (*slot & SV39_PTE_VALID) == 0) {
+        return false;
+    }
+
+    *slot = 0;
+    return true;
+}
+
 static bool can_map_page(uintptr_t vaddr) {
     bool conflict = false;
     uint64_t* slot = lookup_level0_slot(vaddr, false, &conflict);
@@ -270,6 +287,12 @@ static const struct VmFaultRange* find_fault_range(uintptr_t fault_page) {
     }
 
     return NULL;
+}
+
+static void flush_tlb_if_enabled(void) {
+    if (enabled) {
+        vm_flush_tlb();
+    }
 }
 
 static const struct VmFaultActionRule* find_fault_action(uint64_t cause,
@@ -337,6 +360,7 @@ bool vm_map_identity_1g(uintptr_t base, uint64_t flags) {
     }
 
     root_table[index] = pte_from_pa(base, SV39_PTE_VALID | flags);
+    flush_tlb_if_enabled();
     return true;
 }
 
@@ -345,7 +369,12 @@ bool vm_map_page(uintptr_t vaddr, uintptr_t paddr, uint64_t flags) {
         return false;
     }
 
-    return map_page_internal(vaddr, paddr, flags);
+    if (!map_page_internal(vaddr, paddr, flags)) {
+        return false;
+    }
+
+    flush_tlb_if_enabled();
+    return true;
 }
 
 bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags) {
@@ -371,7 +400,7 @@ bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags)
             size_t rollback = 0;
 
             while (rollback < mapped) {
-                vm_unmap_page(vaddr + rollback);
+                unmap_page_internal(vaddr + rollback);
                 rollback += MEMORY_PAGE_SIZE;
             }
             return false;
@@ -381,6 +410,7 @@ bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags)
         offset += MEMORY_PAGE_SIZE;
     }
 
+    flush_tlb_if_enabled();
     return true;
 }
 
@@ -401,19 +431,11 @@ bool vm_map_user_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t f
 }
 
 bool vm_unmap_page(uintptr_t vaddr) {
-    bool conflict = false;
-    uint64_t* slot = NULL;
-
-    if (root_table == NULL || (vaddr & (MEMORY_PAGE_SIZE - 1U)) != 0) {
+    if (!unmap_page_internal(vaddr)) {
         return false;
     }
 
-    slot = lookup_level0_slot(vaddr, false, &conflict);
-    if (slot == NULL || conflict || (*slot & SV39_PTE_VALID) == 0) {
-        return false;
-    }
-
-    *slot = 0;
+    flush_tlb_if_enabled();
     return true;
 }
 
