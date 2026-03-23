@@ -7,8 +7,9 @@
 #include "platform/machine.h"
 
 static void usage(const char* prog) {
-    std::fprintf(stderr, "Usage: %s [-b addr] <image>\n", prog);
+    std::fprintf(stderr, "Usage: %s [-b addr] [-d image] <image>\n", prog);
     std::fprintf(stderr, "  -b addr   load flat binary at hex address (default: 0x80000000)\n");
+    std::fprintf(stderr, "  -d image  attach host-backed storage image to the simple MMIO storage device\n");
     std::fprintf(stderr, "  image     ELF or flat binary\n");
     std::exit(1);
 }
@@ -20,6 +21,7 @@ int main(int argc, char* argv[]) {
 
     bool flat = false;
     uint64_t load_addr = MEM_BASE;
+    const char* disk_image = nullptr;
     const char* image = nullptr;
 
     for (int i = 1; i < argc; i++) {
@@ -29,6 +31,11 @@ int main(int argc, char* argv[]) {
                 usage(argv[0]);
             }
             load_addr = std::strtoull(argv[i], nullptr, 16);
+        } else if (std::strcmp(argv[i], "-d") == 0 || std::strcmp(argv[i], "--disk") == 0) {
+            if (++i >= argc) {
+                usage(argv[0]);
+            }
+            disk_image = argv[i];
         } else {
             image = argv[i];
         }
@@ -40,6 +47,9 @@ int main(int argc, char* argv[]) {
 
     try {
         Machine machine;
+        if (disk_image) {
+            machine.attach_storage_image(disk_image);
+        }
         if (flat) {
             machine.load_binary(image, load_addr);
         } else {

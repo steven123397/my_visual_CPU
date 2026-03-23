@@ -4,6 +4,7 @@
 
 Machine::Machine() : uart_(plic_), bus_(ram_) {
     bus_.attach(uart_);
+    bus_.attach(storage_);
     bus_.attach(clint_);
     bus_.attach(plic_);
 }
@@ -18,6 +19,10 @@ void Machine::load_binary(const std::string& path, uint64_t addr) {
     binary_loader_.load(ram_, path.c_str(), addr);
     cpu_init(cpu_, addr);
     loaded_ = true;
+}
+
+void Machine::attach_storage_image(const std::string& path) {
+    storage_.load_image(path.c_str());
 }
 
 void Machine::run() {
