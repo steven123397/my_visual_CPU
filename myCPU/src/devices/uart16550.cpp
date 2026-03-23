@@ -6,11 +6,6 @@
 
 namespace {
 
-constexpr uint32_t UART_RBR = 0;
-constexpr uint32_t UART_IER = 1;
-constexpr uint32_t UART_IIR = 2;
-constexpr uint32_t UART_LSR = 5;
-constexpr uint32_t UART_IER_THRI = 0x02;
 constexpr uint32_t UART_IIR_NO_INT = 0x01;
 constexpr uint32_t UART_IIR_THRI = 0x02;
 constexpr uint32_t UART_LSR_THRE = 0x20;
@@ -22,13 +17,13 @@ Uart16550::Uart16550(Plic& plic) : Device(UART_BASE, UART_SIZE), plic_(plic) {}
 
 uint64_t Uart16550::load(uint64_t addr, int /*size*/) {
     const uint32_t offset = static_cast<uint32_t>(addr - UART_BASE);
-    if (offset == UART_IER) {
+    if (offset == UART_REG_IER) {
         return ier_;
     }
-    if (offset == UART_IIR) {
+    if (offset == UART_REG_IIR) {
         return (ier_ & UART_IER_THRI) ? UART_IIR_THRI : UART_IIR_NO_INT;
     }
-    if (offset == UART_LSR) {
+    if (offset == UART_REG_LSR) {
         return UART_LSR_THRE | UART_LSR_TEMT;
     }
     return 0;
@@ -36,12 +31,12 @@ uint64_t Uart16550::load(uint64_t addr, int /*size*/) {
 
 void Uart16550::store(uint64_t addr, uint64_t value, int /*size*/) {
     const uint32_t offset = static_cast<uint32_t>(addr - UART_BASE);
-    if (offset == UART_RBR) {
+    if (offset == UART_REG_THR) {
         std::putchar(static_cast<int>(value & 0xFF));
         std::fflush(stdout);
         return;
     }
-    if (offset == UART_IER) {
+    if (offset == UART_REG_IER) {
         ier_ = static_cast<uint8_t>(value) & UART_IER_THRI;
         update_interrupt_line();
     }

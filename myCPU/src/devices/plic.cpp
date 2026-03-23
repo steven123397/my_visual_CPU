@@ -5,7 +5,7 @@ Plic::Plic() : Device(PLIC_BASE, PLIC_SIZE) {}
 uint64_t Plic::load(uint64_t addr, int /*size*/) {
     const uint32_t offset = static_cast<uint32_t>(addr - PLIC_BASE);
 
-    if (offset == 4) {
+    if (offset == PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE)) {
         return priorities_[1];
     }
     if (offset == kPendingOffset) {
@@ -37,7 +37,7 @@ void Plic::store(uint64_t addr, uint64_t value, int /*size*/) {
     const uint32_t offset = static_cast<uint32_t>(addr - PLIC_BASE);
     const uint32_t value32 = static_cast<uint32_t>(value);
 
-    if (offset == 4) {
+    if (offset == PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE)) {
         priorities_[1] = value32 & 0x7;
         return;
     }

@@ -24,7 +24,7 @@ What exists now:
 - A simple physical memory model plus minimal MMIO
 - Basic exception and interrupt handling
 - Initial M/S/U privilege groundwork, including `MPP` tracking, `sret`, minimal supervisor exception delegation via a constrained `medeleg`, minimal supervisor timer interrupt delivery via a constrained `mideleg`, constrained `mie` / `mip` / `sie` / `sip` alias semantics, machine-counter CSR support for `mcycle` / `minstret`, `mcounteren` / `scounteren` gating for `cycle` / `time` / `instret`, retired-instruction counting for `instret`, and `sstatus.SUM` / `sstatus.MXR` handling relevant to supervisor virtual-memory access
-- A `Machine + Ram + Uart16550 + Clint + Plic + SimpleStorage + Bus` C++ platform skeleton around the reference path
+- A `Machine + Ram + Uart16550 + Clint + Plic + SimpleStorage + Bus` C++ platform skeleton around the reference path, plus a first shared MMIO platform contract header/doc for OS-facing device constants
 - Explicit `ElfLoader + BinaryLoader` C++ loader boundaries above raw RAM backing
 - A first `CoreState + CsrFile` state split inside the CPU path
 - A first `TrapController` boundary for trap / interrupt routing inside the CPU path
@@ -40,7 +40,7 @@ What exists now:
   - CLINT timer interrupt delivery and `mret` return
   - supervisor timer interrupt delegation via `mideleg`, `stvec`, and `sret`
   - PLIC-backed machine/supervisor external interrupt delivery and claim/complete via a minimal UART THRE interrupt source
-  - host-backed simple storage image attachment through a minimal MMIO storage device with sequential cursor/data access
+  - host-backed simple storage image attachment through a minimal block-oriented MMIO storage device with `LBA` / `block_count` / `command` / `status` registers and a fixed data window
   - interrupt CSR alias constraints for `mie` / `mip` / `sie` / `sip`, plus delegation edge behavior around `medeleg` / `mideleg`
   - unmapped instruction/load/store access-fault behavior
   - `mtvec` direct / vectored mode routing
@@ -55,7 +55,7 @@ What exists now:
 What does not yet exist:
 
 - Full privileged architecture support (complete CSR coverage)
-- A realistic device platform for OS bring-up beyond the newly landed minimal PLIC/storage path (broader peripherals, richer storage protocols)
+- A realistic device platform for OS bring-up beyond the newly landed minimal PLIC/block-storage path (broader peripherals, richer storage protocols)
 - Pipeline, cache, multicore, or out-of-order models
 
 Additional current planning notes:
@@ -65,7 +65,7 @@ Additional current planning notes:
 - This C-to-C++ transition must be justified by structural gains such as module boundaries, type safety, state management, ownership clarity, and backend extensibility, not by language preference alone.
 - The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` device objects, explicit `ElfLoader` / `BinaryLoader` image-loading boundaries, the first `CoreState + CsrFile` split, and a first `TrapController` boundary are now landed and should be treated as current baseline, not future proposal.
 - The immediate next structural step is to continue tightening the platform-side split: preserve `Bus` as the physical CPU-facing access path, deepen device/platform boundaries, and keep shrinking the remaining legacy responsibilities around raw RAM access and image loading.
-- Sv39 virtual memory is now implemented with 3-level page table walk, a minimal TLB, permission checks, and page fault handling. The immediate next functional step is to expand CSR coverage for full supervisor execution and continue broadening the device platform beyond the newly landed minimal PLIC/storage path for OS bring-up.
+- Sv39 virtual memory is now implemented with 3-level page table walk, a minimal TLB, permission checks, and page fault handling. The immediate next functional step is to expand CSR coverage for full supervisor execution and continue broadening the device platform beyond the newly landed minimal PLIC/block-storage path for OS bring-up.
 - When producing summaries, proposals, or report-style material for this project, describe the current implementation as an already working simulator prototype and the C++ refactor as the next enabling engineering step.
 
 ## Primary direction
@@ -263,7 +263,7 @@ For the current project stage, this migration is no longer only a distant option
 What is already landed in that migration:
 
 - `Machine`, `Bus`, and `Ram` provide the first explicit platform assembly layer
-- `Uart16550`, `Clint`, a first minimal `Plic`, and a host-backed `SimpleStorage` device now exist as explicit device objects behind `Bus`
+- `Uart16550`, `Clint`, a first minimal `Plic`, and a host-backed block-oriented `SimpleStorage` device now exist as explicit device objects behind `Bus`
 - Image loading now passes through explicit `ElfLoader` / `BinaryLoader` modules, keeping `Ram` focused on backing storage
 - ELF and flat-binary loading now write through explicit `Ram` interfaces rather than reaching into raw `Memory` state from loader code
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
@@ -306,4 +306,4 @@ When planning the C++ restructuring, favor boundaries such as:
 - Describe the current project honestly as a working functional simulator prototype, not as a mere idea.
 - Do not claim support for ISA or platform features unless they are actually implemented and validated.
 - When discussing the C++ migration in documents, frame it as a structural response to growing architectural complexity, not as a cosmetic language rewrite.
-- At the current repository state, describe `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` / minimal `Plic` / host-backed `SimpleStorage` devices, explicit `ElfLoader` / `BinaryLoader` loader boundaries, the `CoreState + CsrFile` split, the `TrapController` boundary, and the `AddressSpace` boundary with Sv39 virtual memory support, a minimal TLB, edge-fault coverage, and minimal `SUM` / `MXR` handling as already completed incremental steps; describe expanded CSR coverage and further device-platform targets beyond the minimal storage path as the next structural targets for OS bring-up.
+- At the current repository state, describe `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` / minimal `Plic` / host-backed block-oriented `SimpleStorage` devices, the shared MMIO platform contract header/doc, explicit `ElfLoader` / `BinaryLoader` loader boundaries, the `CoreState + CsrFile` split, the `TrapController` boundary, and the `AddressSpace` boundary with Sv39 virtual memory support, a minimal TLB, edge-fault coverage, and minimal `SUM` / `MXR` handling as already completed incremental steps; describe expanded CSR coverage and further device-platform targets beyond the minimal storage path as the next structural targets for OS bring-up.

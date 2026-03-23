@@ -8,7 +8,7 @@
 
 class Plic : public Device {
 public:
-    static constexpr uint32_t UART_SOURCE_ID = 1;
+    static constexpr uint32_t UART_SOURCE_ID = PLIC_SOURCE_UART_THRE;
 
     Plic();
 
@@ -25,11 +25,11 @@ private:
     };
 
     static constexpr uint32_t kNumSources = 1;
-    static constexpr uint32_t kPendingOffset = 0x1000;
-    static constexpr uint32_t kMachineEnableOffset = 0x2000;
-    static constexpr uint32_t kSupervisorEnableOffset = 0x2080;
-    static constexpr uint32_t kMachineContextOffset = 0x200000;
-    static constexpr uint32_t kSupervisorContextOffset = 0x201000;
+    static constexpr uint32_t kPendingOffset = PLIC_PENDING_OFFSET;
+    static constexpr uint32_t kMachineEnableOffset = PLIC_ENABLE_OFFSET(PLIC_CONTEXT_MACHINE);
+    static constexpr uint32_t kSupervisorEnableOffset = PLIC_ENABLE_OFFSET(PLIC_CONTEXT_SUPERVISOR);
+    static constexpr uint32_t kMachineContextOffset = PLIC_CONTEXT_OFFSET(PLIC_CONTEXT_MACHINE);
+    static constexpr uint32_t kSupervisorContextOffset = PLIC_CONTEXT_OFFSET(PLIC_CONTEXT_SUPERVISOR);
 
     uint32_t best_pending_source(const ContextState& context) const;
     bool context_has_pending(const ContextState& context) const;

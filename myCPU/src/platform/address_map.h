@@ -1,12 +1,3 @@
 #pragma once
 
-#define MEM_BASE   0x80000000UL
-#define MEM_SIZE   (128 * 1024 * 1024)
-#define UART_BASE  0x10000000UL
-#define UART_SIZE  8
-#define STORAGE_BASE 0x10001000UL
-#define STORAGE_SIZE 0x100
-#define CLINT_BASE 0x02000000UL
-#define CLINT_SIZE 0x10000
-#define PLIC_BASE  0x0C000000UL
-#define PLIC_SIZE  0x300000
+#include "../../include/platform_mmio.h"

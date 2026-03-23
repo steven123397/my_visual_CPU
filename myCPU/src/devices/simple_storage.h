@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -17,19 +18,33 @@ public:
 
 private:
     uint64_t register_value(uint32_t offset) const;
-    uint64_t load_data_port(int size);
-    void store_data_port(uint64_t value, int size);
+    uint64_t load_data_window(uint32_t offset, int size) const;
+    void store_data_window(uint32_t offset, uint64_t value, int size);
+    void execute_command(uint64_t command);
+    void set_error(uint64_t error_code);
+    void clear_error();
 
-    static constexpr uint64_t kMagic = 0x31474b4254534d4dULL;
-    static constexpr uint64_t kBlockSize = 512;
-    static constexpr uint32_t kMagicOffset = 0x00;
-    static constexpr uint32_t kCapacityOffset = 0x08;
-    static constexpr uint32_t kBlockSizeOffset = 0x10;
-    static constexpr uint32_t kCursorOffset = 0x18;
-    static constexpr uint32_t kStatusOffset = 0x20;
-    static constexpr uint32_t kDataOffset = 0x28;
+    static constexpr uint64_t kMagic = STORAGE_MMIO_MAGIC;
+    static constexpr uint64_t kVersion = STORAGE_MMIO_VERSION;
+    static constexpr uint64_t kBlockSize = STORAGE_BLOCK_SIZE;
+    static constexpr uint32_t kMagicOffset = STORAGE_REG_MAGIC;
+    static constexpr uint32_t kVersionOffset = STORAGE_REG_VERSION;
+    static constexpr uint32_t kBlockSizeOffset = STORAGE_REG_BLOCK_SIZE;
+    static constexpr uint32_t kCapacityBlocksOffset = STORAGE_REG_CAPACITY_BLOCKS;
+    static constexpr uint32_t kStatusOffset = STORAGE_REG_STATUS;
+    static constexpr uint32_t kCommandOffset = STORAGE_REG_COMMAND;
+    static constexpr uint32_t kLbaOffset = STORAGE_REG_LBA;
+    static constexpr uint32_t kBlockCountOffset = STORAGE_REG_BLOCK_COUNT;
+    static constexpr uint32_t kErrorOffset = STORAGE_REG_ERROR;
+    static constexpr uint32_t kDataWindowOffset = STORAGE_DATA_WINDOW_OFFSET;
+    static constexpr uint32_t kDataWindowSize = STORAGE_DATA_WINDOW_SIZE;
 
     std::vector<uint8_t> data_{};
-    uint64_t cursor_{0};
+    std::array<uint8_t, kDataWindowSize> data_window_{};
+    uint64_t capacity_blocks_{0};
+    uint64_t status_{STORAGE_STATUS_READY};
+    uint64_t lba_{0};
+    uint64_t block_count_{1};
+    uint64_t error_code_{STORAGE_ERR_NONE};
     bool attached_{false};
 };
