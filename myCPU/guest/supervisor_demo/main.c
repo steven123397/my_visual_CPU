@@ -13,17 +13,8 @@
 
 #define TEST_ALIAS_VADDR 0x40000000UL
 
-struct PageFaultContext {
-    uintptr_t alias_vaddr;
-    uintptr_t rodata_addr;
-    uintptr_t exec_addr;
-};
-
 static volatile uint64_t timer_irq_seen = 0;
 static volatile uint64_t external_irq_seen = 0;
-static volatile uint64_t load_page_fault_seen = 0;
-static volatile uint64_t store_page_fault_seen = 0;
-static volatile uint64_t instruction_page_fault_seen = 0;
 static volatile uintptr_t instruction_fault_resume_pc = 0;
 static const uint32_t rodata_marker = 0xCAFEBABEU;
 
@@ -68,43 +59,6 @@ static void external_interrupt_handler(uint64_t cause, void* context) {
     external_irq_seen = 1;
 }
 
-static trap_page_fault_result_t page_fault_handler(uint64_t cause,
-                                                   uint64_t epc,
-                                                   uint64_t tval,
-                                                   void* context) {
-    const struct PageFaultContext* fault_context =
-        (const struct PageFaultContext*)context;
-    uintptr_t resume_pc = 0;
-
-    if (fault_context == NULL) {
-        panic_shutdown();
-    }
-
-    if (cause == RISCV_EXC_LOAD_PAGE_FAULT &&
-        tval == fault_context->alias_vaddr) {
-        load_page_fault_seen = 1;
-        return TRAP_PAGE_FAULT_RESULT_UNHANDLED;
-    }
-
-    if (cause == RISCV_EXC_STORE_PAGE_FAULT &&
-        tval == fault_context->rodata_addr) {
-        store_page_fault_seen = 1;
-        return TRAP_PAGE_FAULT_RESULT_SKIP_INSTRUCTION;
-    }
-
-    if (cause == RISCV_EXC_INSN_PAGE_FAULT &&
-        tval == fault_context->exec_addr &&
-        instruction_fault_resume_pc != 0) {
-        resume_pc = instruction_fault_resume_pc;
-        instruction_page_fault_seen = 1;
-        instruction_fault_resume_pc = 0;
-        return TRAP_PAGE_FAULT_RESULT_RESUME_AT(resume_pc);
-    }
-
-    (void)epc;
-    return TRAP_PAGE_FAULT_RESULT_UNHANDLED;
-}
-
 void kernel_main(void) {
     uintptr_t early_cursor = 0;
     uint32_t* alias_page = NULL;
@@ -114,7 +68,6 @@ void kernel_main(void) {
     uint8_t* storage_buffer = NULL;
     uint8_t* storage_page = NULL;
     void* early_allocation = NULL;
-    struct PageFaultContext page_fault_context = {0};
 
     memory_init();
     early_allocation = memory_alloc(96, 64);
@@ -126,9 +79,7 @@ void kernel_main(void) {
                                         NULL) ||
         !trap_install_interrupt_handler(RISCV_SUPERVISOR_EXTERNAL_INTERRUPT,
                                         external_interrupt_handler,
-                                        NULL) ||
-        !trap_install_page_fault_handler(page_fault_handler,
-                                        &page_fault_context)) {
+                                        NULL)) {
         panic_shutdown();
     }
 
@@ -236,6 +187,13 @@ void kernel_main(void) {
                                  (uintptr_t)backing_page,
                                  MEMORY_PAGE_SIZE,
                                  VM_PAGE_READ | VM_PAGE_WRITE) ||
+        !vm_register_fault_skip(RISCV_EXC_STORE_PAGE_FAULT,
+                                (uintptr_t)&rodata_marker,
+                                sizeof(rodata_marker)) ||
+        !vm_register_fault_resume_slot(RISCV_EXC_INSN_PAGE_FAULT,
+                                       (uintptr_t)nx_page,
+                                       MEMORY_PAGE_SIZE,
+                                       &instruction_fault_resume_pc) ||
         vm_register_fault_range(TEST_ALIAS_VADDR,
                                 (uintptr_t)backing_page,
                                 MEMORY_PAGE_SIZE,
@@ -251,9 +209,6 @@ void kernel_main(void) {
         vm_unmap_page(TEST_ALIAS_VADDR + MEMORY_PAGE_SIZE)) {
         panic_shutdown();
     }
-    page_fault_context.alias_vaddr = TEST_ALIAS_VADDR;
-    page_fault_context.rodata_addr = (uintptr_t)&rodata_marker;
-    page_fault_context.exec_addr = (uintptr_t)nx_page;
 
     backing_page[0] = 0x11223344U;
     nx_page[0] = 0x00008067U;
@@ -281,15 +236,15 @@ void kernel_main(void) {
         panic_shutdown();
     }
     vm_flush_tlb();
-    if (alias_page[0] != 0x11223344U || !load_page_fault_seen) {
+    if (alias_page[0] != 0x11223344U) {
         panic_shutdown();
     }
     provoke_rodata_store_fault();
-    if (!store_page_fault_seen || rodata_marker != 0xCAFEBABEU) {
+    if (rodata_marker != 0xCAFEBABEU) {
         panic_shutdown();
     }
     provoke_instruction_page_fault((uintptr_t)nx_page);
-    if (!instruction_page_fault_seen || instruction_fault_resume_pc != 0) {
+    if (instruction_fault_resume_pc != 0) {
         panic_shutdown();
     }
     storage_page = (uint8_t*)pmm_alloc_page();

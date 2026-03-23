@@ -20,6 +20,11 @@ bool vm_register_fault_range(uintptr_t vaddr,
                              uintptr_t paddr,
                              size_t size,
                              uint64_t flags);
+bool vm_register_fault_skip(uint64_t cause, uintptr_t vaddr, size_t size);
+bool vm_register_fault_resume_slot(uint64_t cause,
+                                   uintptr_t vaddr,
+                                   size_t size,
+                                   volatile uintptr_t* resume_pc_slot);
 bool vm_handle_page_fault(uint64_t cause, uint64_t epc, uint64_t tval);
 void vm_flush_tlb(void);
 bool vm_enable(void);
