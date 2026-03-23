@@ -1,0 +1,22 @@
+#pragma once
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#define VM_PAGE_READ (1ULL << 1)
+#define VM_PAGE_WRITE (1ULL << 2)
+#define VM_PAGE_EXEC (1ULL << 3)
+#define VM_PAGE_USER (1ULL << 4)
+
+bool vm_init(void);
+bool vm_map_identity_1g(uintptr_t base, uint64_t flags);
+bool vm_map_page(uintptr_t vaddr, uintptr_t paddr, uint64_t flags);
+bool vm_map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, uint64_t flags);
+bool vm_unmap_page(uintptr_t vaddr);
+void vm_flush_tlb(void);
+bool vm_enable(void);
+
+uintptr_t vm_root_table(void);
+uint64_t vm_satp_value(void);
+bool vm_is_enabled(void);

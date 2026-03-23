@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个最小 guest supervisor runtime 骨架。
+当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个带 early allocator、最小 PMM、guest-side Sv39 页表层、S-mode page fault bring-up 和页粒度 kernel mapping 的 supervisor runtime 骨架。
 
 ## 目录结构
 
@@ -136,7 +136,7 @@ make test
 - CLINT 定时器中断
 - PLIC machine/supervisor external interrupt 最小路径
 - host-backed block-oriented MMIO storage device
-- 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt handler，以及 linker-backed bump/page allocator
+- 最小 guest supervisor platform layer、统一 trap dispatch、注册式 interrupt/exception handler，以及 linker-backed early allocator + bitmap-backed PMM + guest-side Sv39 page-table builder + page-granular kernel mapping / fault handling
 - `ecall` a7=93 退出约定
 
 ## 源码文件说明
@@ -153,8 +153,8 @@ make test
 
 ### `myCPU/guest/`
 
-- `include/`：guest 平台层、trap、timer、memory 等最小内核接口。
-- `kernel/`：`console` / `storage` / `timer` / `trap` / `memory` 这些最小 guest 侧模块实现。
+- `include/`：guest 平台层、trap、timer、memory、pmm、vm 等最小内核接口。
+- `kernel/`：`console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小 guest 侧模块实现，当前已覆盖页粒度 kernel mapping、page fault dispatch 和 `sfence.vma` 刷新入口。
 - `lib/platform.S`：共享 guest MMIO 平台库入口。
 - `supervisor_demo/`：最小 supervisor runtime、linker script 和 bring-up demo。
 

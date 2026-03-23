@@ -13,6 +13,9 @@ _start:
     la   t0, supervisor_trap
     csrw stvec, t0
 
+    li   t0, ((1 << 12) | (1 << 13) | (1 << 15))
+    csrw medeleg, t0
+
     li   t0, ((1 << 9) | (1 << 5))
     csrw mideleg, t0
     csrw sie, t0

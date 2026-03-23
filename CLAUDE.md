@@ -41,7 +41,7 @@ What exists now:
   - supervisor timer interrupt delegation via `mideleg`, `stvec`, and `sret`
   - PLIC-backed machine/supervisor external interrupt delivery and claim/complete via a minimal UART THRE interrupt source
   - host-backed simple storage image attachment through a minimal block-oriented MMIO storage device with `LBA` / `block_count` / `command` / `status` registers and a fixed data window
-  - a first shared guest-side supervisor platform layer plus smoke/demo coverage that consumes the shared MMIO contract for UART output, supervisor PLIC setup/claim/complete, supervisor timer handling through CLINT `mtime` / `mtimecmp`, block-0 storage reads, and a minimal C-based supervisor runtime with unified trap dispatch, a registered interrupt-handler entry, explicit linker-defined memory layout, and a bump/page allocator
+  - a first shared guest-side supervisor platform layer plus smoke/demo coverage that consumes the shared MMIO contract for UART output, supervisor PLIC setup/claim/complete, supervisor timer handling through CLINT `mtime` / `mtimecmp`, block-0 storage reads, and a minimal C-based supervisor runtime with unified trap dispatch, registered interrupt/exception handlers, explicit linker-defined memory layout, an early bump allocator, a bitmap-backed physical page manager, and a minimal guest-side Sv39 page-table builder with page-granular kernel mappings, `sfence.vma`-backed remap/unmap, and page-fault bring-up coverage
   - interrupt CSR alias constraints for `mie` / `mip` / `sie` / `sip`, plus delegation edge behavior around `medeleg` / `mideleg`
   - unmapped instruction/load/store access-fault behavior
   - `mtvec` direct / vectored mode routing
@@ -66,7 +66,7 @@ Additional current planning notes:
 - This C-to-C++ transition must be justified by structural gains such as module boundaries, type safety, state management, ownership clarity, and backend extensibility, not by language preference alone.
 - The initial C++ restructuring is already underway: `Machine` / `Bus` / `Ram`, explicit `Uart16550` / `Clint` device objects, explicit `ElfLoader` / `BinaryLoader` image-loading boundaries, the first `CoreState + CsrFile` split, and a first `TrapController` boundary are now landed and should be treated as current baseline, not future proposal.
 - The immediate next structural step is to continue tightening the platform-side split: preserve `Bus` as the physical CPU-facing access path, deepen device/platform boundaries, and keep shrinking the remaining legacy responsibilities around raw RAM access and image loading.
-- Sv39 virtual memory is now implemented with 3-level page table walk, a minimal TLB, permission checks, and page fault handling. The immediate next functional step is to expand CSR coverage for full supervisor execution and continue broadening the device platform beyond the newly landed minimal PLIC/block-storage path for OS bring-up.
+- Sv39 virtual memory is now implemented with 3-level page table walk, a minimal TLB, permission checks, and page fault handling. On the guest/runtime side, a minimal PMM, guest-side Sv39 page-table builder, S-mode page-fault dispatch, and page-granular text/rodata/data mappings are now landed. The immediate next functional step is fault-driven address-space evolution: move the current demo-local page-fault policy into reusable guest VM/trap layers, tighten range/unmap semantics, and begin preparing a cleaner kernel/user address-space split for OS bring-up.
 - When producing summaries, proposals, or report-style material for this project, describe the current implementation as an already working simulator prototype and the C++ refactor as the next enabling engineering step.
 
 ## Primary direction
@@ -265,7 +265,7 @@ What is already landed in that migration:
 
 - `Machine`, `Bus`, and `Ram` provide the first explicit platform assembly layer
 - `Uart16550`, `Clint`, a first minimal `Plic`, and a host-backed block-oriented `SimpleStorage` device now exist as explicit device objects behind `Bus`
-- A shared MMIO platform contract now exists in code/docs, along with a reusable guest-side platform library, an assembly shim consumed by tests, and a first minimal supervisor demo that exercises storage, supervisor external interrupts, supervisor timer interrupts, registered trap handlers through a unified dispatch path, and a linker-backed bump/page allocator from S-mode
+- A shared MMIO platform contract now exists in code/docs, along with a reusable guest-side platform library, an assembly shim consumed by tests, and a first minimal supervisor demo that exercises storage, supervisor external interrupts, supervisor timer interrupts, registered trap handlers through a unified dispatch path, a linker-backed early allocator plus bitmap-backed physical page manager, and guest-side Sv39 page-table bring-up with `sfence.vma`-backed remap/unmap, page-fault handling, and page-granular kernel mappings from S-mode
 - Image loading now passes through explicit `ElfLoader` / `BinaryLoader` modules, keeping `Ram` focused on backing storage
 - ELF and flat-binary loading now write through explicit `Ram` interfaces rather than reaching into raw `Memory` state from loader code
 - CPU state is no longer just one flat struct; a first `CoreState + CsrFile` boundary now exists
