@@ -2,9 +2,10 @@
 
 #include <stdexcept>
 
-Machine::Machine() : bus_(ram_) {
+Machine::Machine() : uart_(plic_), bus_(ram_) {
     bus_.attach(uart_);
     bus_.attach(clint_);
+    bus_.attach(plic_);
 }
 
 void Machine::load_elf(const std::string& path) {

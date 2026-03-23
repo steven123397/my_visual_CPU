@@ -3,7 +3,9 @@
 namespace {
 
 constexpr uint64_t CAUSE_INT_BIT = 1ULL << 63;
+constexpr uint64_t CAUSE_SUPERVISOR_EXTERNAL_INT = CAUSE_INT_BIT | 9ULL;
 constexpr uint64_t CAUSE_SUPERVISOR_TIMER_INT = CAUSE_INT_BIT | 5ULL;
+constexpr uint64_t CAUSE_MACHINE_EXTERNAL_INT = CAUSE_INT_BIT | 11ULL;
 constexpr uint64_t CAUSE_MACHINE_TIMER_INT = CAUSE_INT_BIT | 7ULL;
 
 uint64_t interrupt_cause_code(uint64_t cause) {
@@ -104,7 +106,26 @@ void TrapController::handle_platform_events(const PlatformEvents& events) {
     if (events.timer_interrupt_pending) {
         raise_timer_interrupt();
     }
+    sync_external_interrupts(events);
     service_pending_interrupts();
+}
+
+void TrapController::sync_external_interrupts(const PlatformEvents& events) {
+    uint64_t mip = csr_.read(CSR_MIP, core_);
+
+    if (events.machine_external_interrupt_pending) {
+        mip |= MIE_MEIE;
+    } else {
+        mip &= ~MIE_MEIE;
+    }
+
+    if (events.supervisor_external_interrupt_pending) {
+        mip |= MIE_SEIE;
+    } else {
+        mip &= ~MIE_SEIE;
+    }
+
+    csr_.write(CSR_MIP, mip, core_);
 }
 
 void TrapController::raise_timer_interrupt() {
@@ -123,9 +144,21 @@ void TrapController::service_pending_interrupts() {
     const uint64_t mip = csr_.read(CSR_MIP, core_);
     const uint64_t mideleg = csr_.read(CSR_MIDELEG, core_);
 
+    if ((mie & MIE_MEIE) && (mip & MIE_MEIE) && machine_interrupts_enabled(core_, mstatus)) {
+        csr_.write(CSR_MIP, mip & ~MIE_MEIE, core_);
+        enter_interrupt(CAUSE_MACHINE_EXTERNAL_INT);
+        return;
+    }
+
     if ((mie & MIE_MTIE) && (mip & MIE_MTIE) && machine_interrupts_enabled(core_, mstatus)) {
         csr_.write(CSR_MIP, mip & ~MIE_MTIE, core_);
         enter_interrupt(CAUSE_MACHINE_TIMER_INT);
+        return;
+    }
+
+    if ((mideleg & MIE_SEIE) && (mie & MIE_SEIE) && (mip & MIE_SEIE) && supervisor_interrupts_enabled(core_, mstatus)) {
+        csr_.write(CSR_MIP, mip & ~MIE_SEIE, core_);
+        enter_interrupt(CAUSE_SUPERVISOR_EXTERNAL_INT);
         return;
     }
 

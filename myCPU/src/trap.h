@@ -20,6 +20,7 @@ public:
 
 private:
     void enter_trap(uint64_t cause, uint64_t tval);
+    void sync_external_interrupts(const PlatformEvents& events);
 
     CoreState& core_;
     CsrFile& csr_;

@@ -6,6 +6,7 @@
 #include "../cpu.h"
 
 #include "../devices/clint.h"
+#include "../devices/plic.h"
 #include "../devices/uart16550.h"
 #include "../loader/binary_loader.h"
 #include "../loader/elf_loader.h"
@@ -23,6 +24,7 @@ public:
 private:
     CPU cpu_{};
     Ram ram_;
+    Plic plic_;
     Uart16550 uart_;
     Clint clint_;
     ElfLoader elf_loader_;
