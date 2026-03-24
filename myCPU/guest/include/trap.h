@@ -6,6 +6,8 @@
 
 #define TRAP_MAX_INTERRUPT_CAUSE 16U
 #define TRAP_MAX_EXCEPTION_CAUSE 16U
+#define TRAP_USER_RUNTIME_STACK_ALIGNMENT 16U
+#define TRAP_USER_RUNTIME_MIN_STACK_SIZE 256U
 
 typedef struct VmProcess vm_process_t;
 typedef struct TrapUserRuntime trap_user_runtime_t;
@@ -25,9 +27,6 @@ typedef bool (*trap_user_runtime_validate_t)(const trap_user_runtime_t* user_run
 typedef void (*trap_supervisor_external_post_handler_t)(uint64_t cause,
                                                         uint32_t source_id,
                                                         void* context);
-typedef void (*trap_user_enter_fn_t)(uintptr_t entry,
-                                     uintptr_t arg0,
-                                     uintptr_t user_sp);
 
 typedef struct TrapInterruptHandlerEntry {
     trap_interrupt_handler_t handler;
@@ -65,7 +64,14 @@ typedef struct TrapUserTimerSignal {
     bool delivered;
 } trap_user_timer_signal_t;
 
+typedef struct TrapUserArchState {
+    uintptr_t saved_supervisor_sp;
+    uintptr_t supervisor_trap_stack_top;
+    size_t supervisor_trap_stack_size;
+} trap_user_arch_state_t;
+
 typedef struct TrapUserRuntime {
+    trap_user_arch_state_t arch_state;
     struct TrapContext* trap_context;
     vm_process_t* process;
     uintptr_t arg0;
@@ -89,14 +95,18 @@ void trap_user_runtime_init(trap_user_runtime_t* user_runtime);
 bool trap_context_activate(trap_context_t* trap_context);
 bool trap_context_is_active(const trap_context_t* trap_context);
 trap_context_t* trap_active_context(void);
+trap_user_runtime_t* trap_active_user_runtime(void);
 bool trap_user_runtime_bind(trap_user_runtime_t* user_runtime,
                             trap_context_t* trap_context,
                             vm_process_t* process,
                             uintptr_t arg0);
+bool trap_user_runtime_configure_supervisor_trap_stack(
+    trap_user_runtime_t* user_runtime,
+    void* trap_stack_base,
+    size_t trap_stack_size);
 bool trap_user_runtime_configure_ecall_resume(
     trap_user_runtime_t* user_runtime,
     uintptr_t expected_ecall_pc,
-    uintptr_t resume_pc,
     trap_user_runtime_validate_t validate,
     void* validate_context);
 bool trap_user_runtime_arm_timer_signal(trap_user_runtime_t* user_runtime,
@@ -107,8 +117,7 @@ bool trap_user_runtime_timer_signal_delivered(
     const trap_user_runtime_t* user_runtime);
 bool trap_user_runtime_activate(trap_user_runtime_t* user_runtime);
 bool trap_user_runtime_is_active(const trap_user_runtime_t* user_runtime);
-bool trap_user_runtime_enter(const trap_user_runtime_t* user_runtime,
-                             trap_user_enter_fn_t enter_user);
+bool trap_user_runtime_enter(const trap_user_runtime_t* user_runtime);
 bool trap_context_bind_supervisor_timer_user_runtime(
     trap_context_t* trap_context,
     trap_user_runtime_t* user_runtime);

@@ -17,8 +17,6 @@ static const uint32_t rodata_marker = 0xCAFEBABEU;
 static const uint32_t user_data_marker = 0x5A5A1234U;
 static const uint32_t user_timer_marker = 1U;
 
-extern void riscv_enter_user_mode(uintptr_t entry, uintptr_t arg0, uintptr_t user_sp);
-extern void supervisor_resume_after_user(void);
 extern char user_test_entry[];
 extern char user_test_ecall[];
 
@@ -135,6 +133,7 @@ void kernel_main(void) {
     uint32_t* remap_page = NULL;
     uint32_t* nx_page = NULL;
     uint32_t* user_stack_page = NULL;
+    uint8_t* user_trap_stack_page = NULL;
     size_t lifecycle_free_before = 0;
     uint8_t* storage_buffer = NULL;
     uint8_t* storage_page = NULL;
@@ -318,13 +317,17 @@ void kernel_main(void) {
     remap_page = (uint32_t*)pmm_alloc_page();
     nx_page = (uint32_t*)pmm_alloc_page();
     user_stack_page = (uint32_t*)pmm_alloc_page();
+    user_trap_stack_page = (uint8_t*)pmm_alloc_page();
     demo_trap_state.user_data_page = remap_page;
     if (backing_page == NULL ||
         remap_page == NULL ||
         nx_page == NULL ||
         user_stack_page == NULL ||
-        pmm_free_pages() + 4U != pmm_total_pages() ||
-        pmm_used_pages() != 4U ||
+        user_trap_stack_page == NULL ||
+        (((uintptr_t)user_trap_stack_page) &
+         (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) != 0 ||
+        pmm_free_pages() + 5U != pmm_total_pages() ||
+        pmm_used_pages() != 5U ||
         !vm_address_space_create(&user_address_space) ||
         user_address_space == NULL ||
         !vm_process_create(&user_process, user_address_space) ||
@@ -475,10 +478,13 @@ void kernel_main(void) {
                                 &supervisor_trap_context,
                                 &user_process,
                                 alias_vaddr) ||
+        !trap_user_runtime_configure_supervisor_trap_stack(
+            &user_runtime,
+            user_trap_stack_page,
+            MEMORY_PAGE_SIZE) ||
         !trap_user_runtime_configure_ecall_resume(
             &user_runtime,
             user_ecall_va,
-            (uintptr_t)supervisor_resume_after_user,
             user_ecall_validate,
             &demo_trap_state) ||
         !trap_context_bind_supervisor_timer_user_runtime(
@@ -570,7 +576,7 @@ void kernel_main(void) {
     }
     timer_schedule_delta(8);
     demo_trap_state.user_ecall_seen = 0;
-    if (!trap_user_runtime_enter(&user_runtime, riscv_enter_user_mode)) {
+    if (!trap_user_runtime_enter(&user_runtime)) {
         panic_shutdown();
     }
     if (!demo_trap_state.user_ecall_seen ||

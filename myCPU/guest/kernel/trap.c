@@ -10,6 +10,14 @@
 #include "timer.h"
 #include "vm.h"
 
+extern void trap_user_runtime_arch_enter(trap_user_runtime_t* user_runtime,
+                                         uintptr_t entry,
+                                         uintptr_t arg0,
+                                         uintptr_t user_sp);
+extern void trap_user_runtime_arch_resume(void);
+
+static trap_user_runtime_t* active_user_runtime = NULL;
+
 static bool is_page_fault_cause(uint64_t cause) {
     return cause == RISCV_EXC_INSN_PAGE_FAULT ||
            cause == RISCV_EXC_LOAD_PAGE_FAULT ||
@@ -28,6 +36,22 @@ static bool user_runtime_timer_signal_valid(
            user_runtime->timer_signal.page != NULL &&
            user_runtime->timer_signal.word_index <
                (MEMORY_PAGE_SIZE / sizeof(uint32_t));
+}
+
+static bool user_runtime_stack_valid(const trap_user_runtime_t* user_runtime) {
+    const uintptr_t stack_top =
+        user_runtime != NULL ? user_runtime->arch_state.supervisor_trap_stack_top : 0;
+    const size_t stack_size =
+        user_runtime != NULL ? user_runtime->arch_state.supervisor_trap_stack_size : 0;
+    const uintptr_t stack_base =
+        stack_top >= (uintptr_t)stack_size ? stack_top - (uintptr_t)stack_size : 0;
+
+    return user_runtime != NULL &&
+           stack_top != 0 &&
+           stack_size >= TRAP_USER_RUNTIME_MIN_STACK_SIZE &&
+           (stack_base & (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) == 0 &&
+           (stack_size & (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) == 0 &&
+           (stack_top & (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) == 0;
 }
 
 static bool handle_user_timer_signal(trap_context_t* trap_context) {
@@ -107,6 +131,7 @@ static void default_user_ecall_resume_handler(uint64_t cause,
     user_runtime = trap_context->user_ecall_policy.user_runtime;
     if (user_runtime != NULL) {
         if (!user_runtime_valid(user_runtime) ||
+            trap_active_user_runtime() != user_runtime ||
             user_runtime->trap_context != trap_context ||
             user_runtime->expected_ecall_pc == 0 ||
             epc != user_runtime->expected_ecall_pc ||
@@ -174,6 +199,13 @@ void trap_user_runtime_init(trap_user_runtime_t* user_runtime) {
         return;
     }
 
+    if (active_user_runtime == user_runtime) {
+        active_user_runtime = NULL;
+    }
+
+    user_runtime->arch_state.saved_supervisor_sp = 0;
+    user_runtime->arch_state.supervisor_trap_stack_top = 0;
+    user_runtime->arch_state.supervisor_trap_stack_size = 0;
     user_runtime->trap_context = NULL;
     user_runtime->process = NULL;
     user_runtime->arg0 = 0;
@@ -193,6 +225,11 @@ bool trap_context_activate(trap_context_t* trap_context) {
         return false;
     }
 
+    if (active_user_runtime != NULL &&
+        active_user_runtime->trap_context != trap_context) {
+        active_user_runtime = NULL;
+    }
+
     runtime_context_activate_trap_context(trap_context);
     return true;
 }
@@ -203,6 +240,10 @@ bool trap_context_is_active(const trap_context_t* trap_context) {
 
 trap_context_t* trap_active_context(void) {
     return runtime_context_active_trap_context();
+}
+
+trap_user_runtime_t* trap_active_user_runtime(void) {
+    return active_user_runtime;
 }
 
 bool trap_user_runtime_bind(trap_user_runtime_t* user_runtime,
@@ -220,19 +261,38 @@ bool trap_user_runtime_bind(trap_user_runtime_t* user_runtime,
     return true;
 }
 
+bool trap_user_runtime_configure_supervisor_trap_stack(
+    trap_user_runtime_t* user_runtime,
+    void* trap_stack_base,
+    size_t trap_stack_size) {
+    const uintptr_t stack_base = (uintptr_t)trap_stack_base;
+
+    if (!user_runtime_valid(user_runtime) || trap_stack_base == NULL ||
+        trap_stack_size < TRAP_USER_RUNTIME_MIN_STACK_SIZE ||
+        (stack_base & (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) != 0 ||
+        (trap_stack_size & (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) != 0 ||
+        stack_base > UINTPTR_MAX - (uintptr_t)trap_stack_size) {
+        return false;
+    }
+
+    user_runtime->arch_state.saved_supervisor_sp = 0;
+    user_runtime->arch_state.supervisor_trap_stack_top =
+        stack_base + (uintptr_t)trap_stack_size;
+    user_runtime->arch_state.supervisor_trap_stack_size = trap_stack_size;
+    return true;
+}
+
 bool trap_user_runtime_configure_ecall_resume(
     trap_user_runtime_t* user_runtime,
     uintptr_t expected_ecall_pc,
-    uintptr_t resume_pc,
     trap_user_runtime_validate_t validate,
     void* validate_context) {
-    if (!user_runtime_valid(user_runtime) || expected_ecall_pc == 0 ||
-        resume_pc == 0) {
+    if (!user_runtime_valid(user_runtime) || expected_ecall_pc == 0) {
         return false;
     }
 
     user_runtime->expected_ecall_pc = expected_ecall_pc;
-    user_runtime->resume_pc = resume_pc;
+    user_runtime->resume_pc = (uintptr_t)trap_user_runtime_arch_resume;
     user_runtime->validate = validate;
     user_runtime->validate_context = validate_context;
     return true;
@@ -262,6 +322,7 @@ bool trap_user_runtime_timer_signal_delivered(
 
 bool trap_user_runtime_activate(trap_user_runtime_t* user_runtime) {
     if (!user_runtime_valid(user_runtime) ||
+        !user_runtime_stack_valid(user_runtime) ||
         !vm_process_is_runnable(user_runtime->process)) {
         return false;
     }
@@ -270,24 +331,31 @@ bool trap_user_runtime_activate(trap_user_runtime_t* user_runtime) {
         return false;
     }
 
-    return trap_context_activate(user_runtime->trap_context);
+    if (!trap_context_activate(user_runtime->trap_context)) {
+        return false;
+    }
+
+    active_user_runtime = user_runtime;
+    return true;
 }
 
 bool trap_user_runtime_is_active(const trap_user_runtime_t* user_runtime) {
     return user_runtime_valid(user_runtime) &&
+           trap_active_user_runtime() == user_runtime &&
            vm_process_is_active(user_runtime->process) &&
            trap_context_is_active(user_runtime->trap_context);
 }
 
-bool trap_user_runtime_enter(const trap_user_runtime_t* user_runtime,
-                             trap_user_enter_fn_t enter_user) {
-    if (!trap_user_runtime_is_active(user_runtime) || enter_user == NULL) {
+bool trap_user_runtime_enter(const trap_user_runtime_t* user_runtime) {
+    if (!trap_user_runtime_is_active(user_runtime) ||
+        !user_runtime_stack_valid(user_runtime)) {
         return false;
     }
 
-    enter_user(user_runtime->process->entry_pc,
-               user_runtime->arg0,
-               user_runtime->process->user_sp);
+    trap_user_runtime_arch_enter((trap_user_runtime_t*)user_runtime,
+                                 user_runtime->process->entry_pc,
+                                 user_runtime->arg0,
+                                 user_runtime->process->user_sp);
     return true;
 }
 

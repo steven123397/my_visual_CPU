@@ -34,29 +34,6 @@ supervisor_entry:
     li   a0, 0
     call platform_shutdown
 
-.global riscv_enter_user_mode
-.global supervisor_resume_after_user
-riscv_enter_user_mode:
-    mv   t0, a0
-    lla  t1, supervisor_saved_sp
-    sd   sp, 0(t1)
-    mv   a0, a1
-    mv   sp, a2
-    lla  t1, supervisor_trap_stack_top
-    csrw sscratch, t1
-    li   t1, (1 << 8)
-    csrc sstatus, t1
-    li   t1, (1 << 5)
-    csrs sstatus, t1
-    csrw sepc, t0
-    sret
-
-supervisor_resume_after_user:
-    lla  t0, supervisor_saved_sp
-    ld   sp, 0(t0)
-    csrw sscratch, zero
-    ret
-
 supervisor_trap:
     csrrw sp, sscratch, sp
     bnez sp, 1f
@@ -177,11 +154,6 @@ user_test_fail:
 
 .section .bss
 .balign 16
-supervisor_saved_sp:
-    .dword 0
-supervisor_trap_stack:
-    .space 4096
-supervisor_trap_stack_top:
 boot_stack:
     .space 4096
 boot_stack_top:
