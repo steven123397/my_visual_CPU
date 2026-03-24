@@ -27,6 +27,7 @@
 #define VM_USER_VADDR_LIMIT ((uintptr_t)MEM_BASE)
 #define VM_KERNEL_VADDR_BASE ((uintptr_t)MEM_BASE)
 #define VM_KERNEL_VADDR_LIMIT ((uintptr_t)MEM_BASE + (uintptr_t)MEM_SIZE)
+#define VM_OBJECT_ANON_PAGE_SLOTS (MEMORY_PAGE_SIZE / sizeof(uintptr_t))
 
 struct VmFaultRange {
     bool valid;
@@ -170,8 +171,8 @@ static void zero_page(void* page) {
     }
 }
 
-static uint64_t* alloc_table_page(void) {
-    uint64_t* page = (uint64_t*)pmm_alloc_page();
+static void* alloc_zeroed_page(void) {
+    void* page = pmm_alloc_page();
 
     if (page == NULL) {
         return NULL;
@@ -179,6 +180,10 @@ static uint64_t* alloc_table_page(void) {
 
     zero_page(page);
     return page;
+}
+
+static uint64_t* alloc_table_page(void) {
+    return (uint64_t*)alloc_zeroed_page();
 }
 
 static uint64_t* lookup_level0_slot(vm_address_space_t* address_space,
@@ -338,22 +343,130 @@ static bool user_region_descriptor_valid(const vm_user_region_t* region) {
            vm_range_is_user(region->vaddr, region->size);
 }
 
-static bool object_descriptor_valid(const vm_object_t* object) {
-    return object != NULL && object->initialized &&
-           object->size != 0 &&
-           (object->size & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           (object->paddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           !range_overflows(object->paddr, object->size);
+static size_t object_page_count(size_t size) {
+    return size / MEMORY_PAGE_SIZE;
 }
 
-static bool region_object_compatible(const vm_user_region_t* region,
-                                     const vm_object_t* object) {
-    if (!user_region_descriptor_valid(region) || !object_descriptor_valid(object) ||
-        object->size < region->size) {
+static bool physical_object_descriptor_valid(const vm_object_t* object) {
+    return (object->backing.physical.base_paddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           !range_overflows(object->backing.physical.base_paddr, object->size);
+}
+
+static bool anon_object_descriptor_valid(const vm_object_t* object) {
+    const size_t expected_page_count = object_page_count(object->size);
+
+    return expected_page_count != 0 &&
+           expected_page_count <= VM_OBJECT_ANON_PAGE_SLOTS &&
+           object->backing.anon.page_slots != NULL &&
+           object->backing.anon.page_count == expected_page_count &&
+           (((uintptr_t)object->backing.anon.page_slots) &
+            (MEMORY_PAGE_SIZE - 1U)) == 0;
+}
+
+static bool object_descriptor_valid(const vm_object_t* object) {
+    if (object == NULL || !object->initialized || object->size == 0 ||
+        (object->size & (MEMORY_PAGE_SIZE - 1U)) != 0) {
         return false;
     }
 
-    return mapped_range_args_valid(region->vaddr, object->paddr, region->size);
+    switch (object->backing_kind) {
+    case VM_OBJECT_BACKING_PHYSICAL:
+        return physical_object_descriptor_valid(object);
+    case VM_OBJECT_BACKING_ANON:
+        return anon_object_descriptor_valid(object);
+    default:
+        return false;
+    }
+}
+
+static bool object_range_compatible(const vm_object_t* object,
+                                    size_t object_offset,
+                                    size_t size) {
+    return object_descriptor_valid(object) &&
+           page_span_args_valid(object_offset, size) &&
+           range_within_window(object_offset, size, 0, object->size);
+}
+
+static void clear_object_descriptor(vm_object_t* object) {
+    if (object == NULL) {
+        return;
+    }
+
+    object->initialized = false;
+    object->backing_kind = VM_OBJECT_BACKING_NONE;
+    object->size = 0;
+    object->attachment_count = 0;
+    object->backing.anon.page_slots = NULL;
+    object->backing.anon.page_count = 0;
+}
+
+static bool object_resolve_page(vm_object_t* object,
+                                size_t offset,
+                                bool create,
+                                uintptr_t* out_paddr) {
+    size_t page_index = 0;
+    void* page = NULL;
+
+    if (!object_descriptor_valid(object) || out_paddr == NULL ||
+        offset >= object->size ||
+        (offset & (MEMORY_PAGE_SIZE - 1U)) != 0) {
+        return false;
+    }
+
+    switch (object->backing_kind) {
+    case VM_OBJECT_BACKING_PHYSICAL:
+        *out_paddr = object->backing.physical.base_paddr + (uintptr_t)offset;
+        return true;
+    case VM_OBJECT_BACKING_ANON:
+        page_index = offset / MEMORY_PAGE_SIZE;
+        if (page_index >= object->backing.anon.page_count) {
+            return false;
+        }
+
+        if (object->backing.anon.page_slots[page_index] == 0) {
+            if (!create) {
+                return false;
+            }
+
+            page = alloc_zeroed_page();
+            if (page == NULL) {
+                return false;
+            }
+
+            object->backing.anon.page_slots[page_index] = (uintptr_t)page;
+        }
+
+        if ((object->backing.anon.page_slots[page_index] &
+             (MEMORY_PAGE_SIZE - 1U)) != 0) {
+            return false;
+        }
+
+        *out_paddr = object->backing.anon.page_slots[page_index];
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool region_object_compatible(const vm_user_region_t* region,
+                                     const vm_object_t* object,
+                                     size_t object_offset) {
+    if (!user_region_descriptor_valid(region) ||
+        !object_range_compatible(object, object_offset, region->size)) {
+        return false;
+    }
+
+    switch (object->backing_kind) {
+    case VM_OBJECT_BACKING_PHYSICAL:
+        return mapped_range_args_valid(region->vaddr,
+                                       object->backing.physical.base_paddr +
+                                           (uintptr_t)object_offset,
+                                       region->size);
+    case VM_OBJECT_BACKING_ANON:
+        return true;
+    default:
+        return false;
+    }
 }
 
 static bool range_overlaps_user_regions(const vm_address_space_t* address_space,
@@ -516,6 +629,7 @@ static bool register_user_region(vm_address_space_t* address_space,
     region->address_space = address_space;
     region->registered = true;
     region->object = NULL;
+    region->object_offset = 0;
     region->object_mode = VM_REGION_OBJECT_NONE;
     *slot = region;
     return true;
@@ -551,6 +665,17 @@ static const vm_user_region_t* find_process_region_containing(
     }
 
     return NULL;
+}
+
+static vm_user_region_t* find_mutable_process_region_containing(
+    vm_process_t* process,
+    uintptr_t vaddr,
+    size_t size,
+    uint64_t required_flags) {
+    return (vm_user_region_t*)find_process_region_containing(process,
+                                                             vaddr,
+                                                             size,
+                                                             required_flags);
 }
 
 static bool region_contains_vaddr(const vm_user_region_t* region, uintptr_t vaddr) {
@@ -618,6 +743,7 @@ static void clear_region_descriptor(vm_user_region_t* region) {
     region->flags = 0;
     region->registered = false;
     region->object = NULL;
+    region->object_offset = 0;
     region->object_mode = VM_REGION_OBJECT_NONE;
 }
 
@@ -725,6 +851,47 @@ static bool map_range_pages_internal(vm_address_space_t* address_space,
 
             while (rollback < mapped) {
                 unmap_page_internal(address_space, vaddr + rollback);
+                rollback += MEMORY_PAGE_SIZE;
+            }
+            return false;
+        }
+
+        mapped += MEMORY_PAGE_SIZE;
+        offset += MEMORY_PAGE_SIZE;
+    }
+
+    return true;
+}
+
+static bool map_region_object_pages(vm_user_region_t* region,
+                                    vm_object_t* object,
+                                    size_t object_offset) {
+    size_t offset = 0;
+    size_t mapped = 0;
+    uintptr_t paddr = 0;
+
+    if (!region_object_compatible(region, object, object_offset)) {
+        return false;
+    }
+
+    while (offset < region->size) {
+        if (!can_map_page(region->address_space, region->vaddr + offset)) {
+            return false;
+        }
+        offset += MEMORY_PAGE_SIZE;
+    }
+
+    offset = 0;
+    while (offset < region->size) {
+        if (!object_resolve_page(object, object_offset + offset, true, &paddr) ||
+            !map_page_internal(region->address_space,
+                               region->vaddr + offset,
+                               paddr,
+                               region->flags)) {
+            size_t rollback = 0;
+
+            while (rollback < mapped) {
+                unmap_page_internal(region->address_space, region->vaddr + rollback);
                 rollback += MEMORY_PAGE_SIZE;
             }
             return false;
@@ -1013,6 +1180,7 @@ bool vm_address_space_user_region_init(vm_address_space_t* address_space,
     region->flags = flags;
     region->registered = false;
     region->object = NULL;
+    region->object_offset = 0;
     region->object_mode = VM_REGION_OBJECT_NONE;
 
     return register_user_region(address_space, region);
@@ -1262,6 +1430,173 @@ bool vm_process_user_region_init(vm_process_t* process,
     return true;
 }
 
+static bool process_bind_object_region(vm_process_t* process,
+                                       vm_user_region_t* region,
+                                       uintptr_t vaddr,
+                                       size_t size,
+                                       uint64_t flags,
+                                       vm_object_t* object,
+                                       size_t object_offset,
+                                       bool map_now) {
+    bool ok = false;
+
+    if (process == NULL || region == NULL || object == NULL ||
+        !vm_process_user_region_init(process, region, vaddr, size, flags)) {
+        return false;
+    }
+
+    if (map_now) {
+        ok = vm_user_region_map_object_at(region, object, object_offset);
+    } else {
+        ok = vm_user_region_set_fault_object_at(region, object, object_offset);
+    }
+
+    if (ok) {
+        return true;
+    }
+
+    if (!vm_process_remove_user_region(process, region)) {
+        return false;
+    }
+
+    return false;
+}
+
+bool vm_process_bind_user_regions(
+    vm_process_t* process,
+    const vm_process_user_region_binding_t* bindings,
+    size_t binding_count) {
+    vm_user_region_t* bound_regions[VM_PROCESS_MAX_USER_REGIONS];
+    size_t i = 0;
+    size_t bound_count = 0;
+    bool ok = false;
+
+    if (process == NULL ||
+        (binding_count != 0 && bindings == NULL) ||
+        binding_count > VM_PROCESS_MAX_USER_REGIONS) {
+        return false;
+    }
+
+    while (i < binding_count) {
+        const vm_process_user_region_binding_t* binding = &bindings[i];
+
+        if (binding->region == NULL || binding->object == NULL) {
+            ok = false;
+            break;
+        }
+
+        switch (binding->object_mode) {
+        case VM_REGION_OBJECT_MAPPED:
+            ok = process_bind_object_region(process,
+                                            binding->region,
+                                            binding->vaddr,
+                                            binding->size,
+                                            binding->flags,
+                                            binding->object,
+                                            binding->object_offset,
+                                            true);
+            break;
+        case VM_REGION_OBJECT_FAULT:
+            ok = process_bind_object_region(process,
+                                            binding->region,
+                                            binding->vaddr,
+                                            binding->size,
+                                            binding->flags,
+                                            binding->object,
+                                            binding->object_offset,
+                                            false);
+            break;
+        default:
+            ok = false;
+            break;
+        }
+
+        if (!ok) {
+            break;
+        }
+
+        bound_regions[bound_count++] = binding->region;
+        ++i;
+    }
+
+    if (i == binding_count) {
+        return true;
+    }
+
+    while (bound_count > 0) {
+        bound_count -= 1;
+        if (!vm_process_remove_user_region(process, bound_regions[bound_count])) {
+            return false;
+        }
+    }
+
+    return false;
+}
+
+bool vm_process_map_object_region_at(vm_process_t* process,
+                                     vm_user_region_t* region,
+                                     uintptr_t vaddr,
+                                     size_t size,
+                                     uint64_t flags,
+                                     vm_object_t* object,
+                                     size_t object_offset) {
+    return process_bind_object_region(process,
+                                      region,
+                                      vaddr,
+                                      size,
+                                      flags,
+                                      object,
+                                      object_offset,
+                                      true);
+}
+
+bool vm_process_map_object_region(vm_process_t* process,
+                                  vm_user_region_t* region,
+                                  uintptr_t vaddr,
+                                  size_t size,
+                                  uint64_t flags,
+                                  vm_object_t* object) {
+    return vm_process_map_object_region_at(process,
+                                           region,
+                                           vaddr,
+                                           size,
+                                           flags,
+                                           object,
+                                           0);
+}
+
+bool vm_process_set_fault_object_region_at(vm_process_t* process,
+                                           vm_user_region_t* region,
+                                           uintptr_t vaddr,
+                                           size_t size,
+                                           uint64_t flags,
+                                           vm_object_t* object,
+                                           size_t object_offset) {
+    return process_bind_object_region(process,
+                                      region,
+                                      vaddr,
+                                      size,
+                                      flags,
+                                      object,
+                                      object_offset,
+                                      false);
+}
+
+bool vm_process_set_fault_object_region(vm_process_t* process,
+                                        vm_user_region_t* region,
+                                        uintptr_t vaddr,
+                                        size_t size,
+                                        uint64_t flags,
+                                        vm_object_t* object) {
+    return vm_process_set_fault_object_region_at(process,
+                                                 region,
+                                                 vaddr,
+                                                 size,
+                                                 flags,
+                                                 object,
+                                                 0);
+}
+
 bool vm_process_set_user_context(vm_process_t* process,
                                  uintptr_t entry_pc,
                                  uintptr_t user_sp) {
@@ -1299,18 +1634,55 @@ bool vm_process_is_runnable(const vm_process_t* process) {
                                           VM_PAGE_WRITE | VM_PAGE_USER) != NULL;
 }
 
-void vm_object_reset(vm_object_t* object) {
+bool vm_object_reset(vm_object_t* object) {
+    size_t i = 0;
+
     if (object == NULL) {
-        return;
+        return false;
     }
 
-    object->initialized = false;
-    object->paddr = 0;
-    object->size = 0;
+    if (!object->initialized) {
+        clear_object_descriptor(object);
+        return true;
+    }
+
+    if (!object_descriptor_valid(object) || object->attachment_count != 0) {
+        return false;
+    }
+
+    switch (object->backing_kind) {
+    case VM_OBJECT_BACKING_PHYSICAL:
+        clear_object_descriptor(object);
+        return true;
+    case VM_OBJECT_BACKING_ANON:
+        for (i = 0; i < object->backing.anon.page_count; ++i) {
+            const uintptr_t page = object->backing.anon.page_slots[i];
+
+            if (page == 0) {
+                continue;
+            }
+
+            if (!pmm_free_page((void*)page)) {
+                return false;
+            }
+
+            object->backing.anon.page_slots[i] = 0;
+        }
+
+        if (!pmm_free_page(object->backing.anon.page_slots)) {
+            return false;
+        }
+
+        clear_object_descriptor(object);
+        return true;
+    default:
+        return false;
+    }
 }
 
 bool vm_object_init_physical(vm_object_t* object, uintptr_t paddr, size_t size) {
-    if (object == NULL || object->initialized || size == 0 ||
+    if (object == NULL || object->initialized || object->attachment_count != 0 ||
+        size == 0 ||
         (size & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
         (paddr & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
         !span_args_valid(paddr, size)) {
@@ -1318,19 +1690,57 @@ bool vm_object_init_physical(vm_object_t* object, uintptr_t paddr, size_t size) 
     }
 
     object->initialized = true;
-    object->paddr = paddr;
+    object->backing_kind = VM_OBJECT_BACKING_PHYSICAL;
     object->size = size;
+    object->attachment_count = 0;
+    object->backing.physical.base_paddr = paddr;
+    return true;
+}
+
+bool vm_object_init_anon(vm_object_t* object, size_t size) {
+    uintptr_t* page_slots = NULL;
+    const size_t page_count = object_page_count(size);
+
+    if (object == NULL || object->initialized || object->attachment_count != 0 ||
+        size == 0 ||
+        (size & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
+        page_count == 0 ||
+        page_count > VM_OBJECT_ANON_PAGE_SLOTS) {
+        return false;
+    }
+
+    page_slots = (uintptr_t*)alloc_zeroed_page();
+    if (page_slots == NULL) {
+        return false;
+    }
+
+    object->initialized = true;
+    object->backing_kind = VM_OBJECT_BACKING_ANON;
+    object->size = size;
+    object->attachment_count = 0;
+    object->backing.anon.page_slots = page_slots;
+    object->backing.anon.page_count = page_count;
     return true;
 }
 
 bool vm_user_region_clear_object(vm_user_region_t* region) {
     bool changed = false;
+    vm_object_t* object = NULL;
 
     if (!clear_region_page_mappings(region, &changed)) {
         return false;
     }
 
+    object = region->object;
+    if (object != NULL) {
+        if (!object_descriptor_valid(object) || object->attachment_count == 0) {
+            return false;
+        }
+        object->attachment_count -= 1;
+    }
+
     region->object = NULL;
+    region->object_offset = 0;
     region->object_mode = VM_REGION_OBJECT_NONE;
     if (changed) {
         flush_tlb_if_enabled();
@@ -1339,35 +1749,58 @@ bool vm_user_region_clear_object(vm_user_region_t* region) {
     return true;
 }
 
-bool vm_user_region_map_object(vm_user_region_t* region, vm_object_t* object) {
-    if (!region_object_compatible(region, object) ||
-        region->object_mode != VM_REGION_OBJECT_NONE) {
+static bool bind_region_object(vm_user_region_t* region,
+                               vm_object_t* object,
+                               size_t object_offset,
+                               vm_region_object_mode_t object_mode) {
+    const bool map_now = object_mode == VM_REGION_OBJECT_MAPPED;
+
+    if (!region_object_compatible(region, object, object_offset) ||
+        region->object != NULL ||
+        region->object_mode != VM_REGION_OBJECT_NONE ||
+        object->attachment_count == (size_t)-1) {
         return false;
     }
 
-    if (!map_range_pages_internal(region->address_space,
-                                  region->vaddr,
-                                  object->paddr,
-                                  region->size,
-                                  region->flags)) {
+    if (map_now &&
+        !map_region_object_pages(region, object, object_offset)) {
         return false;
     }
 
+    object->attachment_count += 1;
     region->object = object;
-    region->object_mode = VM_REGION_OBJECT_MAPPED;
-    flush_tlb_if_enabled();
+    region->object_offset = object_offset;
+    region->object_mode = object_mode;
+    if (map_now) {
+        flush_tlb_if_enabled();
+    }
     return true;
 }
 
-bool vm_user_region_set_fault_object(vm_user_region_t* region, vm_object_t* object) {
-    if (!region_object_compatible(region, object) ||
-        region->object_mode != VM_REGION_OBJECT_NONE) {
-        return false;
-    }
+bool vm_user_region_map_object_at(vm_user_region_t* region,
+                                  vm_object_t* object,
+                                  size_t object_offset) {
+    return bind_region_object(region,
+                              object,
+                              object_offset,
+                              VM_REGION_OBJECT_MAPPED);
+}
 
-    region->object = object;
-    region->object_mode = VM_REGION_OBJECT_FAULT;
-    return true;
+bool vm_user_region_map_object(vm_user_region_t* region, vm_object_t* object) {
+    return vm_user_region_map_object_at(region, object, 0);
+}
+
+bool vm_user_region_set_fault_object_at(vm_user_region_t* region,
+                                        vm_object_t* object,
+                                        size_t object_offset) {
+    return bind_region_object(region,
+                              object,
+                              object_offset,
+                              VM_REGION_OBJECT_FAULT);
+}
+
+bool vm_user_region_set_fault_object(vm_user_region_t* region, vm_object_t* object) {
+    return vm_user_region_set_fault_object_at(region, object, 0);
 }
 
 bool vm_user_region_unmap_page(vm_user_region_t* region, uintptr_t vaddr) {
@@ -1416,17 +1849,18 @@ uintptr_t vm_user_limit(void) {
     return VM_USER_VADDR_LIMIT;
 }
 
-bool vm_handle_page_fault(const vm_process_t* process,
+bool vm_handle_page_fault(vm_process_t* process,
                           vm_address_space_t* address_space,
                           uint64_t cause,
                           uint64_t epc,
                           uint64_t tval) {
-    const vm_user_region_t* user_region = NULL;
+    vm_user_region_t* user_region = NULL;
     const struct VmFaultRange* range = NULL;
     const struct VmFaultActionRule* action = NULL;
     const uintptr_t fault_page = align_down_page((uintptr_t)tval);
     const uintptr_t fault_addr = (uintptr_t)tval;
     uintptr_t offset = 0;
+    uintptr_t paddr = 0;
     uintptr_t resume_pc = 0;
 
     if (address_space == NULL || address_space->root_table == NULL) {
@@ -1434,16 +1868,22 @@ bool vm_handle_page_fault(const vm_process_t* process,
     }
 
     if (process != NULL && process->address_space == address_space) {
-        user_region = find_process_region_containing(process, fault_page, 1U, 0);
+        user_region =
+            find_mutable_process_region_containing(process, fault_page, 1U, 0);
     }
     if (user_region != NULL &&
-        user_region->object_mode == VM_REGION_OBJECT_FAULT &&
+        user_region->object != NULL &&
+        user_region->object_mode != VM_REGION_OBJECT_NONE &&
         object_descriptor_valid(user_region->object) &&
         fault_range_allows_access(user_region->flags, cause)) {
         offset = fault_page - user_region->vaddr;
-        if (!map_page_internal(address_space,
+        if (!object_resolve_page(user_region->object,
+                                 user_region->object_offset + offset,
+                                 true,
+                                 &paddr) ||
+            !map_page_internal(address_space,
                                fault_page,
-                               user_region->object->paddr + offset,
+                               paddr,
                                user_region->flags)) {
             return false;
         }

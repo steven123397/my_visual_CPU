@@ -100,6 +100,31 @@ bool trap_user_runtime_bind(trap_user_runtime_t* user_runtime,
                             trap_context_t* trap_context,
                             vm_process_t* process,
                             uintptr_t arg0);
+bool trap_user_runtime_prepare(trap_user_runtime_t* user_runtime,
+                               trap_context_t* trap_context,
+                               vm_process_t* process,
+                               uintptr_t arg0,
+                               void* trap_stack_base,
+                               size_t trap_stack_size,
+                               uintptr_t expected_ecall_pc,
+                               trap_user_runtime_validate_t validate,
+                               void* validate_context);
+bool trap_user_runtime_prepare_standard(
+    trap_user_runtime_t* user_runtime,
+    trap_context_t* trap_context,
+    vm_process_t* process,
+    uintptr_t entry_pc,
+    uintptr_t user_sp,
+    uintptr_t arg0,
+    void* trap_stack_base,
+    size_t trap_stack_size,
+    uintptr_t expected_ecall_pc,
+    trap_user_runtime_validate_t validate,
+    void* validate_context,
+    trap_interrupt_handler_t supervisor_timer_post_handler,
+    void* supervisor_timer_post_context,
+    trap_supervisor_external_post_handler_t supervisor_external_post_handler,
+    void* supervisor_external_post_context);
 bool trap_user_runtime_configure_supervisor_trap_stack(
     trap_user_runtime_t* user_runtime,
     void* trap_stack_base,
@@ -129,6 +154,13 @@ bool trap_context_install_supervisor_external_policy(
     trap_context_t* trap_context,
     trap_supervisor_external_post_handler_t post_handler,
     void* post_context);
+bool trap_context_install_standard_user_runtime_policies(
+    trap_context_t* trap_context,
+    trap_user_runtime_t* user_runtime,
+    trap_interrupt_handler_t supervisor_timer_post_handler,
+    void* supervisor_timer_post_context,
+    trap_supervisor_external_post_handler_t supervisor_external_post_handler,
+    void* supervisor_external_post_context);
 bool trap_context_install_user_runtime_resume_policy(
     trap_context_t* trap_context,
     trap_user_runtime_t* user_runtime);

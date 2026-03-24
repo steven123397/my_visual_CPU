@@ -261,6 +261,60 @@ bool trap_user_runtime_bind(trap_user_runtime_t* user_runtime,
     return true;
 }
 
+bool trap_user_runtime_prepare(trap_user_runtime_t* user_runtime,
+                               trap_context_t* trap_context,
+                               vm_process_t* process,
+                               uintptr_t arg0,
+                               void* trap_stack_base,
+                               size_t trap_stack_size,
+                               uintptr_t expected_ecall_pc,
+                               trap_user_runtime_validate_t validate,
+                               void* validate_context) {
+    return trap_user_runtime_bind(user_runtime, trap_context, process, arg0) &&
+           trap_user_runtime_configure_supervisor_trap_stack(user_runtime,
+                                                             trap_stack_base,
+                                                             trap_stack_size) &&
+           trap_user_runtime_configure_ecall_resume(user_runtime,
+                                                    expected_ecall_pc,
+                                                    validate,
+                                                    validate_context);
+}
+
+bool trap_user_runtime_prepare_standard(
+    trap_user_runtime_t* user_runtime,
+    trap_context_t* trap_context,
+    vm_process_t* process,
+    uintptr_t entry_pc,
+    uintptr_t user_sp,
+    uintptr_t arg0,
+    void* trap_stack_base,
+    size_t trap_stack_size,
+    uintptr_t expected_ecall_pc,
+    trap_user_runtime_validate_t validate,
+    void* validate_context,
+    trap_interrupt_handler_t supervisor_timer_post_handler,
+    void* supervisor_timer_post_context,
+    trap_supervisor_external_post_handler_t supervisor_external_post_handler,
+    void* supervisor_external_post_context) {
+    return vm_process_set_user_context(process, entry_pc, user_sp) &&
+           trap_user_runtime_prepare(user_runtime,
+                                     trap_context,
+                                     process,
+                                     arg0,
+                                     trap_stack_base,
+                                     trap_stack_size,
+                                     expected_ecall_pc,
+                                     validate,
+                                     validate_context) &&
+           trap_context_install_standard_user_runtime_policies(
+               trap_context,
+               user_runtime,
+               supervisor_timer_post_handler,
+               supervisor_timer_post_context,
+               supervisor_external_post_handler,
+               supervisor_external_post_context);
+}
+
 bool trap_user_runtime_configure_supervisor_trap_stack(
     trap_user_runtime_t* user_runtime,
     void* trap_stack_base,
@@ -403,6 +457,35 @@ bool trap_context_install_supervisor_external_policy(
         RISCV_SUPERVISOR_EXTERNAL_INTERRUPT,
         default_supervisor_external_handler,
         trap_context);
+}
+
+bool trap_context_install_standard_user_runtime_policies(
+    trap_context_t* trap_context,
+    trap_user_runtime_t* user_runtime,
+    trap_interrupt_handler_t supervisor_timer_post_handler,
+    void* supervisor_timer_post_context,
+    trap_supervisor_external_post_handler_t supervisor_external_post_handler,
+    void* supervisor_external_post_context) {
+    if (trap_context == NULL ||
+        !trap_context_install_supervisor_timer_policy(
+            trap_context,
+            supervisor_timer_post_handler,
+            supervisor_timer_post_context) ||
+        !trap_context_install_supervisor_external_policy(
+            trap_context,
+            supervisor_external_post_handler,
+            supervisor_external_post_context)) {
+        return false;
+    }
+
+    if (user_runtime == NULL) {
+        return true;
+    }
+
+    return trap_context_bind_supervisor_timer_user_runtime(trap_context,
+                                                           user_runtime) &&
+           trap_context_install_user_runtime_resume_policy(trap_context,
+                                                           user_runtime);
 }
 
 bool trap_context_install_user_runtime_resume_policy(
