@@ -4,6 +4,7 @@
 #include "pmm.h"
 #include "riscv.h"
 #include "runtime_context.h"
+#include "timer.h"
 
 static void clear_region(vm_user_region_t* region) {
     if (region == NULL) {
@@ -371,6 +372,69 @@ bool user_program_smoke_prepare_runtime(
                                          supervisor_external_post_context) &&
            user_program_is_runnable(smoke->program) &&
            !user_program_smoke_unmap_remap_page(smoke);
+}
+
+bool user_program_smoke_activate_supervisor_access(
+    user_program_smoke_t* smoke,
+    trap_context_t* expected_trap_context) {
+    vm_address_space_t* address_space = NULL;
+    vm_process_t* process = NULL;
+
+    if (!smoke_ready(smoke) || expected_trap_context == NULL) {
+        return false;
+    }
+
+    address_space = user_program_address_space(smoke->program);
+    process = user_program_process(smoke->program);
+    if (address_space == NULL || process == NULL ||
+        !user_program_is_runnable(smoke->program) ||
+        !user_program_activate(smoke->program) ||
+        !user_program_is_active(smoke->program) ||
+        runtime_context_active_process() != process ||
+        runtime_context_active_address_space() != address_space ||
+        trap_active_context() != expected_trap_context ||
+        !vm_address_space_is_active(address_space) ||
+        !vm_address_space_is_enabled(address_space) ||
+        riscv_read_satp() != vm_address_space_satp_value(address_space) ||
+        (riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0) {
+        return false;
+    }
+
+    riscv_set_sstatus_bits(RISCV_SSTATUS_SUM);
+    return (riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0;
+}
+
+bool user_program_smoke_enter_with_timer_signal(user_program_smoke_t* smoke,
+                                                uint32_t* signal_page,
+                                                size_t signal_index,
+                                                uint32_t signal_value,
+                                                uint64_t timer_delta) {
+    trap_user_runtime_t* runtime = NULL;
+
+    if (!smoke_ready(smoke) || signal_page == NULL || timer_delta == 0 ||
+        !user_program_is_active(smoke->program)) {
+        return false;
+    }
+
+    runtime = user_program_runtime(smoke->program);
+    if (runtime == NULL) {
+        return false;
+    }
+
+    riscv_clear_sstatus_bits(RISCV_SSTATUS_SUM);
+    if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0 ||
+        !user_program_unmap_region_base_page(smoke->program,
+                                             USER_PROGRAM_REGION_ALIAS) ||
+        !trap_user_runtime_arm_timer_signal(runtime,
+                                            signal_page,
+                                            signal_index,
+                                            signal_value) ||
+        trap_user_runtime_timer_signal_delivered(runtime)) {
+        return false;
+    }
+
+    timer_schedule_delta(timer_delta);
+    return user_program_enter(smoke->program);
 }
 
 bool user_program_smoke_unmap_remap_page(user_program_smoke_t* smoke) {

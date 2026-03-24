@@ -336,24 +336,11 @@ void kernel_main(void) {
     remap_page[2] = 0U;
     remap_page[3] = 0U;
     nx_page[0] = 0x00008067U;
-    if (!user_program_activate(&user_program)) {
-        panic_shutdown();
-    }
-
-    if (!user_program_is_active(&user_program) ||
+    if (!user_program_smoke_activate_supervisor_access(
+            &user_program_smoke, &supervisor_trap_context) ||
+        !user_program_is_active(&user_program) ||
         runtime_context_active_process() != user_process ||
-        runtime_context_active_address_space() != user_address_space ||
-        trap_active_context() != &supervisor_trap_context ||
-        !vm_address_space_is_active(user_address_space) ||
-        !vm_address_space_is_enabled(user_address_space) ||
-        riscv_read_satp() != vm_address_space_satp_value(user_address_space)) {
-        panic_shutdown();
-    }
-    if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0) {
-        panic_shutdown();
-    }
-    riscv_set_sstatus_bits(RISCV_SSTATUS_SUM);
-    if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) == 0) {
+        runtime_context_active_address_space() != user_address_space) {
         panic_shutdown();
     }
     alias_page = (uint32_t*)user_alias_vaddr;
@@ -413,24 +400,13 @@ void kernel_main(void) {
     if (instruction_fault_resume_pc != 0) {
         panic_shutdown();
     }
-    riscv_clear_sstatus_bits(RISCV_SSTATUS_SUM);
-    if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0) {
-        panic_shutdown();
-    }
-    if (!user_program_unmap_region_base_page(&user_program,
-                                             USER_PROGRAM_REGION_ALIAS)) {
-        panic_shutdown();
-    }
     demo_trap_state.timer_irq_seen = 0;
-    if (!trap_user_runtime_arm_timer_signal(user_runtime,
-                                            remap_page,
-                                            3U,
-                                            user_timer_marker)) {
-        panic_shutdown();
-    }
-    timer_schedule_delta(8);
     demo_trap_state.user_ecall_seen = 0;
-    if (!user_program_enter(&user_program)) {
+    if (!user_program_smoke_enter_with_timer_signal(&user_program_smoke,
+                                                    remap_page,
+                                                    3U,
+                                                    user_timer_marker,
+                                                    8U)) {
         panic_shutdown();
     }
     if (!demo_trap_state.user_ecall_seen ||

@@ -38,5 +38,13 @@ bool user_program_smoke_prepare_runtime(
     void* supervisor_timer_post_context,
     trap_supervisor_external_post_handler_t supervisor_external_post_handler,
     void* supervisor_external_post_context);
+bool user_program_smoke_activate_supervisor_access(
+    user_program_smoke_t* smoke,
+    trap_context_t* expected_trap_context);
+bool user_program_smoke_enter_with_timer_signal(user_program_smoke_t* smoke,
+                                                uint32_t* signal_page,
+                                                size_t signal_index,
+                                                uint32_t signal_value,
+                                                uint64_t timer_delta);
 bool user_program_smoke_unmap_remap_page(user_program_smoke_t* smoke);
 bool user_program_smoke_rebind_alias_fault_object(user_program_smoke_t* smoke);
