@@ -53,6 +53,11 @@ bool user_task_destroy(user_task_t* user_task) {
         return false;
     }
 
+    if (user_task_is_active(user_task) &&
+        !trap_user_runtime_deactivate(&user_task->runtime)) {
+        return false;
+    }
+
     address_space = user_task->address_space;
     if (!vm_process_reset(&user_task->process) ||
         !vm_address_space_destroy(address_space)) {

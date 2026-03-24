@@ -27,6 +27,38 @@ typedef struct UserProgramSmokeActivePhase {
     volatile uintptr_t* fault_resume_pc_slot;
 } user_program_smoke_active_phase_t;
 
+typedef struct UserProgramSmokePrepare {
+    trap_context_t* trap_context;
+    uintptr_t backing_page_paddr;
+    uintptr_t user_stack_paddr;
+    uintptr_t remap_page_paddr;
+    uintptr_t fault_skip_vaddr;
+    size_t fault_skip_size;
+    uintptr_t fault_resume_vaddr;
+    size_t fault_resume_size;
+    volatile uintptr_t* fault_resume_pc_slot;
+    uintptr_t arg0;
+    void* trap_stack_base;
+    size_t trap_stack_size;
+    trap_user_runtime_validate_t validate;
+    void* validate_context;
+    trap_interrupt_handler_t supervisor_timer_post_handler;
+    void* supervisor_timer_post_context;
+    trap_supervisor_external_post_handler_t supervisor_external_post_handler;
+    void* supervisor_external_post_context;
+} user_program_smoke_prepare_t;
+
+typedef struct UserProgramSmokeRound {
+    trap_context_t* expected_trap_context;
+    uint32_t* timer_signal_page;
+    size_t timer_signal_index;
+    uint32_t timer_signal_value;
+    uint32_t* external_signal_page;
+    size_t external_signal_index;
+    uint32_t external_signal_value;
+    uint64_t timer_delta;
+} user_program_smoke_round_t;
+
 void user_program_smoke_init(user_program_smoke_t* smoke);
 bool user_program_smoke_plan_standard(user_program_t* program,
                                       uintptr_t exec_symbol,
@@ -36,7 +68,8 @@ bool user_program_smoke_validate_standard_plan(const user_program_t* program,
                                                uintptr_t user_limit);
 bool user_program_smoke_validate_vm_lifecycle(uintptr_t user_region_vaddr,
                                               size_t expected_free_pages);
-bool user_program_smoke_validate_runtime_reprepare(
+bool user_program_smoke_validate_lifecycle(
+    trap_context_t* trap_context,
     uintptr_t exec_symbol,
     uintptr_t ecall_symbol,
     uintptr_t alias_backing_paddr,
@@ -44,29 +77,9 @@ bool user_program_smoke_validate_runtime_reprepare(
     uintptr_t arg0,
     void* trap_stack_base,
     size_t trap_stack_size);
-bool user_program_smoke_validate_created_program(user_program_t* program);
-bool user_program_smoke_prepare_address_space(
-    user_program_smoke_t* smoke,
-    user_program_t* program,
-    uintptr_t backing_page_paddr,
-    uintptr_t remap_page_paddr,
-    uintptr_t fault_skip_vaddr,
-    size_t fault_skip_size,
-    uintptr_t fault_resume_vaddr,
-    size_t fault_resume_size,
-    volatile uintptr_t* fault_resume_pc_slot);
-bool user_program_smoke_prepare_runtime(
-    user_program_smoke_t* smoke,
-    trap_context_t* trap_context,
-    uintptr_t arg0,
-    void* trap_stack_base,
-    size_t trap_stack_size,
-    trap_user_runtime_validate_t validate,
-    void* validate_context,
-    trap_interrupt_handler_t supervisor_timer_post_handler,
-    void* supervisor_timer_post_context,
-    trap_supervisor_external_post_handler_t supervisor_external_post_handler,
-    void* supervisor_external_post_context);
+bool user_program_smoke_prepare_standard(user_program_smoke_t* smoke,
+                                         user_program_t* program,
+                                         const user_program_smoke_prepare_t* prepare);
 bool user_program_smoke_activate_supervisor_access(
     user_program_smoke_t* smoke,
     trap_context_t* expected_trap_context);
@@ -78,19 +91,5 @@ bool user_program_smoke_exercise_active_memory(
     uint32_t* backing_page,
     uint32_t* remap_page,
     const user_program_smoke_active_phase_t* phase);
-bool user_program_smoke_enter_with_interrupt_signals(
-    user_program_smoke_t* smoke,
-    uint32_t* timer_signal_page,
-    size_t timer_signal_index,
-    uint32_t timer_signal_value,
-    uint32_t* external_signal_page,
-    size_t external_signal_index,
-    uint32_t external_signal_value,
-    uint64_t timer_delta);
-bool user_program_smoke_enter_with_timer_signal(user_program_smoke_t* smoke,
-                                                uint32_t* signal_page,
-                                                size_t signal_index,
-                                                uint32_t signal_value,
-                                                uint64_t timer_delta);
-bool user_program_smoke_unmap_remap_page(user_program_smoke_t* smoke);
-bool user_program_smoke_rebind_alias_fault_object(user_program_smoke_t* smoke);
+bool user_program_smoke_enter_round(user_program_smoke_t* smoke,
+                                    const user_program_smoke_round_t* round);
