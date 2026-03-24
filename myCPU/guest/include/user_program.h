@@ -88,6 +88,7 @@ bool user_program_prepare_standard(
     trap_supervisor_external_post_handler_t supervisor_external_post_handler,
     void* supervisor_external_post_context);
 bool user_program_activate(user_program_t* program);
+bool user_program_deactivate(user_program_t* program);
 bool user_program_is_active(const user_program_t* program);
 bool user_program_is_runnable(const user_program_t* program);
 bool user_program_enter(const user_program_t* program);

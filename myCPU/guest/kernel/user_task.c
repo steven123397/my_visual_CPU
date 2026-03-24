@@ -215,6 +215,14 @@ bool user_task_activate(user_task_t* user_task) {
     return trap_user_runtime_activate(&user_task->runtime);
 }
 
+bool user_task_deactivate(user_task_t* user_task) {
+    if (!user_task_created(user_task)) {
+        return false;
+    }
+
+    return trap_user_runtime_deactivate(&user_task->runtime);
+}
+
 bool user_task_is_active(const user_task_t* user_task) {
     return user_task_created(user_task) &&
            trap_user_runtime_is_active(&user_task->runtime);

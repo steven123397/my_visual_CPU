@@ -1,6 +1,7 @@
 #include "user_program_smoke.h"
 
 #include "memory.h"
+#include "platform.h"
 #include "pmm.h"
 #include "riscv.h"
 #include "runtime_context.h"
@@ -39,8 +40,25 @@ static bool invalid_region_state_ok(const vm_user_region_t* region) {
            !region->registered && region->object == NULL;
 }
 
+static bool runtime_policies_bound(const trap_context_t* trap_context,
+                                   const trap_user_runtime_t* user_runtime) {
+    return trap_context != NULL && user_runtime != NULL &&
+           trap_context->supervisor_timer_policy.user_runtime == user_runtime &&
+           trap_context->supervisor_external_policy.user_runtime ==
+               user_runtime &&
+           trap_context->user_ecall_policy.user_runtime == user_runtime;
+}
+
+static bool runtime_policies_cleared(const trap_context_t* trap_context) {
+    return trap_context != NULL &&
+           trap_context->supervisor_timer_policy.user_runtime == NULL &&
+           trap_context->supervisor_external_policy.user_runtime == NULL &&
+           trap_context->user_ecall_policy.user_runtime == NULL;
+}
+
 static bool address_space_ready(const user_program_t* program) {
-    return program != NULL && user_program_address_space((user_program_t*)program) != NULL;
+    return program != NULL &&
+           user_program_address_space((user_program_t*)program) != NULL;
 }
 
 static bool smoke_ready(const user_program_smoke_t* smoke) {
@@ -50,6 +68,27 @@ static bool smoke_ready(const user_program_smoke_t* smoke) {
 }
 
 static bool reject_invalid_region_paths(user_program_smoke_t* smoke);
+
+__attribute__((noinline)) static void provoke_rodata_store_fault(
+    volatile const uint32_t* marker) {
+    volatile uint32_t* marker_ptr = (volatile uint32_t*)(uintptr_t)marker;
+
+    *marker_ptr = 0xDEADBEEFU;
+}
+
+__attribute__((noinline)) static void provoke_instruction_page_fault(
+    uintptr_t target,
+    volatile uintptr_t* fault_resume_pc_slot) {
+    __asm__ volatile(
+        "la t0, 1f\n"
+        "sd t0, 0(%1)\n"
+        "jalr ra, 0(%0)\n"
+        "1:\n"
+        "sd zero, 0(%1)\n"
+        :
+        : "r"(target), "r"(fault_resume_pc_slot)
+        : "t0", "ra", "memory");
+}
 
 static bool reject_invalid_kernel_mapping_paths(user_program_t* program,
                                                 uintptr_t remap_page_paddr) {
@@ -233,6 +272,52 @@ void user_program_smoke_init(user_program_smoke_t* smoke) {
     clear_object(&smoke->remap_object);
 }
 
+bool user_program_smoke_plan_standard(user_program_t* program,
+                                      uintptr_t exec_symbol,
+                                      uintptr_t ecall_symbol) {
+    return program != NULL &&
+           user_program_plan_standard(program, exec_symbol, ecall_symbol);
+}
+
+bool user_program_smoke_validate_standard_plan(const user_program_t* program,
+                                               uintptr_t user_base,
+                                               uintptr_t user_limit) {
+    const uintptr_t user_exec_page_paddr =
+        user_program_value(program, USER_PROGRAM_VALUE_EXEC_PAGE_PADDR);
+    const uintptr_t user_exec_vaddr =
+        user_program_value(program, USER_PROGRAM_VALUE_EXEC_VADDR);
+    const uintptr_t user_stack_vaddr =
+        user_program_value(program, USER_PROGRAM_VALUE_STACK_VADDR);
+    const uintptr_t user_alias_vaddr =
+        user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR);
+    const uintptr_t user_anon_tail_vaddr =
+        user_program_value(program, USER_PROGRAM_VALUE_ANON_TAIL_VADDR);
+    const uintptr_t user_entry_pc =
+        user_program_value(program, USER_PROGRAM_VALUE_ENTRY_PC);
+    const uintptr_t user_expected_ecall_pc =
+        user_program_value(program, USER_PROGRAM_VALUE_EXPECTED_ECALL_PC);
+    const uintptr_t user_sp =
+        user_program_value(program, USER_PROGRAM_VALUE_USER_SP);
+
+    return program != NULL && user_base == 0 &&
+           user_limit == memory_kernel_start() &&
+           user_anon_tail_vaddr < user_limit &&
+           user_stack_vaddr >= user_base && user_stack_vaddr < user_limit &&
+           user_exec_vaddr >= user_base && user_exec_vaddr < user_limit &&
+           user_alias_vaddr >= user_base && user_alias_vaddr < user_limit &&
+           (user_alias_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           (user_anon_tail_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           (user_stack_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           (user_exec_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           user_sp == user_stack_vaddr + MEMORY_PAGE_SIZE &&
+           user_exec_page_paddr >= memory_text_start() &&
+           user_exec_page_paddr < memory_text_end() &&
+           user_entry_pc >= user_exec_vaddr &&
+           user_entry_pc < user_exec_vaddr + MEMORY_PAGE_SIZE &&
+           user_expected_ecall_pc >= user_exec_vaddr &&
+           user_expected_ecall_pc < user_exec_vaddr + MEMORY_PAGE_SIZE;
+}
+
 bool user_program_smoke_validate_vm_lifecycle(uintptr_t user_region_vaddr,
                                               size_t expected_free_pages) {
     const uint64_t user_rw_flags =
@@ -302,6 +387,148 @@ bool user_program_smoke_validate_vm_lifecycle(uintptr_t user_region_vaddr,
            vm_address_space_destroy(recycled_space) &&
            vm_object_reset(&lifecycle_object) &&
            pmm_free_pages() == expected_free_pages;
+}
+
+bool user_program_smoke_validate_runtime_reprepare(
+    uintptr_t exec_symbol,
+    uintptr_t ecall_symbol,
+    uintptr_t alias_backing_paddr,
+    uintptr_t user_stack_paddr,
+    uintptr_t arg0,
+    void* trap_stack_base,
+    size_t trap_stack_size) {
+    user_program_t program;
+    trap_user_runtime_t* runtime = NULL;
+    trap_context_t first_context;
+    trap_context_t second_context;
+    uint32_t* signal_page = (uint32_t*)trap_stack_base;
+    const size_t free_before = pmm_free_pages();
+    bool ok = false;
+    bool created = false;
+
+    if (trap_stack_base == NULL ||
+        trap_stack_size < TRAP_USER_RUNTIME_MIN_STACK_SIZE ||
+        trap_stack_size < (2U * sizeof(uint32_t))) {
+        return false;
+    }
+
+    user_program_init(&program);
+    trap_context_init(&first_context);
+    trap_context_init(&second_context);
+
+    if (!user_program_plan_standard(&program, exec_symbol, ecall_symbol) ||
+        !user_program_create(&program, alias_backing_paddr, user_stack_paddr)) {
+        return false;
+    }
+    created = true;
+    runtime = user_program_runtime(&program);
+    if (runtime == NULL ||
+        !user_program_prepare_standard(&program,
+                                       &first_context,
+                                       arg0,
+                                       trap_stack_base,
+                                       trap_stack_size,
+                                       NULL,
+                                       NULL,
+                                       NULL,
+                                       NULL,
+                                       NULL,
+                                       NULL) ||
+        !user_program_is_runnable(&program) ||
+        runtime->trap_context != &first_context ||
+        runtime->arg0 != arg0 ||
+        !runtime_policies_bound(&first_context, runtime) ||
+        !runtime_policies_cleared(&second_context) ||
+        runtime->timer_signal.armed || runtime->timer_signal.delivered ||
+        runtime->external_signal.armed || runtime->external_signal.delivered ||
+        !trap_user_runtime_arm_timer_signal(runtime, signal_page, 0U, 1U) ||
+        !trap_user_runtime_arm_external_signal(runtime, signal_page, 1U, 2U)) {
+        goto cleanup;
+    }
+
+    runtime->timer_signal.delivered = true;
+    runtime->external_signal.delivered = true;
+    if (!runtime->timer_signal.armed || !runtime->timer_signal.delivered ||
+        !runtime->external_signal.armed ||
+        !runtime->external_signal.delivered ||
+        !user_program_prepare_standard(&program,
+                                       &second_context,
+                                       arg0 + 1U,
+                                       trap_stack_base,
+                                       trap_stack_size,
+                                       NULL,
+                                       NULL,
+                                       NULL,
+                                       NULL,
+                                       NULL,
+                                       NULL) ||
+        runtime->trap_context != &second_context ||
+        runtime->arg0 != arg0 + 1U ||
+        !runtime_policies_cleared(&first_context) ||
+        !runtime_policies_bound(&second_context, runtime) ||
+        runtime->timer_signal.armed || runtime->timer_signal.delivered ||
+        runtime->external_signal.armed || runtime->external_signal.delivered) {
+        goto cleanup;
+    }
+
+    ok = true;
+
+cleanup:
+    if (!created) {
+        return ok;
+    }
+
+    return user_program_destroy(&program) && runtime_policies_cleared(&first_context) &&
+           runtime_policies_cleared(&second_context) &&
+           pmm_free_pages() == free_before && ok;
+}
+
+bool user_program_smoke_validate_created_program(user_program_t* program) {
+    vm_address_space_t* user_address_space = user_program_address_space(program);
+
+    return program != NULL && user_address_space != NULL &&
+           user_program_process(program) != NULL &&
+           user_program_runtime(program) != NULL &&
+           user_program_region(program, USER_PROGRAM_REGION_STACK) != NULL &&
+           user_program_region(program, USER_PROGRAM_REGION_ALIAS) != NULL &&
+           user_program_region(program, USER_PROGRAM_REGION_ANON) != NULL &&
+           user_program_region(program, USER_PROGRAM_REGION_ANON_TAIL) != NULL &&
+           user_program_object(program, USER_PROGRAM_OBJECT_ANON) != NULL &&
+           vm_address_space_root_table(user_address_space) != 0 &&
+           (vm_address_space_root_table(user_address_space) &
+            (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           vm_address_space_satp_value(user_address_space) ==
+               (RISCV_SATP_MODE_SV39 |
+                ((uint64_t)vm_address_space_root_table(user_address_space) >>
+                 12)) &&
+           vm_kernel_base() == memory_kernel_start() &&
+           vm_kernel_limit() == memory_heap_limit() &&
+           !vm_address_space_is_active(user_address_space) &&
+           !vm_range_is_user(memory_text_start(), MEMORY_PAGE_SIZE) &&
+           !vm_range_is_kernel(
+               user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR),
+               MEMORY_PAGE_SIZE) &&
+           vm_range_is_user(
+               user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR),
+               MEMORY_PAGE_SIZE) &&
+           vm_range_is_kernel(memory_text_start(),
+                              memory_text_end() - memory_text_start()) &&
+           user_program_region_contains(
+               program,
+               USER_PROGRAM_REGION_STACK,
+               user_program_value(program, USER_PROGRAM_VALUE_USER_SP) - 16U,
+               16U) &&
+           user_program_region_contains(
+               program,
+               USER_PROGRAM_REGION_ALIAS,
+               user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR),
+               MEMORY_PAGE_SIZE) &&
+           !user_program_region_contains(
+               program,
+               USER_PROGRAM_REGION_ALIAS,
+               user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR) -
+                   MEMORY_PAGE_SIZE,
+               MEMORY_PAGE_SIZE);
 }
 
 bool user_program_smoke_prepare_address_space(
@@ -404,14 +631,161 @@ bool user_program_smoke_activate_supervisor_access(
     return (riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0;
 }
 
+bool user_program_smoke_deactivate_supervisor_only(
+    user_program_smoke_t* smoke,
+    trap_context_t* expected_trap_context) {
+    trap_user_runtime_t* runtime = NULL;
+    vm_address_space_t* address_space = NULL;
+
+    if (!smoke_ready(smoke) || expected_trap_context == NULL ||
+        !user_program_is_active(smoke->program)) {
+        return false;
+    }
+
+    runtime = user_program_runtime(smoke->program);
+    address_space = user_program_address_space(smoke->program);
+    if (runtime == NULL || address_space == NULL ||
+        !user_program_deactivate(smoke->program)) {
+        return false;
+    }
+
+    return !user_program_is_active(smoke->program) &&
+           user_program_is_runnable(smoke->program) &&
+           runtime_context_active_process() == NULL &&
+           runtime_context_active_address_space() == NULL &&
+           trap_active_context() == expected_trap_context &&
+           trap_active_user_runtime() == NULL &&
+           !vm_address_space_is_active(address_space) &&
+           !vm_address_space_is_enabled(address_space) &&
+           riscv_read_satp() == 0 &&
+           (riscv_read_sstatus() & RISCV_SSTATUS_SUM) == 0;
+}
+
+bool user_program_smoke_exercise_active_memory(
+    user_program_smoke_t* smoke,
+    uint32_t* backing_page,
+    uint32_t* remap_page,
+    const user_program_smoke_active_phase_t* phase) {
+    const uintptr_t alias_vaddr = smoke_ready(smoke)
+                                      ? user_program_value(
+                                            smoke->program,
+                                            USER_PROGRAM_VALUE_ALIAS_VADDR)
+                                      : 0;
+    const uintptr_t anon_vaddr = smoke_ready(smoke)
+                                     ? user_program_value(
+                                           smoke->program,
+                                           USER_PROGRAM_VALUE_ANON_VADDR)
+                                     : 0;
+    const uintptr_t anon_tail_vaddr = smoke_ready(smoke)
+                                          ? user_program_value(
+                                                smoke->program,
+                                                USER_PROGRAM_VALUE_ANON_TAIL_VADDR)
+                                          : 0;
+    uint32_t* alias_page = NULL;
+    uint32_t* anon_page = NULL;
+    uint32_t* anon_tail_page = NULL;
+    const uint32_t backing_word0 = backing_page != NULL ? backing_page[0] : 0;
+
+    if (!smoke_ready(smoke) || !user_program_is_active(smoke->program) ||
+        backing_page == NULL || remap_page == NULL || phase == NULL ||
+        phase->rodata_marker == NULL || phase->instruction_fault_target == 0 ||
+        phase->fault_resume_pc_slot == NULL ||
+        (riscv_read_sstatus() & RISCV_SSTATUS_SUM) == 0 ||
+        !vm_range_is_user(alias_vaddr, MEMORY_PAGE_SIZE) ||
+        !vm_range_is_user(anon_vaddr, MEMORY_PAGE_SIZE) ||
+        !vm_range_is_user(anon_tail_vaddr, MEMORY_PAGE_SIZE)) {
+        return false;
+    }
+
+    alias_page = (uint32_t*)alias_vaddr;
+    anon_page = (uint32_t*)anon_vaddr;
+    anon_tail_page = (uint32_t*)anon_tail_vaddr;
+
+    if (alias_page[0] != backing_word0) {
+        return false;
+    }
+
+    alias_page[1] = phase->alias_store_value;
+    if (backing_page[1] != phase->alias_store_value) {
+        return false;
+    }
+
+    backing_page[2] = phase->backing_store_value;
+    if (backing_page[2] != phase->backing_store_value ||
+        *phase->rodata_marker != phase->rodata_expected ||
+        user_program_reset_object(smoke->program, USER_PROGRAM_OBJECT_ANON)) {
+        return false;
+    }
+
+    if (anon_page[0] != 0U || anon_page[1] != 0U || anon_tail_page[0] != 0U ||
+        anon_tail_page[1] != 0U) {
+        return false;
+    }
+
+    anon_page[0] = phase->anon_value0;
+    anon_page[1] = phase->anon_value1;
+    anon_tail_page[0] = phase->anon_tail_value0;
+    anon_tail_page[1] = phase->anon_tail_value1;
+    if (!user_program_unmap_region_base_page(smoke->program,
+                                             USER_PROGRAM_REGION_ANON) ||
+        !user_program_unmap_region_base_page(smoke->program,
+                                             USER_PROGRAM_REGION_ANON_TAIL) ||
+        anon_page[0] != phase->anon_value0 ||
+        anon_page[1] != phase->anon_value1 ||
+        anon_tail_page[0] != phase->anon_tail_value0 ||
+        anon_tail_page[1] != phase->anon_tail_value1) {
+        return false;
+    }
+
+    if (!user_program_smoke_rebind_alias_fault_object(smoke) ||
+        alias_page[0] != remap_page[0] || backing_page[0] != backing_word0) {
+        return false;
+    }
+
+    alias_page[1] = phase->remap_store_value;
+    if (remap_page[1] != phase->remap_store_value ||
+        backing_page[1] != phase->alias_store_value) {
+        return false;
+    }
+
+    provoke_rodata_store_fault(phase->rodata_marker);
+    if (*phase->rodata_marker != phase->rodata_expected) {
+        return false;
+    }
+
+    provoke_instruction_page_fault(phase->instruction_fault_target,
+                                   phase->fault_resume_pc_slot);
+    return *phase->fault_resume_pc_slot == 0;
+}
+
 bool user_program_smoke_enter_with_timer_signal(user_program_smoke_t* smoke,
                                                 uint32_t* signal_page,
                                                 size_t signal_index,
                                                 uint32_t signal_value,
                                                 uint64_t timer_delta) {
-    trap_user_runtime_t* runtime = NULL;
+    return user_program_smoke_enter_with_interrupt_signals(smoke,
+                                                           signal_page,
+                                                           signal_index,
+                                                           signal_value,
+                                                           NULL,
+                                                           0,
+                                                           0,
+                                                           timer_delta);
+}
 
-    if (!smoke_ready(smoke) || signal_page == NULL || timer_delta == 0 ||
+bool user_program_smoke_enter_with_interrupt_signals(
+    user_program_smoke_t* smoke,
+    uint32_t* timer_signal_page,
+    size_t timer_signal_index,
+    uint32_t timer_signal_value,
+    uint32_t* external_signal_page,
+    size_t external_signal_index,
+    uint32_t external_signal_value,
+    uint64_t timer_delta) {
+    trap_user_runtime_t* runtime = NULL;
+    const bool external_signal_enabled = external_signal_page != NULL;
+
+    if (!smoke_ready(smoke) || timer_signal_page == NULL || timer_delta == 0 ||
         !user_program_is_active(smoke->program)) {
         return false;
     }
@@ -422,17 +796,35 @@ bool user_program_smoke_enter_with_timer_signal(user_program_smoke_t* smoke,
     }
 
     riscv_clear_sstatus_bits(RISCV_SSTATUS_SUM);
+    if (external_signal_enabled) {
+        riscv_clear_sstatus_bits(RISCV_SSTATUS_SIE);
+    }
+
     if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0 ||
+        (external_signal_enabled &&
+         (riscv_read_sstatus() & RISCV_SSTATUS_SIE) != 0) ||
         !user_program_unmap_region_base_page(smoke->program,
                                              USER_PROGRAM_REGION_ALIAS) ||
         !trap_user_runtime_arm_timer_signal(runtime,
-                                            signal_page,
-                                            signal_index,
-                                            signal_value) ||
+                                            timer_signal_page,
+                                            timer_signal_index,
+                                            timer_signal_value) ||
         trap_user_runtime_timer_signal_delivered(runtime)) {
         return false;
     }
 
+    if (external_signal_enabled &&
+        (!trap_user_runtime_arm_external_signal(runtime,
+                                               external_signal_page,
+                                               external_signal_index,
+                                               external_signal_value) ||
+         trap_user_runtime_external_signal_delivered(runtime))) {
+        return false;
+    }
+
+    if (external_signal_enabled) {
+        platform_uart_enable_thre_irq();
+    }
     timer_schedule_delta(timer_delta);
     return user_program_enter(smoke->program);
 }

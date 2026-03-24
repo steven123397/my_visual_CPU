@@ -144,7 +144,9 @@ user_test_entry:
     bne  t1, t2, user_test_fail
 1:
     lw   t1, 12(a0)
+    lw   t2, 16(a0)
     beqz t1, 1b
+    beqz t2, 1b
     addi sp, sp, 16
 user_test_ecall:
     ecall

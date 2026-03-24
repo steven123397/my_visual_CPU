@@ -52,17 +52,18 @@ typedef struct TrapUserEcallPolicy {
 } trap_user_ecall_policy_t;
 
 typedef struct TrapSupervisorExternalPolicy {
+    trap_user_runtime_t* user_runtime;
     trap_supervisor_external_post_handler_t post_handler;
     void* post_context;
 } trap_supervisor_external_policy_t;
 
-typedef struct TrapUserTimerSignal {
+typedef struct TrapUserSignal {
     uint32_t* page;
     size_t word_index;
     uint32_t value;
     bool armed;
     bool delivered;
-} trap_user_timer_signal_t;
+} trap_user_signal_t;
 
 typedef struct TrapUserArchState {
     uintptr_t saved_supervisor_sp;
@@ -79,7 +80,8 @@ typedef struct TrapUserRuntime {
     uintptr_t resume_pc;
     trap_user_runtime_validate_t validate;
     void* validate_context;
-    trap_user_timer_signal_t timer_signal;
+    trap_user_signal_t timer_signal;
+    trap_user_signal_t external_signal;
 } trap_user_runtime_t;
 
 typedef struct TrapContext {
@@ -140,10 +142,20 @@ bool trap_user_runtime_arm_timer_signal(trap_user_runtime_t* user_runtime,
                                         uint32_t value);
 bool trap_user_runtime_timer_signal_delivered(
     const trap_user_runtime_t* user_runtime);
+bool trap_user_runtime_arm_external_signal(trap_user_runtime_t* user_runtime,
+                                           uint32_t* page,
+                                           size_t word_index,
+                                           uint32_t value);
+bool trap_user_runtime_external_signal_delivered(
+    const trap_user_runtime_t* user_runtime);
 bool trap_user_runtime_activate(trap_user_runtime_t* user_runtime);
 bool trap_user_runtime_is_active(const trap_user_runtime_t* user_runtime);
+bool trap_user_runtime_deactivate(trap_user_runtime_t* user_runtime);
 bool trap_user_runtime_enter(const trap_user_runtime_t* user_runtime);
 bool trap_context_bind_supervisor_timer_user_runtime(
+    trap_context_t* trap_context,
+    trap_user_runtime_t* user_runtime);
+bool trap_context_bind_supervisor_external_user_runtime(
     trap_context_t* trap_context,
     trap_user_runtime_t* user_runtime);
 bool trap_context_install_supervisor_timer_policy(

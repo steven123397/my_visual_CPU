@@ -245,6 +245,14 @@ bool user_program_activate(user_program_t* program) {
     return user_task_activate(&program->user_task);
 }
 
+bool user_program_deactivate(user_program_t* program) {
+    if (!user_program_created(program)) {
+        return false;
+    }
+
+    return user_task_deactivate(&program->user_task);
+}
+
 bool user_program_is_active(const user_program_t* program) {
     return user_program_created(program) &&
            user_task_is_active((user_task_t*)&program->user_task);

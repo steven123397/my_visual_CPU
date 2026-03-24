@@ -65,6 +65,7 @@ bool user_task_prepare_standard(
     trap_supervisor_external_post_handler_t supervisor_external_post_handler,
     void* supervisor_external_post_context);
 bool user_task_activate(user_task_t* user_task);
+bool user_task_deactivate(user_task_t* user_task);
 bool user_task_is_active(const user_task_t* user_task);
 bool user_task_is_runnable(const user_task_t* user_task);
 bool user_task_enter(const user_task_t* user_task);
