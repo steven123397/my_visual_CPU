@@ -1,156 +1,105 @@
-# Kernel Alpha Bring-up 实现计划
+# Kernel Alpha Bring-up 状态
 
-> **面向 AI 代理的工作者：** 推荐使用 `superpowers:executing-plans` 或 `superpowers:subagent-driven-development` 按任务推进。步骤使用复选框（`- [ ]`）语法跟踪。
+## 文档定位
 
-**目标：** 新增一条独立于 `guest_supervisor_demo` 的 `kernel_alpha_demo` bring-up 路径，完成第一次真正的小 kernel alpha 启动，并把它纳入可回归测试。
+本文档用于记录第一次独立 `kernel_alpha` bring-up 的里程碑定义、当前状态和下一步工作。
 
-**架构：** 保持现有 `supervisor_demo_smoke` 不继续膨胀，在 `guest/` 下新增独立入口 ELF，复用共享的 guest kernel 基础设施。第一次 alpha 里程碑使用独立的 S-mode `kernel_main`、自建 Sv39 内核页表、RAM identity map 加 MMIO fault-range lazy map，验证最小 timer interrupt 路径。
+它现在不再保留早期执行 checklist，只保留仍然有效的状态信息和少量关键历史节点。
 
-**技术栈：** C11、RISC-V assembly、GNU Make、现有 guest runtime / VM / trap 基础设施。
+## 目标
 
----
+新增一条独立于 `guest_supervisor_demo` 的 `kernel_alpha` bring-up 路径，完成第一次真正的小 kernel alpha 启动，并把它纳入稳定回归。
 
-## 里程碑定义
+## 架构约束
 
-第一次真正的小 kernel bring-up 先限定为一个可回归的 alpha 基线，而不是一次性做完整 OS：
+- 保持现有 `supervisor_demo_smoke` 不继续膨胀。
+- 在 `guest/` 下维护独立入口 ELF。
+- 复用共享的 guest kernel 基础设施。
+- 正向 bring-up 只验证第一次真正的小 kernel alpha 所需的最小路径，不一次性做完整 OS。
 
-- 独立的 kernel ELF / entry，不再借 `guest_supervisor_demo` 的 smoke runner 承载。
-- 进入 S-mode 后能输出 boot 标记。
-- 完成 early allocator / PMM 初始化。
-- 创建并启用自己的 Sv39 内核页表。
-- 在开启 VM 后仍能通过 fault-range lazy map 访问 UART / CLINT。
-- 至少观察到一次 supervisor timer interrupt。
-- 失败时保持可观察，默认仍走现有 `panic_shutdown()` 路径。
-- 能被 `make test` 稳定回归。
+## 当前正向里程碑
 
-本轮首个成功标记定义为串行输出 `KMVT`：
+当前正向 bring-up 标记定义为串行输出 `KMVPETDS`：
 
-- `K`：进入独立 kernel 入口。
-- `M`：memory / PMM 初始化完成。
-- `V`：自建页表启用后，UART 在 VM 下可继续输出。
-- `T`：第一次 timer interrupt 已经到达。
+- `K`：进入独立 kernel 入口
+- `M`：memory / PMM 初始化完成
+- `V`：自建页表启用后，内核镜像 / early heap / managed RAM 显式映射已可工作
+- `P`：PLIC 在 VM 下完成最小 supervisor 初始化
+- `E`：UART THRE -> PLIC -> supervisor external interrupt 路径已经到达
+- `T`：第一次 timer interrupt 已经到达
+- `D`：storage metadata / readiness probe 已完成
+- `S`：storage block `LBA 0` 读取和签名校验已经完成
 
-## 文件范围
+当前正向里程碑已经落地，覆盖：
 
-预计涉及：
+- 独立 kernel ELF / entry
+- boot marker
+- early allocator / PMM
+- 自建 Sv39 内核页表
+- 内核镜像 / early heap / managed RAM 显式映射
+- UART / CLINT / PLIC / storage 的 MMIO fault-range lazy map
+- 一次 supervisor external interrupt
+- 一次 supervisor timer interrupt
+- 一次 storage readiness probe
+- 一次 block `LBA 0` 读取
 
-- 创建：`docs/kernel_alpha_bringup_plan_2026-03-25.md`
-- 创建：`myCPU/guest/kernel_alpha/main.c`
-- 修改：`myCPU/Makefile`
-- 修改：`AGENTS.md`
-- 修改：`myCPU/AGENTS.md`
-- 修改：`myCPU/guest/AGENTS.md`
-- 修改：`docs/AGENTS.md`
-- 修改：`readme.md`
-- 视实现需要修改：`docs/code_self_review_2026-03-24.md`
+## 当前负向回归
 
-## 任务 1：补计划与回归入口
+在首个 alpha 里程碑完成后，已经补上两条独立负向回归：
 
-**文件：**
+### `guest_kernel_alpha_fault_demo`
 
-- 创建：`docs/kernel_alpha_bringup_plan_2026-03-25.md`
-- 修改：`myCPU/Makefile`
+当前用于验证：
 
-- [x] **步骤 1：把 alpha bring-up 的目标和验收标准写进 `docs/`**
+- VM 已开启
+- UART 仍可输出
+- CLINT 未映射时的内核 MMIO 访问会进入 fault / panic 路径
 
-要求：
+当前输出：
 
-- 明确它是独立 kernel alpha 路径，不是继续往 smoke runner 塞逻辑。
-- 明确第一次 bring-up 的最小成功标准。
-- 明确首个回归输出标记。
+- `KMVX`
 
-- [x] **步骤 2：先在 Makefile 中定义失败中的新 guest 测试目标**
+### `guest_kernel_alpha_storage_no_media_demo`
 
-运行：`cd myCPU && make test-guest-kernel_alpha_demo`
+当前用于验证：
 
-预期：
+- VM 已开启
+- storage MMIO 可达
+- metadata / status 可观察
+- 未附加镜像时 block read 返回 `NO_MEDIA`
 
-- 当前应失败，因为独立 `kernel_alpha_demo` 入口尚未实现。
-- 失败应来自缺失的源文件或目标，而不是已有路径回归变红。
+当前输出：
 
-## 任务 2：实现独立 kernel alpha demo
+- `KMVNX`
 
-**文件：**
+## 关键历史节点
 
-- 创建：`myCPU/guest/kernel_alpha/main.c`
-- 修改：`myCPU/Makefile`
+- `2026-03-25` 已完成首个独立 `kernel_alpha_demo` alpha bring-up。
+- 随后补上了：
+  - `guest_kernel_alpha_fault_demo`
+  - `guest_kernel_alpha_storage_no_media_demo`
 
-- [x] **步骤 1：实现最小独立 `kernel_main`**
+## 当前仍未完成的部分
 
-要求：
+当前 `kernel_alpha` 仍是 alpha 形态，还没有真正进入“小型内核骨架完成态”。
 
-- 不复用 `supervisor_demo_smoke_run()`。
-- 只依赖现有 `memory`、`pmm`、`vm`、`trap`、`timer`、`console`、`platform` 基础设施。
-- 把状态机尽量收在单文件最小范围，不引入过早抽象。
+当前仍然缺少的重点包括：
 
-- [x] **步骤 2：建立 alpha 版页表和 MMIO fault-range**
+- 更完整的 kernel 对象与 runtime 组织，而不只是 bring-up 流程。
+- 更系统的 device readiness / error 合同覆盖。
+- 更完整的内核地址空间管理与 process / runtime refinement。
+- 更真实的 device probe、fault / panic 路径和后续扩展点。
 
-要求：
+## 下一步建议
 
-- RAM 先使用 coarse identity map，优先换来稳定 bring-up。
-- UART / CLINT 通过 `vm_address_space_register_fault_range()` 做 lazy map。
-- 启用 VM 后立刻输出 `V`，用可观察行为证明 fault path 生效。
+1. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` 基线上继续补更多 device readiness 与 fault / panic 回归。
+2. 继续推进 guest runtime 的 process / runtime refinement。
+3. 继续拆分 `guest/kernel/vm.c`、`guest/kernel/trap.c` 等过大的实现文件。
+4. 在不打破 reference path 简洁性的前提下，为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
 
-- [x] **步骤 3：接通 timer interrupt 观察**
+## 验证基线
 
-要求：
-
-- 安装 supervisor timer policy。
-- 调度一次 timer。
-- 在 post-handler 中留下 `T` 标记。
-- 主循环必须在 timer 未到达时走失败路径，而不是无限卡死。
-
-- [x] **步骤 4：回归验证绿灯**
-
-运行：`cd myCPU && make test-guest-kernel_alpha_demo`
-
-预期：
-
-- 输出严格等于 `KMVT`。
-
-## 任务 3：同步文档
-
-**文件：**
-
-- 修改：`AGENTS.md`
-- 修改：`myCPU/AGENTS.md`
-- 修改：`myCPU/guest/AGENTS.md`
-- 修改：`docs/AGENTS.md`
-- 修改：`readme.md`
-- 视需要修改：`docs/code_self_review_2026-03-24.md`
-
-- [x] **步骤 1：更新仓库总览和 guest 当前状态**
-
-要求：
-
-- 把 `kernel_alpha_demo` 写成新的独立 bring-up 基线。
-- 明确它和 `guest_supervisor_demo` 的分工差异。
-
-- [x] **步骤 2：同步 README**
-
-要求：
-
-- 只保留读者需要知道的高层能力和回归入口。
-- 不把内部实现流水账堆进 README。
-
-## 任务 4：最终验证
-
-**文件：**
-
-- 修改：无新增代码文件
-
-- [x] **步骤 1：运行独立 guest 回归**
-
-运行：`cd myCPU && make test-guest-kernel_alpha_demo`
-
-预期：
-
-- 输出 `KMVT`
-
-- [x] **步骤 2：运行全量基线**
-
-运行：`cd myCPU && make test`
-
-预期：
-
-- 现有 asm / unit / `guest_supervisor_demo` / `kernel_alpha_demo` 全部通过。
+- `cd myCPU && make test-guest-kernel_alpha_demo`
+- `cd myCPU && make test-guest-kernel_alpha_fault_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`
+- `cd myCPU && make test`

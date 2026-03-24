@@ -26,9 +26,11 @@
 - [request.md](/home/liangjiaqi/projects/my_visual_CPU/docs/request.md)
   项目背景和原始目标说明。
 - [code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/code_self_review_2026-03-24.md)
-  最近一次全面代码自检结果；当前应结合文内后续状态更新使用，而不是把它机械地当作“全部未修问题”清单。
+  最近一次全面代码自检的摘要与后续修复进展；当前用于跟踪仍然有效的风险点。
 - [kernel_alpha_bringup_plan_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/kernel_alpha_bringup_plan_2026-03-25.md)
-  第一次独立 kernel alpha bring-up 的里程碑定义、实现计划和首个可回归成功标记。
+  第一次独立 kernel alpha bring-up 的里程碑定义、当前状态和下一步。
+- [status_doc_template.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status_doc_template.md)
+  未来状态类文档的统一模板；新增状态文档默认优先按这个结构编写。
 
 ## 文档维护规则
 
@@ -36,7 +38,9 @@
 - 具体实现方式、局部规则、存留问题优先写入对应子树的 `AGENTS.md`。
 - 长篇设计、审查、方案和契约文档放在 `docs/`，不要堆进 README。
 - README 要持续可读，尤其 guest 相关描述保持概览化，不要写成长串内部细节。
-- 历史审查文档在后续问题被修复后，应补状态更新，避免 dated review 与当前仓库状态长期脱节。
+- 状态类文档应优先保留当前状态、仍然有效的风险和少量关键历史节点，不要长期堆积已完成 checklist。
+- 新增状态类文档时，默认先套用 [status_doc_template.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status_doc_template.md)。
+- 已经从“执行中计划”转成“持续状态跟踪”的文档，应主动收口成模板化结构，而不是继续累积历史步骤。
 - 报告和总结文档需要清楚区分：
   - 项目 owner 既有已完成工作
   - 已落地的当前重构成果

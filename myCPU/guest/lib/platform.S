@@ -10,6 +10,7 @@
 .global platform_plic_supervisor_complete
 .global platform_clint_read_mtime
 .global platform_clint_write_mtimecmp
+.global platform_storage_read_u64
 .global platform_storage_read_block
 .global platform_shutdown
 

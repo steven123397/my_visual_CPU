@@ -61,6 +61,12 @@ platform_clint_write_mtimecmp:
     sd   a0, 0(t1)
     ret
 
+platform_storage_read_u64:
+    li   t0, STORAGE_BASE
+    add  t0, t0, a0
+    ld   a0, 0(t0)
+    ret
+
 # a0 = lba, a1 = destination buffer, returns a0 = 0 on success or error code.
 platform_storage_read_block:
     mv   t6, a1

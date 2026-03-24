@@ -6,74 +6,74 @@
 
 使用顺序：
 
-1. 先读本文件，理解项目范围、阶段、全局约定和工作方向。
-2. 进入具体子树工作时，再读对应子目录下的 `AGENTS.md`。
+1. 先读本文件，理解项目范围、阶段目标和全局约定。
+2. 进入具体子树后，再读对应子目录下的 `AGENTS.md`。
 
-本仓库后续只使用 `AGENTS.md` 体系，不再维护 `CLAUDE.md`。
+本仓库后续只维护 `AGENTS.md` 体系，不再维护 `CLAUDE.md`。
 
 ## 项目概况
 
-仓库当前主体是 `myCPU`，一个从 C 原型逐步演进到模块化 C++ 架构的小型 RISC-V 模拟器。
+仓库当前主体是 [myCPU](/home/liangjiaqi/projects/my_visual_CPU/myCPU)，一个从 C 原型逐步演进到模块化 C++ 架构的小型 RISC-V 模拟器。
 
 当前定位：
 
-- 已经是可运行的 functional simulator prototype，不是纯设计稿
-- 正处于 Phase 1 bring-up 路线中
-- 同时在推进一轮有明确结构收益的 C++ 重构
+- 已经是可运行的 functional simulator prototype，不是纯设计稿。
+- 当前处于 Phase 1 bring-up 路线中。
+- 正在同步推进一轮有明确结构收益的 C++ 重构。
 
 长期目标：
 
-- 先把模拟器扩展到足以支撑一个自制的小型 OS / kernel bring-up
-- 之后再考虑 pipeline、OoO、cache、multicore 等更复杂模型
+- 先把模拟器扩展到足以支撑一个自制的小型 OS / kernel bring-up。
+- 之后再进入 pipeline、OoO、cache、multicore 等更复杂模型。
 
 ## 仓库结构
 
 - [myCPU](/home/liangjiaqi/projects/my_visual_CPU/myCPU)
   核心模拟器代码、guest runtime、测试和构建脚本。
 - [docs](/home/liangjiaqi/projects/my_visual_CPU/docs)
-  规划、契约、审查和设计类文档。
+  规划、契约、审查和状态类文档。
 - [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
   面向读者的项目概览、构建和运行说明。
 
 ## 子目录 AGENTS 索引
 
 - [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
-  simulator 主体说明：CPU、CSR、trap、MMU、platform、device、loader、tests 的当前实现、局部约束和待处理问题。
+  simulator 主体说明：CPU、CSR、trap、MMU、platform、device、loader、tests 的当前实现与局部规则。
 - [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
-  guest runtime 说明：memory、PMM、VM、trap、runtime、user task/program、smoke orchestration 与独立 kernel alpha bring-up 的当前边界、局部规则和下一步工作。
+  guest runtime 说明：memory、PMM、VM、trap、runtime、user task/program 与独立 kernel alpha bring-up 的当前边界和下一步。
 - [docs/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/docs/AGENTS.md)
-  文档维护规则：哪些内容留在根目录，哪些内容进实现子树，哪些内容放到专门文档。
-
-如果后续继续细分子树规则，应在这里补充索引，而不是重新把所有细节堆回根目录。
+  文档维护规则：哪些内容留在根目录，哪些内容写入实现子树，哪些内容进入专门文档。
 
 ## 当前状态
 
 当前仓库已经具备以下高层能力：
 
-- RV64I / RV64M 参考执行路径
-- ELF64 和 flat binary 加载
-- 基础 CSR 访问与 M-mode trap
-- 初步的 `M/S/U` 特权路径
-- 最小 UART / CLINT / PLIC / MMIO block storage 平台
-- Sv39 虚拟内存、最小 TLB、`sfence.vma`
-- 一套最小 guest supervisor runtime 和 `guest_supervisor_demo`
-- 一条独立的 `kernel_alpha_demo` bring-up alpha 路径
+- RV64I / RV64M 参考执行路径。
+- ELF64 与 flat binary 加载。
+- 基础 CSR 访问与 M-mode trap。
+- 初步 `M/S/U` 特权路径。
+- 最小 UART / CLINT / PLIC / MMIO block storage 平台。
+- Sv39、最小 TLB、`sfence.vma`。
+- 一套最小 guest supervisor runtime。
+- 一条独立的 `kernel_alpha` bring-up 路径及其正负回归。
 
 当前 guest 侧已经打通：
 
-- early allocator
-- bitmap PMM
-- guest-side Sv39 page table / address space
-- trap / runtime / process / user task / user program 分层
-- 最小 U-mode enter / return
-- timer / external / page-fault / user-`ecall` smoke 路径
-- 独立 kernel alpha 的 boot / PMM / Sv39 / timer interrupt 最小路径
+- early allocator。
+- bitmap PMM。
+- guest-side Sv39 page table / address space。
+- trap / runtime / process / user task / user program 分层。
+- 最小 U-mode enter / return。
+- timer / external / page-fault / user-`ecall` smoke 路径。
+- 独立 kernel alpha 的 boot / PMM / Sv39 / external interrupt / timer interrupt / storage readiness probe / storage read 正向路径。
+- 独立 kernel alpha 的 CLINT unmapped 与 storage no-media 两条负向路径。
 
-最近一轮结构收口后的基线：
+最近一轮关键历史节点只保留以下几项：
 
-- `guest/supervisor_demo/main.c` 保持极简
-- `supervisor_demo_smoke` 只保留单一 public demo runner
-- `user_program_smoke` 对外只保留阶段化 helper
+- `2026-03-25` 已完成一批 simulator-side correctness 修复：非法整数编码、`DIV/REM` 溢出边界、ELF pure-BSS `PT_LOAD`、bus / device 第一轮边界防御。
+- `kernel_alpha_demo` 已完成首个可回归 alpha bring-up，当前正向输出为 `KMVPETDS`。
+- `kernel_alpha_fault_demo` 当前负向输出为 `KMVX`。
+- `kernel_alpha_storage_no_media_demo` 当前负向输出为 `KMVNX`。
 
 ## 当前优先级
 
@@ -84,39 +84,21 @@
 2. 把模拟器推进到足以支撑小型 OS / kernel bring-up。
 3. 只有在 Phase 1 稳定后，才进入更多执行模型和微架构扩展。
 
-不要把这 3 条路线混在同一实现步骤里。
+不要把这几条路线混在同一实现步骤里。
 
-## 当前计划焦点
+## 当前焦点
 
-当前阶段不再优先做 `main.c` 或 smoke API 的继续清理，重点转向 Phase 1 功能缺口收尾：
+当前阶段的主线工作是：
 
-- 已完成最近一批 simulator-side correctness / loader / bus-device 守边界修复
-- 已落地第一次独立 `kernel_alpha_demo` bring-up alpha 基线
-- 继续推进 guest/runtime 的 process / runtime refinement
-- 继续补 user interrupt / trap 覆盖
-- 继续扩展鲁棒性回归，尤其是非法编码矩阵、MMIO 非法访问和更真实 ELF 段布局
-- 在独立 kernel alpha 基线之上继续为第一次真正的小 OS / kernel bring-up 清掉基础障碍
+- 保持 simulator reference path 的 correctness 与可观察性。
+- 在独立 `kernel_alpha` 基线上继续补 device readiness、fault / panic 与更真实的 bring-up 合同。
+- 继续推进 guest runtime 的 process / runtime refinement。
+- 继续拆分 `guest/kernel/vm.c`、`guest/kernel/trap.c` 等过大的实现文件。
+- 为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
 
-最近一次系统性自检结果见：
+相关状态文档见：
 
 - [docs/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/code_self_review_2026-03-24.md)
-
-其中首批 simulator-side 问题已于 `2026-03-25` 完成修复：
-
-- 非法整数编码误执行
-- 有符号 `DIV/REM` 溢出边界触发宿主未定义行为
-- ELF loader 对纯 BSS `PT_LOAD` 段处理不完整
-- bus / device 访问边界偏宽松
-
-当前剩余重点更偏向：
-
-- guest 侧 `vm.c` / `trap.c` 等大文件继续拆分
-- 固定上限常量在第一次真正的小 OS / kernel bring-up 前的收口
-- `SimpleStorage` 的阶段性限制
-- 更系统的 reference robustness 回归补齐
-
-当前 bring-up 计划与首个 alpha 里程碑见：
-
 - [docs/kernel_alpha_bringup_plan_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/kernel_alpha_bringup_plan_2026-03-25.md)
 
 ## 技术栈
@@ -130,25 +112,28 @@
 ## 全局开发约定
 
 - 任何实现改动都应优先维护 reference path 的正确性与可观察性。
-- 当实现状态、已知问题、验证基线或当前计划发生变化后，同步更新相关层级的 `AGENTS.md`、`docs/` 文档和 `readme.md`，避免三者长期漂移。
-- README 中的功能声明必须与真实实现保持一致。
-- 不要做没有结构收益的“纯语言迁移”或“纯 cosmetic 重写”。
+- README、`docs/` 和各层 `AGENTS.md` 必须与当前实现同步。
+- 状态文档优先保留当前状态、少量关键历史节点和下一步，不要长期堆积已完成 checklist。
+- 不要做没有结构收益的纯 cosmetic 重写或纯语言迁移。
 - 优先小步落地，避免一次引入过大的抽象。
 - 不要提交构建产物，尤其是：
   - `myCPU/guest/supervisor_demo.elf`
   - `myCPU/guest/kernel_alpha_demo.elf`
-- 对 guest 相关描述，README 保持简洁；更细节的实现状态和局部规则写进子目录 `AGENTS.md` 或 `docs/`。
+  - `myCPU/guest/kernel_alpha_fault_demo.elf`
+  - `myCPU/guest/kernel_alpha_storage_no_media_demo.elf`
 
 ## 全局验证基线
 
-修改架构相关路径后，至少应守住以下基线：
+修改架构相关路径后，至少应守住：
 
 - `cd myCPU && make test`
 
-如果改动主要集中在 guest runtime / demo bring-up，至少应额外关注：
+如果改动主要集中在 guest runtime / demo bring-up，还应额外关注：
 
 - `cd myCPU && make test-guest-supervisor_demo`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
+- `cd myCPU && make test-guest-kernel_alpha_fault_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`
 
 ## 开发阶段
 
@@ -156,25 +141,25 @@
 
 目标：
 
-- 跑起一个小型自制 OS / kernel，具备基本中断、内存管理和控制台输出
+- 跑起一个小型自制 OS / kernel，具备基本中断、内存管理和控制台输出。
 
 ### Phase 2
 
 目标：
 
-- 在保持统一 ISA 语义来源的前提下，引入多种执行模型
+- 在保持统一 ISA 语义来源的前提下，引入多种执行模型。
 
 ### Phase 3
 
 目标：
 
-- 在可测试前提下推进预测、重命名、ROB、LSQ 等高级微架构
+- 在可测试前提下推进预测、重命名、ROB、LSQ 等高级微架构。
 
 ### Phase 4
 
 目标：
 
-- 逐步加入 cache hierarchy、DMA、multicore 和一致性
+- 逐步加入 cache hierarchy、DMA、multicore 和一致性。
 
 ## 报告与总结规则
 
@@ -182,6 +167,6 @@
 - 描述 C++ 重构时，要强调它是对复杂度增长的结构性响应，不是语言偏好。
 - 报告里应明确区分：
   - 项目 owner 已完成的既有工作
-  - 已落地的 C++ / guest runtime 重构
+  - 已落地的当前结构成果
   - 当前下一步工程任务
-  - 更远期的 Phase 2/3/4 工作
+  - 更远期的 Phase 2 / 3 / 4 工作

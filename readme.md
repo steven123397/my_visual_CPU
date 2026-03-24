@@ -107,9 +107,15 @@ make test
 
 # 只跑独立 kernel alpha bring-up 回归
 make test-guest-kernel_alpha_demo
+
+# 只跑独立 kernel alpha fault/panic 负向回归
+make test-guest-kernel_alpha_fault_demo
+
+# 只跑独立 kernel alpha storage no-media 负向回归
+make test-guest-kernel_alpha_storage_no_media_demo
 ```
 
-`make test` 会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo` 和 `kernel_alpha_demo` 两条 guest bring-up 路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、UART / CLINT lazy map 与第一次 timer interrupt。
+`make test` 会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo`、`kernel_alpha_demo`、`kernel_alpha_fault_demo` 和 `kernel_alpha_storage_no_media_demo` 这 4 条 guest 回归路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 timer interrupt、一次 storage readiness probe、一次最小块设备读取，以及两条独立负向路径：未映射 CLINT MMIO 访问触发的 fault / panic，和 storage 未附加镜像时的 metadata / `NO_MEDIA` error 合同。
 
 ## 内存映射
 
@@ -147,7 +153,9 @@ make test-guest-kernel_alpha_demo
 - host-backed block-oriented MMIO storage device
 - 设备区间重叠防御，以及第一轮 MMIO 非法访问宽度白名单
 - 最小 guest supervisor runtime：包含统一 trap dispatch、基础平台库、early allocator / PMM / guest-side Sv39 VM、显式 trap/runtime/task/program helper，以及由 `user_program_smoke` 提供的阶段化 lifecycle / prepare / enter helper 与 `supervisor_demo_smoke` 提供的单入口 demo runner，覆盖 `guest_supervisor_demo` 的 bootstrap、U-mode 进入/返回、page fault 恢复、timer/external interrupt 与生命周期清理 smoke
-- 独立 `kernel_alpha_demo`：覆盖 boot marker、PMM 初始化、自建 Sv39 内核页表、UART / CLINT fault-range lazy map 与第一次 supervisor timer interrupt
+- 独立 `kernel_alpha_demo`：覆盖 boot marker、PMM 初始化、自建 Sv39 内核页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 supervisor timer interrupt、一次 storage readiness probe，以及一次最小块设备读取
+- 独立 `kernel_alpha_fault_demo`：覆盖独立 kernel alpha 在 VM 已开启但 CLINT 未映射时的 fault / panic 负向路径
+- 独立 `kernel_alpha_storage_no_media_demo`：覆盖独立 kernel alpha 在 VM 已开启且 storage MMIO 可达、但未附加镜像时的 metadata / `NO_MEDIA` error 负向路径
 - `ecall` a7=93 退出约定
 
 ## 源码文件说明
@@ -167,7 +175,9 @@ make test-guest-kernel_alpha_demo
 
 - `include/`：guest 平台层、trap、timer、memory、pmm、vm、`user_task`、`user_task_bootstrap`、`user_program`、`user_program_smoke`、`supervisor_demo_smoke` 等最小内核接口。
 - `kernel/`：guest 最小内核实现，包含 `console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` / `runtime_context`，以及 `user_task` / `user_task_bootstrap` / `user_program` / smoke helpers。当前重点已覆盖页表与 VM 管理、trap/runtime 生命周期、单用户任务 bring-up，以及由阶段化 `user_program_smoke` helper 与单入口 `supervisor_demo_smoke` runner 封装的 `guest_supervisor_demo` bootstrap、fault/interrupt/lifecycle 与 platform-tail 流程。
-- `kernel_alpha/`：独立 kernel alpha bring-up 入口，当前用于验证第一次真正的小 kernel alpha 的 boot / PMM / Sv39 / timer interrupt 最小基线。
+- `kernel_alpha/`：独立 kernel alpha bring-up 入口，当前用于验证第一次真正的小 kernel alpha 的 boot / PMM / Sv39 / PLIC/UART external interrupt / timer interrupt / storage readiness probe / storage read 最小基线。
+- `kernel_alpha/fault_main.c`：独立 kernel alpha 的 fault / panic 负向回归入口，当前故意构造未映射 CLINT MMIO 访问。
+- `kernel_alpha/storage_no_media_main.c`：独立 kernel alpha 的 storage no-media 负向回归入口，当前故意在未挂盘条件下验证 metadata / `NO_MEDIA` error 路径。
 - `lib/platform.S` / `lib/trap_runtime.S`：共享 guest MMIO 平台库入口，以及 U-mode enter/resume 的共享汇编桥。
 - `supervisor_demo/`：最小 supervisor runtime、linker script 和 bring-up demo。
 

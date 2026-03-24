@@ -18,8 +18,11 @@ Thumbs.db
 
 # Project binaries and generated test images
 /myCPU/mycpu
+/myCPU/guest/*.elf
 /myCPU/tests/asm/*.elf
 /myCPU/tests/asm/*.bin
+/myCPU/tests/unit/*
+!/myCPU/tests/unit/*.cpp
 
 # Logs and coverage
 *.log
