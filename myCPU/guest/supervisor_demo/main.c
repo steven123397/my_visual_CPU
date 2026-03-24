@@ -94,10 +94,7 @@ static bool user_ecall_validate(const trap_user_runtime_t* user_runtime,
 void kernel_main(void) {
     uintptr_t early_cursor = 0;
     trap_context_t supervisor_trap_context;
-    vm_address_space_t* lifecycle_space = NULL;
-    vm_address_space_t* recycled_space = NULL;
     vm_address_space_t* user_address_space = NULL;
-    vm_process_t lifecycle_process = {0};
     vm_process_t* user_process = NULL;
     trap_user_runtime_t* user_runtime = NULL;
     user_program_t user_program;
@@ -113,10 +110,6 @@ void kernel_main(void) {
     uintptr_t user_entry_pc = 0;
     uintptr_t user_expected_ecall_pc = 0;
     uintptr_t user_sp = 0;
-    const uint64_t user_rw_flags =
-        VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_USER;
-    vm_user_region_t lifecycle_region = {0};
-    vm_object_t lifecycle_object = {0};
     struct DemoTrapState demo_trap_state = {0};
     uint32_t* alias_page = NULL;
     uint32_t* anon_page = NULL;
@@ -244,65 +237,8 @@ void kernel_main(void) {
         panic_shutdown();
     }
     lifecycle_free_before = pmm_free_pages();
-    if (!vm_address_space_create(&lifecycle_space) ||
-        lifecycle_space == NULL ||
-        !vm_process_create(&lifecycle_process, lifecycle_space) ||
-        !vm_address_space_activate(lifecycle_space) ||
-        !vm_address_space_is_active(lifecycle_space) ||
-        runtime_context_active_address_space() != lifecycle_space ||
-        !vm_address_space_disable(lifecycle_space) ||
-        vm_address_space_is_active(lifecycle_space) ||
-        runtime_context_active_address_space() != NULL ||
-        !vm_address_space_map_identity_1g(lifecycle_space,
-                                          0,
-                                          VM_PAGE_READ | VM_PAGE_WRITE |
-                                              VM_PAGE_EXEC) ||
-        !vm_process_user_region_init(&lifecycle_process,
-                                     &lifecycle_region,
-                                     user_anon_vaddr,
-                                     MEMORY_PAGE_SIZE,
-                                     user_rw_flags) ||
-        vm_process_set_user_context(&lifecycle_process,
-                                    user_anon_vaddr,
-                                    user_anon_vaddr + MEMORY_PAGE_SIZE) ||
-        !vm_object_init_anon(&lifecycle_object, MEMORY_PAGE_SIZE) ||
-        vm_object_init_anon(&lifecycle_object, MEMORY_PAGE_SIZE) ||
-        !vm_user_region_map_object(&lifecycle_region, &lifecycle_object) ||
-        vm_user_region_map_object(&lifecycle_region, &lifecycle_object) ||
-        vm_user_region_set_fault_object(&lifecycle_region, &lifecycle_object) ||
-        vm_object_reset(&lifecycle_object) ||
-        !vm_user_region_clear_object(&lifecycle_region) ||
-        !vm_user_region_set_fault_object(&lifecycle_region, &lifecycle_object) ||
-        vm_user_region_map_object(&lifecycle_region, &lifecycle_object) ||
-        vm_object_reset(&lifecycle_object) ||
-        !vm_user_region_clear_object(&lifecycle_region) ||
-        vm_address_space_destroy(lifecycle_space) ||
-        !vm_process_remove_user_region(&lifecycle_process, &lifecycle_region) ||
-        lifecycle_region.registered ||
-        lifecycle_region.address_space != NULL ||
-        lifecycle_region.object != NULL ||
-        vm_process_create(&lifecycle_process, lifecycle_space)) {
-        panic_shutdown();
-    }
-    if (!vm_process_reset(&lifecycle_process) ||
-        !vm_object_reset(&lifecycle_object)) {
-        panic_shutdown();
-    }
-    if (lifecycle_process.address_space != NULL ||
-        lifecycle_process.entry_pc != 0 ||
-        lifecycle_process.user_sp != 0 ||
-        lifecycle_process.user_regions[0] != NULL ||
-        lifecycle_object.initialized ||
-        lifecycle_object.backing_kind != VM_OBJECT_BACKING_NONE ||
-        lifecycle_object.attachment_count != 0 ||
-        !vm_object_init_anon(&lifecycle_object, MEMORY_PAGE_SIZE) ||
-        !vm_address_space_destroy(lifecycle_space) ||
-        !vm_address_space_create(&lifecycle_space) ||
-        !vm_address_space_create(&recycled_space) ||
-        !vm_address_space_destroy(lifecycle_space) ||
-        !vm_address_space_destroy(recycled_space) ||
-        !vm_object_reset(&lifecycle_object) ||
-        pmm_free_pages() != lifecycle_free_before) {
+    if (!user_program_smoke_validate_vm_lifecycle(user_anon_vaddr,
+                                                  lifecycle_free_before)) {
         panic_shutdown();
     }
 
@@ -357,10 +293,6 @@ void kernel_main(void) {
         !vm_range_is_kernel(memory_text_start(),
                             memory_text_end() - memory_text_start()) ||
         vm_range_is_kernel(user_alias_vaddr, MEMORY_PAGE_SIZE) ||
-        !vm_address_space_map_identity_1g(user_address_space,
-                                          0,
-                                          VM_PAGE_READ | VM_PAGE_WRITE |
-                                              VM_PAGE_EXEC) ||
         !user_program_region_contains(&user_program,
                                       USER_PROGRAM_REGION_STACK,
                                       user_sp - 16U,
@@ -373,69 +305,18 @@ void kernel_main(void) {
                                      USER_PROGRAM_REGION_ALIAS,
                                      user_alias_vaddr - MEMORY_PAGE_SIZE,
                                      MEMORY_PAGE_SIZE) ||
-        vm_address_space_map_kernel_range(user_address_space,
-                                          user_alias_vaddr,
-                                          (uintptr_t)remap_page,
-                                          MEMORY_PAGE_SIZE,
-                                          VM_PAGE_WRITE) ||
-        vm_address_space_map_kernel_range(user_address_space,
-                                          memory_text_start(),
-                                          memory_text_start(),
-                                          memory_text_end() -
-                                              memory_text_start(),
-                                          VM_PAGE_READ | VM_PAGE_EXEC |
-                                              VM_PAGE_USER) ||
-        !vm_address_space_map_kernel_range(user_address_space,
-                                           memory_text_start(),
-                                           memory_text_start(),
-                                           memory_text_end() -
-                                               memory_text_start(),
-                                           VM_PAGE_READ | VM_PAGE_EXEC) ||
-        !vm_address_space_map_kernel_range(user_address_space,
-                                           memory_rodata_start(),
-                                           memory_rodata_start(),
-                                           memory_rodata_end() -
-                                               memory_rodata_start(),
-                                           VM_PAGE_READ) ||
-        !vm_address_space_map_kernel_range(user_address_space,
-                                           memory_data_start(),
-                                           memory_data_start(),
-                                           pmm_managed_start() -
-                                               memory_data_start(),
-                                           VM_PAGE_READ | VM_PAGE_WRITE) ||
-        !vm_address_space_map_kernel_range(user_address_space,
-                                           pmm_managed_start(),
-                                           pmm_managed_start(),
-                                           pmm_managed_end() -
-                                               pmm_managed_start(),
-                                           VM_PAGE_READ | VM_PAGE_WRITE) ||
-        vm_address_space_register_fault_range(user_address_space,
-                                              user_alias_vaddr + 1U,
-                                              (uintptr_t)backing_page,
-                                              MEMORY_PAGE_SIZE,
-                                              VM_PAGE_READ) ||
-        user_program_unmap_region_page(&user_program,
-                                       USER_PROGRAM_REGION_ALIAS,
-                                       memory_text_start()) ||
-        vm_address_space_register_fault_range(user_address_space,
-                                              user_alias_vaddr,
-                                              (uintptr_t)remap_page,
-                                              MEMORY_PAGE_SIZE,
-                                              VM_PAGE_READ | VM_PAGE_WRITE) ||
-        !user_program_smoke_prepare_fault_orchestration(
+        !user_program_smoke_prepare_address_space(
             &user_program_smoke,
             &user_program,
+            (uintptr_t)backing_page,
             (uintptr_t)remap_page,
             (uintptr_t)&rodata_marker,
             sizeof(rodata_marker),
             (uintptr_t)nx_page,
             MEMORY_PAGE_SIZE,
             &instruction_fault_resume_pc) ||
-        user_program_is_active(&user_program) ||
-        !user_program_smoke_unmap_remap_page(&user_program_smoke) ||
-        user_program_is_runnable(&user_program) ||
-        !user_program_prepare_standard(
-            &user_program,
+        !user_program_smoke_prepare_runtime(
+            &user_program_smoke,
             &supervisor_trap_context,
             user_alias_vaddr,
             user_trap_stack_page,
@@ -445,9 +326,7 @@ void kernel_main(void) {
             timer_interrupt_handler,
             &demo_trap_state,
             external_interrupt_handler,
-            &demo_trap_state) ||
-        !user_program_is_runnable(&user_program) ||
-        user_program_smoke_unmap_remap_page(&user_program_smoke)) {
+            &demo_trap_state)) {
         panic_shutdown();
     }
 
