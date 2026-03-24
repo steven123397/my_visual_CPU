@@ -88,7 +88,7 @@ uint64_t ElfLoader::load(Ram& ram, const char* path) const {
         Elf64_Phdr phdr{};
         read_exact(file, phdr, "ELF program header", path);
 
-        if (phdr.p_type != kProgramHeaderLoad || phdr.p_filesz == 0) {
+        if (phdr.p_type != kProgramHeaderLoad || phdr.p_memsz == 0) {
             continue;
         }
         if (phdr.p_filesz > phdr.p_memsz) {
@@ -98,16 +98,18 @@ uint64_t ElfLoader::load(Ram& ram, const char* path) const {
             throw std::runtime_error("segment out of memory range");
         }
 
-        std::string segment(static_cast<size_t>(phdr.p_filesz), '\0');
-        file.seekg(static_cast<std::streamoff>(phdr.p_offset), std::ios::beg);
-        if (!file) {
-            throw std::runtime_error(std::string("failed to seek to ELF segment: ") + path);
-        }
-        if (!file.read(segment.data(), static_cast<std::streamsize>(segment.size()))) {
-            throw std::runtime_error(std::string("failed to read ELF segment: ") + path);
-        }
+        if (phdr.p_filesz != 0) {
+            std::string segment(static_cast<size_t>(phdr.p_filesz), '\0');
+            file.seekg(static_cast<std::streamoff>(phdr.p_offset), std::ios::beg);
+            if (!file) {
+                throw std::runtime_error(std::string("failed to seek to ELF segment: ") + path);
+            }
+            if (!file.read(segment.data(), static_cast<std::streamsize>(segment.size()))) {
+                throw std::runtime_error(std::string("failed to read ELF segment: ") + path);
+            }
 
-        ram.write_bytes(phdr.p_paddr, segment.data(), segment.size());
+            ram.write_bytes(phdr.p_paddr, segment.data(), segment.size());
+        }
         if (phdr.p_memsz > phdr.p_filesz) {
             ram.fill(phdr.p_paddr + phdr.p_filesz, 0, static_cast<size_t>(phdr.p_memsz - phdr.p_filesz));
         }

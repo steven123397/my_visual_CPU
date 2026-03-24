@@ -13,6 +13,24 @@
 
 - `c98bdf2` `refactor(guest runtime): 收口 supervisor demo smoke 编排边界`
 
+## 1.1 后续状态更新（2026-03-25）
+
+本报告是 `2026-03-24` 的审查记录，但仓库状态已经继续前进。为避免它和当前实现脱节，这里补一轮状态更新：
+
+- 第 `4.1` 节问题已修复：非法整数保留编码现在会稳定进入 `illegal instruction`，并新增了 `tests/asm/illegal_integer_encodings.S` 回归。
+- 第 `4.2` 节问题已修复：`DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界不再依赖宿主未定义行为，并新增了 `tests/asm/muldiv_edge_cases.S` 回归。
+- 第 `5.1` 节问题已修复：ELF loader 现在支持对纯 BSS `PT_LOAD` 段执行 `zero-fill`，并新增了 `tests/unit/elf_loader_bss.cpp` 单元回归。
+- 第 `5.2` 节问题已完成第一轮收口：`Bus::attach()` 会拒绝设备区间重叠，UART / PLIC / CLINT / `SimpleStorage` 已收紧第一轮访问宽度约束，并新增了 `tests/unit/bus_device_guards.cpp` 单元回归。
+- 第 `9` 节后的下一步已经开始落地：新增了独立 `kernel_alpha_demo` bring-up alpha 路径，当前可在自建 Sv39 内核页表下完成 boot marker、PMM 初始化、UART / CLINT lazy map 和第一次 supervisor timer interrupt，回归输出为 `KMVT`。
+- 截至本次状态更新，`make test` 仍保持通过，`guest_supervisor_demo` 仍输出 `KRN`，`guest_kernel_alpha_demo` 已输出 `KMVT`。
+
+因此，本报告当前更适合作为：
+
+- 一份历史审查记录
+- 一份带修复进度的风险跟踪文档
+
+而不是一份“不加区分的当前未修问题列表”。
+
 ## 2. 审查范围与验证方式
 
 本次审查覆盖以下模块：
@@ -356,11 +374,11 @@
 
 建议后续按以下顺序修复：
 
-1. 修 `integer_ops.cpp` 中的 illegal-encoding 判定与 `DIV/REM` 溢出边界。
-2. 为上述两类问题补最小回归，确保 reference model 不再静默错误或被 guest 打崩。
-3. 修 ELF loader 对纯 BSS `PT_LOAD` 的处理。
-4. 加强 `Bus` / `Device` 边界防御，避免平台扩展后出现静默错误。
-5. 继续拆分 guest 侧 `vm.c` 和 `trap.c`，把当前收口工作真正落到“实现层也更清晰”。
+1. `[已完成，2026-03-25]` 修 `integer_ops.cpp` 中的 illegal-encoding 判定与 `DIV/REM` 溢出边界。
+2. `[已完成，2026-03-25]` 为上述两类问题补最小回归，确保 reference model 不再静默错误或被 guest 打崩。
+3. `[已完成，2026-03-25]` 修 ELF loader 对纯 BSS `PT_LOAD` 的处理。
+4. `[已完成第一轮，2026-03-25]` 加强 `Bus` / `Device` 边界防御，避免平台扩展后出现静默错误。
+5. `[当前重点]` 继续拆分 guest 侧 `vm.c` 和 `trap.c`，把当前收口工作真正落到“实现层也更清晰”。
 
 ## 10. 简要结语
 

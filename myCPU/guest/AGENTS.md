@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-本文件适用于 [myCPU/guest](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest) 子树下的 guest supervisor runtime、VM、trap、runtime、user task/program 和 demo / smoke orchestration。
+本文件适用于 [myCPU/guest](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest) 子树下的 guest supervisor runtime、VM、trap、runtime、user task/program，以及 demo / smoke orchestration 与独立 kernel bring-up 入口。
 
 ## 当前实现基线
 
@@ -19,6 +19,7 @@ guest 侧当前不是单纯 demo 代码，而是一条已经接通的最小 brin
 - `user_program_t`
 - `user_program_smoke_t`
 - `supervisor_demo_smoke`
+- `kernel_alpha_demo`
 
 当前已经能完成：
 
@@ -28,6 +29,7 @@ guest 侧当前不是单纯 demo 代码，而是一条已经接通的最小 brin
 - delegated user `ecall`
 - delegated timer / external interrupt return
 - 单用户生命周期和清理 smoke
+- 独立 kernel alpha 的 boot / PMM / Sv39 / timer interrupt 最小路径
 
 ## 关键边界
 
@@ -53,6 +55,8 @@ guest 侧当前不是单纯 demo 代码，而是一条已经接通的最小 brin
   user-program smoke orchestration helper。
 - `supervisor_demo_smoke.c`
   顶层 demo runner 和 session orchestration。
+- `kernel_alpha/main.c`
+  独立 kernel alpha bring-up 入口，当前承载第一次真正的小 kernel alpha 回归。
 
 ## 当前 smoke 编排边界
 
@@ -69,9 +73,22 @@ guest 侧当前不是单纯 demo 代码，而是一条已经接通的最小 brin
   - `user_program_smoke_enter_round()`
 - `invalid_region` / `remap_region` / `fault-skip` / `resume` 这类更细的 orchestration 保持在 helper 内部，不再回流到 `main.c`。
 
+## 独立 kernel alpha bring-up 边界
+
+- [kernel_alpha/main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/main.c)
+  当前是独立 `kernel_alpha_demo` 的唯一入口，不应退化成新的“大而全 smoke runner”。
+- `kernel_alpha_demo` 当前阶段只承载第一次真正的小 kernel alpha 基线：
+  - boot marker
+  - PMM 初始化
+  - 自建 Sv39 内核页表
+  - UART / CLINT 的 fault-range lazy map
+  - supervisor timer interrupt 观察
+- 更复杂的 process / user-mode / lifecycle orchestration 仍留在 `guest_supervisor_demo` 及其 smoke helper，不要把两条线重新混写。
+
 ## 本子树的局部规则
 
 - 不要重新把 demo 逻辑堆回 `guest/supervisor_demo/main.c`。
+- 不要把独立 kernel alpha bring-up 再塞回 `supervisor_demo_smoke` 或 `guest/supervisor_demo/main.c`。
 - 新的标准生命周期逻辑优先放到：
   - `user_program`
   - `user_task_bootstrap`
@@ -112,15 +129,23 @@ guest 侧当前不是单纯 demo 代码，而是一条已经接通的最小 brin
 
 这些限制在当前单用户 bring-up 路径可接受，但真正进入小 OS / kernel bring-up 时需要优先关注。
 
+当前独立 `kernel_alpha_demo` 也仍是 alpha 形态：
+
+- RAM 先采用 coarse identity map
+- 只覆盖 UART / CLINT 的最小 MMIO fault-range
+- 还没有独立 fault / panic negative regression
+- 还没有真正的内核对象、调度或设备探测流程
+
 ## 本子树下一步工作
 
 当前“收口”工作可以视为已基本完成，后续重点转为功能缺口与实现层继续拆分：
 
-1. 继续 Phase 1 guest/runtime gap closure，而不是继续做 `main.c` 清理。
-2. 继续推进 process / runtime refinement。
-3. 继续补更多 user interrupt / trap coverage，不止当前 timer + external + user-`ecall`。
-4. 把 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) 和 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 继续拆小。
-5. 为第一次真正的小 OS / kernel bring-up 清掉基础障碍。
+1. 保持 `guest_supervisor_demo` 和 `kernel_alpha_demo` 分工清晰，而不是把两条路径重新揉成一个入口。
+2. 在 `kernel_alpha_demo` 基线上继续补独立 fault / panic / device readiness。
+3. 继续推进 process / runtime refinement。
+4. 继续补更多 user interrupt / trap coverage，不止当前 timer + external + user-`ecall`。
+5. 把 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) 和 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 继续拆小。
+6. 为第一次真正的小 OS / kernel bring-up 清掉剩余基础障碍。
 
 和 guest 路径直接相关的最新系统性审查结果见：
 
@@ -131,6 +156,7 @@ guest 侧当前不是单纯 demo 代码，而是一条已经接通的最小 brin
 只要触及 guest runtime / demo / smoke 路径，默认至少关注：
 
 - `cd myCPU && make test-guest-supervisor_demo`
+- `cd myCPU && make test-guest-kernel_alpha_demo`
 
 通常仍应回归：
 

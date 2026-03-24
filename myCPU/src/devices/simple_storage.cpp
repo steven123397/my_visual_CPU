@@ -8,18 +8,47 @@
 
 namespace {
 
-uint64_t mask_for_size(int size) {
-    switch (size) {
-    case 1:
-        return 0xFFULL;
-    case 2:
-        return 0xFFFFULL;
-    case 4:
-        return 0xFFFFFFFFULL;
-    case 8:
-        return ~0ULL;
+bool is_valid_data_window_access(uint32_t offset, int size) {
+    if (size != 1 && size != 2 && size != 4 && size != 8) {
+        return false;
+    }
+
+    return offset >= STORAGE_DATA_WINDOW_OFFSET
+        && offset + static_cast<uint32_t>(size) <= STORAGE_DATA_WINDOW_OFFSET + STORAGE_DATA_WINDOW_SIZE;
+}
+
+bool is_valid_register_load(uint32_t offset, int size) {
+    if (size != 8) {
+        return false;
+    }
+
+    switch (offset) {
+    case STORAGE_REG_MAGIC:
+    case STORAGE_REG_VERSION:
+    case STORAGE_REG_BLOCK_SIZE:
+    case STORAGE_REG_CAPACITY_BLOCKS:
+    case STORAGE_REG_STATUS:
+    case STORAGE_REG_LBA:
+    case STORAGE_REG_BLOCK_COUNT:
+    case STORAGE_REG_ERROR:
+        return true;
     default:
-        return 0;
+        return false;
+    }
+}
+
+bool is_valid_register_store(uint32_t offset, int size) {
+    if (size != 8) {
+        return false;
+    }
+
+    switch (offset) {
+    case STORAGE_REG_LBA:
+    case STORAGE_REG_BLOCK_COUNT:
+    case STORAGE_REG_COMMAND:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -29,15 +58,26 @@ SimpleStorage::SimpleStorage() : Device(STORAGE_BASE, STORAGE_SIZE) {}
 
 uint64_t SimpleStorage::load(uint64_t addr, int size) {
     const uint32_t offset = static_cast<uint32_t>(addr - STORAGE_BASE);
-    if (offset >= kDataWindowOffset && offset + static_cast<uint32_t>(size) <= kDataWindowOffset + kDataWindowSize) {
+    if (is_valid_data_window_access(offset, size)) {
         return load_data_window(offset, size);
     }
+    if (!is_valid_register_load(offset, size)) {
+        invalid_access(addr, size);
+    }
 
-    return register_value(offset) & mask_for_size(size);
+    return register_value(offset);
 }
 
 void SimpleStorage::store(uint64_t addr, uint64_t value, int size) {
     const uint32_t offset = static_cast<uint32_t>(addr - STORAGE_BASE);
+    if (is_valid_data_window_access(offset, size)) {
+        store_data_window(offset, value, size);
+        return;
+    }
+    if (!is_valid_register_store(offset, size)) {
+        invalid_access(addr, size);
+    }
+
     if (offset == kLbaOffset) {
         lba_ = value;
         return;
@@ -49,9 +89,6 @@ void SimpleStorage::store(uint64_t addr, uint64_t value, int size) {
     if (offset == kCommandOffset) {
         execute_command(value);
         return;
-    }
-    if (offset >= kDataWindowOffset && offset + static_cast<uint32_t>(size) <= kDataWindowOffset + kDataWindowSize) {
-        store_data_window(offset, value, size);
     }
 }
 

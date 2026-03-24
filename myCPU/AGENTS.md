@@ -48,6 +48,10 @@
   ELF / binary 装载边界。
 - [tests/asm](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm)
   当前 reference path 的汇编回归契约。
+- [tests/unit](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/unit)
+  当前 host-side 单元回归，覆盖 loader 和 bus/device 边界防御。
+- [guest/kernel_alpha/main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/main.c)
+  独立 kernel alpha bring-up 入口，当前回归其自建页表、MMIO lazy map 和 timer interrupt 最小路径。
 
 ## 本子树的局部规则
 
@@ -65,7 +69,10 @@
 当前 simulator 侧已经有回归覆盖的高层能力包括：
 
 - RV64I / RV64M 基础整数与乘除语义
+- 非法整数保留编码稳定触发 `illegal instruction`
+- `DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 语义返回
 - ELF / flat binary 加载
+- 纯 BSS `PT_LOAD` 段 zero-fill
 - CSR 指令与基础访问控制
 - M-mode trap / return
 - 初步 `M/S/U` 特权流转
@@ -75,6 +82,8 @@
 - machine counter CSR 与 `counteren`
 - Sv39、最小 TLB、`sfence.vma`
 - UART / CLINT / PLIC / SimpleStorage
+- 设备区间重叠防御，以及第一轮 MMIO 非法访问宽度白名单
+- 独立 `guest_kernel_alpha_demo` 回归，验证 guest 侧自建 Sv39 内核页表、UART / CLINT lazy map 和第一次 supervisor timer interrupt
 
 具体测试列表以 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。
 
@@ -84,24 +93,23 @@
 
 - [docs/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/code_self_review_2026-03-24.md)
 
-其中和本子树直接相关的重点包括：
+其中当前和本子树直接相关、但尚未完全收口的重点包括：
 
-- [src/exec/integer_ops.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/exec/integer_ops.cpp)
-  对部分非法整数编码的判定仍不够严格。
-- [src/exec/integer_ops.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/exec/integer_ops.cpp)
-  `DIV/REM/DIVW/REMW` 的有符号溢出边界会触发宿主未定义行为。
-- [src/loader/elf_loader.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/loader/elf_loader.cpp)
-  对纯 BSS `PT_LOAD` 段的处理不完整。
+- [tests/asm](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm) 和 [tests/unit](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/unit)
+  非法编码矩阵、MMIO 非法偏移/宽度、更真实 ELF 段布局等鲁棒性回归仍可继续扩展。
+- [src/devices/simple_storage.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices/simple_storage.cpp)
+  仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
 - [src/mem/bus.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/mem/bus.cpp) 和 [src/devices](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices)
-  对设备区间重叠和非法 MMIO 访问的防御偏弱。
+  已完成第一轮边界防御，但未来若继续扩平台设备，仍需要更系统的契约和回归。
 
 ## 本子树下一步工作
 
 近期优先级建议如下：
 
-1. 先修 reference correctness 问题，再继续扩功能。
-2. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界。
-3. 等 Phase 1 稳定后，再讨论多 backend、pipeline、OoO 等后续扩展。
+1. 在已修 reference correctness 基线之上，继续扩充非法编码、MMIO 边界和 ELF 段布局回归。
+2. 继续用 `guest_kernel_alpha_demo` 验证 simulator 对独立 kernel bring-up 的支撑，再逐步扩 fault / panic / device readiness。
+3. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界。
+4. 等 Phase 1 稳定后，再讨论多 backend、pipeline、OoO 等后续扩展。
 
 ## 验证要求
 
@@ -114,6 +122,7 @@
 - `src/devices/*`
 - `src/loader/*`
 - `tests/asm/*`
+- `tests/unit/*`
 
 默认都应守住：
 

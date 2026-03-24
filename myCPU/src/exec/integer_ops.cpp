@@ -1,5 +1,7 @@
 #include "integer_ops.h"
 
+#include <limits>
+
 #include "../cpu.h"
 
 namespace {
@@ -8,6 +10,118 @@ constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
 void write_rd(CPU& cpu, uint8_t rd, uint64_t value) {
     cpu.core().write_gpr(rd, value);
+}
+
+bool is_valid_shift_immediate_encoding(const Insn& insn) {
+    const uint8_t upper = insn.funct7 & 0x7EU;
+    switch (insn.funct3) {
+    case 1:
+        return upper == 0x00;
+    case 5:
+        return upper == 0x00 || upper == 0x20;
+    default:
+        return true;
+    }
+}
+
+bool is_valid_shift_word_immediate_encoding(const Insn& insn) {
+    switch (insn.funct3) {
+    case 1:
+        return insn.funct7 == 0x00;
+    case 5:
+        return insn.funct7 == 0x00 || insn.funct7 == 0x20;
+    default:
+        return true;
+    }
+}
+
+bool is_valid_integer_reg_encoding(uint8_t funct3, uint8_t funct7) {
+    switch (funct3) {
+    case 0:
+        return funct7 == 0x00 || funct7 == 0x20;
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 6:
+    case 7:
+        return funct7 == 0x00;
+    case 5:
+        return funct7 == 0x00 || funct7 == 0x20;
+    default:
+        return false;
+    }
+}
+
+bool is_valid_integer_word_reg_encoding(uint8_t funct3, uint8_t funct7) {
+    switch (funct3) {
+    case 0:
+        return funct7 == 0x00 || funct7 == 0x20;
+    case 1:
+        return funct7 == 0x00;
+    case 5:
+        return funct7 == 0x00 || funct7 == 0x20;
+    default:
+        return false;
+    }
+}
+
+uint64_t sign_extend_word(int32_t value) {
+    return static_cast<uint64_t>(static_cast<int64_t>(value));
+}
+
+uint64_t div_signed(uint64_t lhs, uint64_t rhs) {
+    if (rhs == 0) {
+        return ~0ULL;
+    }
+
+    const int64_t dividend = static_cast<int64_t>(lhs);
+    const int64_t divisor = static_cast<int64_t>(rhs);
+    if (dividend == std::numeric_limits<int64_t>::min() && divisor == -1) {
+        return lhs;
+    }
+
+    return static_cast<uint64_t>(dividend / divisor);
+}
+
+uint64_t rem_signed(uint64_t lhs, uint64_t rhs) {
+    if (rhs == 0) {
+        return lhs;
+    }
+
+    const int64_t dividend = static_cast<int64_t>(lhs);
+    const int64_t divisor = static_cast<int64_t>(rhs);
+    if (dividend == std::numeric_limits<int64_t>::min() && divisor == -1) {
+        return 0;
+    }
+
+    return static_cast<uint64_t>(dividend % divisor);
+}
+
+uint64_t div_signed_word(uint64_t lhs, uint64_t rhs) {
+    const int32_t dividend = static_cast<int32_t>(lhs);
+    const int32_t divisor = static_cast<int32_t>(rhs);
+    if (divisor == 0) {
+        return UINT64_MAX;
+    }
+    if (dividend == std::numeric_limits<int32_t>::min() && divisor == -1) {
+        return sign_extend_word(dividend);
+    }
+
+    return sign_extend_word(static_cast<int32_t>(dividend / divisor));
+}
+
+uint64_t rem_signed_word(uint64_t lhs, uint64_t rhs) {
+    const int32_t dividend = static_cast<int32_t>(lhs);
+    const int32_t divisor = static_cast<int32_t>(rhs);
+    if (divisor == 0) {
+        return sign_extend_word(dividend);
+    }
+    if (dividend == std::numeric_limits<int32_t>::min() && divisor == -1) {
+        return 0;
+    }
+
+    return sign_extend_word(static_cast<int32_t>(dividend % divisor));
 }
 
 }  // namespace
@@ -29,6 +143,10 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
             val = rs1v + static_cast<uint64_t>(imm);
             break;
         case 1:
+            if (!is_valid_shift_immediate_encoding(insn)) {
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
+                return false;
+            }
             val = rs1v << shamt;
             break;
         case 2:
@@ -41,6 +159,10 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
             val = rs1v ^ static_cast<uint64_t>(imm);
             break;
         case 5:
+            if (!is_valid_shift_immediate_encoding(insn)) {
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
+                return false;
+            }
             val = (insn.funct7 & 0x20U) ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) >> shamt) : (rs1v >> shamt);
             break;
         case 6:
@@ -63,9 +185,17 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
             val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v + static_cast<uint64_t>(imm))));
             break;
         case 1:
+            if (!is_valid_shift_word_immediate_encoding(insn)) {
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
+                return false;
+            }
             val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) << shamt)));
             break;
         case 5:
+            if (!is_valid_shift_word_immediate_encoding(insn)) {
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
+                return false;
+            }
             val = (insn.funct7 & 0x20U)
                 ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<int32_t>(rs1v) >> shamt)))
                 : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) >> shamt)));
@@ -94,13 +224,13 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 val = static_cast<uint64_t>((static_cast<__uint128_t>(rs1v) * rs2v) >> 64);
                 break;
             case 4:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) / static_cast<int64_t>(rs2v)) : ~0ULL;
+                val = div_signed(rs1v, rs2v);
                 break;
             case 5:
                 val = rs2v ? rs1v / rs2v : ~0ULL;
                 break;
             case 6:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) % static_cast<int64_t>(rs2v)) : rs1v;
+                val = rem_signed(rs1v, rs2v);
                 break;
             case 7:
                 val = rs2v ? rs1v % rs2v : rs1v;
@@ -110,9 +240,13 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 return false;
             }
         } else {
+            if (!is_valid_integer_reg_encoding(insn.funct3, insn.funct7)) {
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
+                return false;
+            }
             switch (insn.funct3) {
             case 0:
-                val = (insn.funct7 & 0x20U) ? (rs1v - rs2v) : (rs1v + rs2v);
+                val = (insn.funct7 == 0x20U) ? (rs1v - rs2v) : (rs1v + rs2v);
                 break;
             case 1:
                 val = rs1v << shamt;
@@ -127,7 +261,7 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 val = rs1v ^ rs2v;
                 break;
             case 5:
-                val = (insn.funct7 & 0x20U) ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) >> shamt) : (rs1v >> shamt);
+                val = (insn.funct7 == 0x20U) ? static_cast<uint64_t>(static_cast<int64_t>(rs1v) >> shamt) : (rs1v >> shamt);
                 break;
             case 6:
                 val = rs1v | rs2v;
@@ -151,13 +285,13 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v * rs2v)));
                 break;
             case 4:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v) / static_cast<int32_t>(rs2v))) : UINT64_MAX;
+                val = div_signed_word(rs1v, rs2v);
                 break;
             case 5:
                 val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) / static_cast<uint32_t>(rs2v)))) : UINT64_MAX;
                 break;
             case 6:
-                val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v) % static_cast<int32_t>(rs2v))) : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v)));
+                val = rem_signed_word(rs1v, rs2v);
                 break;
             case 7:
                 val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) % static_cast<uint32_t>(rs2v)))) : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v)));
@@ -167,15 +301,19 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 return false;
             }
         } else {
+            if (!is_valid_integer_word_reg_encoding(insn.funct3, insn.funct7)) {
+                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
+                return false;
+            }
             switch (insn.funct3) {
             case 0:
-                val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>((insn.funct7 & 0x20U) ? (rs1v - rs2v) : (rs1v + rs2v))));
+                val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>((insn.funct7 == 0x20U) ? (rs1v - rs2v) : (rs1v + rs2v))));
                 break;
             case 1:
                 val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) << shamt)));
                 break;
             case 5:
-                val = (insn.funct7 & 0x20U)
+                val = (insn.funct7 == 0x20U)
                     ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<int32_t>(rs1v) >> shamt)))
                     : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) >> shamt)));
                 break;

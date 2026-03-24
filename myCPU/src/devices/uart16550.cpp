@@ -15,7 +15,11 @@ constexpr uint32_t UART_LSR_TEMT = 0x40;
 
 Uart16550::Uart16550(Plic& plic) : Device(UART_BASE, UART_SIZE), plic_(plic) {}
 
-uint64_t Uart16550::load(uint64_t addr, int /*size*/) {
+uint64_t Uart16550::load(uint64_t addr, int size) {
+    if (size != 1) {
+        invalid_access(addr, size);
+    }
+
     const uint32_t offset = static_cast<uint32_t>(addr - UART_BASE);
     if (offset == UART_REG_IER) {
         return ier_;
@@ -26,10 +30,15 @@ uint64_t Uart16550::load(uint64_t addr, int /*size*/) {
     if (offset == UART_REG_LSR) {
         return UART_LSR_THRE | UART_LSR_TEMT;
     }
-    return 0;
+
+    invalid_access(addr, size);
 }
 
-void Uart16550::store(uint64_t addr, uint64_t value, int /*size*/) {
+void Uart16550::store(uint64_t addr, uint64_t value, int size) {
+    if (size != 1) {
+        invalid_access(addr, size);
+    }
+
     const uint32_t offset = static_cast<uint32_t>(addr - UART_BASE);
     if (offset == UART_REG_THR) {
         std::putchar(static_cast<int>(value & 0xFF));
@@ -39,7 +48,10 @@ void Uart16550::store(uint64_t addr, uint64_t value, int /*size*/) {
     if (offset == UART_REG_IER) {
         ier_ = static_cast<uint8_t>(value) & UART_IER_THRI;
         update_interrupt_line();
+        return;
     }
+
+    invalid_access(addr, size);
 }
 
 void Uart16550::update_interrupt_line() {

@@ -40,7 +40,7 @@
 - [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
   simulator 主体说明：CPU、CSR、trap、MMU、platform、device、loader、tests 的当前实现、局部约束和待处理问题。
 - [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
-  guest runtime 说明：memory、PMM、VM、trap、runtime、user task/program、smoke orchestration 的当前边界、局部规则和下一步工作。
+  guest runtime 说明：memory、PMM、VM、trap、runtime、user task/program、smoke orchestration 与独立 kernel alpha bring-up 的当前边界、局部规则和下一步工作。
 - [docs/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/docs/AGENTS.md)
   文档维护规则：哪些内容留在根目录，哪些内容进实现子树，哪些内容放到专门文档。
 
@@ -57,6 +57,7 @@
 - 最小 UART / CLINT / PLIC / MMIO block storage 平台
 - Sv39 虚拟内存、最小 TLB、`sfence.vma`
 - 一套最小 guest supervisor runtime 和 `guest_supervisor_demo`
+- 一条独立的 `kernel_alpha_demo` bring-up alpha 路径
 
 当前 guest 侧已经打通：
 
@@ -66,6 +67,7 @@
 - trap / runtime / process / user task / user program 分层
 - 最小 U-mode enter / return
 - timer / external / page-fault / user-`ecall` smoke 路径
+- 独立 kernel alpha 的 boot / PMM / Sv39 / timer interrupt 最小路径
 
 最近一轮结构收口后的基线：
 
@@ -88,21 +90,34 @@
 
 当前阶段不再优先做 `main.c` 或 smoke API 的继续清理，重点转向 Phase 1 功能缺口收尾：
 
-- 修复最近自检暴露出的 correctness 问题
+- 已完成最近一批 simulator-side correctness / loader / bus-device 守边界修复
+- 已落地第一次独立 `kernel_alpha_demo` bring-up alpha 基线
 - 继续推进 guest/runtime 的 process / runtime refinement
 - 继续补 user interrupt / trap 覆盖
-- 为第一次真正的小 OS / kernel bring-up 清掉基础障碍
+- 继续扩展鲁棒性回归，尤其是非法编码矩阵、MMIO 非法访问和更真实 ELF 段布局
+- 在独立 kernel alpha 基线之上继续为第一次真正的小 OS / kernel bring-up 清掉基础障碍
 
 最近一次系统性自检结果见：
 
 - [docs/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/code_self_review_2026-03-24.md)
 
-其中当前最重要的 simulator-side 问题包括：
+其中首批 simulator-side 问题已于 `2026-03-25` 完成修复：
 
-- 非法整数编码会被误执行
-- 有符号 `DIV/REM` 溢出边界会触发宿主未定义行为
+- 非法整数编码误执行
+- 有符号 `DIV/REM` 溢出边界触发宿主未定义行为
 - ELF loader 对纯 BSS `PT_LOAD` 段处理不完整
-- bus / device 访问边界仍偏宽松
+- bus / device 访问边界偏宽松
+
+当前剩余重点更偏向：
+
+- guest 侧 `vm.c` / `trap.c` 等大文件继续拆分
+- 固定上限常量在第一次真正的小 OS / kernel bring-up 前的收口
+- `SimpleStorage` 的阶段性限制
+- 更系统的 reference robustness 回归补齐
+
+当前 bring-up 计划与首个 alpha 里程碑见：
+
+- [docs/kernel_alpha_bringup_plan_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/kernel_alpha_bringup_plan_2026-03-25.md)
 
 ## 技术栈
 
@@ -115,11 +130,13 @@
 ## 全局开发约定
 
 - 任何实现改动都应优先维护 reference path 的正确性与可观察性。
+- 当实现状态、已知问题、验证基线或当前计划发生变化后，同步更新相关层级的 `AGENTS.md`、`docs/` 文档和 `readme.md`，避免三者长期漂移。
 - README 中的功能声明必须与真实实现保持一致。
 - 不要做没有结构收益的“纯语言迁移”或“纯 cosmetic 重写”。
 - 优先小步落地，避免一次引入过大的抽象。
 - 不要提交构建产物，尤其是：
   - `myCPU/guest/supervisor_demo.elf`
+  - `myCPU/guest/kernel_alpha_demo.elf`
 - 对 guest 相关描述，README 保持简洁；更细节的实现状态和局部规则写进子目录 `AGENTS.md` 或 `docs/`。
 
 ## 全局验证基线
@@ -131,6 +148,7 @@
 如果改动主要集中在 guest runtime / demo bring-up，至少应额外关注：
 
 - `cd myCPU && make test-guest-supervisor_demo`
+- `cd myCPU && make test-guest-kernel_alpha_demo`
 
 ## 开发阶段
 

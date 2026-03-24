@@ -48,17 +48,22 @@ uint64_t Clint::load(uint64_t addr, int size) {
     if (access_in_range(offset, CLINT_REG_MTIMECMP, size)) {
         return load_register_slice(mtimecmp_, CLINT_REG_MTIMECMP, offset, size);
     }
-    return 0;
+
+    invalid_access(addr, size);
 }
 
 void Clint::store(uint64_t addr, uint64_t value, int size) {
     const uint64_t offset = addr - CLINT_BASE;
     if (access_in_range(offset, CLINT_REG_MTIME, size)) {
         store_register_slice(mtime_, CLINT_REG_MTIME, offset, value, size);
+        return;
     }
     if (access_in_range(offset, CLINT_REG_MTIMECMP, size)) {
         store_register_slice(mtimecmp_, CLINT_REG_MTIMECMP, offset, value, size);
+        return;
     }
+
+    invalid_access(addr, size);
 }
 
 PlatformEvents Clint::tick() {

@@ -1,0 +1,88 @@
+#include <cstdio>
+#include <exception>
+#include <stdexcept>
+
+#include "../../src/devices/plic.h"
+#include "../../src/devices/simple_storage.h"
+#include "../../src/devices/uart16550.h"
+#include "../../src/mem/bus.h"
+#include "../../src/mem/ram.h"
+#include "../../src/platform/address_map.h"
+
+namespace {
+
+class DummyDevice : public Device {
+public:
+    DummyDevice(uint64_t base, uint64_t size)
+        : Device(base, size) {}
+
+    uint64_t load(uint64_t, int) override {
+        return 0;
+    }
+
+    void store(uint64_t, uint64_t, int) override {}
+};
+
+int fail(const char* message) {
+    std::fprintf(stderr, "%s\n", message);
+    return 1;
+}
+
+}  // namespace
+
+int main() {
+    try {
+        {
+            Ram ram;
+            Bus bus(ram);
+            DummyDevice first(0x1000, 0x10);
+            DummyDevice second(0x1008, 0x10);
+
+            bus.attach(first);
+
+            bool threw = false;
+            try {
+                bus.attach(second);
+            } catch (const std::runtime_error&) {
+                threw = true;
+            }
+            if (!threw) {
+                return fail("expected overlapping attach to fail");
+            }
+        }
+
+        {
+            Ram ram;
+            Bus bus(ram);
+            Plic plic;
+            Uart16550 uart(plic);
+            SimpleStorage storage;
+            uint64_t value = 0;
+
+            bus.attach(uart);
+            bus.attach(plic);
+            bus.attach(storage);
+
+            if (!bus.try_load(UART_BASE + UART_REG_LSR, 1, value) || value != 0x60) {
+                return fail("expected valid UART byte load to succeed");
+            }
+            if (bus.try_store(UART_BASE + UART_REG_THR, 'A', 4)) {
+                return fail("expected invalid UART width to fail");
+            }
+            if (bus.try_load(PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE), 8, value)) {
+                return fail("expected invalid PLIC width to fail");
+            }
+            if (!bus.try_load(STORAGE_BASE + STORAGE_REG_MAGIC, 8, value) || value != STORAGE_MMIO_MAGIC) {
+                return fail("expected valid storage register load to succeed");
+            }
+            if (bus.try_store(STORAGE_BASE + STORAGE_REG_COMMAND, STORAGE_CMD_READ, 4)) {
+                return fail("expected invalid storage register width to fail");
+            }
+        }
+
+        return 0;
+    } catch (const std::exception& ex) {
+        std::fprintf(stderr, "%s\n", ex.what());
+        return 1;
+    }
+}

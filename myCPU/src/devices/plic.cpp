@@ -2,7 +2,11 @@
 
 Plic::Plic() : Device(PLIC_BASE, PLIC_SIZE) {}
 
-uint64_t Plic::load(uint64_t addr, int /*size*/) {
+uint64_t Plic::load(uint64_t addr, int size) {
+    if (size != 4) {
+        invalid_access(addr, size);
+    }
+
     const uint32_t offset = static_cast<uint32_t>(addr - PLIC_BASE);
 
     if (offset == PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE)) {
@@ -30,10 +34,14 @@ uint64_t Plic::load(uint64_t addr, int /*size*/) {
         return claim(supervisor_context_);
     }
 
-    return 0;
+    invalid_access(addr, size);
 }
 
-void Plic::store(uint64_t addr, uint64_t value, int /*size*/) {
+void Plic::store(uint64_t addr, uint64_t value, int size) {
+    if (size != 4) {
+        invalid_access(addr, size);
+    }
+
     const uint32_t offset = static_cast<uint32_t>(addr - PLIC_BASE);
     const uint32_t value32 = static_cast<uint32_t>(value);
 
@@ -59,7 +67,10 @@ void Plic::store(uint64_t addr, uint64_t value, int /*size*/) {
     }
     if (offset == kMachineContextOffset + 4 || offset == kSupervisorContextOffset + 4) {
         complete(value32);
+        return;
     }
+
+    invalid_access(addr, size);
 }
 
 PlatformEvents Plic::tick() {

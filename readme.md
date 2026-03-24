@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个最小 guest supervisor runtime。guest 侧目前已经打通 early allocator、最小 PMM、页表与地址空间、trap/runtime、单用户任务封装，以及 `guest_supervisor_demo` 的 bring-up smoke；其中 `supervisor_demo_smoke` 已经收口为单入口 demo runner，`user_program_smoke` 也进一步收成阶段化 lifecycle / prepare / enter helper。
+当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个最小 guest supervisor runtime。最近一轮 simulator-side correctness / loader / bus-device 守边界修复也已经落地：非法整数保留编码会稳定触发 `illegal instruction`，`DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 语义返回，纯 BSS `PT_LOAD` 段会正确 `zero-fill`，第一轮 MMIO 非法访问宽度与设备区间重叠防御也已接通。guest 侧目前已经打通 early allocator、最小 PMM、页表与地址空间、trap/runtime、单用户任务封装，以及两条不同职责的 bring-up 路径：`guest_supervisor_demo` 负责 U-mode/runtime smoke，独立 `kernel_alpha_demo` 负责第一次真正的小 kernel alpha bring-up 基线；其中 `supervisor_demo_smoke` 已经收口为单入口 demo runner，`user_program_smoke` 也进一步收成阶段化 lifecycle / prepare / enter helper。
 
 ## 目录结构
 
@@ -21,6 +21,7 @@ myCPU/
 │   ├── loader/         # C++ ELF / flat binary 镜像装载边界
 │   └── ...
 ├── tests/asm/          # 汇编测试程序与平台 smoke coverage
+├── tests/unit/         # host-side 单元回归（loader / bus/device 守边界）
 ├── docs/               # 规划与平台契约文档
 └── Makefile
 ```
@@ -103,9 +104,12 @@ make
 ```bash
 sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
+
+# 只跑独立 kernel alpha bring-up 回归
+make test-guest-kernel_alpha_demo
 ```
 
-`make test` 会构建汇编样例和最小 guest supervisor demo，并校验 UART 输出是否与预期一致；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、特权/异常/CSR 语义、PLIC/CLINT/storage 等平台路径、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理等 smoke。
+`make test` 会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo` 和 `kernel_alpha_demo` 两条 guest bring-up 路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、UART / CLINT lazy map 与第一次 timer interrupt。
 
 ## 内存映射
 
@@ -121,7 +125,10 @@ make test
 
 - RV64I 基础整数指令集
 - RV64M 乘除法扩展
+- 非法整数保留编码稳定触发 `illegal instruction`
+- `DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 规范返回
 - ELF64 程序加载
+- 纯 BSS `PT_LOAD` 段装载与 zero-fill
 - CSR 指令（CSRRW/CSRRS/CSRRC 及立即数变体）
 - M-mode 异常与中断（ECALL、EBREAK、MRET）
 - 第一批 M/S/U 特权语义：`MPP` 跟踪、`ecall` cause 区分、`sret` 返回、CSR 访问约束
@@ -138,7 +145,9 @@ make test
 - `time` CSR 与 CLINT `mtime` 保持一致，guest 侧 CSR/MMIO 看到同一平台时间源
 - PLIC machine/supervisor external interrupt 最小路径
 - host-backed block-oriented MMIO storage device
+- 设备区间重叠防御，以及第一轮 MMIO 非法访问宽度白名单
 - 最小 guest supervisor runtime：包含统一 trap dispatch、基础平台库、early allocator / PMM / guest-side Sv39 VM、显式 trap/runtime/task/program helper，以及由 `user_program_smoke` 提供的阶段化 lifecycle / prepare / enter helper 与 `supervisor_demo_smoke` 提供的单入口 demo runner，覆盖 `guest_supervisor_demo` 的 bootstrap、U-mode 进入/返回、page fault 恢复、timer/external interrupt 与生命周期清理 smoke
+- 独立 `kernel_alpha_demo`：覆盖 boot marker、PMM 初始化、自建 Sv39 内核页表、UART / CLINT fault-range lazy map 与第一次 supervisor timer interrupt
 - `ecall` a7=93 退出约定
 
 ## 源码文件说明
@@ -151,12 +160,14 @@ make test
 ### `myCPU/`
 
 - `Makefile`：本地编译规则、RISC-V 汇编样例构建规则和 `make test` 测试入口。
+- `tests/unit/`：host-side 单元测试，当前覆盖 ELF pure-BSS 装载和 bus/device 守边界。
 - `mycpu`：编译产物，运行后加载并执行 RISC-V 程序镜像。
 
 ### `myCPU/guest/`
 
 - `include/`：guest 平台层、trap、timer、memory、pmm、vm、`user_task`、`user_task_bootstrap`、`user_program`、`user_program_smoke`、`supervisor_demo_smoke` 等最小内核接口。
 - `kernel/`：guest 最小内核实现，包含 `console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` / `runtime_context`，以及 `user_task` / `user_task_bootstrap` / `user_program` / smoke helpers。当前重点已覆盖页表与 VM 管理、trap/runtime 生命周期、单用户任务 bring-up，以及由阶段化 `user_program_smoke` helper 与单入口 `supervisor_demo_smoke` runner 封装的 `guest_supervisor_demo` bootstrap、fault/interrupt/lifecycle 与 platform-tail 流程。
+- `kernel_alpha/`：独立 kernel alpha bring-up 入口，当前用于验证第一次真正的小 kernel alpha 的 boot / PMM / Sv39 / timer interrupt 最小基线。
 - `lib/platform.S` / `lib/trap_runtime.S`：共享 guest MMIO 平台库入口，以及 U-mode enter/resume 的共享汇编桥。
 - `supervisor_demo/`：最小 supervisor runtime、linker script 和 bring-up demo。
 
@@ -184,7 +195,7 @@ make test
   `Bus` 类声明。维护统一设备映射表，并向上暴露统一的 load/store/tick 接口；`tick()` 返回平台事件而不是暴露具体设备状态。
 
 - `mem/bus.cpp`
-  `Bus` 实现。负责设备附加、地址分发以及平台 tick 结果汇总；RAM 也作为总线设备接入，不再保留专门的 RAM 分支。
+  `Bus` 实现。负责设备附加、地址分发以及平台 tick 结果汇总；RAM 也作为总线设备接入，不再保留专门的 RAM 分支。当前还负责第一轮设备区间重叠防御和非法设备访问收口。
 
 - `mem/address_space.h`
   `AddressSpace` 类声明。定义 CPU 侧 fetch/load/store 访问入口，提供虚拟地址到物理地址的转换边界。
@@ -193,7 +204,7 @@ make test
   `AddressSpace` 实现。支持 bare-mode 直通和 Sv39 三级页表遍历。M-mode 始终使用物理地址；S/U-mode 根据受限 `satp.MODE` 决定是否启用分页。页表遍历包含权限检查（R/W/X/U 位）、大页对齐检查，以及 instruction/load/store page fault 触发。
 
 - `devices/device.h`
-  设备基类声明。定义统一的 `contains/load/store` 接口，供平台总线附加和寻址。
+  设备基类声明。定义统一的 `contains/load/store` 接口，供平台总线附加和寻址，并为非法 MMIO 访问提供统一报错入口。
 
 - `devices/uart16550.h`
   `Uart16550` 类声明。封装最小 16550 串口寄存器访问与 stdout 输出行为。
@@ -217,7 +228,7 @@ make test
   `ElfLoader` 类声明。定义 ELF 镜像装载接口。
 
 - `loader/elf_loader.cpp`
-  `ElfLoader` 实现。解析最小 ELF64 头和程序头，把可加载段通过 `Ram` 接口写入内存，并返回入口地址。
+  `ElfLoader` 实现。解析最小 ELF64 头和程序头，把可加载段通过 `Ram` 接口写入内存，并返回入口地址；当前已支持纯 BSS `PT_LOAD` 段的 `zero-fill`。
 
 - `loader/binary_loader.h`
   `BinaryLoader` 类声明。定义平坦二进制装载接口。
@@ -247,7 +258,7 @@ make test
   整数指令族执行接口声明。承接 `LUI/AUIPC`、整数立即数、整数寄存器、`W` 变体和当前 `FENCE` no-op 路径。
 
 - `exec/integer_ops.cpp`
-  整数指令族执行实现。负责 RV64I/RV64M 中的整数算术、比较、移位和 `W` 类语义。
+  整数指令族执行实现。负责 RV64I/RV64M 中的整数算术、比较、移位和 `W` 类语义；当前已收紧非法整数保留编码判定，并显式处理 `DIV/REM/DIVW/REMW` 的宿主 UB 边界。
 
 - `exec/control_flow_ops.h`
   控制流指令执行接口声明。承接跳转与条件分支语义。
@@ -305,6 +316,8 @@ make test
 - `alu_word.S`：验证 `ADDIW/SLLIW/SRLIW/SRAIW` 与 `ADDW/SUBW/SLLW/SRLW/SRAW` 的 32 位结果截断和符号扩展。
 - `branches_signed_unsigned.S`：验证 `BLT/BGE` 与 `BLTU/BGEU` 在相同输入下的 signed/unsigned 语义差异。
 - `muldiv.S`：验证 `RV64M` 乘除、取模以及除零边界行为。
+- `muldiv_edge_cases.S`：验证 `DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 规范边界。
+- `illegal_integer_encodings.S`：验证非法整数保留编码稳定进入 `illegal instruction` trap。
 - `fence_noop.S`：固定当前 `FENCE/FENCE.I` 在参考模型中的 no-op 行为。
 - `csr_semantic_consistency.S`：验证 `misa` 只读语义、`satp.MODE` 受限 WARL 语义，以及 `time` CSR 与 CLINT `mtime` 的一致性。
 
