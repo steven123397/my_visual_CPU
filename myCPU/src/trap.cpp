@@ -103,11 +103,15 @@ void TrapController::return_from_sret() {
 }
 
 void TrapController::handle_platform_events(const PlatformEvents& events) {
+    sync_platform_events(events);
+    service_pending_interrupts();
+}
+
+void TrapController::sync_platform_events(const PlatformEvents& events) {
     if (events.timer_interrupt_pending) {
         raise_timer_interrupt();
     }
     sync_external_interrupts(events);
-    service_pending_interrupts();
 }
 
 void TrapController::sync_external_interrupts(const PlatformEvents& events) {
@@ -138,7 +142,7 @@ void TrapController::raise_timer_interrupt() {
     csr_.write(CSR_MIP, (mip | MIE_MTIE) & ~MIE_STIE, core_);
 }
 
-void TrapController::service_pending_interrupts() {
+bool TrapController::service_pending_interrupts() {
     const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
     const uint64_t mie = csr_.read(CSR_MIE, core_);
     const uint64_t mip = csr_.read(CSR_MIP, core_);
@@ -147,25 +151,28 @@ void TrapController::service_pending_interrupts() {
     if ((mie & MIE_MEIE) && (mip & MIE_MEIE) && machine_interrupts_enabled(core_, mstatus)) {
         csr_.write(CSR_MIP, mip & ~MIE_MEIE, core_);
         enter_interrupt(CAUSE_MACHINE_EXTERNAL_INT);
-        return;
+        return true;
     }
 
     if ((mie & MIE_MTIE) && (mip & MIE_MTIE) && machine_interrupts_enabled(core_, mstatus)) {
         csr_.write(CSR_MIP, mip & ~MIE_MTIE, core_);
         enter_interrupt(CAUSE_MACHINE_TIMER_INT);
-        return;
+        return true;
     }
 
     if ((mideleg & MIE_SEIE) && (mie & MIE_SEIE) && (mip & MIE_SEIE) && supervisor_interrupts_enabled(core_, mstatus)) {
         csr_.write(CSR_MIP, mip & ~MIE_SEIE, core_);
         enter_interrupt(CAUSE_SUPERVISOR_EXTERNAL_INT);
-        return;
+        return true;
     }
 
     if ((mideleg & MIE_STIE) && (mie & MIE_STIE) && (mip & MIE_STIE) && supervisor_interrupts_enabled(core_, mstatus)) {
         csr_.write(CSR_MIP, mip & ~MIE_STIE, core_);
         enter_interrupt(CAUSE_SUPERVISOR_TIMER_INT);
+        return true;
     }
+
+    return false;
 }
 
 void TrapController::enter_trap(uint64_t cause, uint64_t tval) {

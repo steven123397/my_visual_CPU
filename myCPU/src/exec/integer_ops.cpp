@@ -1,27 +1,50 @@
 #include "integer_ops.h"
 
 #include "../cpu.h"
+#include "../isa/effects.h"
 
 namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
-void write_rd(CPU& cpu, uint8_t rd, uint64_t value) {
-    cpu.core().write_gpr(rd, value);
+TrapRequest illegal_instruction_trap(uint32_t raw) {
+    TrapRequest trap;
+    trap.valid = true;
+    trap.cause = CAUSE_ILLEGAL_INSN;
+    trap.tval = raw;
+    return trap;
+}
+
+void set_rd(InsnEffects& effects, uint8_t rd, uint64_t value) {
+    effects.rd_write.enable = true;
+    effects.rd_write.rd = rd;
+    effects.rd_write.value = value;
+}
+
+bool apply_integer_effects(CPU& cpu, const InsnEffects& effects) {
+    if (effects.trap.valid) {
+        cpu.trap().enter_exception(effects.trap.cause, effects.trap.tval);
+        return false;
+    }
+    if (effects.rd_write.enable) {
+        cpu.core().write_gpr(effects.rd_write.rd, effects.rd_write.value);
+    }
+    return effects.retired;
 }
 
 }  // namespace
 
-bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm, uint64_t pc) {
+InsnEffects build_integer_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm, uint64_t pc) {
+    InsnEffects effects;
     uint64_t val = 0;
 
     switch (insn.opcode) {
     case 0x37:
-        write_rd(cpu, insn.rd, static_cast<uint64_t>(imm));
-        return true;
+        set_rd(effects, insn.rd, static_cast<uint64_t>(imm));
+        return effects;
     case 0x17:
-        write_rd(cpu, insn.rd, pc + static_cast<uint64_t>(imm));
-        return true;
+        set_rd(effects, insn.rd, pc + static_cast<uint64_t>(imm));
+        return effects;
     case 0x13: {
         const uint8_t shamt = static_cast<uint8_t>(insn.rs2 | ((insn.funct7 & 1U) << 5));
         switch (insn.funct3) {
@@ -50,11 +73,12 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
             val = rs1v & static_cast<uint64_t>(imm);
             break;
         default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        write_rd(cpu, insn.rd, val);
-        return true;
+        set_rd(effects, insn.rd, val);
+        return effects;
     }
     case 0x1B: {
         const uint8_t shamt = insn.rs2;
@@ -71,11 +95,12 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) >> shamt)));
             break;
         default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        write_rd(cpu, insn.rd, val);
-        return true;
+        set_rd(effects, insn.rd, val);
+        return effects;
     }
     case 0x33: {
         const uint8_t shamt = static_cast<uint8_t>(rs2v & 63U);
@@ -106,8 +131,9 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 val = rs2v ? rs1v % rs2v : rs1v;
                 break;
             default:
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-                return false;
+                effects.trap = illegal_instruction_trap(insn.raw);
+                effects.retired = false;
+                return effects;
             }
         } else {
             switch (insn.funct3) {
@@ -136,12 +162,13 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 val = rs1v & rs2v;
                 break;
             default:
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-                return false;
+                effects.trap = illegal_instruction_trap(insn.raw);
+                effects.retired = false;
+                return effects;
             }
         }
-        write_rd(cpu, insn.rd, val);
-        return true;
+        set_rd(effects, insn.rd, val);
+        return effects;
     }
     case 0x3B: {
         const uint8_t shamt = static_cast<uint8_t>(rs2v & 31U);
@@ -163,8 +190,9 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                 val = rs2v ? static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) % static_cast<uint32_t>(rs2v)))) : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rs1v)));
                 break;
             default:
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-                return false;
+                effects.trap = illegal_instruction_trap(insn.raw);
+                effects.retired = false;
+                return effects;
             }
         } else {
             switch (insn.funct3) {
@@ -180,15 +208,33 @@ bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint
                     : static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(rs1v) >> shamt)));
                 break;
             default:
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-                return false;
+                effects.trap = illegal_instruction_trap(insn.raw);
+                effects.retired = false;
+                return effects;
             }
         }
-        write_rd(cpu, insn.rd, val);
-        return true;
+        set_rd(effects, insn.rd, val);
+        return effects;
     }
     case 0x0F:
-        return true;
+        return effects;
+    default:
+        effects.trap = illegal_instruction_trap(insn.raw);
+        effects.retired = false;
+        return effects;
+    }
+}
+
+bool execute_integer_instruction(CPU& cpu, const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm, uint64_t pc) {
+    switch (insn.opcode) {
+    case 0x37:
+    case 0x17:
+    case 0x13:
+    case 0x1B:
+    case 0x33:
+    case 0x3B:
+    case 0x0F:
+        return apply_integer_effects(cpu, build_integer_effects(insn, rs1v, rs2v, imm, pc));
     default:
         return false;
     }

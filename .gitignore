@@ -20,6 +20,10 @@ Thumbs.db
 /myCPU/mycpu
 /myCPU/tests/asm/*.elf
 /myCPU/tests/asm/*.bin
+/myCPU/guest/*.elf
+
+# Local brainstorming / prototype artifacts
+/.superpowers/
 
 # Logs and coverage
 *.log

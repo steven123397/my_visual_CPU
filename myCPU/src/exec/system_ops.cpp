@@ -1,6 +1,9 @@
 #include "system_ops.h"
 
 #include "../cpu.h"
+#include "../isa/effects.h"
+#include "../isa/execution_context.h"
+#include "../isa/instruction_semantics.h"
 
 namespace {
 
@@ -10,8 +13,22 @@ constexpr uint64_t CAUSE_ECALL_S = 9;
 constexpr uint64_t CAUSE_BREAKPOINT = 3;
 constexpr uint64_t CAUSE_ECALL_M = 11;
 
-void write_rd(CPU& cpu, uint8_t rd, uint64_t value) {
-    cpu.core().write_gpr(rd, value);
+TrapRequest trap_request(uint64_t cause, uint64_t tval) {
+    TrapRequest trap;
+    trap.valid = true;
+    trap.cause = cause;
+    trap.tval = tval;
+    return trap;
+}
+
+TrapRequest illegal_instruction_trap(uint32_t raw) {
+    return trap_request(CAUSE_ILLEGAL_INSN, raw);
+}
+
+void set_rd(InsnEffects& effects, uint8_t rd, uint64_t value) {
+    effects.rd_write.enable = true;
+    effects.rd_write.rd = rd;
+    effects.rd_write.value = value;
 }
 
 bool is_sfence_vma(const Insn& insn) {
@@ -46,26 +63,29 @@ uint64_t counter_access_mask(uint32_t addr) {
     }
 }
 
-bool counter_read_allowed(const CPU& cpu, uint32_t addr) {
+bool counter_read_allowed(ExecutionContext& ctx, uint32_t addr) {
     const uint64_t mask = counter_access_mask(addr);
     if (mask == 0) {
         return true;
     }
 
-    switch (cpu.core().privilege_mode()) {
+    const CoreState& core = ctx.cpu().core();
+    const CsrFile& csr = ctx.cpu().csr();
+
+    switch (core.privilege_mode()) {
     case PrivilegeMode::Machine:
         return true;
     case PrivilegeMode::Supervisor:
-        return (cpu.csr().read(CSR_MCOUNTEREN, cpu.core()) & mask) != 0;
+        return (csr.read(CSR_MCOUNTEREN, core) & mask) != 0;
     case PrivilegeMode::User:
-        return (cpu.csr().read(CSR_MCOUNTEREN, cpu.core()) & mask) != 0 &&
-               (cpu.csr().read(CSR_SCOUNTEREN, cpu.core()) & mask) != 0;
+        return (csr.read(CSR_MCOUNTEREN, core) & mask) != 0 && (csr.read(CSR_SCOUNTEREN, core) & mask) != 0;
     }
 
     return false;
 }
 
-bool csr_access_allowed(const CPU& cpu, uint32_t addr, bool write) {
+bool csr_access_allowed(ExecutionContext& ctx, uint32_t addr, bool write) {
+    CPU& cpu = ctx.cpu();
     if (!cpu.csr().is_implemented(addr)) {
         return false;
     }
@@ -76,7 +96,7 @@ bool csr_access_allowed(const CPU& cpu, uint32_t addr, bool write) {
         return false;
     }
 
-    if (!write && !counter_read_allowed(cpu, addr)) {
+    if (!write && !counter_read_allowed(ctx, addr)) {
         return false;
     }
 
@@ -90,132 +110,155 @@ bool csr_access_allowed(const CPU& cpu, uint32_t addr, bool write) {
 
 }  // namespace
 
-bool execute_system_instruction(CPU& cpu, const Insn& insn, bool& retired) {
-    CoreState& core = cpu.core();
-    const uint64_t pc = core.pc();
+InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const SemanticInputs& inputs) {
+    CPU& cpu = ctx.cpu();
+    CoreState& core = ctx.core();
+    InsnEffects effects;
     const uint32_t csr_addr = insn.raw >> 20;
-    const uint64_t rs1v = core.read_gpr(insn.rs1);
     uint64_t old = 0;
-    retired = false;
 
     switch (insn.funct3) {
     case 0:
         if (insn.raw == 0x00000073) {
-            if (core.read_gpr(17) == 93) {
-                core.set_halted(true);
-                retired = true;
-            } else {
-                uint64_t cause = CAUSE_ECALL_M;
-                switch (core.privilege_mode()) {
-                case PrivilegeMode::User:
-                    cause = CAUSE_ECALL_U;
-                    break;
-                case PrivilegeMode::Supervisor:
-                    cause = CAUSE_ECALL_S;
-                    break;
-                case PrivilegeMode::Machine:
-                    cause = CAUSE_ECALL_M;
-                    break;
-                }
-                cpu.trap().enter_exception(cause, 0);
+            const uint64_t ecall_a7 = inputs.has_ecall_a7 ? inputs.ecall_a7 : core.read_gpr(17);
+            if (ecall_a7 == 93) {
+                effects.control.halt = true;
+                return effects;
             }
-            return false;
+            uint64_t cause = CAUSE_ECALL_M;
+            switch (core.privilege_mode()) {
+            case PrivilegeMode::User:
+                cause = CAUSE_ECALL_U;
+                break;
+            case PrivilegeMode::Supervisor:
+                cause = CAUSE_ECALL_S;
+                break;
+            case PrivilegeMode::Machine:
+                cause = CAUSE_ECALL_M;
+                break;
+            }
+            effects.trap = trap_request(cause, 0);
+            effects.retired = false;
+            return effects;
         }
         if (insn.raw == 0x00100073) {
-            cpu.trap().enter_exception(CAUSE_BREAKPOINT, pc);
-            return false;
+            effects.trap = trap_request(CAUSE_BREAKPOINT, inputs.pc);
+            effects.retired = false;
+            return effects;
         }
         if (insn.raw == 0x30200073) {
             if (core.privilege_mode() != PrivilegeMode::Machine) {
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-                return false;
+                effects.trap = illegal_instruction_trap(insn.raw);
+                effects.retired = false;
+                return effects;
             }
-            cpu.trap().return_from_mret();
-            retired = true;
-            return false;
+            effects.control.trap_return = TrapReturnKind::Mret;
+            return effects;
         }
         if (insn.raw == 0x10200073) {
             if (core.privilege_mode() == PrivilegeMode::User) {
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-                return false;
+                effects.trap = illegal_instruction_trap(insn.raw);
+                effects.retired = false;
+                return effects;
             }
-            cpu.trap().return_from_sret();
-            retired = true;
-            return false;
+            effects.control.trap_return = TrapReturnKind::Sret;
+            return effects;
         }
         if (is_sfence_vma(insn)) {
             if (core.privilege_mode() == PrivilegeMode::User) {
-                cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-                return false;
+                effects.trap = illegal_instruction_trap(insn.raw);
+                effects.retired = false;
+                return effects;
             }
-            cpu.address_space().flush_tlb();
-            retired = true;
-            return true;
+            effects.control.flush_tlb = true;
+            return effects;
         }
-        cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-        return false;
+        effects.trap = illegal_instruction_trap(insn.raw);
+        effects.retired = false;
+        return effects;
     case 1:
-        if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+        if (!csr_access_allowed(ctx, csr_addr, csr_instruction_writes(insn))) {
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        old = csr_read(cpu, csr_addr);
-        write_rd(cpu, insn.rd, old);
-        csr_write(cpu, csr_addr, rs1v);
-        retired = true;
-        return true;
+        old = inputs.has_csrv ? inputs.csrv : csr_read(cpu, csr_addr);
+        set_rd(effects, insn.rd, old);
+        effects.csr_write.enable = true;
+        effects.csr_write.addr = csr_addr;
+        effects.csr_write.value = inputs.rs1v;
+        return effects;
     case 2:
-        if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+        if (!csr_access_allowed(ctx, csr_addr, csr_instruction_writes(insn))) {
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        old = csr_read(cpu, csr_addr);
-        write_rd(cpu, insn.rd, old);
-        csr_write(cpu, csr_addr, old | rs1v);
-        retired = true;
-        return true;
+        old = inputs.has_csrv ? inputs.csrv : csr_read(cpu, csr_addr);
+        set_rd(effects, insn.rd, old);
+        if (csr_instruction_writes(insn)) {
+            effects.csr_write.enable = true;
+            effects.csr_write.addr = csr_addr;
+            effects.csr_write.value = old | inputs.rs1v;
+        }
+        return effects;
     case 3:
-        if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+        if (!csr_access_allowed(ctx, csr_addr, csr_instruction_writes(insn))) {
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        old = csr_read(cpu, csr_addr);
-        write_rd(cpu, insn.rd, old);
-        csr_write(cpu, csr_addr, old & ~rs1v);
-        retired = true;
-        return true;
+        old = inputs.has_csrv ? inputs.csrv : csr_read(cpu, csr_addr);
+        set_rd(effects, insn.rd, old);
+        if (csr_instruction_writes(insn)) {
+            effects.csr_write.enable = true;
+            effects.csr_write.addr = csr_addr;
+            effects.csr_write.value = old & ~inputs.rs1v;
+        }
+        return effects;
     case 5:
-        if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+        if (!csr_access_allowed(ctx, csr_addr, csr_instruction_writes(insn))) {
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        old = csr_read(cpu, csr_addr);
-        write_rd(cpu, insn.rd, old);
-        csr_write(cpu, csr_addr, insn.rs1);
-        retired = true;
-        return true;
+        old = inputs.has_csrv ? inputs.csrv : csr_read(cpu, csr_addr);
+        set_rd(effects, insn.rd, old);
+        effects.csr_write.enable = true;
+        effects.csr_write.addr = csr_addr;
+        effects.csr_write.value = insn.rs1;
+        return effects;
     case 6:
-        if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+        if (!csr_access_allowed(ctx, csr_addr, csr_instruction_writes(insn))) {
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        old = csr_read(cpu, csr_addr);
-        write_rd(cpu, insn.rd, old);
-        csr_write(cpu, csr_addr, old | insn.rs1);
-        retired = true;
-        return true;
+        old = inputs.has_csrv ? inputs.csrv : csr_read(cpu, csr_addr);
+        set_rd(effects, insn.rd, old);
+        if (csr_instruction_writes(insn)) {
+            effects.csr_write.enable = true;
+            effects.csr_write.addr = csr_addr;
+            effects.csr_write.value = old | insn.rs1;
+        }
+        return effects;
     case 7:
-        if (!csr_access_allowed(cpu, csr_addr, csr_instruction_writes(insn))) {
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+        if (!csr_access_allowed(ctx, csr_addr, csr_instruction_writes(insn))) {
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        old = csr_read(cpu, csr_addr);
-        write_rd(cpu, insn.rd, old);
-        csr_write(cpu, csr_addr, old & ~static_cast<uint64_t>(insn.rs1));
-        retired = true;
-        return true;
+        old = inputs.has_csrv ? inputs.csrv : csr_read(cpu, csr_addr);
+        set_rd(effects, insn.rd, old);
+        if (csr_instruction_writes(insn)) {
+            effects.csr_write.enable = true;
+            effects.csr_write.addr = csr_addr;
+            effects.csr_write.value = old & ~static_cast<uint64_t>(insn.rs1);
+        }
+        return effects;
     default:
-        cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-        return false;
+        effects.trap = illegal_instruction_trap(insn.raw);
+        effects.retired = false;
+        return effects;
     }
 }
