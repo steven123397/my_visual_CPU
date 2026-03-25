@@ -211,12 +211,16 @@
 - 随后继续把六条 storage 负向回归里的 probe / read / clear-error 合同检查
   收口到 `guest/kernel_alpha/storage_contract.c`，让各入口进一步退化成
   “storage-only bring-up + 选择哪条合同 + marker / panic”。
+- 随后继续把 non-storage readiness / panic 相关的 interrupt bring-up、
+  platform interrupt readiness、`PLIC not-ready`、`timer not-ready` 与
+  标准 post-handler 合同收口到 `guest/kernel_alpha/interrupt_contract.c`，
+  让 `kernel_alpha` 主入口与两条 non-storage 负向入口进一步只保留场景差异。
 
 ## 当前仍然有效的风险 / 限制
 
-当前 `kernel_alpha` 仍是 alpha 形态，还没有真正进入“小型内核骨架完成态”。
+对“第一次真正的小型 OS / kernel bring-up”这一层目标而言，当前基础障碍已经清掉，`kernel_alpha` 已经达到 Phase 1 核心完成态。
 
-当前仍然缺少的重点包括：
+当前仍然有效的剩余项，已经从“阻塞首次 bring-up 的基础障碍”转为 post-Phase1 hardening，主要包括：
 
 - 更完整的 kernel 对象与 runtime 组织，而不只是 bring-up 流程。
 - 更系统的 device readiness / error 合同覆盖。
@@ -227,12 +231,13 @@
 
 1. 继续守住 `guest/kernel/vm.c` / `guest/kernel/vm_address_space.c` / `guest/kernel/vm_process.c` / `guest/kernel/vm_object.c` / `guest/kernel/vm_fault.c` 的边界，避免后续修改重新耦合。
 2. 继续守住 `guest/kernel/trap.c` 与 `guest/kernel/trap_dispatch.c` 的 lifecycle / dispatch 边界，避免后续修改重新耦合。
-3. 在不打破 reference path 简洁性的前提下，继续补更系统的 device readiness / fault / panic 合同，并继续把 `kernel_alpha` runtime 从 bring-up helper 推进成更稳定的小内核骨架，为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
+3. 在不打破 reference path 简洁性的前提下，把剩余 device readiness / fault / panic / runtime refinement 继续当作 post-Phase1 hardening，而不再视为首次小型 OS / kernel bring-up 的基础阻塞项。
 
 ## 验证基线
 
 - `cd myCPU && make test-unit-kernel_runtime`
 - `cd myCPU && make test-unit-kernel_alpha_common`
+- `cd myCPU && make test-unit-kernel_alpha_interrupt`
 - `cd myCPU && make test-unit-kernel_alpha_storage`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`

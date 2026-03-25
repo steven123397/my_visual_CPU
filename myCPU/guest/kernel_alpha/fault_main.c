@@ -9,15 +9,9 @@
 
 void kernel_main(void) {
     kernel_runtime_t runtime;
-    const kernel_alpha_bringup_options_t options = {
-        .mmio_mask = KERNEL_ALPHA_MMIO_UART,
-        .pmm_probe_marker = 0,
-        .pre_vm_setup = NULL,
-        .pre_vm_context = NULL,
-    };
 
     kernel_runtime_init(&runtime);
-    if (!kernel_runtime_run_common_bringup(&runtime, &options)) {
+    if (!kernel_alpha_run_fault_bringup(&runtime)) {
         panic_shutdown();
     }
 

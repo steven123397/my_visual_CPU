@@ -5,28 +5,6 @@
 #include "panic.h"
 #include "platform.h"
 
-static void kernel_alpha_timer_post_handler(void* context);
-static void kernel_alpha_external_post_handler(uint32_t source_id,
-                                               void* context);
-
-static void kernel_alpha_timer_post_handler(void* context) {
-    if (context == NULL) {
-        panic_shutdown();
-    }
-
-    console_putc('T');
-}
-
-static void kernel_alpha_external_post_handler(uint32_t source_id,
-                                               void* context) {
-    if (context == NULL || source_id != PLIC_SOURCE_UART_THRE) {
-        panic_shutdown();
-    }
-
-    platform_uart_disable_irq();
-    console_putc('E');
-}
-
 void kernel_main(void) {
     kernel_runtime_t runtime;
     const kernel_alpha_bringup_options_t options = {
@@ -41,8 +19,8 @@ void kernel_main(void) {
     if (!kernel_runtime_bind_self_interrupt_handlers(
             &runtime,
         PLIC_SOURCE_UART_THRE,
-        kernel_alpha_timer_post_handler,
-        kernel_alpha_external_post_handler)) {
+        kernel_alpha_timer_post_handler_emit_ready,
+        kernel_alpha_external_post_handler_emit_ready)) {
         panic_shutdown();
     }
 
@@ -50,9 +28,9 @@ void kernel_main(void) {
         panic_shutdown();
     }
 
-    kernel_alpha_begin_plic_supervisor_phase();
-    if (!kernel_alpha_wait_for_first_external_delivery(&runtime, 4096U) ||
-        !kernel_alpha_wait_for_first_timer_delivery(&runtime, 64U, 4096U) ||
+    if (!kernel_alpha_complete_platform_interrupt_readiness(&runtime,
+                                                            64U,
+                                                            4096U) ||
         !kernel_alpha_complete_storage_probe() ||
         !kernel_alpha_complete_storage_signature_check()) {
         panic_shutdown();

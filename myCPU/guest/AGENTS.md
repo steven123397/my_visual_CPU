@@ -78,6 +78,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   独立 `kernel_alpha_timer_not_ready_demo` 负向入口。
 - [kernel_alpha/common.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/common.c)
   `kernel_alpha` 各入口共享的 alpha bring-up phase helper：当前承接 PLIC phase、first external / timer delivery wait，以及 storage probe / signature check，不再承载通用 `K/M/V` 骨架。
+- [kernel_alpha/interrupt_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/interrupt_contract.c)
+  `kernel_alpha` non-storage 负向回归共享的 interrupt / fault helper：当前收口 interrupt bring-up、platform interrupt readiness、PLIC not-ready、timer not-ready 与标准 post-handler 合同。
 - [kernel_alpha/storage_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_contract.c)
   `kernel_alpha` storage 负向回归共享的合同 helper：当前收口 no-media / not-ready / bad-magic / bad-block-count / lba-range / bad-command 六条独立路径的公共协议检查。
 
@@ -266,6 +268,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `cd myCPU && make test-unit-supervisor_runtime`
 - `cd myCPU && make test-unit-kernel_runtime`
 - `cd myCPU && make test-unit-kernel_alpha_common`
+- `cd myCPU && make test-unit-kernel_alpha_interrupt`
 - `cd myCPU && make test-unit-kernel_alpha_storage`
 - `cd myCPU && make test-guest-supervisor_demo`
 - `cd myCPU && make test-guest-kernel_alpha_demo`

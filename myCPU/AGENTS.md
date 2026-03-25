@@ -100,6 +100,8 @@
   通用 `K/M/V` bring-up 已下沉到 guest kernel 基础设施层，`supervisor_demo` 和 `kernel_alpha` 共享同一份早期启动骨架。
 - [guest/kernel_alpha/storage_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_contract.c)
   storage 负向合同已开始从入口下沉到专门 helper，避免六条 storage demo 继续各自手写 probe / read / clear-error 协议细节。
+- [guest/kernel_alpha/interrupt_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/interrupt_contract.c)
+  non-storage readiness / panic 合同也已开始从入口下沉到共享 helper，`fault`、`PLIC not-ready`、`timer not-ready` 与标准 interrupt post-handler 不再分散在各入口。
 - [src/mem/bus.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/mem/bus.cpp) 和 [src/devices](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices)
   已完成第一轮收口，但未来若继续扩设备，仍需要更系统的契约和回归。
 
@@ -110,7 +112,7 @@
 1. 在已修 correctness 基线之上，继续扩充非法编码、MMIO 边界和 ELF 段布局回归。
 2. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_not_ready_demo`、`guest_kernel_alpha_storage_bad_magic_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 验证 simulator 对独立 kernel bring-up 的支撑，再逐步扩 device readiness。
 3. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界。
-4. 等 Phase 1 稳定后，再讨论多 backend、pipeline、OoO 等后续扩展。
+4. 在保持 Phase 1 已达成核心目标的前提下，先继续做必要稳定化，再讨论多 backend、pipeline、OoO 等后续扩展。
 
 ## 验证要求
 

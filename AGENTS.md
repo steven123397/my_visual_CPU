@@ -18,7 +18,7 @@
 当前定位：
 
 - 已经是可运行的 functional simulator prototype，不是纯设计稿。
-- 当前处于 Phase 1 bring-up 路线中。
+- 当前已达成 Phase 1 核心 bring-up 目标，正处于 Phase 1 收尾/稳定化阶段。
 - 正在同步推进一轮有明确结构收益的 C++ 重构。
 
 长期目标：
@@ -98,10 +98,9 @@
 当前阶段的主线工作是：
 
 - 保持 simulator reference path 的 correctness 与可观察性。
-- 在独立 `kernel_alpha` 基线上继续补 device readiness、fault / panic 与更真实的 bring-up 合同。
-- 继续推进 guest runtime 的 process / runtime refinement。
-- 继续拆分 `guest/kernel/vm.c`、`guest/kernel/trap.c` 等过大的实现文件。
-- 为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
+- 把独立 `kernel_alpha` 基线维持在可回归的 Phase 1 完成态，并继续做必要 hardening。
+- 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，作为 post-Phase1 结构优化。
+- 在不破坏 reference path 清晰性的前提下，为 Phase 2 准备更稳的语义边界与验证基线。
 
 相关状态文档见：
 

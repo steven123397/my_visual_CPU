@@ -26,6 +26,24 @@ bool kernel_alpha_wait_for_first_external_delivery(kernel_runtime_t* runtime,
 bool kernel_alpha_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
                                                 uint64_t timer_delta,
                                                 uint64_t timeout_delta);
+bool kernel_alpha_run_interrupt_bringup(kernel_runtime_t* runtime,
+                                        uint64_t pmm_probe_marker,
+                                        kernel_alpha_pre_vm_setup_t pre_vm_setup);
+bool kernel_alpha_run_fault_bringup(kernel_runtime_t* runtime);
+bool kernel_alpha_complete_platform_interrupt_readiness(kernel_runtime_t* runtime,
+                                                        uint64_t timer_delta,
+                                                        uint64_t timeout_delta);
+bool kernel_alpha_validate_plic_not_ready_contract(kernel_runtime_t* runtime,
+                                                   uint64_t timeout_delta,
+                                                   char marker);
+bool kernel_alpha_validate_timer_not_ready_contract(uint64_t timeout_delta,
+                                                    char marker);
+void kernel_alpha_timer_post_handler_emit_ready(void* context);
+void kernel_alpha_external_post_handler_emit_ready(uint32_t source_id,
+                                                   void* context);
+void kernel_alpha_timer_post_handler_panic(void* context);
+void kernel_alpha_external_post_handler_panic_on_delivery(uint32_t source_id,
+                                                          void* context);
 bool kernel_alpha_complete_storage_probe(void);
 bool kernel_alpha_complete_storage_signature_check(void);
 bool kernel_alpha_run_storage_bringup(kernel_runtime_t* runtime);
