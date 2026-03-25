@@ -5,18 +5,11 @@
 #include "panic.h"
 #include "platform.h"
 #include "pmm.h"
-#include "riscv.h"
 #include "storage.h"
-#include "timer.h"
+#include "supervisor_runtime.h"
 
-typedef struct KernelAlphaState {
-    volatile uint32_t external_interrupts;
-    volatile uint32_t timer_interrupts;
-} kernel_alpha_state_t;
-
-static void kernel_alpha_timer_post_handler(uint64_t cause, void* context);
-static void kernel_alpha_external_post_handler(uint64_t cause,
-                                               uint32_t source_id,
+static void kernel_alpha_timer_post_handler(void* context);
+static void kernel_alpha_external_post_handler(uint32_t source_id,
                                                void* context);
 
 static bool kernel_alpha_probe_storage_page(void) {
@@ -43,59 +36,43 @@ static bool kernel_alpha_probe_storage_device(void) {
     return storage_probe(&storage_info) && storage_info.capacity_blocks > 0;
 }
 
-static bool kernel_alpha_install_policies(trap_context_t* trap_context,
-                                          void* context) {
-    kernel_alpha_state_t* state = (kernel_alpha_state_t*)context;
-
-    return state != NULL &&
-           trap_context_install_supervisor_timer_policy(
-               trap_context,
-               kernel_alpha_timer_post_handler,
-               state) &&
-           trap_context_install_supervisor_external_policy(
-               trap_context,
-               kernel_alpha_external_post_handler,
-               state);
-}
-
-static void kernel_alpha_timer_post_handler(uint64_t cause, void* context) {
-    kernel_alpha_state_t* state = (kernel_alpha_state_t*)context;
-
-    if (cause != RISCV_SUPERVISOR_TIMER_INTERRUPT || state == NULL) {
+static void kernel_alpha_timer_post_handler(void* context) {
+    if (context == NULL) {
         panic_shutdown();
     }
 
-    state->timer_interrupts += 1U;
     console_putc('T');
 }
 
-static void kernel_alpha_external_post_handler(uint64_t cause,
-                                               uint32_t source_id,
+static void kernel_alpha_external_post_handler(uint32_t source_id,
                                                void* context) {
-    kernel_alpha_state_t* state = (kernel_alpha_state_t*)context;
-
-    if (cause != RISCV_SUPERVISOR_EXTERNAL_INTERRUPT || state == NULL ||
-        source_id != PLIC_SOURCE_UART_THRE) {
+    if (context == NULL || source_id != PLIC_SOURCE_UART_THRE) {
         panic_shutdown();
     }
 
     platform_uart_disable_irq();
-    state->external_interrupts += 1U;
     console_putc('E');
 }
 
 void kernel_main(void) {
     trap_context_t supervisor_trap_context;
     vm_address_space_t* kernel_address_space = NULL;
-    kernel_alpha_state_t state = {0};
-    uint64_t deadline = 0;
+    supervisor_runtime_interrupt_state_t interrupts;
     const kernel_alpha_bringup_options_t options = {
         .mmio_mask = KERNEL_ALPHA_MMIO_UART | KERNEL_ALPHA_MMIO_CLINT |
                      KERNEL_ALPHA_MMIO_PLIC | KERNEL_ALPHA_MMIO_STORAGE,
         .pmm_probe_marker = UINT64_C(0x4B41504D4D56414C),
-        .pre_vm_setup = kernel_alpha_install_policies,
-        .pre_vm_context = &state,
+        .pre_vm_setup =
+            supervisor_runtime_install_interrupt_counter_policies_adapter,
+        .pre_vm_context = &interrupts,
     };
+
+    supervisor_runtime_interrupt_state_init(&interrupts);
+    supervisor_runtime_interrupt_state_bind_self_handlers(
+        &interrupts,
+        PLIC_SOURCE_UART_THRE,
+        kernel_alpha_timer_post_handler,
+        kernel_alpha_external_post_handler);
 
     if (!kernel_alpha_run_common_bringup(&supervisor_trap_context,
                                          &kernel_address_space,
@@ -106,20 +83,17 @@ void kernel_main(void) {
     platform_plic_supervisor_init();
     console_putc('P');
 
-    deadline = platform_clint_read_mtime() + 4096U;
-    platform_uart_enable_thre_irq();
-    while (state.external_interrupts == 0U) {
-        if (platform_clint_read_mtime() > deadline) {
-            panic_shutdown();
-        }
+    if (!supervisor_runtime_enable_uart_thre_and_wait(
+            &interrupts.external_interrupts,
+            4096U)) {
+        panic_shutdown();
     }
 
-    deadline = platform_clint_read_mtime() + 4096U;
-    timer_schedule_delta(64U);
-    while (state.timer_interrupts == 0U) {
-        if (platform_clint_read_mtime() > deadline) {
-            panic_shutdown();
-        }
+    if (!supervisor_runtime_schedule_timer_and_wait(
+            &interrupts.timer_interrupts,
+            64U,
+            4096U)) {
+        panic_shutdown();
     }
 
     if (!kernel_alpha_probe_storage_device()) {

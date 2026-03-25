@@ -15,12 +15,15 @@ public:
     void store(uint64_t addr, uint64_t value, int size) override;
 
     void load_image(const char* path);
+    void set_ready(bool ready);
+    void set_magic_valid(bool valid);
 
 private:
     uint64_t register_value(uint32_t offset) const;
     uint64_t load_data_window(uint32_t offset, int size) const;
     void store_data_window(uint32_t offset, uint64_t value, int size);
     void execute_command(uint64_t command);
+    void update_status();
     void set_error(uint64_t error_code);
     void clear_error();
 
@@ -42,9 +45,11 @@ private:
     std::vector<uint8_t> data_{};
     std::array<uint8_t, kDataWindowSize> data_window_{};
     uint64_t capacity_blocks_{0};
-    uint64_t status_{STORAGE_STATUS_READY};
+    uint64_t status_{0};
     uint64_t lba_{0};
     uint64_t block_count_{1};
     uint64_t error_code_{STORAGE_ERR_NONE};
     bool attached_{false};
+    bool ready_{false};
+    bool magic_valid_{true};
 };

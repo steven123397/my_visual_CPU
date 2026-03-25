@@ -46,7 +46,7 @@
 
 当前负向回归包括：
 
-在首个 alpha 里程碑完成后，已经补上七条独立负向回归：
+在首个 alpha 里程碑完成后，已经补上九条独立负向回归：
 
 ### `guest_kernel_alpha_fault_demo`
 
@@ -99,6 +99,33 @@
 
 - `KMVNX`
 
+### `guest_kernel_alpha_storage_not_ready_demo`
+
+当前用于验证：
+
+- VM 已开启
+- storage MMIO 可达，metadata / `ATTACHED` / capacity 可观察
+- attached 但 `READY` 缺失时，`storage_probe()` 不会误判 readiness 已满足
+- 首次 block read 返回 `NOT_READY`
+- `COMMAND = NONE` clear-error 后不会把设备误恢复成 ready
+
+当前输出：
+
+- `KMVRX`
+
+### `guest_kernel_alpha_storage_bad_magic_demo`
+
+当前用于验证：
+
+- VM 已开启
+- storage MMIO 可达，attached / ready / capacity 成功态仍可观察
+- `MAGIC` 元数据损坏时，`storage_read_info()` 与 `storage_probe()` 不会误判 probe 已成功
+- block read 数据路径仍可工作，证明失败点在 probe metadata 合同，而不是 block read 本身
+
+当前输出：
+
+- `KMVGX`
+
 ### `guest_kernel_alpha_storage_bad_block_count_demo`
 
 当前用于验证：
@@ -148,11 +175,32 @@
   - `guest_kernel_alpha_storage_bad_block_count_demo`
   - `guest_kernel_alpha_storage_lba_range_demo`
   - `guest_kernel_alpha_storage_bad_command_demo`
+- 随后在 storage readiness 合同扩展中，又把 simulator 侧 `SimpleStorage`
+  扩成可注入 attached-but-not-ready 状态，新增 `STORAGE_ERR_NOT_READY` 与
+  `--disk-not-ready` 宿主参数，并接通：
+  - `guest_kernel_alpha_storage_not_ready_demo`
+- 随后继续在 storage probe 合同扩展中，又把 simulator 侧 `SimpleStorage`
+  扩成可注入 bad-magic 元数据状态，新增 `--disk-bad-magic` 宿主参数，并接通：
+  - `guest_kernel_alpha_storage_bad_magic_demo`
 - 随后在 non-storage device readiness 扩展中，又补上：
   - `guest_kernel_alpha_plic_not_ready_demo`
   - `guest_kernel_alpha_timer_not_ready_demo`
 - 同日已把各入口重复的 PMM / VM / trap bring-up 骨架收口到
   `guest/kernel_alpha/common.c`，让后续负向回归只保留各自合同差异。
+- 随后继续把 first external / timer delivery 的 interrupt state、policy
+  安装与 deadline orchestration 从 `kernel_alpha` 入口移到
+  `guest/kernel/supervisor_runtime.c`，并进一步补上 self-bound interrupt
+  contract、pre-VM policy adapter 与 `supervisor_demo_smoke` 共享
+  platform interrupt wait / cleanup helper，完成当前轮
+  supervisor-side process / runtime sequencing 收口。
+- 随后开始拆分 guest 基础设施大文件，先把 `trap` 的 default policy /
+  dispatch 拆到 `guest/kernel/trap_dispatch.c`，再把 `vm_process_*`
+  生命周期与 region binding 从 `guest/kernel/vm.c` 拆到
+  `guest/kernel/vm_process.c`，继续把结构复杂度从入口与大文件中移走。
+- 随后继续把 `guest/kernel/vm.c` 中剩余的 address space / object /
+  fault policy 拆到 `guest/kernel/vm_address_space.c`、
+  `guest/kernel/vm_object.c` 和 `guest/kernel/vm_fault.c`，把 `vm.c`
+  收口为低层 page-table / map / unmap / TLB primitive。
 
 ## 当前仍然有效的风险 / 限制
 
@@ -167,8 +215,8 @@
 
 ## 下一步
 
-1. 继续推进 guest runtime 的 process / runtime refinement，避免 `kernel_alpha` 入口继续承载过多编排逻辑。
-2. 优先拆分 `guest/kernel/vm.c` 和 `guest/kernel/trap.c`，把当前持续增长的复杂度从 bring-up 入口移回基础设施层。
+1. 继续守住 `guest/kernel/vm.c` / `guest/kernel/vm_address_space.c` / `guest/kernel/vm_process.c` / `guest/kernel/vm_object.c` / `guest/kernel/vm_fault.c` 的边界，避免后续修改重新耦合。
+2. 继续守住 `guest/kernel/trap.c` 与 `guest/kernel/trap_dispatch.c` 的 lifecycle / dispatch 边界，避免后续修改重新耦合。
 3. 在不打破 reference path 简洁性的前提下，继续补更系统的 device readiness / fault / panic 合同，为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
 
 ## 验证基线
@@ -176,6 +224,8 @@
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_not_ready_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_bad_magic_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_bad_block_count_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_lba_range_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_bad_command_demo`

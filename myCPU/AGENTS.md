@@ -76,7 +76,7 @@
 - `misa` 只读、`satp.MODE` WARL、`counteren`、Sv39、最小 TLB、`sfence.vma`。
 - UART / CLINT / PLIC / `SimpleStorage`。
 - bus / device 第一轮区间与访问宽度防御。
-- 独立 `kernel_alpha` 正向与七条负向 guest 回归。
+- 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。
 
@@ -93,7 +93,7 @@
 - [tests/asm](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm) 和 [tests/unit](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/unit)
   非法编码矩阵、MMIO 非法偏移 / 宽度、更真实 ELF 段布局等鲁棒性回归仍可继续扩展。
 - [src/devices/simple_storage.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices/simple_storage.cpp)
-  仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
+  当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
 - [src/mem/bus.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/mem/bus.cpp) 和 [src/devices](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices)
   已完成第一轮收口，但未来若继续扩设备，仍需要更系统的契约和回归。
 
@@ -102,7 +102,7 @@
 近期优先级建议如下：
 
 1. 在已修 correctness 基线之上，继续扩充非法编码、MMIO 边界和 ELF 段布局回归。
-2. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 验证 simulator 对独立 kernel bring-up 的支撑，再逐步扩 device readiness。
+2. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_not_ready_demo`、`guest_kernel_alpha_storage_bad_magic_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 验证 simulator 对独立 kernel bring-up 的支撑，再逐步扩 device readiness。
 3. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界。
 4. 等 Phase 1 稳定后，再讨论多 backend、pipeline、OoO 等后续扩展。
 

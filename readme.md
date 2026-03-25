@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个最小 guest supervisor runtime。最近一轮 simulator-side correctness / loader / bus-device 守边界修复也已经落地：非法整数保留编码会稳定触发 `illegal instruction`，`DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 语义返回，纯 BSS `PT_LOAD` 段会正确 `zero-fill`，第一轮 MMIO 非法访问宽度与设备区间重叠防御也已接通。guest 侧目前已经打通 early allocator、最小 PMM、页表与地址空间、trap/runtime、单用户任务封装，以及两条不同职责的 bring-up 路径：`guest_supervisor_demo` 负责 U-mode/runtime smoke，独立 `kernel_alpha_demo` 负责第一次真正的小 kernel alpha bring-up 基线；其中 `supervisor_demo_smoke` 已经收口为单入口 demo runner，`user_program_smoke` 也进一步收成阶段化 lifecycle / prepare / enter helper，而 `kernel_alpha` 路径则继续补齐了 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage `BAD_BLOCK_COUNT`、storage `LBA_RANGE` 和 storage `BAD_COMMAND` 这 7 条独立负向回归。
+当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但已经具备更完整的 Phase 1 OS bring-up 地基：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个最小 guest supervisor runtime。最近一轮 simulator-side correctness / loader / bus-device 守边界修复也已经落地：非法整数保留编码会稳定触发 `illegal instruction`，`DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 语义返回，纯 BSS `PT_LOAD` 段会正确 `zero-fill`，第一轮 MMIO 非法访问宽度与设备区间重叠防御也已接通。guest 侧目前已经打通 early allocator、最小 PMM、页表与地址空间、trap/runtime、单用户任务封装，以及两条不同职责的 bring-up 路径：`guest_supervisor_demo` 负责 U-mode/runtime smoke，独立 `kernel_alpha_demo` 负责第一次真正的小 kernel alpha bring-up 基线；其中 `supervisor_demo_smoke` 已经收口为单入口 demo runner，`user_program_smoke` 也进一步收成阶段化 lifecycle / prepare / enter helper，而 `kernel_alpha` 路径则继续补齐了 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage not-ready、storage bad-magic、storage `BAD_BLOCK_COUNT`、storage `LBA_RANGE` 和 storage `BAD_COMMAND` 这 9 条独立负向回归。
 
 ## 目录结构
 
@@ -114,6 +114,12 @@ make test-guest-kernel_alpha_fault_demo
 # 只跑独立 kernel alpha storage no-media 负向回归
 make test-guest-kernel_alpha_storage_no_media_demo
 
+# 只跑独立 kernel alpha storage not-ready 负向回归
+make test-guest-kernel_alpha_storage_not_ready_demo
+
+# 只跑独立 kernel alpha storage bad-magic 负向回归
+make test-guest-kernel_alpha_storage_bad_magic_demo
+
 # 只跑独立 kernel alpha storage bad-block-count 负向回归
 make test-guest-kernel_alpha_storage_bad_block_count_demo
 
@@ -130,7 +136,7 @@ make test-guest-kernel_alpha_plic_not_ready_demo
 make test-guest-kernel_alpha_timer_not_ready_demo
 ```
 
-`make test` 会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo`、`kernel_alpha_demo`、`kernel_alpha_fault_demo`、`kernel_alpha_storage_no_media_demo`、`kernel_alpha_storage_bad_block_count_demo`、`kernel_alpha_storage_lba_range_demo`、`kernel_alpha_storage_bad_command_demo`、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这 9 条 guest 回归路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 timer interrupt、一次 storage readiness probe、一次最小块设备读取，以及 7 条独立负向路径：未映射 CLINT MMIO 访问触发的 fault / panic、未安排第一次 timer delivery 时的 readiness timeout / panic、PLIC 已映射但未初始化时的 readiness timeout / panic、storage 未附加镜像时的 metadata / `NO_MEDIA` error 合同、`BLOCK_COUNT != 1` 时的 `BAD_BLOCK_COUNT` / clear-error 合同、`LBA == capacity_blocks` 时的 `LBA_RANGE` / clear-error 合同，以及非法 `COMMAND` 值时的 `BAD_COMMAND` / clear-error 合同。
+`make test` 会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo`、`kernel_alpha_demo`、`kernel_alpha_fault_demo`、`kernel_alpha_storage_no_media_demo`、`kernel_alpha_storage_not_ready_demo`、`kernel_alpha_storage_bad_magic_demo`、`kernel_alpha_storage_bad_block_count_demo`、`kernel_alpha_storage_lba_range_demo`、`kernel_alpha_storage_bad_command_demo`、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这 11 条 guest 回归路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 timer interrupt、一次 storage readiness probe、一次最小块设备读取，以及 9 条独立负向路径：未映射 CLINT MMIO 访问触发的 fault / panic、未安排第一次 timer delivery 时的 readiness timeout / panic、PLIC 已映射但未初始化时的 readiness timeout / panic、storage 未附加镜像时的 metadata / `NO_MEDIA` error 合同、storage 已附加但 `READY` 缺失时的 readiness / `NOT_READY` / clear-error 合同、storage `MAGIC` 元数据损坏时的 probe-fail / data-path-still-live 合同、`BLOCK_COUNT != 1` 时的 `BAD_BLOCK_COUNT` / clear-error 合同、`LBA == capacity_blocks` 时的 `LBA_RANGE` / clear-error 合同，以及非法 `COMMAND` 值时的 `BAD_COMMAND` / clear-error 合同。
 
 ## 内存映射
 
@@ -165,12 +171,14 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 - CLINT 定时器中断，以及 `mtime/mtimecmp` 的 1/2/4/8 字节 MMIO 访问
 - `time` CSR 与 CLINT `mtime` 保持一致，guest 侧 CSR/MMIO 看到同一平台时间源
 - PLIC machine/supervisor external interrupt 最小路径
-- host-backed block-oriented MMIO storage device
+- host-backed block-oriented MMIO storage device，支持 attached-but-not-ready 状态、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`
 - 设备区间重叠防御，以及第一轮 MMIO 非法访问宽度白名单
 - 最小 guest supervisor runtime：包含统一 trap dispatch、基础平台库、early allocator / PMM / guest-side Sv39 VM、显式 trap/runtime/task/program helper，以及由 `user_program_smoke` 提供的阶段化 lifecycle / prepare / enter helper 与 `supervisor_demo_smoke` 提供的单入口 demo runner，覆盖 `guest_supervisor_demo` 的 bootstrap、U-mode 进入/返回、page fault 恢复、timer/external interrupt 与生命周期清理 smoke
 - 独立 `kernel_alpha_demo`：覆盖 boot marker、PMM 初始化、自建 Sv39 内核页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 supervisor timer interrupt、一次 storage readiness probe，以及一次最小块设备读取
 - 独立 `kernel_alpha_fault_demo`：覆盖独立 kernel alpha 在 VM 已开启但 CLINT 未映射时的 fault / panic 负向路径
 - 独立 `kernel_alpha_storage_no_media_demo`：覆盖独立 kernel alpha 在 VM 已开启且 storage MMIO 可达、但未附加镜像时的 metadata / `NO_MEDIA` error 负向路径
+- 独立 `kernel_alpha_storage_not_ready_demo`：覆盖独立 kernel alpha 在 VM 已开启且 storage 已附加但 `READY` 缺失时的 readiness / `NOT_READY` / clear-error 负向合同
+- 独立 `kernel_alpha_storage_bad_magic_demo`：覆盖独立 kernel alpha 在 VM 已开启且 storage 已附加、但 `MAGIC` 元数据损坏时的 probe-fail / data-path-still-live 负向合同
 - 独立 `kernel_alpha_storage_bad_block_count_demo`：覆盖独立 kernel alpha 在 VM 已开启且 storage 已附加时，`BLOCK_COUNT != 1` 的 `BAD_BLOCK_COUNT` 与 `COMMAND = NONE` clear-error 负向合同
 - 独立 `kernel_alpha_storage_lba_range_demo`：覆盖独立 kernel alpha 在 VM 已开启且 storage 已附加时，`LBA == capacity_blocks` 的 `LBA_RANGE` 与 `COMMAND = NONE` clear-error 负向合同
 - 独立 `kernel_alpha_storage_bad_command_demo`：覆盖独立 kernel alpha 在 VM 已开启且 storage 已附加时，非法 `COMMAND` 值的 `BAD_COMMAND` 与 `COMMAND = NONE` clear-error 负向合同
@@ -188,7 +196,7 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 ### `myCPU/`
 
 - `Makefile`：本地编译规则、RISC-V 汇编样例构建规则和 `make test` 测试入口。
-- `tests/unit/`：host-side 单元测试，当前覆盖 ELF pure-BSS 装载和 bus/device 守边界。
+- `tests/unit/`：host-side 单元测试，当前覆盖 ELF pure-BSS 装载、bus/device 守边界和 storage readiness。
 - `mycpu`：编译产物，运行后加载并执行 RISC-V 程序镜像。
 
 ### `myCPU/guest/`
@@ -198,6 +206,8 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 - `kernel_alpha/`：独立 kernel alpha bring-up 入口，当前用于验证第一次真正的小 kernel alpha 的 boot / PMM / Sv39 / PLIC/UART external interrupt / timer interrupt / storage readiness probe / storage read 最小基线。
 - `kernel_alpha/fault_main.c`：独立 kernel alpha 的 fault / panic 负向回归入口，当前故意构造未映射 CLINT MMIO 访问。
 - `kernel_alpha/storage_no_media_main.c`：独立 kernel alpha 的 storage no-media 负向回归入口，当前故意在未挂盘条件下验证 metadata / `NO_MEDIA` error 路径。
+- `kernel_alpha/storage_not_ready_main.c`：独立 kernel alpha 的 storage not-ready 负向回归入口，当前故意在 attached-but-not-ready 条件下验证 readiness / `NOT_READY` / clear-error 合同。
+- `kernel_alpha/storage_bad_magic_main.c`：独立 kernel alpha 的 storage bad-magic 负向回归入口，当前故意在 bad-magic 条件下验证 probe-fail / data-path-still-live 合同。
 - `kernel_alpha/storage_bad_block_count_main.c`：独立 kernel alpha 的 storage bad-block-count 负向回归入口，当前故意提交 `BLOCK_COUNT != 1` 的 read 命令并验证 clear-error 合同。
 - `kernel_alpha/storage_lba_range_main.c`：独立 kernel alpha 的 storage LBA-range 负向回归入口，当前故意提交 `LBA == capacity_blocks` 的 read 命令并验证 clear-error 合同。
 - `kernel_alpha/storage_bad_command_main.c`：独立 kernel alpha 的 storage bad-command 负向回归入口，当前故意提交非法 `COMMAND` 值并验证 clear-error 合同。
@@ -209,7 +219,7 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 ### `myCPU/src/`
 
 - `main.cpp`
-  程序入口。负责解析 `-b` 参数、创建 `Machine`，并根据镜像类型调用 `load_elf()` 或 `load_binary()` 后启动执行。
+  程序入口。负责解析 `-b`、`--disk`、`--disk-not-ready` 和 `--disk-bad-magic` 参数、创建 `Machine`，并根据镜像类型调用 `load_elf()` 或 `load_binary()` 后启动执行。
 
 - `platform/machine.h`
   `Machine` 类声明。聚合 `CPU`、`Ram` 和 `Bus`，为后续平台化重构提供统一入口。
@@ -257,7 +267,7 @@ make test-guest-kernel_alpha_timer_not_ready_demo
   最小 PLIC 设备实现。当前支持 machine/supervisor context、UART THRE source、claim/complete 与 pending/enable/threshold 路径。
 
 - `devices/simple_storage.h` / `devices/simple_storage.cpp`
-  最小块化 MMIO storage 设备实现。通过 `LBA/BLOCK_COUNT/COMMAND/DATA_WINDOW` 暴露同步 block read/write 接口，并支持宿主 `--disk` 镜像附加。
+  最小块化 MMIO storage 设备实现。通过 `LBA/BLOCK_COUNT/COMMAND/DATA_WINDOW` 暴露同步 block read/write 接口，并支持宿主 `--disk`、`--disk-not-ready` 与 `--disk-bad-magic` 镜像附加、attached-but-not-ready 状态、bad-magic probe 注入和 `STORAGE_ERR_NOT_READY` 合同。
 
 - `loader/elf_loader.h`
   `ElfLoader` 类声明。定义 ELF 镜像装载接口。

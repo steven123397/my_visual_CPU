@@ -22,6 +22,7 @@ Thumbs.db
 /myCPU/tests/asm/*.elf
 /myCPU/tests/asm/*.bin
 /myCPU/tests/unit/*
+!/myCPU/tests/unit/*.c
 !/myCPU/tests/unit/*.cpp
 
 # Logs and coverage

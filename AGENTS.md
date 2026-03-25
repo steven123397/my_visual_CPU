@@ -66,7 +66,7 @@
 - 最小 U-mode enter / return。
 - timer / external / page-fault / user-`ecall` smoke 路径。
 - 独立 kernel alpha 的 boot / PMM / Sv39 / external interrupt / timer interrupt / storage readiness probe / storage read 正向路径。
-- 独立 kernel alpha 的 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage bad-block-count、storage LBA-range 与 storage bad-command 七条负向路径。
+- 独立 kernel alpha 的 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage not-ready、storage bad-magic、storage bad-block-count、storage LBA-range 与 storage bad-command 九条负向路径。
 
 最近一轮关键历史节点只保留以下几项：
 
@@ -74,6 +74,8 @@
 - `kernel_alpha_demo` 已完成首个可回归 alpha bring-up，当前正向输出为 `KMVPETDS`。
 - `kernel_alpha_fault_demo` 当前负向输出为 `KMVX`。
 - `kernel_alpha_storage_no_media_demo` 当前负向输出为 `KMVNX`。
+- `kernel_alpha_storage_not_ready_demo` 当前负向输出为 `KMVRX`。
+- `kernel_alpha_storage_bad_magic_demo` 当前负向输出为 `KMVGX`。
 - `kernel_alpha_storage_bad_block_count_demo` 当前负向输出为 `KMVBX`。
 - `kernel_alpha_storage_lba_range_demo` 当前负向输出为 `KMVLX`。
 - `kernel_alpha_storage_bad_command_demo` 当前负向输出为 `KMVCX`。
@@ -126,6 +128,8 @@
   - `myCPU/guest/kernel_alpha_demo.elf`
   - `myCPU/guest/kernel_alpha_fault_demo.elf`
   - `myCPU/guest/kernel_alpha_storage_no_media_demo.elf`
+  - `myCPU/guest/kernel_alpha_storage_not_ready_demo.elf`
+  - `myCPU/guest/kernel_alpha_storage_bad_magic_demo.elf`
   - `myCPU/guest/kernel_alpha_storage_bad_block_count_demo.elf`
   - `myCPU/guest/kernel_alpha_storage_lba_range_demo.elf`
   - `myCPU/guest/kernel_alpha_storage_bad_command_demo.elf`
@@ -144,6 +148,8 @@
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_not_ready_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_bad_magic_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_bad_block_count_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_lba_range_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_bad_command_demo`

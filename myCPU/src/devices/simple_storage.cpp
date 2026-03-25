@@ -117,15 +117,25 @@ void SimpleStorage::load_image(const char* path) {
     capacity_blocks_ = padded_size / kBlockSize;
     lba_ = 0;
     block_count_ = 1;
-    status_ = STORAGE_STATUS_READY | STORAGE_STATUS_ATTACHED;
-    error_code_ = STORAGE_ERR_NONE;
     attached_ = true;
+    ready_ = true;
+    error_code_ = STORAGE_ERR_NONE;
+    update_status();
+}
+
+void SimpleStorage::set_ready(bool ready) {
+    ready_ = attached_ && ready;
+    update_status();
+}
+
+void SimpleStorage::set_magic_valid(bool valid) {
+    magic_valid_ = valid;
 }
 
 uint64_t SimpleStorage::register_value(uint32_t offset) const {
     switch (offset) {
     case kMagicOffset:
-        return kMagic;
+        return magic_valid_ ? kMagic : 0;
     case kVersionOffset:
         return kVersion;
     case kBlockSizeOffset:
@@ -174,6 +184,10 @@ void SimpleStorage::execute_command(uint64_t command) {
         set_error(STORAGE_ERR_NO_MEDIA);
         return;
     }
+    if (!ready_) {
+        set_error(STORAGE_ERR_NOT_READY);
+        return;
+    }
     if (block_count_ != STORAGE_MAX_BLOCK_COUNT) {
         set_error(STORAGE_ERR_BAD_BLOCK_COUNT);
         return;
@@ -199,12 +213,25 @@ void SimpleStorage::execute_command(uint64_t command) {
     set_error(STORAGE_ERR_BAD_COMMAND);
 }
 
+void SimpleStorage::update_status() {
+    status_ = 0;
+    if (attached_) {
+        status_ |= STORAGE_STATUS_ATTACHED;
+    }
+    if (attached_ && ready_) {
+        status_ |= STORAGE_STATUS_READY;
+    }
+    if (error_code_ != STORAGE_ERR_NONE) {
+        status_ |= STORAGE_STATUS_ERROR;
+    }
+}
+
 void SimpleStorage::set_error(uint64_t error_code) {
-    status_ |= STORAGE_STATUS_ERROR;
     error_code_ = error_code;
+    update_status();
 }
 
 void SimpleStorage::clear_error() {
-    status_ &= ~STORAGE_STATUS_ERROR;
     error_code_ = STORAGE_ERR_NONE;
+    update_status();
 }

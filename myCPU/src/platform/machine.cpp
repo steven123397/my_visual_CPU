@@ -22,8 +22,12 @@ void Machine::load_binary(const std::string& path, uint64_t addr) {
     loaded_ = true;
 }
 
-void Machine::attach_storage_image(const std::string& path) {
+void Machine::attach_storage_image(const std::string& path,
+                                   bool ready,
+                                   bool valid_magic) {
     storage_.load_image(path.c_str());
+    storage_.set_ready(ready);
+    storage_.set_magic_valid(valid_magic);
 }
 
 void Machine::run() {

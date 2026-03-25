@@ -10,7 +10,7 @@
 #include "riscv.h"
 #include "runtime_context.h"
 #include "storage.h"
-#include "timer.h"
+#include "supervisor_runtime.h"
 #include "user_program.h"
 #include "user_program_smoke.h"
 #include "vm.h"
@@ -24,8 +24,7 @@ typedef struct SupervisorDemoSmokePages {
 } supervisor_demo_smoke_pages_t;
 
 typedef struct SupervisorDemoSmokeState {
-    volatile uint64_t timer_irq_seen;
-    volatile uint64_t external_irq_seen;
+    supervisor_runtime_interrupt_state_t interrupts;
     volatile uint64_t user_ecall_seen;
     uint32_t* user_data_page;
     uint32_t expected_user_data;
@@ -37,6 +36,7 @@ enum {
     SUPERVISOR_DEMO_SMOKE_EARLY_ALLOC_SIZE = 96U,
     SUPERVISOR_DEMO_SMOKE_EARLY_ALLOC_ALIGN = 64U,
     SUPERVISOR_DEMO_SMOKE_TIMER_DELTA = 8U,
+    SUPERVISOR_DEMO_SMOKE_INTERRUPT_TIMEOUT = 4096U,
     SUPERVISOR_DEMO_SMOKE_TIMER_SIGNAL_INDEX = 3U,
     SUPERVISOR_DEMO_SMOKE_EXTERNAL_SIGNAL_INDEX = 4U,
 };
@@ -124,11 +124,8 @@ static bool supervisor_demo_smoke_run_demo_session(
     supervisor_demo_smoke_pages_t* pages,
     user_program_smoke_active_phase_t* active_phase,
     uint64_t timer_delta);
-static void supervisor_demo_smoke_timer_interrupt_handler(uint64_t cause,
-                                                          void* context);
-static void supervisor_demo_smoke_external_interrupt_handler(uint64_t cause,
-                                                             uint32_t source_id,
-                                                             void* context);
+static void supervisor_demo_smoke_external_post_handler(uint32_t source_id,
+                                                        void* context);
 static bool supervisor_demo_smoke_user_ecall_validate(
     const trap_user_runtime_t* user_runtime,
     uint64_t epc,
@@ -149,8 +146,11 @@ static void supervisor_demo_smoke_init(supervisor_demo_smoke_state_t* state,
         return;
     }
 
-    state->timer_irq_seen = 0;
-    state->external_irq_seen = 0;
+    supervisor_runtime_interrupt_state_init(&state->interrupts);
+    state->interrupts.expected_external_source_id = PLIC_SOURCE_UART_THRE;
+    state->interrupts.external_post_handler =
+        supervisor_demo_smoke_external_post_handler;
+    state->interrupts.external_post_context = state;
     state->user_ecall_seen = 0;
     state->user_data_page = user_data_page;
     state->expected_user_data = expected_user_data;
@@ -369,11 +369,11 @@ static bool supervisor_demo_smoke_prepare_user_program(
         .validate = supervisor_demo_smoke_user_ecall_validate,
         .validate_context = state,
         .supervisor_timer_post_handler =
-            supervisor_demo_smoke_timer_interrupt_handler,
-        .supervisor_timer_post_context = state,
+            supervisor_runtime_timer_counter_post_handler,
+        .supervisor_timer_post_context = &state->interrupts,
         .supervisor_external_post_handler =
-            supervisor_demo_smoke_external_interrupt_handler,
-        .supervisor_external_post_context = state,
+            supervisor_runtime_external_counter_post_handler,
+        .supervisor_external_post_context = &state->interrupts,
     };
 
     if (state == NULL || program == NULL || smoke == NULL ||
@@ -393,8 +393,7 @@ static bool supervisor_demo_smoke_prepare_user_entry(
         return false;
     }
 
-    state->timer_irq_seen = 0;
-    state->external_irq_seen = 0;
+    supervisor_runtime_interrupt_state_reset_counters(&state->interrupts);
     state->user_ecall_seen = 0;
     state->user_data_page[2] = 0;
     state->user_data_page[3] = 0;
@@ -502,19 +501,11 @@ static bool supervisor_demo_smoke_read_storage_signature(uint8_t* storage_buffer
 static bool supervisor_demo_smoke_wait_platform_interrupts(
     supervisor_demo_smoke_state_t* state,
     uint64_t timer_delta) {
-    if (state == NULL || timer_delta == 0) {
-        return false;
-    }
-
-    state->timer_irq_seen = 0;
-    state->external_irq_seen = 0;
-    timer_schedule_delta(timer_delta);
-    platform_uart_enable_thre_irq();
-
-    while (!state->timer_irq_seen || !state->external_irq_seen) {
-    }
-
-    return true;
+    return state != NULL &&
+           supervisor_runtime_schedule_platform_interrupts_and_wait(
+               &state->interrupts,
+               timer_delta,
+               SUPERVISOR_DEMO_SMOKE_INTERRUPT_TIMEOUT);
 }
 
 static bool supervisor_demo_smoke_run_platform_tail(
@@ -543,31 +534,16 @@ static bool supervisor_demo_smoke_run_demo_session(
            supervisor_demo_smoke_run_platform_tail(state, timer_delta);
 }
 
-static void supervisor_demo_smoke_timer_interrupt_handler(uint64_t cause,
-                                                          void* context) {
+static void supervisor_demo_smoke_external_post_handler(uint32_t source_id,
+                                                        void* context) {
     supervisor_demo_smoke_state_t* state =
         (supervisor_demo_smoke_state_t*)context;
 
-    if (cause != RISCV_SUPERVISOR_TIMER_INTERRUPT || state == NULL) {
-        panic_shutdown();
-    }
-
-    state->timer_irq_seen = 1;
-}
-
-static void supervisor_demo_smoke_external_interrupt_handler(uint64_t cause,
-                                                             uint32_t source_id,
-                                                             void* context) {
-    supervisor_demo_smoke_state_t* state =
-        (supervisor_demo_smoke_state_t*)context;
-
-    if (cause != RISCV_SUPERVISOR_EXTERNAL_INTERRUPT || state == NULL ||
-        source_id != PLIC_SOURCE_UART_THRE) {
+    if (state == NULL || source_id != PLIC_SOURCE_UART_THRE) {
         panic_shutdown();
     }
 
     platform_uart_disable_irq();
-    state->external_irq_seen = 1;
 }
 
 static bool supervisor_demo_smoke_user_ecall_validate(
@@ -598,13 +574,13 @@ static bool supervisor_demo_smoke_verify_user_return(
     const trap_user_runtime_t* user_runtime) {
     return state != NULL && user_runtime != NULL &&
            state->user_data_page != NULL && state->user_ecall_seen &&
-           state->timer_irq_seen &&
+           state->interrupts.timer_interrupts != 0U &&
            state->user_data_page[2] == state->expected_user_data &&
            state->user_data_page[3] == state->expected_user_timer &&
            state->user_data_page[4] == state->expected_user_external &&
            trap_user_runtime_timer_signal_delivered(user_runtime) &&
            trap_user_runtime_external_signal_delivered(user_runtime) &&
-           state->external_irq_seen &&
+           state->interrupts.external_interrupts != 0U &&
            (riscv_read_sstatus() & RISCV_SSTATUS_SPP) == 0;
 }
 

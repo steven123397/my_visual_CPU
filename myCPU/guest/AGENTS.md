@@ -26,7 +26,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - delegated user `ecall`
 - delegated timer / external interrupt return
 - 单用户生命周期和清理 smoke
-- 独立 kernel alpha 的正向 bring-up 与七条负向回归
+- 独立 kernel alpha 的正向 bring-up 与九条负向回归
 
 ## 分层边界
 
@@ -38,10 +38,16 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 
 - `memory.c`：早期内存布局、early allocator、linker symbol 边界
 - `pmm.c`：物理页管理
-- `vm.c`：address space / process / region / object / fault policy
-- `trap.c`：trap dispatch、trap context、user runtime 生命周期
+- `vm.c`：当前主要承载低层 page-table / map / unmap / TLB primitive
+- `vm_address_space.c`：`vm_address_space_*` 生命周期、kernel range / fault-range 注册与 Sv39 address-space 编排
+- `vm_process.c`：`vm_process_*` 生命周期与 region binding 编排
+- `vm_object.c`：`vm_object_*` 与 `vm_user_region_*object*` 生命周期
+- `vm_fault.c`：page-fault policy、fault action 与 `vm_handle_page_fault`
+- `trap.c`：当前主要承载 active runtime 与 user runtime lifecycle
+- `trap_dispatch.c`：trap dispatch、default policy 与 handler 安装
 - `runtime_context.c`：当前活跃 process / address_space / trap_context 记录
 - `console.c` / `timer.c` / `storage.c`：最小平台驱动封装
+- `supervisor_runtime.c`：`kernel_alpha` 与 `supervisor_demo_smoke` 共享的 supervisor bring-up interrupt state、self-bound contract、policy adapter、delivery / deadline wait 最小编排
 - `user_task.c` / `user_task_bootstrap.c` / `user_program.c`：标准用户生命周期装配
 
 ### 入口与编排层：`supervisor_demo` / `kernel_alpha`
@@ -54,6 +60,10 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   独立 `kernel_alpha_fault_demo` 负向入口。
 - [kernel_alpha/storage_no_media_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_no_media_main.c)
   独立 `kernel_alpha_storage_no_media_demo` 负向入口。
+- [kernel_alpha/storage_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_not_ready_main.c)
+  独立 `kernel_alpha_storage_not_ready_demo` 负向入口。
+- [kernel_alpha/storage_bad_magic_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_magic_main.c)
+  独立 `kernel_alpha_storage_bad_magic_demo` 负向入口。
 - [kernel_alpha/storage_bad_block_count_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_block_count_main.c)
   独立 `kernel_alpha_storage_bad_block_count_demo` 负向入口。
 - [kernel_alpha/storage_lba_range_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_lba_range_main.c)
@@ -67,7 +77,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - [kernel_alpha/common.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/common.c)
   `kernel_alpha` 各入口共享的 PMM / VM / trap bring-up 骨架，只收口公共编排，不承载各 demo 的特有合同。
 
-## 当前八条 `kernel_alpha` 路径
+## 当前十条 `kernel_alpha` 路径
 
 ### `kernel_alpha_demo`
 
@@ -111,6 +121,33 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 当前负向回归输出：
 
 - `KMVNX`
+
+### `kernel_alpha_storage_not_ready_demo`
+
+当前用于验证：
+
+- VM 已开启
+- storage MMIO 可达且 metadata / `ATTACHED` / capacity 可观察
+- `READY` 缺失时 `storage_probe()` 不会误判 bring-up readiness 已满足
+- 首次 block read 返回 `STORAGE_ERR_NOT_READY`
+- `COMMAND = NONE` clear-error 后不会把设备误恢复成 ready
+
+当前负向回归输出：
+
+- `KMVRX`
+
+### `kernel_alpha_storage_bad_magic_demo`
+
+当前用于验证：
+
+- VM 已开启
+- storage MMIO 可达且 attached / ready / capacity 成功态仍可观察
+- `MAGIC` 元数据损坏时，`storage_read_info()` 与 `storage_probe()` 不会误判 probe 已成功
+- 即使 probe 失败，基础 block read 数据路径仍可工作，证明失败点在元数据合同而不是读命令本身
+
+当前负向回归输出：
+
+- `KMVGX`
 
 ### `kernel_alpha_storage_bad_block_count_demo`
 
@@ -188,9 +225,15 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ## 当前仍需关注的问题
 
 - [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c)
-  仍同时承担 address space、process、region / object 与 fault policy。
+  已收口为低层 page-table / mapping core。
+- [kernel/vm_address_space.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_address_space.c)
+  当前承载 address space 生命周期、kernel mapping 与 fault-range 注册。
+- [kernel/vm_object.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_object.c)
+  当前承载 object / region object 生命周期。
+- [kernel/vm_fault.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_fault.c)
+  当前承载 fault policy / action 与 page-fault dispatch。
 - [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c)
-  仍同时承担 dispatch、policy 与 user runtime lifecycle。
+  已拆出 `trap_dispatch.c`，但后续仍要继续守住两侧边界不要重新耦合。
 - 当前实现还有一批阶段性固定上限：
   - `VM_MAX_ADDRESS_SPACES`
   - `VM_MAX_USER_REGIONS`
@@ -203,19 +246,22 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
-2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` / `kernel_alpha_storage_bad_block_count_demo` / `kernel_alpha_storage_lba_range_demo` / `kernel_alpha_storage_bad_command_demo` / `kernel_alpha_plic_not_ready_demo` / `kernel_alpha_timer_not_ready_demo` 基线上继续补更多 fault / panic / device readiness，但公共 bring-up 编排继续收敛在 `kernel_alpha/common.c`，不要让重复骨架重新散回各入口。
-3. 继续推进 process / runtime refinement。
-4. 继续补更多 user interrupt / trap coverage。
-5. 把 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) 和 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 继续拆小。
+2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` / `kernel_alpha_storage_not_ready_demo` / `kernel_alpha_storage_bad_magic_demo` / `kernel_alpha_storage_bad_block_count_demo` / `kernel_alpha_storage_lba_range_demo` / `kernel_alpha_storage_bad_command_demo` / `kernel_alpha_plic_not_ready_demo` / `kernel_alpha_timer_not_ready_demo` 基线上继续补更多 fault / panic / device readiness，但公共 bring-up 编排继续收敛在 `kernel_alpha/common.c` 和 `kernel/supervisor_runtime.c`，不要让重复骨架重新散回各入口。
+3. 守住 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) / [kernel/vm_address_space.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_address_space.c) / [kernel/vm_process.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_process.c) / [kernel/vm_object.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_object.c) / [kernel/vm_fault.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_fault.c) 的边界，不要重新耦合。
+4. 在 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 与 [kernel/trap_dispatch.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap_dispatch.c) 的边界上继续保持 lifecycle / dispatch 分离，不要回退。
+5. 继续补更多 user interrupt / trap coverage。
 
 ## 验证要求
 
 只要触及 guest runtime / demo / smoke 路径，默认至少关注：
 
+- `cd myCPU && make test-unit-supervisor_runtime`
 - `cd myCPU && make test-guest-supervisor_demo`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_not_ready_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_bad_magic_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_bad_block_count_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_lba_range_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_bad_command_demo`

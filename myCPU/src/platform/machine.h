@@ -20,7 +20,9 @@ public:
 
     void load_elf(const std::string& path);
     void load_binary(const std::string& path, uint64_t addr);
-    void attach_storage_image(const std::string& path);
+    void attach_storage_image(const std::string& path,
+                              bool ready = true,
+                              bool valid_magic = true);
     void run();
 
 private:
