@@ -14,9 +14,10 @@ public:
     void enter_interrupt(uint64_t cause);
     void return_from_mret();
     void return_from_sret();
+    void sync_platform_events(const PlatformEvents& events);
     void handle_platform_events(const PlatformEvents& events);
     void raise_timer_interrupt();
-    void service_pending_interrupts();
+    bool service_pending_interrupts();
 
 private:
     void enter_trap(uint64_t cause, uint64_t tval);

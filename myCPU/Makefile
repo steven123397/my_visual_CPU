@@ -3,11 +3,11 @@ CXX      = g++
 CFLAGS   = -O2 -Wall -Wextra -g -std=c11
 CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
 C_SRCS   = src/memory.c src/decode.c
-CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/functional_backend.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
+CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/functional_backend.cpp src/exec/pipeline_backend.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 CORE_OBJS = $(filter-out src/main.o,$(OBJS))
 TARGET   = mycpu
-HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/address_space_faults_smoke
+HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/address_space_faults_smoke tests/host/pipeline_backend_smoke tests/host/backend_differential_smoke
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 FLAT_BIN_TESTS = hello
@@ -231,6 +231,26 @@ test-unit-%: FORCE tests/unit/%
 		exit $$status; \
 	fi; \
 	printf '%s\n' "$$output"
+
+test-host-%: FORCE tests/host/%
+	@echo "=== host:$* ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/$* 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Host test timed out: $*" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-backend-cli: FORCE $(TARGET) tests/asm/hello.elf
+	@echo "=== backend_cli ==="; \
+	sh tests/host/backend_cli.sh $(TARGET) tests/asm/hello.elf $(TEST_TIMEOUT)
+
+test-pipeline: test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-backend-cli
 
 test-flat-%: FORCE $(TARGET) tests/asm/%.bin
 	@case "$*" in \

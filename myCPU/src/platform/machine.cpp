@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "../exec/functional_backend.h"
+#include "../exec/pipeline_backend.h"
 
 Machine::Machine() : uart_(plic_), bus_(ram_) {
     cpu_.csr().bind_clint(&clint_);
@@ -25,7 +26,8 @@ void Machine::rebuild_backend() {
         backend_ = std::make_unique<FunctionalBackend>(cpu_, bus_);
         break;
     case BackendKind::Pipeline:
-        throw std::runtime_error("pipeline backend not integrated yet");
+        backend_ = std::make_unique<PipelineBackend>(cpu_, bus_);
+        break;
     }
 }
 
