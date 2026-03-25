@@ -1,9 +1,8 @@
 #include "cpu.h"
 
-#include "exec/control_flow_ops.h"
-#include "exec/integer_ops.h"
 #include "exec/memory_ops.h"
-#include "exec/system_ops.h"
+#include "isa/execution_context.h"
+#include "isa/instruction_semantics.h"
 #include "mem/bus.h"
 
 extern "C" {
@@ -14,54 +13,53 @@ namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
-bool execute(CPU& cpu, Bus& bus, Insn* in) {
+bool apply_instruction_effects(CPU& cpu, Bus& bus, const InsnEffects& effects, uint64_t next_pc) {
     CoreState& core = cpu.core();
-    const uint64_t pc = core.pc();
-    const uint64_t rs1v = core.read_gpr(in->rs1);
-    const uint64_t rs2v = core.read_gpr(in->rs2);
-    const int64_t imm = in->imm;
-    uint64_t next_pc = pc + 4;
 
-    switch (in->opcode) {
-    case 0x37:
-    case 0x17:
-    case 0x13:
-    case 0x1B:
-    case 0x33:
-    case 0x3B:
-    case 0x0F:
-        if (!execute_integer_instruction(cpu, *in, rs1v, rs2v, imm, pc)) {
-            return false;
-        }
-        break;
-    case 0x6F:
-    case 0x67:
-    case 0x63:
-        if (!execute_control_flow_instruction(cpu, *in, rs1v, rs2v, imm, pc, next_pc)) {
-            return false;
-        }
-        break;
-    case 0x03:
-    case 0x23:
-        if (!execute_memory_instruction(cpu, bus, *in, rs1v, rs2v, imm)) {
-            return false;
-        }
-        break;
-    case 0x73: {
-        bool retired = false;
-        if (!execute_system_instruction(cpu, *in, retired)) {
-            return retired;
-        }
-        core.set_pc(next_pc);
-        return retired;
-    }
-    default:
-        cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
+    if (effects.trap.valid) {
+        cpu.trap().enter_exception(effects.trap.cause, effects.trap.tval);
         return false;
     }
+    if (effects.mem.kind != MemoryRequest::Kind::None) {
+        if (!apply_memory_effects(cpu, bus, effects)) {
+            return false;
+        }
+    }
+    if (effects.csr_write.enable) {
+        cpu.csr().write(effects.csr_write.addr, effects.csr_write.value, core);
+    }
+    if (effects.rd_write.enable) {
+        core.write_gpr(effects.rd_write.rd, effects.rd_write.value);
+    }
+    if (effects.control.flush_tlb) {
+        cpu.address_space().flush_tlb();
+    }
+    if (effects.control.halt) {
+        core.set_halted(true);
+    }
+    switch (effects.control.trap_return) {
+    case TrapReturnKind::Mret:
+        cpu.trap().return_from_mret();
+        break;
+    case TrapReturnKind::Sret:
+        cpu.trap().return_from_sret();
+        break;
+    case TrapReturnKind::None:
+        core.set_pc(effects.control.redirect_pc ? effects.control.target_pc : next_pc);
+        break;
+    }
+    return effects.retired;
+}
 
-    core.set_pc(next_pc);
-    return true;
+bool execute(CPU& cpu, Bus& bus, Insn* in) {
+    const uint64_t next_pc = cpu.core().pc() + 4;
+
+    if (InstructionSemantics::supports(*in)) {
+        ExecutionContext ctx(cpu, bus);
+        return apply_instruction_effects(cpu, bus, InstructionSemantics::execute(*in, ctx), next_pc);
+    }
+    cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, in->raw);
+    return false;
 }
 
 }  // namespace

@@ -1,87 +1,147 @@
 #include "memory_ops.h"
 
 #include "../cpu.h"
+#include "../isa/effects.h"
 #include "../mem/bus.h"
 
 namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
-void write_rd(CPU& cpu, uint8_t rd, uint64_t value) {
-    cpu.core().write_gpr(rd, value);
+TrapRequest illegal_instruction_trap(uint32_t raw) {
+    TrapRequest trap;
+    trap.valid = true;
+    trap.cause = CAUSE_ILLEGAL_INSN;
+    trap.tval = raw;
+    return trap;
 }
 
 }  // namespace
 
-bool execute_memory_instruction(CPU& cpu, Bus& bus, const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm) {
-    const uint64_t addr = rs1v + static_cast<uint64_t>(imm);
+uint64_t extend_loaded_value(uint64_t value, int size, bool sign_extend) {
+    if (!sign_extend) {
+        switch (size) {
+        case 1:
+            return static_cast<uint8_t>(value);
+        case 2:
+            return static_cast<uint16_t>(value);
+        case 4:
+            return static_cast<uint32_t>(value);
+        default:
+            return value;
+        }
+    }
+
+    switch (size) {
+    case 1:
+        return static_cast<uint64_t>(static_cast<int64_t>(static_cast<int8_t>(value)));
+    case 2:
+        return static_cast<uint64_t>(static_cast<int64_t>(static_cast<int16_t>(value)));
+    case 4:
+        return static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(value)));
+    default:
+        return value;
+    }
+}
+
+InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm) {
+    InsnEffects effects;
+    effects.mem.addr = rs1v + static_cast<uint64_t>(imm);
 
     switch (insn.opcode) {
-    case 0x03: {
-        uint64_t val = 0;
+    case 0x03:
+        effects.mem.kind = MemoryRequest::Kind::Load;
+        effects.mem.rd = insn.rd;
         switch (insn.funct3) {
         case 0:
-            if (!cpu.address_space().load(bus, addr, 1, val)) {
-                return false;
-            }
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int8_t>(val)));
-            break;
+            effects.mem.size = 1;
+            effects.mem.sign_extend = true;
+            return effects;
         case 1:
-            if (!cpu.address_space().load(bus, addr, 2, val)) {
-                return false;
-            }
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int16_t>(val)));
-            break;
+            effects.mem.size = 2;
+            effects.mem.sign_extend = true;
+            return effects;
         case 2:
-            if (!cpu.address_space().load(bus, addr, 4, val)) {
-                return false;
-            }
-            val = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(val)));
-            break;
+            effects.mem.size = 4;
+            effects.mem.sign_extend = true;
+            return effects;
         case 3:
-            if (!cpu.address_space().load(bus, addr, 8, val)) {
-                return false;
-            }
-            break;
+            effects.mem.size = 8;
+            return effects;
         case 4:
-            if (!cpu.address_space().load(bus, addr, 1, val)) {
-                return false;
-            }
-            val = static_cast<uint8_t>(val);
-            break;
+            effects.mem.size = 1;
+            return effects;
         case 5:
-            if (!cpu.address_space().load(bus, addr, 2, val)) {
-                return false;
-            }
-            val = static_cast<uint16_t>(val);
-            break;
+            effects.mem.size = 2;
+            return effects;
         case 6:
-            if (!cpu.address_space().load(bus, addr, 4, val)) {
-                return false;
-            }
-            val = static_cast<uint32_t>(val);
-            break;
+            effects.mem.size = 4;
+            return effects;
         default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
-            return false;
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
         }
-        write_rd(cpu, insn.rd, val);
-        return true;
-    }
     case 0x23:
+        effects.mem.kind = MemoryRequest::Kind::Store;
+        effects.mem.store_value = rs2v;
         switch (insn.funct3) {
         case 0:
-            return cpu.address_space().store(bus, addr, rs2v, 1);
+            effects.mem.size = 1;
+            return effects;
         case 1:
-            return cpu.address_space().store(bus, addr, rs2v, 2);
+            effects.mem.size = 2;
+            return effects;
         case 2:
-            return cpu.address_space().store(bus, addr, rs2v, 4);
+            effects.mem.size = 4;
+            return effects;
         case 3:
-            return cpu.address_space().store(bus, addr, rs2v, 8);
+            effects.mem.size = 8;
+            return effects;
         default:
-            cpu.trap().enter_exception(CAUSE_ILLEGAL_INSN, insn.raw);
+            effects.trap = illegal_instruction_trap(insn.raw);
+            effects.retired = false;
+            return effects;
+        }
+    default:
+        effects.trap = illegal_instruction_trap(insn.raw);
+        effects.retired = false;
+        return effects;
+    }
+}
+
+bool apply_memory_effects(CPU& cpu, Bus& bus, const InsnEffects& effects) {
+    if (effects.trap.valid) {
+        cpu.trap().enter_exception(effects.trap.cause, effects.trap.tval);
+        return false;
+    }
+
+    switch (effects.mem.kind) {
+    case MemoryRequest::Kind::Load: {
+        uint64_t value = 0;
+        if (!cpu.address_space().load(bus, effects.mem.addr, effects.mem.size, value)) {
             return false;
         }
+        cpu.core().write_gpr(effects.mem.rd, extend_loaded_value(value, effects.mem.size, effects.mem.sign_extend));
+        return effects.retired;
+    }
+    case MemoryRequest::Kind::Store:
+        if (!cpu.address_space().store(bus, effects.mem.addr, effects.mem.store_value, effects.mem.size)) {
+            return false;
+        }
+        return effects.retired;
+    case MemoryRequest::Kind::None:
+        return effects.retired;
+    }
+
+    return effects.retired;
+}
+
+bool execute_memory_instruction(CPU& cpu, Bus& bus, const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm) {
+    switch (insn.opcode) {
+    case 0x03:
+    case 0x23:
+        return apply_memory_effects(cpu, bus, build_memory_effects(insn, rs1v, rs2v, imm));
     default:
         return false;
     }

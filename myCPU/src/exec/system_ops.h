@@ -1,9 +1,11 @@
 #pragma once
 
-class CPU;
+struct InsnEffects;
+struct SemanticInputs;
+class ExecutionContext;
 
 extern "C" {
 #include "../decode.h"
 }
 
-bool execute_system_instruction(CPU& cpu, const Insn& insn, bool& retired);
+InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const SemanticInputs& inputs);

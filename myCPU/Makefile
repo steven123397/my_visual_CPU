@@ -3,10 +3,11 @@ CXX      = g++
 CFLAGS   = -O2 -Wall -Wextra -g -std=c11
 CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
 C_SRCS   = src/memory.c src/decode.c
-CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/functional_backend.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
+CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/functional_backend.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 CORE_OBJS = $(filter-out src/main.o,$(OBJS))
 TARGET   = mycpu
+HOST_TEST_BINS = tests/host/instruction_semantics_smoke
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 FLAT_BIN_TESTS = hello
@@ -500,7 +501,7 @@ check-riscv-toolchain:
 	fi
 
 clean:
-	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin $(UNIT_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
+	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
 	find src guest -type f \( -name '*.o' -o -name '*.d' \) -delete
 
 -include $(DEPS)
@@ -550,4 +551,7 @@ tests/unit/kernel_alpha_interrupt: $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/unit/%: tests/unit/%.cpp $(CORE_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(CORE_OBJS)
+
+tests/host/%: tests/host/%.cpp $(CORE_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(CORE_OBJS)
