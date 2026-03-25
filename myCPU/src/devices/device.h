@@ -45,6 +45,12 @@ public:
     virtual PlatformEvents tick() {
         return {};
     }
+    virtual const char* debug_name() const {
+        return "device";
+    }
+    virtual bool is_mmio() const {
+        return true;
+    }
 
 protected:
     [[noreturn]] void invalid_access(uint64_t, int) const {

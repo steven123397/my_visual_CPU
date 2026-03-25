@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <vector>
 
+#include "../debug/debug_snapshot.h"
 #include "../devices/device.h"
 #include "../platform/platform_events.h"
 
@@ -17,9 +18,12 @@ public:
     bool try_load(uint64_t addr, int size, uint64_t& value);
     bool try_store(uint64_t addr, uint64_t value, int size);
     PlatformEvents tick();
+    const DebugBusAccess& last_access() const;
 
 private:
     Device* find_device(uint64_t addr, int size);
+    void record_access(const Device& device, bool write, uint64_t addr, uint64_t value, int size);
 
     std::vector<Device*> devices_;
+    DebugBusAccess last_access_{};
 };

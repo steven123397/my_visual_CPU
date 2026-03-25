@@ -12,8 +12,11 @@ public:
 
     void step() override;
     const char* name() const override;
+    BackendDebugSnapshot debug_snapshot() const override;
 
 private:
+    DebugStageSnapshot build_fetch_stage_snapshot() const;
+    DebugStageSnapshot build_stage_snapshot(const StageSlot& slot) const;
     bool pipeline_empty() const;
     bool reads_rs1(const Insn& insn) const;
     bool reads_rs2(const Insn& insn) const;
@@ -46,6 +49,8 @@ private:
     ExMemReg next_ex_mem_{};
     MemWbReg next_mem_wb_{};
     bool last_cycle_stalled_{false};
+    bool last_cycle_trap_flush_{false};
+    bool last_cycle_committed_{false};
     bool redirect_pending_{false};
     uint64_t redirect_target_{0};
     TrapRequest pending_fetch_fault_{};

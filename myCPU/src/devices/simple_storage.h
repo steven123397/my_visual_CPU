@@ -17,6 +17,16 @@ public:
     void load_image(const char* path);
     void set_ready(bool ready);
     void set_magic_valid(bool valid);
+    void clear_image();
+    bool attached() const;
+    uint64_t status() const;
+    uint64_t capacity_blocks() const;
+    uint64_t lba() const;
+    uint64_t block_count() const;
+    uint64_t error_code() const;
+    const char* debug_name() const override {
+        return "storage";
+    }
 
 private:
     uint64_t register_value(uint32_t offset) const;

@@ -35,6 +35,64 @@ bool wb_commit_needs_flush(const InsnEffects& effects) {
     return effects.control.halt || effects.control.trap_return != TrapReturnKind::None;
 }
 
+std::string hex_u32(uint32_t value) {
+    char buffer[16];
+    std::snprintf(buffer, sizeof(buffer), "0x%08x", value);
+    return buffer;
+}
+
+std::string opcode_name(const Insn& insn) {
+    if (insn.raw == 0x00000073U) {
+        return "ecall";
+    }
+    if (insn.raw == 0x30200073U) {
+        return "mret";
+    }
+    if (insn.raw == 0x10200073U) {
+        return "sret";
+    }
+
+    switch (insn.opcode) {
+    case 0x03:
+        return "load";
+    case 0x13:
+    case 0x1B:
+        return "op-imm";
+    case 0x23:
+        return "store";
+    case 0x33:
+    case 0x3B:
+        return "op";
+    case 0x37:
+        return "lui";
+    case 0x17:
+        return "auipc";
+    case 0x63:
+        return "branch";
+    case 0x67:
+        return "jalr";
+    case 0x6F:
+        return "jal";
+    case 0x73:
+        return insn.funct3 == 0 ? "system" : "csr";
+    default:
+        return "insn";
+    }
+}
+
+std::string format_stage_text(const StageSlot& slot) {
+    if (!slot.valid) {
+        return {};
+    }
+
+    Insn insn = slot.insn;
+    if (insn.raw != slot.raw) {
+        decode(slot.raw, &insn);
+        insn.raw = slot.raw;
+    }
+    return opcode_name(insn) + " " + hex_u32(slot.raw);
+}
+
 }  // namespace
 
 PipelineBackend::PipelineBackend(CPU& cpu, Bus& bus) : cpu_(cpu), bus_(bus) {
@@ -49,14 +107,22 @@ void PipelineBackend::step() {
     next_ex_mem_ = {};
     next_mem_wb_ = {};
     last_cycle_stalled_ = false;
+    last_cycle_trap_flush_ = false;
+    last_cycle_committed_ = false;
     redirect_pending_ = false;
     redirect_target_ = 0;
 
     const bool wb_flushed = step_wb();
+    bool committed_fetch_fault = false;
+    bool serviced_interrupt = false;
     if (!wb_flushed) {
-        if (!try_commit_fetch_fault()) {
-            try_service_interrupt_at_commit_boundary();
+        committed_fetch_fault = try_commit_fetch_fault();
+        if (!committed_fetch_fault) {
+            serviced_interrupt = try_service_interrupt_at_commit_boundary();
         }
+    }
+    if (committed_fetch_fault || serviced_interrupt) {
+        last_cycle_trap_flush_ = true;
     }
     step_mem();
     step_ex();
@@ -267,6 +333,7 @@ bool PipelineBackend::step_wb() {
         cpu_.trap().enter_exception(mem_wb_.slot.effects.trap.cause, mem_wb_.slot.effects.trap.tval);
         reset_stage_state();
         fetch_pc_ = cpu_.core().pc();
+        last_cycle_trap_flush_ = true;
         return true;
     }
 
@@ -298,11 +365,13 @@ bool PipelineBackend::step_wb() {
     }
     if (mem_wb_.slot.effects.retired) {
         cpu_.core().advance_instret();
+        last_cycle_committed_ = true;
     }
 
     if (wb_commit_needs_flush(mem_wb_.slot.effects)) {
         reset_stage_state();
         fetch_pc_ = cpu_.core().pc();
+        last_cycle_trap_flush_ = true;
         return true;
     }
 
@@ -466,4 +535,48 @@ void PipelineBackend::commit_next_state() {
 
 const char* PipelineBackend::name() const {
     return "pipeline";
+}
+
+BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
+    BackendDebugSnapshot snapshot;
+    snapshot.backend_name = name();
+    snapshot.pipeline.if_stage = build_fetch_stage_snapshot();
+    snapshot.pipeline.id_stage = build_stage_snapshot(if_id_.slot);
+    snapshot.pipeline.ex_stage = build_stage_snapshot(id_ex_.slot);
+    snapshot.pipeline.mem_stage = build_stage_snapshot(ex_mem_.slot);
+    snapshot.pipeline.wb_stage = build_stage_snapshot(mem_wb_.slot);
+    snapshot.pipeline.stalled = last_cycle_stalled_;
+    snapshot.pipeline.redirected = redirect_pending_;
+    snapshot.pipeline.redirect_target = redirect_target_;
+    snapshot.pipeline.pending_fetch_fault = pending_fetch_fault_.valid;
+    snapshot.pipeline.trap_flush = last_cycle_trap_flush_;
+    snapshot.pipeline.committed = last_cycle_committed_;
+    snapshot.pipeline.empty = pipeline_empty();
+    return snapshot;
+}
+
+DebugStageSnapshot PipelineBackend::build_fetch_stage_snapshot() const {
+    DebugStageSnapshot snapshot;
+    if (cpu_.core().halted() || pending_fetch_fault_.valid) {
+        return snapshot;
+    }
+
+    snapshot.valid = true;
+    snapshot.pc = fetch_pc_;
+    snapshot.raw = 0;
+    snapshot.text = "fetch";
+    return snapshot;
+}
+
+DebugStageSnapshot PipelineBackend::build_stage_snapshot(const StageSlot& slot) const {
+    DebugStageSnapshot snapshot;
+    if (!slot.valid) {
+        return snapshot;
+    }
+
+    snapshot.valid = true;
+    snapshot.pc = slot.pc;
+    snapshot.raw = slot.raw;
+    snapshot.text = format_stage_text(slot);
+    return snapshot;
 }

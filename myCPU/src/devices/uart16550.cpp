@@ -41,8 +41,12 @@ void Uart16550::store(uint64_t addr, uint64_t value, int size) {
 
     const uint32_t offset = static_cast<uint32_t>(addr - UART_BASE);
     if (offset == UART_REG_THR) {
-        std::putchar(static_cast<int>(value & 0xFF));
-        std::fflush(stdout);
+        const char ch = static_cast<char>(value & 0xFF);
+        output_.push_back(ch);
+        if (mirror_stdout_) {
+            std::putchar(static_cast<int>(static_cast<unsigned char>(ch)));
+            std::fflush(stdout);
+        }
         return;
     }
     if (offset == UART_REG_IER) {
@@ -56,4 +60,24 @@ void Uart16550::store(uint64_t addr, uint64_t value, int size) {
 
 void Uart16550::update_interrupt_line() {
     plic_.set_source_level(Plic::UART_SOURCE_ID, (ier_ & UART_IER_THRI) != 0);
+}
+
+uint8_t Uart16550::ier() const {
+    return ier_;
+}
+
+bool Uart16550::thre_interrupt_asserted() const {
+    return (ier_ & UART_IER_THRI) != 0;
+}
+
+size_t Uart16550::output_size() const {
+    return output_.size();
+}
+
+const std::string& Uart16550::output() const {
+    return output_;
+}
+
+void Uart16550::set_mirror_stdout(bool enabled) {
+    mirror_stdout_ = enabled;
 }

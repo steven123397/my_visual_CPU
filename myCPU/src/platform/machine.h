@@ -33,6 +33,21 @@ public:
                               bool valid_magic = true);
     void step();
     void run();
+    CPU& cpu();
+    const CPU& cpu() const;
+    Bus& bus();
+    const Bus& bus() const;
+    Uart16550& uart();
+    const Uart16550& uart() const;
+    Clint& clint();
+    const Clint& clint() const;
+    Plic& plic();
+    const Plic& plic() const;
+    SimpleStorage& storage();
+    const SimpleStorage& storage() const;
+    ExecutionBackend& backend();
+    const ExecutionBackend& backend() const;
+    bool loaded() const;
 
 private:
     void rebuild_backend();

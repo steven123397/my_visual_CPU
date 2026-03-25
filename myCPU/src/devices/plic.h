@@ -17,6 +17,19 @@ public:
     PlatformEvents tick() override;
 
     void set_source_level(uint32_t source_id, bool asserted);
+    uint32_t priority(uint32_t source_id) const;
+    bool source_level(uint32_t source_id) const;
+    bool source_pending(uint32_t source_id) const;
+    bool source_claimed(uint32_t source_id) const;
+    uint32_t machine_enables() const;
+    uint32_t supervisor_enables() const;
+    uint32_t machine_threshold() const;
+    uint32_t supervisor_threshold() const;
+    bool machine_has_pending() const;
+    bool supervisor_has_pending() const;
+    const char* debug_name() const override {
+        return "plic";
+    }
 
 private:
     struct ContextState {

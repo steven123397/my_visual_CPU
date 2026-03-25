@@ -77,3 +77,69 @@ void Machine::run() {
         step();
     }
 }
+
+CPU& Machine::cpu() {
+    return cpu_;
+}
+
+const CPU& Machine::cpu() const {
+    return cpu_;
+}
+
+Bus& Machine::bus() {
+    return bus_;
+}
+
+const Bus& Machine::bus() const {
+    return bus_;
+}
+
+Uart16550& Machine::uart() {
+    return uart_;
+}
+
+const Uart16550& Machine::uart() const {
+    return uart_;
+}
+
+Clint& Machine::clint() {
+    return clint_;
+}
+
+const Clint& Machine::clint() const {
+    return clint_;
+}
+
+Plic& Machine::plic() {
+    return plic_;
+}
+
+const Plic& Machine::plic() const {
+    return plic_;
+}
+
+SimpleStorage& Machine::storage() {
+    return storage_;
+}
+
+const SimpleStorage& Machine::storage() const {
+    return storage_;
+}
+
+ExecutionBackend& Machine::backend() {
+    if (!backend_) {
+        throw std::runtime_error("execution backend not initialized");
+    }
+    return *backend_;
+}
+
+const ExecutionBackend& Machine::backend() const {
+    if (!backend_) {
+        throw std::runtime_error("execution backend not initialized");
+    }
+    return *backend_;
+}
+
+bool Machine::loaded() const {
+    return loaded_;
+}

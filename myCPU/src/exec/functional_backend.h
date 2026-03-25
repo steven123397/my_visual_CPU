@@ -11,6 +11,7 @@ public:
 
     void step() override;
     const char* name() const override;
+    BackendDebugSnapshot debug_snapshot() const override;
 
 private:
     CPU& cpu_;

@@ -91,6 +91,58 @@ void Plic::set_source_level(uint32_t source_id, bool asserted) {
     }
 }
 
+uint32_t Plic::priority(uint32_t source_id) const {
+    if (source_id == 0 || source_id > kNumSources) {
+        return 0;
+    }
+    return priorities_[source_id];
+}
+
+bool Plic::source_level(uint32_t source_id) const {
+    if (source_id == 0 || source_id > kNumSources) {
+        return false;
+    }
+    return levels_[source_id];
+}
+
+bool Plic::source_pending(uint32_t source_id) const {
+    if (source_id == 0 || source_id > kNumSources) {
+        return false;
+    }
+    return pending_[source_id];
+}
+
+bool Plic::source_claimed(uint32_t source_id) const {
+    if (source_id == 0 || source_id > kNumSources) {
+        return false;
+    }
+    return claimed_[source_id];
+}
+
+uint32_t Plic::machine_enables() const {
+    return machine_context_.enables;
+}
+
+uint32_t Plic::supervisor_enables() const {
+    return supervisor_context_.enables;
+}
+
+uint32_t Plic::machine_threshold() const {
+    return machine_context_.threshold;
+}
+
+uint32_t Plic::supervisor_threshold() const {
+    return supervisor_context_.threshold;
+}
+
+bool Plic::machine_has_pending() const {
+    return context_has_pending(machine_context_);
+}
+
+bool Plic::supervisor_has_pending() const {
+    return context_has_pending(supervisor_context_);
+}
+
 uint32_t Plic::best_pending_source(const ContextState& context) const {
     uint32_t best_source = 0;
     uint32_t best_priority = 0;

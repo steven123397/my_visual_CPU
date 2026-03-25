@@ -13,6 +13,11 @@ public:
     void store(uint64_t addr, uint64_t value, int size) override;
     PlatformEvents tick() override;
     uint64_t mtime() const;
+    uint64_t mtimecmp() const;
+    bool timer_interrupt_pending() const;
+    const char* debug_name() const override {
+        return "clint";
+    }
 
 private:
     static uint64_t mask_for_size(int size);

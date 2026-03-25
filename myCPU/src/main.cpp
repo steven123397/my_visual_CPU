@@ -2,7 +2,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <iostream>
 
+#include "debug/debug_protocol.h"
 #include "platform/address_map.h"
 #include "platform/machine.h"
 
@@ -18,8 +20,9 @@ static BackendKind parse_backend_kind(const char* value) {
 
 static void usage(const char* prog) {
     std::fprintf(stderr,
-                 "Usage: %s [--backend kind] [-b addr] [-d image] [--disk-not-ready image] [--disk-bad-magic image] <image>\n",
+                 "Usage: %s [--debug-cli] [--backend kind] [-b addr] [-d image] [--disk-not-ready image] [--disk-bad-magic image] <image>\n",
                  prog);
+    std::fprintf(stderr, "  --debug-cli     run JSON line debug protocol on stdin/stdout\n");
     std::fprintf(stderr, "  --backend kind  select execution backend: functional or pipeline\n");
     std::fprintf(stderr, "  -b addr   load flat binary at hex address (default: 0x80000000)\n");
     std::fprintf(stderr, "  -d image  attach host-backed storage image to the simple MMIO storage device\n");
@@ -34,6 +37,12 @@ static void usage(const char* prog) {
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         usage(argv[0]);
+    }
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--debug-cli") == 0) {
+            return run_debug_cli(std::cin, std::cout, std::cerr);
+        }
     }
 
     bool flat = false;

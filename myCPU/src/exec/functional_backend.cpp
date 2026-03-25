@@ -12,3 +12,10 @@ void FunctionalBackend::step() {
 const char* FunctionalBackend::name() const {
     return "functional";
 }
+
+BackendDebugSnapshot FunctionalBackend::debug_snapshot() const {
+    BackendDebugSnapshot snapshot;
+    snapshot.backend_name = name();
+    snapshot.pipeline.empty = true;
+    return snapshot;
+}

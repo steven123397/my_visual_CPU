@@ -76,3 +76,11 @@ PlatformEvents Clint::tick() {
 uint64_t Clint::mtime() const {
     return mtime_;
 }
+
+uint64_t Clint::mtimecmp() const {
+    return mtimecmp_;
+}
+
+bool Clint::timer_interrupt_pending() const {
+    return mtime_ >= mtimecmp_;
+}

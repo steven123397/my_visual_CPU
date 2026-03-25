@@ -42,6 +42,7 @@ bool Bus::try_load(uint64_t addr, int size, uint64_t& value) {
     if (Device* device = find_device(addr, size)) {
         try {
             value = device->load(addr, size);
+            record_access(*device, false, addr, value, size);
             return true;
         } catch (const std::exception&) {
         }
@@ -54,6 +55,7 @@ bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
     if (Device* device = find_device(addr, size)) {
         try {
             device->store(addr, value, size);
+            record_access(*device, true, addr, value, size);
             return true;
         } catch (const std::exception&) {
         }
@@ -67,4 +69,18 @@ PlatformEvents Bus::tick() {
         events.merge(device->tick());
     }
     return events;
+}
+
+const DebugBusAccess& Bus::last_access() const {
+    return last_access_;
+}
+
+void Bus::record_access(const Device& device, bool write, uint64_t addr, uint64_t value, int size) {
+    last_access_.valid = true;
+    last_access_.write = write;
+    last_access_.mmio = device.is_mmio();
+    last_access_.addr = addr;
+    last_access_.value = value;
+    last_access_.size = size;
+    last_access_.device = device.debug_name();
 }
