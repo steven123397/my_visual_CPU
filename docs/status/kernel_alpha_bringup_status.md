@@ -208,6 +208,9 @@
   `guest/kernel/kernel_bringup.c`，并把 `guest/kernel_alpha/common.c` 改成
   PLIC / first delivery / storage probe 的 phase helper，避免
   `supervisor_demo` 再依赖 alpha 私有骨架。
+- 随后继续把六条 storage 负向回归里的 probe / read / clear-error 合同检查
+  收口到 `guest/kernel_alpha/storage_contract.c`，让各入口进一步退化成
+  “storage-only bring-up + 选择哪条合同 + marker / panic”。
 
 ## 当前仍然有效的风险 / 限制
 
@@ -230,6 +233,7 @@
 
 - `cd myCPU && make test-unit-kernel_runtime`
 - `cd myCPU && make test-unit-kernel_alpha_common`
+- `cd myCPU && make test-unit-kernel_alpha_storage`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`

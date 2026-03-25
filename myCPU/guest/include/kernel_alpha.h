@@ -28,3 +28,10 @@ bool kernel_alpha_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
                                                 uint64_t timeout_delta);
 bool kernel_alpha_complete_storage_probe(void);
 bool kernel_alpha_complete_storage_signature_check(void);
+bool kernel_alpha_run_storage_bringup(kernel_runtime_t* runtime);
+bool kernel_alpha_validate_storage_no_media_contract(void);
+bool kernel_alpha_validate_storage_not_ready_contract(void);
+bool kernel_alpha_validate_storage_bad_magic_contract(void);
+bool kernel_alpha_validate_storage_bad_block_count_contract(void);
+bool kernel_alpha_validate_storage_lba_range_contract(void);
+bool kernel_alpha_validate_storage_bad_command_contract(void);
