@@ -13,10 +13,12 @@
 当前 simulator 侧已经落地的关键边界包括：
 
 - `Machine + Bus + Ram + Device`
+- `ExecutionBackend + FunctionalBackend + PipelineBackend`
 - `ElfLoader + BinaryLoader`
 - `CoreState + CsrFile`
 - `TrapController`
 - `AddressSpace`
+- `InstructionSemantics + ExecutionContext + InsnEffects`
 - 按指令族拆分的 `exec/*` 语义模块
 
 当前平台设备包括：
@@ -26,7 +28,7 @@
 - `Plic`
 - `SimpleStorage`
 
-当前参考路径仍然是单一的 fetch-decode-execute loop，不要把它打散成多个语义来源。
+当前 reference 真值来源仍然是共享 `InstructionSemantics` 和默认 `functional` backend，不要把指令语义复制到多个 backend 里；`pipeline` 只能复用共享语义层，不得另起一套 ISA 解释。
 
 ## 模块地图
 
@@ -55,6 +57,7 @@
 
 - 保留一个简单、正确、可调试的 reference core。
 - 不要把同一条指令语义复制到多个 backend 里。
+- `pipeline` 当前只承诺 host-side smoke / differential / CLI 门禁，不默认承担 guest / `kernel_alpha` 回归门禁。
 - CPU 访存路径必须继续沿着：
   `CPU -> AddressSpace -> Bus -> Ram/Device`
 - 平台事件继续沿着：
@@ -76,6 +79,7 @@
 - `misa` 只读、`satp.MODE` WARL、`counteren`、Sv39、最小 TLB、`sfence.vma`。
 - UART / CLINT / PLIC / `SimpleStorage`。
 - bus / device 第一轮区间与访问宽度防御。
+- `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 host-side `pipeline` 核心 smoke / differential 门禁。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。
@@ -87,6 +91,7 @@
   - `DIV/REM` 宿主未定义行为边界
   - ELF pure-BSS `PT_LOAD`
   - bus / device 第一轮边界防御
+- 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 simulator/guest 改动默认应以此为 Phase 1 完成态参考点。
 
 ## 当前仍需关注的问题
 
@@ -110,9 +115,10 @@
 近期优先级建议如下：
 
 1. 在已修 correctness 基线之上，继续扩充非法编码、MMIO 边界和 ELF 段布局回归。
-2. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_not_ready_demo`、`guest_kernel_alpha_storage_bad_magic_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 验证 simulator 对独立 kernel bring-up 的支撑，再逐步扩 device readiness。
+2. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_not_ready_demo`、`guest_kernel_alpha_storage_bad_magic_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 守住 `phase1-stable` bring-up 基线，再把额外 readiness / panic 路径当作 post-Phase1 hardening 渐进扩充。
 3. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界。
 4. 在保持 Phase 1 已达成核心目标的前提下，先继续做必要稳定化，再讨论多 backend、pipeline、OoO 等后续扩展。
+   当前已完成 `pipeline core` 的主线接入准备：默认 `functional` 继续守 `make test`，`pipeline` 额外守 `make test-pipeline`。
 
 ## 验证要求
 
@@ -130,5 +136,17 @@
 默认都应守住：
 
 - `cd myCPU && make test`
+
+如果触及以下任一路径：
+
+- `src/main.cpp`
+- `src/platform/machine.cpp`
+- `src/exec/*`
+- `src/isa/*`
+- `tests/host/*`
+
+还应额外守住：
+
+- `cd myCPU && make test-pipeline`
 
 如果行为变化是有意的，必须同步更新测试或文档说明。

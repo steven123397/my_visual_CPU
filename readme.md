@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但 Phase 1 的核心 OS bring-up 目标已经达成：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个最小 guest supervisor runtime 都已接通。最近一轮 simulator-side correctness / loader / bus-device 守边界修复也已经落地：非法整数保留编码会稳定触发 `illegal instruction`，`DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 语义返回，纯 BSS `PT_LOAD` 段会正确 `zero-fill`，第一轮 MMIO 非法访问宽度与设备区间重叠防御也已接通。guest 侧目前已经打通 early allocator、最小 PMM、页表与地址空间、trap/runtime、单用户任务封装，以及两条不同职责的 bring-up 路径：`guest_supervisor_demo` 负责 U-mode/runtime smoke，独立 `kernel_alpha_demo` 负责第一次真正的小 kernel alpha bring-up 基线；其中 `supervisor_demo_smoke` 已经收口为单入口 demo runner，`user_program_smoke` 也进一步收成阶段化 lifecycle / prepare / enter helper，而 `kernel_alpha` 路径则继续补齐了 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage not-ready、storage bad-magic、storage `BAD_BLOCK_COUNT`、storage `LBA_RANGE` 和 storage `BAD_COMMAND` 这 9 条独立负向回归。
+当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但 Phase 1 的核心 OS bring-up 目标已经达成：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个最小 guest supervisor runtime 都已接通。当前冻结稳定基线已经打为 tag `phase1-stable`（`283aee6`）；后续 guest/runtime 调整默认视为 post-Phase1 hardening。最近一轮 simulator-side correctness / loader / bus-device 守边界修复也已经落地：非法整数保留编码会稳定触发 `illegal instruction`，`DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 语义返回，纯 BSS `PT_LOAD` 段会正确 `zero-fill`，第一轮 MMIO 非法访问宽度与设备区间重叠防御也已接通。guest 侧目前已经打通 early allocator、最小 PMM、页表与地址空间、trap/runtime、单用户任务封装，以及两条不同职责的 bring-up 路径：`guest_supervisor_demo` 负责 U-mode/runtime smoke，独立 `kernel_alpha_demo` 负责第一次真正的小 kernel alpha bring-up 基线；其中 `supervisor_demo_smoke` 已经收口为单入口 demo runner，`user_program_smoke` 也进一步收成阶段化 lifecycle / prepare / enter helper，而 `kernel_alpha` 路径则继续补齐了 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage not-ready、storage bad-magic、storage `BAD_BLOCK_COUNT`、storage `LBA_RANGE` 和 storage `BAD_COMMAND` 这 9 条独立负向回归。
 
 ## 目录结构
 
@@ -8,27 +8,28 @@
 myCPU/
 ├── guest/              # 最小 guest supervisor runtime / 平台层 / demo
 ├── src/
-│   ├── main.cpp        # C++ 入口，CLI 参数与 Machine 启动
-│   ├── cpu.cpp/h       # CPU 外观接口 + 参考执行路径
+│   ├── main.cpp        # C++ 入口，CLI 参数、backend 选择与 Machine 启动
+│   ├── cpu.cpp/h       # CPU 外观接口 + functional 参考执行路径
 │   ├── memory.c/h      # 主内存 backing 与底层访存辅助
 │   ├── decode.c/h      # 指令解码
 │   ├── trap.cpp/h      # TrapController：异常/中断路由与返回
 │   ├── arch/           # CoreState / CsrFile 状态边界
-│   ├── exec/           # 指令语义分块（integer / control-flow / memory / system）
+│   ├── exec/           # backend 骨架 + pipeline core + 指令语义分块
+│   ├── isa/            # 共享 ISA 语义层（InstructionSemantics / Effects / ExecutionContext）
 │   ├── platform/       # C++ Machine 骨架与平台地址映射
 │   ├── mem/            # C++ Ram/Bus/AddressSpace 边界
 │   ├── devices/        # UART / CLINT / PLIC / SimpleStorage 设备对象
 │   ├── loader/         # C++ ELF / flat binary 镜像装载边界
 │   └── ...
 ├── tests/asm/          # 汇编测试程序与平台 smoke coverage
-├── tests/unit/         # host-side 单元回归（loader / bus/device 守边界）
+├── tests/unit/         # host-side 单元回归（loader / bus-device / guest runtime helper 合同）
 ├── docs/               # 规划与平台契约文档
 └── Makefile
 ```
 
 ## 模块关系与运行流程
 
-模拟器从命令行读取镜像路径，通过 `Machine` 组装平台对象，然后进入单步执行循环。整体调用关系如下：
+模拟器从命令行读取镜像路径和 backend 选择，通过 `Machine` 组装平台对象，然后把控制权交给当前 `ExecutionBackend`。整体调用关系如下：
 
 ```text
 main.cpp
@@ -38,22 +39,17 @@ main.cpp
         ├── Bus                      分发 RAM 与设备访问
         ├── ElfLoader / BinaryLoader     加载 ELF 或平坦二进制
         ├── cpu_init()               初始化 CoreState、CsrFile
+        ├── ExecutionBackend         默认 functional，可选 pipeline
         └── while (!halted)
-              └── cpu_step(cpu, bus)
-              ├── Bus::tick() 返回平台事件 / 通过 TrapController 检查 timer / external interrupt
-              ├── AddressSpace::fetch32() 取指
-              ├── decode()          指令译码
-              ├── execute()         执行指令
-              │     ├── AddressSpace::load/store() 访问主内存或设备
-              │     ├── csr_read()/csr_write()   访问 CSR
-              │     └── TrapController 处理 trap 进入/返回
-              └── cycle++
+              └── backend->step()
+                    ├── functional -> cpu_step(cpu, bus)
+                    └── pipeline -> IF/ID/EX/MEM/WB + commit-boundary trap/interrupt
 ```
 
 从模块职责看：
 
-- `main.cpp` 负责 CLI 参数解析和启动 `Machine`。
-- `platform/machine.*` 负责组装 CPU、Ram、Bus、PLIC、storage 等平台对象，并驱动主执行循环。
+- `main.cpp` 负责 CLI 参数解析、`--backend functional|pipeline` 选择和启动 `Machine`。
+- `platform/machine.*` 负责组装 CPU、Ram、Bus、PLIC、storage 等平台对象，管理 backend 生命周期，并驱动主执行循环。
 - `platform/address_map.h` 负责平台地址映射常量，避免设备层依赖 legacy `Memory` 头。
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
 - `arch/csr_file.*` 负责已实现 CSR 集合、`misa/satp/time` 这类带架构约束的特殊语义，以及 `sstatus/sie/sip` 对 `mstatus/mie/mip` 的别名视图。
@@ -62,7 +58,9 @@ main.cpp
 - `devices/uart16550.*`、`devices/clint.*`、`devices/plic.*` 和 `devices/simple_storage.*` 提供独立 MMIO 设备对象。
 - `devices/device.h` 提供统一设备接口，供 `Bus` 附加和分发。
 - `loader/elf_loader.*` 和 `loader/binary_loader.*` 提供镜像装载边界，直接通过 `Ram` 接口写入镜像内容。
-- `cpu.cpp/h` 负责把 `CoreState + CsrFile + TrapController` 接回现有参考执行路径。
+- `cpu.cpp/h` 负责 functional reference path，并把 `CoreState + CsrFile + TrapController` 接到共享 ISA 语义层。
+- `isa/*` 负责共享 `InstructionSemantics`、`ExecutionContext` 和 `InsnEffects`，作为 `functional` 与 `pipeline` 的统一 ISA 语义来源。
+- `exec/backend.h`、`exec/functional_backend.*` 和 `exec/pipeline_backend.*` 负责执行后端抽象、默认 functional backend，以及当前五级 pipeline core。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
 - `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret/sret` 返回、timer/external interrupt 路由，以及当前最小 `medeleg/mideleg` supervisor trap 委托路径。
@@ -93,6 +91,9 @@ make
 # 运行 ELF 程序
 ./mycpu <program.elf>
 
+# 显式选择 pipeline backend 运行 ELF
+./mycpu --backend pipeline <program.elf>
+
 # 运行平坦二进制（指定加载地址，十六进制）
 ./mycpu -b 80000000 <program.bin>
 ```
@@ -104,6 +105,9 @@ make
 ```bash
 sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
+
+# 运行 pipeline host-side 门禁
+make test-pipeline
 
 # 只跑独立 kernel alpha bring-up 回归
 make test-guest-kernel_alpha_demo
@@ -136,7 +140,9 @@ make test-guest-kernel_alpha_plic_not_ready_demo
 make test-guest-kernel_alpha_timer_not_ready_demo
 ```
 
-`make test` 会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo`、`kernel_alpha_demo`、`kernel_alpha_fault_demo`、`kernel_alpha_storage_no_media_demo`、`kernel_alpha_storage_not_ready_demo`、`kernel_alpha_storage_bad_magic_demo`、`kernel_alpha_storage_bad_block_count_demo`、`kernel_alpha_storage_lba_range_demo`、`kernel_alpha_storage_bad_command_demo`、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这 11 条 guest 回归路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 timer interrupt、一次 storage readiness probe、一次最小块设备读取，以及 9 条独立负向路径：未映射 CLINT MMIO 访问触发的 fault / panic、未安排第一次 timer delivery 时的 readiness timeout / panic、PLIC 已映射但未初始化时的 readiness timeout / panic、storage 未附加镜像时的 metadata / `NO_MEDIA` error 合同、storage 已附加但 `READY` 缺失时的 readiness / `NOT_READY` / clear-error 合同、storage `MAGIC` 元数据损坏时的 probe-fail / data-path-still-live 合同、`BLOCK_COUNT != 1` 时的 `BAD_BLOCK_COUNT` / clear-error 合同、`LBA == capacity_blocks` 时的 `LBA_RANGE` / clear-error 合同，以及非法 `COMMAND` 值时的 `BAD_COMMAND` / clear-error 合同。host-side 单元侧除 ELF / bus-device / storage readiness 外，也新增了 `kernel_runtime` 对象边界、`kernel_alpha/common.c` bring-up phase helper、`kernel_alpha/interrupt_contract.c` non-storage 合同 helper，以及 `kernel_alpha/storage_contract.c` storage 合同 helper 回归。
+`make test` 仍然是默认 `functional` reference path 的主回归，会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo`、`kernel_alpha_demo`、`kernel_alpha_fault_demo`、`kernel_alpha_storage_no_media_demo`、`kernel_alpha_storage_not_ready_demo`、`kernel_alpha_storage_bad_magic_demo`、`kernel_alpha_storage_bad_block_count_demo`、`kernel_alpha_storage_lba_range_demo`、`kernel_alpha_storage_bad_command_demo`、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这 11 条 guest 回归路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 timer interrupt、一次 storage readiness probe、一次最小块设备读取，以及 9 条独立负向路径：未映射 CLINT MMIO 访问触发的 fault / panic、未安排第一次 timer delivery 时的 readiness timeout / panic、PLIC 已映射但未初始化时的 readiness timeout / panic、storage 未附加镜像时的 metadata / `NO_MEDIA` error 合同、storage 已附加但 `READY` 缺失时的 readiness / `NOT_READY` / clear-error 合同、storage `MAGIC` 元数据损坏时的 probe-fail / data-path-still-live 合同、`BLOCK_COUNT != 1` 时的 `BAD_BLOCK_COUNT` / clear-error 合同、`LBA == capacity_blocks` 时的 `LBA_RANGE` / clear-error 合同，以及非法 `COMMAND` 值时的 `BAD_COMMAND` / clear-error 合同。host-side 单元侧除 ELF / bus-device / storage readiness 外，也新增了 `supervisor_runtime`、`kernel_runtime`、`kernel_alpha/common.c` bring-up phase helper、`kernel_alpha/interrupt_contract.c` non-storage 合同 helper，以及 `kernel_alpha/storage_contract.c` storage 合同 helper 回归。
+
+`make test-pipeline` 是当前 `pipeline` backend 的 host-side 门禁，只覆盖 `pipeline_backend_smoke`、`backend_differential_smoke` 和 `--backend pipeline` CLI smoke；它的定位是守住 pipeline core 与共享语义层的一致性，不替代 guest / `kernel_alpha` 的 functional Phase 1 回归。
 
 ## 内存映射
 
@@ -196,7 +202,7 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 ### `myCPU/`
 
 - `Makefile`：本地编译规则、RISC-V 汇编样例构建规则和 `make test` 测试入口。
-- `tests/unit/`：host-side 单元测试，当前覆盖 ELF pure-BSS 装载、bus/device 守边界和 storage readiness。
+- `tests/unit/`：host-side 单元测试，当前覆盖 ELF pure-BSS 装载、bus/device 守边界、storage readiness，以及 `supervisor_runtime`、`kernel_runtime`、`kernel_alpha/common`、`kernel_alpha/interrupt_contract` 和 `kernel_alpha/storage_contract` 这些 guest runtime helper 合同。
 - `mycpu`：编译产物，运行后加载并执行 RISC-V 程序镜像。
 
 ### `myCPU/guest/`
@@ -219,13 +225,13 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 ### `myCPU/src/`
 
 - `main.cpp`
-  程序入口。负责解析 `-b`、`--disk`、`--disk-not-ready` 和 `--disk-bad-magic` 参数、创建 `Machine`，并根据镜像类型调用 `load_elf()` 或 `load_binary()` 后启动执行。
+  程序入口。负责解析 `--backend`、`-b`、`--disk`、`--disk-not-ready` 和 `--disk-bad-magic` 参数、创建 `Machine`，并根据镜像类型调用 `load_elf()` 或 `load_binary()` 后启动执行。
 
 - `platform/machine.h`
-  `Machine` 类声明。聚合 `CPU`、`Ram` 和 `Bus`，为后续平台化重构提供统一入口。
+  `Machine` 类声明。聚合 `CPU`、`Ram`、`Bus` 和 `ExecutionBackend`，为平台装配与 backend 选择提供统一入口。
 
 - `platform/machine.cpp`
-  `Machine` 实现。当前负责镜像加载、`cpu_init()` 调用和执行循环，镜像装载通过 `ElfLoader/BinaryLoader` 完成，执行阶段仍复用现有参考语义。
+  `Machine` 实现。当前负责镜像加载、`cpu_init()` 调用、backend 重建和执行循环；默认 backend 为 `functional`，`pipeline` 作为可选执行模型接入。
 
 - `platform/address_map.h`
   平台地址映射常量定义。集中声明 RAM、UART、CLINT、PLIC、storage 的基地址与大小，供入口、设备和 legacy 内存 backing 共享。
@@ -285,7 +291,7 @@ make test-guest-kernel_alpha_timer_not_ready_demo
   CPU 外观接口定义。当前聚合 `CoreState`、`CsrFile` 和 `TrapController`，并通过 `Bus` 访问平台内存与设备。
 
 - `cpu.cpp`
-  CPU 调度入口。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()` 和 `cpu_step()`，当前主要负责取操作数、按 opcode 分发到各个 `exec/` 模块，并通过 `CoreState + CsrFile + TrapController` 管理 CPU 状态与 trap 路由。
+  CPU 调度入口。实现 `cpu_init()`、`csr_read()/csr_write()`、`execute()` 和 `cpu_step()`；当前 functional 路径已经通过共享 `InstructionSemantics` + `InsnEffects` 工作，并通过 `CoreState + CsrFile + TrapController` 管理 CPU 状态与 trap 路由。
 
 - `arch/core_state.h`
   `CoreState` 声明。封装 32 个通用寄存器、`pc`、周期计数和停机状态，为后续继续拆语义和执行后端提供稳定状态边界。
@@ -298,6 +304,15 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 
 - `arch/csr_file.cpp`
   `CsrFile` 实现。负责 CSR 状态复位、普通 CSR 读写，以及固定 `misa` 视图、受限 `satp` WARL 语义和 `time -> CLINT mtime` 这类特殊规则。
+
+- `exec/backend.h`
+  执行后端抽象声明。定义 `ExecutionBackend` 最小接口，供 `Machine` 统一驱动不同执行模型。
+
+- `exec/functional_backend.h` / `exec/functional_backend.cpp`
+  默认 functional backend 实现。直接包装当前 reference `cpu_step()` 路径。
+
+- `exec/pipeline_backend.h` / `exec/pipeline_backend.cpp`
+  五级 pipeline backend 核心实现。当前包含 IF/ID/EX/MEM/WB、forwarding、load-use interlock、redirect/flush，以及 commit-boundary trap / interrupt 处理。
 
 - `exec/integer_ops.h`
   整数指令族执行接口声明。承接 `LUI/AUIPC`、整数立即数、整数寄存器、`W` 变体和当前 `FENCE` no-op 路径。
@@ -322,6 +337,9 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 
 - `exec/system_ops.cpp`
   系统/CSR 指令执行实现。负责 `ecall`、`ebreak`、`mret`、`sret`、`sfence.vma` 以及 CSR 读改写语义，并通过 `TrapController` 进入 trap 路径。
+
+- `isa/effects.h` / `isa/execution_context.*` / `isa/instruction_semantics.*`
+  共享 ISA 语义层。把寄存器写回、CSR 写回、访存请求、trap / redirect / trap-return 等效果统一成值对象，并作为 `functional` 与 `pipeline` 共用的语义来源。
 
 - `decode.h`
   `Insn` 指令结构定义，供译码阶段和执行阶段共享。
