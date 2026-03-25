@@ -11,7 +11,12 @@
 .global platform_clint_read_mtime
 .global platform_clint_write_mtimecmp
 .global platform_storage_read_u64
+.global platform_storage_write_u64
+.global platform_storage_read_status
+.global platform_storage_read_error
+.global platform_storage_issue_command
 .global platform_storage_read_block
+.global platform_storage_read_block_custom
 .global platform_shutdown
 
 #include "../include/platform_drivers.inc"

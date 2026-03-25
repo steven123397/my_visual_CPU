@@ -36,6 +36,24 @@ bool storage_probe(storage_info_t* info) {
     return true;
 }
 
+uint64_t storage_status(void) {
+    return platform_storage_read_status();
+}
+
+uint64_t storage_error(void) {
+    return platform_storage_read_error();
+}
+
+void storage_clear_error(void) {
+    platform_storage_issue_command(STORAGE_CMD_NONE);
+}
+
 uint64_t storage_read_block(uint64_t lba, void* destination) {
     return platform_storage_read_block(lba, destination);
+}
+
+uint64_t storage_read_block_with_count(uint64_t lba,
+                                       uint64_t block_count,
+                                       void* destination) {
+    return platform_storage_read_block_custom(lba, block_count, destination);
 }

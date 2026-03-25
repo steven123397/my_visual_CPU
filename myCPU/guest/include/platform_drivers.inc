@@ -67,13 +67,40 @@ platform_storage_read_u64:
     ld   a0, 0(t0)
     ret
 
+platform_storage_write_u64:
+    li   t0, STORAGE_BASE
+    add  t0, t0, a0
+    sd   a1, 0(t0)
+    ret
+
+platform_storage_read_status:
+    li   t0, STORAGE_BASE
+    ld   a0, STORAGE_REG_STATUS(t0)
+    ret
+
+platform_storage_read_error:
+    li   t0, STORAGE_BASE
+    ld   a0, STORAGE_REG_ERROR(t0)
+    ret
+
+platform_storage_issue_command:
+    li   t0, STORAGE_BASE
+    sd   a0, STORAGE_REG_COMMAND(t0)
+    ret
+
 # a0 = lba, a1 = destination buffer, returns a0 = 0 on success or error code.
 platform_storage_read_block:
-    mv   t6, a1
+    mv   a2, a1
+    li   a1, 1
+    j    platform_storage_read_block_custom
+
+# a0 = lba, a1 = block_count, a2 = destination buffer, returns a0 = 0 on success or error code.
+platform_storage_read_block_custom:
+    mv   t6, a2
+    mv   t5, a1
     li   t0, STORAGE_BASE
     sd   a0, STORAGE_REG_LBA(t0)
-    li   t1, 1
-    sd   t1, STORAGE_REG_BLOCK_COUNT(t0)
+    sd   t5, STORAGE_REG_BLOCK_COUNT(t0)
     li   t1, STORAGE_CMD_READ
     sd   t1, STORAGE_REG_COMMAND(t0)
 

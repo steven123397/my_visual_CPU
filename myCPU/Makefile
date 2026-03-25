@@ -16,6 +16,11 @@ GUEST_SUPERVISOR_DEMO = guest/supervisor_demo.elf
 GUEST_KERNEL_ALPHA_DEMO = guest/kernel_alpha_demo.elf
 GUEST_KERNEL_ALPHA_FAULT_DEMO = guest/kernel_alpha_fault_demo.elf
 GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO = guest/kernel_alpha_storage_no_media_demo.elf
+GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO = guest/kernel_alpha_storage_bad_block_count_demo.elf
+GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO = guest/kernel_alpha_storage_lba_range_demo.elf
+GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO = guest/kernel_alpha_storage_bad_command_demo.elf
+GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO = guest/kernel_alpha_plic_not_ready_demo.elf
+GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO = guest/kernel_alpha_timer_not_ready_demo.elf
 GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/console.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
@@ -28,7 +33,27 @@ GUEST_KERNEL_ALPHA_FAULT_OBJS := $(GUEST_KERNEL_ALPHA_FAULT_OBJS:.c=.o)
 GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/storage_no_media_main.c
 GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS = $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS := $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS:.c=.o)
+GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/storage_bad_block_count_main.c
+GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_OBJS = $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_SRCS:.S=.o)
+GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_OBJS := $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_OBJS:.c=.o)
+GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/storage_lba_range_main.c
+GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS = $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_SRCS:.S=.o)
+GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS := $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS:.c=.o)
+GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/storage_bad_command_main.c
+GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS = $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_SRCS:.S=.o)
+GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS := $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS:.c=.o)
+GUEST_KERNEL_ALPHA_PLIC_NOT_READY_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/plic_not_ready_main.c
+GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS = $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_SRCS:.S=.o)
+GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS := $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS:.c=.o)
+GUEST_KERNEL_ALPHA_TIMER_NOT_READY_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/timer_not_ready_main.c
+GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS = $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_SRCS:.S=.o)
+GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS := $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS:.c=.o)
 DEPS     = $(OBJS:.o=.d) $(GUEST_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_FAULT_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS:.o=.d)
+DEPS     += $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_OBJS:.o=.d)
+DEPS     += $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS:.o=.d)
+DEPS     += $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS:.o=.d)
+DEPS     += $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS:.o=.d)
+DEPS     += $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS:.o=.d)
 TEST_TIMEOUT ?= 2s
 
 # RISC-V toolchain (adjust prefix if needed)
@@ -75,11 +100,26 @@ $(GUEST_KERNEL_ALPHA_FAULT_DEMO): $(GUEST_KERNEL_ALPHA_FAULT_OBJS)
 $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO): $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS)
 	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
 
+$(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO): $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_OBJS)
+	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
+
+$(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO): $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS)
+	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
+
+$(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO): $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS)
+	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
+
+$(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO): $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS)
+	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
+
+$(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO): $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS)
+	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
+
 # Build flat binary from ELF
 tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 	$(RV_OBJCOPY) -O binary $< $@
 
-test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(ASM_TESTS:%=test-%) $(UNIT_TEST_NAMES:%=test-unit-%) test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo $(FLAT_BIN_TESTS:%=test-flat-%)
+test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(ASM_TESTS:%=test-%) $(UNIT_TEST_NAMES:%=test-unit-%) test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo $(FLAT_BIN_TESTS:%=test-flat-%)
 
 FORCE:
 
@@ -267,6 +307,111 @@ test-guest-kernel_alpha_storage_no_media_demo: FORCE $(TARGET) $(GUEST_KERNEL_AL
 	fi; \
 	printf '%s\n' "$$output"
 
+test-guest-kernel_alpha_storage_bad_block_count_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO)
+	@expected='KMVBX'; \
+	echo "=== guest_kernel_alpha_storage_bad_block_count_demo ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: guest_kernel_alpha_storage_bad_block_count_demo" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	if [ "$$output" != "$$expected" ]; then \
+		echo "Unexpected output for guest_kernel_alpha_storage_bad_block_count_demo" >&2; \
+		printf 'Expected: %s\n' "$$expected" >&2; \
+		printf 'Actual: %s\n' "$$output" >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-guest-kernel_alpha_storage_lba_range_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO)
+	@expected='KMVLX'; \
+	echo "=== guest_kernel_alpha_storage_lba_range_demo ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: guest_kernel_alpha_storage_lba_range_demo" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	if [ "$$output" != "$$expected" ]; then \
+		echo "Unexpected output for guest_kernel_alpha_storage_lba_range_demo" >&2; \
+		printf 'Expected: %s\n' "$$expected" >&2; \
+		printf 'Actual: %s\n' "$$output" >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-guest-kernel_alpha_storage_bad_command_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO)
+	@expected='KMVCX'; \
+	echo "=== guest_kernel_alpha_storage_bad_command_demo ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: guest_kernel_alpha_storage_bad_command_demo" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	if [ "$$output" != "$$expected" ]; then \
+		echo "Unexpected output for guest_kernel_alpha_storage_bad_command_demo" >&2; \
+		printf 'Expected: %s\n' "$$expected" >&2; \
+		printf 'Actual: %s\n' "$$output" >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-guest-kernel_alpha_plic_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO)
+	@expected='KMVPX'; \
+	echo "=== guest_kernel_alpha_plic_not_ready_demo ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: guest_kernel_alpha_plic_not_ready_demo" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	if [ "$$output" != "$$expected" ]; then \
+		echo "Unexpected output for guest_kernel_alpha_plic_not_ready_demo" >&2; \
+		printf 'Expected: %s\n' "$$expected" >&2; \
+		printf 'Actual: %s\n' "$$output" >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-guest-kernel_alpha_timer_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
+	@expected='KMVPETX'; \
+	echo "=== guest_kernel_alpha_timer_not_ready_demo ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: guest_kernel_alpha_timer_not_ready_demo" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	if [ "$$output" != "$$expected" ]; then \
+		echo "Unexpected output for guest_kernel_alpha_timer_not_ready_demo" >&2; \
+		printf 'Expected: %s\n' "$$expected" >&2; \
+		printf 'Actual: %s\n' "$$output" >&2; \
+		exit 1; \
+	fi; \
+	printf '%s\n' "$$output"
+
 check-riscv-toolchain:
 	@missing=0; \
 	for tool in $(RV_REQUIRED_TOOLS); do \
@@ -281,7 +426,7 @@ check-riscv-toolchain:
 	fi
 
 clean:
-	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO)
+	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
 	find src guest -type f \( -name '*.o' -o -name '*.d' \) -delete
 
 -include $(DEPS)

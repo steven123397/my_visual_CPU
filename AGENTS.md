@@ -66,7 +66,7 @@
 - 最小 U-mode enter / return。
 - timer / external / page-fault / user-`ecall` smoke 路径。
 - 独立 kernel alpha 的 boot / PMM / Sv39 / external interrupt / timer interrupt / storage readiness probe / storage read 正向路径。
-- 独立 kernel alpha 的 CLINT unmapped 与 storage no-media 两条负向路径。
+- 独立 kernel alpha 的 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage bad-block-count、storage LBA-range 与 storage bad-command 七条负向路径。
 
 最近一轮关键历史节点只保留以下几项：
 
@@ -74,6 +74,11 @@
 - `kernel_alpha_demo` 已完成首个可回归 alpha bring-up，当前正向输出为 `KMVPETDS`。
 - `kernel_alpha_fault_demo` 当前负向输出为 `KMVX`。
 - `kernel_alpha_storage_no_media_demo` 当前负向输出为 `KMVNX`。
+- `kernel_alpha_storage_bad_block_count_demo` 当前负向输出为 `KMVBX`。
+- `kernel_alpha_storage_lba_range_demo` 当前负向输出为 `KMVLX`。
+- `kernel_alpha_storage_bad_command_demo` 当前负向输出为 `KMVCX`。
+- `kernel_alpha_plic_not_ready_demo` 当前负向输出为 `KMVPX`。
+- `kernel_alpha_timer_not_ready_demo` 当前负向输出为 `KMVPETX`。
 
 ## 当前优先级
 
@@ -98,8 +103,8 @@
 
 相关状态文档见：
 
-- [docs/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/code_self_review_2026-03-24.md)
-- [docs/kernel_alpha_bringup_plan_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/kernel_alpha_bringup_plan_2026-03-25.md)
+- [docs/status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
+- [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
 
 ## 技术栈
 
@@ -121,6 +126,11 @@
   - `myCPU/guest/kernel_alpha_demo.elf`
   - `myCPU/guest/kernel_alpha_fault_demo.elf`
   - `myCPU/guest/kernel_alpha_storage_no_media_demo.elf`
+  - `myCPU/guest/kernel_alpha_storage_bad_block_count_demo.elf`
+  - `myCPU/guest/kernel_alpha_storage_lba_range_demo.elf`
+  - `myCPU/guest/kernel_alpha_storage_bad_command_demo.elf`
+  - `myCPU/guest/kernel_alpha_plic_not_ready_demo.elf`
+  - `myCPU/guest/kernel_alpha_timer_not_ready_demo.elf`
 
 ## 全局验证基线
 
@@ -134,6 +144,11 @@
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_bad_block_count_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_lba_range_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_bad_command_demo`
+- `cd myCPU && make test-guest-kernel_alpha_plic_not_ready_demo`
+- `cd myCPU && make test-guest-kernel_alpha_timer_not_ready_demo`
 
 ## 开发阶段
 

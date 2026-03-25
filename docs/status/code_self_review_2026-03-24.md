@@ -61,6 +61,21 @@
 - `guest_kernel_alpha_storage_no_media_demo`
   - 当前输出 `KMVNX`
   - 覆盖“VM 已开启且 storage MMIO 可达、但未附加镜像”时的 metadata / `NO_MEDIA` error 合同
+- `guest_kernel_alpha_storage_bad_block_count_demo`
+  - 当前输出 `KMVBX`
+  - 覆盖“VM 已开启且 storage 已附加”时的 `BAD_BLOCK_COUNT` / clear-error 合同
+- `guest_kernel_alpha_storage_lba_range_demo`
+  - 当前输出 `KMVLX`
+  - 覆盖“VM 已开启且 storage 已附加”时的 `LBA_RANGE` / clear-error 合同
+- `guest_kernel_alpha_storage_bad_command_demo`
+  - 当前输出 `KMVCX`
+  - 覆盖“VM 已开启且 storage 已附加”时的 `BAD_COMMAND` / clear-error 合同
+- `guest_kernel_alpha_plic_not_ready_demo`
+  - 当前输出 `KMVPX`
+  - 覆盖“VM 已开启且 UART / CLINT / PLIC MMIO 可达，但 PLIC 未初始化”时的 device readiness timeout / panic 合同
+- `guest_kernel_alpha_timer_not_ready_demo`
+  - 当前输出 `KMVPETX`
+  - 覆盖“VM 已开启且 UART / CLINT / PLIC MMIO 可达、第一次 external interrupt 已成功到达，但未安排第一次 timer delivery”时的 device readiness timeout / panic 合同
 
 截至本次状态更新：
 

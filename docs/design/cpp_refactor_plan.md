@@ -26,7 +26,7 @@
 
 ### 2.1 `cpu.cpp` 职责仍然过重
 
-当前 [cpu.cpp](../myCPU/src/cpu.cpp) 同时承担了：
+当前 [cpu.cpp](../../myCPU/src/cpu.cpp) 同时承担了：
 
 - 架构状态读写
 - CSR 访问
@@ -46,7 +46,7 @@
 
 ### 2.2 外围入口已完成第一步解耦，但状态边界仍需继续收紧
 
-当前 [main.cpp](../myCPU/src/main.cpp) 已经通过 `Machine` 组织加载和运行流程，`g_mem` 这类全局内存入口也已经从执行路径中移除。这一步已经带来了明确的结构收益，但下一阶段仍然要继续把边界收紧，避免新的隐式耦合重新出现：
+当前 [main.cpp](../../myCPU/src/main.cpp) 已经通过 `Machine` 组织加载和运行流程，`g_mem` 这类全局内存入口也已经从执行路径中移除。这一步已经带来了明确的结构收益，但下一阶段仍然要继续把边界收紧，避免新的隐式耦合重新出现：
 
 - `Machine` 仍然直接驱动 `cpu_step()` 和现有 C 核心语义
 - `Bus` 目前还是对 `memory.c` 的薄适配层
@@ -67,7 +67,7 @@
 
 ### 2.4 设备平台缺少统一抽象
 
-当前 [memory.c](../myCPU/src/memory.c) 用地址判断直接分发 RAM / UART / CLINT。这对两个简单设备足够，但不适合继续扩展到：
+当前 [memory.c](../../myCPU/src/memory.c) 用地址判断直接分发 RAM / UART / CLINT。这对两个简单设备足够，但不适合继续扩展到：
 
 - PLIC
 - block device
@@ -241,7 +241,7 @@ public:
 - `medeleg/mideleg` 处理
 - 设置 `epc/cause/tval/status` 等寄存器
 
-现在的 [trap.cpp](../myCPU/src/trap.cpp) 逻辑很适合作为这个组件的起点，但要从“函数”升级为“依赖显式的对象”。
+现在的 [trap.cpp](../../myCPU/src/trap.cpp) 逻辑很适合作为这个组件的起点，但要从“函数”升级为“依赖显式的对象”。
 
 示意：
 
@@ -269,7 +269,7 @@ public:
 - 仅负责把原始指令转换成结构化结果
 - 不负责执行副作用
 
-现在 [decode.c](../myCPU/src/decode.c) 已经比较接近这个目标。C++ 重构中建议保持译码器纯函数化：
+现在 [decode.c](../../myCPU/src/decode.c) 已经比较接近这个目标。C++ 重构中建议保持译码器纯函数化：
 
 ```cpp
 DecodedInsn decode32(uint32_t raw);

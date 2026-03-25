@@ -26,7 +26,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - delegated user `ecall`
 - delegated timer / external interrupt return
 - 单用户生命周期和清理 smoke
-- 独立 kernel alpha 的正向 bring-up 与两条负向回归
+- 独立 kernel alpha 的正向 bring-up 与七条负向回归
 
 ## 分层边界
 
@@ -54,8 +54,18 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   独立 `kernel_alpha_fault_demo` 负向入口。
 - [kernel_alpha/storage_no_media_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_no_media_main.c)
   独立 `kernel_alpha_storage_no_media_demo` 负向入口。
+- [kernel_alpha/storage_bad_block_count_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_block_count_main.c)
+  独立 `kernel_alpha_storage_bad_block_count_demo` 负向入口。
+- [kernel_alpha/storage_lba_range_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_lba_range_main.c)
+  独立 `kernel_alpha_storage_lba_range_demo` 负向入口。
+- [kernel_alpha/storage_bad_command_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_command_main.c)
+  独立 `kernel_alpha_storage_bad_command_demo` 负向入口。
+- [kernel_alpha/plic_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/plic_not_ready_main.c)
+  独立 `kernel_alpha_plic_not_ready_demo` 负向入口。
+- [kernel_alpha/timer_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/timer_not_ready_main.c)
+  独立 `kernel_alpha_timer_not_ready_demo` 负向入口。
 
-## 当前三条 `kernel_alpha` 路径
+## 当前八条 `kernel_alpha` 路径
 
 ### `kernel_alpha_demo`
 
@@ -100,6 +110,71 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 
 - `KMVNX`
 
+### `kernel_alpha_storage_bad_block_count_demo`
+
+当前用于验证：
+
+- VM 已开启
+- storage MMIO 可达且 attached / ready 成功态可观察
+- `BLOCK_COUNT != 1` 的 read 命令会返回 `STORAGE_ERR_BAD_BLOCK_COUNT`
+- `COMMAND = NONE` 可清除粘滞 error 状态
+
+当前负向回归输出：
+
+- `KMVBX`
+
+### `kernel_alpha_storage_lba_range_demo`
+
+当前用于验证：
+
+- VM 已开启
+- storage MMIO 可达且 attached / ready 成功态可观察
+- `LBA == capacity_blocks` 的 block read 返回 `STORAGE_ERR_LBA_RANGE`
+- `COMMAND = NONE` 可清除粘滞 error 状态
+
+当前负向回归输出：
+
+- `KMVLX`
+
+### `kernel_alpha_storage_bad_command_demo`
+
+当前用于验证：
+
+- VM 已开启
+- storage MMIO 可达且 attached / ready 成功态可观察
+- 非法 `COMMAND` 值会返回 `STORAGE_ERR_BAD_COMMAND`
+- `COMMAND = NONE` 可清除粘滞 error 状态
+
+当前负向回归输出：
+
+- `KMVCX`
+
+### `kernel_alpha_plic_not_ready_demo`
+
+当前用于验证：
+
+- VM 已开启
+- UART / CLINT / PLIC MMIO lazy map 仍可工作
+- PLIC 已映射但未初始化时，UART THRE 不会到达 supervisor external interrupt
+- deadline 超时后会进入 panic 路径
+
+当前负向回归输出：
+
+- `KMVPX`
+
+### `kernel_alpha_timer_not_ready_demo`
+
+当前用于验证：
+
+- VM 已开启
+- UART / CLINT / PLIC MMIO lazy map 仍可工作
+- PLIC supervisor 初始化与第一次 external interrupt 已成功到达
+- 未安排第一次 timer delivery 时，bring-up 会在 deadline 超时后进入 panic 路径
+
+当前负向回归输出：
+
+- `KMVPETX`
+
 ## 局部规则
 
 - 不要重新把 demo 逻辑堆回 `guest/supervisor_demo/main.c`。
@@ -126,10 +201,11 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
-2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` 基线上继续补更多 fault / panic / device readiness。
-3. 继续推进 process / runtime refinement。
-4. 继续补更多 user interrupt / trap coverage。
-5. 把 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) 和 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 继续拆小。
+2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` / `kernel_alpha_storage_bad_block_count_demo` / `kernel_alpha_storage_lba_range_demo` / `kernel_alpha_storage_bad_command_demo` / `kernel_alpha_plic_not_ready_demo` / `kernel_alpha_timer_not_ready_demo` 基线上继续补更多 fault / panic / device readiness，下一项优先收口重复的 bring-up 骨架。
+3. 开始收口各个 `kernel_alpha` 入口里重复的 PMM / VM / trap 初始化流程，避免负向 demo 持续复制同一段编排逻辑。
+4. 继续推进 process / runtime refinement。
+5. 继续补更多 user interrupt / trap coverage。
+6. 把 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) 和 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 继续拆小。
 
 ## 验证要求
 
@@ -139,6 +215,11 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_bad_block_count_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_lba_range_demo`
+- `cd myCPU && make test-guest-kernel_alpha_storage_bad_command_demo`
+- `cd myCPU && make test-guest-kernel_alpha_plic_not_ready_demo`
+- `cd myCPU && make test-guest-kernel_alpha_timer_not_ready_demo`
 
 通常仍应回归：
 
