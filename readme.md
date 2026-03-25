@@ -106,7 +106,7 @@ make
 sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 make test
 
-# 运行 pipeline host-side 门禁
+# 运行 pipeline 完整门禁
 make test-pipeline
 
 # 只跑独立 kernel alpha bring-up 回归
@@ -142,7 +142,7 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 
 `make test` 仍然是默认 `functional` reference path 的主回归，会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo`、`kernel_alpha_demo`、`kernel_alpha_fault_demo`、`kernel_alpha_storage_no_media_demo`、`kernel_alpha_storage_not_ready_demo`、`kernel_alpha_storage_bad_magic_demo`、`kernel_alpha_storage_bad_block_count_demo`、`kernel_alpha_storage_lba_range_demo`、`kernel_alpha_storage_bad_command_demo`、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这 11 条 guest 回归路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 timer interrupt、一次 storage readiness probe、一次最小块设备读取，以及 9 条独立负向路径：未映射 CLINT MMIO 访问触发的 fault / panic、未安排第一次 timer delivery 时的 readiness timeout / panic、PLIC 已映射但未初始化时的 readiness timeout / panic、storage 未附加镜像时的 metadata / `NO_MEDIA` error 合同、storage 已附加但 `READY` 缺失时的 readiness / `NOT_READY` / clear-error 合同、storage `MAGIC` 元数据损坏时的 probe-fail / data-path-still-live 合同、`BLOCK_COUNT != 1` 时的 `BAD_BLOCK_COUNT` / clear-error 合同、`LBA == capacity_blocks` 时的 `LBA_RANGE` / clear-error 合同，以及非法 `COMMAND` 值时的 `BAD_COMMAND` / clear-error 合同。host-side 单元侧除 ELF / bus-device / storage readiness 外，也新增了 `supervisor_runtime`、`kernel_runtime`、`kernel_alpha/common.c` bring-up phase helper、`kernel_alpha/interrupt_contract.c` non-storage 合同 helper，以及 `kernel_alpha/storage_contract.c` storage 合同 helper 回归。
 
-`make test-pipeline` 是当前 `pipeline` backend 的 host-side 门禁，只覆盖 `pipeline_backend_smoke`、`backend_differential_smoke` 和 `--backend pipeline` CLI smoke；它的定位是守住 pipeline core 与共享语义层的一致性，不替代 guest / `kernel_alpha` 的 functional Phase 1 回归。
+`make test-pipeline` 是当前 `pipeline` backend 的完整门禁。它会复用同一批 `tests/asm` 样例跑 `--backend pipeline`，同时覆盖 `pipeline_backend_smoke`、`backend_differential_smoke`、`--backend pipeline` CLI smoke，以及 `guest_supervisor_demo`、`kernel_alpha_demo` 和现有 `kernel_alpha` 负向回归在 `pipeline` 下的输出一致性。`make test` 仍然是默认 `functional` reference path 的主回归；`make test-pipeline` 则负责证明第二种执行模型在不改 guest 合同的前提下也能守住同一套可观察行为。
 
 ## 内存映射
 

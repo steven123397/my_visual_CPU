@@ -57,7 +57,7 @@
 
 - 保留一个简单、正确、可调试的 reference core。
 - 不要把同一条指令语义复制到多个 backend 里。
-- `pipeline` 当前只承诺 host-side smoke / differential / CLI 门禁，不默认承担 guest / `kernel_alpha` 回归门禁。
+- `pipeline` 当前已经具备独立 asm / host / guest 门禁，但仍不是新的 ISA 语义来源；语义修复优先落在共享语义层与公共 simulator 边界。
 - CPU 访存路径必须继续沿着：
   `CPU -> AddressSpace -> Bus -> Ram/Device`
 - 平台事件继续沿着：
@@ -79,7 +79,7 @@
 - `misa` 只读、`satp.MODE` WARL、`counteren`、Sv39、最小 TLB、`sfence.vma`。
 - UART / CLINT / PLIC / `SimpleStorage`。
 - bus / device 第一轮区间与访问宽度防御。
-- `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 host-side `pipeline` 核心 smoke / differential 门禁。
+- `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 `pipeline` 的 asm / host / guest 门禁。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。
@@ -118,7 +118,7 @@
 2. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_not_ready_demo`、`guest_kernel_alpha_storage_bad_magic_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 守住 `phase1-stable` bring-up 基线，再把额外 readiness / panic 路径当作 post-Phase1 hardening 渐进扩充。
 3. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界。
 4. 在保持 Phase 1 已达成核心目标的前提下，先继续做必要稳定化，再讨论多 backend、pipeline、OoO 等后续扩展。
-   当前已完成 `pipeline core` 的主线接入准备：默认 `functional` 继续守 `make test`，`pipeline` 额外守 `make test-pipeline`。
+   当前 `pipeline` 已经正式接入到 asm / host / guest 验证层：默认 `functional` 继续守 `make test`，`pipeline` 通过 `make test-pipeline` 守住同一批 asm 参考输出、host-side smoke/differential，以及 `guest_supervisor_demo` 与 `kernel_alpha` 正负回归。
 
 ## 验证要求
 
@@ -143,6 +143,7 @@
 - `src/platform/machine.cpp`
 - `src/exec/*`
 - `src/isa/*`
+- `guest/*`
 - `tests/host/*`
 
 还应额外守住：
