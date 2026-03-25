@@ -16,6 +16,19 @@ void Ram::store(uint64_t addr, uint64_t value, int size) {
     mem_write(&mem_, addr, value, size);
 }
 
+const char* Ram::debug_name() const {
+    return "ram";
+}
+
+bool Ram::is_mmio_device() const {
+    return false;
+}
+
+void Ram::reset() {
+    mem_free(&mem_);
+    mem_init(&mem_);
+}
+
 void Ram::write_bytes(uint64_t addr, const void* data, size_t size) {
     mem_write_range(&mem_, addr, data, size);
 }

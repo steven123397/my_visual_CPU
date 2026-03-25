@@ -10,6 +10,8 @@ public:
     FunctionalBackend(CPU& cpu, Bus& bus);
 
     void step() override;
+    BackendDebugSnapshot debug_snapshot() const override;
+    const char* name() const override;
 
 private:
     CPU& cpu_;

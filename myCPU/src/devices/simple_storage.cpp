@@ -85,6 +85,45 @@ void SimpleStorage::load_image(const char* path) {
     attached_ = true;
 }
 
+const char* SimpleStorage::debug_name() const {
+    return "storage";
+}
+
+void SimpleStorage::reset() {
+    data_.clear();
+    data_window_.fill(0);
+    capacity_blocks_ = 0;
+    status_ = STORAGE_STATUS_READY;
+    lba_ = 0;
+    block_count_ = 1;
+    error_code_ = STORAGE_ERR_NONE;
+    attached_ = false;
+}
+
+bool SimpleStorage::attached() const {
+    return attached_;
+}
+
+uint64_t SimpleStorage::status() const {
+    return status_;
+}
+
+uint64_t SimpleStorage::capacity_blocks() const {
+    return capacity_blocks_;
+}
+
+uint64_t SimpleStorage::lba() const {
+    return lba_;
+}
+
+uint64_t SimpleStorage::block_count() const {
+    return block_count_;
+}
+
+uint64_t SimpleStorage::error_code() const {
+    return error_code_;
+}
+
 uint64_t SimpleStorage::register_value(uint32_t offset) const {
     switch (offset) {
     case kMagicOffset:

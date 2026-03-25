@@ -13,8 +13,16 @@ public:
 
     uint64_t load(uint64_t addr, int size) override;
     void store(uint64_t addr, uint64_t value, int size) override;
+    const char* debug_name() const override;
 
     void load_image(const char* path);
+    void reset();
+    bool attached() const;
+    uint64_t status() const;
+    uint64_t capacity_blocks() const;
+    uint64_t lba() const;
+    uint64_t block_count() const;
+    uint64_t error_code() const;
 
 private:
     uint64_t register_value(uint32_t offset) const;

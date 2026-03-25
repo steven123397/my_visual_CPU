@@ -29,6 +29,10 @@ public:
     virtual PlatformEvents tick() {
         return {};
     }
+    virtual const char* debug_name() const = 0;
+    virtual bool is_mmio_device() const {
+        return true;
+    }
 
 private:
     uint64_t base_;

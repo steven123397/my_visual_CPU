@@ -3,10 +3,10 @@ CXX      = g++
 CFLAGS   = -O2 -Wall -Wextra -g -std=c11
 CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
 C_SRCS   = src/memory.c src/decode.c
-CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/functional_backend.cpp src/exec/pipeline_backend.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
+CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/debug/debug_protocol.cpp src/debug/debug_session.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/functional_backend.cpp src/exec/pipeline_backend.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 TARGET   = mycpu
-HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/address_space_faults_smoke tests/host/pipeline_backend_smoke tests/host/backend_differential_smoke
+HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/address_space_faults_smoke tests/host/pipeline_backend_smoke tests/host/backend_differential_smoke tests/host/debug_session_smoke
 HOST_TEST_LINK_OBJS = $(filter-out src/main.o,$(OBJS))
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
@@ -27,7 +27,7 @@ GUEST_RV_CFLAGS = $(RV_FLAGS) -mcmodel=medany -mno-relax -msmall-data-limit=0 -f
 GUEST_RV_LDFLAGS = -nostdlib -nostartfiles -static -no-pie -Wl,-T,guest/supervisor_demo/link.ld
 RV_REQUIRED_TOOLS = $(RV_CC) $(RV_OBJCOPY)
 
-.PHONY: all clean test test-pipeline check-riscv-toolchain FORCE test-backend-cli test-host-instruction_semantics test-host-address_space_faults test-host-pipeline_backend test-host-backend_differential
+.PHONY: all clean test test-pipeline check-riscv-toolchain FORCE test-backend-cli test-host-instruction_semantics test-host-address_space_faults test-host-pipeline_backend test-host-backend_differential test-host-debug_session test-host-debug_cli
 
 all: $(TARGET)
 
@@ -250,6 +250,14 @@ test-host-pipeline_backend: FORCE $(HOST_TEST_BINS)
 test-host-backend_differential: FORCE $(HOST_TEST_BINS)
 	@echo "=== host_backend_differential ==="
 	@./tests/host/backend_differential_smoke
+
+test-host-debug_session: FORCE $(HOST_TEST_BINS)
+	@echo "=== host_debug_session ==="
+	@./tests/host/debug_session_smoke
+
+test-host-debug_cli: FORCE $(TARGET) tests/asm/hello.elf
+	@echo "=== host_debug_cli ==="
+	@sh tests/host/debug_cli.sh $(TARGET)
 
 check-riscv-toolchain:
 	@missing=0; \

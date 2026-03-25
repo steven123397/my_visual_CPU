@@ -81,6 +81,39 @@ make test-host-backend_differential
 - `make test-host-pipeline_backend`：流水线专用 host smoke。
 - `make test-host-backend_differential`：`functional` / `pipeline` 的提交级差分 smoke。
 
+## 实时可视化调试前端
+
+仓库现在还包含一个本地实时调试前端，位于 `frontend/`。它通过 Node 本地服务驱动 `myCPU/mycpu --debug-cli`，可以在浏览器中观察当前测试的流水线、寄存器、CSR、总线和设备状态。
+
+启动步骤：
+
+```bash
+cd myCPU
+make
+cd ..
+node frontend/server/debug_server.mjs
+```
+
+默认访问地址：
+
+```text
+http://127.0.0.1:4173
+```
+
+当前首版支持：
+
+- 从仓库内测试清单加载现有 asm/guest 测试
+- `Load / Run / Pause / Step Cycle / Step Commit / Reset`
+- 当前流水线面板与最近周期时间线
+- GPR、关键 CSR / Trap、最近总线访问
+- UART / CLINT / PLIC / Storage 状态
+
+当前限制：
+
+- `Run` 由本地服务定时发送 `step_cycle`
+- 还没有断点、条件暂停、差分对比和任意镜像文件加载
+- 前端目前主要围绕 `pipeline` 视角设计，`functional` 更适合作为参考对照
+
 ## 仓库入口
 
 如果你第一次读这个项目，先看这几个文件：

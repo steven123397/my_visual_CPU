@@ -22,6 +22,13 @@ Device* Bus::find_device(uint64_t addr, int size) {
 bool Bus::try_load(uint64_t addr, int size, uint64_t& value) {
     if (Device* device = find_device(addr, size)) {
         value = device->load(addr, size);
+        last_access_.valid = true;
+        last_access_.write = false;
+        last_access_.mmio = device->is_mmio_device();
+        last_access_.addr = addr;
+        last_access_.value = value;
+        last_access_.size = size;
+        last_access_.device = device->debug_name();
         return true;
     }
     value = 0;
@@ -31,6 +38,13 @@ bool Bus::try_load(uint64_t addr, int size, uint64_t& value) {
 bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
     if (Device* device = find_device(addr, size)) {
         device->store(addr, value, size);
+        last_access_.valid = true;
+        last_access_.write = true;
+        last_access_.mmio = device->is_mmio_device();
+        last_access_.addr = addr;
+        last_access_.value = value;
+        last_access_.size = size;
+        last_access_.device = device->debug_name();
         return true;
     }
     return false;
@@ -42,4 +56,12 @@ PlatformEvents Bus::tick() {
         events.merge(device->tick());
     }
     return events;
+}
+
+const DebugBusAccess& Bus::last_access() const {
+    return last_access_;
+}
+
+void Bus::clear_last_access() {
+    last_access_ = {};
 }

@@ -68,6 +68,23 @@ PlatformEvents Clint::tick() {
     };
 }
 
+const char* Clint::debug_name() const {
+    return "clint";
+}
+
+void Clint::reset() {
+    mtime_ = 0;
+    mtimecmp_ = UINT64_MAX;
+}
+
 uint64_t Clint::mtime() const {
     return mtime_;
+}
+
+uint64_t Clint::mtimecmp() const {
+    return mtimecmp_;
+}
+
+bool Clint::timer_interrupt_pending() const {
+    return mtime_ >= mtimecmp_;
 }

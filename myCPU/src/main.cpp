@@ -2,14 +2,17 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 
+#include "debug/debug_protocol.h"
 #include "platform/address_map.h"
 #include "platform/machine.h"
 
 static void usage(const char* prog) {
-    std::fprintf(stderr, "Usage: %s [-b addr] [-d image] [--backend kind] <image>\n", prog);
+    std::fprintf(stderr, "Usage: %s [--debug-cli] [-b addr] [-d image] [--backend kind] <image>\n", prog);
+    std::fprintf(stderr, "  --debug-cli  run JSON line based debug session protocol on stdin/stdout\n");
     std::fprintf(stderr, "  -b addr   load flat binary at hex address (default: 0x80000000)\n");
     std::fprintf(stderr, "  -d image  attach host-backed storage image to the simple MMIO storage device\n");
     std::fprintf(stderr, "  --backend kind  select execution backend: functional or pipeline\n");
@@ -32,6 +35,7 @@ int main(int argc, char* argv[]) {
         usage(argv[0]);
     }
 
+    bool debug_cli = false;
     bool flat = false;
     uint64_t load_addr = MEM_BASE;
     const char* disk_image = nullptr;
@@ -55,9 +59,15 @@ int main(int argc, char* argv[]) {
                 usage(argv[0]);
             }
             backend_name = argv[i];
+        } else if (std::strcmp(argv[i], "--debug-cli") == 0) {
+            debug_cli = true;
         } else {
             image = argv[i];
         }
+    }
+
+    if (debug_cli) {
+        return run_debug_cli(std::cin, std::cout, std::cerr);
     }
 
     if (!image) {

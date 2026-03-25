@@ -12,6 +12,8 @@ public:
     PipelineBackend(CPU& cpu, Bus& bus);
 
     void step() override;
+    BackendDebugSnapshot debug_snapshot() const override;
+    const char* name() const override;
 
 private:
     bool pipeline_empty() const;
@@ -45,8 +47,12 @@ private:
     IdExReg next_id_ex_{};
     ExMemReg next_ex_mem_{};
     MemWbReg next_mem_wb_{};
+    bool last_cycle_stalled_{false};
     bool redirect_pending_{false};
     uint64_t redirect_target_{0};
     TrapRequest pending_fetch_fault_{};
     uint64_t pending_fetch_fault_pc_{0};
+    bool last_cycle_redirected_{false};
+    bool last_cycle_trap_flush_{false};
+    bool last_cycle_committed_{false};
 };

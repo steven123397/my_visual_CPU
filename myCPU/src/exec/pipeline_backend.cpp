@@ -1,5 +1,7 @@
 #include "pipeline_backend.h"
 
+#include <cstdio>
+
 #include "../cpu.h"
 #include "memory_ops.h"
 #include "../isa/execution_context.h"
@@ -17,8 +19,12 @@ void PipelineBackend::step() {
     next_id_ex_ = {};
     next_ex_mem_ = {};
     next_mem_wb_ = {};
+    last_cycle_stalled_ = false;
     redirect_pending_ = false;
     redirect_target_ = 0;
+    last_cycle_redirected_ = false;
+    last_cycle_trap_flush_ = false;
+    last_cycle_committed_ = false;
 
     const bool wb_flushed = step_wb();
     if (!wb_flushed) {
@@ -90,6 +96,180 @@ CounterCsrKind classify_counter_csr(uint32_t addr) {
 
 bool wb_commit_needs_flush(const InsnEffects& effects) {
     return effects.control.halt || effects.control.trap_return != TrapReturnKind::None;
+}
+
+const char* opcode_name(const Insn& insn) {
+    switch (insn.opcode) {
+    case 0x03:
+        switch (insn.funct3) {
+        case 0x0:
+            return "lb";
+        case 0x1:
+            return "lh";
+        case 0x2:
+            return "lw";
+        case 0x3:
+            return "ld";
+        case 0x4:
+            return "lbu";
+        case 0x5:
+            return "lhu";
+        case 0x6:
+            return "lwu";
+        default:
+            return "load";
+        }
+    case 0x0F:
+        return "fence";
+    case 0x13:
+        switch (insn.funct3) {
+        case 0x0:
+            return "addi";
+        case 0x1:
+            return "slli";
+        case 0x2:
+            return "slti";
+        case 0x3:
+            return "sltiu";
+        case 0x4:
+            return "xori";
+        case 0x5:
+            return ((insn.raw >> 30) & 1U) ? "srai" : "srli";
+        case 0x6:
+            return "ori";
+        case 0x7:
+            return "andi";
+        default:
+            return "op-imm";
+        }
+    case 0x17:
+        return "auipc";
+    case 0x1B:
+        return "op-imm-32";
+    case 0x23:
+        switch (insn.funct3) {
+        case 0x0:
+            return "sb";
+        case 0x1:
+            return "sh";
+        case 0x2:
+            return "sw";
+        case 0x3:
+            return "sd";
+        default:
+            return "store";
+        }
+    case 0x33:
+        if (insn.funct7 == 0x01) {
+            switch (insn.funct3) {
+            case 0x0:
+                return "mul";
+            case 0x4:
+                return "div";
+            case 0x6:
+                return "rem";
+            default:
+                return "op";
+            }
+        }
+        switch (insn.funct3) {
+        case 0x0:
+            return ((insn.raw >> 30) & 1U) ? "sub" : "add";
+        case 0x1:
+            return "sll";
+        case 0x2:
+            return "slt";
+        case 0x3:
+            return "sltu";
+        case 0x4:
+            return "xor";
+        case 0x5:
+            return ((insn.raw >> 30) & 1U) ? "sra" : "srl";
+        case 0x6:
+            return "or";
+        case 0x7:
+            return "and";
+        default:
+            return "op";
+        }
+    case 0x37:
+        return "lui";
+    case 0x3B:
+        return "op-32";
+    case 0x63:
+        switch (insn.funct3) {
+        case 0x0:
+            return "beq";
+        case 0x1:
+            return "bne";
+        case 0x4:
+            return "blt";
+        case 0x5:
+            return "bge";
+        case 0x6:
+            return "bltu";
+        case 0x7:
+            return "bgeu";
+        default:
+            return "branch";
+        }
+    case 0x67:
+        return "jalr";
+    case 0x6F:
+        return "jal";
+    case 0x73:
+        if (insn.raw == 0x00000073U) {
+            return "ecall";
+        }
+        if (insn.raw == 0x00100073U) {
+            return "ebreak";
+        }
+        if (insn.raw == 0x30200073U) {
+            return "mret";
+        }
+        if (insn.raw == 0x10200073U) {
+            return "sret";
+        }
+        switch (insn.funct3) {
+        case 0x1:
+            return "csrrw";
+        case 0x2:
+            return "csrrs";
+        case 0x3:
+            return "csrrc";
+        case 0x5:
+            return "csrrwi";
+        case 0x6:
+            return "csrrsi";
+        case 0x7:
+            return "csrrci";
+        default:
+            return "system";
+        }
+    default:
+        return "unknown";
+    }
+}
+
+DebugStageSnapshot make_stage_snapshot(const StageSlot& slot) {
+    DebugStageSnapshot snapshot;
+    snapshot.valid = slot.valid;
+    snapshot.pc = slot.pc;
+    snapshot.raw = slot.raw;
+    if (!slot.valid) {
+        return snapshot;
+    }
+
+    Insn insn = slot.insn;
+    if (insn.raw == 0 && slot.raw != 0) {
+        insn.raw = slot.raw;
+        decode(slot.raw, &insn);
+    }
+
+    char buffer[64];
+    std::snprintf(buffer, sizeof(buffer), "%s 0x%08x", opcode_name(insn), slot.raw);
+    snapshot.text = buffer;
+    return snapshot;
 }
 
 }  // namespace
@@ -296,9 +476,11 @@ bool PipelineBackend::step_wb() {
     }
     if (mem_wb_.slot.effects.retired) {
         cpu_.core().advance_instret();
+        last_cycle_committed_ = true;
     }
 
     if (wb_commit_needs_flush(mem_wb_.slot.effects)) {
+        last_cycle_trap_flush_ = true;
         reset_stage_state();
         fetch_pc_ = cpu_.core().pc();
         return true;
@@ -388,6 +570,7 @@ void PipelineBackend::step_ex() {
     if (!next_ex_mem_.slot.effects.trap.valid && next_ex_mem_.slot.effects.control.redirect_pc) {
         redirect_pending_ = true;
         redirect_target_ = next_ex_mem_.slot.effects.control.target_pc;
+        last_cycle_redirected_ = true;
         next_if_id_ = {};
         next_id_ex_ = {};
         fetch_pc_ = redirect_target_;
@@ -411,6 +594,7 @@ void PipelineBackend::step_id() {
     decode(decoded_slot.raw, &decoded_slot.insn);
 
     if (has_decode_hazard(decoded_slot.insn)) {
+        last_cycle_stalled_ = true;
         return;
     }
 
@@ -456,4 +640,26 @@ void PipelineBackend::commit_next_state() {
     id_ex_ = next_id_ex_;
     ex_mem_ = next_ex_mem_;
     mem_wb_ = next_mem_wb_;
+}
+
+BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
+    BackendDebugSnapshot snapshot;
+    snapshot.backend_name = name();
+    snapshot.pipeline.if_stage = make_stage_snapshot(if_id_.slot);
+    snapshot.pipeline.id_stage = make_stage_snapshot(id_ex_.slot);
+    snapshot.pipeline.ex_stage = make_stage_snapshot(ex_mem_.slot);
+    snapshot.pipeline.mem_stage = make_stage_snapshot(mem_wb_.slot);
+    snapshot.pipeline.wb_stage = make_stage_snapshot(mem_wb_.slot);
+    snapshot.pipeline.stalled = last_cycle_stalled_;
+    snapshot.pipeline.redirected = last_cycle_redirected_;
+    snapshot.pipeline.redirect_target = redirect_target_;
+    snapshot.pipeline.pending_fetch_fault = pending_fetch_fault_.valid;
+    snapshot.pipeline.trap_flush = last_cycle_trap_flush_;
+    snapshot.pipeline.committed = last_cycle_committed_;
+    snapshot.pipeline.empty = pipeline_empty();
+    return snapshot;
+}
+
+const char* PipelineBackend::name() const {
+    return "pipeline";
 }

@@ -69,6 +69,10 @@ PlatformEvents Plic::tick() {
     };
 }
 
+const char* Plic::debug_name() const {
+    return "plic";
+}
+
 void Plic::set_source_level(uint32_t source_id, bool asserted) {
     if (source_id == 0 || source_id > kNumSources) {
         return;
@@ -78,6 +82,55 @@ void Plic::set_source_level(uint32_t source_id, bool asserted) {
     if (asserted && !claimed_[source_id]) {
         pending_[source_id] = true;
     }
+}
+
+void Plic::reset() {
+    priorities_.fill(0);
+    levels_.fill(false);
+    pending_.fill(false);
+    claimed_.fill(false);
+    machine_context_ = {};
+    supervisor_context_ = {};
+}
+
+uint32_t Plic::priority(uint32_t source_id) const {
+    return source_id <= kNumSources ? priorities_[source_id] : 0;
+}
+
+bool Plic::source_level(uint32_t source_id) const {
+    return source_id <= kNumSources ? levels_[source_id] : false;
+}
+
+bool Plic::source_pending(uint32_t source_id) const {
+    return source_id <= kNumSources ? pending_[source_id] : false;
+}
+
+bool Plic::source_claimed(uint32_t source_id) const {
+    return source_id <= kNumSources ? claimed_[source_id] : false;
+}
+
+uint32_t Plic::machine_enables() const {
+    return machine_context_.enables;
+}
+
+uint32_t Plic::supervisor_enables() const {
+    return supervisor_context_.enables;
+}
+
+uint32_t Plic::machine_threshold() const {
+    return machine_context_.threshold;
+}
+
+uint32_t Plic::supervisor_threshold() const {
+    return supervisor_context_.threshold;
+}
+
+bool Plic::machine_has_pending() const {
+    return context_has_pending(machine_context_);
+}
+
+bool Plic::supervisor_has_pending() const {
+    return context_has_pending(supervisor_context_);
 }
 
 uint32_t Plic::best_pending_source(const ContextState& context) const {
