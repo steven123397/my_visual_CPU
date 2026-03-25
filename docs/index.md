@@ -10,11 +10,13 @@
    理解当前 C++ 结构重构的动机和边界。
 3. [design/pipeline_integration_prep.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_integration_prep.md)
    理解 `phase1-stable` 冻结后，后续流水线代码应该如何接回当前主线。
-4. [contracts/platform_mmio_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/contracts/platform_mmio_contract.md)
+4. [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)
+   理解本轮如何把你同学分支中的 Phase 2 pipeline core，按当前主线边界分批重接。
+5. [contracts/platform_mmio_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/contracts/platform_mmio_contract.md)
    理解 guest / simulator 共享的 MMIO 契约。
-5. [status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
+6. [status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
    查看最近一轮系统性自检留下的仍有效风险。
-6. [status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
+7. [status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
    查看独立 `kernel_alpha` bring-up 的当前状态和下一步。
 
 ## 目录说明
