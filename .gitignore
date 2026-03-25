@@ -21,6 +21,7 @@ Thumbs.db
 /myCPU/tests/asm/*.elf
 /myCPU/tests/asm/*.bin
 /myCPU/guest/*.elf
+/myCPU/tests/host/*_smoke
 
 # Local brainstorming / prototype artifacts
 /.superpowers/
