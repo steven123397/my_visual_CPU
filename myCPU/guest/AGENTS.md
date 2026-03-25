@@ -64,6 +64,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   独立 `kernel_alpha_plic_not_ready_demo` 负向入口。
 - [kernel_alpha/timer_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/timer_not_ready_main.c)
   独立 `kernel_alpha_timer_not_ready_demo` 负向入口。
+- [kernel_alpha/common.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/common.c)
+  `kernel_alpha` 各入口共享的 PMM / VM / trap bring-up 骨架，只收口公共编排，不承载各 demo 的特有合同。
 
 ## 当前八条 `kernel_alpha` 路径
 
@@ -201,11 +203,10 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
-2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` / `kernel_alpha_storage_bad_block_count_demo` / `kernel_alpha_storage_lba_range_demo` / `kernel_alpha_storage_bad_command_demo` / `kernel_alpha_plic_not_ready_demo` / `kernel_alpha_timer_not_ready_demo` 基线上继续补更多 fault / panic / device readiness，下一项优先收口重复的 bring-up 骨架。
-3. 开始收口各个 `kernel_alpha` 入口里重复的 PMM / VM / trap 初始化流程，避免负向 demo 持续复制同一段编排逻辑。
-4. 继续推进 process / runtime refinement。
-5. 继续补更多 user interrupt / trap coverage。
-6. 把 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) 和 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 继续拆小。
+2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` / `kernel_alpha_storage_bad_block_count_demo` / `kernel_alpha_storage_lba_range_demo` / `kernel_alpha_storage_bad_command_demo` / `kernel_alpha_plic_not_ready_demo` / `kernel_alpha_timer_not_ready_demo` 基线上继续补更多 fault / panic / device readiness，但公共 bring-up 编排继续收敛在 `kernel_alpha/common.c`，不要让重复骨架重新散回各入口。
+3. 继续推进 process / runtime refinement。
+4. 继续补更多 user interrupt / trap coverage。
+5. 把 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) 和 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 继续拆小。
 
 ## 验证要求
 

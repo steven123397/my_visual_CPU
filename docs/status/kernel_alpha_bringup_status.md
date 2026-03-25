@@ -151,6 +151,8 @@
 - 随后在 non-storage device readiness 扩展中，又补上：
   - `guest_kernel_alpha_plic_not_ready_demo`
   - `guest_kernel_alpha_timer_not_ready_demo`
+- 同日已把各入口重复的 PMM / VM / trap bring-up 骨架收口到
+  `guest/kernel_alpha/common.c`，让后续负向回归只保留各自合同差异。
 
 ## 当前仍然有效的风险 / 限制
 
@@ -165,10 +167,9 @@
 
 ## 下一步
 
-1. 收口 `kernel_alpha` 各入口里重复的 PMM / VM / trap bring-up 骨架，避免每新增一条负向回归就继续复制同一段编排逻辑。
-2. 继续推进 guest runtime 的 process / runtime refinement，避免 `kernel_alpha` 入口继续承载过多编排逻辑。
-3. 优先拆分 `guest/kernel/vm.c` 和 `guest/kernel/trap.c`，把当前持续增长的复杂度从 bring-up 入口移回基础设施层。
-4. 在不打破 reference path 简洁性的前提下，继续补更系统的 device readiness / fault / panic 合同，为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
+1. 继续推进 guest runtime 的 process / runtime refinement，避免 `kernel_alpha` 入口继续承载过多编排逻辑。
+2. 优先拆分 `guest/kernel/vm.c` 和 `guest/kernel/trap.c`，把当前持续增长的复杂度从 bring-up 入口移回基础设施层。
+3. 在不打破 reference path 简洁性的前提下，继续补更系统的 device readiness / fault / panic 合同，为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
 
 ## 验证基线
 

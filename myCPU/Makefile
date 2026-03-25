@@ -24,28 +24,29 @@ GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO = guest/kernel_alpha_timer_not_ready_dem
 GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/console.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
-GUEST_KERNEL_ALPHA_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/main.c
+GUEST_KERNEL_ALPHA_COMMON_SRCS = guest/kernel_alpha/common.c
+GUEST_KERNEL_ALPHA_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/main.c
 GUEST_KERNEL_ALPHA_OBJS = $(GUEST_KERNEL_ALPHA_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_OBJS := $(GUEST_KERNEL_ALPHA_OBJS:.c=.o)
-GUEST_KERNEL_ALPHA_FAULT_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/fault_main.c
+GUEST_KERNEL_ALPHA_FAULT_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/fault_main.c
 GUEST_KERNEL_ALPHA_FAULT_OBJS = $(GUEST_KERNEL_ALPHA_FAULT_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_FAULT_OBJS := $(GUEST_KERNEL_ALPHA_FAULT_OBJS:.c=.o)
-GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/storage_no_media_main.c
+GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/storage_no_media_main.c
 GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS = $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS := $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS:.c=.o)
-GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/storage_bad_block_count_main.c
+GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/storage_bad_block_count_main.c
 GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_OBJS = $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_OBJS := $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_OBJS:.c=.o)
-GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/storage_lba_range_main.c
+GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/storage_lba_range_main.c
 GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS = $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS := $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS:.c=.o)
-GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/storage_bad_command_main.c
+GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/storage_bad_command_main.c
 GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS = $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS := $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS:.c=.o)
-GUEST_KERNEL_ALPHA_PLIC_NOT_READY_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/plic_not_ready_main.c
+GUEST_KERNEL_ALPHA_PLIC_NOT_READY_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/plic_not_ready_main.c
 GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS = $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS := $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS:.c=.o)
-GUEST_KERNEL_ALPHA_TIMER_NOT_READY_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel_alpha/timer_not_ready_main.c
+GUEST_KERNEL_ALPHA_TIMER_NOT_READY_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/timer_not_ready_main.c
 GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS = $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS := $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS:.c=.o)
 DEPS     = $(OBJS:.o=.d) $(GUEST_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_FAULT_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS:.o=.d)
