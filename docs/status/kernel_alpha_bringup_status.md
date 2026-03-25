@@ -165,6 +165,23 @@
 
 - `KMVCX`
 
+当前冻结稳定基线为：
+
+- tag：`phase1-stable`
+- commit：`283aee6`
+- 含义：`Phase 1` 核心 bring-up 目标已达成；后续 `kernel_alpha` / guest runtime 工作默认视为 post-Phase1 hardening
+- 当前本地 `frontend` 调试测试清单已覆盖：
+  - `guest_kernel_alpha_demo`
+  - `guest_kernel_alpha_fault_demo`
+  - `guest_kernel_alpha_storage_no_media_demo`
+  - `guest_kernel_alpha_storage_not_ready_demo`
+  - `guest_kernel_alpha_storage_bad_magic_demo`
+  - `guest_kernel_alpha_storage_bad_block_count_demo`
+  - `guest_kernel_alpha_storage_lba_range_demo`
+  - `guest_kernel_alpha_storage_bad_command_demo`
+  - `guest_kernel_alpha_plic_not_ready_demo`
+  - `guest_kernel_alpha_timer_not_ready_demo`
+
 ## 关键历史节点
 
 - `2026-03-25` 已完成首个独立 `kernel_alpha_demo` alpha bring-up。
@@ -235,6 +252,7 @@
 
 ## 验证基线
 
+- `cd myCPU && make test-unit-supervisor_runtime`
 - `cd myCPU && make test-unit-kernel_runtime`
 - `cd myCPU && make test-unit-kernel_alpha_common`
 - `cd myCPU && make test-unit-kernel_alpha_interrupt`

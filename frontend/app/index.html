@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>my_visual_CPU Debugger</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="background-layer"></div>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">my_visual_CPU</p>
+          <h1>实时流水线调试工作台</h1>
+          <p class="hero-copy">面向现有测试集的本地可视化调试入口。你可以直接观察五级流水线推进、Trap / Interrupt、CSR 变化和平台设备状态。</p>
+        </div>
+        <div class="status-card">
+          <span class="status-label">run state</span>
+          <strong id="status-badge">idle</strong>
+        </div>
+      </header>
+
+      <section class="control-bar">
+        <label>
+          <span>测试</span>
+          <select id="test-select"></select>
+        </label>
+        <label>
+          <span>后端</span>
+          <select id="backend-select">
+            <option value="pipeline">pipeline</option>
+            <option value="functional">functional</option>
+          </select>
+        </label>
+        <div class="button-row">
+          <button id="load-button">Load</button>
+          <button id="run-button">Run</button>
+          <button id="pause-button">Pause</button>
+          <button id="step-cycle-button">Step Cycle</button>
+          <button id="step-commit-button">Step Commit</button>
+          <button id="reset-button">Reset</button>
+        </div>
+      </section>
+
+      <section id="notice" class="notice" data-kind="info">正在连接本地调试服务…</section>
+
+      <section class="workspace">
+        <div class="workspace-main" id="pipeline-slot"></div>
+        <aside class="workspace-side">
+          <div id="summary-slot"></div>
+          <div id="events-slot"></div>
+          <div id="devices-slot"></div>
+        </aside>
+      </section>
+
+      <section class="workspace-bottom">
+        <div id="registers-slot"></div>
+        <div id="csrs-slot"></div>
+        <div id="bus-slot"></div>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

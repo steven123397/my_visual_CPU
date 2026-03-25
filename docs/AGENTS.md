@@ -46,6 +46,8 @@
   记录 `phase1-stable` 冻结后，如何把后续拿到的旧基线流水线代码接回当前主线。
 - [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)
   记录当前这一轮如何只把 Phase 2 pipeline core 重接到主线，同时排除 `debug/frontend`。
+- [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
+  记录第二轮如何把最小 `debug_session/protocol` 与本地前端教学演示链路接回当前主线。
 - [contracts/platform_mmio_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/contracts/platform_mmio_contract.md)
   当前共享 MMIO 平台契约，属于 guest / simulator 共同依赖的实现边界文档。
 - [status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)

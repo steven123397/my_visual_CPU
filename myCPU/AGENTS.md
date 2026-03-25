@@ -14,6 +14,7 @@
 
 - `Machine + Bus + Ram + Device`
 - `ExecutionBackend + FunctionalBackend + PipelineBackend`
+- `DebugSnapshot + DebugSession + debug_protocol`
 - `ElfLoader + BinaryLoader`
 - `CoreState + CsrFile`
 - `TrapController`
@@ -48,6 +49,8 @@
   平台设备对象。
 - [src/loader](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/loader)
   ELF / binary 装载边界。
+- [src/debug](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/debug)
+  调试快照、debug session 与 `--debug-cli` 协议。
 - [tests/asm](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm)
   reference path 的汇编回归契约。
 - [tests/unit](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/unit)
@@ -58,6 +61,7 @@
 - 保留一个简单、正确、可调试的 reference core。
 - 不要把同一条指令语义复制到多个 backend 里。
 - `pipeline` 当前已经具备独立 asm / host / guest 门禁，但仍不是新的 ISA 语义来源；语义修复优先落在共享语义层与公共 simulator 边界。
+- `debug/frontend` 当前已经正式接入，但它们只消费 backend / machine / device 的只读快照，不得反向成为执行语义来源。
 - CPU 访存路径必须继续沿着：
   `CPU -> AddressSpace -> Bus -> Ram/Device`
 - 平台事件继续沿着：
@@ -80,6 +84,7 @@
 - UART / CLINT / PLIC / `SimpleStorage`。
 - bus / device 第一轮区间与访问宽度防御。
 - `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 `pipeline` 的 asm / host / guest 门禁。
+- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。
@@ -119,6 +124,7 @@
 3. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界。
 4. 在保持 Phase 1 已达成核心目标的前提下，先继续做必要稳定化，再讨论多 backend、pipeline、OoO 等后续扩展。
    当前 `pipeline` 已经正式接入到 asm / host / guest 验证层：默认 `functional` 继续守 `make test`，`pipeline` 通过 `make test-pipeline` 守住同一批 asm 参考输出、host-side smoke/differential，以及 `guest_supervisor_demo` 与 `kernel_alpha` 正负回归。
+5. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围：加载仓库内现有 demo、查看快照、按 cycle / commit 单步，不要在这一层直接扩成带断点 / 条件暂停 / 任意文件加载的通用调试器。
 
 ## 验证要求
 
@@ -141,6 +147,7 @@
 
 - `src/main.cpp`
 - `src/platform/machine.cpp`
+- `src/debug/*`
 - `src/exec/*`
 - `src/isa/*`
 - `guest/*`
@@ -149,5 +156,15 @@
 还应额外守住：
 
 - `cd myCPU && make test-pipeline`
+
+如果触及以下任一路径：
+
+- `src/debug/*`
+- `src/main.cpp`
+- `../frontend/*`
+
+还应额外守住：
+
+- `cd frontend && node --test`
 
 如果行为变化是有意的，必须同步更新测试或文档说明。

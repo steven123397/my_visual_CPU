@@ -50,7 +50,7 @@
 
 ## 与本次自检直接相关的后续状态
 
-第 `9` 节之后提到的“第一次真正的小 kernel bring-up”已经开始落地，并形成了当前可回归的 `kernel_alpha` 基线：
+后续推进中提到的“第一次真正的小 kernel bring-up”已经开始落地，并形成了当前可回归的 `kernel_alpha` 基线：
 
 - `guest_kernel_alpha_demo`
   - 当前输出 `KMVPETDS`
@@ -61,6 +61,12 @@
 - `guest_kernel_alpha_storage_no_media_demo`
   - 当前输出 `KMVNX`
   - 覆盖“VM 已开启且 storage MMIO 可达、但未附加镜像”时的 metadata / `NO_MEDIA` error 合同
+- `guest_kernel_alpha_storage_not_ready_demo`
+  - 当前输出 `KMVRX`
+  - 覆盖“VM 已开启且 storage MMIO 可达、镜像已附加但 `READY` 缺失”时的 readiness / `NOT_READY` / clear-error 合同
+- `guest_kernel_alpha_storage_bad_magic_demo`
+  - 当前输出 `KMVGX`
+  - 覆盖“VM 已开启且 storage MMIO 可达、但 `MAGIC` 元数据损坏”时的 probe-fail / data-path-still-live 合同
 - `guest_kernel_alpha_storage_bad_block_count_demo`
   - 当前输出 `KMVBX`
   - 覆盖“VM 已开启且 storage 已附加”时的 `BAD_BLOCK_COUNT` / clear-error 合同
@@ -76,27 +82,45 @@
 - `guest_kernel_alpha_timer_not_ready_demo`
   - 当前输出 `KMVPETX`
   - 覆盖“VM 已开启且 UART / CLINT / PLIC MMIO 可达、第一次 external interrupt 已成功到达，但未安排第一次 timer delivery”时的 device readiness timeout / panic 合同
+- 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），说明第一次真正的小型 OS / kernel bring-up 基础障碍已经清完；后续 guest/runtime 工作默认视为 post-Phase1 hardening
 
 截至本次状态更新：
 
 - `guest_supervisor_demo` 输出 `KRN`
 - `make test` 保持通过
+- `make test-pipeline` 保持通过
+- 本地 `debug_session/protocol + frontend` 教学演示链路已经正式接入，当前通过：
+  - `tests/host/debug_cli_smoke.cpp`
+  - `frontend/tests/debug_server.test.mjs`
+  - `frontend/tests/ui_state.test.mjs`
 
 ## 当前仍然有效的风险点
 
 虽然当次自检里的 correctness 底线问题已经基本处理，但以下风险仍然有效：
 
-- [myCPU/guest/kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c)
-  仍承担过多职责，后续继续扩 process / address-space 管理时会先承压。
-- [myCPU/guest/kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c)
-  仍同时承担 dispatch、policy 与 runtime lifecycle。
+- [myCPU/guest/kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c)、[myCPU/guest/kernel/vm_address_space.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_address_space.c)、[myCPU/guest/kernel/vm_process.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_process.c)、[myCPU/guest/kernel/vm_object.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_object.c)、[myCPU/guest/kernel/vm_fault.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_fault.c)
+  当前已经完成第一轮职责拆分，但后续修改仍需守住 page-table primitive、address-space lifecycle、process binding、object lifecycle 与 fault policy 的边界，不要重新耦合回单个大文件。
+- [myCPU/guest/kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 和 [myCPU/guest/kernel/trap_dispatch.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap_dispatch.c)
+  当前已经完成 lifecycle / dispatch 的第一轮拆分，但后续仍要避免 policy、dispatch 和 runtime activation 重新糊回同一层。
+- `guest/kernel_runtime.c`、`guest/kernel_bringup.c`、`guest/kernel_alpha/common.c`
+  当前已完成 bring-up skeleton 第一轮收口，但离更完整的 kernel object / runtime 组织仍有距离。
 - `SimpleStorage`
   仍是最小同步块设备：无 completion interrupt、`BLOCK_COUNT` 仅支持 `1`、写入不回写宿主文件。
 - reference robustness 回归仍可继续扩展：
   - 非法编码矩阵
   - MMIO 非法偏移 / 宽度
   - 更真实的 ELF 段布局
-- 一批固定上限常量在第一次真正的小 OS / kernel bring-up 前仍应优先关注。
+- 一批固定上限常量在 post-Phase1 hardening 与后续 kernel 扩展中仍应优先关注。
+
+## 当前建议入口
+
+新对话如果要继续推进实现，建议优先参考：
+
+- [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
+- [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
+- [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
+- [docs/design/pipeline_integration_prep.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_integration_prep.md)
+- [docs/design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
 
 ## 当前使用方式
 

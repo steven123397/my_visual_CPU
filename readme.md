@@ -6,12 +6,14 @@
 
 ```
 myCPU/
+├── frontend/           # 本地前端调试器与 Node 调试服务
 ├── guest/              # 最小 guest supervisor runtime / 平台层 / demo
 ├── src/
 │   ├── main.cpp        # C++ 入口，CLI 参数、backend 选择与 Machine 启动
 │   ├── cpu.cpp/h       # CPU 外观接口 + functional 参考执行路径
 │   ├── memory.c/h      # 主内存 backing 与底层访存辅助
 │   ├── decode.c/h      # 指令解码
+│   ├── debug/          # DebugSnapshot / DebugSession / --debug-cli
 │   ├── trap.cpp/h      # TrapController：异常/中断路由与返回
 │   ├── arch/           # CoreState / CsrFile 状态边界
 │   ├── exec/           # backend 骨架 + pipeline core + 指令语义分块
@@ -48,8 +50,8 @@ main.cpp
 
 从模块职责看：
 
-- `main.cpp` 负责 CLI 参数解析、`--backend functional|pipeline` 选择和启动 `Machine`。
-- `platform/machine.*` 负责组装 CPU、Ram、Bus、PLIC、storage 等平台对象，管理 backend 生命周期，并驱动主执行循环。
+- `main.cpp` 负责 CLI 参数解析、`--backend functional|pipeline`、`--debug-cli` 选择和启动 `Machine` 或 debug protocol。
+- `platform/machine.*` 负责组装 CPU、Ram、Bus、PLIC、storage 等平台对象，管理 backend 生命周期，并驱动主执行循环，同时向 debug session 暴露只读平台状态入口。
 - `platform/address_map.h` 负责平台地址映射常量，避免设备层依赖 legacy `Memory` 头。
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
 - `arch/csr_file.*` 负责已实现 CSR 集合、`misa/satp/time` 这类带架构约束的特殊语义，以及 `sstatus/sie/sip` 对 `mstatus/mie/mip` 的别名视图。
@@ -61,6 +63,7 @@ main.cpp
 - `cpu.cpp/h` 负责 functional reference path，并把 `CoreState + CsrFile + TrapController` 接到共享 ISA 语义层。
 - `isa/*` 负责共享 `InstructionSemantics`、`ExecutionContext` 和 `InsnEffects`，作为 `functional` 与 `pipeline` 的统一 ISA 语义来源。
 - `exec/backend.h`、`exec/functional_backend.*` 和 `exec/pipeline_backend.*` 负责执行后端抽象、默认 functional backend，以及当前五级 pipeline core。
+- `debug/*` 负责 `DebugSnapshot`、`DebugSession` 与 `--debug-cli` JSON line protocol，本地前端调试器通过这层消费 simulator 快照。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
 - `trap.cpp/h` 负责 `TrapController`，集中处理异常/中断入口、`mret/sret` 返回、timer/external interrupt 路由，以及当前最小 `medeleg/mideleg` supervisor trap 委托路径。
@@ -94,9 +97,40 @@ make
 # 显式选择 pipeline backend 运行 ELF
 ./mycpu --backend pipeline <program.elf>
 
+# 作为本地调试协议进程运行
+./mycpu --debug-cli
+
 # 运行平坦二进制（指定加载地址，十六进制）
 ./mycpu -b 80000000 <program.bin>
 ```
+
+## 本地前端调试演示
+
+先构建模拟器：
+
+```bash
+cd myCPU
+make
+```
+
+再从仓库根目录启动本地服务：
+
+```bash
+node frontend/server/debug_server.mjs
+```
+
+默认地址：
+
+```text
+http://127.0.0.1:4173
+```
+
+当前前端支持：
+
+- 选择仓库内现有 asm / guest / `kernel_alpha` demo
+- 切换 `functional` / `pipeline`
+- `Load / Run / Pause / Step Cycle / Step Commit / Reset`
+- 查看五级流水线、最近周期时间线、寄存器变化、CSR / Trap、最近一次总线访问，以及 UART / CLINT / PLIC / Storage 状态
 
 ## 测试
 
@@ -108,6 +142,9 @@ make test
 
 # 运行 pipeline 完整门禁
 make test-pipeline
+
+# 运行前端 Node 测试
+cd ../frontend && node --test
 
 # 只跑独立 kernel alpha bring-up 回归
 make test-guest-kernel_alpha_demo
@@ -142,7 +179,7 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 
 `make test` 仍然是默认 `functional` reference path 的主回归，会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo`、`kernel_alpha_demo`、`kernel_alpha_fault_demo`、`kernel_alpha_storage_no_media_demo`、`kernel_alpha_storage_not_ready_demo`、`kernel_alpha_storage_bad_magic_demo`、`kernel_alpha_storage_bad_block_count_demo`、`kernel_alpha_storage_lba_range_demo`、`kernel_alpha_storage_bad_command_demo`、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这 11 条 guest 回归路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 timer interrupt、一次 storage readiness probe、一次最小块设备读取，以及 9 条独立负向路径：未映射 CLINT MMIO 访问触发的 fault / panic、未安排第一次 timer delivery 时的 readiness timeout / panic、PLIC 已映射但未初始化时的 readiness timeout / panic、storage 未附加镜像时的 metadata / `NO_MEDIA` error 合同、storage 已附加但 `READY` 缺失时的 readiness / `NOT_READY` / clear-error 合同、storage `MAGIC` 元数据损坏时的 probe-fail / data-path-still-live 合同、`BLOCK_COUNT != 1` 时的 `BAD_BLOCK_COUNT` / clear-error 合同、`LBA == capacity_blocks` 时的 `LBA_RANGE` / clear-error 合同，以及非法 `COMMAND` 值时的 `BAD_COMMAND` / clear-error 合同。host-side 单元侧除 ELF / bus-device / storage readiness 外，也新增了 `supervisor_runtime`、`kernel_runtime`、`kernel_alpha/common.c` bring-up phase helper、`kernel_alpha/interrupt_contract.c` non-storage 合同 helper，以及 `kernel_alpha/storage_contract.c` storage 合同 helper 回归。
 
-`make test-pipeline` 是当前 `pipeline` backend 的完整门禁。它会复用同一批 `tests/asm` 样例跑 `--backend pipeline`，同时覆盖 `pipeline_backend_smoke`、`backend_differential_smoke`、`--backend pipeline` CLI smoke，以及 `guest_supervisor_demo`、`kernel_alpha_demo` 和现有 `kernel_alpha` 负向回归在 `pipeline` 下的输出一致性。`make test` 仍然是默认 `functional` reference path 的主回归；`make test-pipeline` 则负责证明第二种执行模型在不改 guest 合同的前提下也能守住同一套可观察行为。
+`make test-pipeline` 是当前 `pipeline` backend 的完整门禁。它会复用同一批 `tests/asm` 样例跑 `--backend pipeline`，同时覆盖 `pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke`、`--backend pipeline` CLI smoke，以及 `guest_supervisor_demo`、`kernel_alpha_demo` 和现有 `kernel_alpha` 负向回归在 `pipeline` 下的输出一致性。`make test` 仍然是默认 `functional` reference path 的主回归；`make test-pipeline` 则负责证明第二种执行模型在不改 guest 合同的前提下也能守住同一套可观察行为。`cd frontend && node --test` 则负责守住本地调试服务、测试清单和前端纯状态逻辑。
 
 ## 内存映射
 

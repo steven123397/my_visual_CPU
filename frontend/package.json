@@ -1,0 +1,8 @@
+{
+  "name": "my-visual-cpu-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
