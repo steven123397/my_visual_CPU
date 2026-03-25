@@ -3,27 +3,28 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "trap.h"
-#include "vm.h"
+#include "kernel_bringup.h"
+#include "kernel_runtime.h"
 
 enum {
-    KERNEL_ALPHA_MMIO_UART = 1U << 0,
-    KERNEL_ALPHA_MMIO_CLINT = 1U << 1,
-    KERNEL_ALPHA_MMIO_PLIC = 1U << 2,
-    KERNEL_ALPHA_MMIO_STORAGE = 1U << 3,
+    KERNEL_ALPHA_MMIO_UART = KERNEL_BRINGUP_MMIO_UART,
+    KERNEL_ALPHA_MMIO_CLINT = KERNEL_BRINGUP_MMIO_CLINT,
+    KERNEL_ALPHA_MMIO_PLIC = KERNEL_BRINGUP_MMIO_PLIC,
+    KERNEL_ALPHA_MMIO_STORAGE = KERNEL_BRINGUP_MMIO_STORAGE,
 };
 
-typedef bool (*kernel_alpha_pre_vm_setup_t)(trap_context_t* trap_context,
-                                            void* context);
-
-typedef struct KernelAlphaBringupOptions {
-    uint32_t mmio_mask;
-    uint64_t pmm_probe_marker;
-    kernel_alpha_pre_vm_setup_t pre_vm_setup;
-    void* pre_vm_context;
-} kernel_alpha_bringup_options_t;
+typedef kernel_bringup_pre_vm_setup_t kernel_alpha_pre_vm_setup_t;
+typedef kernel_bringup_options_t kernel_alpha_bringup_options_t;
 
 bool kernel_alpha_run_common_bringup(
     trap_context_t* trap_context,
     vm_address_space_t** out_space,
     const kernel_alpha_bringup_options_t* options);
+void kernel_alpha_begin_plic_supervisor_phase(void);
+bool kernel_alpha_wait_for_first_external_delivery(kernel_runtime_t* runtime,
+                                                   uint64_t timeout_delta);
+bool kernel_alpha_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
+                                                uint64_t timer_delta,
+                                                uint64_t timeout_delta);
+bool kernel_alpha_complete_storage_probe(void);
+bool kernel_alpha_complete_storage_signature_check(void);

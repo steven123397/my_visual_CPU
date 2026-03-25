@@ -201,6 +201,13 @@
   fault policy 拆到 `guest/kernel/vm_address_space.c`、
   `guest/kernel/vm_object.c` 和 `guest/kernel/vm_fault.c`，把 `vm.c`
   收口为低层 page-table / map / unmap / TLB primitive。
+- 随后继续把 `kernel_alpha` 各入口重复出现的 `trap_context` /
+  `address_space` / `interrupt_state` 收口到 `guest/kernel/kernel_runtime.c`，
+  让 bring-up 入口开始从“裸拼编排”转向最小 kernel runtime 对象。
+- 随后继续把通用 `K/M/V` bring-up 从 `guest/kernel_alpha/common.c` 下沉到
+  `guest/kernel/kernel_bringup.c`，并把 `guest/kernel_alpha/common.c` 改成
+  PLIC / first delivery / storage probe 的 phase helper，避免
+  `supervisor_demo` 再依赖 alpha 私有骨架。
 
 ## 当前仍然有效的风险 / 限制
 
@@ -217,10 +224,12 @@
 
 1. 继续守住 `guest/kernel/vm.c` / `guest/kernel/vm_address_space.c` / `guest/kernel/vm_process.c` / `guest/kernel/vm_object.c` / `guest/kernel/vm_fault.c` 的边界，避免后续修改重新耦合。
 2. 继续守住 `guest/kernel/trap.c` 与 `guest/kernel/trap_dispatch.c` 的 lifecycle / dispatch 边界，避免后续修改重新耦合。
-3. 在不打破 reference path 简洁性的前提下，继续补更系统的 device readiness / fault / panic 合同，为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
+3. 在不打破 reference path 简洁性的前提下，继续补更系统的 device readiness / fault / panic 合同，并继续把 `kernel_alpha` runtime 从 bring-up helper 推进成更稳定的小内核骨架，为第一次真正的小型 OS / kernel bring-up 清掉剩余基础障碍。
 
 ## 验证基线
 
+- `cd myCPU && make test-unit-kernel_runtime`
+- `cd myCPU && make test-unit-kernel_alpha_common`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 - `cd myCPU && make test-guest-kernel_alpha_storage_no_media_demo`

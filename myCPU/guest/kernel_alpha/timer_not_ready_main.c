@@ -26,37 +26,30 @@ static void kernel_alpha_timer_not_ready_timer_post_handler(void* context) {
 }
 
 void kernel_main(void) {
-    trap_context_t supervisor_trap_context;
-    vm_address_space_t* kernel_address_space = NULL;
-    supervisor_runtime_interrupt_state_t interrupts;
+    kernel_runtime_t runtime;
     const kernel_alpha_bringup_options_t options = {
         .mmio_mask = KERNEL_ALPHA_MMIO_UART | KERNEL_ALPHA_MMIO_CLINT |
                      KERNEL_ALPHA_MMIO_PLIC,
         .pmm_probe_marker = UINT64_C(0x54494D4E52445921),
-        .pre_vm_setup =
-            supervisor_runtime_install_interrupt_counter_policies_adapter,
-        .pre_vm_context = &interrupts,
+        .pre_vm_setup = kernel_runtime_install_interrupt_counter_policies_adapter,
+        .pre_vm_context = &runtime,
     };
 
-    supervisor_runtime_interrupt_state_init(&interrupts);
-    supervisor_runtime_interrupt_state_bind_self_handlers(
-        &interrupts,
+    kernel_runtime_init(&runtime);
+    if (!kernel_runtime_bind_self_interrupt_handlers(
+            &runtime,
         PLIC_SOURCE_UART_THRE,
         kernel_alpha_timer_not_ready_timer_post_handler,
-        kernel_alpha_timer_not_ready_external_post_handler);
-
-    if (!kernel_alpha_run_common_bringup(&supervisor_trap_context,
-                                         &kernel_address_space,
-                                         &options)) {
+        kernel_alpha_timer_not_ready_external_post_handler)) {
         panic_shutdown();
     }
 
-    platform_plic_supervisor_init();
-    console_putc('P');
+    if (!kernel_runtime_run_common_bringup(&runtime, &options)) {
+        panic_shutdown();
+    }
 
-    if (!supervisor_runtime_enable_uart_thre_and_wait(
-            &interrupts.external_interrupts,
-            4096U)) {
+    kernel_alpha_begin_plic_supervisor_phase();
+    if (!kernel_alpha_wait_for_first_external_delivery(&runtime, 4096U)) {
         panic_shutdown();
     }
 

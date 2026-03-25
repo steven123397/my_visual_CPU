@@ -1,177 +1,65 @@
 #include "kernel_alpha.h"
 
-#include <stddef.h>
 #include <stdint.h>
 
 #include "console.h"
-#include "memory.h"
 #include "platform.h"
 #include "pmm.h"
-#include "riscv.h"
-#include "runtime_context.h"
-
-static bool map_kernel_identity_if_present(vm_address_space_t* address_space,
-                                           uintptr_t start,
-                                           uintptr_t end,
-                                           uint64_t flags) {
-    const size_t size = start < end ? (size_t)(end - start) : 0U;
-
-    return size == 0 ||
-           vm_address_space_map_kernel_range(address_space,
-                                             start,
-                                             start,
-                                             size,
-                                             flags);
-}
-
-static bool register_kernel_identity_fault_range_if_present(
-    vm_address_space_t* address_space,
-    uintptr_t start,
-    uintptr_t end,
-    uint64_t flags) {
-    const size_t size = start < end ? (size_t)(end - start) : 0U;
-
-    return size == 0 ||
-           vm_address_space_register_fault_range(address_space,
-                                                start,
-                                                start,
-                                                size,
-                                                flags);
-}
-
-static bool register_optional_mmio_range(vm_address_space_t* address_space,
-                                         uint32_t mmio_mask,
-                                         uint32_t mmio_flag,
-                                         uintptr_t start,
-                                         uintptr_t end,
-                                         uint64_t flags) {
-    return (mmio_mask & mmio_flag) == 0U ||
-           register_kernel_identity_fault_range_if_present(address_space,
-                                                           start,
-                                                           end,
-                                                           flags);
-}
-
-static bool activate_trap_context(trap_context_t* trap_context) {
-    return trap_context != NULL &&
-           trap_context_activate(trap_context) &&
-           trap_context_is_active(trap_context) &&
-           trap_active_context() == trap_context;
-}
-
-static bool probe_pmm_page(uint64_t marker) {
-    uint64_t* page = (uint64_t*)pmm_alloc_page();
-
-    if (page == NULL) {
-        return false;
-    }
-
-    page[0] = marker;
-    if (page[0] != marker) {
-        return false;
-    }
-
-    return pmm_free_page(page);
-}
-
-static bool setup_vm(vm_address_space_t** out_space, uint32_t mmio_mask) {
-    const uint64_t text_flags = VM_PAGE_READ | VM_PAGE_EXEC;
-    const uint64_t rodata_flags = VM_PAGE_READ;
-    const uint64_t data_flags = VM_PAGE_READ | VM_PAGE_WRITE;
-    const uintptr_t early_heap_start = memory_heap_start();
-    const uintptr_t managed_start = pmm_managed_start();
-    const uintptr_t managed_end = pmm_managed_end();
-    vm_address_space_t* address_space = NULL;
-
-    if (out_space == NULL ||
-        !vm_address_space_create(&address_space) ||
-        !map_kernel_identity_if_present(address_space,
-                                        memory_text_start(),
-                                        memory_text_end(),
-                                        text_flags) ||
-        !map_kernel_identity_if_present(address_space,
-                                        memory_rodata_start(),
-                                        memory_rodata_end(),
-                                        rodata_flags) ||
-        !map_kernel_identity_if_present(address_space,
-                                        memory_data_start(),
-                                        memory_bss_end(),
-                                        data_flags) ||
-        !map_kernel_identity_if_present(address_space,
-                                        early_heap_start,
-                                        managed_start,
-                                        data_flags) ||
-        !map_kernel_identity_if_present(address_space,
-                                        managed_start,
-                                        managed_end,
-                                        data_flags) ||
-        !register_optional_mmio_range(address_space,
-                                      mmio_mask,
-                                      KERNEL_ALPHA_MMIO_UART,
-                                      UART_BASE,
-                                      UART_BASE + MEMORY_PAGE_SIZE,
-                                      data_flags) ||
-        !register_optional_mmio_range(address_space,
-                                      mmio_mask,
-                                      KERNEL_ALPHA_MMIO_CLINT,
-                                      CLINT_BASE,
-                                      CLINT_BASE + CLINT_SIZE,
-                                      data_flags) ||
-        !register_optional_mmio_range(address_space,
-                                      mmio_mask,
-                                      KERNEL_ALPHA_MMIO_PLIC,
-                                      PLIC_BASE,
-                                      PLIC_BASE + PLIC_SIZE,
-                                      data_flags) ||
-        !register_optional_mmio_range(address_space,
-                                      mmio_mask,
-                                      KERNEL_ALPHA_MMIO_STORAGE,
-                                      STORAGE_BASE,
-                                      STORAGE_BASE + MEMORY_PAGE_SIZE,
-                                      data_flags) ||
-        !vm_address_space_enable(address_space) ||
-        !vm_address_space_is_enabled(address_space) ||
-        !vm_address_space_is_active(address_space) ||
-        riscv_read_satp() != vm_address_space_satp_value(address_space)) {
-        return false;
-    }
-
-    *out_space = address_space;
-    return true;
-}
+#include "storage.h"
+#include "supervisor_runtime.h"
 
 bool kernel_alpha_run_common_bringup(
     trap_context_t* trap_context,
     vm_address_space_t** out_space,
     const kernel_alpha_bringup_options_t* options) {
-    if (trap_context == NULL || out_space == NULL || options == NULL) {
+    return kernel_bringup_run_common(trap_context, out_space, options);
+}
+
+void kernel_alpha_begin_plic_supervisor_phase(void) {
+    platform_plic_supervisor_init();
+    console_putc('P');
+}
+
+bool kernel_alpha_wait_for_first_external_delivery(kernel_runtime_t* runtime,
+                                                   uint64_t timeout_delta) {
+    return runtime != NULL &&
+           supervisor_runtime_enable_uart_thre_and_wait(
+               &runtime->interrupts.external_interrupts,
+               timeout_delta);
+}
+
+bool kernel_alpha_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
+                                                uint64_t timer_delta,
+                                                uint64_t timeout_delta) {
+    return runtime != NULL &&
+           supervisor_runtime_schedule_timer_and_wait(
+               &runtime->interrupts.timer_interrupts,
+               timer_delta,
+               timeout_delta);
+}
+
+bool kernel_alpha_complete_storage_probe(void) {
+    storage_info_t storage_info = {0};
+
+    if (!storage_probe(&storage_info) || storage_info.capacity_blocks == 0) {
         return false;
     }
 
-    *out_space = NULL;
+    console_putc('D');
+    return true;
+}
 
-    memory_init();
-    runtime_context_reset();
-    trap_context_init(trap_context);
-    if (!activate_trap_context(trap_context)) {
-        return false;
-    }
-    console_putc('K');
+bool kernel_alpha_complete_storage_signature_check(void) {
+    uint8_t* storage_page = (uint8_t*)pmm_alloc_page();
+    const bool valid_signature =
+        storage_page != NULL && storage_read_block(0, storage_page) == 0 &&
+        storage_page[0] == 'S' && storage_page[1] == 't' &&
+        storage_page[2] == 'o' && storage_page[3] == 'r';
 
-    pmm_init();
-    if (pmm_total_pages() == 0 || pmm_free_pages() == 0) {
-        return false;
-    }
-    console_putc('M');
-
-    if ((options->pre_vm_setup != NULL &&
-         !options->pre_vm_setup(trap_context, options->pre_vm_context)) ||
-        !setup_vm(out_space, options->mmio_mask) ||
-        (options->pmm_probe_marker != 0 &&
-         !probe_pmm_page(options->pmm_probe_marker))) {
+    if (storage_page == NULL || !valid_signature || !pmm_free_page(storage_page)) {
         return false;
     }
 
-    console_putc('V');
+    console_putc('S');
     return true;
 }
