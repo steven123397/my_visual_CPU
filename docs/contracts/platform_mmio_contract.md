@@ -116,6 +116,8 @@
 - block size 固定为 `512` 字节
 - 当前每次命令只支持 `1` 个 block
 - 通过宿主 `--disk` / `-d` 参数附加镜像文件
+- 可通过 `--disk-not-ready` 注入 attached-but-not-ready 状态
+- 可通过 `--disk-bad-magic` 注入 metadata `MAGIC` 损坏状态
 - 设备读写发生在内部 block data window 上，不做 DMA
 - 命令同步完成，当前阶段推荐 polling 驱动
 
@@ -161,6 +163,7 @@
 | `2` | `BAD_COMMAND` | 非法命令值 |
 | `3` | `BAD_BLOCK_COUNT` | `BLOCK_COUNT` 不是当前支持的 `1` |
 | `4` | `LBA_RANGE` | `LBA` 超出容量范围 |
+| `5` | `NOT_READY` | 镜像已附加，但设备当前不接受命令 |
 
 ### 读块流程
 
@@ -221,8 +224,19 @@
 - `platform_storage_read_block_custom`
 - `platform_shutdown`
 
-这些入口的目标不是成为最终内核 ABI，而是先固定“客体侧如何消费当前 MMIO 契约”的最小驱动层。当前 guest 层已经拆出了 `console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 这些最小模块，并用统一 trap dispatch、注册式 interrupt/exception handler 和 VM-owned page-fault policy/handling 路径，把 supervisor external interrupt、supervisor timer interrupt、demand-mapped fault 和可恢复的 page fault 路径收口到同一条入口；同时最小 demo 已经通过 linker symbol 暴露的内存布局接通了 early bump allocator，在其上建立了 bitmap-backed physical page manager，并进一步接上了 guest-side Sv39 page-table builder、`satp` 切换、fault-range-backed page-fault handling、recoverable page-fault policy registration、较严格的 `vm_map_range` / `vm_unmap_page` 语义、VM 启用后成功 map/unmap 自动维护本地 TLB 一致性的合同，以及当前 user `< MEM_BASE` / kernel `[MEM_BASE, MEM_BASE + MEM_SIZE)` 地址窗口 helper、user fault-range 注册、`sstatus.SUM` 驱动的 supervisor-side user-page 访问验证、text/rodata/data 的页粒度内核权限映射验证和第一批 kernel/user split helper。现在 guest `storage.c` 也已经把 storage 消费路径拆成两层：`storage_read_info()` / `storage_probe()` 负责 metadata / readiness，`storage_status()` / `storage_error()` / `storage_clear_error()` / `storage_read_block_with_count()` 负责最小错误合同消费。独立 `kernel_alpha_demo` 已经消费这套合同完成 storage metadata / readiness probe 与 block `LBA 0` 读取；独立 `kernel_alpha_storage_no_media_demo` 覆盖“VM 已开启但未附加镜像”时 metadata / `NO_MEDIA` error 负向合同；独立 `kernel_alpha_storage_bad_block_count_demo` 覆盖 `BAD_BLOCK_COUNT` 与 clear-error 合同；独立 `kernel_alpha_storage_lba_range_demo` 覆盖 `LBA_RANGE` 与 clear-error 合同；独立 `kernel_alpha_storage_bad_command_demo` 则继续覆盖 `BAD_COMMAND` 与 clear-error 合同。下一阶段应继续沿着这个 VM-owned region/policy 层推进更完整的 kernel/user address-space 管理。当前至少有 3 类消费方：
+这些入口的目标不是成为最终内核 ABI，而是先固定“客体侧如何消费当前 MMIO 契约”的最小驱动层。当前 guest 平台层已经形成以下稳定消费边界：
+
+- guest kernel 基础设施已拆出 `console` / `storage` / `timer` / `trap` / `memory` / `pmm` / `vm` 等最小模块，并通过统一 trap dispatch、注册式 interrupt/exception handler 和 VM-owned page-fault policy/handling 路径，把 supervisor external interrupt、supervisor timer interrupt、demand-mapped fault 与可恢复 page fault 收口到同一套基础设施。
+- 最小 guest runtime 已经接通 early bump allocator、bitmap-backed PMM、guest-side Sv39 page-table builder、`satp` 切换、fault-range-backed page-fault handling、recoverable page-fault policy registration、`vm_map_range` / `vm_unmap_page` 语义、本地 TLB 一致性维护合同，以及当前 user / kernel 地址窗口 helper、`sstatus.SUM` 驱动的 supervisor-side user-page 访问验证和第一批 kernel/user split helper。
+- guest `storage.c` 当前把 storage 消费路径拆成两层：`storage_read_info()` / `storage_probe()` 负责 metadata / readiness，`storage_status()` / `storage_error()` / `storage_clear_error()` / `storage_read_block_with_count()` 负责最小错误合同消费。
+- 独立 `kernel_alpha_demo` 已消费这套合同完成 storage metadata / readiness probe 与 block `LBA 0` 读取。
+- 独立 `kernel_alpha_storage_no_media_demo`、`kernel_alpha_storage_not_ready_demo`、`kernel_alpha_storage_bad_magic_demo`、`kernel_alpha_storage_bad_block_count_demo`、`kernel_alpha_storage_lba_range_demo` 和 `kernel_alpha_storage_bad_command_demo` 已分别覆盖 `NO_MEDIA`、`NOT_READY`、bad-magic probe-fail、`BAD_BLOCK_COUNT`、`LBA_RANGE` 和 `BAD_COMMAND` 这几条 storage 负向合同。
+- 独立 `kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 则继续覆盖 non-storage device readiness timeout / panic 合同。
+
+当前这些能力已经足以支撑 `phase1-stable` 的首次小型 OS / kernel bring-up；后续若继续扩 guest VM / runtime，应把它视为 post-Phase1 hardening，而不是回退当前合同边界。
+
+当前至少有 3 类消费方：
 
 - 汇编 smoke coverage 见 [supervisor_platform_smoke.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm/supervisor_platform_smoke.S)
 - 最小 C-based supervisor runtime/demo 见 [start.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/start.S) 和 [main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/main.c)
-- 独立 kernel alpha bring-up / negative demos 见 [main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/main.c)、[fault_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/fault_main.c)、[storage_no_media_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_no_media_main.c)、[storage_bad_block_count_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_block_count_main.c)、[storage_lba_range_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_lba_range_main.c) 和 [storage_bad_command_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_command_main.c)
+- 独立 kernel alpha bring-up / negative demos 见 [main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/main.c)、[fault_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/fault_main.c)、[storage_no_media_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_no_media_main.c)、[storage_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_not_ready_main.c)、[storage_bad_magic_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_magic_main.c)、[storage_bad_block_count_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_block_count_main.c)、[storage_lba_range_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_lba_range_main.c)、[storage_bad_command_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_command_main.c)、[plic_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/plic_not_ready_main.c) 和 [timer_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/timer_not_ready_main.c)

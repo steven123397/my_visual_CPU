@@ -1,4 +1,7 @@
-# 《计算机系统结构》项目制教学改革方案(初稿) 
+# 《计算机系统结构》项目制教学改革方案（初稿）
+
+> 背景说明：本文是项目最初的课程背景材料，不代表当前实现状态。当前仓库进展、冻结基线和下一步工作请以 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)、[AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/AGENTS.md) 与 [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md) 为准。
+
 ## 一、总体思路 
 • 《计算机系统结构》：造一台 “虚拟计算机” 
 以指令集架构 + CPU 微结构 + 硬件抽象为核心，面向 “硬件设计者” 视角。使用高级编程语言（C/C++、Rust等），以指令集模拟器为核心目标，完成 CPU、指令、内存、中断、外设的模拟实现。支持AI辅助。 

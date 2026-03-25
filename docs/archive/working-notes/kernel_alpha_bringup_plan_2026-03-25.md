@@ -8,7 +8,7 @@
 
 - [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
 
-因此这里不再维护实时状态，只保留少量历史脉络，避免主状态文档重新膨胀成执行流水账。
+因此这里不再维护实时状态，只保留少量历史脉络，避免主状态文档重新膨胀成执行流水账。下文里的“1 条正向 + 6 条负向”等描述，只反映归档当时的中间节点，不代表当前总数。
 
 ## 简要实现过程
 

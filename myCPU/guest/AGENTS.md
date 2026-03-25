@@ -27,6 +27,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - delegated timer / external interrupt return
 - 单用户生命周期和清理 smoke
 - 独立 kernel alpha 的正向 bring-up 与九条负向回归
+- 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 guest runtime 调整默认按 post-Phase1 hardening 理解。
 
 ## 分层边界
 
@@ -256,7 +257,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
-2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` / `kernel_alpha_storage_not_ready_demo` / `kernel_alpha_storage_bad_magic_demo` / `kernel_alpha_storage_bad_block_count_demo` / `kernel_alpha_storage_lba_range_demo` / `kernel_alpha_storage_bad_command_demo` / `kernel_alpha_plic_not_ready_demo` / `kernel_alpha_timer_not_ready_demo` 基线上继续补更多 fault / panic / device readiness，但公共 bring-up 编排继续收敛在 `kernel_alpha/common.c` 和 `kernel/supervisor_runtime.c`，不要让重复骨架重新散回各入口。
+2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` / `kernel_alpha_storage_not_ready_demo` / `kernel_alpha_storage_bad_magic_demo` / `kernel_alpha_storage_bad_block_count_demo` / `kernel_alpha_storage_lba_range_demo` / `kernel_alpha_storage_bad_command_demo` / `kernel_alpha_plic_not_ready_demo` / `kernel_alpha_timer_not_ready_demo` 基线上继续补更多 fault / panic / device readiness，但把它们视为 `phase1-stable` 之后的 hardening；公共 bring-up 编排继续收敛在 `kernel_alpha/common.c` 和 `kernel/supervisor_runtime.c`，不要让重复骨架重新散回各入口。
 3. 守住 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) / [kernel/vm_address_space.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_address_space.c) / [kernel/vm_process.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_process.c) / [kernel/vm_object.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_object.c) / [kernel/vm_fault.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_fault.c) 的边界，不要重新耦合。
 4. 在 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 与 [kernel/trap_dispatch.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap_dispatch.c) 的边界上继续保持 lifecycle / dispatch 分离，不要回退。
 5. 继续补更多 user interrupt / trap coverage。

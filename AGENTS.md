@@ -67,6 +67,7 @@
 - timer / external / page-fault / user-`ecall` smoke 路径。
 - 独立 kernel alpha 的 boot / PMM / Sv39 / external interrupt / timer interrupt / storage readiness probe / storage read 正向路径。
 - 独立 kernel alpha 的 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage not-ready、storage bad-magic、storage bad-block-count、storage LBA-range 与 storage bad-command 九条负向路径。
+- 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 guest/runtime 收口默认按 post-Phase1 hardening 理解。
 
 最近一轮关键历史节点只保留以下几项：
 
@@ -143,6 +144,11 @@
 
 如果改动主要集中在 guest runtime / demo bring-up，还应额外关注：
 
+- `cd myCPU && make test-unit-supervisor_runtime`
+- `cd myCPU && make test-unit-kernel_runtime`
+- `cd myCPU && make test-unit-kernel_alpha_common`
+- `cd myCPU && make test-unit-kernel_alpha_interrupt`
+- `cd myCPU && make test-unit-kernel_alpha_storage`
 - `cd myCPU && make test-guest-supervisor_demo`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
