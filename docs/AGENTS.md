@@ -42,6 +42,8 @@
   项目背景和原始目标说明。
 - [design/cpp_refactor_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/cpp_refactor_plan.md)
   解释为什么要做当前这轮 C++ 结构重构，以及希望得到的模块边界。
+- [design/pipeline_integration_prep.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_integration_prep.md)
+  记录 `phase1-stable` 冻结后，如何把后续拿到的旧基线流水线代码接回当前主线。
 - [contracts/platform_mmio_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/contracts/platform_mmio_contract.md)
   当前共享 MMIO 平台契约，属于 guest / simulator 共同依赖的实现边界文档。
 - [status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
