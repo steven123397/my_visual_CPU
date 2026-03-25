@@ -10,6 +10,12 @@
 - 可以对现有 asm、guest、`kernel_alpha` demo 做可视化单步演示
 - 不扩大为一个新的通用调试器项目
 
+当前状态补充：
+
+- 本文档对应的第二轮 `debug/frontend` 接入已经完成。
+- 当前主线已经具备 `--debug-cli`、本地 Node 调试服务、浏览器前端演示，以及对应的 Node 测试门禁。
+- 当前运行与验证方式以 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 和状态文档为准。
+
 ## 背景
 
 截至 `2026-03-25`，当前主线已经具备：

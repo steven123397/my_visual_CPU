@@ -246,9 +246,10 @@
 
 ## 下一步
 
-1. 继续守住 `guest/kernel/vm.c` / `guest/kernel/vm_address_space.c` / `guest/kernel/vm_process.c` / `guest/kernel/vm_object.c` / `guest/kernel/vm_fault.c` 的边界，避免后续修改重新耦合。
-2. 继续守住 `guest/kernel/trap.c` 与 `guest/kernel/trap_dispatch.c` 的 lifecycle / dispatch 边界，避免后续修改重新耦合。
-3. 在不打破 reference path 简洁性的前提下，把剩余 device readiness / fault / panic / runtime refinement 继续当作 post-Phase1 hardening，而不再视为首次小型 OS / kernel bring-up 的基础阻塞项。
+1. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上。
+2. 继续守住 `guest/kernel/vm.c` / `guest/kernel/vm_address_space.c` / `guest/kernel/vm_process.c` / `guest/kernel/vm_object.c` / `guest/kernel/vm_fault.c` 的边界，避免后续修改重新耦合。
+3. 继续守住 `guest/kernel/trap.c` 与 `guest/kernel/trap_dispatch.c` 的 lifecycle / dispatch 边界，避免后续修改重新耦合。
+4. 在不打破 reference path 简洁性的前提下，把剩余 device readiness / fault / panic / runtime refinement 继续当作 post-Phase1 hardening，而不再视为首次小型 OS / kernel bring-up 的基础阻塞项。
 
 ## 验证基线
 

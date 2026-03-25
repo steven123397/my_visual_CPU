@@ -116,6 +116,7 @@
 
 新对话如果要继续推进实现，建议优先参考：
 
+- [current_mainline_status_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/current_mainline_status_2026-03-25.md)
 - [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
 - [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
 - [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)

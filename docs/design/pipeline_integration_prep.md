@@ -6,6 +6,13 @@
 
 它不是实现计划的执行流水账，而是一个长期有效的集成准备说明。
 
+当前状态补充：
+
+- 本文档描述的准备阶段已经完成。
+- `pipeline core` 的正式接入结果见 [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)。
+- `debug/frontend` 的第二轮接入结果见 [debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)。
+- 下文中的“后续接回”与类似未来时态，均按集成前的准备阶段语境理解。
+
 ## 当前冻结基线
 
 - 稳定 tag：`phase1-stable`

@@ -11,6 +11,13 @@
 - `pipeline` 后端在当前阶段的正式门禁是什么
 - 如何在不破坏 `phase1-stable` 基线的前提下，把 `--backend pipeline` 正式接入
 
+当前状态补充：
+
+- 本文档对应的第一轮 `pipeline core` 集成已经完成。
+- 当前主线已经在此基础上继续完成了第二轮 `debug/frontend` 接入。
+- 第二轮设计见 [debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)。
+- 下文中的“本轮目标/非目标”仅指第一轮 `pipeline core` 集成语境，不代表当前主线的全部已接入范围。
+
 ## 背景
 
 截至 `2026-03-25`，当前主线 `main` 位于提交 `14d0c6c`，其冻结的 Phase 1 基线为 tag `phase1-stable`（提交 `283aee6`）。

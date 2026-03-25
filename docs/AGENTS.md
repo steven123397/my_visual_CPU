@@ -40,14 +40,16 @@
 
 - [background/request.md](/home/liangjiaqi/projects/my_visual_CPU/docs/background/request.md)
   项目背景和原始目标说明。
+- [status/current_mainline_status_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/current_mainline_status_2026-03-25.md)
+  记录 `phase1-stable` 冻结后、`pipeline` 与 `debug/frontend` 已接入之后，当前主线任务切分、Phase 2 当前安排和下一轮实现入口。
 - [design/cpp_refactor_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/cpp_refactor_plan.md)
   解释为什么要做当前这轮 C++ 结构重构，以及希望得到的模块边界。
 - [design/pipeline_integration_prep.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_integration_prep.md)
-  记录 `phase1-stable` 冻结后，如何把后续拿到的旧基线流水线代码接回当前主线。
+  记录 `phase1-stable` 冻结后，为旧基线流水线代码接回主线所做的准备边界；当前已完成。
 - [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)
-  记录当前这一轮如何只把 Phase 2 pipeline core 重接到主线，同时排除 `debug/frontend`。
+  记录第一轮 `pipeline core` 接回主线的设计与结果；当前已完成。
 - [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
-  记录第二轮如何把最小 `debug_session/protocol` 与本地前端教学演示链路接回当前主线。
+  记录第二轮 `debug_session/protocol` 与本地前端教学演示链路接回主线的设计与结果；当前已完成。
 - [contracts/platform_mmio_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/contracts/platform_mmio_contract.md)
   当前共享 MMIO 平台契约，属于 guest / simulator 共同依赖的实现边界文档。
 - [status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
@@ -57,7 +59,7 @@
 - [templates/status_doc_template.md](/home/liangjiaqi/projects/my_visual_CPU/docs/templates/status_doc_template.md)
   未来状态类文档的统一模板；新增状态文档默认优先按这个结构编写。
 - [archive/working-notes](/home/liangjiaqi/projects/my_visual_CPU/docs/archive/working-notes)
-  已完成工作的实现过程记录，仅作归档留存，不作为主文档入口。
+  已完成工作的实现过程记录，仅作历史留档，不作为主文档入口。
 
 ## 文档维护规则
 
@@ -67,6 +69,7 @@
 - README 要持续可读，尤其 guest 相关描述保持概览化，不要写成长串内部细节。
 - 状态类文档统一放在 `docs/status/`，优先保留当前状态、仍然有效的风险和少量关键历史节点，不要长期堆积已完成 checklist。
 - 新增状态类文档时，默认先套用 [templates/status_doc_template.md](/home/liangjiaqi/projects/my_visual_CPU/docs/templates/status_doc_template.md)。
+- 已完成但仍保留的设计/计划文档，要在开头明确“已完成/历史语境”，避免旧的阶段性目标被误读为当前待办。
 - 已经从“执行中计划”转成“持续状态跟踪”的文档，应主动收口成模板化结构，而不是继续累积历史步骤。
 - 设计、计划、执行记录这类过程性文档在任务完成后应移入 `docs/archive/`，必要信息收口进正式状态文档。
 - 报告和总结文档需要清楚区分：

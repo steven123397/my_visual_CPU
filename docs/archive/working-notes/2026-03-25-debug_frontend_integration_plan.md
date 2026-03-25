@@ -1,5 +1,7 @@
 # Debug / Frontend 集成实现计划
 
+> 归档说明：本文档对应的接入工作已经完成，保留为历史计划记录；当前结果以 [debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)、[readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 和相关状态文档为准。下文中的“本轮”“待办”等表述均按当时计划语境理解，不代表当前状态。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 在不改变当前 `functional` / `pipeline` 执行语义的前提下，把最小 `debug_session/protocol` 与前端教学演示链路正式接入主线。

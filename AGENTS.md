@@ -17,19 +17,21 @@
 
 当前定位：
 
-- 已经是可运行的 functional simulator prototype，不是纯设计稿。
-- 当前已达成 Phase 1 核心 bring-up 目标，正处于 Phase 1 收尾/稳定化阶段。
+- 已经是一个已可运行的模拟器原型，不是纯设计稿。
+- 当前已达成 Phase 1 核心 bring-up 目标，正处于 Phase 1 冻结后的稳定化阶段。
 - 正在同步推进一轮有明确结构收益的 C++ 重构。
 
 长期目标：
 
 - 先把模拟器扩展到足以支撑一个自制的小型 OS / kernel bring-up。
-- 之后再进入 pipeline、OoO、cache、multicore 等更复杂模型。
+- 在保持统一 ISA 语义来源的前提下，继续深化 pipeline，并逐步进入 OoO、cache、multicore 等更复杂模型。
 
 ## 仓库结构
 
 - [myCPU](/home/liangjiaqi/projects/my_visual_CPU/myCPU)
   核心模拟器代码、guest runtime、测试和构建脚本。
+- [frontend](/home/liangjiaqi/projects/my_visual_CPU/frontend)
+  本地调试服务、浏览器前端和 Node 测试。
 - [docs](/home/liangjiaqi/projects/my_visual_CPU/docs)
   规划、契约、审查和状态类文档。
 - [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
@@ -49,6 +51,7 @@
 当前仓库已经具备以下高层能力：
 
 - RV64I / RV64M 参考执行路径。
+- `functional` / `pipeline` 两种执行后端。
 - ELF64 与 flat binary 加载。
 - 基础 CSR 访问与 M-mode trap。
 - 初步 `M/S/U` 特权路径。
@@ -56,6 +59,7 @@
 - Sv39、最小 TLB、`sfence.vma`。
 - 一套最小 guest supervisor runtime。
 - 一条独立的 `kernel_alpha` bring-up 路径及其正负回归。
+- 一条本地 `debug_session/protocol + frontend` 教学演示链路。
 
 当前 guest 侧已经打通：
 
@@ -98,13 +102,22 @@
 
 当前阶段的主线工作是：
 
-- 保持 simulator reference path 的 correctness 与可观察性。
-- 把独立 `kernel_alpha` 基线维持在可回归的 Phase 1 完成态，并继续做必要 hardening。
+- 继续稳住 simulator reference path 的 correctness 与可观察性。
+- 继续扩充非法编码、MMIO 边界和 ELF 段布局回归。
+- 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做必要 hardening。
 - 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，作为 post-Phase1 结构优化。
-- 在不破坏 reference path 清晰性的前提下，为 Phase 2 准备更稳的语义边界与验证基线。
+- 在不破坏 reference path 清晰性的前提下，继续稳住已接入 Phase 2 能力的语义边界与验证基线。
+- 保持 `pipeline` 与本地调试前端可运行、可验证，但不让它们反向污染 reference path。
+
+当前对 Phase 2 的工程安排是：
+
+- `pipeline core` 与 `debug/frontend` 的正式接入工作已经完成，不再把它们当作待合入功能。
+- 近期先不继续扩功能面，而是优先明确 Phase 2 出门标准，并补强 `pipeline` 的 correctness / differential / robustness 验证。
+- `debug/frontend` 继续限定在“教学演示可用”的最小范围，重点放在快照稳定性、测试门禁和对现有 demo 的可用性维护。
 
 相关状态文档见：
 
+- [docs/status/current_mainline_status_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/current_mainline_status_2026-03-25.md)
 - [docs/status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
 - [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
 

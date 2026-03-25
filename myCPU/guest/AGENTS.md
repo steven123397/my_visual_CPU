@@ -257,10 +257,11 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
-2. 在 `kernel_alpha_demo` / `kernel_alpha_fault_demo` / `kernel_alpha_storage_no_media_demo` / `kernel_alpha_storage_not_ready_demo` / `kernel_alpha_storage_bad_magic_demo` / `kernel_alpha_storage_bad_block_count_demo` / `kernel_alpha_storage_lba_range_demo` / `kernel_alpha_storage_bad_command_demo` / `kernel_alpha_plic_not_ready_demo` / `kernel_alpha_timer_not_ready_demo` 基线上继续补更多 fault / panic / device readiness，但把它们视为 `phase1-stable` 之后的 hardening；公共 bring-up 编排继续收敛在 `kernel_alpha/common.c` 和 `kernel/supervisor_runtime.c`，不要让重复骨架重新散回各入口。
+2. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上；公共 bring-up 编排继续收敛在 `kernel_alpha/common.c` 和 `kernel/supervisor_runtime.c`，不要让重复骨架重新散回各入口。
 3. 守住 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) / [kernel/vm_address_space.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_address_space.c) / [kernel/vm_process.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_process.c) / [kernel/vm_object.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_object.c) / [kernel/vm_fault.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_fault.c) 的边界，不要重新耦合。
 4. 在 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 与 [kernel/trap_dispatch.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap_dispatch.c) 的边界上继续保持 lifecycle / dispatch 分离，不要回退。
-5. 继续补更多 user interrupt / trap coverage。
+5. 继续沿着 process / runtime refinement 与大文件拆分的方向收口 `kernel_runtime`、`kernel_bringup` 和相关基础设施，而不是再把逻辑重新堆回 demo 入口。
+6. 继续补更多 user interrupt / trap coverage，但不要把这条线和 Phase 2 backend 稳定化混在一起。
 
 ## 验证要求
 

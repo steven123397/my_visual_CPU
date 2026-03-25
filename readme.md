@@ -1,32 +1,27 @@
 # myCPU — RISC-V 模拟器
 
-当前处于从 C 原型向模块化 C++ 架构迁移的早期阶段。现有功能路径仍以原始参考语义为主，但 Phase 1 的核心 OS bring-up 目标已经达成：裸机程序执行、UART/CLINT/PLIC/MMIO block storage 平台、M/S/U 特权路径、Sv39 虚拟内存，以及一个最小 guest supervisor runtime 都已接通。当前冻结稳定基线已经打为 tag `phase1-stable`（`283aee6`）；后续 guest/runtime 调整默认视为 post-Phase1 hardening。最近一轮 simulator-side correctness / loader / bus-device 守边界修复也已经落地：非法整数保留编码会稳定触发 `illegal instruction`，`DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 语义返回，纯 BSS `PT_LOAD` 段会正确 `zero-fill`，第一轮 MMIO 非法访问宽度与设备区间重叠防御也已接通。guest 侧目前已经打通 early allocator、最小 PMM、页表与地址空间、trap/runtime、单用户任务封装，以及两条不同职责的 bring-up 路径：`guest_supervisor_demo` 负责 U-mode/runtime smoke，独立 `kernel_alpha_demo` 负责第一次真正的小 kernel alpha bring-up 基线；其中 `supervisor_demo_smoke` 已经收口为单入口 demo runner，`user_program_smoke` 也进一步收成阶段化 lifecycle / prepare / enter helper，而 `kernel_alpha` 路径则继续补齐了 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage not-ready、storage bad-magic、storage `BAD_BLOCK_COUNT`、storage `LBA_RANGE` 和 storage `BAD_COMMAND` 这 9 条独立负向回归。
+当前仓库已经是一个已可运行的模拟器原型，而不是纯设计稿。当前主线已经达成 `phase1-stable`（`283aee6`）这一 Phase 1 冻结基线：具备 RV64I / RV64M 参考执行路径、UART / CLINT / PLIC / MMIO storage 平台、基础 `M/S/U` 特权路径、Sv39，以及一套最小 guest supervisor runtime。此后主线又继续接入了 `pipeline` 执行后端、本地 `debug_session/protocol` 和浏览器前端教学演示链路。
 
 ## 目录结构
 
-```
-myCPU/
+```text
+my_visual_CPU/
 ├── frontend/           # 本地前端调试器与 Node 调试服务
-├── guest/              # 最小 guest supervisor runtime / 平台层 / demo
-├── src/
-│   ├── main.cpp        # C++ 入口，CLI 参数、backend 选择与 Machine 启动
-│   ├── cpu.cpp/h       # CPU 外观接口 + functional 参考执行路径
-│   ├── memory.c/h      # 主内存 backing 与底层访存辅助
-│   ├── decode.c/h      # 指令解码
-│   ├── debug/          # DebugSnapshot / DebugSession / --debug-cli
-│   ├── trap.cpp/h      # TrapController：异常/中断路由与返回
-│   ├── arch/           # CoreState / CsrFile 状态边界
-│   ├── exec/           # backend 骨架 + pipeline core + 指令语义分块
-│   ├── isa/            # 共享 ISA 语义层（InstructionSemantics / Effects / ExecutionContext）
-│   ├── platform/       # C++ Machine 骨架与平台地址映射
-│   ├── mem/            # C++ Ram/Bus/AddressSpace 边界
-│   ├── devices/        # UART / CLINT / PLIC / SimpleStorage 设备对象
-│   ├── loader/         # C++ ELF / flat binary 镜像装载边界
-│   └── ...
-├── tests/asm/          # 汇编测试程序与平台 smoke coverage
-├── tests/unit/         # host-side 单元回归（loader / bus-device / guest runtime helper 合同）
-├── docs/               # 规划与平台契约文档
-└── Makefile
+├── myCPU/
+│   ├── guest/          # 最小 guest supervisor runtime / 平台层 / demo
+│   ├── src/
+│   │   ├── main.cpp    # C++ 入口，CLI 参数、backend 选择与 Machine 启动
+│   │   ├── cpu.cpp/h   # CPU 外观接口 + functional 参考执行路径
+│   │   ├── decode.c/h  # 指令解码
+│   │   ├── debug/      # DebugSnapshot / DebugSession / --debug-cli
+│   │   ├── exec/       # backend 骨架 + pipeline core + 指令语义分块
+│   │   ├── mem/        # C++ Ram/Bus/AddressSpace 边界
+│   │   ├── devices/    # UART / CLINT / PLIC / SimpleStorage
+│   │   └── ...
+│   ├── tests/asm/      # 汇编测试程序与平台 smoke coverage
+│   ├── tests/unit/     # host-side 单元回归（loader / bus-device / guest runtime helper 合同）
+│   └── Makefile
+└── docs/               # 规划与平台契约文档
 ```
 
 ## 模块关系与运行流程
@@ -138,48 +133,24 @@ http://127.0.0.1:4173
 
 ```bash
 sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
+
+cd myCPU
 make test
-
-# 运行 pipeline 完整门禁
 make test-pipeline
-
-# 运行前端 Node 测试
-cd ../frontend && node --test
-
-# 只跑独立 kernel alpha bring-up 回归
 make test-guest-kernel_alpha_demo
-
-# 只跑独立 kernel alpha fault/panic 负向回归
 make test-guest-kernel_alpha_fault_demo
 
-# 只跑独立 kernel alpha storage no-media 负向回归
-make test-guest-kernel_alpha_storage_no_media_demo
-
-# 只跑独立 kernel alpha storage not-ready 负向回归
-make test-guest-kernel_alpha_storage_not_ready_demo
-
-# 只跑独立 kernel alpha storage bad-magic 负向回归
-make test-guest-kernel_alpha_storage_bad_magic_demo
-
-# 只跑独立 kernel alpha storage bad-block-count 负向回归
-make test-guest-kernel_alpha_storage_bad_block_count_demo
-
-# 只跑独立 kernel alpha storage LBA-range 负向回归
-make test-guest-kernel_alpha_storage_lba_range_demo
-
-# 只跑独立 kernel alpha storage bad-command 负向回归
-make test-guest-kernel_alpha_storage_bad_command_demo
-
-# 只跑独立 kernel alpha PLIC not-ready 负向回归
-make test-guest-kernel_alpha_plic_not_ready_demo
-
-# 只跑独立 kernel alpha timer not-ready 负向回归
-make test-guest-kernel_alpha_timer_not_ready_demo
+cd ../frontend
+node --test
 ```
 
-`make test` 仍然是默认 `functional` reference path 的主回归，会构建汇编样例、host-side 单元测试，以及 `guest_supervisor_demo`、`kernel_alpha_demo`、`kernel_alpha_fault_demo`、`kernel_alpha_storage_no_media_demo`、`kernel_alpha_storage_not_ready_demo`、`kernel_alpha_storage_bad_magic_demo`、`kernel_alpha_storage_bad_block_count_demo`、`kernel_alpha_storage_lba_range_demo`、`kernel_alpha_storage_bad_command_demo`、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这 11 条 guest 回归路径，并校验 UART 输出或单元断言结果是否符合预期；单个样例异常卡死时会超时失败。当前回归范围覆盖基础 ISA 指令族、非法整数编码与 `RV64M` 溢出边界、PLIC/CLINT/storage 等平台路径、ELF 纯 BSS `PT_LOAD` 装载、bus/device 守边界、Sv39/TLB 行为，以及 guest supervisor bring-up 中的 VM、trap/runtime、U-mode 进入/返回、page fault 恢复与生命周期清理 smoke，外加独立 kernel alpha bring-up 中的 boot、PMM、自建页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 timer interrupt、一次 storage readiness probe、一次最小块设备读取，以及 9 条独立负向路径：未映射 CLINT MMIO 访问触发的 fault / panic、未安排第一次 timer delivery 时的 readiness timeout / panic、PLIC 已映射但未初始化时的 readiness timeout / panic、storage 未附加镜像时的 metadata / `NO_MEDIA` error 合同、storage 已附加但 `READY` 缺失时的 readiness / `NOT_READY` / clear-error 合同、storage `MAGIC` 元数据损坏时的 probe-fail / data-path-still-live 合同、`BLOCK_COUNT != 1` 时的 `BAD_BLOCK_COUNT` / clear-error 合同、`LBA == capacity_blocks` 时的 `LBA_RANGE` / clear-error 合同，以及非法 `COMMAND` 值时的 `BAD_COMMAND` / clear-error 合同。host-side 单元侧除 ELF / bus-device / storage readiness 外，也新增了 `supervisor_runtime`、`kernel_runtime`、`kernel_alpha/common.c` bring-up phase helper、`kernel_alpha/interrupt_contract.c` non-storage 合同 helper，以及 `kernel_alpha/storage_contract.c` storage 合同 helper 回归。
+`make test` 是默认 `functional` reference path 的主回归，覆盖 asm、host-side unit、`guest_supervisor_demo`，以及 `kernel_alpha` 正向与全部负向 demo。
 
-`make test-pipeline` 是当前 `pipeline` backend 的完整门禁。它会复用同一批 `tests/asm` 样例跑 `--backend pipeline`，同时覆盖 `pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke`、`--backend pipeline` CLI smoke，以及 `guest_supervisor_demo`、`kernel_alpha_demo` 和现有 `kernel_alpha` 负向回归在 `pipeline` 下的输出一致性。`make test` 仍然是默认 `functional` reference path 的主回归；`make test-pipeline` 则负责证明第二种执行模型在不改 guest 合同的前提下也能守住同一套可观察行为。`cd frontend && node --test` 则负责守住本地调试服务、测试清单和前端纯状态逻辑。
+`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性。
+
+`cd frontend && node --test` 负责守住本地调试服务、测试清单和前端纯状态逻辑。
+
+其余 `kernel_alpha` storage / PLIC / timer 负向 demo 也都有独立测试目标；README 只保留常用入口，具体名称以 [myCPU/Makefile](myCPU/Makefile) 为准。
 
 ## 内存映射
 
@@ -423,6 +394,6 @@ make test-guest-kernel_alpha_timer_not_ready_demo
 
 ## 当前项目定位
 
-这个项目当前已经是一个可运行的 RISC-V 裸机模拟器雏形，不只是代码框架。它适合用于理解 ISA、寄存器、取指译码执行流程、异常中断和 MMIO 的基本机制，也能运行简单的汇编裸机程序。
+这个项目当前已经是一个已可运行的模拟器原型，不只是代码框架。它适合用于理解 ISA、寄存器、取指译码执行流程、异常中断和 MMIO 的基本机制，也能支撑小型 OS / kernel bring-up 的前期工作。
 
-不过它还不是完整系统平台。当前实现仍是单核、顺序参考执行路径，还没有压缩指令 `C` 扩展、完整 privileged CSR 集、真实磁盘协议或 OS 级页分配/页表管理。因此更准确地说，它现在是一个已经能支撑 OS bring-up 前期工作的功能模拟器，并且正在向更模块化的 C++/guest 双侧架构继续演进。
+不过它还不是完整系统平台。当前实现仍是单核、以 reference model 为中心，尚未覆盖压缩指令 `C` 扩展、完整 privileged CSR 集、真实磁盘协议或更复杂微架构模型。

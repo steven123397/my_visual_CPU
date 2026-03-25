@@ -1,10 +1,12 @@
 # Pipeline Core 主线集成实现计划
 
+> 归档说明：本文档对应的接入工作已经完成，保留为历史计划记录；当前结果以 [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)、[debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md) 和当前状态文档为准。下文中的“本轮”“不迁移”“待办”等表述均按当时计划语境理解，不代表当前状态。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 在不破坏当前 `phase1-stable` Phase 1 基线和 guest / `kernel_alpha` 回归的前提下，把你同学分支中的 Phase 2 pipeline core 重接到主线，并正式接入 `--backend pipeline`。
 
-**架构：** 先把 `Machine` 迁移到 `ExecutionBackend` 抽象，再接入共享语义层 `InstructionSemantics + InsnEffects + ExecutionContext`，随后把 `AddressSpace` 改成 result-based fault API，最后接入精确异常的 `PipelineBackend` 与 host-side pipeline 门禁。`functional` 继续作为默认 backend 和统一 ISA 语义真值来源，`debug/frontend` 本轮不迁移。
+**架构：** 先把 `Machine` 迁移到 `ExecutionBackend` 抽象，再接入共享语义层 `InstructionSemantics + InsnEffects + ExecutionContext`，随后把 `AddressSpace` 改成 result-based fault API，最后接入精确异常的 `PipelineBackend` 与 host-side pipeline 门禁。`functional` 继续作为默认 backend 和统一 ISA 语义真值来源；按当时计划语境，`debug/frontend` 留到后续单独一轮处理。
 
 **技术栈：** C11、C++17、GNU Make、RISC-V 交叉工具链（用于完整 `make test`）、host-side g++ smoke tests。
 
@@ -532,7 +534,7 @@
   - `--backend pipeline` 的使用方式
   - `test-pipeline` 的定位
 
-  如果需要，在状态文档中补一条“pipeline core 已接入、debug/frontend 未接”的当前状态。
+  如果需要，在状态文档中补一条“pipeline core 已接入、`debug/frontend` 留待下一轮”的当时阶段状态。
 
 - [ ] **步骤 2：运行最终验证**
 
