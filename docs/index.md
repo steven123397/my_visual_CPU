@@ -24,6 +24,8 @@
    理解第一轮 `pipeline core` 接回主线的设计与结果。
 10. [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
    理解第二轮 `debug_session/protocol` 与本地前端教学演示链路接回主线的设计与结果。
+11. [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
+   理解“前端桌面壳 + guest 串口交互内核”这一最小可交互 OS 的设计边界。
 
 ## 目录说明
 
