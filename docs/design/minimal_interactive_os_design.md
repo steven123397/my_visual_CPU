@@ -1,8 +1,8 @@
-# 最小可交互 OS 设计
+# 最小可交互 Monitor OS 设计
 
 ## 文档定位
 
-本文档用于说明如何在当前已可运行的模拟器原型上，沿现有 guest runtime、平台 MMIO 契约和 `debug/frontend` 链路，落地一条“前端桌面壳 + guest 串口交互内核”的最小可交互 OS 路线。
+本文档用于说明如何在当前已可运行的模拟器原型上，沿现有 guest runtime、平台 MMIO 契约和 `debug/frontend` 链路，落地一条“前端桌面壳 + guest 串口 monitor 内核”的最小可交互 OS 路线。
 
 本文档重点定义：
 
@@ -10,6 +10,7 @@
 - 目标与非目标
 - host / frontend / guest 三层的职责边界
 - 输入输出链路、最小交互合同和验证口径
+- 与 `kernel_alpha` 基线及 `Phase 3-A` 预测增强路线的分工边界
 
 本文档不承担实时进度更新。当前进展请写入对应 `status` 文档。
 
@@ -27,16 +28,17 @@
 
 这意味着“把一个最小内核跑起来”已经不是当前主问题。当前真正缺的，是一条面向使用者的最小交互闭环：guest 侧虽然已经有稳定的 UART 输出、trap、VM、timer、external interrupt 和 storage bring-up 基础，但还没有一条正式的 guest 可见输入路径；现有前端本质上仍是只读调试器，而不是一个承载 guest 交互面的终端式桌面壳。
 
-如果直接把目标抬到“guest 自己驱动的图形桌面”，就会立刻引入 framebuffer / 鼠标设备 / 指针事件 / compositing / widget hit-test 等新虚拟硬件与 guest 图形子系统。这已经超出“最小可交互 OS”范围，也会把当前主线从 reference path hardening 和结构收口拉回大范围扩功能。因此，这份设计明确收口到更小的切片：前端负责桌面壳和窗口交互，guest 只负责一个 `S-mode` 串口交互内核。
+如果直接把目标抬到“guest 自己驱动的图形桌面”，就会立刻引入 framebuffer / 鼠标设备 / 指针事件 / compositing / widget hit-test 等新虚拟硬件与 guest 图形子系统。这已经超出“最小可交互 OS”范围，也会把当前主线从 reference path hardening 和结构收口拉回大范围扩功能。因此，这份设计明确收口到更小的切片：前端负责桌面壳和窗口交互，guest 只负责一个 `S-mode` 串口 monitor 内核。
 
 ## 目标
 
-- 在现有 guest 基础设施之上，新增一条独立的 `S-mode` 串口交互内核路径，而不是继续膨胀 `kernel_alpha`。
+- 在现有 guest 基础设施之上，新增一条独立的 `S-mode` 串口 monitor 路径，而不是继续膨胀 `kernel_alpha`。
 - 让浏览器前端把 guest 的交互面包装成一个“桌面里的终端窗口”，支持鼠标点击聚焦、运行控制和窗口级操作。
 - 打通一条从键盘到 guest 的正式输入链路：`browser -> frontend server -> simulator -> UART RX -> guest console`。
-- 让 guest 提供最小命令循环，包括 prompt、回显、最小行编辑和少量内建命令。
+- 让 guest 提供一个激进型串口 monitor：包含 prompt、回显、最小行编辑，以及面向 bring-up / 调试的内建命令。
 - 继续复用现有 `kernel_bringup`、`kernel_runtime`、`trap`、`vm`、`console`、`timer` 等共享基础设施，不为这个目标重新起一套 runtime。
 - 保持当前 `functional` reference path、共享 ISA 语义层和 `pipeline` backend 的边界不变；输入输出能力应是平台层能力，而不是某个 backend 的私有行为。
+- 把 `kernel_alpha` 保持为 Phase 1 bring-up / hardening 冻结基线，而不是把它演化成最终可交互 OS 入口。
 
 ## 非目标
 
@@ -46,6 +48,7 @@
 - 不在首版中引入文件系统、持久化写盘、网络栈、窗口管理器或图形组件系统。
 - 不把现有前端扩成通用调试器 / IDE / 任意文件终端宿主。
 - 不为了这条交互路径重做 `Machine`、`ExecutionBackend`、`kernel_alpha` 或既有 MMIO 契约。
+- 不把 monitor 命令集当成长期稳定 ABI；首版优先服务 bring-up、调试和教学演示。
 
 ## 约束与边界
 
@@ -54,8 +57,10 @@
 - 鼠标点击只影响前端桌面壳的按钮、窗口焦点和布局状态，不透传给 guest。
 - 首版交互只保证可见 ASCII、`Enter`、`Backspace` 这组最小键集；不承诺方向键、历史、补全、ANSI 终端控制序列或 IME。
 - 首版 guest 输入路径优先采用 polling 式 UART RX 消费，不把“先上接收中断”当成前置条件。
-- 新的交互式 OS 应作为新的 guest demo / 入口存在，`kernel_alpha` 继续保持“第一次真正的小 kernel alpha bring-up 基线 + hardening 回归”的职责，不转型成长期 shell OS。
+- 新的交互式 OS 应作为新的 guest demo / 入口存在，`kernel_alpha` 继续保持“第一次真正的小 kernel alpha bring-up 基线 + hardening 回归”的职责，不转型成长期 monitor OS。
 - `DebugSnapshot` 继续保持稳定、有限的快照语义；终端滚动缓冲不应通过把整段文本无限塞进 snapshot 来实现。
+- monitor 命令可以偏激进，但默认视为开发期调试接口；允许后续因实现和验证需要调整命令名、输出和参数格式。
+- 这条设计线默认拥有 `frontend` 的终端 / 桌面壳层；与 `Phase 3-A` 并行时，`Phase 3-A` 的可观察性优先收口在 snapshot / 协议，不直接主导前端 UI。
 
 ## 方案
 
@@ -72,16 +77,16 @@ browser
        -> Machine
             -> Uart16550 RX/TX
             -> functional / pipeline backend
-       -> guest interactive OS
+       -> guest interactive monitor OS
             -> kernel_bringup / kernel_runtime
-            -> console / shell loop
+            -> console / monitor loop
 ```
 
 第一层是 host / simulator 平台层。这里不新增图形设备，只在现有 `Uart16550` 上补最小可接收输入的 RX 路径，并为 host 提供显式的“注入输入字节流”入口。这个入口属于平台设备能力，不属于 `functional` 或 `pipeline` 私有逻辑。
 
 第二层是 `debug_session/protocol + frontend` 交互层。这里不把当前调试快照改造成无界终端日志，而是补一组最小终端 I/O 命令，由 Node 服务负责把浏览器键盘输入转成 UART RX 注入，把 guest 的 UART 输出增量同步到浏览器终端窗口。前端桌面壳负责窗口呈现、焦点和按钮行为；终端内容仍然是 guest 串口文本。
 
-第三层是 guest 侧最小交互内核。它复用现有 `kernel_bringup` / `kernel_runtime` / `console` / `trap` / `vm` 基础设施，新建独立的 `interactive_os` 入口和最小 shell 循环。目标是形成一条“能启动、能提示、能读键盘、能执行内建命令、能继续输出”的稳定 demo，而不是把当前 `kernel_alpha` 入口越改越大。
+第三层是 guest 侧最小交互 monitor 内核。它复用现有 `kernel_bringup` / `kernel_runtime` / `console` / `trap` / `vm` 基础设施，新建独立的 `interactive_os` 入口和最小 monitor 循环。目标是形成一条“能启动、能提示、能读键盘、能执行调试命令、能继续输出”的稳定 demo，而不是把当前 `kernel_alpha` 入口越改越大。
 
 ### 接口 / 数据 / 契约
 
@@ -131,17 +136,21 @@ browser
 
 这里最重要的边界是：鼠标点击只影响前端壳层状态，例如焦点、按钮、窗口显隐，不对应 guest 内核中的“点击事件”。guest 只看见串口输入流。
 
-#### 4. Guest shell 合同
+#### 4. Guest monitor 合同
 
-guest 侧收口为一个最小串口 shell：
+guest 侧收口为一个最小串口 monitor：
 
 - 启动后打印 boot 信息和 prompt；
 - 支持逐字符回显；
 - 至少支持 `Enter` 提交一行、`Backspace` 删除一个字符；
 - 使用固定长度的行缓冲，超长输入按明确策略处理；
-- 提供少量内建命令，例如 `help`、`echo`、`time`、`halt`。具体命令集合可在实现计划中再细化，但首版不追求丰富命令面。
+- 提供一组偏激进的内建命令，优先覆盖：
+  - 基础交互：`help`、`echo`、`time`、`uptime`、`halt`
+  - 内核观察：`regs`、`peek`、`pagewalk`、`pte dump`
+  - storage 只读探测：`disk info`、`disk read`
+- 首版命令集以开发期调试效率为目标，不承诺输出格式长期稳定；测试应更多约束关键语义片段，而不是把完整终端输出当作稳定 ABI。
 
-这条 shell 路径应理解为“内核自带的交互入口”，不是应用层。它不依赖用户态、可执行文件加载或文件系统。
+这条 monitor 路径应理解为“内核自带的交互入口”，不是应用层。它不依赖用户态、可执行文件加载或文件系统。
 
 ### 验证思路
 
@@ -161,7 +170,7 @@ guest 侧收口为一个最小串口 shell：
    - 加载镜像；
    - 注入一组固定命令；
    - 运行若干 step / cycle；
-   - 断言 prompt、回显和命令输出稳定可见。
+   - 断言 prompt、回显和关键命令语义稳定可见。
 
 4. frontend 层
    - `node --test` 至少守住：
@@ -182,10 +191,12 @@ guest 侧收口为一个最小串口 shell：
 
 ## 风险与取舍
 
-- 选择“前端桌面壳 + 串口交互内核”，意味着首版的“桌面感”来自前端呈现，而不是 guest 自己驱动图形硬件。这是有意取舍，用来换取更小范围和更快收口。
+- 选择“前端桌面壳 + 串口 monitor 内核”，意味着首版的“桌面感”来自前端呈现，而不是 guest 自己驱动图形硬件。这是有意取舍，用来换取更小范围和更快收口。
 - 选择 polling 式 UART RX，而不是首版就做 RX interrupt，意味着设备模型不够“完整”，但可以显著降低 guest trap / PLIC / 时序耦合复杂度。
 - 选择显式 `uart_input / uart_output` 命令，而不是把整段终端文本塞进 snapshot，意味着协议面会多一层，但能保持 `DebugSnapshot` 结构稳定、边界清晰。
-- 把交互式 OS 做成新的 guest 入口，而不是继续扩 `kernel_alpha`，会增加一个 demo 路径，但能避免 bring-up 基线和交互 shell 目标互相污染。
+- 把交互式 OS 做成新的 guest 入口，而不是继续扩 `kernel_alpha`，会增加一个 demo 路径，但能避免 bring-up 基线和交互 monitor 目标互相污染。
+- 把命令集定位为开发期调试接口，而不是长期稳定 ABI，能显著降低前期设计压力，但代价是后续若要把它转成正式用户界面，需要再做一次合同收口。
+- 由于 `frontend` ownership 默认归这条设计线，后续若与 `Phase 3-A` 并行推进，预测器的最小可观察性应优先通过 snapshot / 协议落地；否则会在终端桌面壳与 pipeline 可视化之间制造高冲突区。
 - 如果后续要走真正的 guest 图形桌面路线，应新开一份设计文档，单独定义显示设备、指针输入和 guest 图形层，不应在本设计上直接加码。
 
 ## 当前有效性说明

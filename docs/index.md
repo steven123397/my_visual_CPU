@@ -25,7 +25,9 @@
 10. [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
    理解第二轮 `debug_session/protocol` 与本地前端教学演示链路接回主线的设计与结果。
 11. [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
-   理解“前端桌面壳 + guest 串口交互内核”这一最小可交互 OS 的设计边界。
+   理解“前端桌面壳 + guest 串口 monitor 内核”这一最小可交互 OS 的设计边界。
+12. [design/phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md)
+   理解 `Phase 3-A` 以分支预测增强开启高级微架构工作的结构边界。
 
 ## 目录说明
 
