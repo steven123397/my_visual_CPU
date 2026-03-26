@@ -77,12 +77,16 @@
 - `DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 语义返回。
 - ELF / flat binary 加载。
 - 纯 BSS `PT_LOAD` zero-fill。
+- 更真实的 ELF 多 `PT_LOAD` / mixed data+BSS 布局，以及 ELF header / program-header malformed-input reject。
 - CSR 指令与基础访问控制。
+- CSR 非法访问矩阵，包括 M/S/U 跨级访问、只读 counter CSR 写保护，以及 `misa` 只读写保护。
 - M-mode trap / return。
 - 初步 `M/S/U` 特权流转。
 - `misa` 只读、`satp.MODE` WARL、`counteren`、Sv39、最小 TLB、`sfence.vma`。
 - UART / CLINT / PLIC / `SimpleStorage`。
 - bus / device 第一轮区间与访问宽度防御。
+- CPU 侧 MMIO 非法 offset / width 稳定触发 access-fault trap。
+- host-side MMIO guard 与 contract matrix。
 - `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 `pipeline` 的 asm / host / guest 门禁。
 - `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
@@ -96,12 +100,21 @@
   - `DIV/REM` 宿主未定义行为边界
   - ELF pure-BSS `PT_LOAD`
   - bus / device 第一轮边界防御
+- `2026-03-26` 已完成第一轮更系统的 Phase 1 hardening 回归扩充：
+  - `tests/asm/illegal_integer_encodings.S`
+  - `tests/asm/mmio_access_faults.S`
+  - `tests/asm/csr_illegal_matrix.S`
+  - `tests/unit/elf_loader_segments.cpp`
+  - `tests/unit/elf_loader_rejects.cpp`
+  - `tests/unit/elf_loader_header_rejects.cpp`
+  - `tests/unit/bus_device_guards.cpp`
+  - `tests/unit/mmio_contract_matrix.cpp`
 - 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 simulator/guest 改动默认应以此为 Phase 1 完成态参考点。
 
 ## 当前仍需关注的问题
 
 - [tests/asm](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm) 和 [tests/unit](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/unit)
-  非法编码矩阵、MMIO 非法偏移 / 宽度、更真实 ELF 段布局等鲁棒性回归仍可继续扩展。
+  非法编码、MMIO 非法偏移 / 宽度、ELF 段布局和 CSR / 特权非法访问回归已经完成第一轮系统扩充，但 `privilege / Sv39 / pipeline differential` 仍可继续补洞。
 - [src/devices/simple_storage.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices/simple_storage.cpp)
   当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
 - [guest/kernel/kernel_runtime.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_runtime.c)
@@ -120,10 +133,10 @@
 近期优先级建议如下：
 
 1. 继续稳住 simulator reference path 的 correctness 与可观察性。
-2. 在已修 correctness 基线之上，继续扩充非法编码、MMIO 边界和 ELF 段布局回归。
+2. 在已补第一轮 correctness hardening 矩阵的基础上，继续按合同补洞，而不是重复堆叠非法编码、MMIO 边界、ELF 段布局和 CSR / privilege 同类回归。
 3. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_not_ready_demo`、`guest_kernel_alpha_storage_bad_magic_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 守住 `phase1-stable` bring-up 基线，再把额外 readiness / panic 路径当作 post-Phase1 hardening 渐进扩充。
-4. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界。
-5. 当前对 Phase 2 的近期安排，不再是继续做“正式接入”，而是先明确出门标准，并继续补强 `pipeline` 的 correctness / differential / robustness 验证。
+4. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界，优先补 `privilege / Sv39` 和 `pipeline` 差分仍未成体系的空洞。
+5. 当前对 Phase 2 的近期安排，不再是继续做“正式接入”，而是先按 [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 明确出门标准，并继续补强 `pipeline` 的 correctness / differential / robustness 验证。
    当前 `pipeline` 已经正式接入到 asm / host / guest 验证层：默认 `functional` 继续守 `make test`，`pipeline` 通过 `make test-pipeline` 守住同一批 asm 参考输出、host-side smoke/differential，以及 `guest_supervisor_demo` 与 `kernel_alpha` 正负回归。
 6. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围：加载仓库内现有 demo、查看快照、按 cycle / commit 单步，不要在这一层直接扩成带断点 / 条件暂停 / 任意文件加载的通用调试器。
 

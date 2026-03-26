@@ -22,6 +22,8 @@
   模板类文档。
 - [archive](/home/liangjiaqi/projects/my_visual_CPU/docs/archive)
   已完成工作的过程性记录或归档材料，不作为主维护入口。
+- [superpowers](/home/liangjiaqi/projects/my_visual_CPU/docs/superpowers)
+  本地 AI 规划 / 执行记录；不是正式项目状态文档入口。
 
 ## 文档分工
 
@@ -42,6 +44,8 @@
   项目背景和原始目标说明。
 - [status/current_mainline_status_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/current_mainline_status_2026-03-25.md)
   记录 `phase1-stable` 冻结后、`pipeline` 与 `debug/frontend` 已接入之后，当前主线任务切分、Phase 2 当前安排和下一轮实现入口。
+- [status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)
+  记录当前 Phase 1 / Phase 2 主线中，回归相关工作何时可以认为达到阶段性收口。
 - [design/cpp_refactor_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/cpp_refactor_plan.md)
   解释为什么要做当前这轮 C++ 结构重构，以及希望得到的模块边界。
 - [design/pipeline_integration_prep.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_integration_prep.md)
@@ -72,6 +76,7 @@
 - 已完成但仍保留的设计/计划文档，要在开头明确“已完成/历史语境”，避免旧的阶段性目标被误读为当前待办。
 - 已经从“执行中计划”转成“持续状态跟踪”的文档，应主动收口成模板化结构，而不是继续累积历史步骤。
 - 设计、计划、执行记录这类过程性文档在任务完成后应移入 `docs/archive/`，必要信息收口进正式状态文档。
+- `docs/superpowers/` 下的计划 / 执行笔记默认视为局部工作记录，不当作正式状态入口；任务完成后至少要补一段完成说明，避免遗留全空 checklist。
 - 报告和总结文档需要清楚区分：
   - 项目 owner 既有已完成工作
   - 已落地的当前重构成果

@@ -1,5 +1,7 @@
 # 前端调试器
 
+当前这套前端 / Node 服务已经正式接入主线，但范围仍限定在“教学演示可用”的最小集合，不是通用调试器。
+
 ## 目录说明
 
 - `app/`
@@ -32,7 +34,7 @@ http://127.0.0.1:4173
 
 ## 当前首版能力
 
-- 选择仓库内现有测试并加载
+- 选择仓库内现有 asm、`guest_supervisor_demo` 和 `kernel_alpha` 正负 demo 并加载
 - 切换 `pipeline` / `functional` backend
 - `Load / Run / Pause / Step Cycle / Step Commit / Reset`
 - 实时查看：
@@ -48,3 +50,10 @@ http://127.0.0.1:4173
 - `Run` 目前由 Node 服务按定时器重复发送 `step_cycle`
 - WebSocket 只用于服务端向浏览器推送快照
 - 首版没有断点、条件暂停、差分对比和任意文件加载
+
+## 验证
+
+```bash
+cd frontend
+node --test
+```

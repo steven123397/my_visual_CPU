@@ -76,6 +76,8 @@
 最近一轮关键历史节点只保留以下几项：
 
 - `2026-03-25` 已完成一批 simulator-side correctness 修复：非法整数编码、`DIV/REM` 溢出边界、ELF pure-BSS `PT_LOAD`、bus / device 第一轮边界防御。
+- `2026-03-26` 已完成一轮更系统的 Phase 1 hardening 回归扩充：非法编码样本扩展、CPU 侧 MMIO access-fault asm、ELF segment/reject/header 单元回归、host-side MMIO contract matrix，以及 CSR illegal matrix 均已接入现有门禁。
+- `2026-03-26` 已新增 [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)，作为当前 Phase 1 / Phase 2 回归收口标准。
 - `kernel_alpha_demo` 已完成首个可回归 alpha bring-up，当前正向输出为 `KMVPETDS`。
 - `kernel_alpha_fault_demo` 当前负向输出为 `KMVX`。
 - `kernel_alpha_storage_no_media_demo` 当前负向输出为 `KMVNX`。
@@ -103,7 +105,7 @@
 当前阶段的主线工作是：
 
 - 继续稳住 simulator reference path 的 correctness 与可观察性。
-- 继续扩充非法编码、MMIO 边界和 ELF 段布局回归。
+- 继续沿已落地的第一轮 hardening 矩阵，补足非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 剩余空洞。
 - 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做必要 hardening。
 - 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，作为 post-Phase1 结构优化。
 - 在不破坏 reference path 清晰性的前提下，继续稳住已接入 Phase 2 能力的语义边界与验证基线。
@@ -112,12 +114,13 @@
 当前对 Phase 2 的工程安排是：
 
 - `pipeline core` 与 `debug/frontend` 的正式接入工作已经完成，不再把它们当作待合入功能。
-- 近期先不继续扩功能面，而是优先明确 Phase 2 出门标准，并补强 `pipeline` 的 correctness / differential / robustness 验证。
+- 近期先不继续扩功能面，而是优先按 [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 明确 Phase 2 出门标准，并补强 `pipeline` 的 correctness / differential / robustness 验证。
 - `debug/frontend` 继续限定在“教学演示可用”的最小范围，重点放在快照稳定性、测试门禁和对现有 demo 的可用性维护。
 
 相关状态文档见：
 
 - [docs/status/current_mainline_status_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/current_mainline_status_2026-03-25.md)
+- [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)
 - [docs/status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
 - [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
 

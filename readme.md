@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前仓库已经是一个已可运行的模拟器原型，而不是纯设计稿。当前主线已经达成 `phase1-stable`（`283aee6`）这一 Phase 1 冻结基线：具备 RV64I / RV64M 参考执行路径、UART / CLINT / PLIC / MMIO storage 平台、基础 `M/S/U` 特权路径、Sv39，以及一套最小 guest supervisor runtime。此后主线又继续接入了 `pipeline` 执行后端、本地 `debug_session/protocol` 和浏览器前端教学演示链路。
+当前仓库已经是一个已可运行的模拟器原型，而不是纯设计稿。当前主线已经达成 `phase1-stable`（`283aee6`）这一 Phase 1 冻结基线：具备 RV64I / RV64M 参考执行路径、UART / CLINT / PLIC / MMIO storage 平台、基础 `M/S/U` 特权路径、Sv39，以及一套最小 guest supervisor runtime。此后主线又继续接入了 `pipeline` 执行后端、本地 `debug_session/protocol` 和浏览器前端教学演示链路。到 `2026-03-26` 为止，reference path 又完成了一轮 Phase 1 hardening regression 扩充，补上了更系统的非法编码、CPU 侧 MMIO access-fault、ELF 段布局 / reject 和 CSR 非法访问矩阵回归。
 
 ## 目录结构
 
@@ -19,7 +19,7 @@ my_visual_CPU/
 │   │   ├── devices/    # UART / CLINT / PLIC / SimpleStorage
 │   │   └── ...
 │   ├── tests/asm/      # 汇编测试程序与平台 smoke coverage
-│   ├── tests/unit/     # host-side 单元回归（loader / bus-device / guest runtime helper 合同）
+│   ├── tests/unit/     # host-side 单元回归（loader segment/reject、bus-device/MMIO contract、guest runtime helper 合同）
 │   └── Makefile
 └── docs/               # 规划与平台契约文档
 ```
@@ -152,6 +152,8 @@ node --test
 
 其余 `kernel_alpha` storage / PLIC / timer 负向 demo 也都有独立测试目标；README 只保留常用入口，具体名称以 [myCPU/Makefile](myCPU/Makefile) 为准。
 
+当前 Phase 1 / Phase 2 回归做到什么程度可认为阶段性收口，见 [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)。
+
 ## 内存映射
 
 | 地址范围 | 设备 |
@@ -170,9 +172,11 @@ node --test
 - `DIV/REM/DIVW/REMW` 的 `INT_MIN / -1` 边界按 RISC-V 规范返回
 - ELF64 程序加载
 - 纯 BSS `PT_LOAD` 段装载与 zero-fill
+- 更真实的 ELF 多 `PT_LOAD` / mixed data+BSS 段布局，以及 malformed header / program-header reject 回归
 - CSR 指令（CSRRW/CSRRS/CSRRC 及立即数变体）
 - M-mode 异常与中断（ECALL、EBREAK、MRET）
 - 第一批 M/S/U 特权语义：`MPP` 跟踪、`ecall` cause 区分、`sret` 返回、CSR 访问约束
+- CSR 非法访问矩阵，包括跨特权级访问、只读 counter CSR 写保护和 `misa` 只读写保护
 - 基于 `medeleg` 的最小 supervisor 异常委托
 - 基于 `mideleg` 的最小 supervisor 定时器/外部中断递送
 - **Sv39 虚拟内存**：3 级页表遍历、页错误、权限检查、大页支持、最小 TLB、A/D bit 维护
@@ -187,6 +191,7 @@ node --test
 - PLIC machine/supervisor external interrupt 最小路径
 - host-backed block-oriented MMIO storage device，支持 attached-but-not-ready 状态、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`
 - 设备区间重叠防御，以及第一轮 MMIO 非法访问宽度白名单
+- CPU 侧 MMIO 非法 offset / width 稳定触发 access-fault trap，host-side 也已有 MMIO contract matrix
 - 最小 guest supervisor runtime：包含统一 trap dispatch、基础平台库、early allocator / PMM / guest-side Sv39 VM、显式 trap/runtime/task/program helper，以及由 `user_program_smoke` 提供的阶段化 lifecycle / prepare / enter helper 与 `supervisor_demo_smoke` 提供的单入口 demo runner，覆盖 `guest_supervisor_demo` 的 bootstrap、U-mode 进入/返回、page fault 恢复、timer/external interrupt 与生命周期清理 smoke
 - 独立 `kernel_alpha_demo`：覆盖 boot marker、PMM 初始化、自建 Sv39 内核页表、内核镜像/early heap/managed RAM 显式映射、UART / CLINT / PLIC / storage 的 MMIO lazy map、一次 supervisor external interrupt、第一次 supervisor timer interrupt、一次 storage readiness probe，以及一次最小块设备读取
 - 独立 `kernel_alpha_fault_demo`：覆盖独立 kernel alpha 在 VM 已开启但 CLINT 未映射时的 fault / panic 负向路径

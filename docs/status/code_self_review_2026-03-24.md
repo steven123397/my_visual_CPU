@@ -35,7 +35,7 @@
 - `SimpleStorage` 仍然只是最小同步块设备。
 - reference robustness 回归还不够系统。
 
-## 后续修复进展（更新到 2026-03-25）
+## 后续修复进展（更新到 2026-03-26）
 
 以下问题已经完成修复或第一轮收口：
 
@@ -47,6 +47,14 @@
   - `tests/unit/elf_loader_bss.cpp`
 - `Bus::attach()` 会拒绝设备区间重叠，UART / PLIC / CLINT / `SimpleStorage` 已收紧第一轮访问宽度约束，并已补单元回归：
   - `tests/unit/bus_device_guards.cpp`
+- reference path 已继续完成一轮更系统的 hardening 回归扩充：
+  - `tests/asm/mmio_access_faults.S`
+  - `tests/asm/csr_illegal_matrix.S`
+  - `tests/unit/mmio_contract_matrix.cpp`
+  - `tests/unit/elf_loader_segments.cpp`
+  - `tests/unit/elf_loader_rejects.cpp`
+  - `tests/unit/elf_loader_header_rejects.cpp`
+  这一轮以补回归为主，没有因为文档中列出的这些边界再新增一批生产代码变更。
 
 ## 与本次自检直接相关的后续状态
 
@@ -106,10 +114,10 @@
   当前已完成 bring-up skeleton 第一轮收口，但离更完整的 kernel object / runtime 组织仍有距离。
 - `SimpleStorage`
   仍是最小同步块设备：无 completion interrupt、`BLOCK_COUNT` 仅支持 `1`、写入不回写宿主文件。
-- reference robustness 回归仍可继续扩展：
-  - 非法编码矩阵
-  - MMIO 非法偏移 / 宽度
-  - 更真实的 ELF 段布局
+- reference robustness 回归虽然已经完成一轮 illegal / MMIO / ELF / CSR 系统扩充，但以下方向仍可继续扩展：
+  - `privilege / Sv39` 边界
+  - `pipeline` 的 privileged / trap / MMIO differential coverage
+  - 与新增语义缺口直接对应的最小持久回归
 - 一批固定上限常量在 post-Phase1 hardening 与后续 kernel 扩展中仍应优先关注。
 
 ## 当前建议入口

@@ -170,6 +170,7 @@
 - tag：`phase1-stable`
 - commit：`283aee6`
 - 含义：`Phase 1` 核心 bring-up 目标已达成；后续 `kernel_alpha` / guest runtime 工作默认视为 post-Phase1 hardening
+- 当前这十条 `kernel_alpha` demo 与 `guest_supervisor_demo` 一起，构成 [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 定义的 Phase 1 核心 guest 门禁
 - 当前本地 `frontend` 调试测试清单已覆盖：
   - `guest_kernel_alpha_demo`
   - `guest_kernel_alpha_fault_demo`
@@ -246,7 +247,7 @@
 
 ## 下一步
 
-1. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上。
+1. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上；它们当前就是 Phase 1 回归收口的核心 guest 门禁。
 2. 继续守住 `guest/kernel/vm.c` / `guest/kernel/vm_address_space.c` / `guest/kernel/vm_process.c` / `guest/kernel/vm_object.c` / `guest/kernel/vm_fault.c` 的边界，避免后续修改重新耦合。
 3. 继续守住 `guest/kernel/trap.c` 与 `guest/kernel/trap_dispatch.c` 的 lifecycle / dispatch 边界，避免后续修改重新耦合。
 4. 在不打破 reference path 简洁性的前提下，把剩余 device readiness / fault / panic / runtime refinement 继续当作 post-Phase1 hardening，而不再视为首次小型 OS / kernel bring-up 的基础阻塞项。

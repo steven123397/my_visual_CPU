@@ -8,10 +8,10 @@ OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 CORE_OBJS = $(filter-out src/main.o,$(OBJS))
 TARGET   = mycpu
 HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/address_space_faults_smoke tests/host/pipeline_backend_smoke tests/host/backend_differential_smoke tests/host/debug_cli_smoke
-ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
+ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults mmio_access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control csr_illegal_matrix counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 FLAT_BIN_TESTS = hello
-UNIT_TEST_NAMES = elf_loader_bss bus_device_guards storage_readiness supervisor_runtime kernel_runtime kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
+UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects bus_device_guards mmio_contract_matrix storage_readiness supervisor_runtime kernel_runtime kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
 SUPERVISOR_RUNTIME_UNIT_OBJS = tests/unit/supervisor_runtime_test.o tests/unit/supervisor_runtime_guest.o
 SUPERVISOR_RUNTIME_UNIT_DEPS = $(SUPERVISOR_RUNTIME_UNIT_OBJS:.o=.d)
@@ -167,9 +167,10 @@ test-%: FORCE $(TARGET) tests/asm/%.elf
 		timer_interrupt) expected='TMR' ;; \
 		mtvec_modes) expected='MTV' ;; \
 		trap_state) expected='STS' ;; \
-		exception_traps) expected='EXC' ;; \
-		access_faults) expected='ACF' ;; \
-		loads_signed_unsigned) expected='LDS' ;; \
+			exception_traps) expected='EXC' ;; \
+			access_faults) expected='ACF' ;; \
+			mmio_access_faults) expected='MMIO' ;; \
+			loads_signed_unsigned) expected='LDS' ;; \
 		alu_word) expected='W32' ;; \
 		branches_signed_unsigned) expected='BRU' ;; \
 		muldiv) expected='MLD' ;; \
@@ -181,6 +182,7 @@ test-%: FORCE $(TARGET) tests/asm/%.elf
 		supervisor_exception_delegation) expected='SDG' ;; \
 		supervisor_timer_interrupt) expected='STI' ;; \
 		csr_access_control) expected='CSR' ;; \
+		csr_illegal_matrix) expected='CRM' ;; \
 		counteren_access_control) expected='CNT' ;; \
 		instret_counting) expected='IRT' ;; \
 		machine_counter_csrs) expected='MCR' ;; \
@@ -261,9 +263,10 @@ test-pipeline-%: FORCE $(TARGET) tests/asm/%.elf
 		timer_interrupt) expected='TMR' ;; \
 		mtvec_modes) expected='MTV' ;; \
 		trap_state) expected='STS' ;; \
-		exception_traps) expected='EXC' ;; \
-		access_faults) expected='ACF' ;; \
-		loads_signed_unsigned) expected='LDS' ;; \
+			exception_traps) expected='EXC' ;; \
+			access_faults) expected='ACF' ;; \
+			mmio_access_faults) expected='MMIO' ;; \
+			loads_signed_unsigned) expected='LDS' ;; \
 		alu_word) expected='W32' ;; \
 		branches_signed_unsigned) expected='BRU' ;; \
 		muldiv) expected='MLD' ;; \
@@ -275,6 +278,7 @@ test-pipeline-%: FORCE $(TARGET) tests/asm/%.elf
 		supervisor_exception_delegation) expected='SDG' ;; \
 		supervisor_timer_interrupt) expected='STI' ;; \
 		csr_access_control) expected='CSR' ;; \
+		csr_illegal_matrix) expected='CRM' ;; \
 		counteren_access_control) expected='CNT' ;; \
 		instret_counting) expected='IRT' ;; \
 		machine_counter_csrs) expected='MCR' ;; \

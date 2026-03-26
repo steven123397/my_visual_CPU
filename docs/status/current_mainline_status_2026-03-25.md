@@ -1,4 +1,4 @@
-# 当前主线状态（2026-03-25）
+# 当前主线状态（2026-03-25，更新到 2026-03-26）
 
 ## 文档定位
 
@@ -21,12 +21,27 @@
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
 
+关于当前主线中“回归相关工作做到什么程度可认为阶段性收口”的统一判断口径，见：
+
+- [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)
+
+## 2026-03-26 补充进展
+
+本轮主线已经完成一批新的 hardening 回归扩充：
+
+- `tests/asm/illegal_integer_encodings.S` 已扩展更多非法整数编码样本。
+- `tests/asm/mmio_access_faults.S` 已把 CPU 侧非法 MMIO 访问的 access-fault 合同接入 asm 门禁。
+- `tests/unit/elf_loader_segments.cpp`、`tests/unit/elf_loader_rejects.cpp` 和 `tests/unit/elf_loader_header_rejects.cpp` 已补上更真实的 ELF segment/layout 与 malformed-input reject 回归。
+- `tests/unit/bus_device_guards.cpp` 与 `tests/unit/mmio_contract_matrix.cpp` 已把 host-side MMIO guard / contract 做到第一轮矩阵化。
+- `tests/asm/csr_illegal_matrix.S` 已把 CSR 非法访问、跨特权级访问和只读 CSR 写入的 trap 合同补成第一轮矩阵。
+- `regression_completion_criteria_2026-03-26.md` 已成为当前 Phase 1 / Phase 2 回归收口的正式判断口径。
+
 ## Phase 1 近期主线
 
 当前仍应优先推进的 Phase 1 / post-Phase1 主线工作如下：
 
 1. 继续稳住 simulator reference path 的 correctness 与可观察性。
-2. 继续扩充非法编码、MMIO 边界和 ELF 段布局回归。
+2. 在已落地第一轮 illegal / MMIO / ELF / CSR hardening 矩阵的基础上，继续按合同补洞，而不是重复堆叠同类回归。
 3. 继续守住 `kernel_alpha` 十条回归基线：
    - `kernel_alpha_demo`
    - `kernel_alpha_fault_demo`
@@ -48,18 +63,18 @@
 
 - `pipeline core` 与 `debug/frontend` 的正式接入工作已经完成。
 - 近期不再把 Phase 2 理解成“继续搬运更多旧分支代码”，而是进入稳定化和验证补强阶段。
-- 当前最重要的 Phase 2 工程问题，不是继续扩 UI 或继续引入新模型，而是先明确 Phase 2 的出门标准。
+- 当前最重要的 Phase 2 工程问题，不是继续扩 UI 或继续引入新模型，而是按已新增的回归收口标准把出门条件落实到差分和快照门禁。
 
 在这个前提下，Phase 2 近期优先级如下：
 
-1. 明确当前仓库对 Phase 2 的最小完成标准。
+1. 按 [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 落实当前仓库对 Phase 2 的最小完成标准。
 2. 继续补强 `pipeline` 的 correctness / differential / robustness 验证。
 3. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围，重点守住快照结构、协议输出和本地测试门禁。
 4. 在上述工作稳定之前，不急着把更多执行模型或更大的调试功能面并入当前主线。
 
 ## 当前仍然有效的风险 / 限制
 
-- reference robustness 回归仍不够系统，尤其是非法编码矩阵、MMIO 非法偏移 / 宽度和更真实 ELF 段布局。
+- reference robustness 回归已经完成第一轮系统扩充，但 `privilege / Sv39 / pipeline differential` 仍未完全形成闭环。
 - guest runtime 虽已完成第一轮拆分，但 `vm*`、`trap*`、`kernel_runtime`、`kernel_bringup` 仍需要继续守住边界，避免回退到单个大文件。
 - `kernel_alpha` 已经达到 Phase 1 核心完成态，但更多 device readiness / fault / panic / runtime refinement 仍属于 post-Phase1 hardening。
 - `pipeline` 已经正式可用，但后续 privileged / trap / interrupt / MMIO 行为的一致性验证仍应继续补强。
@@ -67,10 +82,10 @@
 
 ## 下一步
 
-1. 先沿 reference path 继续补非法编码、MMIO 边界和 ELF 段布局回归。
+1. 先沿 reference path 继续补 `privilege / Sv39` 等仍未闭环的边界，并保持已落地的 illegal / MMIO / ELF / CSR hardening 矩阵稳定可回归。
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界。
-4. 单独梳理当前仓库的 Phase 2 出门标准，并把它落实到正式状态文档或 `AGENTS.md`。
+4. 已有 Phase 2 出门标准文档，下一步按 [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 把 `pipeline` 差分矩阵继续做实，而不是停留在原则层。
 5. 在不扩功能面的前提下，继续补强 `pipeline` 差分与 `debug/frontend` 稳定性验证。
 
 ## 建议入口
@@ -80,6 +95,7 @@
 - [AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/AGENTS.md)
 - [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
 - [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
+- [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)
 - [code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
 - [kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
 
