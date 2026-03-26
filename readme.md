@@ -57,7 +57,7 @@ main.cpp
 - `loader/elf_loader.*` 和 `loader/binary_loader.*` 提供镜像装载边界，直接通过 `Ram` 接口写入镜像内容。
 - `cpu.cpp/h` 负责 functional reference path，并把 `CoreState + CsrFile + TrapController` 接到共享 ISA 语义层。
 - `isa/*` 负责共享 `InstructionSemantics`、`ExecutionContext` 和 `InsnEffects`，作为 `functional` 与 `pipeline` 的统一 ISA 语义来源。
-- `exec/backend.h`、`exec/functional_backend.*` 和 `exec/pipeline_backend.*` 负责执行后端抽象、默认 functional backend，以及当前五级 pipeline core。
+- `exec/backend.h`、`exec/functional_backend.*` 和 `exec/pipeline_backend.*` 负责执行后端抽象、默认 functional backend，以及当前五级 pipeline core；其中 `pipeline` 当前已补上“刚退休 CSR 写入新触发的 interrupt 不得让 younger 指令继续退休”的 commit-boundary 时序约束。
 - `debug/*` 负责 `DebugSnapshot`、`DebugSession` 与 `--debug-cli` JSON line protocol，本地前端调试器通过这层消费 simulator 快照。
 - `decode.c` 负责把 32 位机器码拆成执行阶段可用的字段。
 - `memory.c` 负责主内存访问，MMIO 分发由 `Bus` 与设备对象处理。
@@ -146,9 +146,9 @@ node --test
 
 `make test` 是默认 `functional` reference path 的主回归，覆盖 asm、host-side unit、`guest_supervisor_demo`，以及 `kernel_alpha` 正向与全部负向 demo。
 
-`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性。
+`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性；当前 host-side differential 已包含 `Sv39 + MPRV`、delegated instruction/load/store page-fault、reserved page-walk fault，以及 supervisor timer interrupt commit-boundary 这几类架构稳定路径，真实 `CLINT` / `PLIC+UART` 驱动的 supervisor interrupt 由 `pipeline_backend_smoke` 单独守住，而 `debug_cli_smoke` 进一步用自包含 flat-binary 检查这些路径在快照/事件协议里的可观察性。
 
-`cd frontend && node --test` 负责守住本地调试服务、测试清单和前端纯状态逻辑。
+`cd frontend && node --test` 负责守住本地调试服务、测试清单、WebSocket 快照/事件透传，以及前端纯状态逻辑；当前也会检查连续运行中的会话在重新 `load` 时会先停掉旧的定时推进，避免演示链路在切换 demo 后继续后台前进。
 
 其余 `kernel_alpha` storage / PLIC / timer 负向 demo 也都有独立测试目标；README 只保留常用入口，具体名称以 [myCPU/Makefile](myCPU/Makefile) 为准。
 
@@ -181,6 +181,8 @@ node --test
 - 基于 `mideleg` 的最小 supervisor 定时器/外部中断递送
 - **Sv39 虚拟内存**：3 级页表遍历、页错误、权限检查、大页支持、最小 TLB、A/D bit 维护
 - `satp` CSR 支持（MODE 字段按 WARL 约束到 bare/Sv39；不支持值不会以“读得出分页模式、实际却 bare” 的形式泄漏）
+- `mstatus.MPRV` 数据访存语义：M-mode 下的 `load/store` 可按 `MPP` 指定的有效特权级走 Sv39 翻译，并遵守 `SUM/MXR` 权限约束
+- Sv39 page-walk 合同：misaligned superpage 与 non-leaf `U/A/D` 保留位会稳定触发 page fault
 - `sfence.vma` 指令（当前执行本地 TLB 全量失效）
 - `AddressSpace` 访问边界，以及 unmapped fetch/load/store 的 access-fault trap
 - CSR 特权级/只读属性检查，非法访问触发 illegal-instruction trap

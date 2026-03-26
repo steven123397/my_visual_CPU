@@ -17,6 +17,7 @@ public:
     void sync_platform_events(const PlatformEvents& events);
     void handle_platform_events(const PlatformEvents& events);
     void raise_timer_interrupt();
+    bool has_serviceable_interrupt() const;
     bool service_pending_interrupts();
 
 private:

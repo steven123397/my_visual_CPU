@@ -45,6 +45,10 @@
 
 ## 重要计划记录
 
+- [sv39_mprv_semantics_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_mprv_semantics_plan.md)
+  已完成的 `privilege / Sv39` 回归补洞计划，聚焦 `MPRV + Sv39` 数据访存语义。
+- [sv39_pagewalk_contracts_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_pagewalk_contracts_plan.md)
+  已完成的 `Sv39` page-walk 合同补洞计划，聚焦 superpage 对齐与 non-leaf PTE 保留位。
 - [docs_information_architecture_reorg_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/docs_information_architecture_reorg_plan.md)
   已完成的文档治理重组计划。
 - [phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)

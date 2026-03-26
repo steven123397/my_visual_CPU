@@ -51,6 +51,7 @@ private:
     bool last_cycle_stalled_{false};
     bool last_cycle_trap_flush_{false};
     bool last_cycle_committed_{false};
+    bool interrupt_serviceable_at_cycle_start_{false};
     bool redirect_pending_{false};
     uint64_t redirect_target_{0};
     TrapRequest pending_fetch_fault_{};

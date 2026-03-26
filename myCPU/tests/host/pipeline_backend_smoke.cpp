@@ -3,6 +3,8 @@
 #include "../../src/arch/csr_file.h"
 #include "../../src/cpu.h"
 #include "../../src/devices/clint.h"
+#include "../../src/devices/plic.h"
+#include "../../src/devices/uart16550.h"
 #include "../../src/exec/pipeline_backend.h"
 #include "../../src/mem/bus.h"
 #include "../../src/mem/ram.h"
@@ -20,10 +22,20 @@ constexpr uint32_t kAddX3FromX2X1 = 0x001101b3U;         // add x3, x2, x1
 constexpr uint32_t kAddiX1WrongPath = 0x06300093U;       // addi x1, x0, 99
 constexpr uint32_t kAddiX2WrongPath = 0x06300113U;       // addi x2, x0, 99
 constexpr uint32_t kAddiX2FromX0Plus7 = 0x00700113U;     // addi x2, x0, 7
+constexpr uint32_t kAddiA7Exit = 0x05d00893U;            // addi a7, x0, 93
+constexpr uint32_t kEcall = 0x00000073U;                 // ecall
 constexpr uint32_t kInvalidInsn = 0xffffffffU;
 constexpr uint32_t kLwX1FromX10 = 0x00052083U;           // lw x1, 0(x10)
 constexpr uint32_t kAddiX2FromX1Plus5 = 0x00508113U;     // addi x2, x1, 5
 constexpr uint32_t kMret = 0x30200073U;
+constexpr uint32_t kSbX5ToX10Plus1 = 0x005500a3U;        // sb x5, 1(x10)
+constexpr uint32_t kSbX0ToX10Plus1 = 0x000500a3U;        // sb x0, 1(x10)
+constexpr uint32_t kLwX6FromX20 = 0x000a2303U;           // lw x6, 0(x20)
+constexpr uint32_t kSwX6ToX20 = 0x006a2023U;             // sw x6, 0(x20)
+constexpr uint32_t kSdX21ToX20 = 0x015a3023U;            // sd x21, 0(x20)
+constexpr uint32_t kCsrrcSipX5 = 0x1442b073U;            // csrrc x0, sip, x5
+constexpr uint32_t kCsrwSepcX7 = 0x14139073U;            // csrw sepc, x7
+constexpr uint32_t kSret = 0x10200073U;                  // sret
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -124,6 +136,117 @@ int main() {
             return 1;
         }
         if (!expect(cpu.csr().read(CSR_MEPC, cpu.core()) == kEntry + 4, "timer interrupt should capture the post-commit architectural pc")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        Clint clint;
+        bus.attach(clint);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.csr().bind_clint(&clint);
+        cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+        cpu.csr().write(CSR_MIDELEG, MIE_STIE, cpu.core());
+        cpu.csr().write(CSR_SIE, MIE_STIE, cpu.core());
+        cpu.csr().write(CSR_MSTATUS, MSTATUS_SIE, cpu.core());
+        cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+        cpu.core().write_gpr(5, MIE_STIE);
+        cpu.core().write_gpr(7, kEntry + 8);
+        cpu.core().write_gpr(20, CLINT_BASE + CLINT_REG_MTIMECMP);
+        cpu.core().write_gpr(21, ~0ULL);
+        clint.store(CLINT_BASE + CLINT_REG_MTIMECMP, 3, 8);
+
+        write32(ram, kEntry + 0, kAddiX1);
+        write32(ram, kEntry + 4, kAddiX2WrongPath);
+        write32(ram, kEntry + 8, kAddiA7Exit);
+        write32(ram, kEntry + 12, kEcall);
+        write32(ram, kTrapVector + 0, kSdX21ToX20);
+        write32(ram, kTrapVector + 4, kCsrrcSipX5);
+        write32(ram, kTrapVector + 8, kCsrwSepcX7);
+        write32(ram, kTrapVector + 12, kSret);
+
+        PipelineBackend backend(cpu, bus);
+
+        for (int i = 0; i < 24 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "supervisor timer interrupt path should eventually halt via ecall")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(1) == 1, "supervisor timer interrupt should preserve older committed work")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(2) == 0, "supervisor timer interrupt should flush younger in-flight work")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_SCAUSE, cpu.core()) == ((1ULL << 63) | 5ULL), "supervisor timer interrupt should report delegated timer cause")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_SEPC, cpu.core()) == kEntry + 8, "supervisor timer interrupt handler should resume at the post-trap target")) {
+            return 1;
+        }
+        if (!expect((cpu.csr().read(CSR_SIP, cpu.core()) & MIE_STIE) == 0, "supervisor timer interrupt handler should clear delegated pending state")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        Plic plic;
+        Uart16550 uart(plic);
+        uart.set_mirror_stdout(false);
+        bus.attach(plic);
+        bus.attach(uart);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        plic.store(PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE), 1, 4);
+        plic.store(PLIC_BASE + PLIC_ENABLE_OFFSET(PLIC_CONTEXT_SUPERVISOR), 1U << PLIC_SOURCE_UART_THRE, 4);
+        plic.store(PLIC_BASE + PLIC_THRESHOLD_OFFSET(PLIC_CONTEXT_SUPERVISOR), 0, 4);
+        cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+        cpu.csr().write(CSR_MIDELEG, MIE_SEIE, cpu.core());
+        cpu.csr().write(CSR_SIE, MIE_SEIE, cpu.core());
+        cpu.csr().write(CSR_MSTATUS, MSTATUS_SIE, cpu.core());
+        cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+        cpu.core().write_gpr(5, UART_IER_THRI);
+        cpu.core().write_gpr(7, kEntry + 8);
+        cpu.core().write_gpr(10, UART_BASE);
+        cpu.core().write_gpr(20, PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR));
+
+        write32(ram, kEntry + 0, kSbX5ToX10Plus1);
+        write32(ram, kEntry + 4, kAddiX1WrongPath);
+        write32(ram, kEntry + 8, kAddiA7Exit);
+        write32(ram, kEntry + 12, kEcall);
+        write32(ram, kTrapVector + 0, kLwX6FromX20);
+        write32(ram, kTrapVector + 4, kSbX0ToX10Plus1);
+        write32(ram, kTrapVector + 8, kSwX6ToX20);
+        write32(ram, kTrapVector + 12, kCsrwSepcX7);
+        write32(ram, kTrapVector + 16, kSret);
+
+        PipelineBackend backend(cpu, bus);
+
+        for (int i = 0; i < 24 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "supervisor external interrupt path should eventually halt via ecall")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(1) == 0, "supervisor external interrupt should flush younger in-flight work")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_SCAUSE, cpu.core()) == ((1ULL << 63) | 9ULL), "supervisor external interrupt should report delegated external cause")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_SEPC, cpu.core()) == kEntry + 8, "supervisor external interrupt handler should resume at the post-trap target")) {
+            return 1;
+        }
+        if (!expect(uart.ier() == 0, "supervisor external interrupt handler should clear UART interrupt enable")) {
+            return 1;
+        }
+        if (!expect(!plic.supervisor_has_pending() && !plic.source_claimed(PLIC_SOURCE_UART_THRE), "supervisor external interrupt handler should claim and complete the PLIC source")) {
             return 1;
         }
     }

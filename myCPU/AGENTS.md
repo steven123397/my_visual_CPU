@@ -83,12 +83,16 @@
 - M-mode trap / return。
 - 初步 `M/S/U` 特权流转。
 - `misa` 只读、`satp.MODE` WARL、`counteren`、Sv39、最小 TLB、`sfence.vma`。
+- `mstatus.MPRV` 数据访存语义，按 `MPP` 走 Sv39 翻译与 `SUM/MXR` 权限检查。
+- Sv39 page-walk 的 misaligned superpage 与 non-leaf reserved-bit fault 合同。
 - UART / CLINT / PLIC / `SimpleStorage`。
 - bus / device 第一轮区间与访问宽度防御。
 - CPU 侧 MMIO 非法 offset / width 稳定触发 access-fault trap。
 - host-side MMIO guard 与 contract matrix。
 - `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 `pipeline` 的 asm / host / guest 门禁。
-- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路。
+- `pipeline` host-side differential 当前已覆盖基础 ALU / 控制流 / trap-return / illegal trap，以及第一批 `Sv39 + MPRV` / delegated instruction-load/store-page-fault / reserved page-walk fault / supervisor timer interrupt commit-boundary 场景。
+- `pipeline_backend_smoke` 当前还额外覆盖真实 `CLINT` / `PLIC+UART` 平台事件源驱动的 supervisor timer / external interrupt smoke，避免把 cycle-sensitive 设备递送硬塞进 functional-vs-pipeline 逐事件差分。
+- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照，守住 `CLINT` / `PLIC` / `UART` 相关字段与 pipeline flush / halt 事件输出。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。

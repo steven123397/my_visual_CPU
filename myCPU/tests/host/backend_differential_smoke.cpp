@@ -28,6 +28,7 @@ constexpr uint32_t kAddiX6FromX4Plus1 = 0x00120313U;      // addi x6, x4, 1
 constexpr uint32_t kCsrwMscratchX6 = 0x34031073U;         // csrw mscratch, x6
 constexpr uint32_t kCsrrX5Mscratch = 0x340022f3U;         // csrr x5, mscratch
 constexpr uint32_t kAddiX1WrongPath = 0x06300093U;        // addi x1, x0, 99
+constexpr uint32_t kAddiX2WrongPath = 0x06300113U;        // addi x2, x0, 99
 constexpr uint32_t kAddiX2FromX0Plus7 = 0x00700113U;      // addi x2, x0, 7
 constexpr uint32_t kAddiX3WrongPath = 0x06300193U;        // addi x3, x0, 99
 constexpr uint32_t kAddiX4WrongPath = 0x06300213U;        // addi x4, x0, 99
@@ -37,10 +38,16 @@ constexpr uint32_t kBeqX0Taken = 0x00000463U;             // beq x0, x0, 8
 constexpr uint32_t kAuipcX6 = 0x00000317U;                // auipc x6, 0
 constexpr uint32_t kAddiX6Target16 = 0x01030313U;         // addi x6, x6, 16
 constexpr uint32_t kJalrX7X6 = 0x000303e7U;               // jalr x7, x6, 0
+constexpr uint32_t kLwX1FromX10 = 0x00052083U;            // lw x1, 0(x10)
+constexpr uint32_t kSwX11ToX10 = 0x00b52023U;             // sw x11, 0(x10)
 constexpr uint32_t kAddiA7Exit = 0x05d00893U;             // addi a7, x0, 93
 constexpr uint32_t kEcall = 0x00000073U;                  // ecall
 constexpr uint32_t kCsrwMepcX6 = 0x34131073U;             // csrw mepc, x6
 constexpr uint32_t kMret = 0x30200073U;                   // mret
+constexpr uint32_t kCsrwSipX5 = 0x14429073U;              // csrw sip, x5
+constexpr uint32_t kCsrrcSipX5 = 0x1442b073U;             // csrrc x0, sip, x5
+constexpr uint32_t kCsrwSepcX7 = 0x14139073U;             // csrw sepc, x7
+constexpr uint32_t kSret = 0x10200073U;                   // sret
 
 constexpr std::array<uint32_t, 20> kTrackedCsrs{
     CSR_SSTATUS,
@@ -112,6 +119,10 @@ void write32(Ram& ram, uint64_t addr, uint32_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
 }
 
+void write64(Ram& ram, uint64_t addr, uint64_t value) {
+    ram.write_bytes(addr, &value, sizeof(value));
+}
+
 std::unique_ptr<ExecutionBackend> make_backend(BackendUnderTest kind, CPU& cpu, Bus& bus) {
     switch (kind) {
     case BackendUnderTest::Functional:
@@ -147,6 +158,21 @@ bool is_commit_event(const Snapshot& previous, const Snapshot& current) {
            current.halted != previous.halted ||
            current.privilege != previous.privilege ||
            current.csrs != previous.csrs;
+}
+
+bool is_interrupt_entry_event(const Snapshot& previous, const Snapshot& current) {
+    constexpr uint64_t kInterruptCauseBit = 1ULL << 63;
+    const uint64_t supervisorTrapBase = current.csrs[2] & ~0x3ULL;
+    const uint64_t machineTrapBase = current.csrs[14] & ~0x3ULL;
+    const bool machine_interrupt_entered =
+        current.csrs[18] != previous.csrs[18] &&
+        (current.csrs[18] & kInterruptCauseBit) != 0 &&
+        current.pc == machineTrapBase;
+    const bool supervisor_interrupt_entered =
+        current.csrs[6] != previous.csrs[6] &&
+        (current.csrs[6] & kInterruptCauseBit) != 0 &&
+        current.pc == supervisorTrapBase;
+    return machine_interrupt_entered || supervisor_interrupt_entered;
 }
 
 const char* csr_name(uint32_t csr) {
@@ -193,6 +219,27 @@ const char* csr_name(uint32_t csr) {
         return "mtval";
     default:
         return "csr";
+    }
+}
+
+void dump_trace_summary(const char* label, const std::vector<Snapshot>& events) {
+    std::fprintf(stderr, "%s trace (%zu events):\n", label, events.size());
+    for (size_t i = 0; i < events.size(); ++i) {
+        const Snapshot& event = events[i];
+        std::fprintf(
+            stderr,
+            "  [%zu] pc=0x%llx instret=%llu halted=%d priv=%u mepc=0x%llx mcause=0x%llx mtval=0x%llx sepc=0x%llx scause=0x%llx stval=0x%llx\n",
+            i,
+            static_cast<unsigned long long>(event.pc),
+            static_cast<unsigned long long>(event.instret),
+            event.halted ? 1 : 0,
+            static_cast<unsigned>(event.privilege),
+            static_cast<unsigned long long>(event.csrs[17]),
+            static_cast<unsigned long long>(event.csrs[18]),
+            static_cast<unsigned long long>(event.csrs[19]),
+            static_cast<unsigned long long>(event.csrs[5]),
+            static_cast<unsigned long long>(event.csrs[6]),
+            static_cast<unsigned long long>(event.csrs[7]));
     }
 }
 
@@ -280,7 +327,13 @@ TraceResult collect_trace(const Scenario& scenario, BackendUnderTest kind) {
         backend->step();
         Snapshot current = capture_snapshot(cpu, ram, scenario.watches);
         if (is_commit_event(previous, current)) {
-            result.events.push_back(current);
+            // The functional backend services interrupts and then executes the
+            // first trap-handler instruction in the same step. The pipeline
+            // backend exposes a transient interrupt-entry state before that
+            // retirement, so normalize it out before comparing traces.
+            if (!is_interrupt_entry_event(previous, current)) {
+                result.events.push_back(current);
+            }
         }
         previous = current;
         if (current.halted) {
@@ -314,6 +367,8 @@ bool compare_trace(const Scenario& scenario) {
             scenario.name,
             functional.events.size(),
             pipeline.events.size());
+        dump_trace_summary("functional", functional.events);
+        dump_trace_summary("pipeline", pipeline.events);
         return false;
     }
 
@@ -422,6 +477,243 @@ int main() {
             64,
             [](CPU& cpu, Ram&, Bus&) {
                 cpu.csr().write(CSR_MTVEC, kTrapVector, cpu.core());
+            },
+        },
+        {
+            "sv39_mprv_fault",
+            {
+                0x00052083U,  // lw x1, 0(x10)
+                0x00b52023U,  // sw x11, 0(x10)
+                0x00052603U,  // lw x12, 0(x10)
+                0x30079073U,  // csrw mstatus, x15
+                0x00072683U,  // lw x13, 0(x14)
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                0x34131073U,  // csrw mepc, x6
+                kMret,
+            },
+            {
+                {0x80104000ULL, 4},
+            },
+            128,
+            [](CPU& cpu, Ram& ram, Bus&) {
+                constexpr uint64_t kSatpSv39 = 8ULL << 60;
+                constexpr uint64_t kRootPageTable = 0x80100000ULL;
+                constexpr uint64_t kLevel1PageTable = 0x80101000ULL;
+                constexpr uint64_t kLevel0PageTable = 0x80102000ULL;
+                constexpr uint64_t kUserBackingPage = 0x80103000ULL;
+                constexpr uint64_t kSupervisorBackingPage = 0x80104000ULL;
+                constexpr uint64_t kUserVirtualPage = 0x80002000ULL;
+                constexpr uint64_t kSupervisorVirtualPage = 0x80003000ULL;
+
+                // Root[2] -> level-1 table
+                write64(ram, kRootPageTable + 16, ((kLevel1PageTable >> 12) << 10) | 0x1ULL);
+                // Level-1[0] -> level-0 table
+                write64(ram, kLevel1PageTable + 0, ((kLevel0PageTable >> 12) << 10) | 0x1ULL);
+                // Level-0[2]: user data page
+                write64(ram, kLevel0PageTable + 16, ((kUserBackingPage >> 12) << 10) | 0x17ULL);
+                // Level-0[3]: supervisor-only data page
+                write64(ram, kLevel0PageTable + 24, ((kSupervisorBackingPage >> 12) << 10) | 0x7ULL);
+
+                ram.store(kUserBackingPage, 0x11223344U, 4);
+                ram.store(kSupervisorBackingPage, 0x55667788U, 4);
+
+                cpu.core().write_gpr(10, kUserVirtualPage);
+                cpu.core().write_gpr(11, 0x01020304U);
+                cpu.core().write_gpr(14, kSupervisorVirtualPage);
+                cpu.core().write_gpr(15, MSTATUS_MPRV);  // MPP=U, MPRV=1, SUM=0
+                cpu.core().write_gpr(6, kEntry + 20);    // resume at addi a7, x0, 93
+
+                cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
+                cpu.csr().write(
+                    CSR_MSTATUS,
+                    MSTATUS_MPRV | (1ULL << MSTATUS_MPP_SHIFT) | MSTATUS_SUM,
+                    cpu.core());
+                cpu.csr().write(CSR_MTVEC, kTrapVector, cpu.core());
+                cpu.address_space().flush_tlb();
+            },
+        },
+        {
+            "sv39_instruction_page_fault",
+            {
+                0x00030067U,  // jalr x0, x6, 0
+                kAddiX1WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                0x14139073U,  // csrw sepc, x7
+                0x10200073U,  // sret
+            },
+            {},
+            128,
+            [](CPU& cpu, Ram& ram, Bus&) {
+                constexpr uint64_t kSatpSv39 = 8ULL << 60;
+                constexpr uint64_t kRootPageTable = 0x80100000ULL;
+                constexpr uint64_t kLevel1PageTable = 0x80101000ULL;
+                constexpr uint64_t kLevel0PageTable = 0x80102000ULL;
+                constexpr uint64_t kUserExecBackingPage = 0x80103000ULL;
+                constexpr uint64_t kUserExecVirtualPage = 0x80001000ULL;
+
+                // Root[2] -> level-1 table
+                write64(ram, kRootPageTable + 16, ((kLevel1PageTable >> 12) << 10) | 0x1ULL);
+                // Level-1[0] -> level-0 table
+                write64(ram, kLevel1PageTable + 0, ((kLevel0PageTable >> 12) << 10) | 0x1ULL);
+                // Level-0[0]: code page at kEntry, executable in S-mode
+                write64(ram, kLevel0PageTable + 0, ((kEntry >> 12) << 10) | 0xFULL);
+                // Level-0[1]: user executable page, must fault when fetched in S-mode
+                write64(ram, kLevel0PageTable + 8, ((kUserExecBackingPage >> 12) << 10) | 0x19ULL);
+
+                // Populate the user-exec backing page with a harmless instruction
+                // so a buggy implementation would continue past the jump.
+                write32(ram, kUserExecBackingPage, kAddiX1WrongPath);
+
+                cpu.core().write_gpr(6, kUserExecVirtualPage);
+                cpu.core().write_gpr(7, kEntry + 8);  // resume at addi a7, x0, 93
+                cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+
+                cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
+                cpu.csr().write(CSR_MEDELEG, 1ULL << 12, cpu.core());
+                cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                cpu.address_space().flush_tlb();
+            },
+        },
+        {
+            "sv39_load_page_fault",
+            {
+                kLwX1FromX10,
+                kAddiX2WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                kCsrwSepcX7,
+                kSret,
+            },
+            {},
+            128,
+            [](CPU& cpu, Ram& ram, Bus&) {
+                constexpr uint64_t kSatpSv39 = 8ULL << 60;
+                constexpr uint64_t kRootPageTable = 0x80100000ULL;
+                constexpr uint64_t kFaultVirtualAddr = 0xC0000000ULL;
+
+                // Root[2]: 1GiB leaf covering the executable image at 0x80000000.
+                write64(ram, kRootPageTable + 16, ((kEntry >> 12) << 10) | 0xFULL);
+
+                cpu.core().write_gpr(10, kFaultVirtualAddr);
+                cpu.core().write_gpr(7, kEntry + 8);
+                cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+
+                cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
+                cpu.csr().write(CSR_MEDELEG, 1ULL << 13, cpu.core());
+                cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                cpu.address_space().flush_tlb();
+            },
+        },
+        {
+            "sv39_store_page_fault",
+            {
+                kSwX11ToX10,
+                kAddiX3WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                kCsrwSepcX7,
+                kSret,
+            },
+            {},
+            128,
+            [](CPU& cpu, Ram& ram, Bus&) {
+                constexpr uint64_t kSatpSv39 = 8ULL << 60;
+                constexpr uint64_t kRootPageTable = 0x80100000ULL;
+                constexpr uint64_t kFaultVirtualAddr = 0xC0001000ULL;
+
+                // Root[2]: 1GiB leaf covering the executable image at 0x80000000.
+                write64(ram, kRootPageTable + 16, ((kEntry >> 12) << 10) | 0xFULL);
+
+                cpu.core().write_gpr(10, kFaultVirtualAddr);
+                cpu.core().write_gpr(11, 0x12345678U);
+                cpu.core().write_gpr(7, kEntry + 8);
+                cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+
+                cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
+                cpu.csr().write(CSR_MEDELEG, 1ULL << 15, cpu.core());
+                cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                cpu.address_space().flush_tlb();
+            },
+        },
+        {
+            "sv39_reserved_non_leaf_fault",
+            {
+                kLwX1FromX10,
+                kAddiX4WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                kCsrwSepcX7,
+                kSret,
+            },
+            {},
+            128,
+            [](CPU& cpu, Ram& ram, Bus&) {
+                constexpr uint64_t kSatpSv39 = 8ULL << 60;
+                constexpr uint64_t kRootPageTable = 0x80100000ULL;
+                constexpr uint64_t kLevel1PageTable = 0x80101000ULL;
+                constexpr uint64_t kLevel0CodePageTable = 0x80102000ULL;
+                constexpr uint64_t kLevel0ReservedPageTable = 0x80103000ULL;
+                constexpr uint64_t kBackingPage = 0x80104000ULL;
+                constexpr uint64_t kFaultVirtualAddr = 0x80400000ULL;
+
+                // Root[2] -> level-1 table
+                write64(ram, kRootPageTable + 16, ((kLevel1PageTable >> 12) << 10) | 0x1ULL);
+                // Level-1[0] -> level-0 code page table
+                write64(ram, kLevel1PageTable + 0, ((kLevel0CodePageTable >> 12) << 10) | 0x1ULL);
+                // Level-0[0]: executable code page at kEntry
+                write64(ram, kLevel0CodePageTable + 0, ((kEntry >> 12) << 10) | 0xFULL);
+                // Level-1[2]: reserved non-leaf pointer with U bit set
+                write64(ram, kLevel1PageTable + 16, ((kLevel0ReservedPageTable >> 12) << 10) | 0x11ULL);
+                // Leaf that must never become reachable if reserved-bit check works
+                write64(ram, kLevel0ReservedPageTable + 0, ((kBackingPage >> 12) << 10) | 0x7ULL);
+                ram.store(kBackingPage, 0xCAFEBABEU, 4);
+
+                cpu.core().write_gpr(10, kFaultVirtualAddr);
+                cpu.core().write_gpr(7, kEntry + 8);
+                cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+
+                cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
+                cpu.csr().write(CSR_MEDELEG, 1ULL << 13, cpu.core());
+                cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                cpu.address_space().flush_tlb();
+            },
+        },
+        {
+            "supervisor_timer_interrupt_after_sip_write",
+            {
+                kCsrwSipX5,
+                kAddiX1WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                kCsrrcSipX5,
+                kCsrwSepcX7,
+                kSret,
+            },
+            {},
+            128,
+            [](CPU& cpu, Ram&, Bus&) {
+                cpu.core().write_gpr(5, MIE_STIE);
+                cpu.core().write_gpr(7, kEntry + 8);
+                cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+
+                cpu.csr().write(CSR_MIDELEG, MIE_STIE, cpu.core());
+                cpu.csr().write(CSR_SIE, MIE_STIE, cpu.core());
+                cpu.csr().write(CSR_MSTATUS, MSTATUS_SIE, cpu.core());
+                cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
             },
         },
     };

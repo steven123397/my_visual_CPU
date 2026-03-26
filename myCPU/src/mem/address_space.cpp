@@ -98,6 +98,29 @@ bool can_access_user_page(AccessType type, PrivilegeMode mode, uint64_t mstatus)
     return (mstatus & MSTATUS_SUM) != 0;
 }
 
+PrivilegeMode decode_mpp(uint64_t mstatus) {
+    switch ((mstatus & MSTATUS_MPP_MASK) >> MSTATUS_MPP_SHIFT) {
+    case 0:
+        return PrivilegeMode::User;
+    case 1:
+        return PrivilegeMode::Supervisor;
+    case 3:
+        return PrivilegeMode::Machine;
+    default:
+        return PrivilegeMode::Machine;
+    }
+}
+
+PrivilegeMode effective_privilege_mode(AccessType type, const CoreState& core, uint64_t mstatus) {
+    if (type == AccessType::Instruction) {
+        return core.privilege_mode();
+    }
+    if (core.privilege_mode() == PrivilegeMode::Machine && (mstatus & MSTATUS_MPRV)) {
+        return decode_mpp(mstatus);
+    }
+    return core.privilege_mode();
+}
+
 }  // namespace
 
 AddressSpace::AddressSpace(CoreState& core, CsrFile& csr, TrapController& trap)
@@ -211,25 +234,29 @@ void AddressSpace::fill_tlb(
     next_tlb_victim_ = (next_tlb_victim_ + 1) % tlb_.size();
 }
 
-bool AddressSpace::check_leaf_permissions(uint64_t pte, AccessType type, uint64_t vaddr, TrapRequest& fault) {
+bool AddressSpace::check_leaf_permissions(
+    uint64_t pte,
+    AccessType type,
+    PrivilegeMode effective_mode,
+    uint64_t vaddr,
+    TrapRequest& fault) {
     const bool readable = pte & PTE_R;
     const bool writable = pte & PTE_W;
     const bool executable = pte & PTE_X;
     const bool user_accessible = pte & PTE_U;
     const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
-    const PrivilegeMode mode = core_.privilege_mode();
 
     if (writable && !readable) {
         fault = make_fault(page_fault_cause(type), vaddr);
         return false;
     }
 
-    const bool is_user_mode = mode == PrivilegeMode::User;
+    const bool is_user_mode = effective_mode == PrivilegeMode::User;
     if (is_user_mode && !user_accessible) {
         fault = make_fault(page_fault_cause(type), vaddr);
         return false;
     }
-    if (!is_user_mode && user_accessible && !can_access_user_page(type, mode, mstatus)) {
+    if (!is_user_mode && user_accessible && !can_access_user_page(type, effective_mode, mstatus)) {
         fault = make_fault(page_fault_cause(type), vaddr);
         return false;
     }
@@ -281,8 +308,10 @@ bool AddressSpace::update_pte_access_bits(
 bool AddressSpace::translate(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr, TrapRequest& fault) {
     const uint64_t satp = csr_.read(CSR_SATP, core_);
     const uint64_t mode = (satp & SATP_MODE_MASK) >> SATP_MODE_SHIFT;
+    const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
+    const PrivilegeMode effective_mode = effective_privilege_mode(type, core_, mstatus);
 
-    if (mode == SATP_MODE_BARE || core_.privilege_mode() == PrivilegeMode::Machine) {
+    if (mode == SATP_MODE_BARE || effective_mode == PrivilegeMode::Machine) {
         paddr = vaddr;
         return true;
     }
@@ -300,7 +329,7 @@ bool AddressSpace::translate(Bus& bus, uint64_t vaddr, AccessType type, uint64_t
     if (TlbEntry* entry = lookup_tlb(satp, vaddr)) {
         const uint64_t page_mask = (1ULL << entry->page_shift) - 1ULL;
         paddr = entry->ppage_base | (vaddr & page_mask);
-        if (!check_leaf_permissions(entry->pte, type, vaddr, fault)) {
+        if (!check_leaf_permissions(entry->pte, type, effective_mode, vaddr, fault)) {
             return false;
         }
         return update_pte_access_bits(bus, entry->pte_addr, entry->pte, type, vaddr, fault);
@@ -345,6 +374,8 @@ void AddressSpace::apply_fault(const TrapRequest& fault) {
 
 bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr, TrapRequest& fault) {
     const uint64_t satp = csr_.read(CSR_SATP, core_);
+    const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
+    const PrivilegeMode effective_mode = effective_privilege_mode(type, core_, mstatus);
     uint64_t ppn = satp & SATP_PPN_MASK;
 
     const uint64_t vpn[3] = {
@@ -371,7 +402,7 @@ bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, ui
         const bool is_leaf = (pte & (PTE_R | PTE_W | PTE_X)) != 0;
 
         if (is_leaf) {
-            if (!check_leaf_permissions(pte, type, vaddr, fault)) {
+            if (!check_leaf_permissions(pte, type, effective_mode, vaddr, fault)) {
                 return false;
             }
 
@@ -401,6 +432,13 @@ bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, ui
             paddr = (pte_ppn << 12) | page_offset;
             fill_tlb(satp, vaddr, paddr, updated_pte, pte_addr, static_cast<uint8_t>(SV39_PAGE_SHIFT + level * 9));
             return true;
+        }
+
+        // For non-leaf PTEs, U/A/D are reserved in the current Sv39 model and
+        // must not be accepted as valid next-level pointers.
+        if (pte & (PTE_U | PTE_A | PTE_D)) {
+            fault = make_fault(page_fault_cause(type), vaddr);
+            return false;
         }
 
         ppn = (pte >> 10) & PTE_PPN_MASK;

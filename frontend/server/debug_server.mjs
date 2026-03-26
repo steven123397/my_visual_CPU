@@ -162,6 +162,13 @@ export async function startServer({
   let currentSnapshot = null;
   let runTimer = null;
 
+  function stopRunLoop() {
+    if (runTimer) {
+      clearInterval(runTimer);
+      runTimer = null;
+    }
+  }
+
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
@@ -179,6 +186,7 @@ export async function startServer({
           json(response, 404, { error: `unknown test: ${body.test}` });
           return;
         }
+        stopRunLoop();
         if (currentSession) {
           await currentSession.close();
         }
@@ -240,21 +248,17 @@ export async function startServer({
         }
         const body = await readBody(request);
         const intervalMs = Math.max(20, Math.floor(1000 / Math.max(1, body.rateHz ?? 8)));
-        if (runTimer) {
-          clearInterval(runTimer);
-        }
+        stopRunLoop();
         runTimer = setInterval(async () => {
           try {
             currentSnapshot = await currentSession.stepCycle();
             wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
             if (currentSnapshot.summary?.halted) {
-              clearInterval(runTimer);
-              runTimer = null;
+              stopRunLoop();
             }
           } catch (error) {
             wsHub.broadcast({ type: 'error', message: error.message });
-            clearInterval(runTimer);
-            runTimer = null;
+            stopRunLoop();
           }
         }, intervalMs);
         json(response, 200, { ok: true });
@@ -262,10 +266,7 @@ export async function startServer({
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/pause') {
-        if (runTimer) {
-          clearInterval(runTimer);
-          runTimer = null;
-        }
+        stopRunLoop();
         json(response, 200, { ok: true, snapshot: currentSnapshot });
         return;
       }
@@ -290,10 +291,7 @@ export async function startServer({
     port: boundPort,
     baseUrl: `http://${host}:${boundPort}`,
     async close() {
-      if (runTimer) {
-        clearInterval(runTimer);
-        runTimer = null;
-      }
+      stopRunLoop();
       if (currentSession) {
         await currentSession.close();
         currentSession = null;

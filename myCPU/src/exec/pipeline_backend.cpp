@@ -109,25 +109,43 @@ void PipelineBackend::step() {
     last_cycle_stalled_ = false;
     last_cycle_trap_flush_ = false;
     last_cycle_committed_ = false;
+    interrupt_serviceable_at_cycle_start_ = cpu_.trap().has_serviceable_interrupt();
     redirect_pending_ = false;
     redirect_target_ = 0;
 
     const bool wb_flushed = step_wb();
+    bool deferred_interrupt = false;
     bool committed_fetch_fault = false;
     bool serviced_interrupt = false;
+    // Keep fetch-fault delivery precise: when WB already retired an older
+    // instruction this cycle, defer a younger pending fetch fault until the
+    // next cycle instead of collapsing both events into one snapshot.
     if (!wb_flushed) {
-        committed_fetch_fault = try_commit_fetch_fault();
-        if (!committed_fetch_fault) {
-            serviced_interrupt = try_service_interrupt_at_commit_boundary();
+        if (last_cycle_committed_ && !interrupt_serviceable_at_cycle_start_ &&
+            cpu_.trap().has_serviceable_interrupt()) {
+            // A just-retired CSR write made an interrupt newly serviceable.
+            // Flush younger in-flight work and let the interrupt become the
+            // next architectural boundary, matching the functional backend.
+            reset_stage_state();
+            deferred_interrupt = true;
+        } else {
+            if (!last_cycle_committed_) {
+                committed_fetch_fault = try_commit_fetch_fault();
+            }
+            if (!committed_fetch_fault) {
+                serviced_interrupt = try_service_interrupt_at_commit_boundary();
+            }
         }
     }
-    if (committed_fetch_fault || serviced_interrupt) {
+    if (deferred_interrupt || committed_fetch_fault || serviced_interrupt) {
         last_cycle_trap_flush_ = true;
     }
-    step_mem();
-    step_ex();
-    step_id();
-    step_if();
+    if (!deferred_interrupt) {
+        step_mem();
+        step_ex();
+        step_id();
+        step_if();
+    }
 
     commit_next_state();
     cpu_.core().advance_cycle();
@@ -515,6 +533,13 @@ void PipelineBackend::step_if() {
 
 bool PipelineBackend::try_service_interrupt_at_commit_boundary() {
     if (!mem_wb_.slot.valid && !pipeline_empty()) {
+        return false;
+    }
+    // Match the functional backend's sequencing: an interrupt that only
+    // became serviceable because the just-retired instruction updated CSR
+    // state must wait until the next architectural step. Older pending
+    // interrupts may still preempt here to avoid starvation in tight loops.
+    if (last_cycle_committed_ && !interrupt_serviceable_at_cycle_start_) {
         return false;
     }
     if (!cpu_.trap().service_pending_interrupts()) {

@@ -8,6 +8,12 @@ constexpr uint64_t CAUSE_SUPERVISOR_TIMER_INT = CAUSE_INT_BIT | 5ULL;
 constexpr uint64_t CAUSE_MACHINE_EXTERNAL_INT = CAUSE_INT_BIT | 11ULL;
 constexpr uint64_t CAUSE_MACHINE_TIMER_INT = CAUSE_INT_BIT | 7ULL;
 
+struct PendingInterrupt {
+    bool valid{false};
+    uint64_t cause{0};
+    uint64_t mip_mask{0};
+};
+
 uint64_t interrupt_cause_code(uint64_t cause) {
     return cause & ~CAUSE_INT_BIT;
 }
@@ -61,6 +67,33 @@ bool supervisor_interrupts_enabled(const CoreState& core, uint64_t mstatus) {
         return true;
     }
     return false;
+}
+
+PendingInterrupt select_serviceable_interrupt(const CoreState& core, const CsrFile& csr) {
+    const uint64_t mstatus = csr.read(CSR_MSTATUS, core);
+    const uint64_t mie = csr.read(CSR_MIE, core);
+    const uint64_t mip = csr.read(CSR_MIP, core);
+    const uint64_t mideleg = csr.read(CSR_MIDELEG, core);
+
+    if ((mie & MIE_MEIE) && (mip & MIE_MEIE) && machine_interrupts_enabled(core, mstatus)) {
+        return PendingInterrupt{true, CAUSE_MACHINE_EXTERNAL_INT, MIE_MEIE};
+    }
+
+    if ((mie & MIE_MTIE) && (mip & MIE_MTIE) && machine_interrupts_enabled(core, mstatus)) {
+        return PendingInterrupt{true, CAUSE_MACHINE_TIMER_INT, MIE_MTIE};
+    }
+
+    if ((mideleg & MIE_SEIE) && (mie & MIE_SEIE) && (mip & MIE_SEIE) &&
+        supervisor_interrupts_enabled(core, mstatus)) {
+        return PendingInterrupt{true, CAUSE_SUPERVISOR_EXTERNAL_INT, MIE_SEIE};
+    }
+
+    if ((mideleg & MIE_STIE) && (mie & MIE_STIE) && (mip & MIE_STIE) &&
+        supervisor_interrupts_enabled(core, mstatus)) {
+        return PendingInterrupt{true, CAUSE_SUPERVISOR_TIMER_INT, MIE_STIE};
+    }
+
+    return {};
 }
 
 }  // namespace
@@ -142,37 +175,20 @@ void TrapController::raise_timer_interrupt() {
     csr_.write(CSR_MIP, (mip | MIE_MTIE) & ~MIE_STIE, core_);
 }
 
+bool TrapController::has_serviceable_interrupt() const {
+    return select_serviceable_interrupt(core_, csr_).valid;
+}
+
 bool TrapController::service_pending_interrupts() {
-    const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
-    const uint64_t mie = csr_.read(CSR_MIE, core_);
+    const PendingInterrupt pending = select_serviceable_interrupt(core_, csr_);
+    if (!pending.valid) {
+        return false;
+    }
+
     const uint64_t mip = csr_.read(CSR_MIP, core_);
-    const uint64_t mideleg = csr_.read(CSR_MIDELEG, core_);
-
-    if ((mie & MIE_MEIE) && (mip & MIE_MEIE) && machine_interrupts_enabled(core_, mstatus)) {
-        csr_.write(CSR_MIP, mip & ~MIE_MEIE, core_);
-        enter_interrupt(CAUSE_MACHINE_EXTERNAL_INT);
-        return true;
-    }
-
-    if ((mie & MIE_MTIE) && (mip & MIE_MTIE) && machine_interrupts_enabled(core_, mstatus)) {
-        csr_.write(CSR_MIP, mip & ~MIE_MTIE, core_);
-        enter_interrupt(CAUSE_MACHINE_TIMER_INT);
-        return true;
-    }
-
-    if ((mideleg & MIE_SEIE) && (mie & MIE_SEIE) && (mip & MIE_SEIE) && supervisor_interrupts_enabled(core_, mstatus)) {
-        csr_.write(CSR_MIP, mip & ~MIE_SEIE, core_);
-        enter_interrupt(CAUSE_SUPERVISOR_EXTERNAL_INT);
-        return true;
-    }
-
-    if ((mideleg & MIE_STIE) && (mie & MIE_STIE) && (mip & MIE_STIE) && supervisor_interrupts_enabled(core_, mstatus)) {
-        csr_.write(CSR_MIP, mip & ~MIE_STIE, core_);
-        enter_interrupt(CAUSE_SUPERVISOR_TIMER_INT);
-        return true;
-    }
-
-    return false;
+    csr_.write(CSR_MIP, mip & ~pending.mip_mask, core_);
+    enter_interrupt(pending.cause);
+    return true;
 }
 
 void TrapController::enter_trap(uint64_t cause, uint64_t tval) {

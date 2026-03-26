@@ -10,6 +10,7 @@ class Bus;
 class CoreState;
 class CsrFile;
 class TrapController;
+enum class PrivilegeMode : uint8_t;
 
 enum class AccessType : uint8_t {
     Instruction,
@@ -49,7 +50,12 @@ private:
 
     TlbEntry* lookup_tlb(uint64_t satp, uint64_t vaddr);
     void fill_tlb(uint64_t satp, uint64_t vaddr, uint64_t paddr, uint64_t pte, uint64_t pte_addr, uint8_t page_shift);
-    bool check_leaf_permissions(uint64_t pte, AccessType type, uint64_t vaddr, TrapRequest& fault);
+    bool check_leaf_permissions(
+        uint64_t pte,
+        AccessType type,
+        PrivilegeMode effective_mode,
+        uint64_t vaddr,
+        TrapRequest& fault);
     bool update_pte_access_bits(Bus& bus, uint64_t pte_addr, uint64_t& pte, AccessType type, uint64_t vaddr, TrapRequest& fault);
     bool translate(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr, TrapRequest& fault);
     AccessResult access_result(Bus& bus, uint64_t vaddr, int size, AccessType type);
