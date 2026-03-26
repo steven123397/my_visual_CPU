@@ -33,7 +33,7 @@
 - [frontend](/home/liangjiaqi/projects/my_visual_CPU/frontend)
   本地调试服务、浏览器前端和 Node 测试。
 - [docs](/home/liangjiaqi/projects/my_visual_CPU/docs)
-  规划、契约、审查和状态类文档。
+  按 `background / design / plan / status` 组织的正式技术文档，以及统一入口 [docs/index.md](/home/liangjiaqi/projects/my_visual_CPU/docs/index.md)。
 - [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
   面向读者的项目概览、构建和运行说明。
 
@@ -44,7 +44,7 @@
 - [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
   guest runtime 说明：memory、PMM、VM、trap、runtime、user task/program 与独立 kernel alpha bring-up 的当前边界和下一步。
 - [docs/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/docs/AGENTS.md)
-  文档维护规则：哪些内容留在根目录，哪些内容写入实现子树，哪些内容进入专门文档。
+  文档维护规则：四分法目录职责、模板、创建条件、完成态回写规则与索引要求。
 
 ## 当前状态
 
@@ -77,7 +77,7 @@
 
 - `2026-03-25` 已完成一批 simulator-side correctness 修复：非法整数编码、`DIV/REM` 溢出边界、ELF pure-BSS `PT_LOAD`、bus / device 第一轮边界防御。
 - `2026-03-26` 已完成一轮更系统的 Phase 1 hardening 回归扩充：非法编码样本扩展、CPU 侧 MMIO access-fault asm、ELF segment/reject/header 单元回归、host-side MMIO contract matrix，以及 CSR illegal matrix 均已接入现有门禁。
-- `2026-03-26` 已新增 [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)，作为当前 Phase 1 / Phase 2 回归收口标准。
+- `2026-03-26` 已新增 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)，作为当前 Phase 1 / Phase 2 回归收口标准。
 - `kernel_alpha_demo` 已完成首个可回归 alpha bring-up，当前正向输出为 `KMVPETDS`。
 - `kernel_alpha_fault_demo` 当前负向输出为 `KMVX`。
 - `kernel_alpha_storage_no_media_demo` 当前负向输出为 `KMVNX`。
@@ -114,15 +114,15 @@
 当前对 Phase 2 的工程安排是：
 
 - `pipeline core` 与 `debug/frontend` 的正式接入工作已经完成，不再把它们当作待合入功能。
-- 近期先不继续扩功能面，而是优先按 [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 明确 Phase 2 出门标准，并补强 `pipeline` 的 correctness / differential / robustness 验证。
+- 近期先不继续扩功能面，而是优先按 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 明确 Phase 2 出门标准，并补强 `pipeline` 的 correctness / differential / robustness 验证。
 - `debug/frontend` 继续限定在“教学演示可用”的最小范围，重点放在快照稳定性、测试门禁和对现有 demo 的可用性维护。
 
 相关状态文档见：
 
-- [docs/status/current_mainline_status_2026-03-25.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/current_mainline_status_2026-03-25.md)
-- [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)
-- [docs/status/code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
-- [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
+- [docs/status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+- [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+- [docs/status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
+- [docs/status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
 
 ## 技术栈
 

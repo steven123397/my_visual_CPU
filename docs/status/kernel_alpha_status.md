@@ -1,10 +1,18 @@
-# Kernel Alpha Bring-up 状态
+# kernel_alpha 状态
 
 ## 文档定位
 
 本文档用于记录独立 `kernel_alpha` bring-up 路线的当前状态、仍然有效的限制、少量关键历史节点和下一步工作。
 
 它已经从早期执行计划收口成状态跟踪文档，不再保留逐项 checklist 或中间执行流水账。
+
+## 关联文档
+
+- 相关设计：
+  - [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+  - [design/kernel_alpha_storage_error_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/kernel_alpha_storage_error_contract.md)
+- 已完成计划：
+  - [plan/kernel_alpha_storage_error_contract_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/kernel_alpha_storage_error_contract_plan.md)
 
 ## 目标 / 主题
 
@@ -170,7 +178,7 @@
 - tag：`phase1-stable`
 - commit：`283aee6`
 - 含义：`Phase 1` 核心 bring-up 目标已达成；后续 `kernel_alpha` / guest runtime 工作默认视为 post-Phase1 hardening
-- 当前这十条 `kernel_alpha` demo 与 `guest_supervisor_demo` 一起，构成 [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 定义的 Phase 1 核心 guest 门禁
+- 当前这十条 `kernel_alpha` demo 与 `guest_supervisor_demo` 一起，构成 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 定义的 Phase 1 核心 guest 门禁
 - 当前本地 `frontend` 调试测试清单已覆盖：
   - `guest_kernel_alpha_demo`
   - `guest_kernel_alpha_fault_demo`
@@ -186,6 +194,7 @@
 ## 关键历史节点
 
 - `2026-03-25` 已完成首个独立 `kernel_alpha_demo` alpha bring-up。
+- 在同一轮中期阶段，独立 `kernel_alpha` 曾先形成“1 条正向 + 6 条负向”的中间基线（`KMVPETDS`、`KMVX`、`KMVPX`、`KMVNX`、`KMVBX`、`KMVLX`、`KMVCX`），随后继续扩展到当前十条核心 guest 门禁。
 - 随后补上了：
   - `guest_kernel_alpha_fault_demo`
   - `guest_kernel_alpha_storage_no_media_demo`

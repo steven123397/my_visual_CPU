@@ -1,6 +1,22 @@
 # kernel_alpha storage 错误合同扩展设计
 
-> 归档说明：该工作已经完成，当前正式状态请以 [docs/status/kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md) 为准。本文件仅保留当时的设计过程记录。
+## 文档定位
+
+本文档记录独立 `kernel_alpha` 路径中 storage 错误合同扩展的设计边界。
+
+对应工作已经完成，因此本文档保留为历史语境设计说明，不承担实时状态更新。
+
+## 关联文档
+
+- 状态文档：
+  - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+- 相关计划：
+  - [plan/kernel_alpha_storage_error_contract_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/kernel_alpha_storage_error_contract_plan.md)
+
+## 当前有效性说明
+
+- 当前有效 / 历史语境：历史语境，保留当时为何切这条 storage 合同扩展的设计理由。
+- 当前正式结果以 [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md) 为准。
 
 ## 背景
 
@@ -106,7 +122,7 @@
 - 修改：`myCPU/guest/include/storage.h`
 - 修改：`myCPU/guest/kernel/storage.c`
 - 修改：`myCPU/Makefile`
-- 修改：`docs/status/kernel_alpha_bringup_status.md`
+- 修改：`docs/status/kernel_alpha_status.md`
 - 修改：`readme.md`
 
 ## 验证

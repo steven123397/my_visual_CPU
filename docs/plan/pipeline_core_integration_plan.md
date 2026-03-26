@@ -1,14 +1,24 @@
 # Pipeline Core 主线集成实现计划
 
-> 归档说明：本文档对应的接入工作已经完成，保留为历史计划记录；当前结果以 [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)、[debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md) 和当前状态文档为准。下文中的“本轮”“不迁移”“待办”等表述均按当时计划语境理解，不代表当前状态。
+> **文档状态：** 已完成
 
-> **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
+> **完成态说明：** 本文档对应的接入工作已经完成，继续保留在 `plan/` 作为历史计划记录。当前结果以 [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)、[debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md) 和 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。下文中的“本轮”“不迁移”“待办”等表述均按当时计划语境理解。
+
+> **面向 AI 代理的工作者：** 如需重演类似工作，仍应使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans。下文复选框结果仅保留历史执行记录。
 
 **目标：** 在不破坏当前 `phase1-stable` Phase 1 基线和 guest / `kernel_alpha` 回归的前提下，把你同学分支中的 Phase 2 pipeline core 重接到主线，并正式接入 `--backend pipeline`。
 
 **架构：** 先把 `Machine` 迁移到 `ExecutionBackend` 抽象，再接入共享语义层 `InstructionSemantics + InsnEffects + ExecutionContext`，随后把 `AddressSpace` 改成 result-based fault API，最后接入精确异常的 `PipelineBackend` 与 host-side pipeline 门禁。`functional` 继续作为默认 backend 和统一 ISA 语义真值来源；按当时计划语境，`debug/frontend` 留到后续单独一轮处理。
 
 **技术栈：** C11、C++17、GNU Make、RISC-V 交叉工具链（用于完整 `make test`）、host-side g++ smoke tests。
+
+## 关联文档
+
+- 来源设计：
+  - [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)
+  - [design/pipeline_integration_prep.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_integration_prep.md)
+- 目标状态：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
 
 ---
 
@@ -139,7 +149,7 @@
 - 修改：`myCPU/Makefile`
 - 测试：现有 `cd myCPU && make test`（回归守门）
 
-- [ ] **步骤 1：先让 `Machine` 具备 backend 编排骨架**
+- [x] **步骤 1：先让 `Machine` 具备 backend 编排骨架**
 
   修改 [machine.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.h) 和 [machine.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.cpp)，引入：
 
@@ -151,7 +161,7 @@
 
   第一版只要求 `FunctionalBackend` 可工作，不要求 `pipeline` 已接入。
 
-- [ ] **步骤 2：实现 `ExecutionBackend` 与 `FunctionalBackend`**
+- [x] **步骤 2：实现 `ExecutionBackend` 与 `FunctionalBackend`**
 
   在 [backend.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/exec/backend.h) 中定义最小接口：
 
@@ -172,7 +182,7 @@
   }
   ```
 
-- [ ] **步骤 3：把新源文件接进构建系统**
+- [x] **步骤 3：把新源文件接进构建系统**
 
   修改 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile)，加入：
 
@@ -181,7 +191,7 @@
 
   这一阶段不要把 `debug_session`、`debug_protocol` 或 `frontend` 相关项带进来。
 
-- [ ] **步骤 4：运行现有完整回归验证不回归**
+- [x] **步骤 4：运行现有完整回归验证不回归**
 
   运行：`cd myCPU && make test`
 
@@ -190,7 +200,7 @@
   - 构建通过
   - 现有 Phase 1 / guest / `kernel_alpha` 回归仍通过
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
   ```bash
   git add myCPU/src/exec/backend.h myCPU/src/exec/functional_backend.h myCPU/src/exec/functional_backend.cpp myCPU/src/platform/machine.h myCPU/src/platform/machine.cpp myCPU/Makefile
@@ -219,7 +229,7 @@
 - 修改：`myCPU/Makefile`
 - 测试：`myCPU/tests/host/instruction_semantics_smoke.cpp`
 
-- [ ] **步骤 1：先写共享语义层 smoke**
+- [x] **步骤 1：先写共享语义层 smoke**
 
   新增 [instruction_semantics_smoke.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/instruction_semantics_smoke.cpp)，覆盖至少这些场景：
 
@@ -229,13 +239,13 @@
   - `lw` 生成正确的 `MemoryRequest`
   - `sw` 生成正确的 `MemoryRequest`
 
-- [ ] **步骤 2：运行新测试，确认它先失败**
+- [x] **步骤 2：运行新测试，确认它先失败**
 
   运行：`cd myCPU && make tests/host/instruction_semantics_smoke`
 
   预期：FAIL，报缺少 `isa/*`、`InsnEffects`、`InstructionSemantics` 或 `build_*_effects()`。
 
-- [ ] **步骤 3：实现共享语义值对象与上下文**
+- [x] **步骤 3：实现共享语义值对象与上下文**
 
   在 [effects.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/isa/effects.h) 中添加：
 
@@ -248,7 +258,7 @@
 
   在 [execution_context.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/isa/execution_context.cpp) 中提供 `CPU` / `CoreState` / `CsrFile` / `AddressSpace` / `Bus` 的受控访问。
 
-- [ ] **步骤 4：把 `exec/*` 迁成 `build_*_effects()`**
+- [x] **步骤 4：把 `exec/*` 迁成 `build_*_effects()`**
 
   在 `integer/control-flow/memory/system` 四个族中新增 `build_*_effects()`，保留现有 `execute_*()` 兼容层，避免一次性打散当前 functional 路径。
 
@@ -258,7 +268,7 @@
   - [cpu.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/cpu.cpp) 通过 `apply_instruction_effects()` 消费 effects
   - 共享语义层成为 `functional` 与后续 `pipeline` 的统一 ISA 语义源
 
-- [ ] **步骤 5：运行共享语义 smoke 并再跑完整回归**
+- [x] **步骤 5：运行共享语义 smoke 并再跑完整回归**
 
   运行：`cd myCPU && make tests/host/instruction_semantics_smoke && ./tests/host/instruction_semantics_smoke`
 
@@ -268,7 +278,7 @@
 
   预期：PASS
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
   ```bash
   git add myCPU/src/isa/effects.h myCPU/src/isa/execution_context.h myCPU/src/isa/execution_context.cpp myCPU/src/isa/instruction_semantics.h myCPU/src/isa/instruction_semantics.cpp myCPU/src/cpu.cpp myCPU/src/exec/integer_ops.h myCPU/src/exec/integer_ops.cpp myCPU/src/exec/control_flow_ops.h myCPU/src/exec/control_flow_ops.cpp myCPU/src/exec/memory_ops.h myCPU/src/exec/memory_ops.cpp myCPU/src/exec/system_ops.h myCPU/src/exec/system_ops.cpp myCPU/tests/host/instruction_semantics_smoke.cpp myCPU/Makefile
@@ -286,7 +296,7 @@
 - 修改：`myCPU/src/exec/memory_ops.cpp`
 - 测试：`myCPU/tests/host/address_space_faults_smoke.cpp`
 
-- [ ] **步骤 1：先写 `AddressSpace::AccessResult` smoke**
+- [x] **步骤 1：先写 `AddressSpace::AccessResult` smoke**
 
   新增 [address_space_faults_smoke.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/address_space_faults_smoke.cpp)，覆盖：
 
@@ -295,13 +305,13 @@
   - Sv39 non-canonical 地址返回 page-fault result
   - result API 不会直接写 trap CSR
 
-- [ ] **步骤 2：运行新测试，确认它先失败**
+- [x] **步骤 2：运行新测试，确认它先失败**
 
   运行：`cd myCPU && make tests/host/address_space_faults_smoke`
 
   预期：FAIL，报缺少 `AccessResult`、`load_result()` 等接口。
 
-- [ ] **步骤 3：实现 `AccessResult` 和 result API**
+- [x] **步骤 3：实现 `AccessResult` 和 result API**
 
   在 [address_space.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/mem/address_space.h) 中新增：
 
@@ -321,14 +331,14 @@
 
   legacy wrapper `fetch32/load/store` 继续保留，用于当前 `functional` 兼容消费。
 
-- [ ] **步骤 4：调整 `memory_ops` 与 `cpu.cpp` 的 fault 消费路径**
+- [x] **步骤 4：调整 `memory_ops` 与 `cpu.cpp` 的 fault 消费路径**
 
   确保：
 
   - 共享语义层和后续 `pipeline` 能消费 result API
   - 当前 `functional` 仍能通过 legacy wrapper 获得与旧行为一致的 trap 进入
 
-- [ ] **步骤 5：运行专用 smoke 与完整回归**
+- [x] **步骤 5：运行专用 smoke 与完整回归**
 
   运行：`cd myCPU && make tests/host/address_space_faults_smoke && ./tests/host/address_space_faults_smoke`
 
@@ -338,7 +348,7 @@
 
   预期：PASS
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
   ```bash
   git add myCPU/src/mem/address_space.h myCPU/src/mem/address_space.cpp myCPU/src/exec/memory_ops.h myCPU/src/exec/memory_ops.cpp myCPU/tests/host/address_space_faults_smoke.cpp
@@ -372,7 +382,7 @@
 - 修改：`myCPU/Makefile`
 - 测试：`myCPU/tests/host/pipeline_backend_smoke.cpp`
 
-- [ ] **步骤 1：先写 pipeline backend smoke**
+- [x] **步骤 1：先写 pipeline backend smoke**
 
   新增 [pipeline_backend_smoke.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/pipeline_backend_smoke.cpp)，覆盖至少这些关键行为：
 
@@ -382,13 +392,13 @@
   - `mret` 之后的 fetch fault 处理
   - forwarding、load-use interlock、redirect、flush 的基础路径
 
-- [ ] **步骤 2：运行新测试，确认它先失败**
+- [x] **步骤 2：运行新测试，确认它先失败**
 
   运行：`cd myCPU && make tests/host/pipeline_backend_smoke`
 
   预期：FAIL，报缺少 `PipelineBackend` 或其依赖接口。
 
-- [ ] **步骤 3：实现 `PipelineBackend`，但去掉 debug 依赖**
+- [x] **步骤 3：实现 `PipelineBackend`，但去掉 debug 依赖**
 
   从远端 `pipeline_backend.*` 迁移核心逻辑时，明确删除或不引入：
 
@@ -405,13 +415,13 @@
   - redirect / flush
   - commit-boundary trap / interrupt
 
-- [ ] **步骤 4：把 `Machine` 扩成可持有 `PipelineBackend`**
+- [x] **步骤 4：把 `Machine` 扩成可持有 `PipelineBackend`**
 
   在 [machine.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.cpp) 的 `rebuild_backend()` 中新增 `Pipeline` 分支。
 
   如远端实现需要 `prepare_for_load()`、`reset_loaded_image()`、`clear_storage_image()` 等辅助入口，则按当前主线现有语义做最小重接，不得回退当前 storage 选项行为。
 
-- [ ] **步骤 5：运行 pipeline smoke 与完整 `functional` 回归**
+- [x] **步骤 5：运行 pipeline smoke 与完整 `functional` 回归**
 
   运行：`cd myCPU && make tests/host/pipeline_backend_smoke && ./tests/host/pipeline_backend_smoke`
 
@@ -421,7 +431,7 @@
 
   预期：PASS，说明 pipeline core 的引入没有破坏默认 `functional` Phase 1 基线。
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
   ```bash
   git add myCPU/src/exec/pipeline_types.h myCPU/src/exec/pipeline_backend.h myCPU/src/exec/pipeline_backend.cpp myCPU/src/platform/machine.h myCPU/src/platform/machine.cpp myCPU/src/trap.h myCPU/src/trap.cpp myCPU/src/devices/clint.h myCPU/src/devices/clint.cpp myCPU/src/devices/plic.h myCPU/src/devices/plic.cpp myCPU/src/devices/simple_storage.h myCPU/src/devices/simple_storage.cpp myCPU/src/devices/uart16550.h myCPU/src/devices/uart16550.cpp myCPU/src/mem/bus.h myCPU/src/mem/bus.cpp myCPU/src/mem/ram.h myCPU/src/mem/ram.cpp myCPU/tests/host/pipeline_backend_smoke.cpp myCPU/Makefile
@@ -440,7 +450,7 @@
 - 修改：`myCPU/Makefile`
 - 测试：`backend_differential_smoke.cpp`、`backend_cli.sh`
 
-- [ ] **步骤 1：先写差分 smoke 和 CLI smoke**
+- [x] **步骤 1：先写差分 smoke 和 CLI smoke**
 
   新增 [backend_differential_smoke.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/backend_differential_smoke.cpp)，比较 `functional` 与 `pipeline` 在提交态上的一致性，至少覆盖：
 
@@ -456,7 +466,7 @@
   - `--backend pipeline` 输出正确
   - 非法 backend 名称报 `unknown backend`
 
-- [ ] **步骤 2：运行新测试，确认它们先失败**
+- [x] **步骤 2：运行新测试，确认它们先失败**
 
   运行：`cd myCPU && make tests/host/backend_differential_smoke`
 
@@ -466,7 +476,7 @@
 
   预期：FAIL，报 `--backend` 未实现或 `pipeline` 不可选。
 
-- [ ] **步骤 3：在当前主线语义上实现 CLI backend 切换**
+- [x] **步骤 3：在当前主线语义上实现 CLI backend 切换**
 
   修改 [main.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/main.cpp)：
 
@@ -476,7 +486,7 @@
 
   修改 [machine.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.h) / [machine.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.cpp)，确保 backend 切换、镜像加载与 storage 附加在当前主线语义下正确工作。
 
-- [ ] **步骤 4：把 host-side pipeline 门禁接进 `Makefile`**
+- [x] **步骤 4：把 host-side pipeline 门禁接进 `Makefile`**
 
   在 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 中新增：
 
@@ -494,7 +504,7 @@
   - 不照搬远端对全部 asm 样例运行 `--backend pipeline` 的 `test-pipeline-%` 方案
   - 不把 guest/runtime 回归迁移到 `pipeline` 门禁
 
-- [ ] **步骤 5：运行本轮完整验收**
+- [x] **步骤 5：运行本轮完整验收**
 
   运行：`cd myCPU && make test-pipeline`
 
@@ -504,7 +514,7 @@
 
   预期：PASS
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
   ```bash
   git add myCPU/src/main.cpp myCPU/src/platform/machine.h myCPU/src/platform/machine.cpp myCPU/tests/host/backend_differential_smoke.cpp myCPU/tests/host/backend_cli.sh myCPU/Makefile
@@ -517,11 +527,11 @@
 
 - 修改：`myCPU/AGENTS.md`
 - 修改：`readme.md`
-- 修改：`docs/status/code_self_review_2026-03-24.md`（如需要）
-- 修改：`docs/status/kernel_alpha_bringup_status.md`（仅在需要说明 pipeline 集成边界时）
+- 修改：`docs/status/code_self_review_status.md`（如需要）
+- 修改：`docs/status/kernel_alpha_status.md`（仅在需要说明 pipeline 集成边界时）
 - 测试：最终完整验证
 
-- [ ] **步骤 1：更新对外与对内说明**
+- [x] **步骤 1：更新对外与对内说明**
 
   在 [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md) 中补充：
 
@@ -536,7 +546,7 @@
 
   如果需要，在状态文档中补一条“pipeline core 已接入、`debug/frontend` 留待下一轮”的当时阶段状态。
 
-- [ ] **步骤 2：运行最终验证**
+- [x] **步骤 2：运行最终验证**
 
   运行：`cd myCPU && make test-pipeline`
 
@@ -544,7 +554,7 @@
 
   预期：两者均 PASS
 
-- [ ] **步骤 3：检查工作区与变更边界**
+- [x] **步骤 3：检查工作区与变更边界**
 
   运行：`git status --short`
 
@@ -554,10 +564,10 @@
   - 不应出现 `myCPU/src/debug/*` 或 `frontend/*`
   - 不应出现对 `myCPU/guest/*` 的语义性改动
 
-- [ ] **步骤 4：Commit**
+- [x] **步骤 4：Commit**
 
   ```bash
-  git add myCPU/AGENTS.md readme.md docs/status/code_self_review_2026-03-24.md docs/status/kernel_alpha_bringup_status.md
+  git add myCPU/AGENTS.md readme.md docs/status/code_self_review_status.md docs/status/kernel_alpha_status.md
   git commit -m "docs(流水线): 同步 pipeline core 集成状态"
   ```
 

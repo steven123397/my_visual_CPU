@@ -18,6 +18,18 @@
 - 第二轮设计见 [debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)。
 - 下文中的“本轮目标/非目标”仅指第一轮 `pipeline core` 集成语境，不代表当前主线的全部已接入范围。
 
+## 关联文档
+
+- 状态文档：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+- 相关计划：
+  - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
+
+## 当前有效性说明
+
+- 当前有效 / 历史语境：当前有效，记录 `pipeline core` 正式接入主线时确定下来的结构边界。
+- 当前运行状态、后续回归收口和近期重点以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。
+
 ## 背景
 
 截至 `2026-03-25`，当前主线 `main` 位于提交 `14d0c6c`，其冻结的 Phase 1 基线为 tag `phase1-stable`（提交 `283aee6`）。

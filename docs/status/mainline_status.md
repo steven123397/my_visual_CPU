@@ -1,4 +1,4 @@
-# 当前主线状态（2026-03-25，更新到 2026-03-26）
+# 主线状态
 
 ## 文档定位
 
@@ -9,6 +9,19 @@
 - Phase 1 近期主线还剩什么
 - 已接入的 Phase 2 能力当前按什么方式继续推进
 - 新对话继续工作时，应该优先看哪些入口文档和验证门禁
+
+## 关联文档
+
+- 相关设计：
+  - [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+  - [design/cpp_refactor_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/cpp_refactor_design.md)
+- 当前计划：
+  - 当前暂无专门的主线执行计划；后续如有新任务，再单独建立对应 `plan` 文档。
+- 已完成计划：
+  - [plan/docs_information_architecture_reorg_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/docs_information_architecture_reorg_plan.md)
+  - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
+  - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
+  - [plan/debug_frontend_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/debug_frontend_integration_plan.md)
 
 ## 当前状态
 
@@ -23,7 +36,7 @@
 
 关于当前主线中“回归相关工作做到什么程度可认为阶段性收口”的统一判断口径，见：
 
-- [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)
+- [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
 
 ## 2026-03-26 补充进展
 
@@ -34,7 +47,8 @@
 - `tests/unit/elf_loader_segments.cpp`、`tests/unit/elf_loader_rejects.cpp` 和 `tests/unit/elf_loader_header_rejects.cpp` 已补上更真实的 ELF segment/layout 与 malformed-input reject 回归。
 - `tests/unit/bus_device_guards.cpp` 与 `tests/unit/mmio_contract_matrix.cpp` 已把 host-side MMIO guard / contract 做到第一轮矩阵化。
 - `tests/asm/csr_illegal_matrix.S` 已把 CSR 非法访问、跨特权级访问和只读 CSR 写入的 trap 合同补成第一轮矩阵。
-- `regression_completion_criteria_2026-03-26.md` 已成为当前 Phase 1 / Phase 2 回归收口的正式判断口径。
+- `design/regression_completion_criteria.md` 已成为当前 Phase 1 / Phase 2 回归收口的正式判断口径。
+- `docs/` 正式文档已经收口到 `background / design / plan / status + AGENTS.md + index.md` 结构，后续不再新增 `contracts / templates / archive / superpowers` 这类平行正式目录。
 
 ## Phase 1 近期主线
 
@@ -67,7 +81,7 @@
 
 在这个前提下，Phase 2 近期优先级如下：
 
-1. 按 [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 落实当前仓库对 Phase 2 的最小完成标准。
+1. 按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 落实当前仓库对 Phase 2 的最小完成标准。
 2. 继续补强 `pipeline` 的 correctness / differential / robustness 验证。
 3. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围，重点守住快照结构、协议输出和本地测试门禁。
 4. 在上述工作稳定之前，不急着把更多执行模型或更大的调试功能面并入当前主线。
@@ -85,7 +99,7 @@
 1. 先沿 reference path 继续补 `privilege / Sv39` 等仍未闭环的边界，并保持已落地的 illegal / MMIO / ELF / CSR hardening 矩阵稳定可回归。
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界。
-4. 已有 Phase 2 出门标准文档，下一步按 [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md) 把 `pipeline` 差分矩阵继续做实，而不是停留在原则层。
+4. 已有 Phase 2 出门标准文档，下一步按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 把 `pipeline` 差分矩阵继续做实，而不是停留在原则层。
 5. 在不扩功能面的前提下，继续补强 `pipeline` 差分与 `debug/frontend` 稳定性验证。
 
 ## 建议入口
@@ -95,9 +109,9 @@
 - [AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/AGENTS.md)
 - [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
 - [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
-- [regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)
-- [code_self_review_2026-03-24.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_2026-03-24.md)
-- [kernel_alpha_bringup_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_bringup_status.md)
+- [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+- [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
+- [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
 
 ## 验证基线
 

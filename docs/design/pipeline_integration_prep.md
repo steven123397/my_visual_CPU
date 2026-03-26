@@ -13,6 +13,18 @@
 - `debug/frontend` 的第二轮接入结果见 [debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)。
 - 下文中的“后续接回”与类似未来时态，均按集成前的准备阶段语境理解。
 
+## 关联文档
+
+- 状态文档：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+- 相关计划：
+  - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
+
+## 当前有效性说明
+
+- 当前有效 / 历史语境：历史语境，保留当时的接回原则与准备判断。
+- 当前已落地结果以 [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md) 和 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。
+
 ## 当前冻结基线
 
 - 稳定 tag：`phase1-stable`

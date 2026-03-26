@@ -8,6 +8,14 @@
 
 **技术栈：** C++17、RISC-V asm、GNU Make
 
+## 关联文档
+
+- 来源设计：
+  - [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+- 目标状态：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
+
 **实际结果：**
 - 已扩展 `myCPU/tests/asm/illegal_integer_encodings.S`
 - 已新增 `myCPU/tests/asm/mmio_access_faults.S`
@@ -64,7 +72,7 @@
 
 **文件：**
 - 修改：`myCPU/Makefile`
-- 复查：`docs/status/current_mainline_status_2026-03-25.md`
+- 复查：`docs/status/mainline_status.md`
 - 复查：`myCPU/AGENTS.md`
 
 - [x] **步骤 1：运行新增单项回归**

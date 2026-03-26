@@ -16,6 +16,19 @@
 - 当前主线已经具备 `--debug-cli`、本地 Node 调试服务、浏览器前端演示，以及对应的 Node 测试门禁。
 - 当前运行与验证方式以 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 和状态文档为准。
 
+## 关联文档
+
+- 状态文档：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
+- 相关计划：
+  - [plan/debug_frontend_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/debug_frontend_integration_plan.md)
+
+## 当前有效性说明
+
+- 当前有效 / 历史语境：当前有效，记录 `debug/frontend` 已落地的设计边界与非目标。
+- 当前运行方式、验证入口和近期稳定化重点以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 与 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 为准。
+
 ## 背景
 
 截至 `2026-03-25`，当前主线已经具备：

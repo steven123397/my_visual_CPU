@@ -1,5 +1,24 @@
 # Platform MMIO Contract
 
+## 文档定位
+
+本文档用于定义当前模拟器对 guest / 内核代码暴露的最小平台 MMIO 契约，包括地址布局、寄存器窗口、访问宽度与非法访问口径。
+
+它是当前有效的设计 / 契约文档，不承担实时状态更新。
+
+## 关联文档
+
+- 状态文档：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+- 相关计划：
+  - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
+
+## 当前有效性说明
+
+- 当前有效 / 历史语境：当前有效，当前 host / guest 共享的 MMIO 约束以本文档和 [platform_mmio.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/include/platform_mmio.h) 为准。
+- 若契约发生变化，必须同步更新相关回归、状态文档和使用方代码。
+
 这份文档定义当前模拟器对未来 OS 暴露的最小平台 MMIO 约定。对应常量的单一来源是 [platform_mmio.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/include/platform_mmio.h)。
 
 当前目标不是一次对齐某个成熟平台标准，而是先把“足以写内核驱动”的地址、寄存器、命令和约束固定下来，并保持测试覆盖。

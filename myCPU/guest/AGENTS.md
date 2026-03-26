@@ -27,7 +27,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - delegated timer / external interrupt return
 - 单用户生命周期和清理 smoke
 - 独立 kernel alpha 的正向 bring-up 与九条负向回归
-- `guest_supervisor_demo` 与 `kernel_alpha` 十条 demo 当前共同构成 Phase 1 核心 guest 门禁，回归收口口径见 [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)
+- `guest_supervisor_demo` 与 `kernel_alpha` 十条 demo 当前共同构成 Phase 1 核心 guest 门禁，回归收口口径见 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
 - 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 guest runtime 调整默认按 post-Phase1 hardening 理解。
 
 ## 分层边界

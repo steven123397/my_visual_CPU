@@ -1,5 +1,23 @@
 # myCPU C++ 重构方案
 
+## 文档定位
+
+本文档用于说明 `myCPU` 为什么要持续推进 C++ 结构重构、这轮重构的核心边界是什么，以及后续结构演进应遵守哪些约束。
+
+它是长期有效的结构设计文档，不承担实时进度更新。
+
+## 关联文档
+
+- 状态文档：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+- 相关计划：
+  - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
+
+## 当前有效性说明
+
+- 当前有效 / 历史语境：当前有效，作为主线 C++ 结构收口的长期设计背景。
+- 当前主线推进节奏、已完成结果和近期任务以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。
+
 ## 1. 目的与约束
 
 当前 `myCPU` 已经是一个可运行的 RISC-V 功能模拟器原型，具备：

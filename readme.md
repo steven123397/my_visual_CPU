@@ -7,6 +7,7 @@
 ```text
 my_visual_CPU/
 ├── frontend/           # 本地前端调试器与 Node 调试服务
+├── docs/               # background / design / plan / status 正式文档
 ├── myCPU/
 │   ├── guest/          # 最小 guest supervisor runtime / 平台层 / demo
 │   ├── src/
@@ -21,7 +22,6 @@ my_visual_CPU/
 │   ├── tests/asm/      # 汇编测试程序与平台 smoke coverage
 │   ├── tests/unit/     # host-side 单元回归（loader segment/reject、bus-device/MMIO contract、guest runtime helper 合同）
 │   └── Makefile
-└── docs/               # 规划与平台契约文档
 ```
 
 ## 模块关系与运行流程
@@ -152,7 +152,7 @@ node --test
 
 其余 `kernel_alpha` storage / PLIC / timer 负向 demo 也都有独立测试目标；README 只保留常用入口，具体名称以 [myCPU/Makefile](myCPU/Makefile) 为准。
 
-当前 Phase 1 / Phase 2 回归做到什么程度可认为阶段性收口，见 [docs/status/regression_completion_criteria_2026-03-26.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/regression_completion_criteria_2026-03-26.md)。
+当前 Phase 1 / Phase 2 回归做到什么程度可认为阶段性收口，见 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)。
 
 ## 内存映射
 

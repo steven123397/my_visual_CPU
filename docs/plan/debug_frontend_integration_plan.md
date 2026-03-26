@@ -1,14 +1,23 @@
 # Debug / Frontend 集成实现计划
 
-> 归档说明：本文档对应的接入工作已经完成，保留为历史计划记录；当前结果以 [debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)、[readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 和相关状态文档为准。下文中的“本轮”“待办”等表述均按当时计划语境理解，不代表当前状态。
+> **文档状态：** 已完成
 
-> **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
+> **完成态说明：** 本文档对应的接入工作已经完成，继续保留在 `plan/` 作为历史计划记录。当前结果以 [debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)、[status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 和 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 为准。下文中的“本轮”“待办”等表述均按当时计划语境理解。
+
+> **面向 AI 代理的工作者：** 如需重演类似工作，仍应使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans。下文复选框结果仅保留历史执行记录。
 
 **目标：** 在不改变当前 `functional` / `pipeline` 执行语义的前提下，把最小 `debug_session/protocol` 与前端教学演示链路正式接入主线。
 
 **架构：** 先为 backend、`Machine`、`Bus` 和关键设备补最小只读调试面，再接入 `DebugSession` 与 `--debug-cli`，随后接入本地 Node 服务和浏览器前端，最后补齐 README、状态文档和验证门禁。
 
 **技术栈：** C++17、GNU Make、Node.js 内置 `node:test`、原生 HTML / CSS / ESM。
+
+## 关联文档
+
+- 来源设计：
+  - [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
+- 目标状态：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
 
 ---
 
@@ -96,15 +105,15 @@
 - 修改：`myCPU/src/devices/plic.h`
 - 修改：`myCPU/src/devices/simple_storage.h`
 
-- [ ] **步骤 1：先写一个失败的 host smoke，要求能读到 backend / pipeline / bus / device 快照**
+- [x] **步骤 1：先写一个失败的 host smoke，要求能读到 backend / pipeline / bus / device 快照**
 
-- [ ] **步骤 2：运行该 smoke，确认因缺少调试接口而失败**
+- [x] **步骤 2：运行该 smoke，确认因缺少调试接口而失败**
 
-- [ ] **步骤 3：补 `DebugSnapshot`、backend `debug_snapshot()`、`Machine` getter、`Bus::last_access()` 与设备 helper**
+- [x] **步骤 3：补 `DebugSnapshot`、backend `debug_snapshot()`、`Machine` getter、`Bus::last_access()` 与设备 helper**
 
-- [ ] **步骤 4：重新运行 smoke，确认通过**
+- [x] **步骤 4：重新运行 smoke，确认通过**
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ## 任务 2：接入 `DebugSession`、`debug_protocol` 与 `--debug-cli`
 
@@ -118,15 +127,15 @@
 - 修改：`myCPU/src/main.cpp`
 - 修改：`myCPU/Makefile`
 
-- [ ] **步骤 1：先写 `debug_cli_smoke.cpp`，覆盖 `load`、`snapshot`、`step_cycle`、`step_commit`、`reset` 基本路径**
+- [x] **步骤 1：先写 `debug_cli_smoke.cpp`，覆盖 `load`、`snapshot`、`step_cycle`、`step_commit`、`reset` 基本路径**
 
-- [ ] **步骤 2：运行 `cd myCPU && make test-host-debug_cli_smoke`，确认失败**
+- [x] **步骤 2：运行 `cd myCPU && make test-host-debug_cli_smoke`，确认失败**
 
-- [ ] **步骤 3：实现 `DebugSession` 与 `run_debug_cli()`，并在 `main.cpp` 接入 `--debug-cli`**
+- [x] **步骤 3：实现 `DebugSession` 与 `run_debug_cli()`，并在 `main.cpp` 接入 `--debug-cli`**
 
-- [ ] **步骤 4：重新运行 `cd myCPU && make test-host-debug_cli_smoke`，确认通过**
+- [x] **步骤 4：重新运行 `cd myCPU && make test-host-debug_cli_smoke`，确认通过**
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ## 任务 3：接入前端服务、页面和 Node tests
 
@@ -148,15 +157,15 @@
 - 创建：`frontend/tests/debug_server.test.mjs`
 - 创建：`frontend/tests/ui_state.test.mjs`
 
-- [ ] **步骤 1：先写 Node tests，守住 tests manifest、session API 和前端纯状态逻辑**
+- [x] **步骤 1：先写 Node tests，守住 tests manifest、session API 和前端纯状态逻辑**
 
-- [ ] **步骤 2：运行 `cd frontend && node --test`，确认失败**
+- [x] **步骤 2：运行 `cd frontend && node --test`，确认失败**
 
-- [ ] **步骤 3：接入前端文件，按当前主线测试清单补齐 `kernel_alpha` 系列 demo**
+- [x] **步骤 3：接入前端文件，按当前主线测试清单补齐 `kernel_alpha` 系列 demo**
 
-- [ ] **步骤 4：重新运行 `cd frontend && node --test`，确认通过**
+- [x] **步骤 4：重新运行 `cd frontend && node --test`，确认通过**
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ## 任务 4：补文档并跑完整验证
 
@@ -164,17 +173,17 @@
 
 - 修改：`myCPU/AGENTS.md`
 - 修改：`readme.md`
-- 修改：`docs/status/code_self_review_2026-03-24.md`
-- 修改：`docs/status/kernel_alpha_bringup_status.md`
+- 修改：`docs/status/code_self_review_status.md`
+- 修改：`docs/status/kernel_alpha_status.md`
 
-- [ ] **步骤 1：更新实现基线、调试前端运行方式与当前状态说明**
+- [x] **步骤 1：更新实现基线、调试前端运行方式与当前状态说明**
 
-- [ ] **步骤 2：运行 `cd myCPU && make test-host-debug_cli_smoke`**
+- [x] **步骤 2：运行 `cd myCPU && make test-host-debug_cli_smoke`**
 
-- [ ] **步骤 3：运行 `cd frontend && node --test`**
+- [x] **步骤 3：运行 `cd frontend && node --test`**
 
-- [ ] **步骤 4：运行 `cd myCPU && make test-pipeline`**
+- [x] **步骤 4：运行 `cd myCPU && make test-pipeline`**
 
-- [ ] **步骤 5：运行 `cd myCPU && make test`**
+- [x] **步骤 5：运行 `cd myCPU && make test`**
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
