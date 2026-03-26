@@ -230,6 +230,7 @@
   收口为低层 page-table / map / unmap / TLB primitive。
 - 随后继续把 `kernel_alpha` 各入口重复出现的 `trap_context` /
   `address_space` / `interrupt_state` 收口到 `guest/kernel/kernel_runtime.c`，
+  并进一步把 common bring-up options 的 runtime / self-context 装配一并下沉，
   让 bring-up 入口开始从“裸拼编排”转向最小 kernel runtime 对象。
 - 随后继续把通用 `K/M/V` bring-up 从 `guest/kernel_alpha/common.c` 下沉到
   `guest/kernel/kernel_bringup.c`，并把 `guest/kernel_alpha/common.c` 改成

@@ -18,6 +18,7 @@ bool kernel_alpha_validate_storage_lba_range_contract(void);
 bool kernel_alpha_validate_storage_bad_command_contract(void);
 
 static kernel_runtime_t* g_bringup_runtime = NULL;
+static kernel_bringup_options_t g_bringup_options_storage = {0};
 static const kernel_bringup_options_t* g_bringup_options = NULL;
 static bool g_bringup_result = true;
 
@@ -75,10 +76,17 @@ static size_t sequence_index(size_t call_count, size_t sequence_length) {
     return call_count < sequence_length ? call_count : sequence_length - 1U;
 }
 
-bool kernel_runtime_run_common_bringup(kernel_runtime_t* runtime,
-                                       const kernel_bringup_options_t* options) {
+bool kernel_runtime_run_bringup(kernel_runtime_t* runtime,
+                                uint32_t mmio_mask,
+                                uint64_t pmm_probe_marker,
+                                kernel_bringup_pre_vm_setup_t pre_vm_setup) {
     g_bringup_runtime = runtime;
-    g_bringup_options = options;
+    g_bringup_options_storage.mmio_mask = mmio_mask;
+    g_bringup_options_storage.pmm_probe_marker = pmm_probe_marker;
+    g_bringup_options_storage.pre_vm_setup = pre_vm_setup;
+    g_bringup_options_storage.pre_vm_context =
+        pre_vm_setup != NULL ? runtime : NULL;
+    g_bringup_options = &g_bringup_options_storage;
     return g_bringup_result;
 }
 

@@ -77,3 +77,18 @@ bool kernel_runtime_run_common_bringup(
                                      &runtime->address_space,
                                      options);
 }
+
+bool kernel_runtime_run_bringup(
+    kernel_runtime_t* runtime,
+    uint32_t mmio_mask,
+    uint64_t pmm_probe_marker,
+    kernel_bringup_pre_vm_setup_t pre_vm_setup) {
+    const kernel_bringup_options_t options = {
+        .mmio_mask = mmio_mask,
+        .pmm_probe_marker = pmm_probe_marker,
+        .pre_vm_setup = pre_vm_setup,
+        .pre_vm_context = pre_vm_setup != NULL ? runtime : NULL,
+    };
+
+    return kernel_runtime_run_common_bringup(runtime, &options);
+}

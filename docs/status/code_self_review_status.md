@@ -121,11 +121,11 @@
 - [myCPU/guest/kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 和 [myCPU/guest/kernel/trap_dispatch.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap_dispatch.c)
   当前已经完成 lifecycle / dispatch 的第一轮拆分，但后续仍要避免 policy、dispatch 和 runtime activation 重新糊回同一层。
 - `guest/kernel_runtime.c`、`guest/kernel_bringup.c`、`guest/kernel_alpha/common.c`
-  当前已完成 bring-up skeleton 第一轮收口，但离更完整的 kernel object / runtime 组织仍有距离。
+  当前已完成 bring-up skeleton 第一轮收口；其中 common bring-up options 的 runtime/self-context 装配也已下沉到 `guest/kernel_runtime.c`，但离更完整的 kernel object / runtime 组织仍有距离。
 - `SimpleStorage`
   仍是最小同步块设备：无 completion interrupt、`BLOCK_COUNT` 仅支持 `1`、写入不回写宿主文件。
 - reference robustness 回归虽然已经完成一轮 illegal / MMIO / ELF / CSR 系统扩充，但以下方向仍可继续扩展：
-  - `privilege / Sv39` 边界
+  - 已形成一轮代表性闭环后的 `privilege / Sv39` 新增语义缺口
   - `pipeline` 的 privileged / trap / MMIO differential coverage
   - 与新增语义缺口直接对应的最小持久回归
 - 一批固定上限常量在 post-Phase1 hardening 与后续 kernel 扩展中仍应优先关注。

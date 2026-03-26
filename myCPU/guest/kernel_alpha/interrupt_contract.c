@@ -11,26 +11,19 @@
 bool kernel_alpha_run_interrupt_bringup(kernel_runtime_t* runtime,
                                         uint64_t pmm_probe_marker,
                                         kernel_alpha_pre_vm_setup_t pre_vm_setup) {
-    const kernel_alpha_bringup_options_t options = {
-        .mmio_mask = KERNEL_ALPHA_MMIO_UART | KERNEL_ALPHA_MMIO_CLINT |
-                     KERNEL_ALPHA_MMIO_PLIC,
-        .pmm_probe_marker = pmm_probe_marker,
-        .pre_vm_setup = pre_vm_setup,
-        .pre_vm_context = runtime,
-    };
-
-    return runtime != NULL && kernel_runtime_run_common_bringup(runtime, &options);
+    return kernel_runtime_run_bringup(runtime,
+                                      KERNEL_ALPHA_MMIO_UART |
+                                          KERNEL_ALPHA_MMIO_CLINT |
+                                          KERNEL_ALPHA_MMIO_PLIC,
+                                      pmm_probe_marker,
+                                      pre_vm_setup);
 }
 
 bool kernel_alpha_run_fault_bringup(kernel_runtime_t* runtime) {
-    const kernel_alpha_bringup_options_t options = {
-        .mmio_mask = KERNEL_ALPHA_MMIO_UART,
-        .pmm_probe_marker = 0,
-        .pre_vm_setup = NULL,
-        .pre_vm_context = NULL,
-    };
-
-    return runtime != NULL && kernel_runtime_run_common_bringup(runtime, &options);
+    return kernel_runtime_run_bringup(runtime,
+                                      KERNEL_ALPHA_MMIO_UART,
+                                      0,
+                                      NULL);
 }
 
 bool kernel_alpha_complete_platform_interrupt_readiness(kernel_runtime_t* runtime,

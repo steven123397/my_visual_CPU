@@ -26,6 +26,7 @@ static void stub_external_post_handler(uint32_t source_id, void* context);
 static int test_runtime_init_and_bind_self_handlers(void);
 static int test_external_policy_adapter(void);
 static int test_interrupt_policy_adapter(void);
+static int test_runtime_bringup_helper(void);
 static int test_common_bringup_wrapper(void);
 
 void supervisor_runtime_interrupt_state_init(
@@ -202,6 +203,58 @@ static int test_interrupt_policy_adapter(void) {
     return 0;
 }
 
+static int test_runtime_bringup_helper(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    if (!kernel_runtime_run_bringup(&runtime,
+                                    KERNEL_BRINGUP_MMIO_UART |
+                                        KERNEL_BRINGUP_MMIO_CLINT,
+                                    UINT64_C(0xABCDEF),
+                                    kernel_runtime_install_external_counter_policy_adapter)) {
+        return fail("expected runtime bring-up helper to succeed");
+    }
+
+    if (g_common_bringup_trap_context != &runtime.trap_context ||
+        g_common_bringup_out_space != &runtime.address_space ||
+        g_common_bringup_options == NULL ||
+        g_common_bringup_options->mmio_mask !=
+            (KERNEL_BRINGUP_MMIO_UART | KERNEL_BRINGUP_MMIO_CLINT) ||
+        g_common_bringup_options->pmm_probe_marker != UINT64_C(0xABCDEF) ||
+        g_common_bringup_options->pre_vm_setup !=
+            kernel_runtime_install_external_counter_policy_adapter ||
+        g_common_bringup_options->pre_vm_context != &runtime) {
+        return fail("expected runtime bring-up helper to bind runtime as pre-vm context");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    if (!kernel_runtime_run_bringup(&runtime,
+                                    KERNEL_BRINGUP_MMIO_STORAGE,
+                                    0,
+                                    NULL)) {
+        return fail("expected runtime bring-up helper without pre-vm setup to succeed");
+    }
+
+    if (g_common_bringup_options == NULL ||
+        g_common_bringup_options->mmio_mask != KERNEL_BRINGUP_MMIO_STORAGE ||
+        g_common_bringup_options->pmm_probe_marker != 0 ||
+        g_common_bringup_options->pre_vm_setup != NULL ||
+        g_common_bringup_options->pre_vm_context != NULL) {
+        return fail("expected runtime bring-up helper to clear pre-vm context when unused");
+    }
+
+    if (kernel_runtime_run_bringup(NULL,
+                                   KERNEL_BRINGUP_MMIO_UART,
+                                   0,
+                                   NULL)) {
+        return fail("expected null runtime bring-up helper to fail");
+    }
+
+    return 0;
+}
+
 static int test_common_bringup_wrapper(void) {
     kernel_runtime_t runtime;
     const kernel_bringup_options_t options = {
@@ -238,6 +291,7 @@ int main(void) {
     if (test_runtime_init_and_bind_self_handlers() != 0 ||
         test_external_policy_adapter() != 0 ||
         test_interrupt_policy_adapter() != 0 ||
+        test_runtime_bringup_helper() != 0 ||
         test_common_bringup_wrapper() != 0) {
         return 1;
     }

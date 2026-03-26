@@ -7,13 +7,6 @@
 
 void kernel_main(void) {
     kernel_runtime_t runtime;
-    const kernel_alpha_bringup_options_t options = {
-        .mmio_mask = KERNEL_ALPHA_MMIO_UART | KERNEL_ALPHA_MMIO_CLINT |
-                     KERNEL_ALPHA_MMIO_PLIC | KERNEL_ALPHA_MMIO_STORAGE,
-        .pmm_probe_marker = UINT64_C(0x4B41504D4D56414C),
-        .pre_vm_setup = kernel_runtime_install_interrupt_counter_policies_adapter,
-        .pre_vm_context = &runtime,
-    };
 
     kernel_runtime_init(&runtime);
     if (!kernel_runtime_bind_self_interrupt_handlers(
@@ -24,7 +17,12 @@ void kernel_main(void) {
         panic_shutdown();
     }
 
-    if (!kernel_runtime_run_common_bringup(&runtime, &options)) {
+    if (!kernel_runtime_run_bringup(
+            &runtime,
+            KERNEL_ALPHA_MMIO_UART | KERNEL_ALPHA_MMIO_CLINT |
+                KERNEL_ALPHA_MMIO_PLIC | KERNEL_ALPHA_MMIO_STORAGE,
+            UINT64_C(0x4B41504D4D56414C),
+            kernel_runtime_install_interrupt_counter_policies_adapter)) {
         panic_shutdown();
     }
 

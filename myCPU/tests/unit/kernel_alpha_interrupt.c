@@ -10,6 +10,7 @@
 #include "../../include/platform_mmio.h"
 
 static kernel_runtime_t* g_bringup_runtime = NULL;
+static kernel_bringup_options_t g_bringup_options_storage = {0};
 static const kernel_bringup_options_t* g_bringup_options = NULL;
 static bool g_bringup_result = true;
 static int g_begin_plic_calls = 0;
@@ -41,10 +42,17 @@ static int test_ready_and_panic_post_handlers(void);
 static bool stub_external_policy_setup(trap_context_t* trap_context, void* context);
 static bool stub_interrupt_policy_setup(trap_context_t* trap_context, void* context);
 
-bool kernel_runtime_run_common_bringup(kernel_runtime_t* runtime,
-                                       const kernel_bringup_options_t* options) {
+bool kernel_runtime_run_bringup(kernel_runtime_t* runtime,
+                                uint32_t mmio_mask,
+                                uint64_t pmm_probe_marker,
+                                kernel_bringup_pre_vm_setup_t pre_vm_setup) {
     g_bringup_runtime = runtime;
-    g_bringup_options = options;
+    g_bringup_options_storage.mmio_mask = mmio_mask;
+    g_bringup_options_storage.pmm_probe_marker = pmm_probe_marker;
+    g_bringup_options_storage.pre_vm_setup = pre_vm_setup;
+    g_bringup_options_storage.pre_vm_context =
+        pre_vm_setup != NULL ? runtime : NULL;
+    g_bringup_options = &g_bringup_options_storage;
     return g_bringup_result;
 }
 

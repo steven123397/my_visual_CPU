@@ -53,8 +53,8 @@
 ## 当前仍然有效的风险 / 限制
 
 - 如果继续以“能想到的都补一点”为原则推进回归，测试数量会无限增长，但很难说明哪些风险已经真正被消掉。
-- reference path 的 robustness 回归虽然已经完成第一轮系统扩充，但 `privilege / Sv39 / pipeline differential` 仍未完全形成闭环。
-- `pipeline` 已接入，但在 privileged / trap / interrupt / MMIO 等交错场景上的差分验证仍需要继续成体系。
+- reference path 的 robustness 回归虽然已经完成第一轮系统扩充；当前 `privilege / Sv39` 代表性合同已基本形成闭环，后续更适合按新增 bug 或明确新语义缺口补最小持久回归。
+- `pipeline differential` 的高风险主干矩阵已经基本形成闭环，但后续仍需控制低收益变体扩张，并在新增 bug 出现时补最小持久回归。
 - `debug/frontend` 已接入，但它的目标仍应限定为“教学演示可用”，不应因为演示链路存在就无限扩张协议或 UI 功能面。
 
 ## 阶段性收口标准
@@ -88,9 +88,9 @@
 
 ## 下一步
 
-1. 继续沿 reference path 补 `privilege / Sv39` 等仍未闭环的边界，但按“合同补洞”而不是“想到什么补什么”推进，并保持已完成的 illegal / MMIO / ELF / CSR 矩阵稳定可回归。
+1. 继续沿 reference path 维护已形成闭环的 `privilege / Sv39`、illegal / MMIO / ELF / CSR 矩阵，但按“新增 bug / 新合同补洞”而不是“想到什么补什么”推进。
 2. 把 `kernel_alpha` 十条基线和 `guest_supervisor_demo` 继续守在稳定输出上，作为 Phase 1 完成态的核心门禁。
-3. 单独梳理 `pipeline` 的差分矩阵，明确哪些 privileged / trap / interrupt / MMIO 组合已经覆盖，哪些仍是空洞。
+3. 维护现有 `pipeline` 差分矩阵，把后续工作收口到新增 bug 的最小回归和明确新合同，而不是继续做低收益 case 盘点。
 4. 把 `debug/frontend` 的验证继续限定在快照、协议和 demo 可用性，不扩成通用调试器验收清单。
 5. 后续每修掉一个真实 bug，都补一个最小但稳定的持久回归；如果只是重复已有覆盖，就不把它扩成新的长期门禁。
 

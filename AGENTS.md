@@ -57,6 +57,7 @@
 - 初步 `M/S/U` 特权路径。
 - 最小 UART / CLINT / PLIC / MMIO block storage 平台。
 - Sv39、最小 TLB、`sfence.vma`。
+- Sv39 特权边界：`S-mode` 对 `U=1` 可执行页的取指，以及 `U-mode` 对 supervisor-only 可执行页 / data page 的取指、load、store都会稳定触发 page fault。
 - 一套最小 guest supervisor runtime。
 - 一条独立的 `kernel_alpha` bring-up 路径及其正负回归。
 - 一条本地 `debug_session/protocol + frontend` 教学演示链路。
@@ -105,7 +106,7 @@
 当前阶段的主线工作是：
 
 - 继续稳住 simulator reference path 的 correctness 与可观察性。
-- 继续沿已落地的第一轮 hardening 矩阵，补足非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 剩余空洞。
+- 继续沿已落地的第一轮 hardening 矩阵，维护非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 合同闭环，并按新增 bug 补最小回归。
 - 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做必要 hardening。
 - 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，作为 post-Phase1 结构优化。
 - 在不破坏 reference path 清晰性的前提下，继续稳住已接入 Phase 2 能力的语义边界与验证基线。
@@ -114,7 +115,8 @@
 当前对 Phase 2 的工程安排是：
 
 - `pipeline core` 与 `debug/frontend` 的正式接入工作已经完成，不再把它们当作待合入功能。
-- 近期先不继续扩功能面，而是优先按 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 明确 Phase 2 出门标准，并补强 `pipeline` 的 correctness / differential / robustness 验证。
+- 当前 Phase 2 的最小收口已经基本成立：`pipeline` 的高风险 differential 主干与 `debug/frontend` 的最小快照 / 协议门禁都已落地。
+- 后续先不继续扩功能面，而是优先维护既有 `pipeline` 差分 / smoke / guest 门禁，并在新增 bug 出现时补最小持久回归，而不是继续堆叠低收益变体。
 - `debug/frontend` 继续限定在“教学演示可用”的最小范围，重点放在快照稳定性、测试门禁和对现有 demo 的可用性维护。
 
 相关状态文档见：

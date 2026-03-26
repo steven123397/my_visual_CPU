@@ -50,7 +50,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `runtime_context.c`：当前活跃 process / address_space / trap_context 记录
 - `console.c` / `timer.c` / `storage.c`：最小平台驱动封装
 - `kernel_bringup.c`：共享的早期 `K/M/V` bring-up 骨架，负责 memory / PMM / trap / VM 的最小启动编排
-- `kernel_runtime.c`：最小 kernel runtime 对象，承接 `trap_context` / `address_space` / `interrupt_state`，避免 bring-up 入口继续裸拼三件套
+- `kernel_runtime.c`：最小 kernel runtime 对象，承接 `trap_context` / `address_space` / `interrupt_state`，并负责 common bring-up options 的 runtime/self-context 装配，避免 bring-up 入口继续裸拼三件套
 - `supervisor_runtime.c`：`kernel_alpha` 与 `supervisor_demo_smoke` 共享的 supervisor bring-up interrupt state、self-bound contract、policy adapter、delivery / deadline wait 最小编排
 - `user_task.c` / `user_task_bootstrap.c` / `user_program.c`：标准用户生命周期装配
 
@@ -251,7 +251,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   - `TRAP_MAX_EXCEPTION_CAUSE`
 - `kernel_alpha` 仍是 alpha 形态，还没有真正的内核对象、调度或设备探测流程。
 - [kernel/kernel_runtime.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_runtime.c)
-  当前刚收口 `kernel_alpha` 入口的基础 runtime 三件套，但后续仍要继续往真正的小内核对象组织推进。
+  当前已继续收口 `kernel_alpha` 入口的基础 runtime 三件套与 common bring-up options 装配，但后续仍要继续往真正的小内核对象组织推进。
 - [kernel/kernel_bringup.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_bringup.c)
   通用 `K/M/V` bring-up 已从 `kernel_alpha` 子树下沉到基础设施层，避免 `supervisor_demo` 再被 alpha 私有骨架反向耦合。
 

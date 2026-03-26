@@ -33,3 +33,8 @@ bool kernel_runtime_install_interrupt_counter_policies_adapter(
 bool kernel_runtime_run_common_bringup(
     kernel_runtime_t* runtime,
     const kernel_bringup_options_t* options);
+bool kernel_runtime_run_bringup(
+    kernel_runtime_t* runtime,
+    uint32_t mmio_mask,
+    uint64_t pmm_probe_marker,
+    kernel_bringup_pre_vm_setup_t pre_vm_setup);

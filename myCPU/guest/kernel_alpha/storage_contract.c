@@ -42,14 +42,11 @@ static bool kernel_alpha_storage_clear_error_and_probe(storage_info_t* info) {
 }
 
 bool kernel_alpha_run_storage_bringup(kernel_runtime_t* runtime) {
-    const kernel_alpha_bringup_options_t options = {
-        .mmio_mask = KERNEL_ALPHA_MMIO_UART | KERNEL_ALPHA_MMIO_STORAGE,
-        .pmm_probe_marker = 0,
-        .pre_vm_setup = NULL,
-        .pre_vm_context = NULL,
-    };
-
-    return runtime != NULL && kernel_runtime_run_common_bringup(runtime, &options);
+    return kernel_runtime_run_bringup(runtime,
+                                      KERNEL_ALPHA_MMIO_UART |
+                                          KERNEL_ALPHA_MMIO_STORAGE,
+                                      0,
+                                      NULL);
 }
 
 bool kernel_alpha_validate_storage_no_media_contract(void) {
