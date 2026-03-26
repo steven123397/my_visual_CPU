@@ -117,24 +117,25 @@ void PipelineBackend::step() {
     bool deferred_interrupt = false;
     bool committed_fetch_fault = false;
     bool serviced_interrupt = false;
+    if (last_cycle_committed_ && !interrupt_serviceable_at_cycle_start_ &&
+        cpu_.trap().has_serviceable_interrupt()) {
+        // A just-retired instruction changed CSR/privilege state and made an
+        // interrupt newly serviceable. Flush any younger post-commit work and
+        // let the interrupt become the next architectural boundary, matching
+        // the functional backend even across trap returns.
+        reset_stage_state();
+        deferred_interrupt = true;
+    }
+
     // Keep fetch-fault delivery precise: when WB already retired an older
     // instruction this cycle, defer a younger pending fetch fault until the
     // next cycle instead of collapsing both events into one snapshot.
-    if (!wb_flushed) {
-        if (last_cycle_committed_ && !interrupt_serviceable_at_cycle_start_ &&
-            cpu_.trap().has_serviceable_interrupt()) {
-            // A just-retired CSR write made an interrupt newly serviceable.
-            // Flush younger in-flight work and let the interrupt become the
-            // next architectural boundary, matching the functional backend.
-            reset_stage_state();
-            deferred_interrupt = true;
-        } else {
-            if (!last_cycle_committed_) {
-                committed_fetch_fault = try_commit_fetch_fault();
-            }
-            if (!committed_fetch_fault) {
-                serviced_interrupt = try_service_interrupt_at_commit_boundary();
-            }
+    if (!wb_flushed && !deferred_interrupt) {
+        if (!last_cycle_committed_) {
+            committed_fetch_fault = try_commit_fetch_fault();
+        }
+        if (!committed_fetch_fault) {
+            serviced_interrupt = try_service_interrupt_at_commit_boundary();
         }
     }
     if (deferred_interrupt || committed_fetch_fault || serviced_interrupt) {

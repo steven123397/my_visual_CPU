@@ -90,7 +90,7 @@
 - CPU 侧 MMIO 非法 offset / width 稳定触发 access-fault trap。
 - host-side MMIO guard 与 contract matrix。
 - `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 `pipeline` 的 asm / host / guest 门禁。
-- `pipeline` host-side differential 当前已覆盖基础 ALU / 控制流 / trap-return / illegal trap，以及第一批 `Sv39 + MPRV` / delegated instruction-load/store-page-fault / reserved page-walk fault / supervisor timer interrupt commit-boundary 场景。
+- `pipeline` host-side differential 当前已覆盖基础 ALU / 控制流 / trap-return / illegal trap、machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store-page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及由 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer/external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 场景；用户态 delegated supervisor timer / external interrupt 已都纳入差分门禁。
 - `pipeline_backend_smoke` 当前还额外覆盖真实 `CLINT` / `PLIC+UART` 平台事件源驱动的 supervisor timer / external interrupt smoke，避免把 cycle-sensitive 设备递送硬塞进 functional-vs-pipeline 逐事件差分。
 - `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照，守住 `CLINT` / `PLIC` / `UART` 相关字段与 pipeline flush / halt 事件输出。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
@@ -118,7 +118,7 @@
 ## 当前仍需关注的问题
 
 - [tests/asm](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm) 和 [tests/unit](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/unit)
-  非法编码、MMIO 非法偏移 / 宽度、ELF 段布局和 CSR / 特权非法访问回归已经完成第一轮系统扩充，但 `privilege / Sv39 / pipeline differential` 仍可继续补洞。
+  非法编码、MMIO 非法偏移 / 宽度、ELF 段布局和 CSR / 特权非法访问回归已经完成第一轮系统扩充；`pipeline differential` 的高风险主干场景也已基本闭环，后续主要按新增 bug 或明确新合同做最小补洞。
 - [src/devices/simple_storage.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices/simple_storage.cpp)
   当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
 - [guest/kernel/kernel_runtime.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_runtime.c)
@@ -139,8 +139,8 @@
 1. 继续稳住 simulator reference path 的 correctness 与可观察性。
 2. 在已补第一轮 correctness hardening 矩阵的基础上，继续按合同补洞，而不是重复堆叠非法编码、MMIO 边界、ELF 段布局和 CSR / privilege 同类回归。
 3. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_not_ready_demo`、`guest_kernel_alpha_storage_bad_magic_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 守住 `phase1-stable` bring-up 基线，再把额外 readiness / panic 路径当作 post-Phase1 hardening 渐进扩充。
-4. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界，优先补 `privilege / Sv39` 和 `pipeline` 差分仍未成体系的空洞。
-5. 当前对 Phase 2 的近期安排，不再是继续做“正式接入”，而是先按 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 明确出门标准，并继续补强 `pipeline` 的 correctness / differential / robustness 验证。
+4. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界；当前 `pipeline` 差分主干已经基本成体系，后续优先处理新暴露的 `privilege / Sv39` 合同和新增 bug 的最小持久回归。
+5. 当前对 Phase 2 的近期安排，不再是继续做“正式接入”；`pipeline` 的最小 differential / robustness 收口已经基本成立，后续重点转为维护既有门禁、控制低收益 case 膨胀，并在新增问题出现时补最小回归。
    当前 `pipeline` 已经正式接入到 asm / host / guest 验证层：默认 `functional` 继续守 `make test`，`pipeline` 通过 `make test-pipeline` 守住同一批 asm 参考输出、host-side smoke/differential，以及 `guest_supervisor_demo` 与 `kernel_alpha` 正负回归。
 6. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围：加载仓库内现有 demo、查看快照、按 cycle / commit 单步，不要在这一层直接扩成带断点 / 条件暂停 / 任意文件加载的通用调试器。
 

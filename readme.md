@@ -146,7 +146,7 @@ node --test
 
 `make test` 是默认 `functional` reference path 的主回归，覆盖 asm、host-side unit、`guest_supervisor_demo`，以及 `kernel_alpha` 正向与全部负向 demo。
 
-`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性；当前 host-side differential 已包含 `Sv39 + MPRV`、delegated instruction/load/store page-fault、reserved page-walk fault，以及 supervisor timer interrupt commit-boundary 这几类架构稳定路径，真实 `CLINT` / `PLIC+UART` 驱动的 supervisor interrupt 由 `pipeline_backend_smoke` 单独守住，而 `debug_cli_smoke` 进一步用自包含 flat-binary 检查这些路径在快照/事件协议里的可观察性。
+`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性；当前 host-side differential 已包含 machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及经 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer / external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 架构稳定路径，用户态 delegated supervisor timer / external interrupt 也都已纳入；真实 `CLINT` / `PLIC+UART` 驱动的 supervisor interrupt 由 `pipeline_backend_smoke` 单独守住，而 `debug_cli_smoke` 进一步用自包含 flat-binary 检查这些路径在快照/事件协议里的可观察性。
 
 `cd frontend && node --test` 负责守住本地调试服务、测试清单、WebSocket 快照/事件透传，以及前端纯状态逻辑；当前也会检查连续运行中的会话在重新 `load` 时会先停掉旧的定时推进，避免演示链路在切换 demo 后继续后台前进。
 

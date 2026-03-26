@@ -15,6 +15,7 @@
 - 相关设计：
   - [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
   - [design/cpp_refactor_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/cpp_refactor_design.md)
+  - [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
 - 当前计划：
   - 当前暂无专门的主线执行计划；后续如有新任务，再单独建立对应 `plan` 文档。
 - 已完成计划：
@@ -49,11 +50,11 @@
 - `tests/asm/csr_illegal_matrix.S` 已把 CSR 非法访问、跨特权级访问和只读 CSR 写入的 trap 合同补成第一轮矩阵。
 - `tests/asm/sv39_mprv.S` 已把 `mstatus.MPRV` 驱动的 Sv39 数据访存合同接入 asm 门禁；当前 `M-mode` 下 `load/store` 在 `MPRV=1` 时，会按 `MPP` 指定的有效特权级走地址翻译，并遵守 `SUM/MXR` 权限检查。
 - `tests/asm/sv39_pagewalk_contracts.S` 已把 Sv39 page-walk 的 misaligned superpage 与 non-leaf PTE 保留位合同接入 asm 门禁；当前 non-leaf PTE 不再把带 `U/A/D` 保留位的条目误当成有效下级页表。
-- `tests/host/backend_differential_smoke.cpp` 已新增 `sv39_mprv_fault`、`sv39_instruction_page_fault`、`sv39_load_page_fault`、`sv39_store_page_fault`、`sv39_reserved_non_leaf_fault` 与 `supervisor_timer_interrupt_after_sip_write` 六条 host-side 差分场景；当前已把 delegated supervisor page-fault、Sv39 reserved page-walk fault 和 supervisor timer interrupt commit-boundary 这几类特权路径接入差分门禁。
+- `tests/host/backend_differential_smoke.cpp` 已新增 `delegated_user_ecall_to_supervisor`、`sret_to_user_halt`、`machine_timer_interrupt_at_cycle_start`、`sv39_mprv_fault`、`sv39_instruction_page_fault`、`sv39_load_page_fault`、`sv39_store_page_fault`、`sv39_reserved_non_leaf_fault`、`supervisor_mmio_instruction_access_fault`、`supervisor_mmio_load_access_fault`、`supervisor_mmio_store_access_fault`、`supervisor_timer_interrupt_after_mret`、`supervisor_timer_interrupt_after_sip_write`、`supervisor_timer_interrupt_after_sie_write`、`supervisor_timer_interrupt_after_sstatus_write`、`supervisor_timer_interrupt_at_cycle_start`、`user_mode_supervisor_timer_interrupt_at_cycle_start`、`user_mode_supervisor_external_interrupt_after_sret`、`supervisor_external_interrupt_after_sip_write` 与 `user_mode_supervisor_external_interrupt_at_cycle_start` 二十条 host-side 差分场景；当前已把 machine timer interrupt 基线、delegated user-ecall / `sret` privilege transition、delegated supervisor page-fault、delegated supervisor MMIO instruction/load/store access-fault，以及由 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer / external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 稳定路径接入差分门禁。
 - `tests/host/pipeline_backend_smoke.cpp` 已补上 `CLINT` 驱动的 supervisor timer interrupt 与 `PLIC+UART` 驱动的 supervisor external interrupt 两条 host-side smoke，用来守真实平台事件源在 `pipeline` 下的 flush / handler / return 基线；这两类路径按 cycle 前进，不再强行并入 functional-vs-pipeline 的逐事件差分。
 - `tests/host/debug_cli_smoke.cpp` 已改成自包含 flat-binary smoke：当前会直接驱动最小 supervisor timer / external interrupt 场景，并检查 `DebugSnapshot` 中 `CLINT` / `PLIC` / `UART` 的关键字段，以及 `trap` / `flush` / `halt` 等 pipeline 可观察性事件。
 - `frontend/tests/debug_server.test.mjs` 已把本地调试服务的 richer snapshot / event 透传和 WebSocket 广播接入 Node 门禁；当前会检查 `CLINT` / `PLIC` / `UART` 关键字段、pipeline `trap_flush / committed` 标志，以及 `run` 中重新 `load` 会先停掉旧会话定时器，避免教学 demo 在会话切换后被后台偷偷推进。
-- `pipeline` 本轮又修正了一处 commit-boundary 时序：由刚退休 CSR 写入新触发的 pending interrupt，不再让 younger 指令继续退休；同时保留“对 cycle 起点已可递送的 interrupt 仍可抢占”的路径，避免 tight loop 下的 timer interrupt 饥饿。
+- `pipeline` 本轮又修正了一处 commit-boundary 时序：由刚退休 CSR 写入或 `mret/sret` trap-return 新触发可递送的 pending interrupt，不再让返回后的 younger 指令继续退休；同时保留“对 cycle 起点已可递送的 interrupt 仍可抢占”的路径，避免 tight loop 下的 timer interrupt 饥饿。
 - `design/regression_completion_criteria.md` 已成为当前 Phase 1 / Phase 2 回归收口的正式判断口径。
 - `docs/` 正式文档已经收口到 `background / design / plan / status + AGENTS.md + index.md` 结构，后续不再新增 `contracts / templates / archive / superpowers` 这类平行正式目录。
 
@@ -95,10 +96,10 @@
 
 ## 当前仍然有效的风险 / 限制
 
-- reference robustness 回归已经完成第一轮系统扩充，但 `privilege / Sv39 / pipeline differential` 仍未完全形成闭环。
+- reference robustness 回归已经完成第一轮系统扩充；当前 `pipeline differential` 的高风险主干矩阵已基本形成闭环，后续剩余工作主要转为低收益变体控制和新增 bug 的定向回归。
 - guest runtime 虽已完成第一轮拆分，但 `vm*`、`trap*`、`kernel_runtime`、`kernel_bringup` 仍需要继续守住边界，避免回退到单个大文件。
 - `kernel_alpha` 已经达到 Phase 1 核心完成态，但更多 device readiness / fault / panic / runtime refinement 仍属于 post-Phase1 hardening。
-- `pipeline` 已经正式可用，但后续 privileged / trap / interrupt / MMIO 行为的一致性验证仍应继续补强。
+- `pipeline` 已经正式可用，privileged / trap / interrupt / MMIO 行为的一致性验证主干也已基本成体系；后续以维护既有差分门禁和按新增问题补最小持久回归为主。
 - `debug/frontend` 已经正式接入，但仍应避免膨胀成断点 / 条件暂停 / 任意文件加载的通用调试器。
 
 ## 下一步
@@ -106,8 +107,8 @@
 1. 先沿 reference path 继续补 `privilege / Sv39` 等仍未闭环的边界，并保持已落地的 illegal / MMIO / ELF / CSR hardening 矩阵稳定可回归。
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界。
-4. 已有 Phase 2 出门标准文档，下一步按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 把 `pipeline` 差分矩阵继续做实，而不是停留在原则层。
-5. 在不扩功能面的前提下，继续补强 `pipeline` 差分与 `debug/frontend` 稳定性验证。
+4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
+5. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
 
 ## 建议入口
 
