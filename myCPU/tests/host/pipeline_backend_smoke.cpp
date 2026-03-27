@@ -27,6 +27,7 @@ constexpr uint32_t kAddiX2FromX0Plus5 = 0x00500113U;     // addi x2, x0, 5
 constexpr uint32_t kAddiA7Exit = 0x05d00893U;            // addi a7, x0, 93
 constexpr uint32_t kEcall = 0x00000073U;                 // ecall
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;            // jal x0, 8
+constexpr uint32_t kBeqX0Taken = 0x00000463U;            // beq x0, x0, 8
 constexpr uint32_t kInvalidInsn = 0xffffffffU;
 constexpr uint32_t kLwX1FromX10 = 0x00052083U;           // lw x1, 0(x10)
 constexpr uint32_t kAddiX2FromX1Plus5 = 0x00508113U;     // addi x2, x1, 5
@@ -349,6 +350,49 @@ int main() {
             return 1;
         }
         if (!expect(redirects == 0, "jal predict-hit path should not need execute-time redirect")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+
+        write32(ram, kEntry + 0, kJalX0Skip8);
+        write32(ram, kEntry + 4, kAddiX1WrongPath);
+        write32(ram, kEntry + 8, kNop);
+        write32(ram, kEntry + 12, kBeqX0Taken);
+        write32(ram, kEntry + 16, kAddiX2WrongPath);
+        write32(ram, kEntry + 20, kAddiA7Exit);
+        write32(ram, kEntry + 24, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+
+        backend.step();
+        backend.step();
+        backend.step();
+
+        const BackendDebugSnapshot snapshot = backend.debug_snapshot();
+        if (!expect(snapshot.pipeline.predictor.last_prediction_valid,
+                    "resolved control-flow snapshot should report a valid last prediction")) {
+            return 1;
+        }
+        if (!expect(snapshot.pipeline.predictor.last_prediction_taken,
+                    "fetching a younger branch should not overwrite the resolved jal prediction direction")) {
+            return 1;
+        }
+        if (!expect(snapshot.pipeline.predictor.last_prediction_correct,
+                    "jal predict-hit should remain marked correct in the same cycle")) {
+            return 1;
+        }
+        if (!expect(snapshot.pipeline.predictor.last_prediction_pc == kEntry,
+                    "last_prediction_pc should refer to the resolved jal, not a younger fetched branch")) {
+            return 1;
+        }
+        if (!expect(snapshot.pipeline.predictor.last_prediction_target == kEntry + 8,
+                    "last_prediction_target should stay paired with the resolved jal")) {
             return 1;
         }
     }

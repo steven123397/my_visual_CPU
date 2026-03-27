@@ -95,8 +95,9 @@ void BranchPredictor::update(const PredictorUpdate& update) {
     case ControlKind::Branch: {
         Entry& entry = table_[index_for(update.pc)];
         const bool table_hit = entry.valid && entry.pc == update.pc;
-        const bool predicted_taken = table_hit && predicts_taken(entry.counter);
-        const uint64_t predicted_target = predicted_taken ? entry.target : update.pc + 4;
+        const bool predicted_taken = update.prediction.valid && update.prediction.predicted_taken;
+        const uint64_t predicted_target =
+            update.prediction.valid ? update.prediction.predicted_target : update.pc + 4;
         const bool correct =
             predicted_taken == update.taken && (!predicted_taken || predicted_target == update.target);
         if (correct) {
@@ -123,8 +124,10 @@ void BranchPredictor::update(const PredictorUpdate& update) {
         return;
     }
     case ControlKind::Jal: {
-        const uint64_t predicted_target = compute_target(update.pc, update.raw);
-        const bool correct = update.taken && predicted_target == update.target;
+        const bool predicted_taken = update.prediction.valid && update.prediction.predicted_taken;
+        const uint64_t predicted_target =
+            update.prediction.valid ? update.prediction.predicted_target : compute_target(update.pc, update.raw);
+        const bool correct = predicted_taken == update.taken && predicted_target == update.target;
         if (correct) {
             ++stats_.correct_predictions;
         } else {

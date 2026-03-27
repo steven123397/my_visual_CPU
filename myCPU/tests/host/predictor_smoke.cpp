@@ -6,6 +6,8 @@ namespace {
 
 constexpr uint64_t kBranchPc = 0x80000020ULL;
 constexpr uint64_t kBranchTarget = 0x80000040ULL;
+constexpr uint64_t kAliasBranchPc = 0x80000120ULL;
+constexpr uint64_t kAliasBranchTarget = 0x80000140ULL;
 constexpr uint32_t kBeqTaken = 0x00000463U;
 constexpr uint32_t kJalForward = 0x0080006fU;
 
@@ -33,26 +35,65 @@ int main() {
         return 1;
     }
 
-    predictor.update({.pc = kBranchPc, .raw = kBeqTaken, .taken = true, .target = kBranchTarget});
-    predictor.update({.pc = kBranchPc, .raw = kBeqTaken, .taken = true, .target = kBranchTarget});
+    predictor.update({
+        .pc = kBranchPc,
+        .raw = kBeqTaken,
+        .prediction = cold_branch,
+        .taken = true,
+        .target = kBranchTarget,
+    });
 
-    const PredictorQueryResult trained_branch = predictor.query(kBranchPc, kBeqTaken);
-    if (!expect(trained_branch.predicted_taken, "trained conditional branch should predict taken")) {
+    const PredictorQueryResult warm_branch = predictor.query(kBranchPc, kBeqTaken);
+    if (!expect(warm_branch.predicted_taken, "trained conditional branch should predict taken")) {
         return 1;
     }
-    if (!expect(trained_branch.predicted_target == kBranchTarget, "trained conditional branch should reuse learned target")) {
+    if (!expect(warm_branch.predicted_target == kBranchTarget, "trained conditional branch should reuse learned target")) {
         return 1;
     }
-    if (!expect(trained_branch.table_hit, "trained conditional branch should report a predictor table hit")) {
+    if (!expect(warm_branch.table_hit, "trained conditional branch should report a predictor table hit")) {
         return 1;
     }
 
-    predictor.update({.pc = kBranchPc, .raw = kBeqTaken, .taken = false, .target = kBranchPc + 4});
-    const PredictorStats stats_after_miss = predictor.stats();
-    if (!expect(stats_after_miss.total_predictions >= 2, "predictor should count branch queries")) {
+    predictor.update({
+        .pc = kBranchPc,
+        .raw = kBeqTaken,
+        .prediction = warm_branch,
+        .taken = true,
+        .target = kBranchTarget,
+    });
+
+    const PredictorQueryResult preserved_branch = predictor.query(kBranchPc, kBeqTaken);
+    if (!expect(preserved_branch.predicted_taken, "preserved branch prediction should stay taken before alias eviction")) {
         return 1;
     }
-    if (!expect(stats_after_miss.mispredictions >= 1, "predictor should count incorrect predictions")) {
+
+    const PredictorQueryResult alias_branch = predictor.query(kAliasBranchPc, kBeqTaken);
+    if (!expect(!alias_branch.predicted_taken, "cold alias branch should default to not-taken")) {
+        return 1;
+    }
+    predictor.update({
+        .pc = kAliasBranchPc,
+        .raw = kBeqTaken,
+        .prediction = alias_branch,
+        .taken = true,
+        .target = kAliasBranchTarget,
+    });
+    predictor.update({
+        .pc = kBranchPc,
+        .raw = kBeqTaken,
+        .prediction = preserved_branch,
+        .taken = true,
+        .target = kBranchTarget,
+    });
+
+    const PredictorStats stats_after_alias = predictor.stats();
+    if (!expect(stats_after_alias.total_predictions == 4, "predictor should count every resolved branch query once")) {
+        return 1;
+    }
+    if (!expect(stats_after_alias.correct_predictions == 2, "alias eviction should not rewrite an older correct prediction into a miss")) {
+        return 1;
+    }
+    if (!expect(stats_after_alias.mispredictions == 2, "cold-taken training should account for exactly two misses in this scenario")) {
         return 1;
     }
 

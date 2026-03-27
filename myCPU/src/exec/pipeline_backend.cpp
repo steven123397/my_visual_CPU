@@ -512,6 +512,7 @@ void PipelineBackend::step_ex() {
         predictor_.update({
             .pc = id_ex_.slot.pc,
             .raw = id_ex_.slot.raw,
+            .prediction = id_ex_.slot.prediction,
             .taken = actual_taken,
             .target = actual_target,
         });
@@ -573,12 +574,6 @@ void PipelineBackend::step_if() {
     next_if_id_.slot.pc = fetch_pc;
     next_if_id_.slot.raw = static_cast<uint32_t>(fetch.value);
     next_if_id_.slot.prediction = prediction;
-    if (prediction.valid) {
-        last_prediction_valid_ = true;
-        last_prediction_taken_ = prediction.predicted_taken;
-        last_prediction_pc_ = fetch_pc;
-        last_prediction_target_ = prediction.predicted_target;
-    }
     fetch_pc_ = prediction.valid && prediction.predicted_taken ? prediction.predicted_target : fetch_pc + 4;
 }
 

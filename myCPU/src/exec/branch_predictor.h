@@ -14,6 +14,7 @@ struct PredictorQueryResult {
 struct PredictorUpdate {
     uint64_t pc{0};
     uint32_t raw{0};
+    PredictorQueryResult prediction{};
     bool taken{false};
     uint64_t target{0};
 };
