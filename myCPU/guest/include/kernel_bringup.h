@@ -21,6 +21,7 @@ typedef struct KernelBringupOptions {
     uint64_t pmm_probe_marker;
     kernel_bringup_pre_vm_setup_t pre_vm_setup;
     void* pre_vm_context;
+    bool map_managed_memory;
 } kernel_bringup_options_t;
 
 bool kernel_bringup_run_common(

@@ -5,6 +5,18 @@ platform_uart_putc:
     sb   a0, UART_REG_THR(t0)
     ret
 
+platform_uart_rx_ready:
+    li   t0, UART_BASE
+    lbu  t1, UART_REG_LSR(t0)
+    andi a0, t1, UART_LSR_DR
+    snez a0, a0
+    ret
+
+platform_uart_getc:
+    li   t0, UART_BASE
+    lbu  a0, UART_REG_RBR(t0)
+    ret
+
 platform_uart_enable_thre_irq:
     li   t0, UART_BASE
     li   t1, UART_IER_THRI

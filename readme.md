@@ -125,7 +125,36 @@ http://127.0.0.1:4173
 - 选择仓库内现有 asm / guest / `kernel_alpha` demo
 - 切换 `functional` / `pipeline`
 - `Load / Run / Pause / Step Cycle / Step Commit / Reset`
-- 查看五级流水线、最近周期时间线、寄存器变化、CSR / Trap、最近一次总线访问，以及 UART / CLINT / PLIC / Storage 状态
+- 终端主舞台：点击后接管键盘，把 ASCII / `Enter` / `Backspace` 直接送入 guest monitor
+- 可折叠 Debug inspector：查看五级流水线、最近周期时间线、寄存器变化、CSR / Trap、最近一次总线访问，以及 UART / CLINT / PLIC / Storage 状态
+
+## `interactive_os` 最小交互演示
+
+当前仓库已经接入独立 `guest/interactive_os.elf` 演示入口。它不是图形桌面，而是一条“浏览器终端壳 + guest 串口 monitor”最小闭环。
+
+最常用的验证入口：
+
+```bash
+cd myCPU
+make test-unit-monitor_commands
+make test-host-interactive_terminal_smoke
+make test-guest-interactive_os_demo
+make test-pipeline-guest-interactive_os_demo
+```
+
+当前 monitor 命令集至少包含：
+
+- `help`
+- `echo`
+- `time`
+- `uptime`
+- `disk info`
+- `disk read <lba>`
+- `regs`
+- `peek <addr> [1|2|4|8]`
+- `pagewalk <addr>`
+- `pte dump <addr>`
+- `halt`
 
 ## 测试
 
@@ -139,14 +168,17 @@ make test
 make test-pipeline
 make test-guest-kernel_alpha_demo
 make test-guest-kernel_alpha_fault_demo
+make test-host-interactive_terminal_smoke
+make test-guest-interactive_os_demo
+make test-pipeline-guest-interactive_os_demo
 
 cd ../frontend
 node --test
 ```
 
-`make test` 是默认 `functional` reference path 的主回归，覆盖 asm、host-side unit、`guest_supervisor_demo`，以及 `kernel_alpha` 正向与全部负向 demo。
+`make test` 是默认 `functional` reference path 的主回归，覆盖 asm、host-side unit、`guest_supervisor_demo`、`interactive_os`，以及 `kernel_alpha` 正向与全部负向 demo。
 
-`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性；当前 host-side differential 已包含 machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及经 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer / external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 架构稳定路径，用户态 delegated supervisor timer / external interrupt 也都已纳入；真实 `CLINT` / `PLIC+UART` 驱动的 supervisor interrupt 由 `pipeline_backend_smoke` 单独守住，而 `debug_cli_smoke` 进一步用自包含 flat-binary 检查这些路径在快照/事件协议里的可观察性。
+`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI、`interactive_os`，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性；当前 host-side differential 已包含 machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及经 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer / external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 架构稳定路径，用户态 delegated supervisor timer / external interrupt 也都已纳入；真实 `CLINT` / `PLIC+UART` 驱动的 supervisor interrupt 由 `pipeline_backend_smoke` 单独守住，而 `debug_cli_smoke` 进一步用自包含 flat-binary 检查这些路径在快照/事件协议里的可观察性。
 
 `cd frontend && node --test` 负责守住本地调试服务、测试清单、WebSocket 快照/事件透传，以及前端纯状态逻辑；当前也会检查连续运行中的会话在重新 `load` 时会先停掉旧的定时推进，避免演示链路在切换 demo 后继续后台前进。
 

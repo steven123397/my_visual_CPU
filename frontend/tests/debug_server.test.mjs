@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import net from 'node:net';
 
 import { startServer } from '../server/debug_server.mjs';
 
@@ -58,9 +60,11 @@ function makeSnapshot(cycle, sessionLabel) {
 
 function createFakeSession(sessionLabel = 'session-1') {
   let cycle = 0;
+  let terminal = `boot:${sessionLabel}\r\n> `;
   return {
     async load() {
       cycle = 0;
+      terminal = `boot:${sessionLabel}\r\n> `;
       return { ok: true };
     },
     async snapshot() {
@@ -76,7 +80,20 @@ function createFakeSession(sessionLabel = 'session-1') {
     },
     async reset() {
       cycle = 0;
+      terminal = '';
       return this.snapshot();
+    },
+    async uartInput(text) {
+      terminal += text;
+      return { ok: true };
+    },
+    async uartOutput(offset = 0) {
+      return {
+        type: 'uart_output',
+        offset,
+        next_offset: terminal.length,
+        text: terminal.slice(offset),
+      };
     },
     async close() {},
   };
@@ -100,6 +117,134 @@ async function postJson(baseUrl, pathname, payload) {
     status: response.status,
     body: await response.json(),
   };
+}
+
+function createEventTargetSocket(socket) {
+  const listeners = new Map();
+
+  function emit(type, event = {}) {
+    const callbacks = listeners.get(type);
+    if (!callbacks) {
+      return;
+    }
+    for (const callback of [...callbacks]) {
+      callback(event);
+    }
+  }
+
+  return {
+    addEventListener(type, callback) {
+      if (!listeners.has(type)) {
+        listeners.set(type, new Set());
+      }
+      listeners.get(type).add(callback);
+    },
+    removeEventListener(type, callback) {
+      listeners.get(type)?.delete(callback);
+    },
+    close() {
+      socket.end();
+    },
+    emit,
+  };
+}
+
+function decodeFrames(buffer, emit) {
+  let offset = 0;
+  while (offset + 2 <= buffer.length) {
+    const first = buffer[offset];
+    const second = buffer[offset + 1];
+    let payloadLength = second & 0x7f;
+    let headerLength = 2;
+
+    if (payloadLength === 126) {
+      if (offset + 4 > buffer.length) {
+        break;
+      }
+      payloadLength = buffer.readUInt16BE(offset + 2);
+      headerLength = 4;
+    } else if (payloadLength === 127) {
+      if (offset + 10 > buffer.length) {
+        break;
+      }
+      payloadLength = Number(buffer.readBigUInt64BE(offset + 2));
+      headerLength = 10;
+    }
+
+    if (offset + headerLength + payloadLength > buffer.length) {
+      break;
+    }
+
+    const opcode = first & 0x0f;
+    const payload = buffer.slice(offset + headerLength, offset + headerLength + payloadLength);
+    if (opcode === 0x1) {
+      emit('message', { data: payload.toString('utf8') });
+    } else if (opcode === 0x8) {
+      emit('close', {});
+    }
+    offset += headerLength + payloadLength;
+  }
+  return buffer.slice(offset);
+}
+
+function openTestWebSocket(urlText) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlText);
+    const socket = net.createConnection({
+      host: url.hostname,
+      port: Number(url.port || 80),
+    });
+    const ws = createEventTargetSocket(socket);
+    const key = crypto.randomBytes(16).toString('base64');
+    let handshakeComplete = false;
+    let buffer = Buffer.alloc(0);
+
+    socket.on('connect', () => {
+      socket.write([
+        `GET ${url.pathname} HTTP/1.1`,
+        `Host: ${url.host}`,
+        'Upgrade: websocket',
+        'Connection: Upgrade',
+        `Sec-WebSocket-Key: ${key}`,
+        'Sec-WebSocket-Version: 13',
+        '',
+        '',
+      ].join('\r\n'));
+    });
+
+    socket.on('data', (chunk) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      if (!handshakeComplete) {
+        const boundary = buffer.indexOf('\r\n\r\n');
+        if (boundary === -1) {
+          return;
+        }
+        const header = buffer.slice(0, boundary).toString('utf8');
+        if (!header.startsWith('HTTP/1.1 101')) {
+          reject(new Error(`websocket upgrade failed: ${header}`));
+          socket.destroy();
+          return;
+        }
+        handshakeComplete = true;
+        buffer = buffer.slice(boundary + 4);
+        ws.emit('open', {});
+        resolve(ws);
+      }
+
+      if (handshakeComplete && buffer.length > 0) {
+        buffer = decodeFrames(buffer, ws.emit);
+      }
+    });
+
+    socket.on('error', (error) => {
+      ws.emit('error', { error });
+      if (!handshakeComplete) {
+        reject(error);
+      }
+    });
+    socket.on('close', () => ws.emit('close', {}));
+    socket.on('end', () => ws.emit('close', {}));
+  });
 }
 
 function waitForWebSocketOpen(socket) {
@@ -126,6 +271,29 @@ function waitForWebSocketMessage(socket) {
     const onMessage = (event) => {
       cleanup();
       resolve(JSON.parse(event.data));
+    };
+    const onError = (event) => {
+      cleanup();
+      reject(event.error ?? new Error('websocket message failed'));
+    };
+    const cleanup = () => {
+      socket.removeEventListener('message', onMessage);
+      socket.removeEventListener('error', onError);
+    };
+    socket.addEventListener('message', onMessage);
+    socket.addEventListener('error', onError);
+  });
+}
+
+function waitForWebSocketPayload(socket, predicate) {
+  return new Promise((resolve, reject) => {
+    const onMessage = (event) => {
+      const payload = JSON.parse(event.data);
+      if (!predicate(payload)) {
+        return;
+      }
+      cleanup();
+      resolve(payload);
     };
     const onError = (event) => {
       cleanup();
@@ -189,11 +357,9 @@ test('load and step-cycle preserve rich snapshots across HTTP and WebSocket', as
     port: 0,
     createSession: createFakeSessionFactory(),
   });
-  const socket = new WebSocket(`${server.baseUrl.replace('http', 'ws')}/ws`);
+  const socket = await openTestWebSocket(`${server.baseUrl.replace('http', 'ws')}/ws`);
 
   try {
-    await waitForWebSocketOpen(socket);
-
     const loadMessage = waitForWebSocketMessage(socket);
     const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
       test: 'hello',
@@ -254,6 +420,82 @@ test('POST /api/session/load stops a previous run before replacing the session',
     assert.equal(snapshotResponse.body.snapshot.summary.cycle, 0);
     assert.equal(snapshotResponse.body.snapshot.events[0].detail, 'session-2:load');
   } finally {
+    await server.close();
+  }
+});
+
+test('terminal output API returns UART deltas and resets across session reloads', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const initialOutput = await postJson(server.baseUrl, '/api/session/terminal-output', { offset: 0 });
+    assert.equal(initialOutput.status, 200);
+    assert.equal(initialOutput.body.text, 'boot:session-1\r\n> ');
+    assert.equal(initialOutput.body.nextOffset, 'boot:session-1\r\n> '.length);
+
+    const emptyDelta = await postJson(server.baseUrl, '/api/session/terminal-output', {
+      offset: initialOutput.body.nextOffset,
+    });
+    assert.equal(emptyDelta.status, 200);
+    assert.equal(emptyDelta.body.text, '');
+    assert.equal(emptyDelta.body.nextOffset, initialOutput.body.nextOffset);
+
+    const reloadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_supervisor_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(reloadResponse.status, 200);
+
+    const resetOutput = await postJson(server.baseUrl, '/api/session/terminal-output', { offset: 0 });
+    assert.equal(resetOutput.status, 200);
+    assert.equal(resetOutput.body.text, 'boot:session-2\r\n> ');
+  } finally {
+    await server.close();
+  }
+});
+
+test('terminal input API forwards text and broadcasts terminal deltas over websocket', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+  const socket = await openTestWebSocket(`${server.baseUrl.replace('http', 'ws')}/ws`);
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const initialOutput = await postJson(server.baseUrl, '/api/session/terminal-output', { offset: 0 });
+    assert.equal(initialOutput.status, 200);
+
+    const terminalMessage = waitForWebSocketPayload(
+      socket,
+      (payload) => payload.type === 'terminal' && payload.text === 'help\r',
+    );
+    const inputResponse = await postJson(server.baseUrl, '/api/session/terminal-input', { text: 'help\r' });
+    assert.equal(inputResponse.status, 200);
+    assert.equal(inputResponse.body.text, 'help\r');
+    assert.equal(inputResponse.body.nextOffset, initialOutput.body.nextOffset + 'help\r'.length);
+    assert.deepEqual(await terminalMessage, {
+      type: 'terminal',
+      text: 'help\r',
+      nextOffset: initialOutput.body.nextOffset + 'help\r'.length,
+      reset: false,
+    });
+  } finally {
+    socket.close();
     await server.close();
   }
 });

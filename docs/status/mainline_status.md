@@ -18,7 +18,7 @@
   - [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
   - [design/phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md)
 - 当前计划：
-  - 当前暂无专门的主线执行计划；后续如有新任务，再单独建立对应 `plan` 文档。
+  - [plan/minimal_interactive_os_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/minimal_interactive_os_plan.md)
 - 已完成计划：
   - [plan/docs_information_architecture_reorg_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/docs_information_architecture_reorg_plan.md)
   - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
@@ -83,6 +83,60 @@
 
 这些工作仍然是近期主线，不应因为 `pipeline` / `debug/frontend` 已接入而被搁置。
 
+## 2026-03-27 补充进展
+
+本轮主线已把最小可交互 monitor OS 路线推进到 guest / debug protocol / frontend / host smoke 四层闭环：
+
+- `Uart16550` 已补最小 RX 合同，guest 侧轮询式 `platform_uart_rx_ready()` / `platform_uart_getc()` 已可用。
+- `debug_session` / `debug_protocol` 已补 `uart_input(text)` 与 `uart_output(offset)`，并增加面向交互 smoke 的条件推进命令：
+  - `run_until_uart_contains`
+  - `run_until_halt`
+- debug JSON string 解析已支持基础转义，`uart_input("help\\r")` 这类终端输入现已按真实回车语义进入 guest。
+- 新的 `guest/interactive_os` 已独立落地，当前最小 monitor 闭环已成立：
+  - banner / prompt
+  - 可见 ASCII 回显
+  - `Enter`
+  - `Backspace`
+  - 固定长度行缓冲
+  - `help` / `echo` / `time` / `uptime` / `halt`
+  - `disk info` / `disk read`
+  - `regs` / `peek` / `pagewalk` / `pte dump`
+- 前端已完成 Task 4 的终端桌面壳收口：
+  - 主界面切为“终端主舞台 + 可折叠 Debug inspector”
+  - terminal I/O 通过独立 API / WebSocket 增量同步，不并入 `DebugSnapshot`
+  - 页面默认点击终端后才接管键盘
+- `tests/unit/monitor_commands.c` 已接入，当前 monitor 正式命令集已有 host-side 单元门禁。
+- `make test` / `make test-pipeline` 已纳入：
+  - `test-unit-monitor_commands`
+  - `test-host-interactive_terminal_smoke`
+  - `test-guest-interactive_os_demo`
+  - `test-pipeline-guest-interactive_os_demo`
+- `tests/asm/mmio_access_faults.S` 已按 UART RX 新合同修正第二个 UART case：
+  - 旧用例把 `UART_REG_THR` 读当作非法访问，但在引入 `UART_REG_RBR` 后，offset `0x0` 的字节读已成为合法 RX 路径；
+  - 当前 asm 回归改为验证 `UART` 基址上的非法读宽度，继续守住 CPU 侧 `load access fault` 合同。
+- `Makefile` 已把 `guest_supervisor_demo` 切到独立 timeout 预算：
+  - functional 实测约 `2.33s`，pipeline 实测约 `4.51s`；
+  - 当前不再复用 `2s / 4s` 的通用门限，避免既有高成本 smoke 误报失败。
+- 为了把 monitor 启动成本控制在 host-driven smoke 可接受范围内，`interactive_os` 当前采用独立的最小 Sv39 bring-up 路径：
+  - kernel 高地址 RAM 走 1G identity superpage
+  - 低地址 MMIO 区走 1G identity superpage
+  - 不改 `kernel_alpha` 默认 `kernel_runtime_run_bringup()` 路线
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test`
+- `cd myCPU && make test-pipeline`
+- `cd frontend && node --test`
+- `cd myCPU && make test-unit-kernel_runtime`
+- `cd myCPU && make test-host-debug_cli_smoke`
+- `cd myCPU && make test-unit-monitor_commands`
+- `cd myCPU && make test-host-interactive_terminal_smoke`
+- `cd myCPU && make test-guest-supervisor_demo`
+- `cd myCPU && make test-pipeline-guest-supervisor_demo`
+- `cd myCPU && make test-guest-interactive_os_demo`
+- `cd myCPU && make test-pipeline-guest-interactive_os_demo`
+- `cd myCPU && make test-guest-kernel_alpha_demo`
+
 ## Phase 2 当前安排
 
 当前对 Phase 2 的理解和安排如下：
@@ -104,6 +158,7 @@
 - guest runtime 虽已完成第一轮拆分，但 `vm*`、`trap*`、`kernel_runtime`、`kernel_bringup` 仍需要继续守住边界，避免回退到单个大文件。
 - `kernel_alpha` 已经达到 Phase 1 核心完成态，但更多 device readiness / fault / panic / runtime refinement 仍属于 post-Phase1 hardening。
 - `pipeline` 已经正式可用，privileged / trap / interrupt / MMIO 行为的一致性验证主干也已基本成体系；后续以维护既有差分门禁和按新增问题补最小持久回归为主。
+- 本轮收尾后，`interactive_os` 相关改动与总门禁已同步恢复到通过状态。
 - `debug/frontend` 已经正式接入，但仍应避免膨胀成断点 / 条件暂停 / 任意文件加载的通用调试器。
 
 ## 下一步
@@ -112,7 +167,7 @@
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
-5. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
+5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
 
 ## 建议入口
 

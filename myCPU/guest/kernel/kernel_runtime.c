@@ -88,6 +88,7 @@ bool kernel_runtime_run_bringup(
         .pmm_probe_marker = pmm_probe_marker,
         .pre_vm_setup = pre_vm_setup,
         .pre_vm_context = pre_vm_setup != NULL ? runtime : NULL,
+        .map_managed_memory = true,
     };
 
     return kernel_runtime_run_common_bringup(runtime, &options);

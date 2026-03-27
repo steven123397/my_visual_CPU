@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "debug_snapshot.h"
@@ -11,6 +13,12 @@
 
 class DebugSession {
 public:
+    struct UartOutputChunk {
+        size_t offset{0};
+        size_t next_offset{0};
+        std::string text{};
+    };
+
     void load_elf(const std::string& path,
                   BackendKind backend_kind,
                   const char* disk_image,
@@ -25,6 +33,10 @@ public:
     void reset();
     void step_cycle();
     void step_commit();
+    void run_until_uart_contains(std::string_view text, uint64_t max_steps);
+    void run_until_halt(uint64_t max_steps);
+    void uart_input(std::string_view text);
+    UartOutputChunk uart_output(size_t offset) const;
     DebugSnapshot snapshot() const;
 
 private:

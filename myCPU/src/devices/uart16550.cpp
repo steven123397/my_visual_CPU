@@ -21,6 +21,14 @@ uint64_t Uart16550::load(uint64_t addr, int size) {
     }
 
     const uint32_t offset = static_cast<uint32_t>(addr - UART_BASE);
+    if (offset == UART_REG_RBR) {
+        if (input_.empty()) {
+            return 0;
+        }
+        const uint8_t value = input_.front();
+        input_.pop_front();
+        return value;
+    }
     if (offset == UART_REG_IER) {
         return ier_;
     }
@@ -28,7 +36,7 @@ uint64_t Uart16550::load(uint64_t addr, int size) {
         return (ier_ & UART_IER_THRI) ? UART_IIR_THRI : UART_IIR_NO_INT;
     }
     if (offset == UART_REG_LSR) {
-        return UART_LSR_THRE | UART_LSR_TEMT;
+        return (input_.empty() ? 0U : UART_LSR_DR) | UART_LSR_THRE | UART_LSR_TEMT;
     }
 
     invalid_access(addr, size);
@@ -76,6 +84,12 @@ size_t Uart16550::output_size() const {
 
 const std::string& Uart16550::output() const {
     return output_;
+}
+
+void Uart16550::inject_input(std::string_view text) {
+    for (const char ch : text) {
+        input_.push_back(static_cast<uint8_t>(ch));
+    }
 }
 
 void Uart16550::set_mirror_stdout(bool enabled) {

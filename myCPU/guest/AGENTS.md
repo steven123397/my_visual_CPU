@@ -17,6 +17,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `user_program_t` / `user_program_smoke_t`
 - `supervisor_demo_smoke`
 - 独立 `kernel_alpha` bring-up / negative demos
+- 独立 `interactive_os` 串口 monitor demo
 
 当前已经能完成：
 
@@ -27,6 +28,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - delegated timer / external interrupt return
 - 单用户生命周期和清理 smoke
 - 独立 kernel alpha 的正向 bring-up 与九条负向回归
+- 独立 `interactive_os` 的 browser/front-end 终端壳闭环与 monitor 命令集
 - `guest_supervisor_demo` 与 `kernel_alpha` 十条 demo 当前共同构成 Phase 1 核心 guest 门禁，回归收口口径见 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
 - 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 guest runtime 调整默认按 post-Phase1 hardening 理解。
 
@@ -54,7 +56,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `supervisor_runtime.c`：`kernel_alpha` 与 `supervisor_demo_smoke` 共享的 supervisor bring-up interrupt state、self-bound contract、policy adapter、delivery / deadline wait 最小编排
 - `user_task.c` / `user_task_bootstrap.c` / `user_program.c`：标准用户生命周期装配
 
-### 入口与编排层：`supervisor_demo` / `kernel_alpha`
+### 入口与编排层：`supervisor_demo` / `kernel_alpha` / `interactive_os`
 
 - [supervisor_demo/main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/main.c)
   只负责基础初始化和调用 `supervisor_demo_smoke_run()`。
@@ -84,6 +86,16 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   `kernel_alpha` non-storage 负向回归共享的 interrupt / fault helper：当前收口 interrupt bring-up、platform interrupt readiness、PLIC not-ready、timer not-ready 与标准 post-handler 合同。
 - [kernel_alpha/storage_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_contract.c)
   `kernel_alpha` storage 负向回归共享的合同 helper：当前收口 no-media / not-ready / bad-magic / bad-block-count / lba-range / bad-command 六条独立路径的公共协议检查。
+- [interactive_os/main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/interactive_os/main.c)
+  独立 `interactive_os` 入口。当前只负责最小 bring-up、进入串口 monitor 主循环，不承载 `kernel_alpha` 的 bring-up 合同。
+- [kernel/console_input.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/console_input.c)
+  轮询式 UART 输入与最小行编辑。
+- [kernel/monitor.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/monitor.c)
+  banner / prompt / monitor 主循环。
+- [kernel/monitor_commands.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/monitor_commands.c)
+  monitor 命令解析与执行，当前至少包含 `help`、`echo`、`time`、`uptime`、`disk info`、`disk read`、`regs`、`peek`、`pagewalk`、`pte dump` 与 `halt`。
+- [kernel/vm_debug.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_debug.c)
+  monitor 专用的只读页表 walk / PTE dump helper，不把这组调试输出混回 `kernel_alpha`。
 
 ## 当前十条 `kernel_alpha` 路径
 
@@ -226,6 +238,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 
 - 不要重新把 demo 逻辑堆回 `guest/supervisor_demo/main.c`。
 - 不要把独立 kernel alpha bring-up 再塞回 `supervisor_demo_smoke`。
+- 不要把 `interactive_os` 扩成图形桌面、窗口管理器或 `kernel_alpha` 的替代入口。
 - 新的标准生命周期逻辑优先放到 `user_program`、`user_task_bootstrap`、`trap`、`vm`，而不是直接塞进 smoke/demo。
 - smoke 的 public surface 应尽量小，细碎 orchestration 尽量内部化、`static` 化。
 - `kernel_alpha/*` 入口不应退化成新的“大而全 runtime 框架”。

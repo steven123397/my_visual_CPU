@@ -126,6 +126,25 @@ class DebugCliSession {
     return this.send({ cmd: 'reset' });
   }
 
+  async uartInput(text) {
+    const response = await this.send({ cmd: 'uart_input', text });
+    if (response.type === 'error') {
+      throw new Error(response.message);
+    }
+    return response;
+  }
+
+  async uartOutput(offset = 0) {
+    const response = await this.send({ cmd: 'uart_output', offset });
+    if (response.type === 'error') {
+      throw new Error(response.message);
+    }
+    return {
+      text: response.text ?? '',
+      nextOffset: response.next_offset ?? offset,
+    };
+  }
+
   async close() {
     try {
       await this.send({ cmd: 'quit' });
@@ -161,12 +180,55 @@ export async function startServer({
   let currentSession = null;
   let currentSnapshot = null;
   let runTimer = null;
+  let currentTerminalBuffer = '';
+  let currentTerminalOffset = 0;
 
   function stopRunLoop() {
     if (runTimer) {
       clearInterval(runTimer);
       runTimer = null;
     }
+  }
+
+  function resetTerminalTracking() {
+    currentTerminalBuffer = '';
+    currentTerminalOffset = 0;
+  }
+
+  async function readTerminalOutput(offset = currentTerminalOffset) {
+    if (!currentSession) {
+      throw new Error('session not loaded');
+    }
+    const chunk = await currentSession.uartOutput(offset);
+    return {
+      text: chunk.text ?? '',
+      nextOffset: chunk.nextOffset ?? chunk.next_offset ?? offset,
+    };
+  }
+
+  function trackTerminalChunk(chunk, { reset = false } = {}) {
+    const normalized = {
+      type: 'terminal',
+      text: chunk.text ?? '',
+      nextOffset: chunk.nextOffset ?? currentTerminalOffset,
+      reset,
+    };
+
+    if (reset) {
+      currentTerminalBuffer = normalized.text;
+    } else if (normalized.nextOffset > currentTerminalOffset) {
+      currentTerminalBuffer += normalized.text;
+    }
+    currentTerminalOffset = normalized.nextOffset;
+    return normalized;
+  }
+
+  async function syncTerminalDelta({ offset = currentTerminalOffset, reset = false, broadcast = false } = {}) {
+    const message = trackTerminalChunk(await readTerminalOutput(offset), { reset });
+    if (broadcast && (reset || message.text.length > 0)) {
+      wsHub.broadcast(message);
+    }
+    return message;
   }
 
   const server = http.createServer(async (request, response) => {
@@ -193,8 +255,10 @@ export async function startServer({
         currentSession = await createSession();
         await currentSession.load(entry, body.backend ?? 'pipeline');
         currentSnapshot = await currentSession.snapshot();
+        resetTerminalTracking();
         wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        json(response, 200, { ok: true, snapshot: currentSnapshot });
+        const terminal = await syncTerminalDelta({ offset: 0, reset: true, broadcast: true });
+        json(response, 200, { ok: true, snapshot: currentSnapshot, terminal });
         return;
       }
 
@@ -215,7 +279,8 @@ export async function startServer({
         }
         currentSnapshot = await currentSession.stepCycle();
         wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        json(response, 200, { snapshot: currentSnapshot });
+        const terminal = await syncTerminalDelta({ broadcast: true });
+        json(response, 200, { snapshot: currentSnapshot, terminal });
         return;
       }
 
@@ -226,7 +291,8 @@ export async function startServer({
         }
         currentSnapshot = await currentSession.stepCommit();
         wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        json(response, 200, { snapshot: currentSnapshot });
+        const terminal = await syncTerminalDelta({ broadcast: true });
+        json(response, 200, { snapshot: currentSnapshot, terminal });
         return;
       }
 
@@ -236,8 +302,10 @@ export async function startServer({
           return;
         }
         currentSnapshot = await currentSession.reset();
+        resetTerminalTracking();
         wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        json(response, 200, { snapshot: currentSnapshot });
+        const terminal = await syncTerminalDelta({ offset: 0, reset: true, broadcast: true });
+        json(response, 200, { snapshot: currentSnapshot, terminal });
         return;
       }
 
@@ -253,6 +321,7 @@ export async function startServer({
           try {
             currentSnapshot = await currentSession.stepCycle();
             wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+            await syncTerminalDelta({ broadcast: true });
             if (currentSnapshot.summary?.halted) {
               stopRunLoop();
             }
@@ -262,6 +331,33 @@ export async function startServer({
           }
         }, intervalMs);
         json(response, 200, { ok: true });
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/session/terminal-input') {
+        if (!currentSession) {
+          json(response, 400, { error: 'session not loaded' });
+          return;
+        }
+        const body = await readBody(request);
+        await currentSession.uartInput(body.text ?? '');
+        const terminal = await syncTerminalDelta({ broadcast: true });
+        json(response, 200, {
+          ok: true,
+          text: terminal.text,
+          nextOffset: terminal.nextOffset,
+        });
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/session/terminal-output') {
+        if (!currentSession) {
+          json(response, 400, { error: 'session not loaded' });
+          return;
+        }
+        const body = await readBody(request);
+        const terminal = await readTerminalOutput(body.offset ?? 0);
+        json(response, 200, terminal);
         return;
       }
 

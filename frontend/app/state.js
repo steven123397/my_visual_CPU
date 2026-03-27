@@ -8,6 +8,16 @@ export function createAppState() {
     runState: 'idle',
     currentSnapshot: null,
     history: [],
+    terminal: {
+      buffer: '',
+      nextOffset: 0,
+      focused: false,
+      connected: false,
+      pendingInput: false,
+    },
+    layout: {
+      debugPanelOpen: false,
+    },
   };
 }
 
@@ -27,6 +37,67 @@ export function pushSnapshot(state, snapshot) {
 export function resetHistory(state) {
   state.currentSnapshot = null;
   state.history = [];
+}
+
+export function resetTerminalState(state) {
+  state.terminal = {
+    buffer: '',
+    nextOffset: 0,
+    focused: false,
+    connected: false,
+    pendingInput: false,
+  };
+}
+
+export function appendTerminalOutput(state, payload = {}) {
+  const text = payload.text ?? '';
+  const nextOffset =
+    typeof payload.nextOffset === 'number'
+      ? payload.nextOffset
+      : (typeof payload.next_offset === 'number' ? payload.next_offset : state.terminal.nextOffset);
+  const reset = Boolean(payload.reset);
+
+  if (!reset && nextOffset <= state.terminal.nextOffset) {
+    state.terminal.connected = true;
+    return;
+  }
+
+  state.terminal.buffer = reset ? text : `${state.terminal.buffer}${text}`;
+  state.terminal.nextOffset = nextOffset;
+  state.terminal.connected = true;
+}
+
+export function setTerminalFocus(state, focused) {
+  state.terminal.focused = focused;
+}
+
+export function setTerminalPendingInput(state, pending) {
+  state.terminal.pendingInput = pending;
+}
+
+export function setDebugPanelOpen(state, open) {
+  state.layout.debugPanelOpen = open;
+}
+
+export function normalizeTerminalInput(event) {
+  if (!event || event.ctrlKey || event.metaKey || event.altKey) {
+    return null;
+  }
+
+  if (event.key === 'Enter') {
+    return '\r';
+  }
+
+  if (event.key === 'Backspace') {
+    return '\b';
+  }
+
+  if (typeof event.key !== 'string' || event.key.length !== 1) {
+    return null;
+  }
+
+  const code = event.key.charCodeAt(0);
+  return code >= 0x20 && code <= 0x7e ? event.key : null;
 }
 
 export function buildTimelineRows(history) {

@@ -27,7 +27,7 @@ after_uart_invalid_width:
     bne  t0, t1, fail
 
 uart_invalid_load:
-    lb   t0, UART_REG_THR(s1)
+    lh   t0, UART_REG_RBR(s1)
 
 after_uart_invalid_load:
     csrr t0, mscratch

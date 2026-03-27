@@ -224,7 +224,8 @@ static int test_runtime_bringup_helper(void) {
         g_common_bringup_options->pmm_probe_marker != UINT64_C(0xABCDEF) ||
         g_common_bringup_options->pre_vm_setup !=
             kernel_runtime_install_external_counter_policy_adapter ||
-        g_common_bringup_options->pre_vm_context != &runtime) {
+        g_common_bringup_options->pre_vm_context != &runtime ||
+        !g_common_bringup_options->map_managed_memory) {
         return fail("expected runtime bring-up helper to bind runtime as pre-vm context");
     }
 
@@ -241,7 +242,8 @@ static int test_runtime_bringup_helper(void) {
         g_common_bringup_options->mmio_mask != KERNEL_BRINGUP_MMIO_STORAGE ||
         g_common_bringup_options->pmm_probe_marker != 0 ||
         g_common_bringup_options->pre_vm_setup != NULL ||
-        g_common_bringup_options->pre_vm_context != NULL) {
+        g_common_bringup_options->pre_vm_context != NULL ||
+        !g_common_bringup_options->map_managed_memory) {
         return fail("expected runtime bring-up helper to clear pre-vm context when unused");
     }
 
@@ -262,6 +264,7 @@ static int test_common_bringup_wrapper(void) {
         .pmm_probe_marker = 0,
         .pre_vm_setup = NULL,
         .pre_vm_context = NULL,
+        .map_managed_memory = true,
     };
 
     reset_stub_state();

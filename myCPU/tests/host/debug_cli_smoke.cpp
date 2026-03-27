@@ -1,4 +1,5 @@
 #include <array>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -251,6 +252,49 @@ int main() {
     }
 
     if (!expect_contains(timer_final_output, "\"cmd\":\"quit\"", "quit response should be emitted")) {
+        return 1;
+    }
+
+    const std::string terminal_io_output =
+        run_cli_script(build_flat_load_command(external_binary.path) +
+                       "{\"cmd\":\"step_commit\",\"count\":64}\n" +
+                       "{\"cmd\":\"uart_output\",\"offset\":0}\n"
+                       "{\"cmd\":\"uart_output\",\"offset\":2}\n"
+                       "{\"cmd\":\"uart_input\",\"text\":\"abc\"}\n"
+                       "{\"cmd\":\"quit\"}\n");
+    const std::vector<std::string> terminal_io_lines = split_lines(terminal_io_output);
+    if (!expect_line_with_fields(
+            terminal_io_lines,
+            terminal_io_output,
+            {
+                "\"type\":\"uart_output\"",
+                "\"offset\":0",
+                "\"next_offset\":2",
+                "\"text\":\"PE\"",
+            },
+            "uart_output should expose the full UART log from offset 0")) {
+        return 1;
+    }
+    if (!expect_line_with_fields(
+            terminal_io_lines,
+            terminal_io_output,
+            {
+                "\"type\":\"uart_output\"",
+                "\"offset\":2",
+                "\"next_offset\":2",
+                "\"text\":\"\"",
+            },
+            "uart_output should return an empty increment once the offset catches up")) {
+        return 1;
+    }
+    if (!expect_line_with_fields(
+            terminal_io_lines,
+            terminal_io_output,
+            {
+                "\"type\":\"ok\"",
+                "\"cmd\":\"uart_input\"",
+            },
+            "uart_input should be accepted as a first-class debug CLI command")) {
         return 1;
     }
 

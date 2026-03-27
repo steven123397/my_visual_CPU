@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>my_visual_CPU Debugger</title>
+    <title>my_visual_CPU Interactive Terminal</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -12,8 +12,8 @@
       <header class="hero">
         <div>
           <p class="eyebrow">my_visual_CPU</p>
-          <h1>实时流水线调试工作台</h1>
-          <p class="hero-copy">面向现有测试集的本地可视化调试入口。你可以直接观察五级流水线推进、Trap / Interrupt、CSR 变化和平台设备状态。</p>
+          <h1>交互式终端调试台</h1>
+          <p class="hero-copy">终端现在是主舞台，guest monitor 的串口输出和输入都通过浏览器壳层直达。调试器退到侧边，在你需要查看流水线、CSR 和设备快照时再展开。</p>
         </div>
         <div class="status-card">
           <span class="status-label">run state</span>
@@ -40,24 +40,27 @@
           <button id="step-cycle-button">Step Cycle</button>
           <button id="step-commit-button">Step Commit</button>
           <button id="reset-button">Reset</button>
+          <button id="toggle-debug-button" type="button" aria-expanded="false">展开 Debug</button>
         </div>
       </section>
 
       <section id="notice" class="notice" data-kind="info">正在连接本地调试服务…</section>
 
-      <section class="workspace">
-        <div class="workspace-main" id="pipeline-slot"></div>
-        <aside class="workspace-side">
-          <div id="summary-slot"></div>
-          <div id="events-slot"></div>
-          <div id="devices-slot"></div>
+      <section class="desktop-shell" id="desktop-shell" data-debug-open="false">
+        <div class="terminal-stage">
+          <div id="terminal-slot"></div>
+        </div>
+        <aside class="debug-inspector" id="debug-inspector" data-open="false">
+          <div class="debug-inspector-grid">
+            <div id="summary-slot"></div>
+            <div id="pipeline-slot"></div>
+            <div id="events-slot"></div>
+            <div id="devices-slot"></div>
+            <div id="registers-slot"></div>
+            <div id="csrs-slot"></div>
+            <div id="bus-slot"></div>
+          </div>
         </aside>
-      </section>
-
-      <section class="workspace-bottom">
-        <div id="registers-slot"></div>
-        <div id="csrs-slot"></div>
-        <div id="bus-slot"></div>
       </section>
     </main>
     <script type="module" src="/app.js"></script>

@@ -93,9 +93,9 @@ int main() {
         if (!expect_load(bus, UART_BASE + UART_REG_IIR, 1, 0x01, "expected UART IIR load") ||
             !expect_store_ok(bus, UART_BASE + UART_REG_IER, 0xFF, 1, "expected UART IER write") ||
             !expect_load(bus, UART_BASE + UART_REG_IER, 1, UART_IER_THRI, "expected UART IER mask") ||
+            !expect_load(bus, UART_BASE + UART_REG_RBR, 1, 0, "expected empty UART RBR read") ||
             !expect_store_ok(bus, UART_BASE + UART_REG_THR, 'Z', 1, "expected UART THR write") ||
             uart.output_size() != 1 ||
-            !expect_load_fail(bus, UART_BASE + UART_REG_THR, 1, "expected UART THR read to fail") ||
             !expect_store_fail(bus, UART_BASE + UART_REG_LSR, 0, 1, "expected UART LSR write to fail") ||
             !expect_load_fail(bus, UART_BASE + UART_REG_IER, 2, "expected UART wide load to fail") ||
             !expect_store_fail(bus, UART_BASE + UART_SIZE - 1, 0, 2, "expected UART boundary crossing write to fail")) {

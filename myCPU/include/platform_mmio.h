@@ -6,11 +6,13 @@
 
 #define UART_BASE 0x10000000
 #define UART_SIZE 0x8
+#define UART_REG_RBR 0x0
 #define UART_REG_THR 0x0
 #define UART_REG_IER 0x1
 #define UART_REG_IIR 0x2
 #define UART_REG_LSR 0x5
 #define UART_IER_THRI 0x2
+#define UART_LSR_DR 0x01
 
 #define STORAGE_BASE 0x10001000
 #define STORAGE_SIZE 0x400

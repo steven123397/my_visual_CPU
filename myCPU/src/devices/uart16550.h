@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <string>
+#include <string_view>
 
 #include "device.h"
 #include "../platform/address_map.h"
@@ -22,6 +24,7 @@ public:
     bool thre_interrupt_asserted() const;
     size_t output_size() const;
     const std::string& output() const;
+    void inject_input(std::string_view text);
     void set_mirror_stdout(bool enabled);
 
 private:
@@ -29,6 +32,7 @@ private:
 
     Plic& plic_;
     uint8_t ier_{0};
+    std::deque<uint8_t> input_{};
     std::string output_{};
     bool mirror_stdout_{true};
 };

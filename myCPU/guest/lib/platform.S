@@ -3,6 +3,8 @@
 .section .text
 
 .global platform_uart_putc
+.global platform_uart_rx_ready
+.global platform_uart_getc
 .global platform_uart_enable_thre_irq
 .global platform_uart_disable_irq
 .global platform_plic_supervisor_init

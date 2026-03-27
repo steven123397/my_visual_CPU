@@ -45,11 +45,45 @@ std::string extract_string(const std::string& line, const char* key) {
         throw std::runtime_error(std::string("expected string for key: ") + key);
     }
     ++value_pos;
-    const size_t end = line.find('"', value_pos);
-    if (end == std::string::npos) {
-        throw std::runtime_error(std::string("unterminated string for key: ") + key);
+
+    std::string value;
+    for (; value_pos < line.size(); ++value_pos) {
+        const char ch = line[value_pos];
+        if (ch == '"') {
+            return value;
+        }
+        if (ch != '\\') {
+            value.push_back(ch);
+            continue;
+        }
+
+        ++value_pos;
+        if (value_pos >= line.size()) {
+            break;
+        }
+
+        switch (line[value_pos]) {
+        case '\\':
+            value.push_back('\\');
+            break;
+        case '"':
+            value.push_back('"');
+            break;
+        case 'n':
+            value.push_back('\n');
+            break;
+        case 'r':
+            value.push_back('\r');
+            break;
+        case 't':
+            value.push_back('\t');
+            break;
+        default:
+            throw std::runtime_error(std::string("unsupported escape in string for key: ") + key);
+        }
     }
-    return line.substr(value_pos, end - value_pos);
+
+    throw std::runtime_error(std::string("unterminated string for key: ") + key);
 }
 
 std::string try_extract_string(const std::string& line, const char* key) {
@@ -322,6 +356,18 @@ std::string ok_json(const char* command) {
     return std::string("{\"type\":\"ok\",\"cmd\":\"") + command + "\"}";
 }
 
+std::string uart_output_json(const DebugSession::UartOutputChunk& chunk) {
+    std::ostringstream out;
+    out << "{"
+        << "\"type\":\"uart_output\""
+        << ",\"offset\":" << chunk.offset
+        << ",\"next_offset\":" << chunk.next_offset
+        << ",\"text\":";
+    append_json_string(out, chunk.text);
+    out << "}";
+    return out.str();
+}
+
 std::string error_json(const std::string& message) {
     std::ostringstream out;
     out << "{\"type\":\"error\",\"message\":";
@@ -378,18 +424,46 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                 continue;
             }
             if (command == "step_cycle") {
-                session.step_cycle();
+                const uint64_t count = try_extract_u64(line, "count", 1);
+                for (uint64_t i = 0; i < count; ++i) {
+                    session.step_cycle();
+                }
                 out << snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
             if (command == "step_commit") {
-                session.step_commit();
+                const uint64_t count = try_extract_u64(line, "count", 1);
+                for (uint64_t i = 0; i < count; ++i) {
+                    session.step_commit();
+                }
+                out << snapshot_json(session.snapshot()) << '\n';
+                continue;
+            }
+            if (command == "run_until_uart_contains") {
+                session.run_until_uart_contains(extract_string(line, "text"),
+                                                try_extract_u64(line, "max_steps", 0));
+                out << snapshot_json(session.snapshot()) << '\n';
+                continue;
+            }
+            if (command == "run_until_halt") {
+                session.run_until_halt(try_extract_u64(line, "max_steps", 0));
                 out << snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
             if (command == "reset") {
                 session.reset();
                 out << snapshot_json(session.snapshot()) << '\n';
+                continue;
+            }
+            if (command == "uart_input") {
+                session.uart_input(extract_string(line, "text"));
+                out << ok_json("uart_input") << '\n';
+                continue;
+            }
+            if (command == "uart_output") {
+                out << uart_output_json(
+                           session.uart_output(static_cast<size_t>(try_extract_u64(line, "offset", 0))))
+                    << '\n';
                 continue;
             }
             if (command == "quit") {

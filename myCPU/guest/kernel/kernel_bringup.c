@@ -76,16 +76,17 @@ static bool kernel_bringup_probe_pmm_page(uint64_t marker) {
 }
 
 static bool kernel_bringup_setup_vm(vm_address_space_t** out_space,
-                                    uint32_t mmio_mask) {
+                                    const kernel_bringup_options_t* options) {
     const uint64_t text_flags = VM_PAGE_READ | VM_PAGE_EXEC;
     const uint64_t rodata_flags = VM_PAGE_READ;
     const uint64_t data_flags = VM_PAGE_READ | VM_PAGE_WRITE;
     const uintptr_t early_heap_start = memory_heap_start();
     const uintptr_t managed_start = pmm_managed_start();
     const uintptr_t managed_end = pmm_managed_end();
+    const uint32_t mmio_mask = options != NULL ? options->mmio_mask : 0U;
     vm_address_space_t* address_space = NULL;
 
-    if (out_space == NULL ||
+    if (out_space == NULL || options == NULL ||
         !vm_address_space_create(&address_space) ||
         !kernel_bringup_map_identity_if_present(address_space,
                                                 memory_text_start(),
@@ -103,10 +104,11 @@ static bool kernel_bringup_setup_vm(vm_address_space_t** out_space,
                                                 early_heap_start,
                                                 managed_start,
                                                 data_flags) ||
-        !kernel_bringup_map_identity_if_present(address_space,
-                                                managed_start,
-                                                managed_end,
-                                                data_flags) ||
+        (options->map_managed_memory &&
+         !kernel_bringup_map_identity_if_present(address_space,
+                                                 managed_start,
+                                                 managed_end,
+                                                 data_flags)) ||
         !kernel_bringup_register_optional_mmio_range(address_space,
                                                      mmio_mask,
                                                      KERNEL_BRINGUP_MMIO_UART,
@@ -170,7 +172,7 @@ bool kernel_bringup_run_common(
 
     if ((options->pre_vm_setup != NULL &&
          !options->pre_vm_setup(trap_context, options->pre_vm_context)) ||
-        !kernel_bringup_setup_vm(out_space, options->mmio_mask) ||
+        !kernel_bringup_setup_vm(out_space, options) ||
         (options->pmm_probe_marker != 0 &&
          !kernel_bringup_probe_pmm_page(options->pmm_probe_marker))) {
         return false;

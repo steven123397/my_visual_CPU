@@ -1,5 +1,27 @@
-import { listTests, loadSession, stepCycle, stepCommit, resetSession, runSession, pauseSession, connectSnapshotSocket } from './api.js';
-import { createAppState, pushSnapshot, resetHistory, setTests } from './state.js';
+import {
+  listTests,
+  loadSession,
+  stepCycle,
+  stepCommit,
+  resetSession,
+  runSession,
+  pauseSession,
+  terminalInput,
+  terminalOutput,
+  connectSnapshotSocket,
+} from './api.js';
+import {
+  appendTerminalOutput,
+  createAppState,
+  normalizeTerminalInput,
+  pushSnapshot,
+  resetHistory,
+  resetTerminalState,
+  setDebugPanelOpen,
+  setTerminalFocus,
+  setTerminalPendingInput,
+  setTests,
+} from './state.js';
 import { renderApp, updateControls } from './render.js';
 
 const state = createAppState();
@@ -8,6 +30,10 @@ const elements = {
   testSelect: document.querySelector('#test-select'),
   backendSelect: document.querySelector('#backend-select'),
   statusBadge: document.querySelector('#status-badge'),
+  toggleDebugButton: document.querySelector('#toggle-debug-button'),
+  desktop: document.querySelector('#desktop-shell'),
+  debugInspector: document.querySelector('#debug-inspector'),
+  terminal: document.querySelector('#terminal-slot'),
   summary: document.querySelector('#summary-slot'),
   pipeline: document.querySelector('#pipeline-slot'),
   events: document.querySelector('#events-slot'),
@@ -28,12 +54,33 @@ function showNotice(message, kind = 'info') {
   elements.notice.dataset.kind = kind;
 }
 
+function mergeTerminal(payload, reset = false) {
+  if (!payload) {
+    return;
+  }
+  appendTerminalOutput(state, {
+    text: payload.text ?? '',
+    nextOffset: payload.nextOffset ?? payload.next_offset ?? state.terminal.nextOffset,
+    reset: payload.reset ?? reset,
+  });
+}
+
+async function syncTerminal(offset = state.terminal.nextOffset, reset = false) {
+  const payload = await terminalOutput(offset);
+  mergeTerminal(payload, reset);
+}
+
 async function handleLoad() {
   state.runState = 'loading';
+  resetTerminalState(state);
   paint();
   const response = await loadSession(state.selectedTest, state.backend);
   resetHistory(state);
   pushSnapshot(state, response.snapshot);
+  mergeTerminal(response.terminal, true);
+  if (!response.terminal) {
+    await syncTerminal(0, true);
+  }
   state.runState = 'paused';
   paint();
   showNotice(`已加载 ${state.selectedTest}`, 'success');
@@ -44,9 +91,22 @@ async function handleAction(action, label) {
   if (response?.snapshot) {
     pushSnapshot(state, response.snapshot);
   }
+  mergeTerminal(response?.terminal);
   state.runState = response?.snapshot?.summary?.halted ? 'halted' : 'paused';
   paint();
   showNotice(label, 'success');
+}
+
+async function handleTerminalInput(text) {
+  setTerminalPendingInput(state, true);
+  paint();
+  try {
+    const response = await terminalInput(text);
+    mergeTerminal(response);
+  } finally {
+    setTerminalPendingInput(state, false);
+    paint();
+  }
 }
 
 async function init() {
@@ -60,6 +120,40 @@ async function init() {
   });
   elements.backendSelect.addEventListener('change', (event) => {
     state.backend = event.target.value;
+  });
+  elements.toggleDebugButton.addEventListener('click', () => {
+    setDebugPanelOpen(state, !state.layout.debugPanelOpen);
+    paint();
+  });
+
+  document.addEventListener('click', (event) => {
+    const shouldFocusTerminal = state.terminal.connected && elements.terminal.contains(event.target);
+    if (!state.terminal.connected && elements.terminal.contains(event.target)) {
+      showNotice('先点击 Load，建立一个 interactive_os 会话。');
+    }
+    if (state.terminal.focused !== shouldFocusTerminal) {
+      setTerminalFocus(state, shouldFocusTerminal);
+      paint();
+    }
+  });
+
+  document.addEventListener('keydown', async (event) => {
+    if (!state.terminal.focused || state.terminal.pendingInput) {
+      return;
+    }
+
+    const text = normalizeTerminalInput(event);
+    if (!text) {
+      return;
+    }
+
+    event.preventDefault();
+
+    try {
+      await handleTerminalInput(text);
+    } catch (error) {
+      showNotice(error.message, 'error');
+    }
   });
 
   document.querySelector('#load-button').addEventListener('click', async () => {
@@ -113,6 +207,7 @@ async function init() {
       if (response?.snapshot) {
         pushSnapshot(state, response.snapshot);
       }
+      mergeTerminal(response?.terminal);
       state.runState = 'paused';
       paint();
       showNotice('已暂停。', 'success');
@@ -128,6 +223,10 @@ async function init() {
       paint();
     },
     (message) => showNotice(message, 'error'),
+    (terminal) => {
+      mergeTerminal(terminal);
+      paint();
+    },
   );
 }
 

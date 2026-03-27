@@ -83,6 +83,61 @@ void DebugSession::step_commit() {
     throw std::runtime_error("step_commit exceeded cycle budget without reaching a commit boundary");
 }
 
+void DebugSession::run_until_uart_contains(std::string_view text,
+                                           uint64_t max_steps) {
+    ensure_loaded();
+
+    const std::string needle(text);
+    if (machine().uart().output().find(needle) != std::string::npos) {
+        return;
+    }
+
+    for (uint64_t i = 0; i < max_steps; ++i) {
+        machine().step();
+        if (machine().uart().output().find(needle) != std::string::npos) {
+            return;
+        }
+        if (machine().cpu().core().halted()) {
+            throw std::runtime_error("guest halted before requested UART text appeared");
+        }
+    }
+
+    throw std::runtime_error("run_until_uart_contains exceeded step budget");
+}
+
+void DebugSession::run_until_halt(uint64_t max_steps) {
+    ensure_loaded();
+    if (machine().cpu().core().halted()) {
+        return;
+    }
+
+    for (uint64_t i = 0; i < max_steps; ++i) {
+        machine().step();
+        if (machine().cpu().core().halted()) {
+            return;
+        }
+    }
+
+    throw std::runtime_error("run_until_halt exceeded step budget");
+}
+
+void DebugSession::uart_input(std::string_view text) {
+    ensure_loaded();
+    machine().uart().inject_input(text);
+}
+
+DebugSession::UartOutputChunk DebugSession::uart_output(size_t offset) const {
+    ensure_loaded();
+
+    const std::string& output = machine().uart().output();
+    const size_t start = offset < output.size() ? offset : output.size();
+    return UartOutputChunk{
+        .offset = start,
+        .next_offset = output.size(),
+        .text = output.substr(start),
+    };
+}
+
 DebugSnapshot DebugSession::snapshot() const {
     ensure_loaded();
     DebugSnapshot snapshot = collect_snapshot();

@@ -7,16 +7,18 @@ CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arc
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 CORE_OBJS = $(filter-out src/main.o,$(OBJS))
 TARGET   = mycpu
-HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/address_space_faults_smoke tests/host/pipeline_backend_smoke tests/host/backend_differential_smoke tests/host/debug_cli_smoke
+HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/address_space_faults_smoke tests/host/pipeline_backend_smoke tests/host/backend_differential_smoke tests/host/debug_cli_smoke tests/host/interactive_terminal_smoke
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults mmio_access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control csr_illegal_matrix counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_mprv sv39_pagewalk_contracts sv39_exec_privilege sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 FLAT_BIN_TESTS = hello
-UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects bus_device_guards mmio_contract_matrix storage_readiness supervisor_runtime kernel_runtime kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
+UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects bus_device_guards mmio_contract_matrix uart_rx_contract storage_readiness supervisor_runtime kernel_runtime monitor_commands kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
 SUPERVISOR_RUNTIME_UNIT_OBJS = tests/unit/supervisor_runtime_test.o tests/unit/supervisor_runtime_guest.o
 SUPERVISOR_RUNTIME_UNIT_DEPS = $(SUPERVISOR_RUNTIME_UNIT_OBJS:.o=.d)
 KERNEL_RUNTIME_UNIT_OBJS = tests/unit/kernel_runtime_test.o tests/unit/kernel_runtime_guest.o
 KERNEL_RUNTIME_UNIT_DEPS = $(KERNEL_RUNTIME_UNIT_OBJS:.o=.d)
+MONITOR_COMMANDS_UNIT_OBJS = tests/unit/monitor_commands_test.o tests/unit/monitor_commands_guest.o tests/unit/vm_debug_guest.o
+MONITOR_COMMANDS_UNIT_DEPS = $(MONITOR_COMMANDS_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_COMMON_UNIT_OBJS = tests/unit/kernel_alpha_common_test.o tests/unit/kernel_alpha_common_guest.o
 KERNEL_ALPHA_COMMON_UNIT_DEPS = $(KERNEL_ALPHA_COMMON_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_STORAGE_UNIT_OBJS = tests/unit/kernel_alpha_storage_test.o tests/unit/kernel_alpha_storage_guest.o
@@ -34,6 +36,7 @@ GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO = guest/kernel_alpha_storage_lba_range
 GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO = guest/kernel_alpha_storage_bad_command_demo.elf
 GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO = guest/kernel_alpha_plic_not_ready_demo.elf
 GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO = guest/kernel_alpha_timer_not_ready_demo.elf
+GUEST_INTERACTIVE_OS_DEMO = guest/interactive_os.elf
 GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/console.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
@@ -68,6 +71,9 @@ GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS := $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OB
 GUEST_KERNEL_ALPHA_TIMER_NOT_READY_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) $(GUEST_KERNEL_ALPHA_COMMON_SRCS) guest/kernel_alpha/timer_not_ready_main.c
 GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS = $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_SRCS:.S=.o)
 GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS := $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS:.c=.o)
+GUEST_INTERACTIVE_OS_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel/console_input.c guest/kernel/monitor.c guest/kernel/monitor_commands.c guest/kernel/monitor_format.c guest/kernel/vm_debug.c guest/interactive_os/main.c
+GUEST_INTERACTIVE_OS_OBJS = $(GUEST_INTERACTIVE_OS_SRCS:.S=.o)
+GUEST_INTERACTIVE_OS_OBJS := $(GUEST_INTERACTIVE_OS_OBJS:.c=.o)
 DEPS     = $(OBJS:.o=.d) $(GUEST_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_FAULT_OBJS:.o=.d) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_OBJS:.o=.d)
 DEPS     += $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_OBJS:.o=.d)
 DEPS     += $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_OBJS:.o=.d)
@@ -76,18 +82,22 @@ DEPS     += $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_OBJS:.o=.d)
 DEPS     += $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_OBJS:.o=.d)
 DEPS     += $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS:.o=.d)
 DEPS     += $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS:.o=.d)
+DEPS     += $(GUEST_INTERACTIVE_OS_OBJS:.o=.d)
 DEPS     += $(SUPERVISOR_RUNTIME_UNIT_DEPS)
 DEPS     += $(KERNEL_RUNTIME_UNIT_DEPS)
+DEPS     += $(MONITOR_COMMANDS_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_COMMON_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_STORAGE_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS)
 TEST_TIMEOUT ?= 2s
+SUPERVISOR_GUEST_TEST_TIMEOUT ?= 4s
 PIPELINE_GUEST_TEST_TIMEOUT ?= 4s
+PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 6s
 
 # RISC-V toolchain (adjust prefix if needed)
 RV_CC   = riscv64-unknown-elf-gcc
 RV_OBJCOPY = riscv64-unknown-elf-objcopy
-RV_FLAGS = -march=rv64im -mabi=lp64
+RV_FLAGS = -march=rv64im_zicsr -mabi=lp64
 RV_ELF_LDFLAGS = -nostdlib -Wl,-Ttext-segment=0x80000000
 GUEST_RV_CFLAGS = $(RV_FLAGS) -mcmodel=medany -mno-relax -msmall-data-limit=0 -ffreestanding -fno-builtin -fno-stack-protector -fno-pie -MMD -MP -g -O2 -Wall -Wextra
 GUEST_RV_LDFLAGS = -nostdlib -nostartfiles -static -no-pie -Wl,-T,guest/supervisor_demo/link.ld
@@ -149,11 +159,14 @@ $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO): $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_O
 $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO): $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS)
 	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
 
+$(GUEST_INTERACTIVE_OS_DEMO): $(GUEST_INTERACTIVE_OS_OBJS)
+	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
+
 # Build flat binary from ELF
 tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 	$(RV_OBJCOPY) -O binary $< $@
 
-test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(ASM_TESTS:%=test-%) $(UNIT_TEST_NAMES:%=test-unit-%) test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo $(FLAT_BIN_TESTS:%=test-flat-%)
+test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(ASM_TESTS:%=test-%) $(UNIT_TEST_NAMES:%=test-unit-%) test-host-debug_cli_smoke test-host-interactive_terminal_smoke test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo test-guest-interactive_os_demo $(FLAT_BIN_TESTS:%=test-flat-%)
 
 FORCE:
 
@@ -252,6 +265,48 @@ test-host-%: FORCE tests/host/%
 	fi; \
 	printf '%s\n' "$$output"
 
+test-host-interactive_terminal_smoke: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEMO) tests/host/interactive_terminal_smoke
+	@echo "=== host:interactive_terminal_smoke ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/interactive_terminal_smoke functional 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Host test timed out: interactive_terminal_smoke" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-guest-interactive_os_demo: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEMO) tests/host/interactive_terminal_smoke
+	@echo "=== guest_interactive_os_demo ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/interactive_terminal_smoke functional 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: guest_interactive_os_demo" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-pipeline-guest-interactive_os_demo: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEMO) tests/host/interactive_terminal_smoke
+	@echo "=== guest_interactive_os_demo (pipeline) ==="; \
+	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./tests/host/interactive_terminal_smoke pipeline 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Test timed out: guest_interactive_os_demo (pipeline)" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
 test-backend-cli: FORCE $(TARGET) tests/asm/hello.elf
 	@echo "=== backend_cli ==="; \
 	sh tests/host/backend_cli.sh $(TARGET) tests/asm/hello.elf $(TEST_TIMEOUT)
@@ -323,7 +378,7 @@ test-pipeline-%: FORCE $(TARGET) tests/asm/%.elf
 	fi; \
 	printf '%s\n' "$$output"
 
-test-pipeline: $(ASM_TESTS:%=test-pipeline-%) test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-host-debug_cli_smoke test-backend-cli test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo
+test-pipeline: $(ASM_TESTS:%=test-pipeline-%) test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-host-debug_cli_smoke test-host-interactive_terminal_smoke test-backend-cli test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo test-pipeline-guest-interactive_os_demo
 
 test-flat-%: FORCE $(TARGET) tests/asm/%.bin
 	@case "$*" in \
@@ -352,7 +407,7 @@ test-flat-%: FORCE $(TARGET) tests/asm/%.bin
 test-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
 	@expected='KRN'; \
 	echo "=== guest_supervisor_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_SUPERVISOR_DEMO) 2>&1)"; \
+	output="$$(timeout $(SUPERVISOR_GUEST_TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_SUPERVISOR_DEMO) 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
 		echo "Test timed out: guest_supervisor_demo" >&2; \
@@ -373,7 +428,7 @@ test-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
 test-pipeline-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
 	@expected='KRN'; \
 	echo "=== guest_supervisor_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk tests/data/storage_basic.txt $(GUEST_SUPERVISOR_DEMO) 2>&1)"; \
+	output="$$(timeout $(PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk tests/data/storage_basic.txt $(GUEST_SUPERVISOR_DEMO) 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
 		echo "Test timed out: guest_supervisor_demo (pipeline)" >&2; \
@@ -825,7 +880,7 @@ check-riscv-toolchain:
 	fi
 
 clean:
-	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
+	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(MONITOR_COMMANDS_UNIT_OBJS) $(MONITOR_COMMANDS_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO)
 	find src guest -type f \( -name '*.o' -o -name '*.d' \) -delete
 
 -include $(DEPS)
@@ -845,6 +900,18 @@ tests/unit/kernel_runtime_guest.o: guest/kernel/kernel_runtime.c
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
 
 tests/unit/kernel_runtime: $(KERNEL_RUNTIME_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/monitor_commands_test.o: tests/unit/monitor_commands.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/monitor_commands_guest.o: guest/kernel/monitor_commands.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/vm_debug_guest.o: guest/kernel/vm_debug.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/monitor_commands: $(MONITOR_COMMANDS_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/unit/kernel_alpha_common_test.o: tests/unit/kernel_alpha_common.c

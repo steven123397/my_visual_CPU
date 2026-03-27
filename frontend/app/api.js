@@ -43,13 +43,25 @@ export async function pauseSession() {
   return postJson('/api/session/pause');
 }
 
-export function connectSnapshotSocket(onSnapshot, onError) {
+export async function terminalInput(text) {
+  return postJson('/api/session/terminal-input', { text });
+}
+
+export async function terminalOutput(offset = 0) {
+  return postJson('/api/session/terminal-output', { offset });
+}
+
+export function connectSnapshotSocket(onSnapshot, onError, onTerminal) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
   socket.addEventListener('message', (event) => {
     const payload = JSON.parse(event.data);
     if (payload.type === 'snapshot' && payload.snapshot) {
       onSnapshot(payload.snapshot);
+      return;
+    }
+    if (payload.type === 'terminal' && onTerminal) {
+      onTerminal(payload);
       return;
     }
     if (payload.type === 'error' && onError) {

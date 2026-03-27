@@ -1,4 +1,5 @@
 import { buildTimelineRows, diffRegisters, shouldAutoScrollToBottom } from './state.js';
+import { renderTerminal } from './components/terminal.js';
 import { renderPipelineBoard, renderTimeline } from './components/pipeline.js';
 import { renderSummary, renderEvents, renderDevices, renderRegisters, renderCsrs, renderBus } from './components/panels.js';
 
@@ -9,7 +10,13 @@ export function renderApp(elements, state) {
   const timelineRows = buildTimelineRows(state.history).slice().reverse();
   const previousEventList = elements.events.querySelector('.event-list');
   const keepEventsPinned = shouldAutoScrollToBottom(previousEventList);
+  const previousTerminal = elements.terminal.querySelector('.terminal-scrollport');
+  const keepTerminalPinned = shouldAutoScrollToBottom(previousTerminal);
+  const previousTerminalScrollTop = previousTerminal?.scrollTop ?? 0;
 
+  elements.desktop.dataset.debugOpen = state.layout.debugPanelOpen ? 'true' : 'false';
+  elements.debugInspector.dataset.open = state.layout.debugPanelOpen ? 'true' : 'false';
+  elements.terminal.innerHTML = renderTerminal(state);
   elements.summary.innerHTML = renderSummary(snapshot, state.runState);
   elements.pipeline.innerHTML = `${renderPipelineBoard(snapshot)}${renderTimeline(timelineRows)}`;
   elements.events.innerHTML = renderEvents(snapshot);
@@ -22,6 +29,15 @@ export function renderApp(elements, state) {
   if (nextEventList && keepEventsPinned) {
     nextEventList.scrollTop = nextEventList.scrollHeight;
   }
+
+  const nextTerminal = elements.terminal.querySelector('.terminal-scrollport');
+  if (nextTerminal) {
+    if (keepTerminalPinned) {
+      nextTerminal.scrollTop = nextTerminal.scrollHeight;
+    } else {
+      nextTerminal.scrollTop = previousTerminalScrollTop;
+    }
+  }
 }
 
 export function updateControls(elements, state) {
@@ -32,4 +48,6 @@ export function updateControls(elements, state) {
   `).join('');
   elements.backendSelect.value = state.backend;
   elements.statusBadge.textContent = state.runState;
+  elements.toggleDebugButton.textContent = state.layout.debugPanelOpen ? '收起 Debug' : '展开 Debug';
+  elements.toggleDebugButton.setAttribute('aria-expanded', state.layout.debugPanelOpen ? 'true' : 'false');
 }
