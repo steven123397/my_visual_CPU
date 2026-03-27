@@ -18,7 +18,7 @@
 - 状态文档：
   - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
 - 相关计划：
-  - 当前暂无；后续若正式启动实现，再新增对应 `plan` 文档并回链本文档。
+  - [plan/phase3_branch_prediction_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase3_branch_prediction_plan.md)
 
 ## 背景与问题
 

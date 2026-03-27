@@ -18,7 +18,7 @@
   - [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
   - [design/phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md)
 - 当前计划：
-  - 当前暂无专门的主线执行计划；后续如有新任务，再单独建立对应 `plan` 文档。
+  - [plan/phase3_branch_prediction_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase3_branch_prediction_plan.md)
 - 已完成计划：
   - [plan/docs_information_architecture_reorg_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/docs_information_architecture_reorg_plan.md)
   - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)

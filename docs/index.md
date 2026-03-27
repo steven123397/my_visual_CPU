@@ -49,6 +49,8 @@
 
 ## 重要计划记录
 
+- [phase3_branch_prediction_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase3_branch_prediction_plan.md)
+  当前执行中的 `Phase 3-A` 分支预测增强实现计划。
 - [sv39_mprv_semantics_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_mprv_semantics_plan.md)
   已完成的 `privilege / Sv39` 回归补洞计划，聚焦 `MPRV + Sv39` 数据访存语义。
 - [sv39_pagewalk_contracts_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_pagewalk_contracts_plan.md)
