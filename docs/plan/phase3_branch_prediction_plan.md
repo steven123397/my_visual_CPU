@@ -112,7 +112,7 @@
 - 创建：`myCPU/tests/host/predictor_smoke.cpp`
 - 修改：`myCPU/Makefile`
 
-- [ ] **步骤 1：先写失败的 predictor smoke**
+- [x] **步骤 1：先写失败的 predictor smoke**
 
   在 `tests/host/predictor_smoke.cpp` 中先写最小断言，至少覆盖：
 
@@ -130,7 +130,7 @@
   const auto second = predictor.query(pc, raw_branch);
   ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
   运行：`cd myCPU && make test-host-predictor_smoke`
 
@@ -139,7 +139,7 @@
   - FAIL
   - 报错指向缺少 `branch_predictor.*`、缺少 `query/update/reset`，或 Makefile 尚未接入该测试
 
-- [ ] **步骤 3：实现最小 predictor 模块**
+- [x] **步骤 3：实现最小 predictor 模块**
 
   在 `branch_predictor.h/.cpp` 中实现首轮最小接口：
 
@@ -174,7 +174,7 @@
   - `jalr` 首轮不预测，统一走顺序取指。
   - predictor 只关心 next-PC 建议和统计，不持有 architected 状态。
 
-- [ ] **步骤 4：运行独立 smoke 验证通过**
+- [x] **步骤 4：运行独立 smoke 验证通过**
 
   运行：`cd myCPU && make test-host-predictor_smoke`
 
@@ -183,7 +183,7 @@
   - PASS
   - predictor 的 `query / update / reset / stats` 行为可复现、可解释
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
   ```bash
   git add myCPU/src/exec/branch_predictor.h myCPU/src/exec/branch_predictor.cpp myCPU/tests/host/predictor_smoke.cpp myCPU/Makefile
