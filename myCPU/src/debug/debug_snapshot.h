@@ -15,6 +15,21 @@ struct DebugStageSnapshot {
     std::string text{};
 };
 
+struct PredictorDebugSnapshot {
+    std::string mode{};
+    bool last_prediction_valid{false};
+    bool last_prediction_taken{false};
+    bool last_prediction_correct{false};
+    uint64_t last_prediction_pc{0};
+    uint64_t last_prediction_target{0};
+    bool last_mispredict_valid{false};
+    uint64_t last_mispredict_pc{0};
+    uint64_t last_mispredict_target{0};
+    uint64_t total_predictions{0};
+    uint64_t correct_predictions{0};
+    uint64_t mispredictions{0};
+};
+
 struct PipelineDebugSnapshot {
     DebugStageSnapshot if_stage{};
     DebugStageSnapshot id_stage{};
@@ -28,6 +43,7 @@ struct PipelineDebugSnapshot {
     bool trap_flush{false};
     bool committed{false};
     bool empty{true};
+    PredictorDebugSnapshot predictor{};
 };
 
 struct BackendDebugSnapshot {

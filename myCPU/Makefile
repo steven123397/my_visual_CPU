@@ -323,7 +323,7 @@ test-pipeline-%: FORCE $(TARGET) tests/asm/%.elf
 	fi; \
 	printf '%s\n' "$$output"
 
-test-pipeline: $(ASM_TESTS:%=test-pipeline-%) test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-host-debug_cli_smoke test-backend-cli test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo
+test-pipeline: $(ASM_TESTS:%=test-pipeline-%) test-host-predictor_smoke test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-host-debug_cli_smoke test-backend-cli test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo
 
 test-flat-%: FORCE $(TARGET) tests/asm/%.bin
 	@case "$*" in \

@@ -274,7 +274,7 @@
 - 修改：`myCPU/tests/host/debug_cli_smoke.cpp`
 - 修改：`myCPU/Makefile`
 
-- [ ] **步骤 1：先写失败的差分和 CLI smoke**
+- [x] **步骤 1：先写失败的差分和 CLI smoke**
 
   先补两类失败测试：
 
@@ -291,7 +291,7 @@
     - `mispredictions`
     - 最近一次 mispredict redirect 信息
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
   运行：`cd myCPU && make test-host-backend_differential_smoke test-host-debug_cli_smoke`
 
@@ -300,7 +300,7 @@
   - FAIL
   - 旧 `PipelineDebugSnapshot` / JSON 中没有 predictor 字段，且差分场景还没接 predictor 路径
 
-- [ ] **步骤 3：实现 predictor debug snapshot / protocol**
+- [x] **步骤 3：实现 predictor debug snapshot / protocol**
 
   在 `debug_snapshot.h` 中新增最小字段，例如：
 
@@ -327,7 +327,7 @@
   - 在 `debug_protocol.cpp` 的 `snapshot_json()` 中稳定序列化
   - 在 `Makefile` 中把 `test-host-predictor_smoke` 挂进 `test-pipeline`
 
-- [ ] **步骤 4：运行差分、CLI 和前端基线**
+- [x] **步骤 4：运行差分、CLI 和前端基线**
 
   运行：
 
@@ -340,7 +340,7 @@
   - PASS
   - richer snapshot 不要求改 `frontend/app/*`，但调试服务和前端状态测试要继续兼容
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
   ```bash
   git add myCPU/src/debug/debug_snapshot.h myCPU/src/debug/debug_protocol.cpp myCPU/src/exec/pipeline_backend.h myCPU/src/exec/pipeline_backend.cpp myCPU/tests/host/backend_differential_smoke.cpp myCPU/tests/host/debug_cli_smoke.cpp myCPU/Makefile

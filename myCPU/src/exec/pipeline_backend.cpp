@@ -9,6 +9,8 @@
 
 namespace {
 
+constexpr const char* kPredictorModeName = "bimodal-2bit";
+
 enum class CounterCsrKind : uint8_t {
     None,
     Cycle,
@@ -496,6 +498,16 @@ void PipelineBackend::step_ex() {
         const bool actual_taken = next_ex_mem_.slot.effects.control.redirect_pc;
         const uint64_t actual_target =
             actual_taken ? next_ex_mem_.slot.effects.control.target_pc : id_ex_.slot.pc + 4;
+        const bool correct = prediction_matches(id_ex_.slot.prediction, actual_taken, actual_target);
+
+        last_prediction_valid_ = id_ex_.slot.prediction.valid;
+        last_prediction_taken_ = id_ex_.slot.prediction.predicted_taken;
+        last_prediction_correct_ = correct;
+        last_prediction_pc_ = id_ex_.slot.pc;
+        last_prediction_target_ = id_ex_.slot.prediction.valid ? id_ex_.slot.prediction.predicted_target : 0;
+        last_mispredict_valid_ = !correct;
+        last_mispredict_pc_ = !correct ? id_ex_.slot.pc : 0;
+        last_mispredict_target_ = !correct ? actual_target : 0;
 
         predictor_.update({
             .pc = id_ex_.slot.pc,
@@ -504,7 +516,7 @@ void PipelineBackend::step_ex() {
             .target = actual_target,
         });
 
-        if (!prediction_matches(id_ex_.slot.prediction, actual_taken, actual_target)) {
+        if (!correct) {
             redirect_pending_ = true;
             redirect_target_ = actual_target;
             next_if_id_ = {};
@@ -561,6 +573,12 @@ void PipelineBackend::step_if() {
     next_if_id_.slot.pc = fetch_pc;
     next_if_id_.slot.raw = static_cast<uint32_t>(fetch.value);
     next_if_id_.slot.prediction = prediction;
+    if (prediction.valid) {
+        last_prediction_valid_ = true;
+        last_prediction_taken_ = prediction.predicted_taken;
+        last_prediction_pc_ = fetch_pc;
+        last_prediction_target_ = prediction.predicted_target;
+    }
     fetch_pc_ = prediction.valid && prediction.predicted_taken ? prediction.predicted_target : fetch_pc + 4;
 }
 
@@ -597,6 +615,7 @@ const char* PipelineBackend::name() const {
 
 BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     BackendDebugSnapshot snapshot;
+    const PredictorStats predictor_stats = predictor_.stats();
     snapshot.backend_name = name();
     snapshot.pipeline.if_stage = build_fetch_stage_snapshot();
     snapshot.pipeline.id_stage = build_stage_snapshot(if_id_.slot);
@@ -610,6 +629,18 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     snapshot.pipeline.trap_flush = last_cycle_trap_flush_;
     snapshot.pipeline.committed = last_cycle_committed_;
     snapshot.pipeline.empty = pipeline_empty();
+    snapshot.pipeline.predictor.mode = kPredictorModeName;
+    snapshot.pipeline.predictor.last_prediction_valid = last_prediction_valid_;
+    snapshot.pipeline.predictor.last_prediction_taken = last_prediction_taken_;
+    snapshot.pipeline.predictor.last_prediction_correct = last_prediction_correct_;
+    snapshot.pipeline.predictor.last_prediction_pc = last_prediction_pc_;
+    snapshot.pipeline.predictor.last_prediction_target = last_prediction_target_;
+    snapshot.pipeline.predictor.last_mispredict_valid = last_mispredict_valid_;
+    snapshot.pipeline.predictor.last_mispredict_pc = last_mispredict_pc_;
+    snapshot.pipeline.predictor.last_mispredict_target = last_mispredict_target_;
+    snapshot.pipeline.predictor.total_predictions = predictor_stats.total_predictions;
+    snapshot.pipeline.predictor.correct_predictions = predictor_stats.correct_predictions;
+    snapshot.pipeline.predictor.mispredictions = predictor_stats.mispredictions;
     return snapshot;
 }
 
