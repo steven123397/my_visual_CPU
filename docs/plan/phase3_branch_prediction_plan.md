@@ -1,6 +1,6 @@
 # Phase 3-A 分支预测增强实现计划
 
-> **文档状态：** 执行中
+> **文档状态：** 已完成（2026-03-27）
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans` 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
@@ -355,7 +355,7 @@
 - 修改：`docs/status/mainline_status.md`
 - 修改：`docs/plan/phase3_branch_prediction_plan.md`
 
-- [ ] **步骤 1：更新对外与内部文档**
+- [x] **步骤 1：更新对外与内部文档**
 
   文档同步只写“当前已落地事实”，不写实现流水账：
 
@@ -366,7 +366,7 @@
   - `docs/status/mainline_status.md`
     回写本轮结果摘要、关键历史节点与剩余风险。
 
-- [ ] **步骤 2：运行全量验证基线**
+- [x] **步骤 2：运行全量验证基线**
 
   运行：
 
@@ -379,7 +379,7 @@
   - 全部 PASS
   - 新 predictor 不得破坏既有 guest、trap / interrupt、MMIO、privilege 主门禁
 
-- [ ] **步骤 3：回写计划完成态**
+- [x] **步骤 3：回写计划完成态**
 
   完成本计划后，必须同步：
 
@@ -390,7 +390,7 @@
     - 关键历史节点
     - 仍然有效的剩余风险
 
-- [ ] **步骤 4：Commit**
+- [x] **步骤 4：Commit**
 
   ```bash
   git add myCPU/AGENTS.md readme.md docs/status/mainline_status.md docs/plan/phase3_branch_prediction_plan.md
@@ -405,3 +405,15 @@
   - 完成结果摘要
   - 关键历史节点
   - 仍然有效的剩余风险（如果有）
+
+## 执行结果
+
+- `2026-03-27` 已完成 `Phase 3-A` 第一轮分支预测增强：引入独立 `branch_predictor` 子模块，把 predictor 接到 `PipelineBackend` 的 fetch / execute / mispredict 恢复主路径，并补齐 `predictor_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 与 `frontend` 兼容性门禁。
+- 已完成主线文档回写：
+  - [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
+  - [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
+  - [mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+- 完成态验证基线：
+  - `cd myCPU && make test`
+  - `cd myCPU && make test-pipeline`
+  - `cd frontend && node --test`
