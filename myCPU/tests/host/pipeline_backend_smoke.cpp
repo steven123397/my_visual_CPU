@@ -17,13 +17,16 @@ constexpr uint64_t kTrapVector = kEntry + 0x80;
 constexpr uint64_t kDataAddr = kEntry + 0x100;
 constexpr uint32_t kNop = 0x00000013U;                    // addi x0, x0, 0
 constexpr uint32_t kAddiX1 = 0x00100093U;                // addi x1, x0, 1
+constexpr uint32_t kAddiX1Inc = 0x00108093U;             // addi x1, x1, 1
 constexpr uint32_t kAddiX2FromX1Plus2 = 0x00208113U;     // addi x2, x1, 2
 constexpr uint32_t kAddX3FromX2X1 = 0x001101b3U;         // add x3, x2, x1
 constexpr uint32_t kAddiX1WrongPath = 0x06300093U;       // addi x1, x0, 99
 constexpr uint32_t kAddiX2WrongPath = 0x06300113U;       // addi x2, x0, 99
 constexpr uint32_t kAddiX2FromX0Plus7 = 0x00700113U;     // addi x2, x0, 7
+constexpr uint32_t kAddiX2FromX0Plus5 = 0x00500113U;     // addi x2, x0, 5
 constexpr uint32_t kAddiA7Exit = 0x05d00893U;            // addi a7, x0, 93
 constexpr uint32_t kEcall = 0x00000073U;                 // ecall
+constexpr uint32_t kJalX0Skip8 = 0x0080006fU;            // jal x0, 8
 constexpr uint32_t kInvalidInsn = 0xffffffffU;
 constexpr uint32_t kLwX1FromX10 = 0x00052083U;           // lw x1, 0(x10)
 constexpr uint32_t kAddiX2FromX1Plus5 = 0x00508113U;     // addi x2, x1, 5
@@ -36,6 +39,7 @@ constexpr uint32_t kSdX21ToX20 = 0x015a3023U;            // sd x21, 0(x20)
 constexpr uint32_t kCsrrcSipX5 = 0x1442b073U;            // csrrc x0, sip, x5
 constexpr uint32_t kCsrwSepcX7 = 0x14139073U;            // csrw sepc, x7
 constexpr uint32_t kSret = 0x10200073U;                  // sret
+constexpr uint32_t kBltX1X2Loop = 0xfe20cee3U;           // blt x1, x2, -4
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -47,6 +51,17 @@ bool expect(bool condition, const char* message) {
 
 void write32(Ram& ram, uint64_t addr, uint32_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
+}
+
+int run_until_halt_and_count_redirects(PipelineBackend& backend, CPU& cpu, int max_steps) {
+    int redirects = 0;
+    for (int i = 0; i < max_steps && !cpu.core().halted(); ++i) {
+        backend.step();
+        if (backend.debug_snapshot().pipeline.redirected) {
+            ++redirects;
+        }
+    }
+    return redirects;
 }
 
 }  // namespace
@@ -309,6 +324,91 @@ int main() {
             return 1;
         }
         if (!expect(cpu.core().read_gpr(1) == 0, "fetch fault after mret should flush wrong-path work after the return")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+
+        write32(ram, kEntry + 0, kJalX0Skip8);
+        write32(ram, kEntry + 4, kAddiX1WrongPath);
+        write32(ram, kEntry + 8, kAddiA7Exit);
+        write32(ram, kEntry + 12, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+
+        const int redirects = run_until_halt_and_count_redirects(backend, cpu, 24);
+        if (!expect(cpu.core().halted(), "jal predict-hit smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(1) == 0, "jal predict-hit smoke should keep wrong-path writes flushed")) {
+            return 1;
+        }
+        if (!expect(redirects == 0, "jal predict-hit path should not need execute-time redirect")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+
+        write32(ram, kEntry + 0, kAddiX2FromX0Plus5);
+        write32(ram, kEntry + 4, kAddiX1Inc);
+        write32(ram, kEntry + 8, kBltX1X2Loop);
+        write32(ram, kEntry + 12, kAddiA7Exit);
+        write32(ram, kEntry + 16, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+
+        const int redirects = run_until_halt_and_count_redirects(backend, cpu, 48);
+        if (!expect(cpu.core().halted(), "branch predictor loop smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(1) == 5, "branch predictor loop smoke should leave the loop counter at 5")) {
+            return 1;
+        }
+        if (!expect(redirects == 2, "trained branch loop should only redirect on cold miss and exit mispredict")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram1;
+        Bus bus1(ram1);
+        CPU cpu1;
+        cpu_init(cpu1, kEntry);
+        write32(ram1, kEntry + 0, kAddiX2FromX0Plus5);
+        write32(ram1, kEntry + 4, kAddiX1Inc);
+        write32(ram1, kEntry + 8, kBltX1X2Loop);
+        write32(ram1, kEntry + 12, kAddiA7Exit);
+        write32(ram1, kEntry + 16, kEcall);
+
+        PipelineBackend trained_backend(cpu1, bus1);
+        const int trained_redirects = run_until_halt_and_count_redirects(trained_backend, cpu1, 48);
+        if (!expect(trained_redirects == 2, "trained loop baseline should converge to the expected redirect count")) {
+            return 1;
+        }
+
+        Ram ram2;
+        Bus bus2(ram2);
+        CPU cpu2;
+        cpu_init(cpu2, kEntry);
+        write32(ram2, kEntry + 0, kAddiX2FromX0Plus5);
+        write32(ram2, kEntry + 4, kAddiX1Inc);
+        write32(ram2, kEntry + 8, kBltX1X2Loop);
+        write32(ram2, kEntry + 12, kAddiA7Exit);
+        write32(ram2, kEntry + 16, kEcall);
+
+        PipelineBackend reset_backend(cpu2, bus2);
+        const int reset_redirects = run_until_halt_and_count_redirects(reset_backend, cpu2, 48);
+        if (!expect(reset_redirects == 2, "new pipeline backend should start from a cold predictor state")) {
             return 1;
         }
     }

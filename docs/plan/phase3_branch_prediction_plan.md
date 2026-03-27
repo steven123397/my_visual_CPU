@@ -198,7 +198,7 @@
 - 修改：`myCPU/src/exec/pipeline_backend.cpp`
 - 修改：`myCPU/tests/host/pipeline_backend_smoke.cpp`
 
-- [ ] **步骤 1：先写失败的 pipeline smoke**
+- [x] **步骤 1：先写失败的 pipeline smoke**
 
   在 `pipeline_backend_smoke.cpp` 中新增 3 组最小场景：
 
@@ -213,7 +213,7 @@
   - `redirect / trap_flush`
   - predictor 统计和最近一次预测信息
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
   运行：`cd myCPU && make test-host-pipeline_backend_smoke`
 
@@ -222,7 +222,7 @@
   - FAIL
   - 旧实现仍会把所有 taken branch / jump 都当成 execute-time redirect，无法满足 predict-hit / mispredict 断言
 
-- [ ] **步骤 3：在 `PipelineBackend` 中接入 predictor**
+- [x] **步骤 3：在 `PipelineBackend` 中接入 predictor**
 
   按以下切片修改：
 
@@ -247,7 +247,7 @@
   - `reset_stage_state()`
     只清空 stage / fetch-fault 状态，不重置 predictor；predictor reset 只能发生在 backend 新建或显式 `reset()`
 
-- [ ] **步骤 4：运行针对性验证**
+- [x] **步骤 4：运行针对性验证**
 
   运行：`cd myCPU && make test-host-predictor_smoke test-host-pipeline_backend_smoke`
 
@@ -256,7 +256,7 @@
   - PASS
   - predictor 命中、mispredict flush、backend 重建后 reset 三条最小路径都成立
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
   ```bash
   git add myCPU/src/exec/pipeline_types.h myCPU/src/exec/pipeline_backend.h myCPU/src/exec/pipeline_backend.cpp myCPU/tests/host/pipeline_backend_smoke.cpp

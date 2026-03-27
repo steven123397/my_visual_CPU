@@ -1,5 +1,6 @@
 #pragma once
 
+#include "branch_predictor.h"
 #include "backend.h"
 #include "pipeline_types.h"
 
@@ -56,4 +57,5 @@ private:
     uint64_t redirect_target_{0};
     TrapRequest pending_fetch_fault_{};
     uint64_t pending_fetch_fault_pc_{0};
+    BranchPredictor predictor_{};
 };

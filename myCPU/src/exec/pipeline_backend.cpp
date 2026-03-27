@@ -35,6 +35,22 @@ bool wb_commit_needs_flush(const InsnEffects& effects) {
     return effects.control.halt || effects.control.trap_return != TrapReturnKind::None;
 }
 
+bool is_control_flow_opcode(uint32_t opcode) {
+    return opcode == 0x63 || opcode == 0x67 || opcode == 0x6F;
+}
+
+bool prediction_matches(const PredictorQueryResult& prediction,
+                        bool actual_taken,
+                        uint64_t actual_target) {
+    if (!prediction.valid) {
+        return !actual_taken;
+    }
+    if (prediction.predicted_taken != actual_taken) {
+        return false;
+    }
+    return !actual_taken || prediction.predicted_target == actual_target;
+}
+
 std::string hex_u32(uint32_t value) {
     char buffer[16];
     std::snprintf(buffer, sizeof(buffer), "0x%08x", value);
@@ -476,14 +492,27 @@ void PipelineBackend::step_ex() {
     }
     next_ex_mem_.slot.effects = InstructionSemantics::execute(id_ex_.slot.insn, ctx, inputs);
 
-    if (!next_ex_mem_.slot.effects.trap.valid && next_ex_mem_.slot.effects.control.redirect_pc) {
-        redirect_pending_ = true;
-        redirect_target_ = next_ex_mem_.slot.effects.control.target_pc;
-        next_if_id_ = {};
-        next_id_ex_ = {};
-        pending_fetch_fault_ = {};
-        pending_fetch_fault_pc_ = 0;
-        fetch_pc_ = redirect_target_;
+    if (!next_ex_mem_.slot.effects.trap.valid && is_control_flow_opcode(id_ex_.slot.insn.opcode)) {
+        const bool actual_taken = next_ex_mem_.slot.effects.control.redirect_pc;
+        const uint64_t actual_target =
+            actual_taken ? next_ex_mem_.slot.effects.control.target_pc : id_ex_.slot.pc + 4;
+
+        predictor_.update({
+            .pc = id_ex_.slot.pc,
+            .raw = id_ex_.slot.raw,
+            .taken = actual_taken,
+            .target = actual_target,
+        });
+
+        if (!prediction_matches(id_ex_.slot.prediction, actual_taken, actual_target)) {
+            redirect_pending_ = true;
+            redirect_target_ = actual_target;
+            next_if_id_ = {};
+            next_id_ex_ = {};
+            pending_fetch_fault_ = {};
+            pending_fetch_fault_pc_ = 0;
+            fetch_pc_ = redirect_target_;
+        }
     }
 }
 
@@ -519,17 +548,20 @@ void PipelineBackend::step_if() {
         return;
     }
 
-    const AddressSpace::AccessResult fetch = cpu_.address_space().fetch32_result(bus_, fetch_pc_);
+    const uint64_t fetch_pc = fetch_pc_;
+    const AddressSpace::AccessResult fetch = cpu_.address_space().fetch32_result(bus_, fetch_pc);
     if (!fetch.ok) {
         pending_fetch_fault_ = fetch.fault;
-        pending_fetch_fault_pc_ = fetch_pc_;
+        pending_fetch_fault_pc_ = fetch_pc;
         return;
     }
 
+    const PredictorQueryResult prediction = predictor_.query(fetch_pc, static_cast<uint32_t>(fetch.value));
     next_if_id_.slot.valid = true;
-    next_if_id_.slot.pc = fetch_pc_;
+    next_if_id_.slot.pc = fetch_pc;
     next_if_id_.slot.raw = static_cast<uint32_t>(fetch.value);
-    fetch_pc_ += 4;
+    next_if_id_.slot.prediction = prediction;
+    fetch_pc_ = prediction.valid && prediction.predicted_taken ? prediction.predicted_target : fetch_pc + 4;
 }
 
 bool PipelineBackend::try_service_interrupt_at_commit_boundary() {
