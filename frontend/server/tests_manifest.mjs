@@ -41,11 +41,12 @@ const asmTests = [
   'clint_split_access',
 ];
 
-function guestEntry(myCpuRoot, name, diskMode = 'none') {
+function guestEntry(myCpuRoot, name, diskMode = 'none', imageName = null) {
   const withDisk = diskMode !== 'none';
+  const resolvedImageName = imageName ?? name.replace(/^guest_/, '');
   return {
     name,
-    image: path.join(myCpuRoot, 'guest', `${name.replace(/^guest_/, '')}.elf`),
+    image: path.join(myCpuRoot, 'guest', `${resolvedImageName}.elf`),
     disk:
       withDisk
         ? path.join(myCpuRoot, 'tests', 'data', 'storage_basic.txt')
@@ -71,6 +72,12 @@ export function listTests(repoRoot) {
   }));
 
   manifest.push(guestEntry(myCpuRoot, 'guest_supervisor_demo', 'ready'));
+  manifest.push({
+    ...guestEntry(myCpuRoot, 'guest_interactive_os_demo', 'ready', 'interactive_os'),
+    bootUntilUartText: 'monitor> ',
+    bootMaxSteps: 5000000,
+    terminalPrompt: 'monitor> ',
+  });
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_demo', 'ready'));
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_fault_demo'));
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_storage_no_media_demo'));

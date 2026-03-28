@@ -114,6 +114,18 @@ class DebugCliSession {
     return this.send({ cmd: 'snapshot' });
   }
 
+  async runUntilUartContains(text, maxSteps) {
+    const response = await this.send({
+      cmd: 'run_until_uart_contains',
+      text,
+      max_steps: maxSteps,
+    });
+    if (response.type === 'error') {
+      throw new Error(response.message);
+    }
+    return response;
+  }
+
   async stepCycle() {
     return this.send({ cmd: 'step_cycle' });
   }
@@ -179,6 +191,7 @@ export async function startServer({
   const tests = listTests(repoRoot);
   let currentSession = null;
   let currentSnapshot = null;
+  let currentTerminalPrompt = null;
   let runTimer = null;
   let currentTerminalBuffer = '';
   let currentTerminalOffset = 0;
@@ -231,6 +244,80 @@ export async function startServer({
     return message;
   }
 
+  async function advanceUntilTerminalActivity({
+    maxCommits = 4096,
+    settleCommits = 256,
+    shouldStop = null,
+  } = {}) {
+    const aggregate = {
+      type: 'terminal',
+      text: '',
+      nextOffset: currentTerminalOffset,
+      reset: false,
+    };
+    let quietCommits = 0;
+    let sawOutput = false;
+
+    for (let i = 0; i < maxCommits; ++i) {
+      currentSnapshot = await currentSession.stepCommit();
+      wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+
+      const terminal = await syncTerminalDelta({ broadcast: true });
+      if (terminal.text.length > 0) {
+        aggregate.text += terminal.text;
+        aggregate.nextOffset = terminal.nextOffset;
+        sawOutput = true;
+        quietCommits = 0;
+        if (shouldStop?.({ aggregate, currentSnapshot, currentTerminalBuffer })) {
+          break;
+        }
+      } else if (sawOutput) {
+        quietCommits += 1;
+        if (quietCommits >= settleCommits) {
+          break;
+        }
+      }
+
+      if (currentSnapshot.summary?.halted) {
+        break;
+      }
+    }
+
+    return aggregate;
+  }
+
+  function buildTerminalAdvancePlan(text) {
+    if (!text) {
+      return null;
+    }
+
+    if (text.includes('\r') || text.includes('\n')) {
+      return {
+        maxCommits: 16384,
+        settleCommits: 1024,
+        shouldStop: ({ aggregate, currentSnapshot, currentTerminalBuffer: terminalBuffer }) =>
+          aggregate.text.length > 0
+          && (
+            currentSnapshot.summary?.halted
+            || (currentTerminalPrompt && terminalBuffer.endsWith(currentTerminalPrompt))
+          ),
+      };
+    }
+
+    if (/^[\x20-\x7e]+$/.test(text)) {
+      return {
+        maxCommits: Math.max(2048, text.length * 1024),
+        settleCommits: 256,
+        shouldStop: ({ aggregate }) => aggregate.text.length >= text.length,
+      };
+    }
+
+    return {
+      maxCommits: 4096,
+      settleCommits: 256,
+    };
+  }
+
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
@@ -253,8 +340,14 @@ export async function startServer({
           await currentSession.close();
         }
         currentSession = await createSession();
+        currentTerminalPrompt = entry.terminalPrompt ?? null;
         await currentSession.load(entry, body.backend ?? 'pipeline');
-        currentSnapshot = await currentSession.snapshot();
+        currentSnapshot = entry.bootUntilUartText
+          ? await currentSession.runUntilUartContains(
+              entry.bootUntilUartText,
+              entry.bootMaxSteps ?? 0,
+            )
+          : await currentSession.snapshot();
         resetTerminalTracking();
         wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
         const terminal = await syncTerminalDelta({ offset: 0, reset: true, broadcast: true });
@@ -340,8 +433,11 @@ export async function startServer({
           return;
         }
         const body = await readBody(request);
-        await currentSession.uartInput(body.text ?? '');
-        const terminal = await syncTerminalDelta({ broadcast: true });
+        const text = body.text ?? '';
+        await currentSession.uartInput(text);
+        const terminal = runTimer
+          ? await syncTerminalDelta({ broadcast: true })
+          : await advanceUntilTerminalActivity(buildTerminalAdvancePlan(text) ?? undefined);
         json(response, 200, {
           ok: true,
           text: terminal.text,

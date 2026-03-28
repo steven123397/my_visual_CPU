@@ -60,15 +60,34 @@ function makeSnapshot(cycle, sessionLabel) {
 
 function createFakeSession(sessionLabel = 'session-1') {
   let cycle = 0;
+  let currentTest = 'hello';
   let terminal = `boot:${sessionLabel}\r\n> `;
+  let pendingTerminalOutput = '';
+  let interactiveLine = '';
+  let interactiveOutputCooldown = 0;
+  const interactiveDripInterval = 24;
   return {
-    async load() {
+    async load(entry) {
+      currentTest = entry?.name ?? 'hello';
       cycle = 0;
-      terminal = `boot:${sessionLabel}\r\n> `;
+      pendingTerminalOutput = '';
+      interactiveLine = '';
+      interactiveOutputCooldown = 0;
+      terminal =
+        currentTest === 'guest_interactive_os_demo'
+          ? ''
+          : `boot:${sessionLabel}\r\n> `;
       return { ok: true };
     },
     async snapshot() {
       return makeSnapshot(cycle, sessionLabel);
+    },
+    async runUntilUartContains(text) {
+      if (currentTest === 'guest_interactive_os_demo' && text === 'monitor> ') {
+        cycle = 42;
+        terminal = 'KMV\r\ninteractive monitor\r\nmonitor> ';
+      }
+      return this.snapshot();
     },
     async stepCycle() {
       cycle += 1;
@@ -76,15 +95,58 @@ function createFakeSession(sessionLabel = 'session-1') {
     },
     async stepCommit() {
       cycle += 2;
+      if (pendingTerminalOutput) {
+        if (currentTest === 'guest_interactive_os_demo') {
+          if (interactiveOutputCooldown > 0) {
+            interactiveOutputCooldown -= 1;
+          } else {
+            terminal += pendingTerminalOutput[0];
+            pendingTerminalOutput = pendingTerminalOutput.slice(1);
+            interactiveOutputCooldown = interactiveDripInterval;
+          }
+        } else {
+          terminal += pendingTerminalOutput;
+          pendingTerminalOutput = '';
+        }
+      }
       return this.snapshot();
     },
     async reset() {
       cycle = 0;
       terminal = '';
+      pendingTerminalOutput = '';
+      interactiveLine = '';
+      interactiveOutputCooldown = 0;
       return this.snapshot();
     },
     async uartInput(text) {
-      terminal += text;
+      if (currentTest !== 'guest_interactive_os_demo') {
+        pendingTerminalOutput += text;
+        return { ok: true };
+      }
+
+      for (const char of text) {
+        if (char === '\r') {
+          pendingTerminalOutput += '\r\n';
+          pendingTerminalOutput +=
+            interactiveLine === 'help'
+              ? 'help echo time uptime halt disk regs peek pagewalk pte\r\nmonitor> '
+              : 'monitor> ';
+          interactiveLine = '';
+          continue;
+        }
+
+        if (char === '\b') {
+          if (interactiveLine.length > 0) {
+            interactiveLine = interactiveLine.slice(0, -1);
+            pendingTerminalOutput += '\b \b';
+          }
+          continue;
+        }
+
+        interactiveLine += char;
+        pendingTerminalOutput += char;
+      }
       return { ok: true };
     },
     async uartOutput(offset = 0) {
@@ -324,6 +386,7 @@ test('GET /api/tests returns built-in test manifest', async () => {
     assert.equal(response.status, 200);
     assert.ok(body.tests.some((item) => item.name === 'hello'));
     assert.ok(body.tests.some((item) => item.name === 'guest_supervisor_demo'));
+    assert.ok(body.tests.some((item) => item.name === 'guest_interactive_os_demo'));
     assert.ok(body.tests.some((item) => item.name === 'guest_kernel_alpha_demo'));
     assert.ok(body.tests.some((item) => item.name === 'guest_kernel_alpha_storage_not_ready_demo'));
   } finally {
@@ -347,6 +410,74 @@ test('POST /api/session/step-cycle returns updated snapshot', async () => {
     const response = await postJson(server.baseUrl, '/api/session/step-cycle', {});
     assert.equal(response.status, 200);
     assert.equal(response.body.snapshot.summary.cycle, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/load boots guest_interactive_os_demo to monitor prompt', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_interactive_os_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.snapshot.summary.cycle, 42);
+    assert.match(response.body.terminal.text, /interactive monitor/);
+    assert.match(response.body.terminal.text, /monitor> /);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/terminal-input advances guest_interactive_os_demo until input is echoed', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_interactive_os_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const response = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'abc',
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.text, 'abc');
+    assert.equal(response.body.nextOffset, loadResponse.body.terminal.nextOffset + 3);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/terminal-input waits for interactive_os help output to settle', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_interactive_os_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const response = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'help\r',
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.body.text, /help echo time uptime halt disk regs peek pagewalk pte/);
+    assert.match(response.body.text, /monitor> $/);
   } finally {
     await server.close();
   }
