@@ -10,6 +10,15 @@
 - 调试信息使用可折叠侧栏，而不是常驻主视图；
 - 键盘默认不直通 guest，用户点击终端后才进入输入态。
 
+本文档不承担实时进度更新。当前进展请写入对应 `status` 文档。
+
+## 关联文档
+
+- 状态文档：
+  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+- 相关计划：
+  - [plan/minimal_interactive_os_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/minimal_interactive_os_plan.md)
+
 ## 设计边界
 
 本方案必须继续满足 `docs/design/minimal_interactive_os_design.md` 的约束：
@@ -145,3 +154,8 @@ Task 4 的测试目标分 2 层：
 - 本方案刻意不实现可拖拽窗口、窗口层级或多终端会话。那会把 Task 4 从“最小桌面壳”扩成窗口管理器。
 - terminal 输出选择独立通道，而不是塞回 snapshot，是为了保持协议边界清晰并避免快照无限膨胀。
 - 点击后输入比默认直接抢键盘更稳妥，适合当前页面同时保留调试按钮和 inspector 操作。
+
+## 当前有效性说明
+
+- 当前有效 / 历史语境：历史语境，对应 `minimal_interactive_os` Task 4 前端实现规格。该功能已实现完成。
+- 当前正式结果以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。

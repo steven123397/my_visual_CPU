@@ -35,6 +35,7 @@ const elements = {
   debugInspector: document.querySelector('#debug-inspector'),
   terminal: document.querySelector('#terminal-slot'),
   summary: document.querySelector('#summary-slot'),
+  predictor: document.querySelector('#predictor-slot'),
   pipeline: document.querySelector('#pipeline-slot'),
   events: document.querySelector('#events-slot'),
   devices: document.querySelector('#devices-slot'),

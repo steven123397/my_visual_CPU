@@ -20,9 +20,10 @@
   --terminal-accent: #f0b45a;
   --mono: "IBM Plex Mono", "Consolas", monospace;
   --sans: "IBM Plex Sans", "Trebuchet MS", sans-serif;
-  --pipeline-panel-height: 350px;
-  --timeline-panel-height: 420px;
-  --events-panel-height: 420px;
+  /* 调整面板高度以适应新的横向布局 */
+  --pipeline-panel-height: 280px;
+  --timeline-panel-height: 320px;
+  --events-panel-height: 280px;
 }
 
 * {
@@ -188,10 +189,17 @@ button:hover {
   display: grid;
   gap: 20px;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
 }
 
 .desktop-shell[data-debug-open="true"] {
-  grid-template-columns: minmax(0, 1.28fr) minmax(340px, 0.92fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+}
+
+/* 展开 debug 时，terminal 保持合理高度 */
+.desktop-shell[data-debug-open="true"] .terminal-stage {
+  max-height: 55vh;
 }
 
 .terminal-stage,
@@ -204,20 +212,39 @@ button:hover {
   display: none;
 }
 
+.debug-inspector {
+  /* 展开时占满整个宽度 */
+  width: 100%;
+  /* 避免遮挡 terminal 下边沿 */
+  margin-top: 64px;
+}
+
 .debug-inspector-grid {
   display: grid;
   gap: 20px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 大屏幕下使用 3 列布局，给每个面板更多空间 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* 让关键面板占满整行宽度 */
 #summary-slot,
 #pipeline-slot,
 #registers-slot {
   grid-column: 1 / -1;
 }
 
+/* 分支预测器占 2 列，放在 bus 左边 */
+#predictor-slot {
+  grid-column: span 2;
+}
+
+/* 总线访问占 1 列 */
+#bus-slot {
+  grid-column: span 1;
+}
+
 .terminal-window {
-  min-height: 680px;
+  min-height: 520px;
   display: grid;
   grid-template-rows: auto 1fr;
   border-radius: calc(var(--radius) + 8px);
@@ -375,10 +402,114 @@ button:hover {
 
 .panel-timeline {
   height: var(--timeline-panel-height);
+  margin-top: 16px;
 }
 
 .panel-events {
   height: var(--events-panel-height);
+}
+
+.panel-predictor {
+  display: flex;
+  flex-direction: column;
+}
+
+.predictor-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.predictor-stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.stat-box {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  display: block;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.stat-correct {
+  color: var(--teal);
+}
+
+.stat-mispredict {
+  color: var(--accent);
+}
+
+.stat-accuracy {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.predictor-last,
+.predictor-mispredict {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(24, 33, 39, 0.08);
+}
+
+.predictor-last.pred-correct {
+  border-color: rgba(31, 111, 120, 0.35);
+  background: rgba(31, 111, 120, 0.08);
+}
+
+.predictor-last.pred-mispredict {
+  border-color: rgba(188, 92, 45, 0.35);
+  background: rgba(188, 92, 45, 0.08);
+}
+
+.predictor-mispredict {
+  border-color: rgba(188, 92, 45, 0.25);
+  background: rgba(188, 92, 45, 0.05);
+}
+
+.predictor-section-title {
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+
+.pred-result {
+  font-weight: 600;
+}
+
+.pred-correct .pred-result {
+  color: var(--teal);
+}
+
+.pred-mispredict .pred-result {
+  color: var(--accent);
+}
+
+.predictor-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
 }
 
 .panel-header {
@@ -417,9 +548,24 @@ button:hover {
 .stages-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
   flex: 1;
   min-height: 0;
+}
+
+/* 中等屏幕：5个阶段可能太挤，改为滚动或保持5列但缩小间距 */
+@media (max-width: 1200px) {
+  .stages-grid {
+    gap: 10px;
+  }
+  
+  .stage-card {
+    padding: 10px;
+  }
+  
+  .stage-text {
+    font-size: 13px;
+  }
 }
 
 .stage-card {
@@ -659,16 +805,25 @@ button:hover {
   padding: 12px 0;
 }
 
+@media (max-width: 1400px) {
+  .debug-inspector-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1100px) {
   .hero,
   .desktop-shell[data-debug-open="true"],
-  .debug-inspector-grid,
   .control-bar {
     grid-template-columns: 1fr;
   }
 
-  .stages-grid {
+  .debug-inspector-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stages-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

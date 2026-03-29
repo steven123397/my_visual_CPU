@@ -22,6 +22,11 @@
 - 相关计划：
   - [plan/minimal_interactive_os_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/minimal_interactive_os_plan.md)
 
+## 当前有效性说明
+
+- 当前有效 / 历史语境：当前有效，作为当前主线对"最小可交互 OS"目标的结构边界说明。
+- 当前正式进展以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准；若后续为该方向建立专门 `status` 文档，再以对应文档承载实时进度。
+
 ## 背景与问题
 
 当前仓库已经是一个已可运行的模拟器原型，而不是纯设计稿。`phase1-stable`（`283aee6`）对应的 Phase 1 核心 bring-up 基线已经形成，独立 `kernel_alpha` 正向与九条负向回归、`functional` / `pipeline` 两个 backend，以及本地 `debug_session/protocol + frontend` 教学演示链路都已经接入主线。

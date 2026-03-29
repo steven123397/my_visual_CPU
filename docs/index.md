@@ -26,8 +26,12 @@
    理解第二轮 `debug_session/protocol` 与本地前端教学演示链路接回主线的设计与结果。
 11. [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
    理解“前端桌面壳 + guest 串口 monitor 内核”这一最小可交互 OS 的设计边界。
-12. [design/phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md)
-   理解 `Phase 3-A` 以分支预测增强开启高级微架构工作的结构边界。
+12. [design/interactive_terminal_shell_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/interactive_terminal_shell_design.md)
+    理解前端交互式终端桌面壳的具体实现规格。
+13. [design/phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md)
+    理解 `Phase 3-A` 以分支预测增强开启高级微架构工作的结构边界。
+14. [design/kernel_alpha_storage_error_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/kernel_alpha_storage_error_contract.md)
+    理解 `kernel_alpha` storage 错误处理合同与负向回归设计。
 
 ## 目录说明
 
@@ -65,6 +69,8 @@
   已完成的 `pipeline core` 主线集成计划。
 - [debug_frontend_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/debug_frontend_integration_plan.md)
   已完成的 `debug/frontend` 接入计划。
+- [kernel_alpha_storage_error_contract_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/kernel_alpha_storage_error_contract_plan.md)
+  已完成的 `kernel_alpha` storage 错误合同与负向回归实现计划。
 
 ## 维护约束
 

@@ -1,7 +1,7 @@
 import { buildTimelineRows, diffRegisters, shouldAutoScrollToBottom } from './state.js';
 import { renderTerminal } from './components/terminal.js';
 import { renderPipelineBoard, renderTimeline } from './components/pipeline.js';
-import { renderSummary, renderEvents, renderDevices, renderRegisters, renderCsrs, renderBus } from './components/panels.js';
+import { renderSummary, renderEvents, renderDevices, renderRegisters, renderCsrs, renderBus, renderPredictor } from './components/panels.js';
 
 export function renderApp(elements, state) {
   const snapshot = state.currentSnapshot;
@@ -18,6 +18,7 @@ export function renderApp(elements, state) {
   elements.debugInspector.dataset.open = state.layout.debugPanelOpen ? 'true' : 'false';
   elements.terminal.innerHTML = renderTerminal(state);
   elements.summary.innerHTML = renderSummary(snapshot, state.runState);
+  elements.predictor.innerHTML = renderPredictor(snapshot);
   elements.pipeline.innerHTML = `${renderPipelineBoard(snapshot)}${renderTimeline(timelineRows)}`;
   elements.events.innerHTML = renderEvents(snapshot);
   elements.devices.innerHTML = renderDevices(snapshot);
