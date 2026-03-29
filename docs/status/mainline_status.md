@@ -19,11 +19,13 @@
   - [design/phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md)
 - 当前计划：
   - [plan/minimal_interactive_os_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/minimal_interactive_os_plan.md)
+  - 当前暂无新的主线执行计划；后续如有新的 `Phase 3-B/C` 任务，再单独建立对应 `plan` 文档。
 - 已完成计划：
   - [plan/docs_information_architecture_reorg_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/docs_information_architecture_reorg_plan.md)
   - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
   - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
   - [plan/debug_frontend_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/debug_frontend_integration_plan.md)
+  - [plan/phase3_branch_prediction_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase3_branch_prediction_plan.md)
 
 ## 当前状态
 
@@ -33,6 +35,7 @@
 - `phase1-stable`（`283aee6`）对应的 Phase 1 核心 bring-up 冻结基线已经形成。
 - 默认 `functional` reference path、独立 `kernel_alpha` 正向与九条负向回归、`make test` 主门禁均已打通。
 - `pipeline core`、`--backend pipeline`、`make test-pipeline`、`debug_session/protocol`、本地 Node 调试服务与浏览器前端教学演示链路都已经正式接入。
+- `Phase 3-A` 第一轮分支预测增强已经落地：当前 `pipeline` 已具备最小 `branch_predictor`、`jal` static predict-taken、条件分支动态预测与继续复用现有 flush / redirect 的 mispredict 恢复路径。
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
 
@@ -61,6 +64,17 @@
 - `pipeline` 本轮又修正了一处 commit-boundary 时序：由刚退休 CSR 写入或 `mret/sret` trap-return 新触发可递送的 pending interrupt，不再让返回后的 younger 指令继续退休；同时保留“对 cycle 起点已可递送的 interrupt 仍可抢占”的路径，避免 tight loop 下的 timer interrupt 饥饿。
 - `design/regression_completion_criteria.md` 已成为当前 Phase 1 / Phase 2 回归收口的正式判断口径。
 - `docs/` 正式文档已经收口到 `background / design / plan / status + AGENTS.md + index.md` 结构，后续不再新增 `contracts / templates / archive / superpowers` 这类平行正式目录。
+
+## 2026-03-27 补充进展
+
+本轮主线已完成 `Phase 3-A` 第一轮分支预测增强：
+
+- `src/exec/branch_predictor.*` 已引入最小 predictor 子模块；当前条件分支使用 `2-bit` bimodal counter + target 记忆，`jal` 使用 static predict-taken，`jalr` 仍维持不预测。
+- `src/exec/pipeline_backend.*` 已把 predictor 接到 fetch / execute 主路径；当前分支预测只影响 `pipeline` 内部取指方向与 mispredict flush / redirect，不改变 `functional + shared InstructionSemantics` 的 ISA 真值来源，也不改变 in-order 提交模型。
+- `tests/host/predictor_smoke.cpp` 已补上 predictor 独立 smoke，守住 `query / update / reset / stats` 最小合同。
+- `tests/host/pipeline_backend_smoke.cpp` 已补上 `jal` predict-hit、predictable branch loop 与 backend rebuild 后 predictor cold-reset 三条 host-side smoke。
+- `tests/host/backend_differential_smoke.cpp` 已新增 `predictable_branch_loop` 差分场景，继续守住 predictor 参与后 `functional vs pipeline` 的 architected 一致性。
+- `DebugSnapshot` / `debug_cli_smoke` 已补 predictor mode / counters / 最近一次预测 / 最近一次 mispredict 字段；`frontend` 现有服务与纯状态测试继续兼容这些 richer snapshot。
 
 ## Phase 1 近期主线
 
@@ -159,6 +173,7 @@
 - `kernel_alpha` 已经达到 Phase 1 核心完成态，但更多 device readiness / fault / panic / runtime refinement 仍属于 post-Phase1 hardening。
 - `pipeline` 已经正式可用，privileged / trap / interrupt / MMIO 行为的一致性验证主干也已基本成体系；后续以维护既有差分门禁和按新增问题补最小持久回归为主。
 - 本轮收尾后，`interactive_os` 相关改动与总门禁已同步恢复到通过状态。
+- `Phase 3-A` predictor 当前仍是首轮最小实现：条件分支 `2-bit` counter + target 记忆、`jal` static predict-taken、`jalr` 不预测；后续应先以 bug-driven hardening 与最小持久回归补洞为主，不急着扩成复杂 BTB / RAS / 多级 predictor。
 - `debug/frontend` 已经正式接入，但仍应避免膨胀成断点 / 条件暂停 / 任意文件加载的通用调试器。
 
 ## 下一步
@@ -168,6 +183,8 @@
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
+6. 当前 `Phase 3-A` 第一轮已落地；后续优先维护 `predictor_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 与 `frontend` 透传门禁，再决定是否打开下一轮 predictor hardening 或更远的 `Phase 3-B/C` 设计。
+7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
 
 ## 建议入口
 

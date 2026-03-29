@@ -1,6 +1,6 @@
 # myCPU — RISC-V 模拟器
 
-当前仓库已经是一个已可运行的模拟器原型，而不是纯设计稿。当前主线已经达成 `phase1-stable`（`283aee6`）这一 Phase 1 冻结基线：具备 RV64I / RV64M 参考执行路径、UART / CLINT / PLIC / MMIO storage 平台、基础 `M/S/U` 特权路径、Sv39，以及一套最小 guest supervisor runtime。此后主线又继续接入了 `pipeline` 执行后端、本地 `debug_session/protocol` 和浏览器前端教学演示链路。到 `2026-03-26` 为止，reference path 又完成了一轮 Phase 1 hardening regression 扩充，补上了更系统的非法编码、CPU 侧 MMIO access-fault、ELF 段布局 / reject 和 CSR 非法访问矩阵回归。
+当前仓库已经是一个已可运行的模拟器原型，而不是纯设计稿。当前主线已经达成 `phase1-stable`（`283aee6`）这一 Phase 1 冻结基线：具备 RV64I / RV64M 参考执行路径、UART / CLINT / PLIC / MMIO storage 平台、基础 `M/S/U` 特权路径、Sv39，以及一套最小 guest supervisor runtime。此后主线又继续接入了 `pipeline` 执行后端、本地 `debug_session/protocol` 和浏览器前端教学演示链路，并已开始 `Phase 3-A` 的第一轮分支预测增强。到 `2026-03-26` 为止，reference path 又完成了一轮 Phase 1 hardening regression 扩充，补上了更系统的非法编码、CPU 侧 MMIO access-fault、ELF 段布局 / reject 和 CSR 非法访问矩阵回归。
 
 ## 目录结构
 
@@ -178,7 +178,7 @@ node --test
 
 `make test` 是默认 `functional` reference path 的主回归，覆盖 asm、host-side unit、`guest_supervisor_demo`、`interactive_os`，以及 `kernel_alpha` 正向与全部负向 demo。
 
-`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI、`interactive_os`，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性；当前 host-side differential 已包含 machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及经 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer / external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 架构稳定路径，用户态 delegated supervisor timer / external interrupt 也都已纳入；真实 `CLINT` / `PLIC+UART` 驱动的 supervisor interrupt 由 `pipeline_backend_smoke` 单独守住，而 `debug_cli_smoke` 进一步用自包含 flat-binary 检查这些路径在快照/事件协议里的可观察性。
+`make test-pipeline` 是 `pipeline` backend 的完整门禁，覆盖同一批 asm 输出、host-side smoke / differential / debug CLI、`interactive_os`，以及 `guest_supervisor_demo` 和全部 `kernel_alpha` demo 在 `pipeline` 下的一致性；当前 host-side differential 已包含 machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及经 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer / external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 架构稳定路径，用户态 delegated supervisor timer / external interrupt 也都已纳入；`predictor_smoke`、`pipeline_backend_smoke` 和 `backend_differential_smoke` 还额外守住 `Phase 3-A` 的最小 branch prediction 行为、mispredict 恢复和 architected 一致性，真实 `CLINT` / `PLIC+UART` 驱动的 supervisor interrupt 由 `pipeline_backend_smoke` 单独守住，而 `debug_cli_smoke` 进一步用自包含 flat-binary 检查这些路径在快照/事件协议里的可观察性。
 
 `cd frontend && node --test` 负责守住本地调试服务、测试清单、WebSocket 快照/事件透传，以及前端纯状态逻辑；当前也会检查连续运行中的会话在重新 `load` 时会先停掉旧的定时推进，避免演示链路在切换 demo 后继续后台前进。
 
@@ -219,6 +219,7 @@ node --test
 - `AddressSpace` 访问边界，以及 unmapped fetch/load/store 的 access-fault trap
 - CSR 特权级/只读属性检查，非法访问触发 illegal-instruction trap
 - `misa` 作为固定实现能力视图对 guest 只读暴露，不允许软件改写 ISA 声明
+- `pipeline` 下的首轮 `Phase 3-A` 分支预测增强：条件分支最小动态 predictor、`jal` static predict-taken、mispredict 继续沿现有 flush / redirect 恢复，并通过 snapshot / protocol 暴露 predictor mode / counters / 最近一次预测状态
 - UART MMIO（写入直接输出到 stdout）
 - CLINT 定时器中断，以及 `mtime/mtimecmp` 的 1/2/4/8 字节 MMIO 访问
 - `time` CSR 与 CLINT `mtime` 保持一致，guest 侧 CSR/MMIO 看到同一平台时间源

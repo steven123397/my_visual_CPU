@@ -92,8 +92,10 @@
 - host-side MMIO guard 与 contract matrix。
 - `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 `pipeline` 的 asm / host / guest 门禁。
 - `pipeline` host-side differential 当前已覆盖基础 ALU / 控制流 / trap-return / illegal trap、machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store-page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及由 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer/external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 场景；用户态 delegated supervisor timer / external interrupt 已都纳入差分门禁。
+- `Phase 3-A` 首轮分支预测增强：最小 `branch_predictor` 子模块、`jal` static predict-taken、条件分支 `2-bit` bimodal counter + target 记忆，以及继续复用现有 flush / redirect 的 mispredict 恢复路径。
 - `pipeline_backend_smoke` 当前还额外覆盖真实 `CLINT` / `PLIC+UART` 平台事件源驱动的 supervisor timer / external interrupt smoke，避免把 cycle-sensitive 设备递送硬塞进 functional-vs-pipeline 逐事件差分。
-- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照，守住 `CLINT` / `PLIC` / `UART` 相关字段与 pipeline flush / halt 事件输出。
+- `pipeline_backend_smoke` 当前也已补上 `jal` predict-hit、predictable branch loop、以及 backend rebuild 后 predictor cold-reset 的 host-side smoke。
+- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照，以及 predictor mode / counters / 最近一次预测字段，守住 `CLINT` / `PLIC` / `UART` 与 predictor 可观察性输出。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。
@@ -132,6 +134,8 @@
   non-storage readiness / panic 合同也已开始从入口下沉到共享 helper，`fault`、`PLIC not-ready`、`timer not-ready` 与标准 interrupt post-handler 不再分散在各入口。
 - [src/mem/bus.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/mem/bus.cpp) 和 [src/devices](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices)
   已完成第一轮收口，但未来若继续扩设备，仍需要更系统的契约和回归。
+- [src/exec/branch_predictor.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/exec/branch_predictor.cpp)
+  当前仍是 `Phase 3-A` 首轮最小 predictor：条件分支使用 `2-bit` counter + target 记忆，`jal` 走静态 predict-taken，`jalr` 仍不预测；后续应先以 bug-driven hardening 和最小回归补洞为主，不急着扩成复杂 BTB / RAS 组合。
 
 ## 本子树下一步工作
 
@@ -144,6 +148,7 @@
 5. 当前对 Phase 2 的近期安排，不再是继续做“正式接入”；`pipeline` 的最小 differential / robustness 收口已经基本成立，后续重点转为维护既有门禁、控制低收益 case 膨胀，并在新增问题出现时补最小回归。
    当前 `pipeline` 已经正式接入到 asm / host / guest 验证层：默认 `functional` 继续守 `make test`，`pipeline` 通过 `make test-pipeline` 守住同一批 asm 参考输出、host-side smoke/differential，以及 `guest_supervisor_demo` 与 `kernel_alpha` 正负回归。
 6. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围：加载仓库内现有 demo、查看快照、按 cycle / commit 单步，不要在这一层直接扩成带断点 / 条件暂停 / 任意文件加载的通用调试器。
+7. `Phase 3-A` 首轮分支预测增强已经落地；后续优先维护 `predictor_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 和 `frontend` 透传门禁，不急着把 `Phase 3-B/C` 的 rename / `ROB` / `LSQ` 并入当前主线。
 
 ## 验证要求
 

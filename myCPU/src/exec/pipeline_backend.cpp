@@ -9,6 +9,8 @@
 
 namespace {
 
+constexpr const char* kPredictorModeName = "bimodal-2bit";
+
 enum class CounterCsrKind : uint8_t {
     None,
     Cycle,
@@ -33,6 +35,22 @@ CounterCsrKind classify_counter_csr(uint32_t addr) {
 
 bool wb_commit_needs_flush(const InsnEffects& effects) {
     return effects.control.halt || effects.control.trap_return != TrapReturnKind::None;
+}
+
+bool is_control_flow_opcode(uint32_t opcode) {
+    return opcode == 0x63 || opcode == 0x67 || opcode == 0x6F;
+}
+
+bool prediction_matches(const PredictorQueryResult& prediction,
+                        bool actual_taken,
+                        uint64_t actual_target) {
+    if (!prediction.valid) {
+        return !actual_taken;
+    }
+    if (prediction.predicted_taken != actual_taken) {
+        return false;
+    }
+    return !actual_taken || prediction.predicted_target == actual_target;
 }
 
 std::string hex_u32(uint32_t value) {
@@ -476,14 +494,38 @@ void PipelineBackend::step_ex() {
     }
     next_ex_mem_.slot.effects = InstructionSemantics::execute(id_ex_.slot.insn, ctx, inputs);
 
-    if (!next_ex_mem_.slot.effects.trap.valid && next_ex_mem_.slot.effects.control.redirect_pc) {
-        redirect_pending_ = true;
-        redirect_target_ = next_ex_mem_.slot.effects.control.target_pc;
-        next_if_id_ = {};
-        next_id_ex_ = {};
-        pending_fetch_fault_ = {};
-        pending_fetch_fault_pc_ = 0;
-        fetch_pc_ = redirect_target_;
+    if (!next_ex_mem_.slot.effects.trap.valid && is_control_flow_opcode(id_ex_.slot.insn.opcode)) {
+        const bool actual_taken = next_ex_mem_.slot.effects.control.redirect_pc;
+        const uint64_t actual_target =
+            actual_taken ? next_ex_mem_.slot.effects.control.target_pc : id_ex_.slot.pc + 4;
+        const bool correct = prediction_matches(id_ex_.slot.prediction, actual_taken, actual_target);
+
+        last_prediction_valid_ = id_ex_.slot.prediction.valid;
+        last_prediction_taken_ = id_ex_.slot.prediction.predicted_taken;
+        last_prediction_correct_ = correct;
+        last_prediction_pc_ = id_ex_.slot.pc;
+        last_prediction_target_ = id_ex_.slot.prediction.valid ? id_ex_.slot.prediction.predicted_target : 0;
+        last_mispredict_valid_ = !correct;
+        last_mispredict_pc_ = !correct ? id_ex_.slot.pc : 0;
+        last_mispredict_target_ = !correct ? actual_target : 0;
+
+        predictor_.update({
+            .pc = id_ex_.slot.pc,
+            .raw = id_ex_.slot.raw,
+            .prediction = id_ex_.slot.prediction,
+            .taken = actual_taken,
+            .target = actual_target,
+        });
+
+        if (!correct) {
+            redirect_pending_ = true;
+            redirect_target_ = actual_target;
+            next_if_id_ = {};
+            next_id_ex_ = {};
+            pending_fetch_fault_ = {};
+            pending_fetch_fault_pc_ = 0;
+            fetch_pc_ = redirect_target_;
+        }
     }
 }
 
@@ -519,17 +561,20 @@ void PipelineBackend::step_if() {
         return;
     }
 
-    const AddressSpace::AccessResult fetch = cpu_.address_space().fetch32_result(bus_, fetch_pc_);
+    const uint64_t fetch_pc = fetch_pc_;
+    const AddressSpace::AccessResult fetch = cpu_.address_space().fetch32_result(bus_, fetch_pc);
     if (!fetch.ok) {
         pending_fetch_fault_ = fetch.fault;
-        pending_fetch_fault_pc_ = fetch_pc_;
+        pending_fetch_fault_pc_ = fetch_pc;
         return;
     }
 
+    const PredictorQueryResult prediction = predictor_.query(fetch_pc, static_cast<uint32_t>(fetch.value));
     next_if_id_.slot.valid = true;
-    next_if_id_.slot.pc = fetch_pc_;
+    next_if_id_.slot.pc = fetch_pc;
     next_if_id_.slot.raw = static_cast<uint32_t>(fetch.value);
-    fetch_pc_ += 4;
+    next_if_id_.slot.prediction = prediction;
+    fetch_pc_ = prediction.valid && prediction.predicted_taken ? prediction.predicted_target : fetch_pc + 4;
 }
 
 bool PipelineBackend::try_service_interrupt_at_commit_boundary() {
@@ -565,6 +610,7 @@ const char* PipelineBackend::name() const {
 
 BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     BackendDebugSnapshot snapshot;
+    const PredictorStats predictor_stats = predictor_.stats();
     snapshot.backend_name = name();
     snapshot.pipeline.if_stage = build_fetch_stage_snapshot();
     snapshot.pipeline.id_stage = build_stage_snapshot(if_id_.slot);
@@ -578,6 +624,18 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     snapshot.pipeline.trap_flush = last_cycle_trap_flush_;
     snapshot.pipeline.committed = last_cycle_committed_;
     snapshot.pipeline.empty = pipeline_empty();
+    snapshot.pipeline.predictor.mode = kPredictorModeName;
+    snapshot.pipeline.predictor.last_prediction_valid = last_prediction_valid_;
+    snapshot.pipeline.predictor.last_prediction_taken = last_prediction_taken_;
+    snapshot.pipeline.predictor.last_prediction_correct = last_prediction_correct_;
+    snapshot.pipeline.predictor.last_prediction_pc = last_prediction_pc_;
+    snapshot.pipeline.predictor.last_prediction_target = last_prediction_target_;
+    snapshot.pipeline.predictor.last_mispredict_valid = last_mispredict_valid_;
+    snapshot.pipeline.predictor.last_mispredict_pc = last_mispredict_pc_;
+    snapshot.pipeline.predictor.last_mispredict_target = last_mispredict_target_;
+    snapshot.pipeline.predictor.total_predictions = predictor_stats.total_predictions;
+    snapshot.pipeline.predictor.correct_predictions = predictor_stats.correct_predictions;
+    snapshot.pipeline.predictor.mispredictions = predictor_stats.mispredictions;
     return snapshot;
 }
 

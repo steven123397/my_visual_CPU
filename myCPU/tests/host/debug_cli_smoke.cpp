@@ -34,6 +34,13 @@ constexpr std::array<uint32_t, 39> kSupervisorTimerProgram = {
     0x00000297U, 0xfd428293U, 0x14129073U, 0x10200073U,
 };
 
+constexpr std::array<uint32_t, 4> kPredictorProgram = {
+    0x0080006fU,
+    0x06300093U,
+    0x05d00893U,
+    0x00000073U,
+};
+
 bool expect_contains(const std::string& haystack, const char* needle, const char* message) {
     if (haystack.find(needle) == std::string::npos) {
         std::fprintf(stderr, "%s\n", message);
@@ -151,6 +158,7 @@ struct TempBinary {
 int main() {
     const TempBinary external_binary{write_temp_binary("external", kSupervisorExternalProgram)};
     const TempBinary timer_binary{write_temp_binary("timer", kSupervisorTimerProgram)};
+    const TempBinary predictor_binary{write_temp_binary("predictor", kPredictorProgram)};
 
     const std::string external_pending_output =
         run_cli_script(build_flat_load_command(external_binary.path) +
@@ -295,6 +303,31 @@ int main() {
                 "\"cmd\":\"uart_input\"",
             },
             "uart_input should be accepted as a first-class debug CLI command")) {
+        return 1;
+    }
+
+    const std::string predictor_output =
+        run_cli_script(build_flat_load_command(predictor_binary.path) +
+                       repeat_command("{\"cmd\":\"step_commit\"}", 16) + "{\"cmd\":\"quit\"}\n");
+    const std::vector<std::string> predictor_lines = split_lines(predictor_output);
+    if (!expect_line_with_fields(
+            predictor_lines,
+            predictor_output,
+            {
+                "\"halted\":true",
+                "\"backend\":\"pipeline\"",
+                "\"predictor\"",
+                "\"mode\":\"bimodal-2bit\"",
+                "\"last_prediction_valid\":true",
+                "\"last_prediction_taken\":true",
+                "\"last_prediction_correct\":true",
+                "\"last_prediction_pc\":\"0x80000078\"",
+                "\"last_prediction_target\":\"0x80000080\"",
+                "\"total_predictions\":1",
+                "\"correct_predictions\":1",
+                "\"mispredictions\":0",
+            },
+            "predictor snapshot should expose branch prediction state and counters")) {
         return 1;
     }
 

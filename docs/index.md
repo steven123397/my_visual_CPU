@@ -51,6 +51,8 @@
 
 - [minimal_interactive_os_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/minimal_interactive_os_plan.md)
   已完成的最小可交互 Monitor OS 落地计划，覆盖 UART RX、debug protocol、前端终端壳与独立 `interactive_os` guest demo。
+- [phase3_branch_prediction_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase3_branch_prediction_plan.md)
+  已完成的第一轮 `Phase 3-A` 分支预测增强实现计划。
 - [sv39_mprv_semantics_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_mprv_semantics_plan.md)
   已完成的 `privilege / Sv39` 回归补洞计划，聚焦 `MPRV + Sv39` 数据访存语义。
 - [sv39_pagewalk_contracts_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_pagewalk_contracts_plan.md)

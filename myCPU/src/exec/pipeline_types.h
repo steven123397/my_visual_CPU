@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "branch_predictor.h"
 #include "../isa/effects.h"
 
 extern "C" {
@@ -13,6 +14,7 @@ struct StageSlot {
     uint64_t pc{0};
     uint32_t raw{0};
     Insn insn{};
+    PredictorQueryResult prediction{};
     uint64_t rs1v{0};
     uint64_t rs2v{0};
     InsnEffects effects{};

@@ -257,6 +257,25 @@ std::string snapshot_json(const DebugSnapshot& snapshot) {
         << "}"
         << ",\"redirect_target\":";
     append_json_string(out, hex_u64(snapshot.pipeline.redirect_target));
+    out << ",\"predictor\":{"
+        << "\"mode\":";
+    append_json_string(out, snapshot.pipeline.predictor.mode);
+    out << ",\"last_prediction_valid\":" << (snapshot.pipeline.predictor.last_prediction_valid ? "true" : "false")
+        << ",\"last_prediction_taken\":" << (snapshot.pipeline.predictor.last_prediction_taken ? "true" : "false")
+        << ",\"last_prediction_correct\":" << (snapshot.pipeline.predictor.last_prediction_correct ? "true" : "false")
+        << ",\"last_prediction_pc\":";
+    append_json_string(out, hex_u64(snapshot.pipeline.predictor.last_prediction_pc));
+    out << ",\"last_prediction_target\":";
+    append_json_string(out, hex_u64(snapshot.pipeline.predictor.last_prediction_target));
+    out << ",\"last_mispredict_valid\":" << (snapshot.pipeline.predictor.last_mispredict_valid ? "true" : "false")
+        << ",\"last_mispredict_pc\":";
+    append_json_string(out, hex_u64(snapshot.pipeline.predictor.last_mispredict_pc));
+    out << ",\"last_mispredict_target\":";
+    append_json_string(out, hex_u64(snapshot.pipeline.predictor.last_mispredict_target));
+    out << ",\"total_predictions\":" << snapshot.pipeline.predictor.total_predictions
+        << ",\"correct_predictions\":" << snapshot.pipeline.predictor.correct_predictions
+        << ",\"mispredictions\":" << snapshot.pipeline.predictor.mispredictions
+        << "}";
     out << "},\"gpr\":[";
     for (size_t i = 0; i < snapshot.gpr.size(); ++i) {
         if (i != 0) {

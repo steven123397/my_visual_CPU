@@ -31,7 +31,9 @@ constexpr uint32_t kAddiX6FromX4Plus1 = 0x00120313U;      // addi x6, x4, 1
 constexpr uint32_t kCsrwMscratchX6 = 0x34031073U;         // csrw mscratch, x6
 constexpr uint32_t kCsrrX5Mscratch = 0x340022f3U;         // csrr x5, mscratch
 constexpr uint32_t kAddiX1WrongPath = 0x06300093U;        // addi x1, x0, 99
+constexpr uint32_t kAddiX1Inc = 0x00108093U;              // addi x1, x1, 1
 constexpr uint32_t kAddiX2WrongPath = 0x06300113U;        // addi x2, x0, 99
+constexpr uint32_t kAddiX2FromX0Plus5 = 0x00500113U;      // addi x2, x0, 5
 constexpr uint32_t kAddiX2FromX0Plus7 = 0x00700113U;      // addi x2, x0, 7
 constexpr uint32_t kAddiX3WrongPath = 0x06300193U;        // addi x3, x0, 99
 constexpr uint32_t kAddiX4WrongPath = 0x06300213U;        // addi x4, x0, 99
@@ -54,6 +56,7 @@ constexpr uint32_t kAddiX5FromX0Plus256 = 0x10000293U;    // addi x5, x0, 256
 constexpr uint32_t kCsrwSieX5 = 0x10429073U;              // csrw sie, x5
 constexpr uint32_t kCsrwSstatusX5 = 0x10029073U;          // csrw sstatus, x5
 constexpr uint32_t kSret = 0x10200073U;                   // sret
+constexpr uint32_t kBltX1X2Loop = 0xfe20cee3U;            // blt x1, x2, -4
 
 constexpr std::array<uint32_t, 20> kTrackedCsrs{
     CSR_SSTATUS,
@@ -464,6 +467,20 @@ int main() {
             {},
             {},
             64,
+            {},
+        },
+        {
+            "predictable_branch_loop",
+            {
+                kAddiX2FromX0Plus5,
+                kAddiX1Inc,
+                kBltX1X2Loop,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {},
+            {},
+            128,
             {},
         },
         {
