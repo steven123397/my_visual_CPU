@@ -45,7 +45,7 @@
 - `SimpleStorage` 仍然只是最小同步块设备。
 - reference robustness 回归还不够系统。
 
-## 后续修复进展（更新到 2026-03-26）
+## 后续修复进展（更新到 2026-03-30）
 
 以下问题已经完成修复或第一轮收口：
 
@@ -65,6 +65,35 @@
   - `tests/unit/elf_loader_rejects.cpp`
   - `tests/unit/elf_loader_header_rejects.cpp`
   这一轮以补回归为主，没有因为文档中列出的这些边界再新增一批生产代码变更。
+- guest runtime 已完成一轮更系统的结构收口与 host-side 单元门禁扩充：
+  - `guest/kernel/kernel_bringup.c`
+  - `guest/kernel/kernel_runtime.c`
+  - `guest/kernel/vm_address_space.c`
+  - `guest/kernel/vm_process.c`
+  - `guest/kernel/vm_object.c`
+  - `guest/kernel/vm_fault.c`
+  - `guest/kernel/trap.c`
+  - `guest/kernel/trap_dispatch.c`
+  - `guest/kernel/supervisor_runtime.c`
+  - `guest/kernel/user_task.c`
+  - `guest/kernel/user_task_bootstrap.c`
+  - `guest/kernel/user_program.c`
+  - `guest/kernel/user_program_smoke.c`
+  - `guest/kernel/supervisor_demo_smoke.c`
+  当前已新增并接入：
+  - `tests/unit/kernel_bringup.c`
+  - `tests/unit/vm_address_space.c`
+  - `tests/unit/vm_process.c`
+  - `tests/unit/vm_object.c`
+  - `tests/unit/vm_fault.c`
+  - `tests/unit/trap_runtime.c`
+  - `tests/unit/trap_dispatch.c`
+  - `tests/unit/supervisor_runtime.c`
+  - `tests/unit/user_task.c`
+  - `tests/unit/user_task_bootstrap.c`
+  - `tests/unit/user_program.c`
+  - `tests/unit/user_program_smoke.c`
+  这一轮仍以行为不变的职责收口为主，目标是把 lifecycle / binding / fault policy / dispatch / smoke orchestration 的边界守得更稳，而不是扩功能面。
 
 ## 与本次自检直接相关的后续状态
 
@@ -120,6 +149,10 @@
   当前已经完成第一轮职责拆分，但后续修改仍需守住 page-table primitive、address-space lifecycle、process binding、object lifecycle 与 fault policy 的边界，不要重新耦合回单个大文件。
 - [myCPU/guest/kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 和 [myCPU/guest/kernel/trap_dispatch.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap_dispatch.c)
   当前已经完成 lifecycle / dispatch 的第一轮拆分，但后续仍要避免 policy、dispatch 和 runtime activation 重新糊回同一层。
+- [myCPU/guest/kernel/user_task.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_task.c)、[myCPU/guest/kernel/user_task_bootstrap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_task_bootstrap.c)、[myCPU/guest/kernel/user_program.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_program.c)
+  当前已经完成第一轮 standard lifecycle / plan / binding 收口，并已补 host-side 单元回归；后续仍要避免把 wrapper、rollback 和 access check 重新写成多处重复分支。
+- [myCPU/guest/kernel/user_program_smoke.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_program_smoke.c) 和 [myCPU/guest/kernel/supervisor_demo_smoke.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/supervisor_demo_smoke.c)
+  当前已经完成第一轮 smoke prepare / round / platform-tail 收口，但仍应避免把 demo orchestration 重新膨胀成不可测试的大文件。
 - `guest/kernel_runtime.c`、`guest/kernel_bringup.c`、`guest/kernel_alpha/common.c`
   当前已完成 bring-up skeleton 第一轮收口；其中 common bring-up options 的 runtime/self-context 装配也已下沉到 `guest/kernel_runtime.c`，但离更完整的 kernel object / runtime 组织仍有距离。
 - `SimpleStorage`

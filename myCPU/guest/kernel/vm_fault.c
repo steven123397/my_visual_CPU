@@ -57,6 +57,35 @@ static const struct VmFaultActionRule* find_fault_action(
     return NULL;
 }
 
+static bool fault_action_args_valid(const vm_address_space_t* address_space,
+                                    uint64_t cause,
+                                    uintptr_t vaddr,
+                                    size_t size,
+                                    vm_fault_action_t action,
+                                    volatile uintptr_t* resume_pc_slot) {
+    return address_space != NULL && address_space->root_table != NULL &&
+           page_fault_cause_valid(cause) && span_args_valid(vaddr, size) &&
+           (action != VM_FAULT_ACTION_RESUME_AT_SLOT || resume_pc_slot != NULL);
+}
+
+static void write_fault_action_rule(struct VmFaultActionRule* rule,
+                                    uint64_t cause,
+                                    uintptr_t vaddr,
+                                    size_t size,
+                                    vm_fault_action_t action,
+                                    volatile uintptr_t* resume_pc_slot) {
+    if (rule == NULL) {
+        return;
+    }
+
+    rule->valid = true;
+    rule->cause = cause;
+    rule->vaddr = vaddr;
+    rule->size = size;
+    rule->action = action;
+    rule->resume_pc_slot = resume_pc_slot;
+}
+
 static bool register_fault_action(vm_address_space_t* address_space,
                                   uint64_t cause,
                                   uintptr_t vaddr,
@@ -66,12 +95,12 @@ static bool register_fault_action(vm_address_space_t* address_space,
     size_t i = 0;
     struct VmFaultActionRule* free_slot = NULL;
 
-    if (address_space == NULL || address_space->root_table == NULL ||
-        !page_fault_cause_valid(cause) || !span_args_valid(vaddr, size)) {
-        return false;
-    }
-
-    if (action == VM_FAULT_ACTION_RESUME_AT_SLOT && resume_pc_slot == NULL) {
+    if (!fault_action_args_valid(address_space,
+                                 cause,
+                                 vaddr,
+                                 size,
+                                 action,
+                                 resume_pc_slot)) {
         return false;
     }
 
@@ -95,12 +124,12 @@ static bool register_fault_action(vm_address_space_t* address_space,
         return false;
     }
 
-    free_slot->valid = true;
-    free_slot->cause = cause;
-    free_slot->vaddr = vaddr;
-    free_slot->size = size;
-    free_slot->action = action;
-    free_slot->resume_pc_slot = resume_pc_slot;
+    write_fault_action_rule(free_slot,
+                            cause,
+                            vaddr,
+                            size,
+                            action,
+                            resume_pc_slot);
     return true;
 }
 
@@ -140,9 +169,6 @@ bool vm_handle_page_fault(vm_process_t* process,
     const struct VmFaultActionRule* action = NULL;
     const uintptr_t fault_page = align_down_page((uintptr_t)tval);
     const uintptr_t fault_addr = (uintptr_t)tval;
-    uintptr_t offset = 0;
-    uintptr_t paddr = 0;
-    uintptr_t resume_pc = 0;
 
     if (address_space == NULL || address_space->root_table == NULL) {
         return false;
@@ -164,12 +190,13 @@ bool vm_handle_page_fault(vm_process_t* process,
         }
     }
 
-    if (user_region != NULL &&
-        user_region->object != NULL &&
+    if (user_region != NULL && user_region->object != NULL &&
         user_region->object_mode != VM_REGION_OBJECT_NONE &&
         object_descriptor_valid(user_region->object) &&
         fault_range_allows_access(user_region->flags, cause)) {
-        offset = fault_page - user_region->vaddr;
+        const uintptr_t offset = fault_page - user_region->vaddr;
+        uintptr_t paddr = 0;
+
         if (!object_resolve_page(user_region->object,
                                  user_region->object_offset + offset,
                                  true,
@@ -187,7 +214,8 @@ bool vm_handle_page_fault(vm_process_t* process,
 
     range = find_kernel_fault_range(address_space, fault_page);
     if (range != NULL && fault_range_allows_access(range->flags, cause)) {
-        offset = fault_page - range->vaddr;
+        const uintptr_t offset = fault_page - range->vaddr;
+
         if (!map_page_internal(address_space,
                                fault_page,
                                range->paddr + offset,
@@ -208,14 +236,16 @@ bool vm_handle_page_fault(vm_process_t* process,
     case VM_FAULT_ACTION_SKIP_INSTRUCTION:
         riscv_write_sepc(epc + 4U);
         return true;
-    case VM_FAULT_ACTION_RESUME_AT_SLOT:
-        resume_pc = (uintptr_t)(*action->resume_pc_slot);
+    case VM_FAULT_ACTION_RESUME_AT_SLOT: {
+        const uintptr_t resume_pc = (uintptr_t)(*action->resume_pc_slot);
+
         if (resume_pc == 0) {
             return false;
         }
         riscv_write_sepc(resume_pc);
         *action->resume_pc_slot = 0;
         return true;
+    }
     }
 
     return false;

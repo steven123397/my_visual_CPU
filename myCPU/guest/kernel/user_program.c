@@ -1,9 +1,66 @@
 #include "user_program.h"
 
+static user_task_t* user_program_task(user_program_t* program) {
+    return program != NULL ? &program->user_task : NULL;
+}
+
+static const user_task_t* user_program_task_view(const user_program_t* program) {
+    return program != NULL ? &program->user_task : NULL;
+}
+
 static bool user_program_created(const user_program_t* program) {
     return program != NULL && program->user_task.address_space != NULL &&
            program->user_task.process.address_space ==
                program->user_task.address_space;
+}
+
+static bool user_program_planned(const user_program_t* program) {
+    return program != NULL && program->bootstrap.planned;
+}
+
+static bool user_program_ready_for_create(const user_program_t* program) {
+    return program != NULL && !user_program_created(program) &&
+           program->bootstrap.planned && !program->bootstrap.configured &&
+           !program->bootstrap.bound;
+}
+
+static uintptr_t user_program_exec_symbol(const user_program_t* program) {
+    return user_program_planned(program)
+               ? program->bootstrap.exec_page_paddr +
+                     (program->bootstrap.entry_pc - program->bootstrap.exec_vaddr)
+               : 0;
+}
+
+static uintptr_t user_program_ecall_symbol(const user_program_t* program) {
+    return user_program_planned(program)
+               ? program->bootstrap.exec_page_paddr +
+                     (program->bootstrap.expected_ecall_pc -
+                      program->bootstrap.exec_vaddr)
+               : 0;
+}
+
+static bool user_program_reset_lifecycle(user_program_t* program) {
+    return program != NULL &&
+           (!user_program_created(program) || user_task_destroy(&program->user_task)) &&
+           user_task_bootstrap_reset(&program->bootstrap);
+}
+
+static bool user_program_replan_after_create_failure(user_program_t* program,
+                                                     uintptr_t exec_symbol,
+                                                     uintptr_t ecall_symbol) {
+    return user_program_destroy(program) &&
+           user_program_plan_standard(program, exec_symbol, ecall_symbol);
+}
+
+static bool user_program_configure_standard(user_program_t* program,
+                                            uintptr_t alias_backing_paddr,
+                                            uintptr_t user_stack_paddr) {
+    return program != NULL &&
+           user_task_bootstrap_configure(&program->bootstrap,
+                                         &program->user_task,
+                                         alias_backing_paddr,
+                                         user_stack_paddr) &&
+           user_task_bootstrap_bind(&program->bootstrap);
 }
 
 static const vm_user_region_t* user_program_region_view(
@@ -39,16 +96,7 @@ void user_program_init(user_program_t* program) {
 }
 
 bool user_program_destroy(user_program_t* program) {
-    if (program == NULL) {
-        return false;
-    }
-
-    if (user_program_created(program) &&
-        !user_task_destroy(&program->user_task)) {
-        return false;
-    }
-
-    if (!user_task_bootstrap_reset(&program->bootstrap)) {
+    if (!user_program_reset_lifecycle(program)) {
         return false;
     }
 
@@ -60,7 +108,7 @@ bool user_program_plan_standard(user_program_t* program,
                                 uintptr_t exec_symbol,
                                 uintptr_t ecall_symbol) {
     if (program == NULL || user_program_created(program) ||
-        program->bootstrap.planned) {
+        user_program_planned(program)) {
         return false;
     }
 
@@ -72,21 +120,10 @@ bool user_program_plan_standard(user_program_t* program,
 bool user_program_create(user_program_t* program,
                          uintptr_t alias_backing_paddr,
                          uintptr_t user_stack_paddr) {
-    const uintptr_t exec_symbol =
-        program != NULL
-            ? program->bootstrap.exec_page_paddr +
-                  (program->bootstrap.entry_pc - program->bootstrap.exec_vaddr)
-            : 0;
-    const uintptr_t ecall_symbol =
-        program != NULL
-            ? program->bootstrap.exec_page_paddr +
-                  (program->bootstrap.expected_ecall_pc -
-                   program->bootstrap.exec_vaddr)
-            : 0;
+    const uintptr_t exec_symbol = user_program_exec_symbol(program);
+    const uintptr_t ecall_symbol = user_program_ecall_symbol(program);
 
-    if (program == NULL || user_program_created(program) ||
-        !program->bootstrap.planned || program->bootstrap.configured ||
-        program->bootstrap.bound) {
+    if (!user_program_ready_for_create(program)) {
         return false;
     }
 
@@ -94,47 +131,48 @@ bool user_program_create(user_program_t* program,
         return false;
     }
 
-    if (user_task_bootstrap_configure(&program->bootstrap,
-                                      &program->user_task,
-                                      alias_backing_paddr,
-                                      user_stack_paddr) &&
-        user_task_bootstrap_bind(&program->bootstrap)) {
+    if (user_program_configure_standard(program,
+                                        alias_backing_paddr,
+                                        user_stack_paddr)) {
         return true;
     }
 
-    if (!user_program_destroy(program)) {
-        return false;
-    }
-
-    if (!user_program_plan_standard(program, exec_symbol, ecall_symbol)) {
-        return false;
-    }
-
-    return false;
+    return !user_program_replan_after_create_failure(program,
+                                                     exec_symbol,
+                                                     ecall_symbol);
 }
 
 vm_address_space_t* user_program_address_space(user_program_t* program) {
+    user_task_t* user_task = NULL;
+
     if (!user_program_created(program)) {
         return NULL;
     }
 
-    return user_task_address_space(&program->user_task);
+    user_task = user_program_task(program);
+    return user_task != NULL ? user_task_address_space(user_task) : NULL;
 }
 
 vm_process_t* user_program_process(user_program_t* program) {
+    user_task_t* user_task = NULL;
+
     if (!user_program_created(program)) {
         return NULL;
     }
 
-    return user_task_process(&program->user_task);
+    user_task = user_program_task(program);
+    return user_task != NULL ? user_task_process(user_task) : NULL;
 }
 
 trap_user_runtime_t* user_program_runtime(user_program_t* program) {
+    user_task_t* user_task = NULL;
+
     if (!user_program_created(program)) {
         return NULL;
     }
 
-    return user_task_runtime(&program->user_task);
+    user_task = user_program_task(program);
+    return user_task != NULL ? user_task_runtime(user_task) : NULL;
 }
 
 bool user_program_map_object_region_at(user_program_t* program,
@@ -144,11 +182,10 @@ bool user_program_map_object_region_at(user_program_t* program,
                                        uint64_t flags,
                                        vm_object_t* object,
                                        size_t object_offset) {
-    if (!user_program_created(program)) {
-        return false;
-    }
+    user_task_t* user_task = user_program_task(program);
 
-    return user_task_map_object_region_at(&program->user_task,
+    return user_task != NULL && user_program_created(program) &&
+           user_task_map_object_region_at(user_task,
                                           region,
                                           vaddr,
                                           size,
@@ -179,11 +216,10 @@ bool user_program_set_fault_object_region_at(user_program_t* program,
                                              uint64_t flags,
                                              vm_object_t* object,
                                              size_t object_offset) {
-    if (!user_program_created(program)) {
-        return false;
-    }
+    user_task_t* user_task = user_program_task(program);
 
-    return user_task_set_fault_object_region_at(&program->user_task,
+    return user_task != NULL && user_program_created(program) &&
+           user_task_set_fault_object_region_at(user_task,
                                                 region,
                                                 vaddr,
                                                 size,
@@ -219,53 +255,54 @@ bool user_program_prepare_standard(
     void* supervisor_timer_post_context,
     trap_supervisor_external_post_handler_t supervisor_external_post_handler,
     void* supervisor_external_post_context) {
-    if (!user_program_created(program)) {
-        return false;
-    }
-
-    return user_task_bootstrap_prepare_standard(
-        &program->bootstrap,
-        trap_context,
-        arg0,
-        trap_stack_base,
-        trap_stack_size,
-        validate,
-        validate_context,
-        supervisor_timer_post_handler,
-        supervisor_timer_post_context,
-        supervisor_external_post_handler,
-        supervisor_external_post_context);
+    return user_program_created(program) &&
+           user_task_bootstrap_prepare_standard(
+               &program->bootstrap,
+               trap_context,
+               arg0,
+               trap_stack_base,
+               trap_stack_size,
+               validate,
+               validate_context,
+               supervisor_timer_post_handler,
+               supervisor_timer_post_context,
+               supervisor_external_post_handler,
+               supervisor_external_post_context);
 }
 
 bool user_program_activate(user_program_t* program) {
-    if (!user_program_created(program)) {
-        return false;
-    }
+    user_task_t* user_task = user_program_task(program);
 
-    return user_task_activate(&program->user_task);
+    return user_task != NULL && user_program_created(program) &&
+           user_task_activate(user_task);
 }
 
 bool user_program_deactivate(user_program_t* program) {
-    if (!user_program_created(program)) {
-        return false;
-    }
+    user_task_t* user_task = user_program_task(program);
 
-    return user_task_deactivate(&program->user_task);
+    return user_task != NULL && user_program_created(program) &&
+           user_task_deactivate(user_task);
 }
 
 bool user_program_is_active(const user_program_t* program) {
-    return user_program_created(program) &&
-           user_task_is_active((user_task_t*)&program->user_task);
+    const user_task_t* user_task = user_program_task_view(program);
+
+    return user_task != NULL && user_program_created(program) &&
+           user_task_is_active(user_task);
 }
 
 bool user_program_is_runnable(const user_program_t* program) {
-    return user_program_created(program) &&
-           user_task_is_runnable((user_task_t*)&program->user_task);
+    const user_task_t* user_task = user_program_task_view(program);
+
+    return user_task != NULL && user_program_created(program) &&
+           user_task_is_runnable(user_task);
 }
 
 bool user_program_enter(const user_program_t* program) {
-    return user_program_created(program) &&
-           user_task_enter((user_task_t*)&program->user_task);
+    const user_task_t* user_task = user_program_task_view(program);
+
+    return user_task != NULL && user_program_created(program) &&
+           user_task_enter(user_task);
 }
 
 uintptr_t user_program_value(const user_program_t* program,

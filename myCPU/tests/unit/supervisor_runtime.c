@@ -15,6 +15,9 @@ static uint64_t g_timer_schedule_delta = 0;
 static bool g_auto_deliver_interrupts = false;
 static uint64_t g_auto_deliver_at_mtime = 0;
 static supervisor_runtime_interrupt_state_t* g_delivery_state = NULL;
+static volatile uint32_t* g_auto_counter = NULL;
+static uint32_t g_auto_counter_value = 0;
+static uint64_t g_auto_counter_at_mtime = 0;
 static trap_context_t* g_timer_policy_trap_context = NULL;
 static trap_interrupt_handler_t g_timer_policy_handler = NULL;
 static void* g_timer_policy_context = NULL;
@@ -31,8 +34,11 @@ static void stub_external_post_handler(uint32_t source_id, void* context);
 static int test_bind_self_handlers(void);
 static int test_external_policy_adapter(void);
 static int test_interrupt_policy_adapter(void);
+static int test_counter_wait_helpers(void);
+static int test_uart_and_timer_wait_wrappers(void);
 static int test_schedule_platform_interrupts_success(void);
 static int test_schedule_platform_interrupts_timeout_cleanup(void);
+static int test_wait_timeout_and_cancel(void);
 
 void platform_uart_enable_thre_irq(void) {
     g_uart_enable_calls += 1;
@@ -49,6 +55,9 @@ uint64_t platform_clint_read_mtime(void) {
         value >= g_auto_deliver_at_mtime) {
         g_delivery_state->timer_interrupts = 1U;
         g_delivery_state->external_interrupts = 1U;
+    }
+    if (g_auto_counter != NULL && value >= g_auto_counter_at_mtime) {
+        *g_auto_counter = g_auto_counter_value;
     }
 
     g_mtime = value + 1U;
@@ -99,6 +108,9 @@ static void reset_stub_state(void) {
     g_auto_deliver_interrupts = false;
     g_auto_deliver_at_mtime = 0;
     g_delivery_state = NULL;
+    g_auto_counter = NULL;
+    g_auto_counter_value = 0;
+    g_auto_counter_at_mtime = 0;
     g_timer_policy_trap_context = NULL;
     g_timer_policy_handler = NULL;
     g_timer_policy_context = NULL;
@@ -198,6 +210,72 @@ static int test_interrupt_policy_adapter(void) {
     return 0;
 }
 
+static int test_counter_wait_helpers(void) {
+    uint32_t counter = 1U;
+
+    reset_stub_state();
+    g_auto_counter = &counter;
+    g_auto_counter_value = 2U;
+    g_auto_counter_at_mtime = 2U;
+    if (!supervisor_runtime_wait_for_counter(&counter, 2U, 8U)) {
+        return fail("expected counter wait to observe delivered target");
+    }
+
+    counter = 3U;
+    reset_stub_state();
+    g_auto_counter = &counter;
+    g_auto_counter_value = 4U;
+    g_auto_counter_at_mtime = 1U;
+    if (!supervisor_runtime_wait_for_next_counter(&counter, 1U)) {
+        return fail("expected next-counter wait to observe delivered increment");
+    }
+
+    counter = 0U;
+    reset_stub_state();
+    if (supervisor_runtime_wait_for_counter(&counter, 1U, 1U) ||
+        supervisor_runtime_wait_for_next_counter(NULL, 4U)) {
+        return fail("expected counter wait helpers to reject timeout/null cases");
+    }
+
+    return 0;
+}
+
+static int test_uart_and_timer_wait_wrappers(void) {
+    uint32_t external_counter = 0U;
+    uint32_t timer_counter = 0U;
+
+    reset_stub_state();
+    g_auto_counter = &external_counter;
+    g_auto_counter_value = 1U;
+    g_auto_counter_at_mtime = 1U;
+    if (!supervisor_runtime_enable_uart_thre_and_wait(&external_counter, 8U) ||
+        g_uart_enable_calls != 1 || g_uart_disable_calls != 0) {
+        return fail("expected UART wait wrapper to enable and observe interrupt");
+    }
+
+    reset_stub_state();
+    if (supervisor_runtime_enable_uart_thre_and_wait(&external_counter, 1U) ||
+        g_uart_enable_calls != 1 || g_uart_disable_calls != 1) {
+        return fail("expected UART wait timeout to disable IRQ on failure");
+    }
+
+    reset_stub_state();
+    g_auto_counter = &timer_counter;
+    g_auto_counter_value = 1U;
+    g_auto_counter_at_mtime = 1U;
+    if (!supervisor_runtime_schedule_timer_and_wait(&timer_counter, 6U, 8U) ||
+        g_timer_schedule_calls != 1 || g_timer_schedule_delta != 6U) {
+        return fail("expected timer wait wrapper to schedule requested delta");
+    }
+
+    reset_stub_state();
+    if (supervisor_runtime_schedule_timer_and_wait(&timer_counter, 0U, 4U)) {
+        return fail("expected timer wait wrapper to reject zero timer delta");
+    }
+
+    return 0;
+}
+
 static int test_schedule_platform_interrupts_success(void) {
     supervisor_runtime_interrupt_state_t state;
 
@@ -249,12 +327,30 @@ static int test_schedule_platform_interrupts_timeout_cleanup(void) {
     return 0;
 }
 
+static int test_wait_timeout_and_cancel(void) {
+    reset_stub_state();
+    if (!supervisor_runtime_wait_timeout(2U) ||
+        supervisor_runtime_wait_timeout(0U)) {
+        return fail("expected timeout wait helper to respect zero/non-zero delta");
+    }
+
+    supervisor_runtime_cancel_timer_delivery();
+    if (g_timer_cancel_calls != 1) {
+        return fail("expected timer delivery cancel helper to forward interrupt clear");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_bind_self_handlers() != 0 ||
         test_external_policy_adapter() != 0 ||
         test_interrupt_policy_adapter() != 0 ||
+        test_counter_wait_helpers() != 0 ||
+        test_uart_and_timer_wait_wrappers() != 0 ||
         test_schedule_platform_interrupts_success() != 0 ||
-        test_schedule_platform_interrupts_timeout_cleanup() != 0) {
+        test_schedule_platform_interrupts_timeout_cleanup() != 0 ||
+        test_wait_timeout_and_cancel() != 0) {
         return 1;
     }
 

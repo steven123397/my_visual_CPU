@@ -24,6 +24,8 @@ Thumbs.db
 /myCPU/tests/unit/*
 !/myCPU/tests/unit/*.c
 !/myCPU/tests/unit/*.cpp
+!/myCPU/tests/unit/include/
+!/myCPU/tests/unit/include/*.h
 
 # Logs and coverage
 *.log

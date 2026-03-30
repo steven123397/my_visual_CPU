@@ -81,6 +81,28 @@
 - `tests/host/backend_differential_smoke.cpp` 已新增 `predictable_branch_loop` 差分场景，继续守住 predictor 参与后 `functional vs pipeline` 的 architected 一致性。
 - `DebugSnapshot` / `debug_cli_smoke` 已补 predictor mode / counters / 最近一次预测 / 最近一次 mispredict 字段；`frontend` 现有服务与纯状态测试继续兼容这些 richer snapshot。
 
+## 2026-03-30 补充进展
+
+本轮主线已把 guest runtime 的第一轮结构收口继续推进到 user lifecycle / smoke orchestration 层：
+
+- `guest/kernel/kernel_bringup.c`、`guest/kernel/kernel_runtime.c`、`guest/kernel/vm_address_space.c`、`guest/kernel/vm_process.c`、`guest/kernel/vm_object.c`、`guest/kernel/vm_fault.c`、`guest/kernel/trap.c`、`guest/kernel/trap_dispatch.c`、`guest/kernel/supervisor_runtime.c`、`guest/kernel/user_task.c`、`guest/kernel/user_task_bootstrap.c`、`guest/kernel/user_program.c`、`guest/kernel/user_program_smoke.c` 与 `guest/kernel/supervisor_demo_smoke.c` 已完成一轮更系统的职责收口。
+- 当前收口重点仍是行为不变的结构整理：
+  - lifecycle / binding / rollback helper 下沉
+  - trap / fault / wait / policy adapter 的重复分支收口
+  - smoke prepare / round / platform-tail 的临时组装内聚
+- `Makefile` 已新增并接入以下 host-side 单元门禁：
+  - `test-unit-vm_process`
+  - `test-unit-vm_object`
+  - `test-unit-vm_fault`
+  - `test-unit-trap_runtime`
+  - `test-unit-trap_dispatch`
+  - `test-unit-user_task`
+  - `test-unit-user_task_bootstrap`
+  - `test-unit-user_program`
+  - `test-unit-user_program_smoke`
+- `tests/unit/include/riscv.h` 也已同步补齐 guest/runtime 侧 host build 所需的最小 CSR / trap 常量与 stub 声明，避免为了单元编译去污染真实 guest 路径。
+- 本轮收口后，`make test` 与 `make test-pipeline` 仍保持通过，`guest_supervisor_demo` 输出仍为 `KRN`，`kernel_alpha` 十条基线保持不变。
+
 ## Phase 1 近期主线
 
 当前仍应优先推进的 Phase 1 / post-Phase1 主线工作如下：
@@ -98,7 +120,7 @@
    - `kernel_alpha_storage_bad_command_demo`
    - `kernel_alpha_plic_not_ready_demo`
    - `kernel_alpha_timer_not_ready_demo`
-4. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，尤其守住 `vm*`、`trap*`、`kernel_runtime`、`kernel_bringup` 当前已经形成的边界。
+4. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，尤其守住 `vm*`、`trap*`、`kernel_runtime`、`kernel_bringup`、`user_task*`、`user_program*` 与 `supervisor_demo_smoke` 当前已经形成的边界。
 
 这些工作仍然是近期主线，不应因为 `pipeline` / `debug/frontend` 已接入而被搁置。
 
@@ -185,7 +207,7 @@
 
 1. 先沿 reference path 继续维护已形成闭环的 `privilege / Sv39`、illegal / MMIO / ELF / CSR 合同矩阵，并在新增 bug 出现时补最小持久回归。
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
-3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界。
+3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `vm*`、`trap*`、`supervisor_runtime`、`user_task*`、`user_program*` 与 `supervisor_demo_smoke` 的第一轮收口已经完成，下一块更值得继续推进的是 `interactive_os / monitor / vm_debug`。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
 6. 当前 `Phase 3-A` 第一轮已落地；后续优先维护 `predictor_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 与 `frontend` 透传门禁，再决定是否打开下一轮 predictor hardening 或更远的 `Phase 3-B/C` 设计。

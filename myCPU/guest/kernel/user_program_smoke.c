@@ -67,6 +67,39 @@ static bool smoke_ready(const user_program_smoke_t* smoke) {
            user_program_process(smoke->program) != NULL;
 }
 
+typedef struct UserProgramStandardPlanValues {
+    uintptr_t exec_page_paddr;
+    uintptr_t exec_vaddr;
+    uintptr_t stack_vaddr;
+    uintptr_t alias_vaddr;
+    uintptr_t anon_tail_vaddr;
+    uintptr_t entry_pc;
+    uintptr_t expected_ecall_pc;
+    uintptr_t user_sp;
+} user_program_standard_plan_values_t;
+
+static bool load_standard_plan_values(
+    const user_program_t* program,
+    user_program_standard_plan_values_t* values);
+static bool standard_plan_pages_aligned(
+    const user_program_standard_plan_values_t* values);
+static bool standard_plan_layout_within_user_range(
+    const user_program_standard_plan_values_t* values,
+    uintptr_t user_base,
+    uintptr_t user_limit);
+static bool standard_plan_exec_range_valid(
+    const user_program_standard_plan_values_t* values);
+static bool prepare_args_valid(const user_program_smoke_prepare_t* prepare);
+static bool round_args_valid(const user_program_smoke_round_t* round);
+static bool active_memory_args_valid(
+    const user_program_smoke_t* smoke,
+    uint32_t* backing_page,
+    uint32_t* remap_page,
+    const user_program_smoke_active_phase_t* phase,
+    uintptr_t alias_vaddr,
+    uintptr_t anon_vaddr,
+    uintptr_t anon_tail_vaddr);
+
 static bool reject_invalid_region_paths(user_program_smoke_t* smoke);
 static bool user_program_smoke_validate_runtime_reprepare(
     uintptr_t exec_symbol,
@@ -150,6 +183,12 @@ __attribute__((noinline)) static void provoke_rodata_store_fault(
 __attribute__((noinline)) static void provoke_instruction_page_fault(
     uintptr_t target,
     volatile uintptr_t* fault_resume_pc_slot) {
+#ifdef UNIT_TEST_HOST
+    (void)target;
+    if (fault_resume_pc_slot != NULL) {
+        *fault_resume_pc_slot = 0;
+    }
+#else
     __asm__ volatile(
         "la t0, 1f\n"
         "sd t0, 0(%1)\n"
@@ -159,6 +198,7 @@ __attribute__((noinline)) static void provoke_instruction_page_fault(
         :
         : "r"(target), "r"(fault_resume_pc_slot)
         : "t0", "ra", "memory");
+#endif
 }
 
 static bool reject_invalid_kernel_mapping_paths(user_program_t* program,
@@ -353,40 +393,106 @@ bool user_program_smoke_plan_standard(user_program_t* program,
 bool user_program_smoke_validate_standard_plan(const user_program_t* program,
                                                uintptr_t user_base,
                                                uintptr_t user_limit) {
-    const uintptr_t user_exec_page_paddr =
-        user_program_value(program, USER_PROGRAM_VALUE_EXEC_PAGE_PADDR);
-    const uintptr_t user_exec_vaddr =
-        user_program_value(program, USER_PROGRAM_VALUE_EXEC_VADDR);
-    const uintptr_t user_stack_vaddr =
-        user_program_value(program, USER_PROGRAM_VALUE_STACK_VADDR);
-    const uintptr_t user_alias_vaddr =
-        user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR);
-    const uintptr_t user_anon_tail_vaddr =
-        user_program_value(program, USER_PROGRAM_VALUE_ANON_TAIL_VADDR);
-    const uintptr_t user_entry_pc =
-        user_program_value(program, USER_PROGRAM_VALUE_ENTRY_PC);
-    const uintptr_t user_expected_ecall_pc =
-        user_program_value(program, USER_PROGRAM_VALUE_EXPECTED_ECALL_PC);
-    const uintptr_t user_sp =
-        user_program_value(program, USER_PROGRAM_VALUE_USER_SP);
+    user_program_standard_plan_values_t values = {0};
 
-    return program != NULL && user_base == 0 &&
+    return load_standard_plan_values(program, &values) && user_base == 0 &&
            user_limit == memory_kernel_start() &&
-           user_anon_tail_vaddr < user_limit &&
-           user_stack_vaddr >= user_base && user_stack_vaddr < user_limit &&
-           user_exec_vaddr >= user_base && user_exec_vaddr < user_limit &&
-           user_alias_vaddr >= user_base && user_alias_vaddr < user_limit &&
-           (user_alias_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           (user_anon_tail_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           (user_stack_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           (user_exec_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           user_sp == user_stack_vaddr + MEMORY_PAGE_SIZE &&
-           user_exec_page_paddr >= memory_text_start() &&
-           user_exec_page_paddr < memory_text_end() &&
-           user_entry_pc >= user_exec_vaddr &&
-           user_entry_pc < user_exec_vaddr + MEMORY_PAGE_SIZE &&
-           user_expected_ecall_pc >= user_exec_vaddr &&
-           user_expected_ecall_pc < user_exec_vaddr + MEMORY_PAGE_SIZE;
+           standard_plan_layout_within_user_range(&values, user_base, user_limit) &&
+           standard_plan_pages_aligned(&values) &&
+           values.user_sp == values.stack_vaddr + MEMORY_PAGE_SIZE &&
+           standard_plan_exec_range_valid(&values);
+}
+
+static bool load_standard_plan_values(
+    const user_program_t* program,
+    user_program_standard_plan_values_t* values) {
+    if (program == NULL || values == NULL) {
+        return false;
+    }
+
+    values->exec_page_paddr =
+        user_program_value(program, USER_PROGRAM_VALUE_EXEC_PAGE_PADDR);
+    values->exec_vaddr = user_program_value(program, USER_PROGRAM_VALUE_EXEC_VADDR);
+    values->stack_vaddr =
+        user_program_value(program, USER_PROGRAM_VALUE_STACK_VADDR);
+    values->alias_vaddr =
+        user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR);
+    values->anon_tail_vaddr =
+        user_program_value(program, USER_PROGRAM_VALUE_ANON_TAIL_VADDR);
+    values->entry_pc = user_program_value(program, USER_PROGRAM_VALUE_ENTRY_PC);
+    values->expected_ecall_pc =
+        user_program_value(program, USER_PROGRAM_VALUE_EXPECTED_ECALL_PC);
+    values->user_sp = user_program_value(program, USER_PROGRAM_VALUE_USER_SP);
+    return true;
+}
+
+static bool standard_plan_pages_aligned(
+    const user_program_standard_plan_values_t* values) {
+    return values != NULL &&
+           (values->alias_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           (values->anon_tail_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           (values->stack_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
+           (values->exec_vaddr & (MEMORY_PAGE_SIZE - 1U)) == 0;
+}
+
+static bool standard_plan_layout_within_user_range(
+    const user_program_standard_plan_values_t* values,
+    uintptr_t user_base,
+    uintptr_t user_limit) {
+    return values != NULL && values->anon_tail_vaddr < user_limit &&
+           values->stack_vaddr >= user_base &&
+           values->stack_vaddr < user_limit &&
+           values->exec_vaddr >= user_base && values->exec_vaddr < user_limit &&
+           values->alias_vaddr >= user_base &&
+           values->alias_vaddr < user_limit;
+}
+
+static bool standard_plan_exec_range_valid(
+    const user_program_standard_plan_values_t* values) {
+    return values != NULL &&
+           values->exec_page_paddr >= memory_text_start() &&
+           values->exec_page_paddr < memory_text_end() &&
+           values->entry_pc >= values->exec_vaddr &&
+           values->entry_pc < values->exec_vaddr + MEMORY_PAGE_SIZE &&
+           values->expected_ecall_pc >= values->exec_vaddr &&
+           values->expected_ecall_pc < values->exec_vaddr + MEMORY_PAGE_SIZE;
+}
+
+static bool prepare_args_valid(const user_program_smoke_prepare_t* prepare) {
+    return prepare != NULL && prepare->trap_context != NULL &&
+           prepare->backing_page_paddr != 0 &&
+           prepare->user_stack_paddr != 0 &&
+           prepare->remap_page_paddr != 0 && prepare->fault_skip_vaddr != 0 &&
+           prepare->fault_skip_size != 0 &&
+           prepare->fault_resume_vaddr != 0 &&
+           prepare->fault_resume_size != 0 &&
+           prepare->fault_resume_pc_slot != NULL &&
+           prepare->trap_stack_base != NULL &&
+           prepare->trap_stack_size != 0;
+}
+
+static bool round_args_valid(const user_program_smoke_round_t* round) {
+    return round != NULL && round->timer_signal_page != NULL &&
+           round->timer_delta != 0;
+}
+
+static bool active_memory_args_valid(
+    const user_program_smoke_t* smoke,
+    uint32_t* backing_page,
+    uint32_t* remap_page,
+    const user_program_smoke_active_phase_t* phase,
+    uintptr_t alias_vaddr,
+    uintptr_t anon_vaddr,
+    uintptr_t anon_tail_vaddr) {
+    return smoke_ready(smoke) && user_program_is_active(smoke->program) &&
+           backing_page != NULL && remap_page != NULL && phase != NULL &&
+           phase->rodata_marker != NULL &&
+           phase->instruction_fault_target != 0 &&
+           phase->fault_resume_pc_slot != NULL &&
+           (riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0 &&
+           vm_range_is_user(alias_vaddr, MEMORY_PAGE_SIZE) &&
+           vm_range_is_user(anon_vaddr, MEMORY_PAGE_SIZE) &&
+           vm_range_is_user(anon_tail_vaddr, MEMORY_PAGE_SIZE);
 }
 
 bool user_program_smoke_validate_vm_lifecycle(uintptr_t user_region_vaddr,
@@ -733,14 +839,7 @@ cleanup:
 bool user_program_smoke_prepare_standard(user_program_smoke_t* smoke,
                                          user_program_t* program,
                                          const user_program_smoke_prepare_t* prepare) {
-    if (smoke == NULL || program == NULL || prepare == NULL ||
-        prepare->trap_context == NULL || prepare->backing_page_paddr == 0 ||
-        prepare->user_stack_paddr == 0 || prepare->remap_page_paddr == 0 ||
-        prepare->fault_skip_vaddr == 0 || prepare->fault_skip_size == 0 ||
-        prepare->fault_resume_vaddr == 0 ||
-        prepare->fault_resume_size == 0 ||
-        prepare->fault_resume_pc_slot == NULL ||
-        prepare->trap_stack_base == NULL || prepare->trap_stack_size == 0) {
+    if (smoke == NULL || program == NULL || !prepare_args_valid(prepare)) {
         return false;
     }
 
@@ -952,8 +1051,7 @@ bool user_program_smoke_deactivate_supervisor_only(
 
 bool user_program_smoke_enter_round(user_program_smoke_t* smoke,
                                     const user_program_smoke_round_t* round) {
-    if (!smoke_ready(smoke) || round == NULL || round->timer_signal_page == NULL ||
-        round->timer_delta == 0) {
+    if (!smoke_ready(smoke) || !round_args_valid(round)) {
         return false;
     }
 
@@ -1029,14 +1127,13 @@ bool user_program_smoke_exercise_active_memory(
     uint32_t* anon_tail_page = NULL;
     const uint32_t backing_word0 = backing_page != NULL ? backing_page[0] : 0;
 
-    if (!smoke_ready(smoke) || !user_program_is_active(smoke->program) ||
-        backing_page == NULL || remap_page == NULL || phase == NULL ||
-        phase->rodata_marker == NULL || phase->instruction_fault_target == 0 ||
-        phase->fault_resume_pc_slot == NULL ||
-        (riscv_read_sstatus() & RISCV_SSTATUS_SUM) == 0 ||
-        !vm_range_is_user(alias_vaddr, MEMORY_PAGE_SIZE) ||
-        !vm_range_is_user(anon_vaddr, MEMORY_PAGE_SIZE) ||
-        !vm_range_is_user(anon_tail_vaddr, MEMORY_PAGE_SIZE)) {
+    if (!active_memory_args_valid(smoke,
+                                  backing_page,
+                                  remap_page,
+                                  phase,
+                                  alias_vaddr,
+                                  anon_vaddr,
+                                  anon_tail_vaddr)) {
         return false;
     }
 

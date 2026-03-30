@@ -84,6 +84,40 @@ static bool handle_user_external_signal(trap_context_t* trap_context) {
     return true;
 }
 
+static void dispatch_installed_exception(const trap_context_t* trap_context,
+                                         uint64_t cause,
+                                         uint64_t epc,
+                                         uint64_t tval) {
+    const trap_exception_handler_entry_t* exception_entry = NULL;
+
+    if (trap_context == NULL || cause >= TRAP_MAX_EXCEPTION_CAUSE) {
+        panic_shutdown();
+    }
+
+    exception_entry = &trap_context->exception_handlers[cause];
+    if (exception_entry->handler == 0) {
+        panic_shutdown();
+    }
+
+    exception_entry->handler(cause, epc, tval, exception_entry->context);
+}
+
+static void dispatch_installed_interrupt(const trap_context_t* trap_context,
+                                         uint64_t cause) {
+    const trap_interrupt_handler_entry_t* entry = NULL;
+
+    if (trap_context == NULL || cause >= TRAP_MAX_INTERRUPT_CAUSE) {
+        panic_shutdown();
+    }
+
+    entry = &trap_context->interrupt_handlers[cause];
+    if (entry->handler == 0) {
+        panic_shutdown();
+    }
+
+    entry->handler(cause, entry->context);
+}
+
 static void default_supervisor_timer_handler(uint64_t cause, void* context) {
     trap_context_t* trap_context = (trap_context_t*)context;
 
@@ -336,8 +370,6 @@ void supervisor_trap_dispatch(void) {
     const uint64_t scause = riscv_read_scause();
     const uint64_t cause = scause & ~RISCV_INTERRUPT_BIT;
     const trap_context_t* trap_context = runtime_context_active_trap_context();
-    const trap_interrupt_handler_entry_t* entry = 0;
-    const trap_exception_handler_entry_t* exception_entry = 0;
 
     if (trap_context == NULL) {
         panic_shutdown();
@@ -346,10 +378,6 @@ void supervisor_trap_dispatch(void) {
     if ((scause & RISCV_INTERRUPT_BIT) == 0) {
         const uint64_t epc = riscv_read_sepc();
         const uint64_t tval = riscv_read_stval();
-
-        if (cause >= TRAP_MAX_EXCEPTION_CAUSE) {
-            panic_shutdown();
-        }
 
         if (is_page_fault_cause(cause) &&
             vm_handle_page_fault(runtime_context_active_process(),
@@ -360,22 +388,9 @@ void supervisor_trap_dispatch(void) {
             return;
         }
 
-        exception_entry = &trap_context->exception_handlers[cause];
-        if (exception_entry->handler == 0) {
-            panic_shutdown();
-        }
-
-        exception_entry->handler(cause, epc, tval, exception_entry->context);
+        dispatch_installed_exception(trap_context, cause, epc, tval);
         return;
     }
 
-    if (cause >= TRAP_MAX_INTERRUPT_CAUSE) {
-        panic_shutdown();
-    }
-
-    entry = &trap_context->interrupt_handlers[cause];
-    if (entry->handler == 0) {
-        panic_shutdown();
-    }
-    entry->handler(cause, entry->context);
+    dispatch_installed_interrupt(trap_context, cause);
 }

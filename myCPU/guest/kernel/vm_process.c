@@ -22,6 +22,40 @@ static vm_user_region_t** find_free_process_region_slot(vm_process_t* process) {
     return NULL;
 }
 
+static void clear_process_region_slots(vm_process_t* process) {
+    size_t i = 0;
+
+    if (process == NULL) {
+        return;
+    }
+
+    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
+        process->user_regions[i] = NULL;
+    }
+}
+
+static bool process_is_clean(const vm_process_t* process) {
+    size_t i = 0;
+
+    if (process == NULL || process->address_space != NULL || process->entry_pc != 0 ||
+        process->user_sp != 0) {
+        return false;
+    }
+
+    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
+        if (process->user_regions[i] != NULL) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool process_has_address_space(const vm_process_t* process) {
+    return process != NULL && process->address_space != NULL &&
+           vm_address_space_root_table(process->address_space) != 0;
+}
+
 static vm_user_region_t** find_process_region_slot(vm_process_t* process,
                                                    const vm_user_region_t* region) {
     size_t i = 0;
@@ -97,6 +131,21 @@ static void clear_region_descriptor(vm_user_region_t* region) {
     region->object_mode = VM_REGION_OBJECT_NONE;
 }
 
+static void clear_process_context_if_region_contains(vm_process_t* process,
+                                                     const vm_user_region_t* region) {
+    if (process == NULL || region == NULL) {
+        return;
+    }
+
+    if (vm_user_region_contains(region, process->entry_pc, 1U)) {
+        process->entry_pc = 0;
+    }
+    if (process->user_sp > 0 &&
+        vm_user_region_contains(region, process->user_sp - 1U, 1U)) {
+        process->user_sp = 0;
+    }
+}
+
 static bool process_bind_object_region(vm_process_t* process,
                                        vm_user_region_t* region,
                                        uintptr_t vaddr,
@@ -129,28 +178,78 @@ static bool process_bind_object_region(vm_process_t* process,
     return false;
 }
 
-bool vm_process_create(vm_process_t* process, vm_address_space_t* address_space) {
-    size_t i = 0;
-
-    if (process == NULL || address_space == NULL ||
-        vm_address_space_root_table(address_space) == 0 ||
-        process->address_space != NULL || process->entry_pc != 0 ||
-        process->user_sp != 0) {
+static bool process_bind_region_from_binding(
+    vm_process_t* process,
+    const vm_process_user_region_binding_t* binding) {
+    if (process == NULL || binding == NULL || binding->region == NULL ||
+        binding->object == NULL) {
         return false;
     }
 
-    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
-        if (process->user_regions[i] != NULL) {
+    switch (binding->object_mode) {
+    case VM_REGION_OBJECT_MAPPED:
+        return process_bind_object_region(process,
+                                          binding->region,
+                                          binding->vaddr,
+                                          binding->size,
+                                          binding->flags,
+                                          binding->object,
+                                          binding->object_offset,
+                                          true);
+    case VM_REGION_OBJECT_FAULT:
+        return process_bind_object_region(process,
+                                          binding->region,
+                                          binding->vaddr,
+                                          binding->size,
+                                          binding->flags,
+                                          binding->object,
+                                          binding->object_offset,
+                                          false);
+    default:
+        return false;
+    }
+}
+
+static bool rollback_bound_regions(vm_process_t* process,
+                                   vm_user_region_t** bound_regions,
+                                   size_t bound_count) {
+    while (bound_count > 0) {
+        bound_count -= 1;
+        if (!vm_process_remove_user_region(process, bound_regions[bound_count])) {
             return false;
         }
+    }
+
+    return true;
+}
+
+static bool process_context_valid(const vm_process_t* process,
+                                  uintptr_t entry_pc,
+                                  uintptr_t user_sp) {
+    return process_has_address_space(process) &&
+           vm_range_is_user(entry_pc, 1U) &&
+           user_sp > vm_user_base() &&
+           user_sp <= vm_user_limit() &&
+           find_process_region_containing(process,
+                                          entry_pc,
+                                          1U,
+                                          VM_PAGE_EXEC | VM_PAGE_USER) != NULL &&
+           find_process_region_containing(process,
+                                          user_sp - 1U,
+                                          1U,
+                                          VM_PAGE_WRITE | VM_PAGE_USER) != NULL;
+}
+
+bool vm_process_create(vm_process_t* process, vm_address_space_t* address_space) {
+    if (process == NULL || address_space == NULL ||
+        vm_address_space_root_table(address_space) == 0 || !process_is_clean(process)) {
+        return false;
     }
 
     process->address_space = address_space;
     process->entry_pc = 0;
     process->user_sp = 0;
-    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
-        process->user_regions[i] = NULL;
-    }
+    clear_process_region_slots(process);
 
     return true;
 }
@@ -187,13 +286,7 @@ bool vm_process_remove_user_region(vm_process_t* process,
     }
 
     *process_slot = NULL;
-    if (vm_user_region_contains(region, process->entry_pc, 1U)) {
-        process->entry_pc = 0;
-    }
-    if (process->user_sp > 0 &&
-        vm_user_region_contains(region, process->user_sp - 1U, 1U)) {
-        process->user_sp = 0;
-    }
+    clear_process_context_if_region_contains(process, region);
     clear_region_descriptor(region);
     return true;
 }
@@ -221,9 +314,7 @@ bool vm_process_reset(vm_process_t* process) {
     process->address_space = NULL;
     process->entry_pc = 0;
     process->user_sp = 0;
-    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
-        process->user_regions[i] = NULL;
-    }
+    clear_process_region_slots(process);
 
     return true;
 }
@@ -272,37 +363,7 @@ bool vm_process_bind_user_regions(
     while (i < binding_count) {
         const vm_process_user_region_binding_t* binding = &bindings[i];
 
-        if (binding->region == NULL || binding->object == NULL) {
-            ok = false;
-            break;
-        }
-
-        switch (binding->object_mode) {
-        case VM_REGION_OBJECT_MAPPED:
-            ok = process_bind_object_region(process,
-                                            binding->region,
-                                            binding->vaddr,
-                                            binding->size,
-                                            binding->flags,
-                                            binding->object,
-                                            binding->object_offset,
-                                            true);
-            break;
-        case VM_REGION_OBJECT_FAULT:
-            ok = process_bind_object_region(process,
-                                            binding->region,
-                                            binding->vaddr,
-                                            binding->size,
-                                            binding->flags,
-                                            binding->object,
-                                            binding->object_offset,
-                                            false);
-            break;
-        default:
-            ok = false;
-            break;
-        }
-
+        ok = process_bind_region_from_binding(process, binding);
         if (!ok) {
             break;
         }
@@ -315,14 +376,7 @@ bool vm_process_bind_user_regions(
         return true;
     }
 
-    while (bound_count > 0) {
-        bound_count -= 1;
-        if (!vm_process_remove_user_region(process, bound_regions[bound_count])) {
-            return false;
-        }
-    }
-
-    return false;
+    return rollback_bound_regions(process, bound_regions, bound_count) && false;
 }
 
 bool vm_process_map_object_region_at(vm_process_t* process,
@@ -392,18 +446,7 @@ bool vm_process_set_fault_object_region(vm_process_t* process,
 bool vm_process_set_user_context(vm_process_t* process,
                                  uintptr_t entry_pc,
                                  uintptr_t user_sp) {
-    if (process == NULL || process->address_space == NULL ||
-        vm_address_space_root_table(process->address_space) == 0 ||
-        !vm_range_is_user(entry_pc, 1U) || user_sp <= vm_user_base() ||
-        user_sp > vm_user_limit() ||
-        find_process_region_containing(process,
-                                       entry_pc,
-                                       1U,
-                                       VM_PAGE_EXEC | VM_PAGE_USER) == NULL ||
-        find_process_region_containing(process,
-                                       user_sp - 1U,
-                                       1U,
-                                       VM_PAGE_WRITE | VM_PAGE_USER) == NULL) {
+    if (!process_context_valid(process, entry_pc, user_sp)) {
         return false;
     }
 
@@ -413,16 +456,5 @@ bool vm_process_set_user_context(vm_process_t* process,
 }
 
 bool vm_process_is_runnable(const vm_process_t* process) {
-    return process != NULL && process->address_space != NULL &&
-           vm_address_space_root_table(process->address_space) != 0 &&
-           find_process_region_containing(process,
-                                          process->entry_pc,
-                                          1U,
-                                          VM_PAGE_EXEC | VM_PAGE_USER) != NULL &&
-           process->user_sp > vm_user_base() &&
-           process->user_sp <= vm_user_limit() &&
-           find_process_region_containing(process,
-                                          process->user_sp - 1U,
-                                          1U,
-                                          VM_PAGE_WRITE | VM_PAGE_USER) != NULL;
+    return process_context_valid(process, process->entry_pc, process->user_sp);
 }

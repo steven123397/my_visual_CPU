@@ -51,6 +51,26 @@ static void supervisor_demo_smoke_init(supervisor_demo_smoke_state_t* state,
                                        uint32_t expected_user_data,
                                        uint32_t expected_user_timer,
                                        uint32_t expected_user_external);
+static bool supervisor_demo_smoke_pages_ready(
+    const supervisor_demo_smoke_pages_t* pages);
+static bool supervisor_demo_smoke_state_ready(
+    const supervisor_demo_smoke_state_t* state);
+static user_program_smoke_prepare_t supervisor_demo_smoke_build_prepare(
+    supervisor_demo_smoke_state_t* state,
+    user_program_t* program,
+    trap_context_t* trap_context,
+    const supervisor_demo_smoke_pages_t* pages,
+    const volatile uint32_t* rodata_marker,
+    volatile uintptr_t* fault_resume_pc_slot);
+static user_program_smoke_round_t supervisor_demo_smoke_build_round(
+    trap_context_t* expected_trap_context,
+    uint32_t* timer_signal_page,
+    size_t timer_signal_index,
+    uint32_t timer_signal_value,
+    uint32_t* external_signal_page,
+    size_t external_signal_index,
+    uint32_t external_signal_value,
+    uint64_t timer_delta);
 static void supervisor_demo_smoke_init_active_phase(
     user_program_smoke_active_phase_t* phase,
     const volatile uint32_t* rodata_marker,
@@ -156,6 +176,76 @@ static void supervisor_demo_smoke_init(supervisor_demo_smoke_state_t* state,
     state->expected_user_data = expected_user_data;
     state->expected_user_timer = expected_user_timer;
     state->expected_user_external = expected_user_external;
+}
+
+static bool supervisor_demo_smoke_pages_ready(
+    const supervisor_demo_smoke_pages_t* pages) {
+    return pages != NULL && pages->backing_page != NULL &&
+           pages->remap_page != NULL && pages->nx_page != NULL &&
+           pages->user_stack_page != NULL &&
+           pages->user_trap_stack_page != NULL;
+}
+
+static bool supervisor_demo_smoke_state_ready(
+    const supervisor_demo_smoke_state_t* state) {
+    return state != NULL && state->user_data_page != NULL;
+}
+
+static user_program_smoke_prepare_t supervisor_demo_smoke_build_prepare(
+    supervisor_demo_smoke_state_t* state,
+    user_program_t* program,
+    trap_context_t* trap_context,
+    const supervisor_demo_smoke_pages_t* pages,
+    const volatile uint32_t* rodata_marker,
+    volatile uintptr_t* fault_resume_pc_slot) {
+    const user_program_smoke_prepare_t prepare = {
+        .trap_context = trap_context,
+        .backing_page_paddr = pages != NULL ? (uintptr_t)pages->backing_page : 0,
+        .user_stack_paddr = pages != NULL ? (uintptr_t)pages->user_stack_page : 0,
+        .remap_page_paddr = pages != NULL ? (uintptr_t)pages->remap_page : 0,
+        .fault_skip_vaddr = (uintptr_t)rodata_marker,
+        .fault_skip_size = rodata_marker != NULL ? sizeof(*rodata_marker) : 0,
+        .fault_resume_vaddr = pages != NULL ? (uintptr_t)pages->nx_page : 0,
+        .fault_resume_size = MEMORY_PAGE_SIZE,
+        .fault_resume_pc_slot = fault_resume_pc_slot,
+        .arg0 = user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR),
+        .trap_stack_base = pages != NULL ? pages->user_trap_stack_page : NULL,
+        .trap_stack_size = MEMORY_PAGE_SIZE,
+        .validate = supervisor_demo_smoke_user_ecall_validate,
+        .validate_context = state,
+        .supervisor_timer_post_handler =
+            supervisor_runtime_timer_counter_post_handler,
+        .supervisor_timer_post_context = state != NULL ? &state->interrupts : NULL,
+        .supervisor_external_post_handler =
+            supervisor_runtime_external_counter_post_handler,
+        .supervisor_external_post_context =
+            state != NULL ? &state->interrupts : NULL,
+    };
+
+    return prepare;
+}
+
+static user_program_smoke_round_t supervisor_demo_smoke_build_round(
+    trap_context_t* expected_trap_context,
+    uint32_t* timer_signal_page,
+    size_t timer_signal_index,
+    uint32_t timer_signal_value,
+    uint32_t* external_signal_page,
+    size_t external_signal_index,
+    uint32_t external_signal_value,
+    uint64_t timer_delta) {
+    const user_program_smoke_round_t round = {
+        .expected_trap_context = expected_trap_context,
+        .timer_signal_page = timer_signal_page,
+        .timer_signal_index = timer_signal_index,
+        .timer_signal_value = timer_signal_value,
+        .external_signal_page = external_signal_page,
+        .external_signal_index = external_signal_index,
+        .external_signal_value = external_signal_value,
+        .timer_delta = timer_delta,
+    };
+
+    return round;
 }
 
 static void supervisor_demo_smoke_init_active_phase(
@@ -276,9 +366,7 @@ static bool supervisor_demo_smoke_validate_user_program_lifecycle(
     uintptr_t exec_symbol,
     uintptr_t ecall_symbol,
     const supervisor_demo_smoke_pages_t* pages) {
-    return trap_context != NULL && pages != NULL &&
-           pages->backing_page != NULL && pages->user_stack_page != NULL &&
-           pages->user_trap_stack_page != NULL &&
+    return trap_context != NULL && supervisor_demo_smoke_pages_ready(pages) &&
            user_program_smoke_validate_lifecycle(
                trap_context,
                exec_symbol,
@@ -353,33 +441,16 @@ static bool supervisor_demo_smoke_prepare_user_program(
     const supervisor_demo_smoke_pages_t* pages,
     const volatile uint32_t* rodata_marker,
     volatile uintptr_t* fault_resume_pc_slot) {
-    const user_program_smoke_prepare_t prepare = {
-        .trap_context = trap_context,
-        .backing_page_paddr = (uintptr_t)pages->backing_page,
-        .user_stack_paddr = (uintptr_t)pages->user_stack_page,
-        .remap_page_paddr = (uintptr_t)pages->remap_page,
-        .fault_skip_vaddr = (uintptr_t)rodata_marker,
-        .fault_skip_size = sizeof(*rodata_marker),
-        .fault_resume_vaddr = (uintptr_t)pages->nx_page,
-        .fault_resume_size = MEMORY_PAGE_SIZE,
-        .fault_resume_pc_slot = fault_resume_pc_slot,
-        .arg0 = user_program_value(program, USER_PROGRAM_VALUE_ALIAS_VADDR),
-        .trap_stack_base = pages->user_trap_stack_page,
-        .trap_stack_size = MEMORY_PAGE_SIZE,
-        .validate = supervisor_demo_smoke_user_ecall_validate,
-        .validate_context = state,
-        .supervisor_timer_post_handler =
-            supervisor_runtime_timer_counter_post_handler,
-        .supervisor_timer_post_context = &state->interrupts,
-        .supervisor_external_post_handler =
-            supervisor_runtime_external_counter_post_handler,
-        .supervisor_external_post_context = &state->interrupts,
-    };
+    const user_program_smoke_prepare_t prepare =
+        supervisor_demo_smoke_build_prepare(state,
+                                            program,
+                                            trap_context,
+                                            pages,
+                                            rodata_marker,
+                                            fault_resume_pc_slot);
 
     if (state == NULL || program == NULL || smoke == NULL ||
-        trap_context == NULL || pages == NULL || pages->backing_page == NULL ||
-        pages->remap_page == NULL || pages->nx_page == NULL ||
-        pages->user_stack_page == NULL || pages->user_trap_stack_page == NULL ||
+        trap_context == NULL || !supervisor_demo_smoke_pages_ready(pages) ||
         rodata_marker == NULL || fault_resume_pc_slot == NULL) {
         return false;
     }
@@ -389,7 +460,7 @@ static bool supervisor_demo_smoke_prepare_user_program(
 
 static bool supervisor_demo_smoke_prepare_user_entry(
     supervisor_demo_smoke_state_t* state) {
-    if (state == NULL || state->user_data_page == NULL) {
+    if (!supervisor_demo_smoke_state_ready(state)) {
         return false;
     }
 
@@ -413,16 +484,15 @@ static bool supervisor_demo_smoke_run_user_round(
     size_t external_signal_index,
     uint32_t external_signal_value,
     uint64_t timer_delta) {
-    const user_program_smoke_round_t round = {
-        .expected_trap_context = expected_trap_context,
-        .timer_signal_page = timer_signal_page,
-        .timer_signal_index = timer_signal_index,
-        .timer_signal_value = timer_signal_value,
-        .external_signal_page = external_signal_page,
-        .external_signal_index = external_signal_index,
-        .external_signal_value = external_signal_value,
-        .timer_delta = timer_delta,
-    };
+    const user_program_smoke_round_t round = supervisor_demo_smoke_build_round(
+        expected_trap_context,
+        timer_signal_page,
+        timer_signal_index,
+        timer_signal_value,
+        external_signal_page,
+        external_signal_index,
+        external_signal_value,
+        timer_delta);
 
     if (state == NULL || smoke == NULL || expected_trap_context == NULL ||
         user_runtime == NULL || timer_signal_page == NULL || timer_delta == 0 ||

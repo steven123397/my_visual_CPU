@@ -55,6 +55,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `kernel_runtime.c`：最小 kernel runtime 对象，承接 `trap_context` / `address_space` / `interrupt_state`，并负责 common bring-up options 的 runtime/self-context 装配，避免 bring-up 入口继续裸拼三件套
 - `supervisor_runtime.c`：`kernel_alpha` 与 `supervisor_demo_smoke` 共享的 supervisor bring-up interrupt state、self-bound contract、policy adapter、delivery / deadline wait 最小编排
 - `user_task.c` / `user_task_bootstrap.c` / `user_program.c`：标准用户生命周期装配
+- `user_program_smoke.c`：标准用户 smoke 编排 helper，当前收口 standard plan 校验、prepare、active memory 与 enter round 最小 orchestration
+- `supervisor_demo_smoke.c`：`guest_supervisor_demo` 的最小 `KRN` bring-up orchestration，当前复用 `user_program_smoke` 与 `supervisor_runtime`，不再散落手写 lifecycle / prepare / platform tail
 
 ### 入口与编排层：`supervisor_demo` / `kernel_alpha` / `interactive_os`
 
@@ -255,6 +257,24 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   当前承载 fault policy / action 与 page-fault dispatch。
 - [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c)
   已拆出 `trap_dispatch.c`，但后续仍要继续守住两侧边界不要重新耦合。
+- [kernel/user_task.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_task.c)、[kernel/user_task_bootstrap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_task_bootstrap.c) 和 [kernel/user_program.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_program.c)
+  当前已经完成第一轮 lifecycle / plan / binding 收口，并新增 `test-unit-user_task`、`test-unit-user_task_bootstrap` 与 `test-unit-user_program` host-side 门禁；后续仍要避免回退到零散 wrapper 和重复 rollback 分支。
+- [kernel/user_program_smoke.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_program_smoke.c) 和 [kernel/supervisor_demo_smoke.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/supervisor_demo_smoke.c)
+  当前已经完成第一轮 smoke orchestration helper 收口，并新增 `test-unit-user_program_smoke`；后续仍要避免把 prepare / round / active-memory / platform-tail 再重新写散。
+- 当前 guest runtime 结构收口的 host-side 单元门禁，至少已经覆盖：
+  - `test-unit-kernel_bringup`
+  - `test-unit-kernel_runtime`
+  - `test-unit-vm_address_space`
+  - `test-unit-vm_process`
+  - `test-unit-vm_object`
+  - `test-unit-vm_fault`
+  - `test-unit-trap_runtime`
+  - `test-unit-trap_dispatch`
+  - `test-unit-supervisor_runtime`
+  - `test-unit-user_task`
+  - `test-unit-user_task_bootstrap`
+  - `test-unit-user_program`
+  - `test-unit-user_program_smoke`
 - 当前实现还有一批阶段性固定上限：
   - `VM_MAX_ADDRESS_SPACES`
   - `VM_MAX_USER_REGIONS`

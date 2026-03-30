@@ -19,13 +19,59 @@ static void clear_object_descriptor(vm_object_t* object) {
     object->backing.anon.page_count = 0;
 }
 
+static bool resolve_physical_object_page(const vm_object_t* object,
+                                         size_t offset,
+                                         uintptr_t* out_paddr) {
+    if (object == NULL || out_paddr == NULL) {
+        return false;
+    }
+
+    *out_paddr = object->backing.physical.base_paddr + (uintptr_t)offset;
+    return true;
+}
+
+static bool resolve_anon_object_page(vm_object_t* object,
+                                     size_t offset,
+                                     bool create,
+                                     uintptr_t* out_paddr) {
+    size_t page_index = 0;
+    void* page = NULL;
+
+    if (object == NULL || out_paddr == NULL) {
+        return false;
+    }
+
+    page_index = offset / MEMORY_PAGE_SIZE;
+    if (page_index >= object->backing.anon.page_count) {
+        return false;
+    }
+
+    if (object->backing.anon.page_slots[page_index] == 0) {
+        if (!create) {
+            return false;
+        }
+
+        page = alloc_zeroed_page();
+        if (page == NULL) {
+            return false;
+        }
+
+        object->backing.anon.page_slots[page_index] = (uintptr_t)page;
+    }
+
+    if ((object->backing.anon.page_slots[page_index] &
+         (MEMORY_PAGE_SIZE - 1U)) != 0) {
+        return false;
+    }
+
+    *out_paddr = object->backing.anon.page_slots[page_index];
+    return true;
+}
+
 bool object_resolve_page(vm_object_t* object,
                          size_t offset,
                          bool create,
                          uintptr_t* out_paddr) {
-    size_t page_index = 0;
-    void* page = NULL;
-
     if (!object_descriptor_valid(object) || out_paddr == NULL ||
         offset >= object->size ||
         (offset & (MEMORY_PAGE_SIZE - 1U)) != 0) {
@@ -34,34 +80,9 @@ bool object_resolve_page(vm_object_t* object,
 
     switch (object->backing_kind) {
     case VM_OBJECT_BACKING_PHYSICAL:
-        *out_paddr = object->backing.physical.base_paddr + (uintptr_t)offset;
-        return true;
+        return resolve_physical_object_page(object, offset, out_paddr);
     case VM_OBJECT_BACKING_ANON:
-        page_index = offset / MEMORY_PAGE_SIZE;
-        if (page_index >= object->backing.anon.page_count) {
-            return false;
-        }
-
-        if (object->backing.anon.page_slots[page_index] == 0) {
-            if (!create) {
-                return false;
-            }
-
-            page = alloc_zeroed_page();
-            if (page == NULL) {
-                return false;
-            }
-
-            object->backing.anon.page_slots[page_index] = (uintptr_t)page;
-        }
-
-        if ((object->backing.anon.page_slots[page_index] &
-             (MEMORY_PAGE_SIZE - 1U)) != 0) {
-            return false;
-        }
-
-        *out_paddr = object->backing.anon.page_slots[page_index];
-        return true;
+        return resolve_anon_object_page(object, offset, create, out_paddr);
     default:
         return false;
     }
@@ -159,9 +180,31 @@ bool map_region_object_pages(vm_user_region_t* region,
     return true;
 }
 
-bool vm_object_reset(vm_object_t* object) {
+static bool release_anon_object_pages(vm_object_t* object) {
     size_t i = 0;
 
+    if (object == NULL) {
+        return false;
+    }
+
+    for (i = 0; i < object->backing.anon.page_count; ++i) {
+        const uintptr_t page = object->backing.anon.page_slots[i];
+
+        if (page == 0) {
+            continue;
+        }
+
+        if (!pmm_free_page((void*)page)) {
+            return false;
+        }
+
+        object->backing.anon.page_slots[i] = 0;
+    }
+
+    return pmm_free_page(object->backing.anon.page_slots);
+}
+
+bool vm_object_reset(vm_object_t* object) {
     if (object == NULL) {
         return false;
     }
@@ -180,21 +223,7 @@ bool vm_object_reset(vm_object_t* object) {
         clear_object_descriptor(object);
         return true;
     case VM_OBJECT_BACKING_ANON:
-        for (i = 0; i < object->backing.anon.page_count; ++i) {
-            const uintptr_t page = object->backing.anon.page_slots[i];
-
-            if (page == 0) {
-                continue;
-            }
-
-            if (!pmm_free_page((void*)page)) {
-                return false;
-            }
-
-            object->backing.anon.page_slots[i] = 0;
-        }
-
-        if (!pmm_free_page(object->backing.anon.page_slots)) {
+        if (!release_anon_object_pages(object)) {
             return false;
         }
 

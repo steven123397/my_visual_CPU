@@ -163,7 +163,18 @@
 如果改动主要集中在 guest runtime / demo bring-up，还应额外关注：
 
 - `cd myCPU && make test-unit-supervisor_runtime`
+- `cd myCPU && make test-unit-kernel_bringup`
 - `cd myCPU && make test-unit-kernel_runtime`
+- `cd myCPU && make test-unit-vm_address_space`
+- `cd myCPU && make test-unit-vm_process`
+- `cd myCPU && make test-unit-vm_object`
+- `cd myCPU && make test-unit-vm_fault`
+- `cd myCPU && make test-unit-trap_runtime`
+- `cd myCPU && make test-unit-trap_dispatch`
+- `cd myCPU && make test-unit-user_task`
+- `cd myCPU && make test-unit-user_task_bootstrap`
+- `cd myCPU && make test-unit-user_program`
+- `cd myCPU && make test-unit-user_program_smoke`
 - `cd myCPU && make test-unit-kernel_alpha_common`
 - `cd myCPU && make test-unit-kernel_alpha_interrupt`
 - `cd myCPU && make test-unit-kernel_alpha_storage`

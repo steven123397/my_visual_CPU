@@ -15,11 +15,18 @@ extern void trap_user_runtime_arch_enter(trap_user_runtime_t* user_runtime,
 extern void trap_user_runtime_arch_resume(void);
 
 static trap_user_runtime_t* active_user_runtime = NULL;
+static bool user_runtime_stack_valid(const trap_user_runtime_t* user_runtime);
 
 static bool user_runtime_valid(const trap_user_runtime_t* user_runtime) {
     return user_runtime != NULL &&
            user_runtime->trap_context != NULL &&
            user_runtime->process != NULL;
+}
+
+static bool user_runtime_activation_ready(const trap_user_runtime_t* user_runtime) {
+    return user_runtime_valid(user_runtime) &&
+           user_runtime_stack_valid(user_runtime) &&
+           vm_process_is_runnable(user_runtime->process);
 }
 
 static void clear_user_signal(trap_user_signal_t* signal) {
@@ -32,6 +39,32 @@ static void clear_user_signal(trap_user_signal_t* signal) {
     signal->value = 0;
     signal->armed = false;
     signal->delivered = false;
+}
+
+static void clear_interrupt_handlers(trap_context_t* trap_context) {
+    uint64_t i = 0;
+
+    if (trap_context == NULL) {
+        return;
+    }
+
+    for (i = 0; i < TRAP_MAX_INTERRUPT_CAUSE; ++i) {
+        trap_context->interrupt_handlers[i].handler = 0;
+        trap_context->interrupt_handlers[i].context = 0;
+    }
+}
+
+static void clear_exception_handlers(trap_context_t* trap_context) {
+    uint64_t i = 0;
+
+    if (trap_context == NULL) {
+        return;
+    }
+
+    for (i = 0; i < TRAP_MAX_EXCEPTION_CAUSE; ++i) {
+        trap_context->exception_handlers[i].handler = 0;
+        trap_context->exception_handlers[i].context = 0;
+    }
 }
 
 static void reset_prepared_runtime_state(trap_user_runtime_t* user_runtime) {
@@ -106,22 +139,12 @@ static bool user_runtime_stack_valid(const trap_user_runtime_t* user_runtime) {
 }
 
 void trap_context_init(trap_context_t* trap_context) {
-    uint64_t i = 0;
-
     if (trap_context == NULL) {
         return;
     }
 
-    for (i = 0; i < TRAP_MAX_INTERRUPT_CAUSE; ++i) {
-        trap_context->interrupt_handlers[i].handler = 0;
-        trap_context->interrupt_handlers[i].context = 0;
-    }
-
-    for (i = 0; i < TRAP_MAX_EXCEPTION_CAUSE; ++i) {
-        trap_context->exception_handlers[i].handler = 0;
-        trap_context->exception_handlers[i].context = 0;
-    }
-
+    clear_interrupt_handlers(trap_context);
+    clear_exception_handlers(trap_context);
     trap_context->supervisor_timer_policy.user_runtime = NULL;
     trap_context->supervisor_timer_policy.post_handler = NULL;
     trap_context->supervisor_timer_policy.post_context = NULL;
@@ -342,9 +365,7 @@ bool trap_user_runtime_external_signal_delivered(
 }
 
 bool trap_user_runtime_activate(trap_user_runtime_t* user_runtime) {
-    if (!user_runtime_valid(user_runtime) ||
-        !user_runtime_stack_valid(user_runtime) ||
-        !vm_process_is_runnable(user_runtime->process)) {
+    if (!user_runtime_activation_ready(user_runtime)) {
         return false;
     }
 

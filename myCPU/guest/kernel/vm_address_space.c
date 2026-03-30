@@ -12,6 +12,11 @@ static uint64_t* alloc_table_page(void) {
     return (uint64_t*)alloc_zeroed_page();
 }
 
+static bool address_space_storage_ready(const vm_address_space_t* address_space) {
+    return address_space != NULL && address_space->allocated &&
+           address_space->root_table != NULL;
+}
+
 static bool range_overlaps_fault_ranges(const struct VmFaultRange* ranges,
                                         size_t count,
                                         uintptr_t vaddr,
@@ -174,6 +179,56 @@ static void clear_fault_actions(struct VmFaultActionRule* actions, size_t count)
     }
 }
 
+static void clear_user_region_slots(vm_user_region_t** user_regions, size_t count) {
+    size_t i = 0;
+
+    for (i = 0; i < count; ++i) {
+        user_regions[i] = NULL;
+    }
+}
+
+static void initialize_address_space_tracking(vm_address_space_t* address_space) {
+    if (address_space == NULL) {
+        return;
+    }
+
+    clear_fault_ranges(address_space->kernel_mappings, VM_MAX_KERNEL_MAPPINGS);
+    clear_fault_ranges(address_space->kernel_fault_ranges,
+                       VM_MAX_KERNEL_FAULT_RANGES);
+    clear_fault_actions(address_space->fault_actions, VM_MAX_FAULT_ACTIONS);
+    clear_user_region_slots(address_space->user_regions, VM_MAX_USER_REGIONS);
+}
+
+static void initialize_address_space(vm_address_space_t* address_space,
+                                     uint64_t* root_table) {
+    if (address_space == NULL || root_table == NULL) {
+        return;
+    }
+
+    address_space->allocated = true;
+    address_space->root_table = root_table;
+    address_space->root_table_pa = (uintptr_t)root_table;
+    address_space->satp_value =
+        RISCV_SATP_MODE_SV39 |
+        (((uint64_t)(address_space->root_table_pa >> SV39_PAGE_SHIFT)) &
+         SV39_PPN_MASK);
+    address_space->enabled = false;
+    initialize_address_space_tracking(address_space);
+}
+
+static void reset_address_space(vm_address_space_t* address_space) {
+    if (address_space == NULL) {
+        return;
+    }
+
+    address_space->allocated = false;
+    address_space->root_table = NULL;
+    address_space->root_table_pa = 0;
+    address_space->satp_value = 0;
+    address_space->enabled = false;
+    initialize_address_space_tracking(address_space);
+}
+
 static bool free_table_pages_recursive(uint64_t* table, unsigned level) {
     size_t i = 0;
     bool ok = true;
@@ -247,7 +302,7 @@ static bool map_kernel_global_range(vm_address_space_t* address_space,
                                     uint64_t flags) {
     struct VmFaultRange* record = NULL;
 
-    if (address_space == NULL || address_space->root_table == NULL ||
+    if (!address_space_storage_ready(address_space) ||
         !mapped_range_args_valid(vaddr, paddr, size) ||
         !kernel_flags_valid(flags) ||
         range_overlaps_kernel_globals(address_space, vaddr, size) ||
@@ -271,25 +326,39 @@ static bool map_kernel_global_range(vm_address_space_t* address_space,
     return true;
 }
 
-static bool register_kernel_fault_range(vm_address_space_t* address_space,
-                                        uintptr_t vaddr,
-                                        uintptr_t paddr,
-                                        size_t size,
-                                        uint64_t flags) {
-    struct VmFaultRange* record = NULL;
+static bool kernel_fault_range_args_valid(const vm_address_space_t* address_space,
+                                          uintptr_t vaddr,
+                                          uintptr_t paddr,
+                                          size_t size,
+                                          uint64_t flags) {
+    return address_space_storage_ready(address_space) &&
+           mapped_range_args_valid(vaddr, paddr, size) &&
+           kernel_flags_valid(flags) &&
+           !range_overlaps_kernel_globals(address_space, vaddr, size) &&
+           !range_overlaps_user_regions(address_space, vaddr, size);
+}
 
-    if (address_space == NULL || address_space->root_table == NULL ||
-        !mapped_range_args_valid(vaddr, paddr, size) ||
-        !kernel_flags_valid(flags) ||
-        range_overlaps_kernel_globals(address_space, vaddr, size) ||
-        range_overlaps_user_regions(address_space, vaddr, size)) {
-        return false;
+static struct VmFaultRange* reserve_kernel_fault_range(
+    vm_address_space_t* address_space,
+    uintptr_t vaddr,
+    uintptr_t paddr,
+    size_t size,
+    uint64_t flags) {
+    if (!kernel_fault_range_args_valid(address_space, vaddr, paddr, size, flags)) {
+        return NULL;
     }
 
-    record = find_free_fault_range_slot(address_space->kernel_fault_ranges,
-                                        VM_MAX_KERNEL_FAULT_RANGES);
+    return find_free_fault_range_slot(address_space->kernel_fault_ranges,
+                                      VM_MAX_KERNEL_FAULT_RANGES);
+}
+
+static void write_fault_range_record(struct VmFaultRange* record,
+                                     uintptr_t vaddr,
+                                     uintptr_t paddr,
+                                     size_t size,
+                                     uint64_t flags) {
     if (record == NULL) {
-        return false;
+        return;
     }
 
     record->valid = true;
@@ -297,13 +366,28 @@ static bool register_kernel_fault_range(vm_address_space_t* address_space,
     record->paddr = paddr;
     record->size = size;
     record->flags = flags;
+}
+
+static bool register_kernel_fault_range(vm_address_space_t* address_space,
+                                        uintptr_t vaddr,
+                                        uintptr_t paddr,
+                                        size_t size,
+                                        uint64_t flags) {
+    struct VmFaultRange* record = NULL;
+
+    record = reserve_kernel_fault_range(address_space, vaddr, paddr, size, flags);
+    if (record == NULL) {
+        return false;
+    }
+
+    write_fault_range_record(record, vaddr, paddr, size, flags);
     return true;
 }
 
 bool vm_address_space_create(vm_address_space_t** out_space) {
     size_t i = 0;
-    size_t j = 0;
     vm_address_space_t* space = NULL;
+    uint64_t* root_table = NULL;
 
     if (out_space == NULL) {
         return false;
@@ -320,41 +404,18 @@ bool vm_address_space_create(vm_address_space_t** out_space) {
         return false;
     }
 
-    space->root_table = alloc_table_page();
-    if (space->root_table == NULL) {
+    root_table = alloc_table_page();
+    if (root_table == NULL) {
         return false;
     }
 
-    space->allocated = true;
-    space->root_table_pa = (uintptr_t)space->root_table;
-    space->satp_value =
-        RISCV_SATP_MODE_SV39 |
-        (((uint64_t)(space->root_table_pa >> SV39_PAGE_SHIFT)) & SV39_PPN_MASK);
-    space->enabled = false;
-
-    for (j = 0; j < VM_MAX_KERNEL_MAPPINGS; ++j) {
-        space->kernel_mappings[j].valid = false;
-    }
-
-    for (j = 0; j < VM_MAX_KERNEL_FAULT_RANGES; ++j) {
-        space->kernel_fault_ranges[j].valid = false;
-    }
-
-    for (j = 0; j < VM_MAX_FAULT_ACTIONS; ++j) {
-        space->fault_actions[j].valid = false;
-    }
-
-    for (j = 0; j < VM_MAX_USER_REGIONS; ++j) {
-        space->user_regions[j] = NULL;
-    }
-
+    initialize_address_space(space, root_table);
     *out_space = space;
     return true;
 }
 
 bool vm_address_space_activate(vm_address_space_t* address_space) {
-    if (address_space == NULL || !address_space->allocated ||
-        address_space->root_table == NULL) {
+    if (!address_space_storage_ready(address_space)) {
         return false;
     }
 
@@ -371,8 +432,7 @@ bool vm_address_space_is_enabled(const vm_address_space_t* address_space) {
 }
 
 bool vm_address_space_disable(vm_address_space_t* address_space) {
-    if (address_space == NULL || !address_space->allocated ||
-        address_space->root_table == NULL) {
+    if (!address_space_storage_ready(address_space)) {
         return false;
     }
 
@@ -389,8 +449,7 @@ bool vm_address_space_disable(vm_address_space_t* address_space) {
 bool vm_address_space_destroy(vm_address_space_t* address_space) {
     size_t i = 0;
 
-    if (address_space == NULL || !address_space->allocated ||
-        address_space->root_table == NULL) {
+    if (!address_space_storage_ready(address_space)) {
         return false;
     }
 
@@ -405,19 +464,7 @@ bool vm_address_space_destroy(vm_address_space_t* address_space) {
         return false;
     }
 
-    address_space->allocated = false;
-    address_space->root_table = NULL;
-    address_space->root_table_pa = 0;
-    address_space->satp_value = 0;
-    address_space->enabled = false;
-    clear_fault_ranges(address_space->kernel_mappings, VM_MAX_KERNEL_MAPPINGS);
-    clear_fault_ranges(address_space->kernel_fault_ranges,
-                       VM_MAX_KERNEL_FAULT_RANGES);
-    clear_fault_actions(address_space->fault_actions, VM_MAX_FAULT_ACTIONS);
-    for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
-        address_space->user_regions[i] = NULL;
-    }
-
+    reset_address_space(address_space);
     return true;
 }
 

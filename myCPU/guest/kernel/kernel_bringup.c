@@ -10,6 +10,35 @@
 #include "riscv.h"
 #include "runtime_context.h"
 
+typedef struct KernelBringupMmioRange {
+    uint32_t flag;
+    uintptr_t start;
+    uintptr_t end;
+} kernel_bringup_mmio_range_t;
+
+static const kernel_bringup_mmio_range_t k_kernel_bringup_mmio_ranges[] = {
+    {
+        .flag = KERNEL_BRINGUP_MMIO_UART,
+        .start = UART_BASE,
+        .end = UART_BASE + MEMORY_PAGE_SIZE,
+    },
+    {
+        .flag = KERNEL_BRINGUP_MMIO_CLINT,
+        .start = CLINT_BASE,
+        .end = CLINT_BASE + CLINT_SIZE,
+    },
+    {
+        .flag = KERNEL_BRINGUP_MMIO_PLIC,
+        .start = PLIC_BASE,
+        .end = PLIC_BASE + PLIC_SIZE,
+    },
+    {
+        .flag = KERNEL_BRINGUP_MMIO_STORAGE,
+        .start = STORAGE_BASE,
+        .end = STORAGE_BASE + MEMORY_PAGE_SIZE,
+    },
+};
+
 static bool kernel_bringup_map_identity_if_present(vm_address_space_t* address_space,
                                                    uintptr_t start,
                                                    uintptr_t end,
@@ -60,6 +89,71 @@ static bool kernel_bringup_activate_trap_context(trap_context_t* trap_context) {
            trap_active_context() == trap_context;
 }
 
+static bool kernel_bringup_map_fixed_kernel_ranges(
+    vm_address_space_t* address_space,
+    bool map_managed_memory) {
+    const uint64_t text_flags = VM_PAGE_READ | VM_PAGE_EXEC;
+    const uint64_t rodata_flags = VM_PAGE_READ;
+    const uint64_t data_flags = VM_PAGE_READ | VM_PAGE_WRITE;
+    const uintptr_t early_heap_start = memory_heap_start();
+    const uintptr_t managed_start = pmm_managed_start();
+    const uintptr_t managed_end = pmm_managed_end();
+
+    return kernel_bringup_map_identity_if_present(address_space,
+                                                  memory_text_start(),
+                                                  memory_text_end(),
+                                                  text_flags) &&
+           kernel_bringup_map_identity_if_present(address_space,
+                                                  memory_rodata_start(),
+                                                  memory_rodata_end(),
+                                                  rodata_flags) &&
+           kernel_bringup_map_identity_if_present(address_space,
+                                                  memory_data_start(),
+                                                  memory_bss_end(),
+                                                  data_flags) &&
+           kernel_bringup_map_identity_if_present(address_space,
+                                                  early_heap_start,
+                                                  managed_start,
+                                                  data_flags) &&
+           (!map_managed_memory ||
+            kernel_bringup_map_identity_if_present(address_space,
+                                                   managed_start,
+                                                   managed_end,
+                                                   data_flags));
+}
+
+static bool kernel_bringup_register_selected_mmio_fault_ranges(
+    vm_address_space_t* address_space,
+    uint32_t mmio_mask) {
+    const uint64_t data_flags = VM_PAGE_READ | VM_PAGE_WRITE;
+
+    for (size_t i = 0; i < (sizeof(k_kernel_bringup_mmio_ranges) /
+                            sizeof(k_kernel_bringup_mmio_ranges[0]));
+         ++i) {
+        const kernel_bringup_mmio_range_t* range =
+            &k_kernel_bringup_mmio_ranges[i];
+
+        if (!kernel_bringup_register_optional_mmio_range(address_space,
+                                                         mmio_mask,
+                                                         range->flag,
+                                                         range->start,
+                                                         range->end,
+                                                         data_flags)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool kernel_bringup_validate_active_address_space(
+    const vm_address_space_t* address_space) {
+    return address_space != NULL &&
+           vm_address_space_is_enabled(address_space) &&
+           vm_address_space_is_active(address_space) &&
+           riscv_read_satp() == vm_address_space_satp_value(address_space);
+}
+
 static bool kernel_bringup_probe_pmm_page(uint64_t marker) {
     uint64_t* page = (uint64_t*)pmm_alloc_page();
 
@@ -77,68 +171,17 @@ static bool kernel_bringup_probe_pmm_page(uint64_t marker) {
 
 static bool kernel_bringup_setup_vm(vm_address_space_t** out_space,
                                     const kernel_bringup_options_t* options) {
-    const uint64_t text_flags = VM_PAGE_READ | VM_PAGE_EXEC;
-    const uint64_t rodata_flags = VM_PAGE_READ;
-    const uint64_t data_flags = VM_PAGE_READ | VM_PAGE_WRITE;
-    const uintptr_t early_heap_start = memory_heap_start();
-    const uintptr_t managed_start = pmm_managed_start();
-    const uintptr_t managed_end = pmm_managed_end();
-    const uint32_t mmio_mask = options != NULL ? options->mmio_mask : 0U;
     vm_address_space_t* address_space = NULL;
 
     if (out_space == NULL || options == NULL ||
         !vm_address_space_create(&address_space) ||
-        !kernel_bringup_map_identity_if_present(address_space,
-                                                memory_text_start(),
-                                                memory_text_end(),
-                                                text_flags) ||
-        !kernel_bringup_map_identity_if_present(address_space,
-                                                memory_rodata_start(),
-                                                memory_rodata_end(),
-                                                rodata_flags) ||
-        !kernel_bringup_map_identity_if_present(address_space,
-                                                memory_data_start(),
-                                                memory_bss_end(),
-                                                data_flags) ||
-        !kernel_bringup_map_identity_if_present(address_space,
-                                                early_heap_start,
-                                                managed_start,
-                                                data_flags) ||
-        (options->map_managed_memory &&
-         !kernel_bringup_map_identity_if_present(address_space,
-                                                 managed_start,
-                                                 managed_end,
-                                                 data_flags)) ||
-        !kernel_bringup_register_optional_mmio_range(address_space,
-                                                     mmio_mask,
-                                                     KERNEL_BRINGUP_MMIO_UART,
-                                                     UART_BASE,
-                                                     UART_BASE +
-                                                         MEMORY_PAGE_SIZE,
-                                                     data_flags) ||
-        !kernel_bringup_register_optional_mmio_range(address_space,
-                                                     mmio_mask,
-                                                     KERNEL_BRINGUP_MMIO_CLINT,
-                                                     CLINT_BASE,
-                                                     CLINT_BASE + CLINT_SIZE,
-                                                     data_flags) ||
-        !kernel_bringup_register_optional_mmio_range(address_space,
-                                                     mmio_mask,
-                                                     KERNEL_BRINGUP_MMIO_PLIC,
-                                                     PLIC_BASE,
-                                                     PLIC_BASE + PLIC_SIZE,
-                                                     data_flags) ||
-        !kernel_bringup_register_optional_mmio_range(address_space,
-                                                     mmio_mask,
-                                                     KERNEL_BRINGUP_MMIO_STORAGE,
-                                                     STORAGE_BASE,
-                                                     STORAGE_BASE +
-                                                         MEMORY_PAGE_SIZE,
-                                                     data_flags) ||
+        !kernel_bringup_map_fixed_kernel_ranges(address_space,
+                                                options->map_managed_memory) ||
+        !kernel_bringup_register_selected_mmio_fault_ranges(
+            address_space,
+            options->mmio_mask) ||
         !vm_address_space_enable(address_space) ||
-        !vm_address_space_is_enabled(address_space) ||
-        !vm_address_space_is_active(address_space) ||
-        riscv_read_satp() != vm_address_space_satp_value(address_space)) {
+        !kernel_bringup_validate_active_address_space(address_space)) {
         return false;
     }
 
