@@ -13,6 +13,9 @@ constexpr uint64_t LEVEL1_PAGE_TABLE = 0x80101000ULL;
 constexpr uint64_t LEVEL0_PAGE_TABLE = 0x80102000ULL;
 constexpr uint64_t USER_EXEC_BACKING_PAGE = 0x80103000ULL;
 constexpr uint64_t USER_EXEC_VADDR = 0x80001000ULL;
+constexpr uint64_t DATA_BACKING_PAGE_A = 0x80104000ULL;
+constexpr uint64_t DATA_BACKING_PAGE_B = 0x80105000ULL;
+constexpr uint64_t DATA_VADDR = 0x80002000ULL;
 
 void write64(Ram& ram, uint64_t addr, uint64_t value) {
     ram.store(addr, value, 8);
@@ -23,6 +26,12 @@ void setup_sv39_user_exec_page(Ram& ram) {
     write64(ram, LEVEL1_PAGE_TABLE + 0, ((LEVEL0_PAGE_TABLE >> 12) << 10) | 0x1ULL);
     write64(ram, LEVEL0_PAGE_TABLE + 8, ((USER_EXEC_BACKING_PAGE >> 12) << 10) | 0x19ULL);
     ram.store(USER_EXEC_BACKING_PAGE, 0x00000013U, 4);
+}
+
+void map_sv39_data_page(Ram& ram, uint64_t backing_page) {
+    write64(ram, ROOT_PAGE_TABLE + 16, ((LEVEL1_PAGE_TABLE >> 12) << 10) | 0x1ULL);
+    write64(ram, LEVEL1_PAGE_TABLE + 0, ((LEVEL0_PAGE_TABLE >> 12) << 10) | 0x1ULL);
+    write64(ram, LEVEL0_PAGE_TABLE + 16, ((backing_page >> 12) << 10) | 0x7ULL);
 }
 
 bool expect(bool condition, const char* message) {
@@ -138,6 +147,43 @@ int main() {
     }
     if (!expect(cpu.csr().read(CSR_MTVAL, cpu.core()) == USER_EXEC_VADDR,
                 "legacy fetch wrapper should still report faulting virtual address")) {
+        return 1;
+    }
+
+    cpu_init(cpu, MEM_BASE);
+    map_sv39_data_page(ram, DATA_BACKING_PAGE_A);
+    ram.store(DATA_BACKING_PAGE_A, UINT32_C(0x11111111), 4);
+    ram.store(DATA_BACKING_PAGE_B, UINT32_C(0x22222222), 4);
+    cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+    const uint64_t satp_value = SATP_MODE_SV39 | (ROOT_PAGE_TABLE >> 12);
+    cpu.csr().write(CSR_SATP, satp_value, cpu.core());
+
+    AddressSpace::AccessResult first_data = cpu.address_space().load_result(bus, DATA_VADDR, 4);
+    if (!expect(first_data.ok, "initial Sv39 data load should succeed")) {
+        return 1;
+    }
+    if (!expect(first_data.value == UINT32_C(0x11111111),
+                "initial Sv39 data load should observe the first mapping")) {
+        return 1;
+    }
+
+    map_sv39_data_page(ram, DATA_BACKING_PAGE_B);
+    AddressSpace::AccessResult stale_data = cpu.address_space().load_result(bus, DATA_VADDR, 4);
+    if (!expect(stale_data.ok, "stale Sv39 TLB load should still succeed before refresh")) {
+        return 1;
+    }
+    if (!expect(stale_data.value == UINT32_C(0x11111111),
+                "rewriting the page table without a refresh should keep the stale translation")) {
+        return 1;
+    }
+
+    cpu.csr().write(CSR_SATP, satp_value, cpu.core());
+    AddressSpace::AccessResult refreshed_data = cpu.address_space().load_result(bus, DATA_VADDR, 4);
+    if (!expect(refreshed_data.ok, "SATP rewrite should keep Sv39 translation valid")) {
+        return 1;
+    }
+    if (!expect(refreshed_data.value == UINT32_C(0x22222222),
+                "rewriting SATP should refresh the local TLB view of the same address space")) {
         return 1;
     }
 

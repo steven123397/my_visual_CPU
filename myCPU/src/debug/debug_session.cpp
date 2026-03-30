@@ -260,10 +260,14 @@ void DebugSession::record_step_events(const DebugSnapshot& before, const DebugSn
     }
     if (after.bus.valid &&
         (!before.bus.valid || before.bus.addr != after.bus.addr || before.bus.value != after.bus.value ||
-         before.bus.write != after.bus.write || before.bus.device != after.bus.device)) {
-        append_event(
-            after.bus.write ? "store" : "load",
-            after.bus.device + " " + (after.bus.write ? "write " : "read ") + hex_u64(after.bus.addr));
+         before.bus.write != after.bus.write || before.bus.device != after.bus.device ||
+         before.bus.success != after.bus.success || before.bus.detail != after.bus.detail)) {
+        std::string detail =
+            after.bus.device + " " + (after.bus.write ? "write " : "read ") + hex_u64(after.bus.addr);
+        if (!after.bus.success && !after.bus.detail.empty()) {
+            detail += " failed: " + after.bus.detail;
+        }
+        append_event(after.bus.write ? "store" : "load", detail);
     }
     if (after.summary.halted && !before.summary.halted) {
         append_event("halt", "program halted");

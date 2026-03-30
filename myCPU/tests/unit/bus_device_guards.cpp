@@ -66,11 +66,20 @@ int main() {
 	            bus.attach(plic);
 	            bus.attach(storage);
 
-	            if (!bus.try_load(UART_BASE + UART_REG_LSR, 1, value) || value != 0x60) {
+            if (!bus.try_load(UART_BASE + UART_REG_LSR, 1, value) || value != 0x60) {
 	                return fail("expected valid UART byte load to succeed");
             }
             if (bus.try_store(UART_BASE + UART_REG_THR, 'A', 4)) {
                 return fail("expected invalid UART width to fail");
+            }
+            const DebugBusAccess& failed_uart_store = bus.last_access();
+            if (!failed_uart_store.valid ||
+                failed_uart_store.success ||
+                failed_uart_store.addr != UART_BASE + UART_REG_THR ||
+                failed_uart_store.size != 4 ||
+                failed_uart_store.device != "uart" ||
+                failed_uart_store.detail.empty()) {
+                return fail("expected failed UART store to remain observable via last_access");
 	            }
 	            if (bus.try_load(UART_BASE + 0x4, 1, value)) {
 	                return fail("expected invalid UART offset to fail");

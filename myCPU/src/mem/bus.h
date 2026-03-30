@@ -22,7 +22,14 @@ public:
 
 private:
     Device* find_device(uint64_t addr, int size);
-    void record_access(const Device& device, bool write, uint64_t addr, uint64_t value, int size);
+    void record_access(
+        const Device& device,
+        bool success,
+        bool write,
+        uint64_t addr,
+        uint64_t value,
+        int size,
+        const char* detail);
 
     std::vector<Device*> devices_;
     DebugBusAccess last_access_{};

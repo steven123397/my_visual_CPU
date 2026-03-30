@@ -82,7 +82,7 @@
 - CSR 非法访问矩阵，包括 M/S/U 跨级访问、只读 counter CSR 写保护，以及 `misa` 只读写保护。
 - M-mode trap / return。
 - 初步 `M/S/U` 特权流转。
-- `misa` 只读、`satp.MODE` WARL、`counteren`、Sv39、最小 TLB、`sfence.vma`。
+- `misa` 只读、`satp.MODE` WARL、`counteren`、Sv39、最小 TLB、`satp` 写入后的本地 TLB 刷新、`sfence.vma`。
 - `mstatus.MPRV` 数据访存语义，按 `MPP` 走 Sv39 翻译与 `SUM/MXR` 权限检查。
 - Sv39 page-walk 的 misaligned superpage 与 non-leaf reserved-bit fault 合同。
 - Sv39 特权边界：`S-mode` 对 `U=1` 可执行页的取指，以及 `U-mode` 对 supervisor-only 可执行页 / data page 的取指、load、store都会稳定触发 page fault；当前该合同已进入 asm / pipeline 主门禁，host-side `AddressSpace` result API 也已补 smoke。

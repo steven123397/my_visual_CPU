@@ -5,6 +5,7 @@
 
 class CoreState;
 class Clint;
+class AddressSpace;
 
 constexpr uint32_t CSR_SSTATUS = 0x100;
 constexpr uint32_t CSR_SIE = 0x104;
@@ -54,8 +55,13 @@ constexpr uint64_t MIE_MEIE = 1ULL << 11;
 
 class CsrFile {
 public:
+    CsrFile() = default;
+    CsrFile(const CsrFile& other);
+    CsrFile& operator=(const CsrFile& other);
+
     void reset();
     void bind_clint(const Clint* clint);
+    void bind_address_space(AddressSpace* address_space);
     uint64_t read(uint32_t addr, const CoreState& core) const;
     void write(uint32_t addr, uint64_t value);
     void write(uint32_t addr, uint64_t value, CoreState& core);
@@ -64,4 +70,5 @@ public:
 private:
     std::array<uint64_t, 4096> regs_{};
     const Clint* clint_{nullptr};
+    AddressSpace* address_space_{nullptr};
 };

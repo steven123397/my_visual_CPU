@@ -53,12 +53,14 @@ struct BackendDebugSnapshot {
 
 struct DebugBusAccess {
     bool valid{false};
+    bool success{true};
     bool write{false};
     bool mmio{false};
     uint64_t addr{0};
     uint64_t value{0};
     int size{0};
     std::string device{};
+    std::string detail{};
 };
 
 struct DebugEvent {

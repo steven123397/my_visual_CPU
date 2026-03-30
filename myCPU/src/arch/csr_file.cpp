@@ -2,6 +2,7 @@
 
 #include "core_state.h"
 #include "../devices/clint.h"
+#include "../mem/address_space.h"
 
 namespace {
 
@@ -65,6 +66,19 @@ bool is_supported_csr(uint32_t addr) {
 
 }
 
+CsrFile::CsrFile(const CsrFile& other)
+    : regs_(other.regs_), clint_(other.clint_) {}
+
+CsrFile& CsrFile::operator=(const CsrFile& other) {
+    if (this == &other) {
+        return *this;
+    }
+    regs_ = other.regs_;
+    clint_ = other.clint_;
+    address_space_ = nullptr;
+    return *this;
+}
+
 void CsrFile::reset() {
     regs_.fill(0);
     regs_[CSR_MISA] = MISA_IMPLEMENTED_VALUE;
@@ -72,6 +86,10 @@ void CsrFile::reset() {
 
 void CsrFile::bind_clint(const Clint* clint) {
     clint_ = clint;
+}
+
+void CsrFile::bind_address_space(AddressSpace* address_space) {
+    address_space_ = address_space;
 }
 
 uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
@@ -125,9 +143,12 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
         const uint64_t mode = (value & SATP_MODE_MASK) >> SATP_MODE_SHIFT;
         if (mode == SATP_MODE_SV39) {
             regs_[CSR_SATP] = (SATP_MODE_SV39 << SATP_MODE_SHIFT) | (value & SATP_PPN_MASK);
-            return;
+        } else {
+            regs_[CSR_SATP] = SATP_MODE_BARE;
         }
-        regs_[CSR_SATP] = SATP_MODE_BARE;
+        if (address_space_ != nullptr) {
+            address_space_->flush_tlb();
+        }
         return;
     }
     if (addr == CSR_MEDELEG) {

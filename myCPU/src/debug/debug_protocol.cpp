@@ -316,6 +316,7 @@ std::string snapshot_json(const DebugSnapshot& snapshot) {
     append_json_string(out, hex_u64(snapshot.csrs.satp));
     out << "},\"bus\":{"
         << "\"valid\":" << (snapshot.bus.valid ? "true" : "false")
+        << ",\"success\":" << (snapshot.bus.success ? "true" : "false")
         << ",\"write\":" << (snapshot.bus.write ? "true" : "false")
         << ",\"mmio\":" << (snapshot.bus.mmio ? "true" : "false")
         << ",\"addr\":";
@@ -325,6 +326,8 @@ std::string snapshot_json(const DebugSnapshot& snapshot) {
     out << ",\"size\":" << snapshot.bus.size
         << ",\"device\":";
     append_json_string(out, snapshot.bus.device);
+    out << ",\"detail\":";
+    append_json_string(out, snapshot.bus.detail);
     out << "},\"devices\":{"
         << "\"uart\":{"
         << "\"ier\":" << static_cast<unsigned>(snapshot.devices.uart.ier)

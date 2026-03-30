@@ -64,7 +64,9 @@ bool execute(CPU& cpu, Bus& bus, Insn* in) {
 
 }  // namespace
 
-CPU::CPU() : trap_(core_, csr_), address_space_(core_, csr_, trap_) {}
+CPU::CPU() : trap_(core_, csr_), address_space_(core_, csr_, trap_) {
+    csr_.bind_address_space(&address_space_);
+}
 
 CoreState& CPU::core() {
     return core_;

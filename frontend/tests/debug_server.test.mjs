@@ -45,8 +45,10 @@ function makeSnapshot(cycle, sessionLabel) {
       addr: '0x10000000',
       value: '0x00000041',
       size: 1,
+      success: true,
       write: true,
       mmio: cycle > 0,
+      detail: '',
     },
     events: [
       {

@@ -42,9 +42,10 @@ bool Bus::try_load(uint64_t addr, int size, uint64_t& value) {
     if (Device* device = find_device(addr, size)) {
         try {
             value = device->load(addr, size);
-            record_access(*device, false, addr, value, size);
+            record_access(*device, true, false, addr, value, size, "");
             return true;
-        } catch (const std::exception&) {
+        } catch (const std::exception& ex) {
+            record_access(*device, false, false, addr, 0, size, ex.what());
         }
     }
     value = 0;
@@ -55,9 +56,10 @@ bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
     if (Device* device = find_device(addr, size)) {
         try {
             device->store(addr, value, size);
-            record_access(*device, true, addr, value, size);
+            record_access(*device, true, true, addr, value, size, "");
             return true;
-        } catch (const std::exception&) {
+        } catch (const std::exception& ex) {
+            record_access(*device, false, true, addr, value, size, ex.what());
         }
     }
     return false;
@@ -75,12 +77,21 @@ const DebugBusAccess& Bus::last_access() const {
     return last_access_;
 }
 
-void Bus::record_access(const Device& device, bool write, uint64_t addr, uint64_t value, int size) {
+void Bus::record_access(
+    const Device& device,
+    bool success,
+    bool write,
+    uint64_t addr,
+    uint64_t value,
+    int size,
+    const char* detail) {
     last_access_.valid = true;
+    last_access_.success = success;
     last_access_.write = write;
     last_access_.mmio = device.is_mmio();
     last_access_.addr = addr;
     last_access_.value = value;
     last_access_.size = size;
     last_access_.device = device.debug_name();
+    last_access_.detail = detail != nullptr ? detail : "";
 }

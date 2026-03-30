@@ -117,6 +117,8 @@ export function renderBus(snapshot) {
         <div class="kv-row"><span>size</span><strong>${bus.size ?? 0}</strong></div>
         <div class="kv-row"><span>kind</span><strong>${bus.write ? 'store' : 'load'}</strong></div>
         <div class="kv-row"><span>space</span><strong>${bus.mmio ? 'MMIO' : 'RAM'}</strong></div>
+        <div class="kv-row"><span>status</span><strong>${bus.success === false ? 'failed' : 'ok'}</strong></div>
+        <div class="kv-row"><span>detail</span><strong>${bus.detail || '-'}</strong></div>
       </div>
     `,
     'panel-bus',

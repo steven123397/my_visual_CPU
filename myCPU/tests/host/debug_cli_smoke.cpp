@@ -41,6 +41,13 @@ constexpr std::array<uint32_t, 4> kPredictorProgram = {
     0x00000073U,
 };
 
+constexpr std::array<uint32_t, 4> kMmioFaultProgram = {
+    0x10000437U,
+    0x04100493U,
+    0x00942023U,
+    0x00000073U,
+};
+
 bool expect_contains(const std::string& haystack, const char* needle, const char* message) {
     if (haystack.find(needle) == std::string::npos) {
         std::fprintf(stderr, "%s\n", message);
@@ -112,12 +119,16 @@ bool expect_line_with_fields(const std::vector<std::string>& lines,
     return false;
 }
 
-std::string build_flat_load_command(const std::string& path) {
+std::string build_flat_load_command(const std::string& path, const char* backend) {
     std::ostringstream command;
     command << "{\"cmd\":\"load\",\"image\":\"" << path
-            << "\",\"backend\":\"pipeline\",\"flat\":true,\"addr\":\"0x" << std::hex << kDebugProgramAddr
+            << "\",\"backend\":\"" << backend << "\",\"flat\":true,\"addr\":\"0x" << std::hex << kDebugProgramAddr
             << "\"}\n";
     return command.str();
+}
+
+std::string build_flat_load_command(const std::string& path) {
+    return build_flat_load_command(path, "pipeline");
 }
 
 std::string repeat_command(const char* command, int count) {
@@ -159,6 +170,7 @@ int main() {
     const TempBinary external_binary{write_temp_binary("external", kSupervisorExternalProgram)};
     const TempBinary timer_binary{write_temp_binary("timer", kSupervisorTimerProgram)};
     const TempBinary predictor_binary{write_temp_binary("predictor", kPredictorProgram)};
+    const TempBinary mmio_fault_binary{write_temp_binary("mmio_fault", kMmioFaultProgram)};
 
     const std::string external_pending_output =
         run_cli_script(build_flat_load_command(external_binary.path) +
@@ -260,6 +272,31 @@ int main() {
     }
 
     if (!expect_contains(timer_final_output, "\"cmd\":\"quit\"", "quit response should be emitted")) {
+        return 1;
+    }
+
+    const std::string mmio_fault_output =
+        run_cli_script(build_flat_load_command(mmio_fault_binary.path, "functional") +
+                       repeat_command("{\"cmd\":\"step_cycle\"}", 3) + "{\"cmd\":\"quit\"}\n");
+    const std::vector<std::string> mmio_fault_lines = split_lines(mmio_fault_output);
+    if (!expect_line_with_fields(
+            mmio_fault_lines,
+            mmio_fault_output,
+            {
+                "\"backend\":\"functional\"",
+                "\"mcause\":\"0x7\"",
+                "\"mtval\":\"0x10000000\"",
+                "\"valid\":true",
+                "\"success\":false",
+                "\"write\":true",
+                "\"mmio\":true",
+                "\"device\":\"uart\"",
+                "\"addr\":\"0x10000000\"",
+                "\"size\":4",
+                "\"detail\":\"invalid MMIO access\"",
+                "\"kind\":\"store\"",
+            },
+            "failed MMIO snapshot should expose bus failure detail through the debug CLI protocol")) {
         return 1;
     }
 

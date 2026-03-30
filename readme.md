@@ -51,7 +51,7 @@ main.cpp
 - `arch/core_state.*` 负责通用寄存器、`pc`、周期计数和停机状态。
 - `arch/csr_file.*` 负责已实现 CSR 集合、`misa/satp/time` 这类带架构约束的特殊语义，以及 `sstatus/sie/sip` 对 `mstatus/mie/mip` 的别名视图。
 - `mem/ram.*` 和 `mem/bus.*` 提供平台总线与 RAM 边界。
-- `mem/address_space.*` 负责 CPU 侧地址访问边界，当前提供 bare-mode 直通、Sv39 三级页表遍历、最小 TLB、受限 `satp` 模式切换、`sfence.vma` 刷新，以及 instruction/load/store 的 fault 路由。
+- `mem/address_space.*` 负责 CPU 侧地址访问边界，当前提供 bare-mode 直通、Sv39 三级页表遍历、最小 TLB、受限 `satp` 模式切换、`satp` 写入后的本地 TLB 刷新、`sfence.vma` 刷新，以及 instruction/load/store 的 fault 路由。
 - `devices/uart16550.*`、`devices/clint.*`、`devices/plic.*` 和 `devices/simple_storage.*` 提供独立 MMIO 设备对象。
 - `devices/device.h` 提供统一设备接口，供 `Bus` 附加和分发。
 - `loader/elf_loader.*` 和 `loader/binary_loader.*` 提供镜像装载边界，直接通过 `Ram` 接口写入镜像内容。
@@ -212,7 +212,7 @@ node --test
 - 基于 `medeleg` 的最小 supervisor 异常委托
 - 基于 `mideleg` 的最小 supervisor 定时器/外部中断递送
 - **Sv39 虚拟内存**：3 级页表遍历、页错误、权限检查、大页支持、最小 TLB、A/D bit 维护
-- `satp` CSR 支持（MODE 字段按 WARL 约束到 bare/Sv39；不支持值不会以“读得出分页模式、实际却 bare” 的形式泄漏）
+- `satp` CSR 支持（MODE 字段按 WARL 约束到 bare/Sv39；不支持值不会以“读得出分页模式、实际却 bare” 的形式泄漏；当前重写 `satp` 时会同步刷新本地 TLB，避免同一地址空间下的陈旧翻译残留）
 - `mstatus.MPRV` 数据访存语义：M-mode 下的 `load/store` 可按 `MPP` 指定的有效特权级走 Sv39 翻译，并遵守 `SUM/MXR` 权限约束
 - Sv39 page-walk 合同：misaligned superpage 与 non-leaf `U/A/D` 保留位会稳定触发 page fault
 - `sfence.vma` 指令（当前执行本地 TLB 全量失效）
@@ -224,7 +224,7 @@ node --test
 - CLINT 定时器中断，以及 `mtime/mtimecmp` 的 1/2/4/8 字节 MMIO 访问
 - `time` CSR 与 CLINT `mtime` 保持一致，guest 侧 CSR/MMIO 看到同一平台时间源
 - PLIC machine/supervisor external interrupt 最小路径
-- host-backed block-oriented MMIO storage device，支持 attached-but-not-ready 状态、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`
+- host-backed block-oriented MMIO storage device，支持 attached-but-not-ready 状态、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`；当前仍是最小同步单块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件
 - 设备区间重叠防御，以及第一轮 MMIO 非法访问宽度白名单
 - CPU 侧 MMIO 非法 offset / width 稳定触发 access-fault trap，host-side 也已有 MMIO contract matrix
 - 最小 guest supervisor runtime：包含统一 trap dispatch、基础平台库、early allocator / PMM / guest-side Sv39 VM、显式 trap/runtime/task/program helper，以及由 `user_program_smoke` 提供的阶段化 lifecycle / prepare / enter helper 与 `supervisor_demo_smoke` 提供的单入口 demo runner，覆盖 `guest_supervisor_demo` 的 bootstrap、U-mode 进入/返回、page fault 恢复、timer/external interrupt 与生命周期清理 smoke
@@ -300,7 +300,7 @@ node --test
   `AddressSpace` 类声明。定义 CPU 侧 fetch/load/store 访问入口，提供虚拟地址到物理地址的转换边界。
 
 - `mem/address_space.cpp`
-  `AddressSpace` 实现。支持 bare-mode 直通和 Sv39 三级页表遍历。M-mode 始终使用物理地址；S/U-mode 根据受限 `satp.MODE` 决定是否启用分页。页表遍历包含权限检查（R/W/X/U 位）、大页对齐检查，以及 instruction/load/store page fault 触发。
+  `AddressSpace` 实现。支持 bare-mode 直通和 Sv39 三级页表遍历。M-mode 始终使用物理地址；S/U-mode 根据受限 `satp.MODE` 决定是否启用分页。页表遍历包含权限检查（R/W/X/U 位）、大页对齐检查，以及 instruction/load/store page fault 触发；当前重写 `satp` 也会同步刷新本地 TLB。
 
 - `devices/device.h`
   设备基类声明。定义统一的 `contains/load/store` 接口，供平台总线附加和寻址，并为非法 MMIO 访问提供统一报错入口。
@@ -321,7 +321,7 @@ node --test
   最小 PLIC 设备实现。当前支持 machine/supervisor context、UART THRE source、claim/complete 与 pending/enable/threshold 路径。
 
 - `devices/simple_storage.h` / `devices/simple_storage.cpp`
-  最小块化 MMIO storage 设备实现。通过 `LBA/BLOCK_COUNT/COMMAND/DATA_WINDOW` 暴露同步 block read/write 接口，并支持宿主 `--disk`、`--disk-not-ready` 与 `--disk-bad-magic` 镜像附加、attached-but-not-ready 状态、bad-magic probe 注入和 `STORAGE_ERR_NOT_READY` 合同。
+  最小块化 MMIO storage 设备实现。通过 `LBA/BLOCK_COUNT/COMMAND/DATA_WINDOW` 暴露同步 block read/write 接口，并支持宿主 `--disk`、`--disk-not-ready` 与 `--disk-bad-magic` 镜像附加、attached-but-not-ready 状态、bad-magic probe 注入和 `STORAGE_ERR_NOT_READY` 合同。当前仍明确限定为最小同步单块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
 
 - `loader/elf_loader.h`
   `ElfLoader` 类声明。定义 ELF 镜像装载接口。
@@ -351,7 +351,7 @@ node --test
   `CsrFile` 声明。封装 CSR 地址常量、`mstatus/mie/mip` 位定义以及 CSR 存储接口。
 
 - `arch/csr_file.cpp`
-  `CsrFile` 实现。负责 CSR 状态复位、普通 CSR 读写，以及固定 `misa` 视图、受限 `satp` WARL 语义和 `time -> CLINT mtime` 这类特殊规则。
+  `CsrFile` 实现。负责 CSR 状态复位、普通 CSR 读写，以及固定 `misa` 视图、受限 `satp` WARL 语义、`satp` 写入后的本地 TLB 刷新和 `time -> CLINT mtime` 这类特殊规则。
 
 - `exec/backend.h`
   执行后端抽象声明。定义 `ExecutionBackend` 最小接口，供 `Machine` 统一驱动不同执行模型。
