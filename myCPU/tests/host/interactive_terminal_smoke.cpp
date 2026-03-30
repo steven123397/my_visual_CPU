@@ -107,6 +107,8 @@ int main(int argc, char** argv) {
            << run_until_uart_contains_command("timer_interrupts=", 500000)
            << "{\"cmd\":\"uart_input\",\"text\":\"peek 0x80000000 8\\r\"}\n"
            << run_until_uart_contains_command("0x80000000:", 500000)
+           << "{\"cmd\":\"uart_input\",\"text\":\"peek 0x40000000 4\\r\"}\n"
+           << run_until_uart_contains_command("peek miss va=0x40000000 width=4", 500000)
            << "{\"cmd\":\"uart_input\",\"text\":\"pagewalk 0x80000000\\r\"}\n"
            << run_until_uart_contains_command("leaf=L2", 500000)
            << "{\"cmd\":\"uart_input\",\"text\":\"pte dump 0x80000000\\r\"}\n"
@@ -152,6 +154,11 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (!expect_contains(output, "timer_interrupts=", "regs should expose runtime counters")) {
+        return 1;
+    }
+    if (!expect_contains(output,
+                         "peek miss va=0x40000000 width=4",
+                         "peek should reject unmapped virtual addresses without faulting")) {
         return 1;
     }
     if (!expect_contains(output, "leaf=L2", "pagewalk should resolve the kernel identity map")) {

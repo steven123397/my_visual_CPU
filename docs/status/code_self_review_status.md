@@ -94,6 +94,13 @@
   - `tests/unit/user_program.c`
   - `tests/unit/user_program_smoke.c`
   这一轮仍以行为不变的职责收口为主，目标是把 lifecycle / binding / fault policy / dispatch / smoke orchestration 的边界守得更稳，而不是扩功能面。
+- `interactive_os / monitor / vm_debug` 已完成第一轮 post-Phase1 hardening：
+  - `guest/kernel/monitor_commands.c`
+  - `guest/kernel/monitor_format.c`
+  - `guest/kernel/vm_debug.c`
+  - `tests/unit/monitor_commands.c`
+  - `tests/host/interactive_terminal_smoke.cpp`
+  当前 `peek` 已改为通过 `vm_debug_read()` 做只读校验与读取，未映射地址会显式返回 `peek miss ...`，不再因为 monitor 的调试命令本身制造 guest fault；同时 `monitor_commands.c` 也收紧了参数使用路径，并把通用格式化 helper 下沉回 `monitor_format.c`。
 
 ## 与本次自检直接相关的后续状态
 

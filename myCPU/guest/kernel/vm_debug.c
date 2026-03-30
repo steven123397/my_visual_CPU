@@ -2,6 +2,10 @@
 
 #include "vm_private.h"
 
+static bool vm_debug_read_width_valid(size_t width) {
+    return width == 1U || width == 2U || width == 4U || width == 8U;
+}
+
 bool vm_debug_walk(const vm_address_space_t* address_space,
                    uintptr_t vaddr,
                    vm_debug_walk_result_t* out_result) {
@@ -49,4 +53,36 @@ bool vm_debug_walk(const vm_address_space_t* address_space,
         table = table_from_pte(entry);
         level -= 1U;
     }
+}
+
+bool vm_debug_read(const vm_address_space_t* address_space,
+                   uintptr_t vaddr,
+                   size_t width,
+                   vm_debug_read_result_t* out_result) {
+    vm_debug_read_result_t result = {0};
+    size_t offset = 0U;
+
+    if (address_space == NULL || out_result == NULL ||
+        !span_args_valid(vaddr, width) ||
+        !vm_debug_read_width_valid(width)) {
+        return false;
+    }
+
+    while (offset < width) {
+        vm_debug_walk_result_t walk_result;
+
+        if (!vm_debug_walk(address_space, vaddr + offset, &walk_result)) {
+            *out_result = result;
+            return false;
+        }
+
+        result.value |=
+            ((uint64_t)(*(const volatile uint8_t*)(uintptr_t)walk_result.resolved_pa))
+            << (offset * 8U);
+        ++offset;
+    }
+
+    result.valid = true;
+    *out_result = result;
+    return true;
 }

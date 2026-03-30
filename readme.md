@@ -156,6 +156,8 @@ make test-pipeline-guest-interactive_os_demo
 - `pte dump <addr>`
 - `halt`
 
+当前 `peek` 会先通过 `vm_debug` 做只读地址校验；如果地址未映射或宽度非法，会返回明确的 `usage` / `peek miss ...` 提示，而不会把 monitor 自己变成新的 guest fault 来源。
+
 ## 测试
 
 需要 RISC-V 交叉编译工具链：

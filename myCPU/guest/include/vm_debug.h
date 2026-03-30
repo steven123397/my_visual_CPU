@@ -14,6 +14,15 @@ typedef struct VmDebugWalkResult {
     bool entry_valid[3];
 } vm_debug_walk_result_t;
 
+typedef struct VmDebugReadResult {
+    bool valid;
+    uint64_t value;
+} vm_debug_read_result_t;
+
 bool vm_debug_walk(const vm_address_space_t* address_space,
                    uintptr_t vaddr,
                    vm_debug_walk_result_t* out_result);
+bool vm_debug_read(const vm_address_space_t* address_space,
+                   uintptr_t vaddr,
+                   size_t width,
+                   vm_debug_read_result_t* out_result);

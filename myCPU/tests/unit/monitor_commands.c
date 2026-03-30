@@ -72,6 +72,14 @@ static void reset_stubs(void) {
     memcpy(g_storage_block, kStorageText, sizeof(kStorageText) - 1U);
 }
 
+void monitor_write_char(char ch) {
+    char text[2];
+
+    text[0] = ch;
+    text[1] = '\0';
+    append_output(text);
+}
+
 void monitor_write_text(const char* text) {
     append_output(text);
 }
@@ -81,8 +89,64 @@ void monitor_write_line(const char* text) {
     append_output("\n");
 }
 
+void monitor_write_uint64(uint64_t value) {
+    char buffer[32];
+    size_t index = sizeof(buffer) - 1U;
+
+    buffer[index] = '\0';
+    do {
+        buffer[--index] = (char)('0' + (value % 10U));
+        value /= 10U;
+    } while (value != 0U && index > 0U);
+
+    append_output(&buffer[index]);
+}
+
+void monitor_write_hex64(uint64_t value) {
+    char buffer[19];
+    static const char kHexDigits[] = "0123456789abcdef";
+    size_t start = 0U;
+    size_t index;
+
+    buffer[0] = '0';
+    buffer[1] = 'x';
+    for (index = 0; index < 16U; ++index) {
+        const unsigned shift = (unsigned)((15U - index) * 4U);
+        buffer[2U + index] = kHexDigits[(value >> shift) & 0xfU];
+    }
+    buffer[18] = '\0';
+
+    while (start < 15U && buffer[2U + start] == '0') {
+        ++start;
+    }
+
+    append_output("0x");
+    append_output(&buffer[2U + start]);
+}
+
+void monitor_write_preview_ascii(const uint8_t* data, size_t length) {
+    size_t index;
+
+    for (index = 0; index < length; ++index) {
+        const uint8_t byte = data[index];
+
+        if (byte == 0U) {
+            break;
+        }
+        if (byte < 0x20U || byte > 0x7eU) {
+            monitor_write_char('.');
+            continue;
+        }
+        monitor_write_char((char)byte);
+    }
+}
+
 uint64_t platform_clint_read_mtime(void) {
     return g_mtime;
+}
+
+uint64_t vm_address_space_satp_value(const vm_address_space_t* address_space) {
+    return address_space != NULL ? address_space->satp_value : 0U;
 }
 
 bool storage_probe(storage_info_t* info) {
@@ -204,16 +268,31 @@ static int test_disk_commands(void) {
 static int test_regs_and_peek(void) {
     kernel_runtime_t runtime;
     vm_address_space_t address_space;
-    uint64_t sample = UINT64_C(0x1122334455667788);
-    char command[64];
+    static uint64_t root_table[SV39_LEVEL_ENTRIES] __attribute__((aligned(MEMORY_PAGE_SIZE)));
+    static uint64_t level1_table[SV39_LEVEL_ENTRIES] __attribute__((aligned(MEMORY_PAGE_SIZE)));
+    static uint64_t level0_table[SV39_LEVEL_ENTRIES] __attribute__((aligned(MEMORY_PAGE_SIZE)));
+    static uint8_t sample_page[MEMORY_PAGE_SIZE] __attribute__((aligned(MEMORY_PAGE_SIZE)));
 
     reset_stubs();
     memset(&runtime, 0, sizeof(runtime));
     memset(&address_space, 0, sizeof(address_space));
+    memset(root_table, 0, sizeof(root_table));
+    memset(level1_table, 0, sizeof(level1_table));
+    memset(level0_table, 0, sizeof(level0_table));
+    memset(sample_page, 0, sizeof(sample_page));
     runtime.interrupts.timer_interrupts = 3U;
     runtime.interrupts.external_interrupts = 2U;
     runtime.interrupts.expected_external_source_id = 9U;
     address_space.satp_value = UINT64_C(0x8000000000000088);
+    root_table[vpn_index(UINT64_C(0x80001000), 2U)] =
+        pte_from_pa((uintptr_t)level1_table, SV39_PTE_VALID);
+    level1_table[vpn_index(UINT64_C(0x80001000), 1U)] =
+        pte_from_pa((uintptr_t)level0_table, SV39_PTE_VALID);
+    level0_table[vpn_index(UINT64_C(0x80001000), 0U)] =
+        pte_from_pa((uintptr_t)sample_page,
+                    SV39_PTE_VALID | VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXEC);
+    *(uint64_t*)sample_page = UINT64_C(0x1122334455667788);
+    address_space.root_table = root_table;
     runtime.address_space = &address_space;
     monitor_commands_reset(0);
 
@@ -226,9 +305,7 @@ static int test_regs_and_peek(void) {
     }
 
     reset_output();
-    snprintf(command, sizeof(command), "peek 0x%llx 8",
-             (unsigned long long)(uintptr_t)&sample);
-    if (!monitor_execute_line(&runtime, command)) {
+    if (!monitor_execute_line(&runtime, "peek 0x80001000 8")) {
         return fail("peek should continue running");
     }
     if (strstr(g_output, "0x1122334455667788") == NULL) {
@@ -273,11 +350,67 @@ static int test_pagewalk_and_pte_dump(void) {
     return 0;
 }
 
+static int test_monitor_usage_and_miss_paths(void) {
+    kernel_runtime_t runtime;
+    vm_address_space_t address_space;
+    static uint64_t root_table[SV39_LEVEL_ENTRIES] __attribute__((aligned(MEMORY_PAGE_SIZE)));
+
+    reset_stubs();
+    memset(&runtime, 0, sizeof(runtime));
+    memset(&address_space, 0, sizeof(address_space));
+    memset(root_table, 0, sizeof(root_table));
+    address_space.root_table = root_table;
+    runtime.address_space = &address_space;
+    monitor_commands_reset(0);
+
+    if (!monitor_execute_line(&runtime, "disk read 0 extra")) {
+        return fail("disk read with extra args should still return to the monitor");
+    }
+    if (strstr(g_output, "usage: disk info | disk read <lba>") == NULL) {
+        return fail("disk read with extra args should print usage");
+    }
+
+    reset_output();
+    if (!monitor_execute_line(&runtime, "peek 0x40000000 4")) {
+        return fail("peek miss should continue running");
+    }
+    if (strstr(g_output, "peek miss va=0x40000000 width=4") == NULL) {
+        return fail("peek miss should report the rejected virtual address");
+    }
+
+    reset_output();
+    if (!monitor_execute_line(&runtime, "peek 0x80000000 3")) {
+        return fail("peek with invalid width should continue running");
+    }
+    if (strstr(g_output, "usage: peek <addr> [1|2|4|8]") == NULL) {
+        return fail("peek with invalid width should print usage");
+    }
+
+    reset_output();
+    if (!monitor_execute_line(&runtime, "pagewalk 0x40000000 extra")) {
+        return fail("pagewalk with extra args should continue running");
+    }
+    if (strstr(g_output, "usage: pagewalk <addr>") == NULL) {
+        return fail("pagewalk with extra args should print usage");
+    }
+
+    reset_output();
+    if (!monitor_execute_line(&runtime, "pte inspect 0x80000000")) {
+        return fail("unknown pte subcommand should continue running");
+    }
+    if (strstr(g_output, "unknown pte subcommand: inspect") == NULL) {
+        return fail("unknown pte subcommand should include the captured token");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_help_time_uptime_and_halt() != 0 ||
         test_disk_commands() != 0 ||
         test_regs_and_peek() != 0 ||
-        test_pagewalk_and_pte_dump() != 0) {
+        test_pagewalk_and_pte_dump() != 0 ||
+        test_monitor_usage_and_miss_paths() != 0) {
         return 1;
     }
 

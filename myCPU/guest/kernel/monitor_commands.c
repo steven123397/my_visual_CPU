@@ -7,7 +7,6 @@
 #include "platform.h"
 #include "storage.h"
 #include "vm_debug.h"
-#include "vm_private.h"
 
 typedef struct MonitorToken {
     const char* start;
@@ -15,6 +14,12 @@ typedef struct MonitorToken {
 } monitor_token_t;
 
 static uint64_t g_monitor_boot_mtime = 0;
+static const char kMonitorHelpText[] =
+    "help echo time uptime halt disk regs peek pagewalk pte";
+static const char kDiskUsageText[] = "usage: disk info | disk read <lba>";
+static const char kPeekUsageText[] = "usage: peek <addr> [1|2|4|8]";
+static const char kPagewalkUsageText[] = "usage: pagewalk <addr>";
+static const char kPteDumpUsageText[] = "usage: pte dump <addr>";
 
 static const char* monitor_skip_spaces(const char* text) {
     while (text != NULL && *text == ' ') {
@@ -60,6 +65,11 @@ static const char* monitor_next_token(const char* text, monitor_token_t* token) 
     return cursor + token->length;
 }
 
+static bool monitor_cursor_at_end(const char* cursor) {
+    cursor = monitor_skip_spaces(cursor);
+    return cursor == NULL || *cursor == '\0';
+}
+
 static bool monitor_parse_u64(monitor_token_t token, uint64_t* out_value) {
     uint64_t value = 0;
     uint64_t base = 10;
@@ -97,55 +107,16 @@ static bool monitor_parse_u64(monitor_token_t token, uint64_t* out_value) {
             return false;
         }
 
+        if (value > (UINT64_MAX - digit) / base) {
+            return false;
+        }
+
         value = value * base + digit;
         ++index;
     }
 
     *out_value = value;
     return true;
-}
-
-static void monitor_write_char(char ch) {
-    char text[2];
-
-    text[0] = ch;
-    text[1] = '\0';
-    monitor_write_text(text);
-}
-
-static void monitor_write_uint64(uint64_t value) {
-    char buffer[32];
-    size_t index = sizeof(buffer) - 1U;
-
-    buffer[index] = '\0';
-    do {
-        buffer[--index] = (char)('0' + (value % 10U));
-        value /= 10U;
-    } while (value != 0U && index > 0U);
-
-    monitor_write_text(&buffer[index]);
-}
-
-static void monitor_write_hex64(uint64_t value) {
-    char buffer[19];
-    static const char kHexDigits[] = "0123456789abcdef";
-    size_t start = 0U;
-    size_t index;
-
-    buffer[0] = '0';
-    buffer[1] = 'x';
-    for (index = 0; index < 16U; ++index) {
-        const unsigned shift = (unsigned)((15U - index) * 4U);
-        buffer[2U + index] = kHexDigits[(value >> shift) & 0xfU];
-    }
-    buffer[18] = '\0';
-
-    while (start < 15U && buffer[2U + start] == '0') {
-        ++start;
-    }
-
-    monitor_write_text("0x");
-    monitor_write_text(&buffer[2U + start]);
 }
 
 static void monitor_write_captured_token(monitor_token_t token) {
@@ -156,24 +127,8 @@ static void monitor_write_captured_token(monitor_token_t token) {
     }
 }
 
-static void monitor_write_preview_ascii(const uint8_t* data, size_t length) {
-    size_t index;
-
-    for (index = 0; index < length; ++index) {
-        const uint8_t byte = data[index];
-        if (byte == 0U) {
-            break;
-        }
-        if (byte < 0x20U || byte > 0x7eU) {
-            monitor_write_char('.');
-            continue;
-        }
-        monitor_write_char((char)byte);
-    }
-}
-
 static bool monitor_handle_help(void) {
-    monitor_write_line("help echo time uptime halt disk regs peek pagewalk pte");
+    monitor_write_line(kMonitorHelpText);
     return true;
 }
 
@@ -238,8 +193,8 @@ static bool monitor_handle_disk_read(const char* cursor) {
     uint64_t status;
 
     cursor = monitor_next_token(cursor, &lba_token);
-    if (!monitor_parse_u64(lba_token, &lba)) {
-        monitor_write_line("usage: disk read <lba>");
+    if (!monitor_parse_u64(lba_token, &lba) || !monitor_cursor_at_end(cursor)) {
+        monitor_write_line(kDiskUsageText);
         return true;
     }
 
@@ -266,6 +221,10 @@ static bool monitor_handle_disk(const char* cursor) {
 
     cursor = monitor_next_token(cursor, &subcommand);
     if (monitor_token_eq(subcommand, "info")) {
+        if (!monitor_cursor_at_end(cursor)) {
+            monitor_write_line(kDiskUsageText);
+            return true;
+        }
         return monitor_handle_disk_info();
     }
 
@@ -273,7 +232,7 @@ static bool monitor_handle_disk(const char* cursor) {
         return monitor_handle_disk_read(cursor);
     }
 
-    monitor_write_line("usage: disk info | disk read <lba>");
+    monitor_write_line(kDiskUsageText);
     return true;
 }
 
@@ -283,7 +242,7 @@ static bool monitor_handle_regs(const kernel_runtime_t* runtime) {
     const vm_address_space_t* address_space =
         runtime != NULL ? runtime->address_space : NULL;
     const uint64_t satp_value =
-        address_space != NULL ? address_space->satp_value : 0U;
+        address_space != NULL ? vm_address_space_satp_value(address_space) : 0U;
 
     monitor_write_text("satp=");
     monitor_write_hex64(satp_value);
@@ -301,46 +260,50 @@ static bool monitor_handle_regs(const kernel_runtime_t* runtime) {
     return true;
 }
 
-static bool monitor_handle_peek(const char* cursor) {
+static bool monitor_handle_peek(const kernel_runtime_t* runtime,
+                                const char* cursor) {
     monitor_token_t address_token;
     monitor_token_t width_token;
+    const vm_address_space_t* address_space =
+        runtime != NULL ? runtime->address_space : NULL;
     uint64_t address = 0;
     uint64_t width = 8;
-    uint64_t value = 0;
+    vm_debug_read_result_t result;
 
     cursor = monitor_next_token(cursor, &address_token);
     if (!monitor_parse_u64(address_token, &address)) {
-        monitor_write_line("usage: peek <addr> [1|2|4|8]");
+        monitor_write_line(kPeekUsageText);
         return true;
     }
 
     cursor = monitor_next_token(cursor, &width_token);
     if (width_token.length != 0U && !monitor_parse_u64(width_token, &width)) {
-        monitor_write_line("usage: peek <addr> [1|2|4|8]");
+        monitor_write_line(kPeekUsageText);
         return true;
     }
 
-    switch (width) {
-    case 1:
-        value = *(const volatile uint8_t*)(uintptr_t)address;
-        break;
-    case 2:
-        value = *(const volatile uint16_t*)(uintptr_t)address;
-        break;
-    case 4:
-        value = *(const volatile uint32_t*)(uintptr_t)address;
-        break;
-    case 8:
-        value = *(const volatile uint64_t*)(uintptr_t)address;
-        break;
-    default:
-        monitor_write_line("usage: peek <addr> [1|2|4|8]");
+    if (!monitor_cursor_at_end(cursor)) {
+        monitor_write_line(kPeekUsageText);
+        return true;
+    }
+
+    if (width != 1U && width != 2U && width != 4U && width != 8U) {
+        monitor_write_line(kPeekUsageText);
+        return true;
+    }
+
+    if (!vm_debug_read(address_space, (uintptr_t)address, (size_t)width, &result)) {
+        monitor_write_text("peek miss va=");
+        monitor_write_hex64(address);
+        monitor_write_text(" width=");
+        monitor_write_uint64(width);
+        monitor_write_line("");
         return true;
     }
 
     monitor_write_hex64(address);
     monitor_write_text(": ");
-    monitor_write_hex64(value);
+    monitor_write_hex64(result.value);
     monitor_write_line("");
     return true;
 }
@@ -352,8 +315,9 @@ static bool monitor_handle_pagewalk(const kernel_runtime_t* runtime,
     vm_debug_walk_result_t result;
 
     cursor = monitor_next_token(cursor, &address_token);
-    if (!monitor_parse_u64(address_token, &address)) {
-        monitor_write_line("usage: pagewalk <addr>");
+    if (!monitor_parse_u64(address_token, &address) ||
+        !monitor_cursor_at_end(cursor)) {
+        monitor_write_line(kPagewalkUsageText);
         return true;
     }
 
@@ -386,8 +350,9 @@ static bool monitor_handle_pte_dump(const kernel_runtime_t* runtime,
     unsigned level;
 
     cursor = monitor_next_token(cursor, &address_token);
-    if (!monitor_parse_u64(address_token, &address)) {
-        monitor_write_line("usage: pte dump <addr>");
+    if (!monitor_parse_u64(address_token, &address) ||
+        !monitor_cursor_at_end(cursor)) {
+        monitor_write_line(kPteDumpUsageText);
         return true;
     }
 
@@ -461,7 +426,7 @@ bool monitor_execute_line(kernel_runtime_t* runtime, const char* line) {
     }
 
     if (monitor_token_eq(primary, "peek")) {
-        return monitor_handle_peek(cursor);
+        return monitor_handle_peek(runtime, cursor);
     }
 
     if (monitor_token_eq(primary, "pagewalk")) {

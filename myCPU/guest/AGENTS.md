@@ -95,9 +95,9 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - [kernel/monitor.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/monitor.c)
   banner / prompt / monitor 主循环。
 - [kernel/monitor_commands.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/monitor_commands.c)
-  monitor 命令解析与执行，当前至少包含 `help`、`echo`、`time`、`uptime`、`disk info`、`disk read`、`regs`、`peek`、`pagewalk`、`pte dump` 与 `halt`。
+  monitor 命令解析与执行，当前至少包含 `help`、`echo`、`time`、`uptime`、`disk info`、`disk read`、`regs`、`peek`、`pagewalk`、`pte dump` 与 `halt`；`peek` 当前已经改为走 `vm_debug` 的只读校验与读取路径，不再直接裸解引用虚拟地址。
 - [kernel/vm_debug.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_debug.c)
-  monitor 专用的只读页表 walk / PTE dump helper，不把这组调试输出混回 `kernel_alpha`。
+  monitor 专用的只读 VM 调试 helper，当前承接页表 walk / PTE dump，以及 `peek` 的受校验只读读取路径，不把这组调试输出混回 `kernel_alpha`。
 
 ## 当前十条 `kernel_alpha` 路径
 

@@ -178,6 +178,22 @@
 - `cd myCPU && make test-pipeline-guest-interactive_os_demo`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 
+## 2026-03-30 补充进展
+
+本轮继续把 `interactive_os / monitor / vm_debug` 往 post-Phase1 hardening 收口：
+
+- `monitor_format.c` 现在承接 monitor 数字 / 十六进制 / ASCII preview 输出 helper，`monitor_commands.c` 不再继续持有这组格式化细节。
+- `vm_debug.c` 已补 `vm_debug_read()` 只读调试 helper，`peek` 当前会先验证地址与宽度，再读取映射内容；未命中地址空间时返回 `peek miss ...`，不再让 monitor 自己制造 guest fault。
+- `tests/unit/monitor_commands.c` 已扩 `disk read` 参数使用、`peek` unmapped/misuse 和 `pagewalk`/`pte` 错误路径回归。
+- `tests/host/interactive_terminal_smoke.cpp` 已补 guest miss-path smoke，验证 `interactive_os` 在 functional / pipeline 下都能稳定暴露 `peek miss` 输出。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-unit-monitor_commands`
+- `cd myCPU && make test-host-interactive_terminal_smoke`
+- `cd myCPU && make test-guest-interactive_os_demo`
+- `cd myCPU && make test-pipeline-guest-interactive_os_demo`
+
 ## Phase 2 当前安排
 
 当前对 Phase 2 的理解和安排如下：
@@ -207,7 +223,7 @@
 
 1. 先沿 reference path 继续维护已形成闭环的 `privilege / Sv39`、illegal / MMIO / ELF / CSR 合同矩阵，并在新增 bug 出现时补最小持久回归。
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
-3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `vm*`、`trap*`、`supervisor_runtime`、`user_task*`、`user_program*` 与 `supervisor_demo_smoke` 的第一轮收口已经完成，下一块更值得继续推进的是 `interactive_os / monitor / vm_debug`。
+3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug` 的第一轮 hardening 也已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup / kernel_alpha/common`。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
 6. 当前 `Phase 3-A` 第一轮已落地；后续优先维护 `predictor_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 与 `frontend` 透传门禁，再决定是否打开下一轮 predictor hardening 或更远的 `Phase 3-B/C` 设计。
