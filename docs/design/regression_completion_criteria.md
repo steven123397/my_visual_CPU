@@ -9,15 +9,15 @@
 ## 关联文档
 
 - 相关状态：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-  - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
+  - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关计划：
-  - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
+  - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为当前 Phase 1 / Phase 2 回归是否达到阶段性收口的统一判断口径。
-- 具体执行进展、当前缺口和近期任务以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 与相关 `status` 文档为准。
+- 具体执行进展、当前缺口和近期任务以 [status/mainline_status.md](../status/mainline_status.md) 与相关 `status` 文档为准。
 
 ## 目标 / 主题
 

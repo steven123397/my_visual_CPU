@@ -17,16 +17,16 @@
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-  - [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
-  - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
+  - [status/code_self_review_status.md](../status/code_self_review_status.md)
+  - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关计划：
   - 无。该方向的执行细节已经回写到相关 `status` 文档。
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为当前主线对"最小可交互 OS"目标的结构边界说明。
-- 当前正式进展以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准；当前 terminal 壳层剩余稳定化问题统一写入 [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)。
+- 当前正式进展以 [status/mainline_status.md](../status/mainline_status.md) 为准；当前 terminal 壳层剩余稳定化问题统一写入 [status/code_self_review_status.md](../status/code_self_review_status.md)。
 
 ## 背景与问题
 
@@ -157,7 +157,7 @@ terminal 相关前端状态至少包括：
 - 鼠标只影响前端壳层焦点与控件行为，不向 guest 暴露更高层点击语义。
 - 调试信息继续保留为辅助观察区，不与 guest monitor 的命令语义耦合。
 
-当前这组合同已经实现完成；剩余工作重点是 session 串行化、terminal 性能和协议稳健性，统一见 [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)。
+当前这组合同已经实现完成；剩余工作重点是 session 串行化、terminal 性能和协议稳健性，统一见 [status/code_self_review_status.md](../status/code_self_review_status.md)。
 
 #### 4. Guest monitor 合同
 
@@ -225,4 +225,4 @@ guest 侧收口为一个最小串口 monitor：
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为当前主线对“最小可交互 OS”目标的结构边界说明。
-- 当前正式进展以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准；若后续为该方向建立专门 `status` 文档，再以对应文档承载实时进度。
+- 当前正式进展以 [status/mainline_status.md](../status/mainline_status.md) 为准；若后续为该方向建立专门 `status` 文档，再以对应文档承载实时进度。

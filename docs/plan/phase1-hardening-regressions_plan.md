@@ -11,10 +11,10 @@
 ## 关联文档
 
 - 来源设计：
-  - [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+  - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
 - 目标状态：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-  - [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
+  - [status/code_self_review_status.md](../status/code_self_review_status.md)
 
 **实际结果：**
 - 已扩展 `myCPU/tests/asm/illegal_integer_encodings.S`

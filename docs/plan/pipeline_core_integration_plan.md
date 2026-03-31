@@ -2,7 +2,7 @@
 
 > **文档状态：** 已完成
 
-> **完成态说明：** 本文档对应的接入工作已经完成，继续保留在 `plan/` 作为历史计划记录。当前结果以 [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)、[debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md) 和 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。下文中的“本轮”“不迁移”“待办”等表述均按当时计划语境理解。
+> **完成态说明：** 本文档对应的接入工作已经完成，继续保留在 `plan/` 作为历史计划记录。当前结果以 [pipeline_core_integration.md](../design/pipeline_core_integration.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md) 和 [status/mainline_status.md](../status/mainline_status.md) 为准。下文中的“本轮”“不迁移”“待办”等表述均按当时计划语境理解。
 
 > **面向 AI 代理的工作者：** 如需重演类似工作，仍应使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans。下文复选框结果仅保留历史执行记录。
 
@@ -15,17 +15,17 @@
 ## 关联文档
 
 - 来源设计：
-  - [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)
+  - [design/pipeline_core_integration.md](../design/pipeline_core_integration.md)
 - 目标状态：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
 
 ---
 
 ## 参考文档
 
-- [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)
-- [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
-- [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
+- [pipeline_core_integration.md](../design/pipeline_core_integration.md)
+- [myCPU/AGENTS.md](../../myCPU/AGENTS.md)
+- [readme.md](../../readme.md)
 
 ## 文件结构
 
@@ -149,7 +149,7 @@
 
 - [x] **步骤 1：先让 `Machine` 具备 backend 编排骨架**
 
-  修改 [machine.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.h) 和 [machine.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.cpp)，引入：
+  修改 [machine.h](../../myCPU/src/platform/machine.h) 和 [machine.cpp](../../myCPU/src/platform/machine.cpp)，引入：
 
   - `BackendKind`
   - `std::unique_ptr<ExecutionBackend>`
@@ -161,7 +161,7 @@
 
 - [x] **步骤 2：实现 `ExecutionBackend` 与 `FunctionalBackend`**
 
-  在 [backend.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/exec/backend.h) 中定义最小接口：
+  在 [backend.h](../../myCPU/src/exec/backend.h) 中定义最小接口：
 
   ```cpp
   class ExecutionBackend {
@@ -172,7 +172,7 @@
   };
   ```
 
-  在 [functional_backend.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/exec/functional_backend.cpp) 中先直接包装：
+  在 [functional_backend.cpp](../../myCPU/src/exec/functional_backend.cpp) 中先直接包装：
 
   ```cpp
   void FunctionalBackend::step() {
@@ -182,7 +182,7 @@
 
 - [x] **步骤 3：把新源文件接进构建系统**
 
-  修改 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile)，加入：
+  修改 [Makefile](../../myCPU/Makefile)，加入：
 
   - `src/exec/functional_backend.cpp`
   - 未来 `pipeline` / `isa` 文件的占位变量结构
@@ -229,7 +229,7 @@
 
 - [x] **步骤 1：先写共享语义层 smoke**
 
-  新增 [instruction_semantics_smoke.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/instruction_semantics_smoke.cpp)，覆盖至少这些场景：
+  新增 [instruction_semantics_smoke.cpp](../../myCPU/tests/host/instruction_semantics_smoke.cpp)，覆盖至少这些场景：
 
   - `addi` 生成正确的 `rd_write`
   - `jal` 生成正确的 link write 和 redirect
@@ -245,7 +245,7 @@
 
 - [x] **步骤 3：实现共享语义值对象与上下文**
 
-  在 [effects.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/isa/effects.h) 中添加：
+  在 [effects.h](../../myCPU/src/isa/effects.h) 中添加：
 
   - `TrapRequest`
   - `RegWrite`
@@ -254,7 +254,7 @@
   - `ControlEffect`
   - `InsnEffects`
 
-  在 [execution_context.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/isa/execution_context.cpp) 中提供 `CPU` / `CoreState` / `CsrFile` / `AddressSpace` / `Bus` 的受控访问。
+  在 [execution_context.cpp](../../myCPU/src/isa/execution_context.cpp) 中提供 `CPU` / `CoreState` / `CsrFile` / `AddressSpace` / `Bus` 的受控访问。
 
 - [x] **步骤 4：把 `exec/*` 迁成 `build_*_effects()`**
 
@@ -263,7 +263,7 @@
   目标状态：
 
   - `InstructionSemantics::execute()` 统一分发到 `build_*_effects()`
-  - [cpu.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/cpu.cpp) 通过 `apply_instruction_effects()` 消费 effects
+  - [cpu.cpp](../../myCPU/src/cpu.cpp) 通过 `apply_instruction_effects()` 消费 effects
   - 共享语义层成为 `functional` 与后续 `pipeline` 的统一 ISA 语义源
 
 - [x] **步骤 5：运行共享语义 smoke 并再跑完整回归**
@@ -296,7 +296,7 @@
 
 - [x] **步骤 1：先写 `AddressSpace::AccessResult` smoke**
 
-  新增 [address_space_faults_smoke.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/address_space_faults_smoke.cpp)，覆盖：
+  新增 [address_space_faults_smoke.cpp](../../myCPU/tests/host/address_space_faults_smoke.cpp)，覆盖：
 
   - bare-mode unmapped load 的 access fault result
   - legacy `load()` wrapper 仍然会真正写 trap CSR
@@ -311,7 +311,7 @@
 
 - [x] **步骤 3：实现 `AccessResult` 和 result API**
 
-  在 [address_space.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/mem/address_space.h) 中新增：
+  在 [address_space.h](../../myCPU/src/mem/address_space.h) 中新增：
 
   ```cpp
   struct AccessResult {
@@ -382,7 +382,7 @@
 
 - [x] **步骤 1：先写 pipeline backend smoke**
 
-  新增 [pipeline_backend_smoke.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/pipeline_backend_smoke.cpp)，覆盖至少这些关键行为：
+  新增 [pipeline_backend_smoke.cpp](../../myCPU/tests/host/pipeline_backend_smoke.cpp)，覆盖至少这些关键行为：
 
   - commit-boundary timer interrupt
   - illegal instruction 不允许 younger write 提交
@@ -415,7 +415,7 @@
 
 - [x] **步骤 4：把 `Machine` 扩成可持有 `PipelineBackend`**
 
-  在 [machine.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.cpp) 的 `rebuild_backend()` 中新增 `Pipeline` 分支。
+  在 [machine.cpp](../../myCPU/src/platform/machine.cpp) 的 `rebuild_backend()` 中新增 `Pipeline` 分支。
 
   如远端实现需要 `prepare_for_load()`、`reset_loaded_image()`、`clear_storage_image()` 等辅助入口，则按当前主线现有语义做最小重接，不得回退当前 storage 选项行为。
 
@@ -450,14 +450,14 @@
 
 - [x] **步骤 1：先写差分 smoke 和 CLI smoke**
 
-  新增 [backend_differential_smoke.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/backend_differential_smoke.cpp)，比较 `functional` 与 `pipeline` 在提交态上的一致性，至少覆盖：
+  新增 [backend_differential_smoke.cpp](../../myCPU/tests/host/backend_differential_smoke.cpp)，比较 `functional` 与 `pipeline` 在提交态上的一致性，至少覆盖：
 
   - 基础整数 / 跳转 / CSR / 访存路径
   - illegal instruction
   - `ecall`
   - `mret`
 
-  新增 [backend_cli.sh](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/host/backend_cli.sh)，覆盖：
+  新增 [backend_cli.sh](../../myCPU/tests/host/backend_cli.sh)，覆盖：
 
   - backend 缺省值仍为 `functional`
   - `--backend functional` 输出正确
@@ -476,17 +476,17 @@
 
 - [x] **步骤 3：在当前主线语义上实现 CLI backend 切换**
 
-  修改 [main.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/main.cpp)：
+  修改 [main.cpp](../../myCPU/src/main.cpp)：
 
   - 增加 `--backend functional|pipeline`
   - 保留当前 `-b`、`--disk`、`--disk-not-ready`、`--disk-bad-magic`
   - 不引入 `--debug-cli`
 
-  修改 [machine.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.h) / [machine.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.cpp)，确保 backend 切换、镜像加载与 storage 附加在当前主线语义下正确工作。
+  修改 [machine.h](../../myCPU/src/platform/machine.h) / [machine.cpp](../../myCPU/src/platform/machine.cpp)，确保 backend 切换、镜像加载与 storage 附加在当前主线语义下正确工作。
 
 - [x] **步骤 4：把 host-side pipeline 门禁接进 `Makefile`**
 
-  在 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 中新增：
+  在 [Makefile](../../myCPU/Makefile) 中新增：
 
   - `tests/host/*` 的构建规则
   - `test-host-instruction_semantics`
@@ -531,13 +531,13 @@
 
 - [x] **步骤 1：更新对外与对内说明**
 
-  在 [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md) 中补充：
+  在 [myCPU/AGENTS.md](../../myCPU/AGENTS.md) 中补充：
 
   - `ExecutionBackend` / `PipelineBackend` 已接入
   - `functional` 仍是默认 reference backend
   - `pipeline` 当前正式门禁只到 host-side
 
-  在 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 中补充：
+  在 [readme.md](../../readme.md) 中补充：
 
   - `--backend pipeline` 的使用方式
   - `test-pipeline` 的定位
@@ -572,5 +572,5 @@
 ## 执行备注
 
 - 本计划默认按小补丁推进，每个任务完成后都应先做局部验证，再做一次完整门禁。
-- 如果在任务 4 或任务 5 中发现 `pipeline` 为了通过 host-side smoke 需要修改 guest/runtime 合同，应立即停止并回到 [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md) 重新评估，不得直接改 guest 语义绕过问题。
+- 如果在任务 4 或任务 5 中发现 `pipeline` 为了通过 host-side smoke 需要修改 guest/runtime 合同，应立即停止并回到 [pipeline_core_integration.md](../design/pipeline_core_integration.md) 重新评估，不得直接改 guest 语义绕过问题。
 - 如果在移植远端 `PipelineBackend` 时发现核心逻辑与 `debug_snapshot()` 强耦合，应优先删除调试输出拼装代码，而不是把 `debug/*` 一起带入本轮。

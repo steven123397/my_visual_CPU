@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-本文件适用于 [myCPU/guest](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest) 子树下的 guest supervisor runtime、VM、trap、runtime、user task/program，以及 demo / smoke orchestration 与独立 kernel bring-up 入口。
+本文件适用于 [myCPU/guest](.) 子树下的 guest supervisor runtime、VM、trap、runtime、user task/program，以及 demo / smoke orchestration 与独立 kernel bring-up 入口。
 
 ## 当前实现基线
 
@@ -29,7 +29,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - 单用户生命周期和清理 smoke
 - 独立 kernel alpha 的正向 bring-up 与九条负向回归
 - 独立 `interactive_os` 的 browser/front-end 终端壳闭环与 monitor 命令集
-- `guest_supervisor_demo` 与 `kernel_alpha` 十条 demo 当前共同构成 Phase 1 核心 guest 门禁，回归收口口径见 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+- `guest_supervisor_demo` 与 `kernel_alpha` 十条 demo 当前共同构成 Phase 1 核心 guest 门禁，回归收口口径见 [docs/design/regression_completion_criteria.md](../../docs/design/regression_completion_criteria.md)
 - 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 guest runtime 调整默认按 post-Phase1 hardening 理解。
 
 ## 分层边界
@@ -60,43 +60,43 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 
 ### 入口与编排层：`supervisor_demo` / `kernel_alpha` / `interactive_os`
 
-- [supervisor_demo/main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/main.c)
+- [supervisor_demo/main.c](supervisor_demo/main.c)
   只负责基础初始化和调用 `supervisor_demo_smoke_run()`。
-- [kernel_alpha/main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/main.c)
+- [kernel_alpha/main.c](kernel_alpha/main.c)
   独立 `kernel_alpha_demo` 正向入口。
-- [kernel_alpha/fault_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/fault_main.c)
+- [kernel_alpha/fault_main.c](kernel_alpha/fault_main.c)
   独立 `kernel_alpha_fault_demo` 负向入口。
-- [kernel_alpha/storage_no_media_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_no_media_main.c)
+- [kernel_alpha/storage_no_media_main.c](kernel_alpha/storage_no_media_main.c)
   独立 `kernel_alpha_storage_no_media_demo` 负向入口。
-- [kernel_alpha/storage_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_not_ready_main.c)
+- [kernel_alpha/storage_not_ready_main.c](kernel_alpha/storage_not_ready_main.c)
   独立 `kernel_alpha_storage_not_ready_demo` 负向入口。
-- [kernel_alpha/storage_bad_magic_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_magic_main.c)
+- [kernel_alpha/storage_bad_magic_main.c](kernel_alpha/storage_bad_magic_main.c)
   独立 `kernel_alpha_storage_bad_magic_demo` 负向入口。
-- [kernel_alpha/storage_bad_block_count_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_block_count_main.c)
+- [kernel_alpha/storage_bad_block_count_main.c](kernel_alpha/storage_bad_block_count_main.c)
   独立 `kernel_alpha_storage_bad_block_count_demo` 负向入口。
-- [kernel_alpha/storage_lba_range_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_lba_range_main.c)
+- [kernel_alpha/storage_lba_range_main.c](kernel_alpha/storage_lba_range_main.c)
   独立 `kernel_alpha_storage_lba_range_demo` 负向入口。
-- [kernel_alpha/storage_bad_command_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_command_main.c)
+- [kernel_alpha/storage_bad_command_main.c](kernel_alpha/storage_bad_command_main.c)
   独立 `kernel_alpha_storage_bad_command_demo` 负向入口。
-- [kernel_alpha/plic_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/plic_not_ready_main.c)
+- [kernel_alpha/plic_not_ready_main.c](kernel_alpha/plic_not_ready_main.c)
   独立 `kernel_alpha_plic_not_ready_demo` 负向入口。
-- [kernel_alpha/timer_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/timer_not_ready_main.c)
+- [kernel_alpha/timer_not_ready_main.c](kernel_alpha/timer_not_ready_main.c)
   独立 `kernel_alpha_timer_not_ready_demo` 负向入口。
-- [kernel_alpha/common.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/common.c)
+- [kernel_alpha/common.c](kernel_alpha/common.c)
   `kernel_alpha` 各入口共享的 alpha bring-up marker / 命名 wrapper：当前只保留 `P/D/S` 这类 alpha 侧标记与兼容入口名，具体 `PLIC / first delivery / storage probe / signature` 实现已经下沉到 `kernel_runtime.c`，不再承载通用 `K/M/V` 骨架或 phase orchestration 细节。
-- [kernel_alpha/interrupt_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/interrupt_contract.c)
+- [kernel_alpha/interrupt_contract.c](kernel_alpha/interrupt_contract.c)
   `kernel_alpha` non-storage 负向回归共享的 interrupt / fault helper：当前收口 interrupt bring-up、platform interrupt readiness、PLIC not-ready、timer not-ready 与标准 post-handler 合同。
-- [kernel_alpha/storage_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_contract.c)
+- [kernel_alpha/storage_contract.c](kernel_alpha/storage_contract.c)
   `kernel_alpha` storage 负向回归共享的合同 helper：当前收口 no-media / not-ready / bad-magic / bad-block-count / lba-range / bad-command 六条独立路径的公共协议检查。
-- [interactive_os/main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/interactive_os/main.c)
+- [interactive_os/main.c](interactive_os/main.c)
   独立 `interactive_os` 入口。当前只负责最小 bring-up、进入串口 monitor 主循环，不承载 `kernel_alpha` 的 bring-up 合同。
-- [kernel/console_input.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/console_input.c)
+- [kernel/console_input.c](kernel/console_input.c)
   轮询式 UART 输入与最小行编辑。
-- [kernel/monitor.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/monitor.c)
+- [kernel/monitor.c](kernel/monitor.c)
   banner / prompt / monitor 主循环。
-- [kernel/monitor_commands.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/monitor_commands.c)
+- [kernel/monitor_commands.c](kernel/monitor_commands.c)
   monitor 命令解析与执行，当前至少包含 `help`、`echo`、`time`、`uptime`、`disk info`、`disk read`、`regs`、`peek`、`pagewalk`、`pte dump` 与 `halt`；`peek` 当前已经改为走 `vm_debug` 的只读校验与读取路径，不再直接裸解引用虚拟地址。
-- [kernel/vm_debug.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_debug.c)
+- [kernel/vm_debug.c](kernel/vm_debug.c)
   monitor 专用的只读 VM 调试 helper，当前承接页表 walk / PTE dump，以及 `peek` 的受校验只读读取路径，不把这组调试输出混回 `kernel_alpha`。
 
 ## 当前十条 `kernel_alpha` 路径
@@ -247,19 +247,19 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 
 ## 当前仍需关注的问题
 
-- [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c)
+- [kernel/vm.c](kernel/vm.c)
   已收口为低层 page-table / mapping core。
-- [kernel/vm_address_space.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_address_space.c)
+- [kernel/vm_address_space.c](kernel/vm_address_space.c)
   当前承载 address space 生命周期、kernel mapping 与 fault-range 注册。
-- [kernel/vm_object.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_object.c)
+- [kernel/vm_object.c](kernel/vm_object.c)
   当前承载 object / region object 生命周期。
-- [kernel/vm_fault.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_fault.c)
+- [kernel/vm_fault.c](kernel/vm_fault.c)
   当前承载 fault policy / action 与 page-fault dispatch。
-- [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c)
+- [kernel/trap.c](kernel/trap.c)
   已拆出 `trap_dispatch.c`，但后续仍要继续守住两侧边界不要重新耦合。
-- [kernel/user_task.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_task.c)、[kernel/user_task_bootstrap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_task_bootstrap.c) 和 [kernel/user_program.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_program.c)
+- [kernel/user_task.c](kernel/user_task.c)、[kernel/user_task_bootstrap.c](kernel/user_task_bootstrap.c) 和 [kernel/user_program.c](kernel/user_program.c)
   当前已经完成第一轮 lifecycle / plan / binding 收口，并新增 `test-unit-user_task`、`test-unit-user_task_bootstrap` 与 `test-unit-user_program` host-side 门禁；后续仍要避免回退到零散 wrapper 和重复 rollback 分支。
-- [kernel/user_program_smoke.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/user_program_smoke.c) 和 [kernel/supervisor_demo_smoke.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/supervisor_demo_smoke.c)
+- [kernel/user_program_smoke.c](kernel/user_program_smoke.c) 和 [kernel/supervisor_demo_smoke.c](kernel/supervisor_demo_smoke.c)
   当前已经完成第一轮 smoke orchestration helper 收口，并新增 `test-unit-user_program_smoke`；后续仍要避免把 prepare / round / active-memory / platform-tail 再重新写散。
 - 当前 guest runtime 结构收口的 host-side 单元门禁，至少已经覆盖：
   - `test-unit-kernel_bringup`
@@ -283,17 +283,17 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   - `TRAP_MAX_INTERRUPT_CAUSE`
   - `TRAP_MAX_EXCEPTION_CAUSE`
 - `kernel_alpha` 仍是 alpha 形态，还没有真正的内核对象、调度或设备探测流程。
-- [kernel/kernel_runtime.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_runtime.c)
+- [kernel/kernel_runtime.c](kernel/kernel_runtime.c)
   当前已继续收口 `kernel_alpha` 入口的基础 runtime 三件套、common bring-up options 的默认 self-context 装配，以及 alpha 共享 phase helper 的真实实现，但后续仍要继续往真正的小内核对象组织推进。
-- [kernel/kernel_bringup.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_bringup.c)
+- [kernel/kernel_bringup.c](kernel/kernel_bringup.c)
   通用 `K/M/V` bring-up 已从 `kernel_alpha` 子树下沉到基础设施层，避免 `supervisor_demo` 再被 alpha 私有骨架反向耦合。
 
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
 2. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上；它们当前就是 Phase 1 核心 guest 门禁的一部分。公共 bring-up 编排继续收敛在 `kernel_runtime.c`、`kernel_bringup.c` 和 `kernel/supervisor_runtime.c`；`kernel_alpha/common.c` 只保留轻量 marker wrapper，不要让重复骨架重新散回各入口。
-3. 守住 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) / [kernel/vm_address_space.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_address_space.c) / [kernel/vm_process.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_process.c) / [kernel/vm_object.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_object.c) / [kernel/vm_fault.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_fault.c) 的边界，不要重新耦合。
-4. 在 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 与 [kernel/trap_dispatch.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap_dispatch.c) 的边界上继续保持 lifecycle / dispatch 分离，不要回退。
+3. 守住 [kernel/vm.c](kernel/vm.c) / [kernel/vm_address_space.c](kernel/vm_address_space.c) / [kernel/vm_process.c](kernel/vm_process.c) / [kernel/vm_object.c](kernel/vm_object.c) / [kernel/vm_fault.c](kernel/vm_fault.c) 的边界，不要重新耦合。
+4. 在 [kernel/trap.c](kernel/trap.c) 与 [kernel/trap_dispatch.c](kernel/trap_dispatch.c) 的边界上继续保持 lifecycle / dispatch 分离，不要回退。
 5. 继续沿着 process / runtime refinement 与大文件拆分的方向收口 `kernel_runtime`、`kernel_bringup` 和相关基础设施，而不是再把逻辑重新堆回 demo 入口。
 6. 继续补更多 user interrupt / trap coverage，但不要把这条线和 Phase 2 backend 稳定化混在一起。
 

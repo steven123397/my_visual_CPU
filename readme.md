@@ -27,9 +27,9 @@ my_visual_CPU/
 
 更细的模块边界和局部规则请直接看：
 
-- [AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/AGENTS.md)
-- [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
-- [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
+- [AGENTS.md](AGENTS.md)
+- [myCPU/AGENTS.md](myCPU/AGENTS.md)
+- [myCPU/guest/AGENTS.md](myCPU/guest/AGENTS.md)
 
 ## 构建
 
@@ -146,21 +146,21 @@ make test-guest-kernel_alpha_fault_demo
 - `make test` 守默认 `functional` reference path。
 - `make test-pipeline` 守 `pipeline` backend 的 asm / host / guest / debug 门禁。
 - `node --test` 守本地调试服务、terminal API 和前端纯状态逻辑。
-- 更细的目标名称以 [myCPU/Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。
+- 更细的目标名称以 [myCPU/Makefile](myCPU/Makefile) 为准。
 
 ## 文档入口
 
 想快速了解当前状态，建议按下面顺序看：
 
-1. [docs/index.md](/home/liangjiaqi/projects/my_visual_CPU/docs/index.md)
-2. [docs/status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-3. [docs/status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
-4. [docs/status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
+1. [docs/index.md](docs/index.md)
+2. [docs/status/mainline_status.md](docs/status/mainline_status.md)
+3. [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
+4. [docs/status/code_self_review_status.md](docs/status/code_self_review_status.md)
 
 设计边界和回归收口标准见：
 
-- [docs/design/cpp_refactor_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/cpp_refactor_design.md)
-- [docs/design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
-- [docs/design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
-- [docs/design/platform_mmio_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/platform_mmio_contract.md)
-- [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+- [docs/design/cpp_refactor_design.md](docs/design/cpp_refactor_design.md)
+- [docs/design/debug_frontend_integration.md](docs/design/debug_frontend_integration.md)
+- [docs/design/minimal_interactive_os_design.md](docs/design/minimal_interactive_os_design.md)
+- [docs/design/platform_mmio_contract.md](docs/design/platform_mmio_contract.md)
+- [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)

@@ -9,14 +9,14 @@
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
-  - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
+  - [plan/pipeline_core_integration_plan.md](../plan/pipeline_core_integration_plan.md)
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为主线 C++ 结构收口的长期设计背景。
-- 当前主线推进节奏、已完成结果和近期任务以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。
+- 当前主线推进节奏、已完成结果和近期任务以 [status/mainline_status.md](../status/mainline_status.md) 为准。
 
 ## 1. 目的与约束
 

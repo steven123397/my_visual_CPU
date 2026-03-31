@@ -13,7 +13,7 @@
 
 ## 项目概况
 
-仓库当前主体是 [myCPU](/home/liangjiaqi/projects/my_visual_CPU/myCPU)，一个从 C 原型逐步演进到模块化 C++ 架构的小型 RISC-V 模拟器。
+仓库当前主体是 [myCPU](myCPU)，一个从 C 原型逐步演进到模块化 C++ 架构的小型 RISC-V 模拟器。
 
 当前定位：
 
@@ -28,22 +28,22 @@
 
 ## 仓库结构
 
-- [myCPU](/home/liangjiaqi/projects/my_visual_CPU/myCPU)
+- [myCPU](myCPU)
   核心模拟器代码、guest runtime、测试和构建脚本。
-- [frontend](/home/liangjiaqi/projects/my_visual_CPU/frontend)
+- [frontend](frontend)
   本地调试服务、浏览器前端和 Node 测试。
-- [docs](/home/liangjiaqi/projects/my_visual_CPU/docs)
-  按 `background / design / plan / status` 组织的正式技术文档，以及统一入口 [docs/index.md](/home/liangjiaqi/projects/my_visual_CPU/docs/index.md)。
-- [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
+- [docs](docs)
+  按 `background / design / plan / status` 组织的正式技术文档，以及统一入口 [docs/index.md](docs/index.md)。
+- [readme.md](readme.md)
   面向读者的项目概览、构建和运行说明。
 
 ## 子目录 AGENTS 索引
 
-- [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
+- [myCPU/AGENTS.md](myCPU/AGENTS.md)
   simulator 主体说明：CPU、CSR、trap、MMU、platform、device、loader、tests 的当前实现与局部规则。
-- [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
+- [myCPU/guest/AGENTS.md](myCPU/guest/AGENTS.md)
   guest runtime 说明：memory、PMM、VM、trap、runtime、user task/program 与独立 kernel alpha bring-up 的当前边界和下一步。
-- [docs/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/docs/AGENTS.md)
+- [docs/AGENTS.md](docs/AGENTS.md)
   文档维护规则：四分法目录职责、模板、创建条件、完成态回写规则与索引要求。
 
 ## 当前状态
@@ -78,7 +78,7 @@
 
 - `2026-03-25` 已完成一批 simulator-side correctness 修复：非法整数编码、`DIV/REM` 溢出边界、ELF pure-BSS `PT_LOAD`、bus / device 第一轮边界防御。
 - `2026-03-26` 已完成一轮更系统的 Phase 1 hardening 回归扩充：非法编码样本扩展、CPU 侧 MMIO access-fault asm、ELF segment/reject/header 单元回归、host-side MMIO contract matrix，以及 CSR illegal matrix 均已接入现有门禁。
-- `2026-03-26` 已新增 [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)，作为当前 Phase 1 / Phase 2 回归收口标准。
+- `2026-03-26` 已新增 [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)，作为当前 Phase 1 / Phase 2 回归收口标准。
 - `kernel_alpha_demo` 已完成首个可回归 alpha bring-up，当前正向输出为 `KMVPETDS`。
 - `kernel_alpha_fault_demo` 当前负向输出为 `KMVX`。
 - `kernel_alpha_storage_no_media_demo` 当前负向输出为 `KMVNX`。
@@ -121,10 +121,10 @@
 
 相关状态文档见：
 
-- [docs/status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-- [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
-- [docs/status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
-- [docs/status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+- [docs/status/mainline_status.md](docs/status/mainline_status.md)
+- [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)
+- [docs/status/code_self_review_status.md](docs/status/code_self_review_status.md)
+- [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
 
 ## 技术栈
 

@@ -15,20 +15,20 @@
 
 - 本文档对应的第一轮 `pipeline core` 集成已经完成。
 - 当前主线已经在此基础上继续完成了第二轮 `debug/frontend` 接入。
-- 第二轮设计见 [debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)。
+- 第二轮设计见 [debug_frontend_integration.md](debug_frontend_integration.md)。
 - 下文中的“本轮目标/非目标”仅指第一轮 `pipeline core` 集成语境，不代表当前主线的全部已接入范围。
 
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
-  - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
+  - [plan/pipeline_core_integration_plan.md](../plan/pipeline_core_integration_plan.md)
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，记录 `pipeline core` 正式接入主线时确定下来的结构边界。
-- 当前运行状态、后续回归收口和近期重点以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准；原先独立的准备阶段说明已经并入本文档，不再单独维护。
+- 当前运行状态、后续回归收口和近期重点以 [status/mainline_status.md](../status/mainline_status.md) 为准；原先独立的准备阶段说明已经并入本文档，不再单独维护。
 
 ## 背景
 
@@ -229,7 +229,7 @@ main.cpp
 - `backend_differential_smoke`
 - backend CLI smoke
 
-如有必要，应在 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 中新增明确的 `pipeline` 测试入口，例如：
+如有必要，应在 [Makefile](../../myCPU/Makefile) 中新增明确的 `pipeline` 测试入口，例如：
 
 - `make test-pipeline`
 

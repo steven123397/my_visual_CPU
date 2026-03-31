@@ -15,9 +15,9 @@
 ## 关联文档
 
 - 来源设计：
-  - [docs/design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+  - [docs/design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
 - 目标状态：
-  - [docs/status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [docs/status/mainline_status.md](../status/mainline_status.md)
 
 ## 文件结构
 

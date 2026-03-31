@@ -2,7 +2,7 @@
 
 > **文档状态：** 已完成
 
-> **完成态说明：** 该计划对应工作已经完成，继续保留在 `plan/` 作为历史执行记录。当前正式状态以 [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md) 为准。
+> **完成态说明：** 该计划对应工作已经完成，继续保留在 `plan/` 作为历史执行记录。当前正式状态以 [status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
 
 > **面向 AI 代理的工作者：** 如需重演类似工作，仍应使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans。下文复选框结果仅保留历史执行记录。
 
@@ -15,9 +15,9 @@
 ## 关联文档
 
 - 来源设计：
-  - [design/kernel_alpha_storage_error_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/kernel_alpha_storage_error_contract.md)
+  - [design/kernel_alpha_storage_error_contract.md](../design/kernel_alpha_storage_error_contract.md)
 - 目标状态：
-  - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+  - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
 ---
 

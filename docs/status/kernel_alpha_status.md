@@ -9,10 +9,10 @@
 ## 关联文档
 
 - 相关设计：
-  - [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
-  - [design/kernel_alpha_storage_error_contract.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/kernel_alpha_storage_error_contract.md)
+  - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+  - [design/kernel_alpha_storage_error_contract.md](../design/kernel_alpha_storage_error_contract.md)
 - 已完成计划：
-  - [plan/kernel_alpha_storage_error_contract_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/kernel_alpha_storage_error_contract_plan.md)
+  - [plan/kernel_alpha_storage_error_contract_plan.md](../plan/kernel_alpha_storage_error_contract_plan.md)
 
 ## 目标 / 主题
 
@@ -178,7 +178,7 @@
 - tag：`phase1-stable`
 - commit：`283aee6`
 - 含义：`Phase 1` 核心 bring-up 目标已达成；后续 `kernel_alpha` / guest runtime 工作默认视为 post-Phase1 hardening
-- 当前这十条 `kernel_alpha` demo 与 `guest_supervisor_demo` 一起，构成 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 定义的 Phase 1 核心 guest 门禁
+- 当前这十条 `kernel_alpha` demo 与 `guest_supervisor_demo` 一起，构成 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 定义的 Phase 1 核心 guest 门禁
 - 当前本地 `frontend` 调试测试清单已覆盖：
   - `guest_kernel_alpha_demo`
   - `guest_kernel_alpha_fault_demo`

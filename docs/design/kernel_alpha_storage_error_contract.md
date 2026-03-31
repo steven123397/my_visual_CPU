@@ -9,14 +9,14 @@
 ## 关联文档
 
 - 状态文档：
-  - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+  - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关计划：
-  - [plan/kernel_alpha_storage_error_contract_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/kernel_alpha_storage_error_contract_plan.md)
+  - [plan/kernel_alpha_storage_error_contract_plan.md](../plan/kernel_alpha_storage_error_contract_plan.md)
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：历史语境，保留当时为何切这条 storage 合同扩展的设计理由。
-- 当前正式结果以 [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md) 为准。
+- 当前正式结果以 [status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
 
 ## 背景
 

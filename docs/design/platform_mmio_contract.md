@@ -9,17 +9,17 @@
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-  - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
+  - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关计划：
-  - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
+  - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
 
 ## 当前有效性说明
 
-- 当前有效 / 历史语境：当前有效，当前 host / guest 共享的 MMIO 约束以本文档和 [platform_mmio.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/include/platform_mmio.h) 为准。
+- 当前有效 / 历史语境：当前有效，当前 host / guest 共享的 MMIO 约束以本文档和 [platform_mmio.h](../../myCPU/include/platform_mmio.h) 为准。
 - 若契约发生变化，必须同步更新相关回归、状态文档和使用方代码。
 
-这份文档定义当前模拟器对未来 OS 暴露的最小平台 MMIO 约定。对应常量的单一来源是 [platform_mmio.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/include/platform_mmio.h)。
+这份文档定义当前模拟器对未来 OS 暴露的最小平台 MMIO 约定。对应常量的单一来源是 [platform_mmio.h](../../myCPU/include/platform_mmio.h)。
 
 当前目标不是一次对齐某个成熟平台标准，而是先把“足以写内核驱动”的地址、寄存器、命令和约束固定下来，并保持测试覆盖。
 
@@ -219,10 +219,10 @@
 
 客体侧最小平台驱动接口现在已经从纯测试辅助代码提升成了可复用的 guest 平台层：
 
-- 共享汇编驱动实现位于 [platform_drivers.inc](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/include/platform_drivers.inc)
-- C 侧声明位于 [platform.h](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/include/platform.h)
-- 可链接的 guest 平台库入口位于 [platform.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/lib/platform.S)
-- 测试侧的 [platform_drivers.inc](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm/include/platform_drivers.inc) 现在只是转发到共享实现，避免双份维护
+- 共享汇编驱动实现位于 [platform_drivers.inc](../../myCPU/guest/include/platform_drivers.inc)
+- C 侧声明位于 [platform.h](../../myCPU/guest/include/platform.h)
+- 可链接的 guest 平台库入口位于 [platform.S](../../myCPU/guest/lib/platform.S)
+- 测试侧的 [platform_drivers.inc](../../myCPU/tests/asm/include/platform_drivers.inc) 现在只是转发到共享实现，避免双份维护
 
 当前提供的最小入口包括：
 
@@ -256,6 +256,6 @@
 
 当前至少有 3 类消费方：
 
-- 汇编 smoke coverage 见 [supervisor_platform_smoke.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm/supervisor_platform_smoke.S)
-- 最小 C-based supervisor runtime/demo 见 [start.S](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/start.S) 和 [main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/supervisor_demo/main.c)
-- 独立 kernel alpha bring-up / negative demos 见 [main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/main.c)、[fault_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/fault_main.c)、[storage_no_media_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_no_media_main.c)、[storage_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_not_ready_main.c)、[storage_bad_magic_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_magic_main.c)、[storage_bad_block_count_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_block_count_main.c)、[storage_lba_range_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_lba_range_main.c)、[storage_bad_command_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_bad_command_main.c)、[plic_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/plic_not_ready_main.c) 和 [timer_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/timer_not_ready_main.c)
+- 汇编 smoke coverage 见 [supervisor_platform_smoke.S](../../myCPU/tests/asm/supervisor_platform_smoke.S)
+- 最小 C-based supervisor runtime/demo 见 [start.S](../../myCPU/guest/supervisor_demo/start.S) 和 [main.c](../../myCPU/guest/supervisor_demo/main.c)
+- 独立 kernel alpha bring-up / negative demos 见 [main.c](../../myCPU/guest/kernel_alpha/main.c)、[fault_main.c](../../myCPU/guest/kernel_alpha/fault_main.c)、[storage_no_media_main.c](../../myCPU/guest/kernel_alpha/storage_no_media_main.c)、[storage_not_ready_main.c](../../myCPU/guest/kernel_alpha/storage_not_ready_main.c)、[storage_bad_magic_main.c](../../myCPU/guest/kernel_alpha/storage_bad_magic_main.c)、[storage_bad_block_count_main.c](../../myCPU/guest/kernel_alpha/storage_bad_block_count_main.c)、[storage_lba_range_main.c](../../myCPU/guest/kernel_alpha/storage_lba_range_main.c)、[storage_bad_command_main.c](../../myCPU/guest/kernel_alpha/storage_bad_command_main.c)、[plic_not_ready_main.c](../../myCPU/guest/kernel_alpha/plic_not_ready_main.c) 和 [timer_not_ready_main.c](../../myCPU/guest/kernel_alpha/timer_not_ready_main.c)

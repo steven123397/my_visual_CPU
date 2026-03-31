@@ -2,11 +2,11 @@
 
 ## 适用范围
 
-本文件适用于 [myCPU](/home/liangjiaqi/projects/my_visual_CPU/myCPU) 子树下的 simulator 主体代码、平台设备、加载路径、测试与构建逻辑。
+本文件适用于 [myCPU](.) 子树下的 simulator 主体代码、平台设备、加载路径、测试与构建逻辑。
 
 如果工作落在 guest runtime 子树，请继续阅读：
 
-- [guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
+- [guest/AGENTS.md](guest/AGENTS.md)
 
 ## 当前实现基线
 
@@ -33,27 +33,27 @@
 
 ## 模块地图
 
-- [src/main.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/main.cpp)
+- [src/main.cpp](src/main.cpp)
   CLI 参数、镜像选择、`Machine` 启动。
-- [src/platform/machine.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/platform/machine.cpp)
+- [src/platform/machine.cpp](src/platform/machine.cpp)
   平台组装、镜像加载、执行循环。
-- [src/cpu.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/cpu.cpp)
+- [src/cpu.cpp](src/cpu.cpp)
   CPU facade、取指/译码/执行接线。
-- [src/arch](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/arch)
+- [src/arch](src/arch)
   `CoreState` / `CsrFile`。
-- [src/trap.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/trap.cpp)
+- [src/trap.cpp](src/trap.cpp)
   trap / interrupt 路由与返回。
-- [src/mem](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/mem)
+- [src/mem](src/mem)
   `Ram` / `Bus` / `AddressSpace`。
-- [src/devices](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices)
+- [src/devices](src/devices)
   平台设备对象。
-- [src/loader](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/loader)
+- [src/loader](src/loader)
   ELF / binary 装载边界。
-- [src/debug](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/debug)
+- [src/debug](src/debug)
   调试快照、debug session 与 `--debug-cli` 协议。
-- [tests/asm](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm)
+- [tests/asm](tests/asm)
   reference path 的汇编回归契约。
-- [tests/unit](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/unit)
+- [tests/unit](tests/unit)
   host-side 单元回归。
 
 ## 局部规则
@@ -98,7 +98,7 @@
 - `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照，以及 predictor mode / counters / 最近一次预测字段，守住 `CLINT` / `PLIC` / `UART` 与 predictor 可观察性输出。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
-具体测试列表以 [Makefile](/home/liangjiaqi/projects/my_visual_CPU/myCPU/Makefile) 为准。
+具体测试列表以 [Makefile](Makefile) 为准。
 
 ## 关键历史节点
 
@@ -120,21 +120,21 @@
 
 ## 当前仍需关注的问题
 
-- [tests/asm](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/asm) 和 [tests/unit](/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/unit)
+- [tests/asm](tests/asm) 和 [tests/unit](tests/unit)
   非法编码、MMIO 非法偏移 / 宽度、ELF 段布局和 CSR / 特权非法访问回归已经完成第一轮系统扩充；`pipeline differential` 的高风险主干场景也已基本闭环，后续主要按新增 bug 或明确新合同做最小补洞。
-- [src/devices/simple_storage.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices/simple_storage.cpp)
+- [src/devices/simple_storage.cpp](src/devices/simple_storage.cpp)
   当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
-- [guest/kernel/kernel_runtime.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_runtime.c)
+- [guest/kernel/kernel_runtime.c](guest/kernel/kernel_runtime.c)
   `kernel_alpha` 入口的 `trap_context` / `address_space` / `interrupt_state` 已收口为最小 runtime 对象；当前 common bring-up options 的默认 self-context 装配，以及 `PLIC / first delivery / storage probe/signature` 这组早期 phase helper 也已继续下沉到这里，但整体仍只是 Phase 1 的早期内核 runtime 骨架。
-- [guest/kernel/kernel_bringup.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_bringup.c)
+- [guest/kernel/kernel_bringup.c](guest/kernel/kernel_bringup.c)
   通用 `K/M/V` bring-up 已下沉到 guest kernel 基础设施层，`supervisor_demo` 和 `kernel_alpha` 共享同一份早期启动骨架。
-- [guest/kernel_alpha/storage_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_contract.c)
+- [guest/kernel_alpha/storage_contract.c](guest/kernel_alpha/storage_contract.c)
   storage 负向合同已开始从入口下沉到专门 helper，避免六条 storage demo 继续各自手写 probe / read / clear-error 协议细节。
-- [guest/kernel_alpha/interrupt_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/interrupt_contract.c)
+- [guest/kernel_alpha/interrupt_contract.c](guest/kernel_alpha/interrupt_contract.c)
   non-storage readiness / panic 合同也已开始从入口下沉到共享 helper，`fault`、`PLIC not-ready`、`timer not-ready` 与标准 interrupt post-handler 不再分散在各入口。
-- [src/mem/bus.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/mem/bus.cpp) 和 [src/devices](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/devices)
+- [src/mem/bus.cpp](src/mem/bus.cpp) 和 [src/devices](src/devices)
   已完成第一轮收口，但未来若继续扩设备，仍需要更系统的契约和回归。
-- [src/exec/branch_predictor.cpp](/home/liangjiaqi/projects/my_visual_CPU/myCPU/src/exec/branch_predictor.cpp)
+- [src/exec/branch_predictor.cpp](src/exec/branch_predictor.cpp)
   当前仍是 `Phase 3-A` 首轮最小 predictor：条件分支使用 `2-bit` counter + target 记忆，`jal` 走静态 predict-taken，`jalr` 仍不预测；后续应先以 bug-driven hardening 和最小回归补洞为主，不急着扩成复杂 BTB / RAS 组合。
 
 ## 本子树下一步工作

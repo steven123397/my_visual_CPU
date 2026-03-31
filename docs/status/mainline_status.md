@@ -13,20 +13,20 @@
 ## 关联文档
 
 - 相关设计：
-  - [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
-  - [design/cpp_refactor_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/cpp_refactor_design.md)
-  - [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
-  - [design/phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md)
-  - [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)
-  - [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
+  - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+  - [design/cpp_refactor_design.md](../design/cpp_refactor_design.md)
+  - [design/minimal_interactive_os_design.md](../design/minimal_interactive_os_design.md)
+  - [design/phase3_branch_prediction_design.md](../design/phase3_branch_prediction_design.md)
+  - [design/pipeline_core_integration.md](../design/pipeline_core_integration.md)
+  - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
 - 当前计划：
   - 当前暂无新的主线执行计划；后续如有新的 `Phase 3-B/C` 任务，再单独建立对应 `plan` 文档。
 - 已完成计划：
-  - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
-  - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
-  - [plan/phase3_branch_prediction_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase3_branch_prediction_plan.md)
-  - [plan/sv39_mprv_semantics_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_mprv_semantics_plan.md)
-  - [plan/sv39_pagewalk_contracts_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_pagewalk_contracts_plan.md)
+  - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
+  - [plan/pipeline_core_integration_plan.md](../plan/pipeline_core_integration_plan.md)
+  - [plan/phase3_branch_prediction_plan.md](../plan/phase3_branch_prediction_plan.md)
+  - [plan/sv39_mprv_semantics_plan.md](../plan/sv39_mprv_semantics_plan.md)
+  - [plan/sv39_pagewalk_contracts_plan.md](../plan/sv39_pagewalk_contracts_plan.md)
 
 ## 当前状态
 
@@ -42,7 +42,7 @@
 
 关于当前主线中“回归相关工作做到什么程度可认为阶段性收口”的统一判断口径，见：
 
-- [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
+- [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
 
 ## 2026-03-26 补充进展
 
@@ -203,12 +203,12 @@
 
 本轮没有继续扩功能面，而是做了一轮文档与自检收口：
 
-- [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md) 已重写为“当前有效的自检结论 + 活跃风险 + 下一步顺序”，并吸收 `interactive_os terminal` 专项复检结果。
+- [status/code_self_review_status.md](code_self_review_status.md) 已重写为“当前有效的自检结论 + 活跃风险 + 下一步顺序”，并吸收 `interactive_os terminal` 专项复检结果。
 - `guest/kernel/kernel_runtime.c` 已继续收口 bring-up 基础设施：当前 `kernel_runtime_run_common_bringup()` 会为带 `pre_vm_setup` 且未显式给出 context 的调用自动回填 runtime self-context；`PLIC / first delivery / storage probe/signature` 这组 phase helper 也已下沉到 `kernel_runtime`。`guest/kernel_alpha/common.c` 当前只保留 alpha marker / 命名 wrapper，相关边界由 `tests/unit/kernel_runtime.c` 与 `tests/unit/kernel_alpha_common.c` 一起守住。
-- `minimal_interactive_os` 的前端终端壳合同已经并回 [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)，不再单独维护拆开的 shell 设计文档。
-- `pipeline` 早期准备阶段结论已经并回 [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)，不再单独维护独立的 prep 文档。
+- `minimal_interactive_os` 的前端终端壳合同已经并回 [design/minimal_interactive_os_design.md](../design/minimal_interactive_os_design.md)，不再单独维护拆开的 shell 设计文档。
+- `pipeline` 早期准备阶段结论已经并回 [design/pipeline_core_integration.md](../design/pipeline_core_integration.md)，不再单独维护独立的 prep 文档。
 - 已完成且内容已被 `design/status` 吸收的 `docs` 治理、`debug/frontend` 接入和 `minimal_interactive_os` 执行计划，当前不再单独保留为 `plan` 文档。
-- [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 已收回入口文档定位，只保留项目定位、快速开始、`interactive_os` 演示、测试入口和文档导航。
+- [readme.md](../../readme.md) 已收回入口文档定位，只保留项目定位、快速开始、`interactive_os` 演示、测试入口和文档导航。
 
 ## Phase 2 当前安排
 
@@ -240,7 +240,7 @@
 1. 先沿 reference path 继续维护已形成闭环的 `privilege / Sv39`、illegal / MMIO / ELF / CSR 合同矩阵，并在新增 bug 出现时补最小持久回归。
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug` 的第一轮 hardening 也已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup / kernel_alpha/common`。
-4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
+4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
 6. 当前 `Phase 3-A` 第一轮已落地；后续优先维护 `predictor_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 与 `frontend` 透传门禁，再决定是否打开下一轮 predictor hardening 或更远的 `Phase 3-B/C` 设计。
 7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
@@ -249,12 +249,12 @@
 
 新对话如果要继续推进当前主线工作，建议优先阅读：
 
-- [AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/AGENTS.md)
-- [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
-- [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
-- [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
-- [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
-- [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+- [AGENTS.md](../../AGENTS.md)
+- [myCPU/AGENTS.md](../../myCPU/AGENTS.md)
+- [myCPU/guest/AGENTS.md](../../myCPU/guest/AGENTS.md)
+- [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+- [status/code_self_review_status.md](code_self_review_status.md)
+- [status/kernel_alpha_status.md](kernel_alpha_status.md)
 
 ## 验证基线
 

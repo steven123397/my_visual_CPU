@@ -2,34 +2,34 @@
 
 ## 适用范围
 
-本文件适用于 [docs](/home/liangjiaqi/projects/my_visual_CPU/docs) 子树下的全部正式技术文档。
+本文件适用于 [docs](.) 子树下的全部正式技术文档。
 
 ## 目录结构
 
 当前 `docs/` 只保留以下正式层次：
 
-- [index.md](/home/liangjiaqi/projects/my_visual_CPU/docs/index.md)
+- [index.md](index.md)
   面向读者的文档入口和阅读顺序。
-- [background](/home/liangjiaqi/projects/my_visual_CPU/docs/background)
-  项目背景、原始目标和外部上下文。当前只保留 [background/request.md](/home/liangjiaqi/projects/my_visual_CPU/docs/background/request.md)。
-- [design](/home/liangjiaqi/projects/my_visual_CPU/docs/design)
+- [background](background)
+  项目背景、原始目标和外部上下文。当前只保留 [background/request.md](background/request.md)。
+- [design](design)
   结构设计、阶段设计、模块设计与长期有效的契约 / 收口标准。
-- [plan](/home/liangjiaqi/projects/my_visual_CPU/docs/plan)
+- [plan](plan)
   具体实现计划、整改计划和已完成计划记录。
-- [status](/home/liangjiaqi/projects/my_visual_CPU/docs/status)
+- [status](status)
   当前状态跟踪文档。
 
 ## 文档分工
 
 根目录与子目录文档职责如下：
 
-- [AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/AGENTS.md)
+- [AGENTS.md](../AGENTS.md)
   只保留项目总览、全局约定、workflow、阶段规划和子目录索引。
-- [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
+- [myCPU/AGENTS.md](../myCPU/AGENTS.md)
   记录 simulator 主体的实现基线、局部规则和已知问题。
-- [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
+- [myCPU/guest/AGENTS.md](../myCPU/guest/AGENTS.md)
   记录 guest runtime 的实现基线、局部规则和已知问题。
-- [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
+- [readme.md](../readme.md)
   面向读者的项目概览，保持可读、简洁，不承载过细实现流水账。
 
 ## 文档角色规则
@@ -65,9 +65,9 @@
 
 ## 模板要求
 
-- 新增设计文档默认先套用 [design/template.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/template.md)。
-- 新增计划文档默认先套用 [plan/template.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/template.md)。
-- 新增状态文档默认先套用 [status/template.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/template.md)。
+- 新增设计文档默认先套用 [design/template.md](design/template.md)。
+- 新增计划文档默认先套用 [plan/template.md](plan/template.md)。
+- 新增状态文档默认先套用 [status/template.md](status/template.md)。
 - `background/` 当前不提供自动模板。
 - 如果计划文档不是从现有设计文档派生，而是直接来自用户确认的任务，也必须先套用计划模板，并在“来源设计”处明确写清来源。
 
@@ -94,7 +94,7 @@
   - 相关 `design`
   - 当前活跃 `plan`
   - 重要已完成 `plan`
-- 新增或重命名正式文档后，必须同步更新 [index.md](/home/liangjiaqi/projects/my_visual_CPU/docs/index.md)。
+- 新增或重命名正式文档后，必须同步更新 [index.md](index.md)。
 
 ## 文档维护规则
 
@@ -110,3 +110,4 @@
   - 已落地的当前重构成果
   - 正在进行的下一步工作
   - 更远期阶段规划
+- 每部分任务完成时，自动更新`plan/`和`status/`下相关文档内容，同步到最新进度。

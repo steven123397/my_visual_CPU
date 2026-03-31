@@ -4,7 +4,7 @@
 
 本文档用于说明如何在当前主线上，把 `my-project-3-24` 分支中的 `debug_session/protocol` 与 `frontend` 可视化调试器，以最小兼容方式重新接入仓库。
 
-它承接 [pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md) 已完成的 pipeline core 集成，聚焦第二轮“教学演示可用”目标：
+它承接 [pipeline_core_integration.md](pipeline_core_integration.md) 已完成的 pipeline core 集成，聚焦第二轮“教学演示可用”目标：
 
 - 仓库使用者可以本地启动一个调试服务和前端页面
 - 可以对现有 asm、guest、`kernel_alpha` demo 做可视化单步演示
@@ -14,20 +14,20 @@
 
 - 本文档对应的第二轮 `debug/frontend` 接入已经完成。
 - 当前主线已经具备 `--debug-cli`、本地 Node 调试服务、浏览器前端演示，以及对应的 Node 测试门禁。
-- 当前运行与验证方式以 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 和状态文档为准。
+- 当前运行与验证方式以 [readme.md](../../readme.md) 和状态文档为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-  - [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
+  - [status/code_self_review_status.md](../status/code_self_review_status.md)
 - 相关计划：
   - 无。该轮执行细节已回写到相关 `status` 文档。
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，记录 `debug/frontend` 已落地的设计边界与非目标。
-- 当前运行方式、验证入口和近期稳定化重点以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)、[status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md) 与 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 为准。
+- 当前运行方式、验证入口和近期稳定化重点以 [status/mainline_status.md](../status/mainline_status.md)、[status/code_self_review_status.md](../status/code_self_review_status.md) 与 [readme.md](../../readme.md) 为准。
 
 ## 背景
 

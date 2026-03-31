@@ -16,9 +16,9 @@
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
-  - [plan/phase3_branch_prediction_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase3_branch_prediction_plan.md)
+  - [plan/phase3_branch_prediction_plan.md](../plan/phase3_branch_prediction_plan.md)
 
 ## 背景与问题
 
@@ -179,4 +179,4 @@ PipelineBackend
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为 `phase2-stable` 之后 `Phase 3` 第一轮工作的结构边界说明。
-- 当前正式进展以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准；若后续为 `Phase 3-A` 建立专门 `status` 文档，再以对应文档承载实时进度。
+- 当前正式进展以 [status/mainline_status.md](../status/mainline_status.md) 为准；若后续为 `Phase 3-A` 建立专门 `status` 文档，再以对应文档承载实时进度。

@@ -12,25 +12,25 @@
 
 ## 文档定位
 
-本文档用于把 [phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md) 收口成可执行任务清单，明确 `Phase 3-A` 第一轮要改哪些文件、以什么顺序落地、由哪些测试验证，以及完成后如何回写主线状态文档。
+本文档用于把 [phase3_branch_prediction_design.md](../design/phase3_branch_prediction_design.md) 收口成可执行任务清单，明确 `Phase 3-A` 第一轮要改哪些文件、以什么顺序落地、由哪些测试验证，以及完成后如何回写主线状态文档。
 
-本文档只回答“怎么落地”。实时进度、风险变化与完成结果摘要以 [mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。
+本文档只回答“怎么落地”。实时进度、风险变化与完成结果摘要以 [mainline_status.md](../status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 来源设计：
-  - [design/phase3_branch_prediction_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/phase3_branch_prediction_design.md)
+  - [design/phase3_branch_prediction_design.md](../design/phase3_branch_prediction_design.md)
 - 目标状态：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/mainline_status.md](../status/mainline_status.md)
 
 ---
 
 ## 参考文档
 
-- [AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/AGENTS.md)
-- [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
-- [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
-- [pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
+- [AGENTS.md](../../AGENTS.md)
+- [myCPU/AGENTS.md](../../myCPU/AGENTS.md)
+- [readme.md](../../readme.md)
+- [pipeline_core_integration_plan.md](pipeline_core_integration_plan.md)
 
 ## 目标
 
@@ -47,9 +47,9 @@
 - `pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 均补上 predictor 相关场景，并通过。
 - `make test`、`make test-pipeline`、`cd frontend && node --test` 继续通过。
 - 文档完成同步：
-  - [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
-  - [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
-  - [mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [myCPU/AGENTS.md](../../myCPU/AGENTS.md)
+  - [readme.md](../../readme.md)
+  - [mainline_status.md](../status/mainline_status.md)
 
 ## 文件结构
 
@@ -410,9 +410,9 @@
 
 - `2026-03-27` 已完成 `Phase 3-A` 第一轮分支预测增强：引入独立 `branch_predictor` 子模块，把 predictor 接到 `PipelineBackend` 的 fetch / execute / mispredict 恢复主路径，并补齐 `predictor_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 与 `frontend` 兼容性门禁。
 - 已完成主线文档回写：
-  - [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
-  - [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md)
-  - [mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [myCPU/AGENTS.md](../../myCPU/AGENTS.md)
+  - [readme.md](../../readme.md)
+  - [mainline_status.md](../status/mainline_status.md)
 - 完成态验证基线：
   - `cd myCPU && make test`
   - `cd myCPU && make test-pipeline`

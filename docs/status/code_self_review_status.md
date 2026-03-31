@@ -2,31 +2,32 @@
 
 ## 文档定位
 
-本文档用于承接两轮仍然有效的自检结论：
+本文档用于承接以下仍然有效的自检结论与后续收口结果：
 
 - `2026-03-24` 的系统性代码自检
 - `2026-03-31` 的 `interactive_os terminal` 专项复检
+- `2026-03-31` 晚些时候落地的 terminal 输入与会话同步修正
 
 它只保留当前仍有价值的结论、风险和后续顺序，不再维护早期逐项审查流水账。
 
 ## 关联文档
 
 - 相关设计：
-  - [design/regression_completion_criteria.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/regression_completion_criteria.md)
-  - [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
-  - [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
+  - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+  - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
+  - [design/minimal_interactive_os_design.md](../design/minimal_interactive_os_design.md)
 - 相关状态：
-  - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-  - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
+  - [status/mainline_status.md](mainline_status.md)
+  - [status/kernel_alpha_status.md](kernel_alpha_status.md)
 - 重要已完成计划：
-  - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
+  - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
 
 ## 当前结论
 
 - 早期触及 reference path correctness 底线的那批问题，已经基本完成第一轮修复和回归化。
 - guest runtime、`kernel_alpha` 基线和 `interactive_os` guest monitor 当前整体边界已经比早期稳定得多。
-- 当前自检焦点已经从“ISA / MMU / loader 基础 correctness”转移到“host/frontend 调试链路的并发、性能和协议稳健性”。
-- 就 `interactive_os terminal` 这条链路而言，guest 侧 monitor 本身没有发现新的 CPU 设计、特权语义或 MMU 合同错误；主要风险集中在 browser frontend、Node debug server 和 host-side `debug_cli`。
+- 当前自检焦点已经从“ISA / MMU / loader 基础 correctness”进一步转移到“host/frontend 调试链路的协议边界、长会话压力与功能面控制”。
+- 就 `interactive_os terminal` 这条链路而言，guest 侧 monitor 本身没有发现新的 CPU 设计、特权语义或 MMU 合同错误；当前活跃风险主要集中在 browser frontend、Node debug server 和 host-side `debug_cli` 的协议与压力场景，而不是先前那批已识别的会话竞态与 terminal tail 问题。
 
 ## 已完成的主要收口
 
@@ -41,8 +42,13 @@
   - `peek` 走 `vm_debug_read()` 的只读校验路径，不再因为 monitor 命令本身制造 guest fault。
   - `monitor_commands` 的参数与错误路径已有单元回归。
   - `interactive_terminal_smoke` 已覆盖 functional / pipeline 下的最小交互闭环。
+- `interactive_os terminal` 的 host/frontend 链路也已补上本轮同步修正：
+  - `debug_server` 当前已使用 session 级串行化与 generation 失效保护，`load/reset/run/terminal-input` 不再让旧请求污染新会话。
+  - terminal 增量同步已和 snapshot 广播解耦，等待回显 / prompt 时会合并 WebSocket 更新，不再把一次输入放大成整页重绘风暴。
+  - server / frontend 已共享控制字符投影与有界 projected tail，当前不再沿用“raw tail 先截断、渲染时再解释控制序列”的旧路径。
+  - 上述边界已由 `frontend/tests/debug_server.test.mjs`、`frontend/tests/terminal_input_pump.test.mjs`、`frontend/tests/terminal_projection.test.mjs`、`frontend/tests/terminal_render.test.mjs` 与 `myCPU/tests/host/interactive_terminal_smoke.cpp` 守住。
 
-## 2026-03-31 `interactive_os terminal` 专项复检结论
+## 2026-03-31 `interactive_os terminal` 专项复检与后续收口结论
 
 本轮复检覆盖：
 
@@ -54,32 +60,40 @@
 结论如下：
 
 - guest monitor 这一侧结构相对干净，职责边界基本清晰。
-- 当前性能与稳定性问题，主要不是 guest 命令实现“写成屎山”，而是 host/frontend 在 session 生命周期、terminal 增量同步和 UI 渲染上的耦合过重。
-- 现有测试是绿的，但它们还没有把这些结构性风险压成稳定红灯。
+- 这一轮识别出的主要问题，确实集中在 host/frontend 的 session 生命周期、terminal 增量同步和 UI 渲染耦合，而不是 guest 命令实现本身。
+- 随后的 terminal 输入与会话同步修正已经把上一版识别出的几条核心风险压成稳定门禁；当前剩余工作更多转向协议稳健性、长会话压力验证和功能面控制，而不是继续处理同一批已知竞态。
+
+### 本轮已同步收口、不再作为当前 blocker 跟踪的问题
+
+1. **server 侧 session 串行化与旧请求失效。**
+   `debug_server` 当前已经引入 session 级 action queue、generation guard 和 run loop token；`load/reset/run/terminal-input` 的互斥与旧请求失效不再只靠前端忽略旧响应。
+
+2. **terminal 输入触发的 snapshot / WebSocket 广播风暴。**
+   当前服务端等待回显 / prompt 时，terminal delta 与 snapshot 已分离处理，相关路径会合并增量更新；`debug_server` Node 测试已明确守住“等待输出收敛时最多只广播一次 snapshot / terminal update”的合同。
+
+3. **server / frontend terminal tail 的无界增长与重复状态。**
+   当前 terminal 状态已收口到共享 projection state 和有界 projected tail，原来那条“服务端累积全量 UART 文本、前端再维护另一份 raw tail”的退化模式已经退出当前主路径。
+
+4. **raw tail 先截断、后投影导致的显示边界不稳。**
+   当前 server / frontend 已统一改为“先做控制字符投影，再保留有界 tail”，相关边界已由 projection / render 测试覆盖。
 
 ### 当前仍有效的高优先级风险
 
-1. **[必须修复] server 侧缺少 session 串行化。**
-   `currentSession/currentSnapshot/currentTerminalBuffer/currentTerminalOffset/runTimer` 当前由多个 HTTP handler 和 `setInterval(async ...)` 并发访问。前端的 `terminalInputPump.reset()` 只能忽略旧响应，不能阻止旧请求继续改服务端状态或继续发 websocket，这会造成 `load/reset/run/terminal-input` 之间的真实竞态和跨会话污染。
+1. **[建议修改] `debug_protocol` 仍是手写 JSON line parser。**
+   当前协议解析已经补到更完整的字符串 escape / Unicode 处理，足以支撑现阶段 demo，但整体仍是自维护的最小 codec。若后续继续扩 `debug_cli` 字段、事件种类或错误处理，这里仍是容易反复出 bug 的边界。
 
-2. **[建议修改] terminal 输入链路仍会放大成 snapshot 广播风暴。**
-   当前服务端为等待回显 / prompt 会循环推进 `stepCommit()` 并广播 snapshot；前端收到 terminal 或 snapshot 消息后又会整页 `paint()`。这会把一次按键放大成高频 websocket 消息和全页面重绘，是当前 `interactive_os terminal` 越用越慢的主要结构性原因。
+2. **[建议关注] terminal 链路仍缺更长会话与更高吞吐压力验证。**
+   现有 Node / host smoke 已经能把“会话替换污染、广播风暴、有界 tail 与控制字符投影”压成稳定红灯，但它们仍主要覆盖单会话、最小交互和有限输出量。对更长时间 `run`、更高频输入输出和真实浏览器交互时序的压力验证仍然偏少。
 
-3. **[建议修改] server 侧 terminal buffer 仍然无界增长。**
-   `currentTerminalBuffer` 当前主要只是为 prompt 检测服务，但仍在累积全量 UART 文本。这与前端此前已经修过的 buffer 膨胀问题是同类退化模式，也让 server / frontend 之间出现了不必要的重复状态。
-
-4. **[建议修改] terminal raw tail 先截断、后投影，显示边界还不稳。**
-   前端当前先保留原始 UART 文本尾部，再在渲染时处理 `\b/\r`。一旦截断点落在控制序列边界，终端起始处就可能保留脏字符或出现与逻辑状态不一致的显示残留。
-
-5. **[建议修改] `debug_protocol` 仍是手写最小 JSON line parser。**
-   当前协议解析依赖字符串查找与有限 escape 集合，足以支撑现阶段 demo，但对更复杂字段、协议演进和异常输入的容错都偏弱。terminal 输入这轮已经因为 escape 处理暴露过一次问题，这块仍然是后续容易反复出 bug 的边界。
+3. **[建议关注] `debug/frontend` 的功能面仍需继续收住。**
+   当前这条链路已经达到“教学演示可用”的最小状态。后续如果继续往断点、条件暂停、任意文件加载或更大 UI 功能面扩张，而不先收口协议与验证边界，很容易重新引入新的耦合和脆弱点。
 
 ## 当前建议顺序
 
-1. 先把 `debug_server` 改成 session 级 single-flight / generation 模型，真正收住 `load/reset/run/terminal-input` 的互斥和旧请求失效。
-2. 把 terminal 增量同步与 snapshot 广播解耦，避免“一个字符触发整页重绘”。
-3. 给 server 侧 terminal buffer 加上有界 tail，并把前端 buffer cap 从“raw tail”改成“对控制序列友好”的保留策略。
-4. 如果 `debug_cli` 协议继续扩展，再把手写 parser 收口成更稳的统一 codec，而不是继续补零散 escape case。
+1. 如果 `debug_cli` 协议继续扩展，优先把手写 parser 收口成更稳的统一 codec，而不是继续补零散 escape case。
+2. 为 terminal 输入 / 输出链路补更长会话、持续 `run`、更高吞吐输出和真实浏览器交互节奏下的压力验证。
+3. 继续维持 terminal delta、snapshot 和 UI 渲染之间已经形成的边界，不让新功能把它们重新耦合回去。
+4. `debug/frontend` 后续仍以教学演示可用为边界，避免在现有协议和门禁尚未继续增强前盲目扩功能面。
 
 ## 本轮复检依据
 
@@ -92,14 +106,15 @@
 这些门禁当前能证明：
 
 - terminal 最小交互链路仍然可用；
-- 这轮文档中列出的风险主要是并发、长会话和结构性性能问题，而不是现有 smoke 已经直接失败的 correctness 红灯。
+- 上一版识别出的会话替换污染、terminal 广播风暴、buffer / tail 投影边界问题，当前已经进入自动化门禁；
+- 当前文档里保留的风险，主要转向协议演进、长会话压力和功能面控制，而不是现有 smoke 已经直接失败的 correctness 红灯。
 
 ## 当前建议入口
 
 如果下一轮要继续处理这些问题，建议优先阅读：
 
-- [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
-- [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
-- [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)
-- [myCPU/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/AGENTS.md)
-- [myCPU/guest/AGENTS.md](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/AGENTS.md)
+- [status/mainline_status.md](mainline_status.md)
+- [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
+- [design/minimal_interactive_os_design.md](../design/minimal_interactive_os_design.md)
+- [myCPU/AGENTS.md](../../myCPU/AGENTS.md)
+- [myCPU/guest/AGENTS.md](../../myCPU/guest/AGENTS.md)
