@@ -2,9 +2,11 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "../../guest/include/kernel_bringup.h"
 #include "../../guest/include/kernel_runtime.h"
+#include "../../guest/include/storage.h"
 #include "../../guest/include/supervisor_runtime.h"
 
 static trap_context_t* g_external_policy_trap_context = NULL;
@@ -15,9 +17,30 @@ static supervisor_runtime_interrupt_state_t* g_interrupt_policies_state = NULL;
 static bool g_interrupt_policies_result = true;
 static trap_context_t* g_common_bringup_trap_context = NULL;
 static vm_address_space_t** g_common_bringup_out_space = NULL;
+static kernel_bringup_options_t g_common_bringup_options_storage = {0};
 static const kernel_bringup_options_t* g_common_bringup_options = NULL;
 static vm_address_space_t* g_common_bringup_address_space = NULL;
 static bool g_common_bringup_result = true;
+static int g_console_chars[16];
+static size_t g_console_char_count = 0;
+static int g_plic_init_calls = 0;
+static volatile uint32_t* g_external_wait_counter = NULL;
+static uint64_t g_external_wait_timeout = 0;
+static bool g_external_wait_result = true;
+static volatile uint32_t* g_timer_wait_counter = NULL;
+static uint64_t g_timer_wait_delta = 0;
+static uint64_t g_timer_wait_timeout = 0;
+static bool g_timer_wait_result = true;
+static bool g_storage_probe_result = true;
+static storage_info_t g_storage_probe_info = {0};
+static int g_storage_probe_calls = 0;
+static uint8_t g_storage_page[4096];
+static bool g_storage_page_allocated = false;
+static uint64_t g_storage_read_block_result = 0;
+static uint64_t g_storage_read_block_lba = UINT64_MAX;
+static int g_storage_read_block_calls = 0;
+static void* g_last_freed_page = NULL;
+static bool g_pmm_free_result = true;
 
 static void reset_stub_state(void);
 static int fail(const char* message);
@@ -28,6 +51,11 @@ static int test_external_policy_adapter(void);
 static int test_interrupt_policy_adapter(void);
 static int test_runtime_bringup_helper(void);
 static int test_common_bringup_wrapper(void);
+static int test_plic_phase_helper(void);
+static int test_external_wait_helper(void);
+static int test_timer_wait_helper(void);
+static int test_storage_probe_helper(void);
+static int test_storage_signature_helper(void);
 
 void supervisor_runtime_interrupt_state_init(
     supervisor_runtime_interrupt_state_t* state) {
@@ -82,11 +110,69 @@ bool kernel_bringup_run_common(
     const kernel_bringup_options_t* options) {
     g_common_bringup_trap_context = trap_context;
     g_common_bringup_out_space = out_space;
-    g_common_bringup_options = options;
+    if (options != NULL) {
+        g_common_bringup_options_storage = *options;
+        g_common_bringup_options = &g_common_bringup_options_storage;
+    } else {
+        g_common_bringup_options = NULL;
+    }
     if (g_common_bringup_result && out_space != NULL) {
         *out_space = g_common_bringup_address_space;
     }
     return g_common_bringup_result;
+}
+
+void console_putc(char ch) {
+    if (g_console_char_count < (sizeof(g_console_chars) / sizeof(g_console_chars[0]))) {
+        g_console_chars[g_console_char_count++] = (unsigned char)ch;
+    }
+}
+
+void platform_plic_supervisor_init(void) {
+    g_plic_init_calls += 1;
+}
+
+bool supervisor_runtime_enable_uart_thre_and_wait(
+    volatile uint32_t* external_counter,
+    uint64_t timeout_delta) {
+    g_external_wait_counter = external_counter;
+    g_external_wait_timeout = timeout_delta;
+    return g_external_wait_result;
+}
+
+bool supervisor_runtime_schedule_timer_and_wait(volatile uint32_t* timer_counter,
+                                                uint64_t timer_delta,
+                                                uint64_t timeout_delta) {
+    g_timer_wait_counter = timer_counter;
+    g_timer_wait_delta = timer_delta;
+    g_timer_wait_timeout = timeout_delta;
+    return g_timer_wait_result;
+}
+
+bool storage_probe(storage_info_t* info) {
+    g_storage_probe_calls += 1;
+    if (info != NULL) {
+        *info = g_storage_probe_info;
+    }
+    return g_storage_probe_result;
+}
+
+uint64_t storage_read_block(uint64_t lba, void* destination) {
+    g_storage_read_block_calls += 1;
+    g_storage_read_block_lba = lba;
+    if (destination != NULL) {
+        memcpy(destination, g_storage_page, sizeof(g_storage_page));
+    }
+    return g_storage_read_block_result;
+}
+
+void* pmm_alloc_page(void) {
+    return g_storage_page_allocated ? g_storage_page : NULL;
+}
+
+bool pmm_free_page(void* page) {
+    g_last_freed_page = page;
+    return page == g_storage_page && g_pmm_free_result;
 }
 
 static void reset_stub_state(void) {
@@ -101,6 +187,26 @@ static void reset_stub_state(void) {
     g_common_bringup_options = NULL;
     g_common_bringup_address_space = (vm_address_space_t*)(uintptr_t)0x1234U;
     g_common_bringup_result = true;
+    memset(g_console_chars, 0, sizeof(g_console_chars));
+    g_console_char_count = 0;
+    g_plic_init_calls = 0;
+    g_external_wait_counter = NULL;
+    g_external_wait_timeout = 0;
+    g_external_wait_result = true;
+    g_timer_wait_counter = NULL;
+    g_timer_wait_delta = 0;
+    g_timer_wait_timeout = 0;
+    g_timer_wait_result = true;
+    g_storage_probe_result = true;
+    memset(&g_storage_probe_info, 0, sizeof(g_storage_probe_info));
+    g_storage_probe_calls = 0;
+    memset(g_storage_page, 0, sizeof(g_storage_page));
+    g_storage_page_allocated = false;
+    g_storage_read_block_result = 0;
+    g_storage_read_block_lba = UINT64_MAX;
+    g_storage_read_block_calls = 0;
+    g_last_freed_page = NULL;
+    g_pmm_free_result = true;
 }
 
 static int fail(const char* message) {
@@ -259,32 +365,196 @@ static int test_runtime_bringup_helper(void) {
 
 static int test_common_bringup_wrapper(void) {
     kernel_runtime_t runtime;
-    const kernel_bringup_options_t options = {
+    int explicit_context = 7;
+    const kernel_bringup_options_t implicit_self_context_options = {
         .mmio_mask = KERNEL_BRINGUP_MMIO_UART,
-        .pmm_probe_marker = 0,
-        .pre_vm_setup = NULL,
+        .pmm_probe_marker = UINT64_C(0x13579BDF),
+        .pre_vm_setup = kernel_runtime_install_external_counter_policy_adapter,
         .pre_vm_context = NULL,
+        .map_managed_memory = false,
+    };
+    const kernel_bringup_options_t explicit_context_options = {
+        .mmio_mask = KERNEL_BRINGUP_MMIO_STORAGE,
+        .pmm_probe_marker = 0,
+        .pre_vm_setup = kernel_runtime_install_interrupt_counter_policies_adapter,
+        .pre_vm_context = &explicit_context,
         .map_managed_memory = true,
     };
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    if (!kernel_runtime_run_common_bringup(&runtime, &options)) {
+    if (!kernel_runtime_run_common_bringup(&runtime,
+                                           &implicit_self_context_options)) {
         return fail("expected runtime common bring-up wrapper to succeed");
     }
 
     if (g_common_bringup_trap_context != &runtime.trap_context ||
         g_common_bringup_out_space != &runtime.address_space ||
-        g_common_bringup_options != &options ||
+        g_common_bringup_options == NULL ||
+        g_common_bringup_options->mmio_mask != KERNEL_BRINGUP_MMIO_UART ||
+        g_common_bringup_options->pmm_probe_marker != UINT64_C(0x13579BDF) ||
+        g_common_bringup_options->pre_vm_setup !=
+            kernel_runtime_install_external_counter_policy_adapter ||
+        g_common_bringup_options->pre_vm_context != &runtime ||
+        g_common_bringup_options->map_managed_memory ||
         runtime.address_space != g_common_bringup_address_space) {
-        return fail("expected runtime common bring-up wrapper to forward state");
+        return fail("expected runtime common bring-up wrapper to bind runtime as default pre-vm context");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    if (!kernel_runtime_run_common_bringup(&runtime, &explicit_context_options)) {
+        return fail("expected runtime common bring-up wrapper with explicit context to succeed");
+    }
+
+    if (g_common_bringup_options == NULL ||
+        g_common_bringup_options->mmio_mask != KERNEL_BRINGUP_MMIO_STORAGE ||
+        g_common_bringup_options->pre_vm_setup !=
+            kernel_runtime_install_interrupt_counter_policies_adapter ||
+        g_common_bringup_options->pre_vm_context != &explicit_context ||
+        !g_common_bringup_options->map_managed_memory) {
+        return fail("expected runtime common bring-up wrapper to preserve explicit pre-vm context");
     }
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
     g_common_bringup_result = false;
-    if (kernel_runtime_run_common_bringup(&runtime, &options)) {
+    if (kernel_runtime_run_common_bringup(&runtime,
+                                          &implicit_self_context_options)) {
         return fail("expected runtime common bring-up wrapper failure to propagate");
+    }
+
+    return 0;
+}
+
+static int test_plic_phase_helper(void) {
+    reset_stub_state();
+    kernel_runtime_begin_plic_supervisor_phase('P');
+
+    if (g_plic_init_calls != 1 || g_console_char_count != 1 ||
+        g_console_chars[0] != 'P') {
+        return fail("expected runtime PLIC phase helper to init platform and print marker");
+    }
+
+    reset_stub_state();
+    kernel_runtime_begin_plic_supervisor_phase('\0');
+    if (g_plic_init_calls != 1 || g_console_char_count != 0) {
+        return fail("expected runtime PLIC phase helper to allow silent marker");
+    }
+
+    return 0;
+}
+
+static int test_external_wait_helper(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    runtime.interrupts.external_interrupts = 3U;
+    if (!kernel_runtime_wait_for_first_external_delivery(&runtime, 64U)) {
+        return fail("expected runtime external wait helper to propagate success");
+    }
+
+    if (g_external_wait_counter != &runtime.interrupts.external_interrupts ||
+        g_external_wait_timeout != 64U) {
+        return fail("expected runtime external wait helper to forward interrupt counter");
+    }
+
+    reset_stub_state();
+    g_external_wait_result = false;
+    if (kernel_runtime_wait_for_first_external_delivery(&runtime, 32U)) {
+        return fail("expected runtime external wait helper to propagate failure");
+    }
+
+    if (kernel_runtime_wait_for_first_external_delivery(NULL, 32U)) {
+        return fail("expected runtime external wait helper to reject null runtime");
+    }
+
+    return 0;
+}
+
+static int test_timer_wait_helper(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    runtime.interrupts.timer_interrupts = 5U;
+    if (!kernel_runtime_wait_for_first_timer_delivery(&runtime, 8U, 96U)) {
+        return fail("expected runtime timer wait helper to propagate success");
+    }
+
+    if (g_timer_wait_counter != &runtime.interrupts.timer_interrupts ||
+        g_timer_wait_delta != 8U || g_timer_wait_timeout != 96U) {
+        return fail("expected runtime timer wait helper to forward interrupt counter");
+    }
+
+    reset_stub_state();
+    g_timer_wait_result = false;
+    if (kernel_runtime_wait_for_first_timer_delivery(&runtime, 4U, 48U)) {
+        return fail("expected runtime timer wait helper to propagate failure");
+    }
+
+    if (kernel_runtime_wait_for_first_timer_delivery(NULL, 4U, 48U)) {
+        return fail("expected runtime timer wait helper to reject null runtime");
+    }
+
+    return 0;
+}
+
+static int test_storage_probe_helper(void) {
+    reset_stub_state();
+    g_storage_probe_info.capacity_blocks = 2U;
+    if (!kernel_runtime_complete_storage_probe('D')) {
+        return fail("expected runtime storage probe helper to accept ready media");
+    }
+
+    if (g_storage_probe_calls != 1 || g_console_char_count != 1 ||
+        g_console_chars[0] != 'D') {
+        return fail("expected runtime storage probe helper to probe and print marker");
+    }
+
+    reset_stub_state();
+    g_storage_probe_info.capacity_blocks = 0U;
+    if (kernel_runtime_complete_storage_probe('D')) {
+        return fail("expected runtime storage probe helper to reject zero-capacity media");
+    }
+
+    reset_stub_state();
+    g_storage_probe_info.capacity_blocks = 3U;
+    if (!kernel_runtime_complete_storage_probe('\0') || g_console_char_count != 0) {
+        return fail("expected runtime storage probe helper to allow silent marker");
+    }
+
+    return 0;
+}
+
+static int test_storage_signature_helper(void) {
+    reset_stub_state();
+    g_storage_page_allocated = true;
+    memcpy(g_storage_page, "Stor", 4);
+    if (!kernel_runtime_complete_storage_signature_check('S')) {
+        return fail("expected runtime storage signature helper to accept Stor prefix");
+    }
+
+    if (g_storage_read_block_calls != 1 || g_storage_read_block_lba != 0U ||
+        g_last_freed_page != g_storage_page || g_console_char_count != 1 ||
+        g_console_chars[0] != 'S') {
+        return fail("expected runtime storage signature helper to read, free and print");
+    }
+
+    reset_stub_state();
+    g_storage_page_allocated = true;
+    memcpy(g_storage_page, "Fail", 4);
+    if (kernel_runtime_complete_storage_signature_check('S')) {
+        return fail("expected runtime storage signature helper to reject bad signature");
+    }
+
+    reset_stub_state();
+    g_storage_page_allocated = true;
+    memcpy(g_storage_page, "Stor", 4);
+    if (!kernel_runtime_complete_storage_signature_check('\0') ||
+        g_console_char_count != 0) {
+        return fail("expected runtime storage signature helper to allow silent marker");
     }
 
     return 0;
@@ -295,7 +565,12 @@ int main(void) {
         test_external_policy_adapter() != 0 ||
         test_interrupt_policy_adapter() != 0 ||
         test_runtime_bringup_helper() != 0 ||
-        test_common_bringup_wrapper() != 0) {
+        test_common_bringup_wrapper() != 0 ||
+        test_plic_phase_helper() != 0 ||
+        test_external_wait_helper() != 0 ||
+        test_timer_wait_helper() != 0 ||
+        test_storage_probe_helper() != 0 ||
+        test_storage_signature_helper() != 0) {
         return 1;
     }
 

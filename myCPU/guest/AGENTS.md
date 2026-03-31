@@ -52,7 +52,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `runtime_context.c`：当前活跃 process / address_space / trap_context 记录
 - `console.c` / `timer.c` / `storage.c`：最小平台驱动封装
 - `kernel_bringup.c`：共享的早期 `K/M/V` bring-up 骨架，负责 memory / PMM / trap / VM 的最小启动编排
-- `kernel_runtime.c`：最小 kernel runtime 对象，承接 `trap_context` / `address_space` / `interrupt_state`，并负责 common bring-up options 的 runtime/self-context 装配，避免 bring-up 入口继续裸拼三件套
+- `kernel_runtime.c`：最小 kernel runtime 对象，承接 `trap_context` / `address_space` / `interrupt_state`，并负责 common bring-up options 的 runtime/self-context 装配，以及 `PLIC / first delivery / storage probe/signature` 这组可复用 phase helper，避免 bring-up 入口继续裸拼三件套
 - `supervisor_runtime.c`：`kernel_alpha` 与 `supervisor_demo_smoke` 共享的 supervisor bring-up interrupt state、self-bound contract、policy adapter、delivery / deadline wait 最小编排
 - `user_task.c` / `user_task_bootstrap.c` / `user_program.c`：标准用户生命周期装配
 - `user_program_smoke.c`：标准用户 smoke 编排 helper，当前收口 standard plan 校验、prepare、active memory 与 enter round 最小 orchestration
@@ -83,7 +83,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - [kernel_alpha/timer_not_ready_main.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/timer_not_ready_main.c)
   独立 `kernel_alpha_timer_not_ready_demo` 负向入口。
 - [kernel_alpha/common.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/common.c)
-  `kernel_alpha` 各入口共享的 alpha bring-up phase helper：当前承接 PLIC phase、first external / timer delivery wait，以及 storage probe / signature check，不再承载通用 `K/M/V` 骨架。
+  `kernel_alpha` 各入口共享的 alpha bring-up marker / 命名 wrapper：当前只保留 `P/D/S` 这类 alpha 侧标记与兼容入口名，具体 `PLIC / first delivery / storage probe / signature` 实现已经下沉到 `kernel_runtime.c`，不再承载通用 `K/M/V` 骨架或 phase orchestration 细节。
 - [kernel_alpha/interrupt_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/interrupt_contract.c)
   `kernel_alpha` non-storage 负向回归共享的 interrupt / fault helper：当前收口 interrupt bring-up、platform interrupt readiness、PLIC not-ready、timer not-ready 与标准 post-handler 合同。
 - [kernel_alpha/storage_contract.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel_alpha/storage_contract.c)
@@ -284,14 +284,14 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   - `TRAP_MAX_EXCEPTION_CAUSE`
 - `kernel_alpha` 仍是 alpha 形态，还没有真正的内核对象、调度或设备探测流程。
 - [kernel/kernel_runtime.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_runtime.c)
-  当前已继续收口 `kernel_alpha` 入口的基础 runtime 三件套与 common bring-up options 装配，但后续仍要继续往真正的小内核对象组织推进。
+  当前已继续收口 `kernel_alpha` 入口的基础 runtime 三件套、common bring-up options 的默认 self-context 装配，以及 alpha 共享 phase helper 的真实实现，但后续仍要继续往真正的小内核对象组织推进。
 - [kernel/kernel_bringup.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/kernel_bringup.c)
   通用 `K/M/V` bring-up 已从 `kernel_alpha` 子树下沉到基础设施层，避免 `supervisor_demo` 再被 alpha 私有骨架反向耦合。
 
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
-2. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上；它们当前就是 Phase 1 核心 guest 门禁的一部分。公共 bring-up 编排继续收敛在 `kernel_alpha/common.c` 和 `kernel/supervisor_runtime.c`，不要让重复骨架重新散回各入口。
+2. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上；它们当前就是 Phase 1 核心 guest 门禁的一部分。公共 bring-up 编排继续收敛在 `kernel_runtime.c`、`kernel_bringup.c` 和 `kernel/supervisor_runtime.c`；`kernel_alpha/common.c` 只保留轻量 marker wrapper，不要让重复骨架重新散回各入口。
 3. 守住 [kernel/vm.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm.c) / [kernel/vm_address_space.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_address_space.c) / [kernel/vm_process.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_process.c) / [kernel/vm_object.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_object.c) / [kernel/vm_fault.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/vm_fault.c) 的边界，不要重新耦合。
 4. 在 [kernel/trap.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap.c) 与 [kernel/trap_dispatch.c](/home/liangjiaqi/projects/my_visual_CPU/myCPU/guest/kernel/trap_dispatch.c) 的边界上继续保持 lifecycle / dispatch 分离，不要回退。
 5. 继续沿着 process / runtime refinement 与大文件拆分的方向收口 `kernel_runtime`、`kernel_bringup` 和相关基础设施，而不是再把逻辑重新堆回 demo 入口。

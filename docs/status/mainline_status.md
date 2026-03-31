@@ -204,6 +204,7 @@
 本轮没有继续扩功能面，而是做了一轮文档与自检收口：
 
 - [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md) 已重写为“当前有效的自检结论 + 活跃风险 + 下一步顺序”，并吸收 `interactive_os terminal` 专项复检结果。
+- `guest/kernel/kernel_runtime.c` 已继续收口 bring-up 基础设施：当前 `kernel_runtime_run_common_bringup()` 会为带 `pre_vm_setup` 且未显式给出 context 的调用自动回填 runtime self-context；`PLIC / first delivery / storage probe/signature` 这组 phase helper 也已下沉到 `kernel_runtime`。`guest/kernel_alpha/common.c` 当前只保留 alpha marker / 命名 wrapper，相关边界由 `tests/unit/kernel_runtime.c` 与 `tests/unit/kernel_alpha_common.c` 一起守住。
 - `minimal_interactive_os` 的前端终端壳合同已经并回 [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)，不再单独维护拆开的 shell 设计文档。
 - `pipeline` 早期准备阶段结论已经并回 [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)，不再单独维护独立的 prep 文档。
 - 已完成且内容已被 `design/status` 吸收的 `docs` 治理、`debug/frontend` 接入和 `minimal_interactive_os` 执行计划，当前不再单独保留为 `plan` 文档。

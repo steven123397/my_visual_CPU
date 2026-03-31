@@ -243,6 +243,11 @@
   platform interrupt readiness、`PLIC not-ready`、`timer not-ready` 与
   标准 post-handler 合同收口到 `guest/kernel_alpha/interrupt_contract.c`，
   让 `kernel_alpha` 主入口与两条 non-storage 负向入口进一步只保留场景差异。
+- `2026-03-31` 又继续把 alpha 共享 bring-up phase helper 往基础设施层收口：
+  `guest/kernel/kernel_runtime.c` 当前已承接默认 runtime self-context 装配，以及
+  `PLIC / first delivery / storage probe / signature` 这组真实实现；
+  `guest/kernel_alpha/common.c` 只保留 alpha marker / 命名 wrapper，
+  避免这批 phase 细节重新膨胀回各入口。
 
 ## 当前仍然有效的风险 / 限制
 

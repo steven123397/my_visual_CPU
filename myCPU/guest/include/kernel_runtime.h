@@ -19,6 +19,14 @@ trap_context_t* kernel_runtime_trap_context(kernel_runtime_t* runtime);
 vm_address_space_t* kernel_runtime_address_space(const kernel_runtime_t* runtime);
 supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state(
     kernel_runtime_t* runtime);
+void kernel_runtime_begin_plic_supervisor_phase(char marker);
+bool kernel_runtime_wait_for_first_external_delivery(kernel_runtime_t* runtime,
+                                                     uint64_t timeout_delta);
+bool kernel_runtime_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
+                                                  uint64_t timer_delta,
+                                                  uint64_t timeout_delta);
+bool kernel_runtime_complete_storage_probe(char marker);
+bool kernel_runtime_complete_storage_signature_check(char marker);
 bool kernel_runtime_bind_self_interrupt_handlers(
     kernel_runtime_t* runtime,
     uint32_t expected_external_source_id,
