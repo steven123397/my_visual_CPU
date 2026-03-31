@@ -1,3 +1,5 @@
+import { projectTerminalText } from '../../shared/terminal_projection.mjs';
+
 function escapeHtml(text = '') {
   return text
     .replaceAll('&', '&amp;')
@@ -5,6 +7,10 @@ function escapeHtml(text = '') {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+export function projectTerminalBuffer(text = '') {
+  return projectTerminalText(text);
 }
 
 export function renderTerminal(state) {
@@ -17,7 +23,9 @@ export function renderTerminal(state) {
       : terminal.focused
         ? '输入已接管，只发送 ASCII / Enter / Backspace。'
         : '点击终端开始输入。';
-  const buffer = terminal.buffer.length > 0 ? escapeHtml(terminal.buffer) : '';
+  const buffer = terminal.buffer.length > 0
+    ? escapeHtml(projectTerminalBuffer(terminal.buffer))
+    : '';
 
   return `
     <section class="terminal-window ${terminal.focused ? 'is-focused' : ''}">

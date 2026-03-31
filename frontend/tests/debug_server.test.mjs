@@ -67,6 +67,7 @@ function createFakeSession(sessionLabel = 'session-1') {
   let pendingTerminalOutput = '';
   let interactiveLine = '';
   let interactiveOutputCooldown = 0;
+  let stepCommitCount = 0;
   const interactiveDripInterval = 24;
   return {
     async load(entry) {
@@ -96,6 +97,7 @@ function createFakeSession(sessionLabel = 'session-1') {
       return this.snapshot();
     },
     async stepCommit() {
+      stepCommitCount += 1;
       cycle += 2;
       if (pendingTerminalOutput) {
         if (currentTest === 'guest_interactive_os_demo') {
@@ -160,6 +162,9 @@ function createFakeSession(sessionLabel = 'session-1') {
       };
     },
     async close() {},
+    get stepCommitCount() {
+      return stepCommitCount;
+    },
   };
 }
 
@@ -480,6 +485,190 @@ test('POST /api/session/terminal-input waits for interactive_os help output to s
     assert.equal(response.status, 200);
     assert.match(response.body.text, /help echo time uptime halt disk regs peek pagewalk pte/);
     assert.match(response.body.text, /monitor> $/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/terminal-input does not mutate a replacement session after concurrent load', async () => {
+  const sessions = [];
+  let releaseFirstCommit;
+  const firstCommitGate = new Promise((resolve) => {
+    releaseFirstCommit = resolve;
+  });
+  const server = await startServer({
+    port: 0,
+    createSession: async () => {
+      const session = createFakeSession(`session-${sessions.length + 1}`);
+      if (sessions.length === 0) {
+        const baseStepCommit = session.stepCommit.bind(session);
+        let firstCommitBlocked = false;
+        session.stepCommit = async () => {
+          if (!firstCommitBlocked) {
+            firstCommitBlocked = true;
+            await firstCommitGate;
+          }
+          return baseStepCommit();
+        };
+      }
+      sessions.push(session);
+      return session;
+    },
+  });
+
+  try {
+    const initialLoad = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_interactive_os_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(initialLoad.status, 200);
+
+    const terminalInputPromise = postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'a',
+    });
+    await wait(10);
+
+    const replacementLoadPromise = postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    await wait(10);
+    releaseFirstCommit();
+
+    const [terminalInputResponse, replacementLoad] = await Promise.all([
+      terminalInputPromise,
+      replacementLoadPromise,
+    ]);
+    assert.equal(terminalInputResponse.status, 409);
+    assert.equal(replacementLoad.status, 200);
+    assert.equal(sessions.length, 2);
+    assert.equal(sessions[1].stepCommitCount, 0);
+
+    const snapshotResponse = await postJson(server.baseUrl, '/api/session/snapshot', {});
+    assert.equal(snapshotResponse.status, 200);
+    assert.equal(snapshotResponse.body.snapshot.summary.cycle, 0);
+    assert.equal(snapshotResponse.body.snapshot.events[0].detail, 'session-2:load');
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/terminal-input keeps backspace erase output in the same response', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_interactive_os_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const response = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'abc\b',
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.text, 'abc\b \b');
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/terminal-input coalesces websocket updates while waiting for output to settle', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+  const socket = await openTestWebSocket(`${server.baseUrl.replace('http', 'ws')}/ws`);
+  const messages = [];
+  const onMessage = (event) => {
+    messages.push(JSON.parse(event.data));
+  };
+  socket.addEventListener('message', onMessage);
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_interactive_os_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    await wait(10);
+    messages.length = 0;
+
+    const response = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'help\r',
+    });
+    assert.equal(response.status, 200);
+    await wait(20);
+
+    const snapshotMessages = messages.filter((payload) => payload.type === 'snapshot');
+    const terminalMessages = messages.filter((payload) => payload.type === 'terminal');
+
+    assert.ok(snapshotMessages.length <= 1, `expected at most one snapshot update, got ${snapshotMessages.length}`);
+    assert.ok(terminalMessages.length <= 1, `expected at most one terminal update, got ${terminalMessages.length}`);
+    assert.match(terminalMessages.at(-1)?.text ?? '', /help echo time uptime halt/);
+  } finally {
+    socket.removeEventListener('message', onMessage);
+    socket.close();
+    await server.close();
+  }
+});
+
+test('POST /api/session/terminal-input stops early when backspace has no effect', async () => {
+  let currentSession = null;
+  const server = await startServer({
+    port: 0,
+    createSession: async () => {
+      currentSession = createFakeSession();
+      return currentSession;
+    },
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_interactive_os_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const response = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: '\b',
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.text, '');
+    assert.ok(currentSession.stepCommitCount < 128);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/terminal-input returns immediately for ignored characters', async () => {
+  let currentSession = null;
+  const server = await startServer({
+    port: 0,
+    createSession: async () => {
+      currentSession = createFakeSession();
+      currentSession.uartInput = async () => ({ ok: true });
+      return currentSession;
+    },
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_interactive_os_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const response = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: '你',
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.text, '');
+    assert.equal(currentSession.stepCommitCount, 0);
   } finally {
     await server.close();
   }

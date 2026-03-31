@@ -6,6 +6,12 @@ import { spawn } from 'node:child_process';
 
 import { listTests } from './tests_manifest.mjs';
 import { createWebSocketHub } from './ws.mjs';
+import {
+  applyTerminalChunk,
+  createTerminalProjectionState,
+  DEFAULT_TERMINAL_MAX_LENGTH,
+  resetTerminalProjectionState,
+} from '../shared/terminal_projection.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -167,6 +173,13 @@ class DebugCliSession {
   }
 }
 
+class StaleSessionError extends Error {
+  constructor(message = 'stale session action') {
+    super(message);
+    this.name = 'StaleSessionError';
+  }
+}
+
 async function serveStatic(response, pathname) {
   const relative = pathname === '/' ? '/index.html' : pathname;
   const filePath = path.join(appRoot, relative.replace(/^\/+/, ''));
@@ -193,26 +206,50 @@ export async function startServer({
   let currentSnapshot = null;
   let currentTerminalPrompt = null;
   let runTimer = null;
-  let currentTerminalBuffer = '';
+  let currentTerminalProjection = createTerminalProjectionState({
+    maxLength: DEFAULT_TERMINAL_MAX_LENGTH,
+  });
   let currentTerminalOffset = 0;
+  let currentGeneration = 0;
+  let sessionActionQueue = Promise.resolve();
+  let runLoopToken = 0;
 
-  function stopRunLoop() {
-    if (runTimer) {
-      clearInterval(runTimer);
-      runTimer = null;
+  function enqueueSessionAction(action) {
+    const queued = sessionActionQueue.then(action, action);
+    sessionActionQueue = queued.catch(() => {});
+    return queued;
+  }
+
+  function beginSessionGeneration() {
+    currentGeneration += 1;
+    return currentGeneration;
+  }
+
+  function assertGeneration(generation) {
+    if (generation !== currentGeneration) {
+      throw new StaleSessionError();
     }
   }
 
+  function stopRunLoop() {
+    if (runTimer) {
+      clearTimeout(runTimer);
+      runTimer = null;
+    }
+    runLoopToken += 1;
+  }
+
   function resetTerminalTracking() {
-    currentTerminalBuffer = '';
+    resetTerminalProjectionState(currentTerminalProjection);
     currentTerminalOffset = 0;
   }
 
-  async function readTerminalOutput(offset = currentTerminalOffset) {
+  async function readTerminalOutput(offset = currentTerminalOffset, generation = currentGeneration) {
     if (!currentSession) {
       throw new Error('session not loaded');
     }
     const chunk = await currentSession.uartOutput(offset);
+    assertGeneration(generation);
     return {
       text: chunk.text ?? '',
       nextOffset: chunk.nextOffset ?? chunk.next_offset ?? offset,
@@ -228,16 +265,22 @@ export async function startServer({
     };
 
     if (reset) {
-      currentTerminalBuffer = normalized.text;
+      resetTerminalProjectionState(currentTerminalProjection);
+      applyTerminalChunk(currentTerminalProjection, normalized.text);
     } else if (normalized.nextOffset > currentTerminalOffset) {
-      currentTerminalBuffer += normalized.text;
+      applyTerminalChunk(currentTerminalProjection, normalized.text);
     }
     currentTerminalOffset = normalized.nextOffset;
     return normalized;
   }
 
-  async function syncTerminalDelta({ offset = currentTerminalOffset, reset = false, broadcast = false } = {}) {
-    const message = trackTerminalChunk(await readTerminalOutput(offset), { reset });
+  async function syncTerminalDelta({
+    offset = currentTerminalOffset,
+    reset = false,
+    broadcast = false,
+    generation = currentGeneration,
+  } = {}) {
+    const message = trackTerminalChunk(await readTerminalOutput(offset, generation), { reset });
     if (broadcast && (reset || message.text.length > 0)) {
       wsHub.broadcast(message);
     }
@@ -247,7 +290,9 @@ export async function startServer({
   async function advanceUntilTerminalActivity({
     maxCommits = 4096,
     settleCommits = 256,
+    idleCommitsWithoutOutput = null,
     shouldStop = null,
+    generation = currentGeneration,
   } = {}) {
     const aggregate = {
       type: 'terminal',
@@ -257,23 +302,31 @@ export async function startServer({
     };
     let quietCommits = 0;
     let sawOutput = false;
+    let commits = 0;
 
     for (let i = 0; i < maxCommits; ++i) {
+      assertGeneration(generation);
       currentSnapshot = await currentSession.stepCommit();
-      wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+      assertGeneration(generation);
+      commits += 1;
 
-      const terminal = await syncTerminalDelta({ broadcast: true });
+      const terminal = await syncTerminalDelta({ broadcast: false, generation });
       if (terminal.text.length > 0) {
         aggregate.text += terminal.text;
         aggregate.nextOffset = terminal.nextOffset;
         sawOutput = true;
         quietCommits = 0;
-        if (shouldStop?.({ aggregate, currentSnapshot, currentTerminalBuffer })) {
+        if (shouldStop?.({ aggregate, currentSnapshot, currentTerminalBuffer: currentTerminalProjection.text })) {
           break;
         }
-      } else if (sawOutput) {
+      } else {
         quietCommits += 1;
-        if (quietCommits >= settleCommits) {
+        if (sawOutput) {
+          if (quietCommits >= settleCommits) {
+            break;
+          }
+        } else if (idleCommitsWithoutOutput != null &&
+                   quietCommits >= idleCommitsWithoutOutput) {
           break;
         }
       }
@@ -283,7 +336,10 @@ export async function startServer({
       }
     }
 
-    return aggregate;
+    return {
+      commits,
+      terminal: aggregate,
+    };
   }
 
   function buildTerminalAdvancePlan(text) {
@@ -291,10 +347,32 @@ export async function startServer({
       return null;
     }
 
+    let visibleAsciiCount = 0;
+    let controlCount = 0;
+
+    for (const char of text) {
+      if (char === '\r' || char === '\n') {
+        controlCount += 1;
+        continue;
+      }
+      if (char === '\b' || char === '\x7f') {
+        controlCount += 1;
+        continue;
+      }
+      if (/^[\x20-\x7e]$/.test(char)) {
+        visibleAsciiCount += 1;
+      }
+    }
+
+    if (visibleAsciiCount === 0 && controlCount === 0) {
+      return null;
+    }
+
     if (text.includes('\r') || text.includes('\n')) {
       return {
         maxCommits: 16384,
         settleCommits: 1024,
+        idleCommitsWithoutOutput: 128,
         shouldStop: ({ aggregate, currentSnapshot, currentTerminalBuffer: terminalBuffer }) =>
           aggregate.text.length > 0
           && (
@@ -304,18 +382,79 @@ export async function startServer({
       };
     }
 
-    if (/^[\x20-\x7e]+$/.test(text)) {
+    if (controlCount > 0) {
       return {
-        maxCommits: Math.max(2048, text.length * 1024),
-        settleCommits: 256,
-        shouldStop: ({ aggregate }) => aggregate.text.length >= text.length,
+        maxCommits: Math.max(1024, (visibleAsciiCount + controlCount) * 1024),
+        settleCommits: 64,
+        idleCommitsWithoutOutput: 64,
       };
     }
 
-    return {
-      maxCommits: 4096,
-      settleCommits: 256,
+    if (visibleAsciiCount > 0) {
+      return {
+        maxCommits: Math.max(2048, (visibleAsciiCount + controlCount) * 1024),
+        settleCommits: 256,
+        idleCommitsWithoutOutput: 64,
+        shouldStop: ({ aggregate }) => aggregate.text.length >= visibleAsciiCount,
+      };
+    }
+  }
+
+  function startRunLoop(intervalMs, generation) {
+    stopRunLoop();
+    const token = runLoopToken;
+
+    const scheduleNextTick = () => {
+      if (token !== runLoopToken || generation !== currentGeneration || !currentSession) {
+        return;
+      }
+
+      runTimer = setTimeout(async () => {
+        runTimer = null;
+        try {
+          await enqueueSessionAction(async () => {
+            assertGeneration(generation);
+            if (!currentSession || token !== runLoopToken) {
+              return;
+            }
+
+            currentSnapshot = await currentSession.stepCycle();
+            assertGeneration(generation);
+            wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+            await syncTerminalDelta({ broadcast: true, generation });
+            if (currentSnapshot.summary?.halted) {
+              stopRunLoop();
+            }
+          });
+        } catch (error) {
+          if (error instanceof StaleSessionError) {
+            return;
+          }
+          wsHub.broadcast({ type: 'error', message: error.message });
+          stopRunLoop();
+          return;
+        }
+
+        if (token === runLoopToken && generation === currentGeneration && !currentSnapshot?.summary?.halted) {
+          scheduleNextTick();
+        }
+      }, intervalMs);
     };
+
+    scheduleNextTick();
+  }
+
+  async function runQueued(response, action) {
+    try {
+      await enqueueSessionAction(action);
+      return true;
+    } catch (error) {
+      if (error instanceof StaleSessionError) {
+        json(response, 409, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
   }
 
   const server = http.createServer(async (request, response) => {
@@ -335,131 +474,189 @@ export async function startServer({
           json(response, 404, { error: `unknown test: ${body.test}` });
           return;
         }
+        const generation = beginSessionGeneration();
         stopRunLoop();
-        if (currentSession) {
-          await currentSession.close();
-        }
-        currentSession = await createSession();
-        currentTerminalPrompt = entry.terminalPrompt ?? null;
-        await currentSession.load(entry, body.backend ?? 'pipeline');
-        currentSnapshot = entry.bootUntilUartText
-          ? await currentSession.runUntilUartContains(
-              entry.bootUntilUartText,
-              entry.bootMaxSteps ?? 0,
-            )
-          : await currentSession.snapshot();
-        resetTerminalTracking();
-        wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        const terminal = await syncTerminalDelta({ offset: 0, reset: true, broadcast: true });
-        json(response, 200, { ok: true, snapshot: currentSnapshot, terminal });
+        await runQueued(response, async () => {
+          assertGeneration(generation);
+          if (currentSession) {
+            await currentSession.close();
+            assertGeneration(generation);
+          }
+          currentSession = await createSession();
+          currentTerminalPrompt = entry.terminalPrompt ?? null;
+          await currentSession.load(entry, body.backend ?? 'pipeline');
+          assertGeneration(generation);
+          currentSnapshot = entry.bootUntilUartText
+            ? await currentSession.runUntilUartContains(
+                entry.bootUntilUartText,
+                entry.bootMaxSteps ?? 0,
+              )
+            : await currentSession.snapshot();
+          assertGeneration(generation);
+          resetTerminalTracking();
+          wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+          const terminal = await syncTerminalDelta({
+            offset: 0,
+            reset: true,
+            broadcast: true,
+            generation,
+          });
+          json(response, 200, { ok: true, snapshot: currentSnapshot, terminal });
+        });
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/snapshot') {
-        if (!currentSession) {
-          json(response, 400, { error: 'session not loaded' });
-          return;
-        }
-        currentSnapshot = await currentSession.snapshot();
-        json(response, 200, { snapshot: currentSnapshot });
+        const generation = currentGeneration;
+        await runQueued(response, async () => {
+          assertGeneration(generation);
+          if (!currentSession) {
+            json(response, 400, { error: 'session not loaded' });
+            return;
+          }
+          currentSnapshot = await currentSession.snapshot();
+          assertGeneration(generation);
+          json(response, 200, { snapshot: currentSnapshot });
+        });
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/step-cycle') {
-        if (!currentSession) {
-          json(response, 400, { error: 'session not loaded' });
-          return;
-        }
-        currentSnapshot = await currentSession.stepCycle();
-        wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        const terminal = await syncTerminalDelta({ broadcast: true });
-        json(response, 200, { snapshot: currentSnapshot, terminal });
+        const generation = currentGeneration;
+        await runQueued(response, async () => {
+          assertGeneration(generation);
+          if (!currentSession) {
+            json(response, 400, { error: 'session not loaded' });
+            return;
+          }
+          currentSnapshot = await currentSession.stepCycle();
+          assertGeneration(generation);
+          wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+          const terminal = await syncTerminalDelta({ broadcast: true, generation });
+          json(response, 200, { snapshot: currentSnapshot, terminal });
+        });
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/step-commit') {
-        if (!currentSession) {
-          json(response, 400, { error: 'session not loaded' });
-          return;
-        }
-        currentSnapshot = await currentSession.stepCommit();
-        wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        const terminal = await syncTerminalDelta({ broadcast: true });
-        json(response, 200, { snapshot: currentSnapshot, terminal });
+        const generation = currentGeneration;
+        await runQueued(response, async () => {
+          assertGeneration(generation);
+          if (!currentSession) {
+            json(response, 400, { error: 'session not loaded' });
+            return;
+          }
+          currentSnapshot = await currentSession.stepCommit();
+          assertGeneration(generation);
+          wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+          const terminal = await syncTerminalDelta({ broadcast: true, generation });
+          json(response, 200, { snapshot: currentSnapshot, terminal });
+        });
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/reset') {
-        if (!currentSession) {
-          json(response, 400, { error: 'session not loaded' });
-          return;
-        }
-        currentSnapshot = await currentSession.reset();
-        resetTerminalTracking();
-        wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        const terminal = await syncTerminalDelta({ offset: 0, reset: true, broadcast: true });
-        json(response, 200, { snapshot: currentSnapshot, terminal });
+        const generation = beginSessionGeneration();
+        stopRunLoop();
+        await runQueued(response, async () => {
+          assertGeneration(generation);
+          if (!currentSession) {
+            json(response, 400, { error: 'session not loaded' });
+            return;
+          }
+          currentSnapshot = await currentSession.reset();
+          assertGeneration(generation);
+          resetTerminalTracking();
+          wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+          const terminal = await syncTerminalDelta({
+            offset: 0,
+            reset: true,
+            broadcast: true,
+            generation,
+          });
+          json(response, 200, { snapshot: currentSnapshot, terminal });
+        });
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/run') {
-        if (!currentSession) {
-          json(response, 400, { error: 'session not loaded' });
-          return;
-        }
         const body = await readBody(request);
         const intervalMs = Math.max(20, Math.floor(1000 / Math.max(1, body.rateHz ?? 8)));
-        stopRunLoop();
-        runTimer = setInterval(async () => {
-          try {
-            currentSnapshot = await currentSession.stepCycle();
-            wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-            await syncTerminalDelta({ broadcast: true });
-            if (currentSnapshot.summary?.halted) {
-              stopRunLoop();
-            }
-          } catch (error) {
-            wsHub.broadcast({ type: 'error', message: error.message });
-            stopRunLoop();
+        const generation = currentGeneration;
+        await runQueued(response, async () => {
+          assertGeneration(generation);
+          if (!currentSession) {
+            json(response, 400, { error: 'session not loaded' });
+            return;
           }
-        }, intervalMs);
-        json(response, 200, { ok: true });
+          startRunLoop(intervalMs, generation);
+          json(response, 200, { ok: true });
+        });
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/terminal-input') {
-        if (!currentSession) {
-          json(response, 400, { error: 'session not loaded' });
-          return;
-        }
         const body = await readBody(request);
         const text = body.text ?? '';
-        await currentSession.uartInput(text);
-        const terminal = runTimer
-          ? await syncTerminalDelta({ broadcast: true })
-          : await advanceUntilTerminalActivity(buildTerminalAdvancePlan(text) ?? undefined);
-        json(response, 200, {
-          ok: true,
-          text: terminal.text,
-          nextOffset: terminal.nextOffset,
+        const generation = currentGeneration;
+        await runQueued(response, async () => {
+          assertGeneration(generation);
+          if (!currentSession) {
+            json(response, 400, { error: 'session not loaded' });
+            return;
+          }
+          await currentSession.uartInput(text);
+          assertGeneration(generation);
+          const advancePlan = buildTerminalAdvancePlan(text);
+          let terminal;
+          let shouldBroadcastSnapshot = false;
+          if (runTimer) {
+            terminal = await syncTerminalDelta({ broadcast: true, generation });
+          } else if (advancePlan) {
+            const result = await advanceUntilTerminalActivity({
+              ...advancePlan,
+              generation,
+            });
+            terminal = result.terminal;
+            shouldBroadcastSnapshot = result.commits > 0;
+            if (shouldBroadcastSnapshot) {
+              wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+            }
+            if (terminal.text.length > 0) {
+              wsHub.broadcast(terminal);
+            }
+          } else {
+            terminal = await syncTerminalDelta({ broadcast: true, generation });
+          }
+          json(response, 200, {
+            ok: true,
+            text: terminal.text,
+            nextOffset: terminal.nextOffset,
+          });
         });
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/terminal-output') {
-        if (!currentSession) {
-          json(response, 400, { error: 'session not loaded' });
-          return;
-        }
         const body = await readBody(request);
-        const terminal = await readTerminalOutput(body.offset ?? 0);
-        json(response, 200, terminal);
+        const generation = currentGeneration;
+        await runQueued(response, async () => {
+          assertGeneration(generation);
+          if (!currentSession) {
+            json(response, 400, { error: 'session not loaded' });
+            return;
+          }
+          const terminal = await readTerminalOutput(body.offset ?? 0, generation);
+          json(response, 200, terminal);
+        });
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/pause') {
         stopRunLoop();
-        json(response, 200, { ok: true, snapshot: currentSnapshot });
+        await runQueued(response, async () => {
+          json(response, 200, { ok: true, snapshot: currentSnapshot });
+        });
         return;
       }
 

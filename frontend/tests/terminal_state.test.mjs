@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  MAX_TERMINAL_BUFFER,
   appendTerminalOutput,
   createAppState,
   normalizeTerminalInput,
@@ -10,7 +11,7 @@ import {
   setTerminalPendingInput,
 } from '../app/state.js';
 
-test('createAppState starts with a collapsed inspector and inactive terminal', () => {
+test('createAppState starts with an open inspector and inactive terminal', () => {
   const state = createAppState();
 
   assert.deepEqual(state.terminal, {
@@ -21,7 +22,7 @@ test('createAppState starts with a collapsed inspector and inactive terminal', (
     pendingInput: false,
   });
   assert.deepEqual(state.layout, {
-    debugPanelOpen: false,
+    debugPanelOpen: true,
   });
 });
 
@@ -42,7 +43,7 @@ test('appendTerminalOutput can reset or extend the terminal buffer while advanci
     nextOffset: 6,
     reset: true,
   });
-  assert.equal(state.terminal.buffer, 'boot\r\n');
+  assert.equal(state.terminal.buffer, 'boot\n');
   assert.equal(state.terminal.nextOffset, 6);
   assert.equal(state.terminal.connected, true);
 
@@ -50,8 +51,22 @@ test('appendTerminalOutput can reset or extend the terminal buffer while advanci
     text: '> ',
     nextOffset: 8,
   });
-  assert.equal(state.terminal.buffer, 'boot\r\n> ');
+  assert.equal(state.terminal.buffer, 'boot\n> ');
   assert.equal(state.terminal.nextOffset, 8);
+});
+
+test('appendTerminalOutput keeps only the latest terminal tail once the buffer grows too large', () => {
+  const state = createAppState();
+  const oversized = 'a'.repeat(MAX_TERMINAL_BUFFER + 32);
+
+  appendTerminalOutput(state, {
+    text: oversized,
+    nextOffset: oversized.length,
+    reset: true,
+  });
+
+  assert.equal(state.terminal.buffer.length, MAX_TERMINAL_BUFFER);
+  assert.equal(state.terminal.buffer, oversized.slice(-MAX_TERMINAL_BUFFER));
 });
 
 test('terminal focus, pending input and inspector visibility update independently', () => {

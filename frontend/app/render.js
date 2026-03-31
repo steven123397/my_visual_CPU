@@ -49,6 +49,4 @@ export function updateControls(elements, state) {
   `).join('');
   elements.backendSelect.value = state.backend;
   elements.statusBadge.textContent = state.runState;
-  elements.toggleDebugButton.textContent = state.layout.debugPanelOpen ? '收起 Debug' : '展开 Debug';
-  elements.toggleDebugButton.setAttribute('aria-expanded', state.layout.debugPanelOpen ? 'true' : 'false');
 }

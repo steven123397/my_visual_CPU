@@ -113,7 +113,13 @@ int main(int argc, char** argv) {
            << run_until_uart_contains_command("leaf=L2", 500000)
            << "{\"cmd\":\"uart_input\",\"text\":\"pte dump 0x80000000\\r\"}\n"
            << run_until_uart_contains_command("l2=", 500000)
-           << "{\"cmd\":\"uart_input\",\"text\":\"halt\\r\"}\n"
+           << "{\"cmd\":\"uart_input\",\"text\":\"abc\\b\"}\n"
+           << run_until_uart_contains_command("abc\\b \\b", 500000)
+           << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
+           << "{\"cmd\":\"uart_input\",\"text\":\"\\b\\bxy\\u0008\"}\n"
+           << run_until_uart_contains_command("xy\\b \\b", 500000)
+           << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
+           << "{\"cmd\":\"uart_input\",\"text\":\"\\bhalt\\r\"}\n"
            << run_until_halt_command(500000)
            << "{\"cmd\":\"snapshot\"}\n"
            << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
@@ -168,6 +174,16 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (!expect_contains(output, "hi", "echo command should print its payload")) {
+        return 1;
+    }
+    if (!expect_contains(output,
+                         "abc\\b \\b",
+                         "backspace input should be accepted and surfaced through the debug CLI JSON protocol")) {
+        return 1;
+    }
+    if (!expect_contains(output,
+                         "xy\\b \\b",
+                         "unicode-escaped backspace should be decoded and surfaced through the debug CLI JSON protocol")) {
         return 1;
     }
     if (!expect_line_with_fields(lines,

@@ -17,11 +17,11 @@ import {
   pushSnapshot,
   resetHistory,
   resetTerminalState,
-  setDebugPanelOpen,
   setTerminalFocus,
   setTerminalPendingInput,
   setTests,
 } from './state.js';
+import { createTerminalInputPump } from './terminal_input_pump.js';
 import { renderApp, updateControls } from './render.js';
 
 const state = createAppState();
@@ -30,7 +30,6 @@ const elements = {
   testSelect: document.querySelector('#test-select'),
   backendSelect: document.querySelector('#backend-select'),
   statusBadge: document.querySelector('#status-badge'),
-  toggleDebugButton: document.querySelector('#toggle-debug-button'),
   desktop: document.querySelector('#desktop-shell'),
   debugInspector: document.querySelector('#debug-inspector'),
   terminal: document.querySelector('#terminal-slot'),
@@ -99,16 +98,23 @@ async function handleAction(action, label) {
 }
 
 async function handleTerminalInput(text) {
-  setTerminalPendingInput(state, true);
-  paint();
-  try {
-    const response = await terminalInput(text);
-    mergeTerminal(response);
-  } finally {
-    setTerminalPendingInput(state, false);
-    paint();
-  }
+  terminalInputPump.enqueue(text);
 }
+
+const terminalInputPump = createTerminalInputPump({
+  sendInput: terminalInput,
+  onResponse: (response) => {
+    mergeTerminal(response);
+    paint();
+  },
+  onError: (error) => {
+    showNotice(error.message, 'error');
+  },
+  onPendingChange: (pending) => {
+    setTerminalPendingInput(state, pending);
+    paint();
+  },
+});
 
 async function init() {
   const testsResponse = await listTests();
@@ -121,10 +127,6 @@ async function init() {
   });
   elements.backendSelect.addEventListener('change', (event) => {
     state.backend = event.target.value;
-  });
-  elements.toggleDebugButton.addEventListener('click', () => {
-    setDebugPanelOpen(state, !state.layout.debugPanelOpen);
-    paint();
   });
 
   document.addEventListener('click', (event) => {
@@ -139,7 +141,7 @@ async function init() {
   });
 
   document.addEventListener('keydown', async (event) => {
-    if (!state.terminal.focused || state.terminal.pendingInput) {
+    if (!state.terminal.focused) {
       return;
     }
 
@@ -159,6 +161,7 @@ async function init() {
 
   document.querySelector('#load-button').addEventListener('click', async () => {
     try {
+      terminalInputPump.reset();
       await handleLoad();
     } catch (error) {
       state.runState = 'error';
@@ -185,6 +188,7 @@ async function init() {
 
   document.querySelector('#reset-button').addEventListener('click', async () => {
     try {
+      terminalInputPump.reset();
       await handleAction(resetSession, '已重置当前会话');
     } catch (error) {
       showNotice(error.message, 'error');

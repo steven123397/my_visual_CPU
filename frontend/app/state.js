@@ -1,4 +1,27 @@
 const MAX_HISTORY = 32;
+export const MAX_TERMINAL_BUFFER = 32768;
+
+import {
+  applyTerminalChunk,
+  createTerminalProjectionState,
+  resetTerminalProjectionState,
+} from '../shared/terminal_projection.mjs';
+
+function createTerminalState() {
+  const terminal = {
+    buffer: '',
+    nextOffset: 0,
+    focused: false,
+    connected: false,
+    pendingInput: false,
+  };
+  Object.defineProperty(terminal, 'projection', {
+    value: createTerminalProjectionState({ maxLength: MAX_TERMINAL_BUFFER }),
+    writable: true,
+    enumerable: false,
+  });
+  return terminal;
+}
 
 export function createAppState() {
   return {
@@ -8,15 +31,9 @@ export function createAppState() {
     runState: 'idle',
     currentSnapshot: null,
     history: [],
-    terminal: {
-      buffer: '',
-      nextOffset: 0,
-      focused: false,
-      connected: false,
-      pendingInput: false,
-    },
+    terminal: createTerminalState(),
     layout: {
-      debugPanelOpen: false,
+      debugPanelOpen: true,
     },
   };
 }
@@ -40,13 +57,7 @@ export function resetHistory(state) {
 }
 
 export function resetTerminalState(state) {
-  state.terminal = {
-    buffer: '',
-    nextOffset: 0,
-    focused: false,
-    connected: false,
-    pendingInput: false,
-  };
+  state.terminal = createTerminalState();
 }
 
 export function appendTerminalOutput(state, payload = {}) {
@@ -62,7 +73,11 @@ export function appendTerminalOutput(state, payload = {}) {
     return;
   }
 
-  state.terminal.buffer = reset ? text : `${state.terminal.buffer}${text}`;
+  if (reset) {
+    resetTerminalProjectionState(state.terminal.projection);
+  }
+  applyTerminalChunk(state.terminal.projection, text);
+  state.terminal.buffer = state.terminal.projection.text;
   state.terminal.nextOffset = nextOffset;
   state.terminal.connected = true;
 }
