@@ -4,7 +4,7 @@
 
 本文档用于说明如何把你同学在 `my-project-3-24` 分支上完成的 Phase 2 pipeline core 工作，按当前主线边界重新接回仓库。
 
-它是 [pipeline_integration_prep.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_integration_prep.md) 的具体化设计，重点回答以下问题：
+本文档已经吸收当时“集成准备”阶段的冻结基线、不可整体 merge 旧分支以及三类改动分类判断，重点回答以下问题：
 
 - 本轮到底集成什么，不集成什么
 - 哪些改动可以直接迁移，哪些必须基于当前主线重接
@@ -28,7 +28,7 @@
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，记录 `pipeline core` 正式接入主线时确定下来的结构边界。
-- 当前运行状态、后续回归收口和近期重点以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准。
+- 当前运行状态、后续回归收口和近期重点以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准；原先独立的准备阶段说明已经并入本文档，不再单独维护。
 
 ## 背景
 
@@ -70,7 +70,7 @@
 
 ## 集成原则
 
-本轮继续遵守 [pipeline_integration_prep.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_integration_prep.md) 已经确定的原则，并进一步收口为下面几条：
+本轮继续遵守准备阶段已经确认的原则，并进一步收口为下面几条：
 
 1. `functional` 继续保留，且其行为定义优先于 `pipeline`。
 2. `pipeline` 是新 backend，不是新的语义来源。

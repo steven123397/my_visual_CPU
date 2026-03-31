@@ -18,14 +18,15 @@
 
 - 状态文档：
   - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
+  - [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
   - [status/kernel_alpha_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/kernel_alpha_status.md)
 - 相关计划：
-  - [plan/minimal_interactive_os_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/minimal_interactive_os_plan.md)
+  - 无。该方向的执行细节已经回写到相关 `status` 文档。
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为当前主线对"最小可交互 OS"目标的结构边界说明。
-- 当前正式进展以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准；若后续为该方向建立专门 `status` 文档，再以对应文档承载实时进度。
+- 当前正式进展以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 为准；当前 terminal 壳层剩余稳定化问题统一写入 [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)。
 
 ## 背景与问题
 
@@ -131,15 +132,32 @@ browser
 
 #### 3. 前端桌面壳合同
 
-“桌面”在这里是前端呈现层概念，不是 guest 图形系统。首版只需要一个带窗口边框和控制条的终端壳，最小职责包括：
+“桌面”在这里是前端呈现层概念，不是 guest 图形系统。当前实现与后续维护都应继续收口到以下 3 个区域：
 
-- 点击窗口使终端获得焦点；
-- 点击 `Load / Run / Pause / Reset` 等按钮控制会话；
-- 焦点激活时捕获键盘输入，并发送给 guest；
-- 展示滚动终端文本；
-- 保留现有 debug 面板能力，但不要求和终端强耦合。
+- `session bar`
+  展示当前测试、backend、运行状态和 `Load / Run / Pause / Reset / Step` 控件。
+- `terminal stage`
+  作为主舞台，负责 banner、prompt、命令回显和滚动缓冲。
+- `debug inspector`
+  作为辅助观察区，继续承接 snapshot、pipeline、events、registers、CSR、bus 与设备状态，但不反向定义 terminal 协议。
 
-这里最重要的边界是：鼠标点击只影响前端壳层状态，例如焦点、按钮、窗口显隐，不对应 guest 内核中的“点击事件”。guest 只看见串口输入流。
+terminal 相关前端状态至少包括：
+
+- `terminal.buffer`
+- `terminal.nextOffset`
+- `terminal.focused`
+- `terminal.connected`
+- `terminal.pendingInput`
+
+这组状态当前必须继续遵守以下规则：
+
+- terminal buffer 只通过独立 terminal API / terminal WebSocket 增量推进，不并入 `DebugSnapshot`。
+- `load` / `reset` 必须清空 terminal buffer 和 offset，避免跨 session 串味。
+- 键盘输入继续只收口到可见 ASCII、`Enter`、`Backspace` 这组最小键集。
+- 鼠标只影响前端壳层焦点与控件行为，不向 guest 暴露更高层点击语义。
+- 调试信息继续保留为辅助观察区，不与 guest monitor 的命令语义耦合。
+
+当前这组合同已经实现完成；剩余工作重点是 session 串行化、terminal 性能和协议稳健性，统一见 [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)。
 
 #### 4. Guest monitor 合同
 

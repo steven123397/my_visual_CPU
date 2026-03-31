@@ -20,14 +20,10 @@
   - [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)
   - [design/debug_frontend_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/debug_frontend_integration.md)
 - 当前计划：
-  - [plan/minimal_interactive_os_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/minimal_interactive_os_plan.md)
   - 当前暂无新的主线执行计划；后续如有新的 `Phase 3-B/C` 任务，再单独建立对应 `plan` 文档。
 - 已完成计划：
-  - [plan/docs_information_architecture_reorg_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/docs_information_architecture_reorg_plan.md)
   - [plan/phase1-hardening-regressions_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase1-hardening-regressions_plan.md)
   - [plan/pipeline_core_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/pipeline_core_integration_plan.md)
-  - [plan/debug_frontend_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/debug_frontend_integration_plan.md)
-  - [plan/minimal_interactive_os_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/minimal_interactive_os_plan.md)
   - [plan/phase3_branch_prediction_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/phase3_branch_prediction_plan.md)
   - [plan/sv39_mprv_semantics_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_mprv_semantics_plan.md)
   - [plan/sv39_pagewalk_contracts_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/sv39_pagewalk_contracts_plan.md)
@@ -193,6 +189,25 @@
 - `cd myCPU && make test-host-interactive_terminal_smoke`
 - `cd myCPU && make test-guest-interactive_os_demo`
 - `cd myCPU && make test-pipeline-guest-interactive_os_demo`
+
+同日，`interactive_os` 的浏览器终端输入链路也补了一轮最小 hardening：
+
+- 前端 terminal 输入已改为批量排队发送，不再因为前一个字符尚未返回就直接丢掉后续按键。
+- debug server 当前会区分“guest 可能回显的输入”和“guest 明确会忽略的输入”；后者现在直接返回当前 terminal delta，不再无意义推进整段 commit budget。
+
+本轮已新鲜验证通过：
+
+- `cd frontend && node --test`
+
+## 2026-03-31 补充进展
+
+本轮没有继续扩功能面，而是做了一轮文档与自检收口：
+
+- [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md) 已重写为“当前有效的自检结论 + 活跃风险 + 下一步顺序”，并吸收 `interactive_os terminal` 专项复检结果。
+- `minimal_interactive_os` 的前端终端壳合同已经并回 [design/minimal_interactive_os_design.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/minimal_interactive_os_design.md)，不再单独维护拆开的 shell 设计文档。
+- `pipeline` 早期准备阶段结论已经并回 [design/pipeline_core_integration.md](/home/liangjiaqi/projects/my_visual_CPU/docs/design/pipeline_core_integration.md)，不再单独维护独立的 prep 文档。
+- 已完成且内容已被 `design/status` 吸收的 `docs` 治理、`debug/frontend` 接入和 `minimal_interactive_os` 执行计划，当前不再单独保留为 `plan` 文档。
+- [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 已收回入口文档定位，只保留项目定位、快速开始、`interactive_os` 演示、测试入口和文档导航。
 
 ## Phase 2 当前安排
 

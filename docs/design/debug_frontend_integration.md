@@ -22,12 +22,12 @@
   - [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)
   - [status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md)
 - 相关计划：
-  - [plan/debug_frontend_integration_plan.md](/home/liangjiaqi/projects/my_visual_CPU/docs/plan/debug_frontend_integration_plan.md)
+  - 无。该轮执行细节已回写到相关 `status` 文档。
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，记录 `debug/frontend` 已落地的设计边界与非目标。
-- 当前运行方式、验证入口和近期稳定化重点以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md) 与 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 为准。
+- 当前运行方式、验证入口和近期稳定化重点以 [status/mainline_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/mainline_status.md)、[status/code_self_review_status.md](/home/liangjiaqi/projects/my_visual_CPU/docs/status/code_self_review_status.md) 与 [readme.md](/home/liangjiaqi/projects/my_visual_CPU/readme.md) 为准。
 
 ## 背景
 
