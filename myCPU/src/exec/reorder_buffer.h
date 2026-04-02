@@ -15,6 +15,7 @@ struct RobAllocate {
     uint32_t raw{0};
     uint8_t arch_rd{0};
     uint16_t phys_rd{0};
+    uint16_t previous_phys_rd{0};
 };
 
 struct RobReady {
@@ -34,6 +35,7 @@ struct RobEntry {
     uint32_t raw{0};
     uint8_t arch_rd{0};
     uint16_t phys_rd{0};
+    uint16_t previous_phys_rd{0};
     bool ready{false};
     bool value_ready{false};
     uint64_t value{0};

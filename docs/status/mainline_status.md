@@ -22,7 +22,7 @@
   - [design/pipeline_core_integration.md](../design/pipeline_core_integration.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
 - 当前计划：
-  - 当前尚未新建下一份“大块 `OoO / rename / ROB / LSQ` 接线计划”；启动前先以本状态与相关设计文档为准。
+  - [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)
 - 已完成计划：
   - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
   - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
@@ -43,7 +43,7 @@
 - `Phase 3-B/C` 的 OoO readiness 前置准备已经完成：当前仓库已具备正式设计文档、retire trace / sequence 观测面、共享 commit boundary helper、`PipelineBackend` 状态/冒险拆分，以及未接线但已独立门禁的 `rename_map / reorder_buffer / load_store_queue` helper。
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
-同时也意味着：下一轮如果要继续推进 `Phase 3`，已经不需要先回头补基础设施，而是可以单独新开一份真正的大块 `OoO / rename / ROB / LSQ` 接线计划。
+同时也意味着：下一轮如果要继续推进 `Phase 3`，已经不需要先回头补基础设施，而是可以直接执行独立的 [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)，推进真正的大块 `OoO / rename / ROB / LSQ` 接线。
 
 关于当前主线中“回归相关工作做到什么程度可认为阶段性收口”的统一判断口径，见：
 
@@ -265,7 +265,7 @@
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug` 的第一轮 hardening 也已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup / kernel_alpha/common`。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
-6. `Phase 3-B/C` 的 readiness 前置条件已经完成；下一步应单独新建并执行真正的大块 `OoO / rename / ROB / LSQ` 接线计划，而不是继续在当前计划里叠加后续实现。
+6. `Phase 3-B/C` 的 readiness 前置条件已经完成；当前已切到 [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 执行真正的大块 `OoO / rename / ROB / LSQ` 接线，而不是继续在 readiness 计划里叠加后续实现。
 7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
 
 ## 建议入口
@@ -278,6 +278,7 @@
 - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
 - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
 - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
+- [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)
 - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
   当前作为已完成的 OoO readiness 收口记录保留。
 - [status/code_self_review_status.md](code_self_review_status.md)

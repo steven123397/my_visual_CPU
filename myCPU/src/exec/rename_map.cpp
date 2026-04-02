@@ -31,17 +31,24 @@ uint16_t RenameMap::architectural_source(uint8_t arch) const {
     return architectural_map_[arch];
 }
 
-uint16_t RenameMap::rename_dest(uint8_t arch) {
+RenameDestResult RenameMap::rename_dest(uint8_t arch) {
     if (arch == 0) {
-        return 0;
+        return {};
     }
 
+    const uint16_t previous_phys = speculative_map_[arch];
     const uint16_t phys = next_phys_++;
     speculative_map_[arch] = phys;
-    return phys;
+    return RenameDestResult{
+        .phys = phys,
+        .previous_phys = previous_phys,
+    };
 }
 
 void RenameMap::commit_dest(uint8_t arch, uint16_t phys) {
+    if (arch == 0) {
+        return;
+    }
     architectural_map_[arch] = phys;
     speculative_map_[arch] = phys;
 }

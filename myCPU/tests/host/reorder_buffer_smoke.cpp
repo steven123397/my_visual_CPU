@@ -22,6 +22,7 @@ int main() {
         .raw = 0x00100093U,
         .arch_rd = 1,
         .phys_rd = 33,
+        .previous_phys_rd = 1,
     });
     const RobIndex second = rob.allocate({
         .sequence_id = 11,
@@ -29,11 +30,13 @@ int main() {
         .raw = 0x00208113U,
         .arch_rd = 2,
         .phys_rd = 34,
+        .previous_phys_rd = 2,
     });
 
     const auto head_before_ready = rob.peek_head();
-    if (!expect(head_before_ready.has_value() && head_before_ready->sequence_id == 10 && !head_before_ready->ready,
-                "ROB head should be the oldest allocated entry before readiness updates")) {
+    if (!expect(head_before_ready.has_value() && head_before_ready->sequence_id == 10 &&
+                    head_before_ready->previous_phys_rd == 1 && !head_before_ready->ready,
+                "ROB head should retain the stale physical destination for the oldest entry")) {
         return 1;
     }
 
@@ -70,6 +73,7 @@ int main() {
         .raw = 0x003101b3U,
         .arch_rd = 3,
         .phys_rd = 35,
+        .previous_phys_rd = 3,
     });
     rob.flush_younger_than(11);
     if (!expect(rob.size() == 1, "flush_younger_than should drop entries younger than the provided sequence")) {

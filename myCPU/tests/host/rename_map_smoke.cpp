@@ -22,10 +22,11 @@ int main() {
     }
 
     const RenameCheckpoint checkpoint = map.checkpoint();
-    const uint16_t speculative_phys = map.rename_dest(5);
-    if (!expect(speculative_phys != 5 && map.map_source(5) == speculative_phys &&
+    const RenameDestResult first_rename = map.rename_dest(5);
+    if (!expect(first_rename.phys != 5 && first_rename.previous_phys == 5 &&
+                    map.map_source(5) == first_rename.phys &&
                     map.architectural_source(5) == 5,
-                "rename_dest should update only the speculative mapping")) {
+                "rename_dest should report both the new physical register and the previous speculative mapping")) {
         return 1;
     }
 
@@ -35,17 +36,22 @@ int main() {
         return 1;
     }
 
-    const uint16_t committed_phys = map.rename_dest(10);
-    map.commit_dest(10, committed_phys);
-    if (!expect(map.map_source(10) == committed_phys && map.architectural_source(10) == committed_phys,
+    const RenameDestResult committed_dest = map.rename_dest(10);
+    map.commit_dest(10, committed_dest.phys);
+    if (!expect(map.map_source(10) == committed_dest.phys &&
+                    map.architectural_source(10) == committed_dest.phys,
                 "commit_dest should advance the architectural rename map")) {
         return 1;
     }
 
     const RenameCheckpoint committed_checkpoint = map.checkpoint();
-    (void) map.rename_dest(10);
+    const RenameDestResult renamed_again = map.rename_dest(10);
+    if (!expect(renamed_again.previous_phys == committed_dest.phys,
+                "rename_dest should surface the last committed mapping as the next stale physical register")) {
+        return 1;
+    }
     map.rollback(committed_checkpoint);
-    if (!expect(map.map_source(10) == committed_phys,
+    if (!expect(map.map_source(10) == committed_dest.phys,
                 "rollback should preserve the last committed mapping as the speculative baseline")) {
         return 1;
     }

@@ -8,6 +8,11 @@ struct RenameCheckpoint {
     uint16_t next_phys{32};
 };
 
+struct RenameDestResult {
+    uint16_t phys{0};
+    uint16_t previous_phys{0};
+};
+
 class RenameMap {
 public:
     RenameMap();
@@ -15,7 +20,7 @@ public:
     RenameCheckpoint checkpoint() const;
     uint16_t map_source(uint8_t arch) const;
     uint16_t architectural_source(uint8_t arch) const;
-    uint16_t rename_dest(uint8_t arch);
+    RenameDestResult rename_dest(uint8_t arch);
     void commit_dest(uint8_t arch, uint16_t phys);
     void rollback(const RenameCheckpoint& checkpoint);
 

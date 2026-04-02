@@ -30,9 +30,11 @@
     `Phase 3-B/C` 首轮执行模型边界。
 13. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
     `pipeline` 投机执行与 commit-visible side-effect 契约。
-14. [plan/phase3_ooo_readiness_plan.md](plan/phase3_ooo_readiness_plan.md)
+14. [plan/phase3_ooo_execution_plan.md](plan/phase3_ooo_execution_plan.md)
+    当前活跃的 `Phase 3-B/C` `OoO / rename / ROB / LSQ` 接线计划。
+15. [plan/phase3_ooo_readiness_plan.md](plan/phase3_ooo_readiness_plan.md)
     已完成的 `Phase 3-B/C` OoO readiness 前置准备记录。
-15. [design/kernel_alpha_storage_error_contract.md](design/kernel_alpha_storage_error_contract.md)
+16. [design/kernel_alpha_storage_error_contract.md](design/kernel_alpha_storage_error_contract.md)
     `kernel_alpha` storage 错误合同设计。
 
 ## 目录说明
@@ -54,6 +56,8 @@
   `kernel_alpha` 子线实时状态。
 - [status/code_self_review_status.md](status/code_self_review_status.md)
   当前仍有效的自检结果和调试链路风险。
+- [plan/phase3_ooo_execution_plan.md](plan/phase3_ooo_execution_plan.md)
+  当前正在执行的 `Phase 3-B/C` 接线计划。
 - [plan/phase3_ooo_readiness_plan.md](plan/phase3_ooo_readiness_plan.md)
   已完成的 `Phase 3-B/C` OoO readiness 收口记录，也是下一份大块 OoO 接线计划的直接前置入口。
 - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
@@ -65,6 +69,8 @@
 
 当前 `plan/` 只保留仍然值得独立回看的计划记录：
 
+- [plan/phase3_ooo_execution_plan.md](plan/phase3_ooo_execution_plan.md)
+  当前活跃，承接真正的大块 `OoO / rename / ROB / LSQ` 接线。
 - [plan/phase3_ooo_readiness_plan.md](plan/phase3_ooo_readiness_plan.md)
   当前已完成，保留为下一轮大块 `OoO / rename / ROB / LSQ` 接线的前置记录。
 - [plan/phase1-hardening-regressions_plan.md](plan/phase1-hardening-regressions_plan.md)

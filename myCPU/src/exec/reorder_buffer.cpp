@@ -11,6 +11,7 @@ RobIndex ReorderBuffer::allocate(const RobAllocate& entry) {
         .raw = entry.raw,
         .arch_rd = entry.arch_rd,
         .phys_rd = entry.phys_rd,
+        .previous_phys_rd = entry.previous_phys_rd,
     });
     return index;
 }

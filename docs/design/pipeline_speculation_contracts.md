@@ -18,6 +18,7 @@
 - 状态文档：
   - [status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
+  - [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)
   - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
 
 ## 背景与问题
@@ -181,4 +182,4 @@ TLB / address-space 相关动作也必须按 architected commit boundary 理解�
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为 `Phase 3-B/C` readiness 阶段的投机执行与 commit contract 说明。
-- 当前实现结果、测试门禁与是否已进入真正 OoO 接线阶段，以 [status/mainline_status.md](../status/mainline_status.md) 与 [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md) 为准。
+- 当前实现结果、测试门禁与当前 `rename / ROB / LSQ` 接线进度，以 [status/mainline_status.md](../status/mainline_status.md)、[plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 与 [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md) 为准。
