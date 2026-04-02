@@ -19,6 +19,7 @@
   - [status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
   - [plan/phase3_branch_prediction_plan.md](../plan/phase3_branch_prediction_plan.md)
+  - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
 
 ## 背景与问题
 

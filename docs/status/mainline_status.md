@@ -17,11 +17,14 @@
   - [design/cpp_refactor_design.md](../design/cpp_refactor_design.md)
   - [design/minimal_interactive_os_design.md](../design/minimal_interactive_os_design.md)
   - [design/phase3_branch_prediction_design.md](../design/phase3_branch_prediction_design.md)
+  - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
+  - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
   - [design/pipeline_core_integration.md](../design/pipeline_core_integration.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
 - 当前计划：
-  - 当前暂无新的主线执行计划；后续如有新的 `Phase 3-B/C` 任务，再单独建立对应 `plan` 文档。
+  - 当前尚未新建下一份“大块 `OoO / rename / ROB / LSQ` 接线计划”；启动前先以本状态与相关设计文档为准。
 - 已完成计划：
+  - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
   - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
   - [plan/pipeline_core_integration_plan.md](../plan/pipeline_core_integration_plan.md)
   - [plan/phase3_branch_prediction_plan.md](../plan/phase3_branch_prediction_plan.md)
@@ -37,12 +40,31 @@
 - 默认 `functional` reference path、独立 `kernel_alpha` 正向与九条负向回归、`make test` 主门禁均已打通。
 - `pipeline core`、`--backend pipeline`、`make test-pipeline`、`debug_session/protocol`、本地 Node 调试服务与浏览器前端教学演示链路都已经正式接入。
 - `Phase 3-A` 第一轮分支预测增强已经落地：当前 `pipeline` 已具备最小 `branch_predictor`、`jal` static predict-taken、条件分支动态预测与继续复用现有 flush / redirect 的 mispredict 恢复路径。
+- `Phase 3-B/C` 的 OoO readiness 前置准备已经完成：当前仓库已具备正式设计文档、retire trace / sequence 观测面、共享 commit boundary helper、`PipelineBackend` 状态/冒险拆分，以及未接线但已独立门禁的 `rename_map / reorder_buffer / load_store_queue` helper。
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
+同时也意味着：下一轮如果要继续推进 `Phase 3`，已经不需要先回头补基础设施，而是可以单独新开一份真正的大块 `OoO / rename / ROB / LSQ` 接线计划。
 
 关于当前主线中“回归相关工作做到什么程度可认为阶段性收口”的统一判断口径，见：
 
 - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+
+## 2026-04-02 补充进展
+
+本轮主线已完成 `Phase 3-B/C` 的 OoO readiness 前置收口：
+
+- [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md) 与 [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md) 已补齐，正式定义第一轮 `rename / ROB / LSQ` 接线顺序、非目标，以及 precise exception / interrupt / MMIO / CSR / TLB 的投机执行合同。
+- `pipeline` 已引入稳定的 `sequence_id` 与 bounded retire trace；当前 `pipeline_commit_trace_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 与前端透传都能观察年龄顺序与退休记录。
+- `functional` 与 `pipeline` 已共用 [src/exec/pipeline_commit_boundary.cpp](../../myCPU/src/exec/pipeline_commit_boundary.cpp) 的 architectural commit boundary helper；当前 CSR、trap-return、TLB flush、halt 与 commit-visible side effect 的 apply 路径不再分散在 backend 局部流程里。
+- `PipelineBackend` 已收口为 orchestration shell；当前 [src/exec/pipeline_core_state.h](../../myCPU/src/exec/pipeline_core_state.h) / [src/exec/pipeline_hazards.h](../../myCPU/src/exec/pipeline_hazards.h) 已分别承接五级状态轮转与 hazard / forwarding helper。
+- [src/exec/rename_map.h](../../myCPU/src/exec/rename_map.h)、[src/exec/reorder_buffer.h](../../myCPU/src/exec/reorder_buffer.h) 与 [src/exec/load_store_queue.h](../../myCPU/src/exec/load_store_queue.h) 已作为未接线 helper 独立存在，并由 `rename_map_smoke`、`reorder_buffer_smoke` 与 `load_store_queue_smoke` 守住最小接口。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-pipeline`
+- `cd myCPU && make test-host-rename_map_smoke`
+- `cd myCPU && make test-host-reorder_buffer_smoke`
+- `cd myCPU && make test-host-load_store_queue_smoke`
 
 ## 2026-03-26 补充进展
 
@@ -234,6 +256,7 @@
 - 本轮收尾后，`interactive_os` 相关改动与总门禁已同步恢复到通过状态。
 - `Phase 3-A` predictor 当前仍是首轮最小实现：条件分支 `2-bit` counter + target 记忆、`jal` static predict-taken、`jalr` 不预测；后续应先以 bug-driven hardening 与最小持久回归补洞为主，不急着扩成复杂 BTB / RAS / 多级 predictor。
 - `debug/frontend` 已经正式接入，但仍应避免膨胀成断点 / 条件暂停 / 任意文件加载的通用调试器。
+- `rename_map / ROB / LSQ` 当前只是 OoO readiness helper，还没有接到 `PipelineBackend` 主路径；现有 `pipeline` 仍保持单发射、in-order retire 的执行模型。
 
 ## 下一步
 
@@ -242,7 +265,7 @@
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug` 的第一轮 hardening 也已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup / kernel_alpha/common`。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
-6. 当前 `Phase 3-A` 第一轮已落地；后续优先维护 `predictor_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke`、`debug_cli_smoke` 与 `frontend` 透传门禁，再决定是否打开下一轮 predictor hardening 或更远的 `Phase 3-B/C` 设计。
+6. `Phase 3-B/C` 的 readiness 前置条件已经完成；下一步应单独新建并执行真正的大块 `OoO / rename / ROB / LSQ` 接线计划，而不是继续在当前计划里叠加后续实现。
 7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
 
 ## 建议入口
@@ -253,6 +276,10 @@
 - [myCPU/AGENTS.md](../../myCPU/AGENTS.md)
 - [myCPU/guest/AGENTS.md](../../myCPU/guest/AGENTS.md)
 - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+- [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
+- [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
+- [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
+  当前作为已完成的 OoO readiness 收口记录保留。
 - [status/code_self_review_status.md](code_self_review_status.md)
 - [status/kernel_alpha_status.md](kernel_alpha_status.md)
 
