@@ -22,6 +22,11 @@
 
 本文档只回答“怎么落地”。当前实时结果和完成态回写以 [status/mainline_status.md](../status/mainline_status.md) 为准。
 
+## 2026-04-02 执行补充
+
+- `LSQ` 的 load-after-store 顺序合同已继续细化为「按 `sequence_id + address/data-ready + address overlap` 判定」的形态，不再继续保留最初那种对非重叠 younger load 也一并施加的保守阻塞。
+- `guest_supervisor_demo` 的 `pipeline` 长 guest 路径在当前 `Phase 3-B/C` 形态下，本机串行实测约为 `6.18 s`；对照 `538ebf9` 基线约为 `6.33 s`。因此本轮同步把 `PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT` 调整到 `8 s`，避免沿用更早阶段的过紧预算。
+
 ## 关联文档
 
 - 来源设计：

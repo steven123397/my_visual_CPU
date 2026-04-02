@@ -36,6 +36,7 @@ struct LsqEntry {
     uint64_t sequence_id{0};
     uint8_t rd{0};
     int size{0};
+    bool order_ready{false};
     bool address_ready{false};
     uint64_t address{0};
     bool data_ready{false};
@@ -49,10 +50,12 @@ class LoadStoreQueue {
 public:
     LsqIndex enqueue_load(const LsqLoadRequest& req);
     LsqIndex enqueue_store(const LsqStoreRequest& req);
+    void mark_order_ready(LsqIndex index);
     void mark_address_ready(LsqIndex index, uint64_t addr);
     void mark_data_ready(LsqIndex index, uint64_t value);
     std::optional<LsqEntry> peek(LsqIndex index) const;
     std::optional<LsqEntry> peek_oldest() const;
+    bool has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
     std::optional<LsqEntry> retire_entry(LsqIndex index);
     void clear();
     void flush_younger_than(uint64_t sequence_id);

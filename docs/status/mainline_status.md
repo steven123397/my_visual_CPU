@@ -58,6 +58,8 @@
 - `pipeline` 已接上最小 `LSQ` 主路径：load / store 会进入 `LSQ` 管理，load 结果继续走 `ROB + phys-state`，RAM / MMIO store 只会在 commit boundary 真正落地；由于当前还没有 store-to-load forwarding / replay，younger load 会保守地等待 older store 离开 `ID/EX`，以守住 `clint_split_access` 这类顺序合同。
 - 当前 mispredict、trap、trap-return flush，以及 commit-boundary interrupt service 都会统一回滚 speculative `rename / ROB / phys / LSQ` younger state；此前暴露过的 supervisor timer commit-boundary 卡死问题已通过这条 rollback 路径收口。
 - 由于 `guest_supervisor_demo` 这类长 guest 路径会持续分配新 phys tag，phys register tag 已统一扩为 `uint32_t`，避免原先 `uint16_t` 在长时间运行下的回卷风险。
+- 本轮继续把 `LSQ` 的 load-after-store 顺序合同收口成更细粒度的形态：store 会在 decode 侧先进入 `LSQ`，younger load 会按 `sequence_id + address/data-ready + address overlap` 判断是否需要等待；当前非重叠 load 不再被无谓拖慢，而 `clint_split_access` 这类重叠顺序合同仍保持稳定通过。
+- 结合当前 `Phase 3-B/C` 接线后的本机串行实测，`guest_supervisor_demo` 的 `pipeline` 路径约为 `6.18s`，而对照 `538ebf9` 基线约为 `6.33s`；`Makefile` 已把 `PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT` 调整到 `8s`，避免沿用更早阶段的过紧预算导致长 guest 门禁误报超时。
 - `debug_snapshot / debug_cli` 当前已补上最小 `ROB / LSQ` 观测面：能看到队列深度与 head sequence，继续与既有 stage / retire-trace / predictor 字段一起服务本地教学调试链路。
 
 本轮已新鲜验证通过：

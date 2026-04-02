@@ -15,11 +15,6 @@ uint8_t inflight_rd(const StageSlot& slot);
 uint32_t inflight_dest_phys(const StageSlot& slot);
 bool has_decode_hazard(const StageSlot& id_ex_slot, const Insn& insn);
 bool has_decode_hazard(const StageSlot& id_ex_slot, uint32_t rs1_phys, uint32_t rs2_phys);
-bool has_load_store_order_hazard(const StageSlot& id_ex_slot,
-                                 const StageSlot& ex_mem_slot,
-                                 const StageSlot& mem_wb_slot,
-                                 bool mem_wb_committed,
-                                 const Insn& insn);
 uint64_t resolve_register_value(const PipelineForwardingSources& sources,
                                 uint8_t rs,
                                 uint64_t latched_value);

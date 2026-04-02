@@ -37,6 +37,8 @@ constexpr uint32_t kAddiX2FromX1Plus5 = 0x00508113U;     // addi x2, x1, 5
 constexpr uint32_t kMret = 0x30200073U;
 constexpr uint32_t kSbX5ToX10Plus1 = 0x005500a3U;        // sb x5, 1(x10)
 constexpr uint32_t kSbX0ToX10Plus1 = 0x000500a3U;        // sb x0, 1(x10)
+constexpr uint32_t kLbX6FromX10Plus1 = 0x00150303U;      // lb x6, 1(x10)
+constexpr uint32_t kLbX6FromX10Plus8 = 0x00850303U;      // lb x6, 8(x10)
 constexpr uint32_t kLwX6FromX20 = 0x000a2303U;           // lw x6, 0(x20)
 constexpr uint32_t kSwX6ToX20 = 0x006a2023U;             // sw x6, 0(x20)
 constexpr uint32_t kSdX21ToX20 = 0x015a3023U;            // sd x21, 0(x20)
@@ -225,6 +227,50 @@ int main() {
             backend.step();
         }
         if (!expect(cpu.core().read_gpr(2) == 42, "pipeline should resolve load-use hazards with a single interlock")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.core().write_gpr(5, 0x7a);
+        cpu.core().write_gpr(10, kDataAddr);
+
+        write32(ram, kEntry + 0, kSbX5ToX10Plus1);
+        write32(ram, kEntry + 4, kLbX6FromX10Plus8);
+        write32(ram, kEntry + 8, kAddiA7Exit);
+        write32(ram, kEntry + 12, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+
+        backend.step();
+        backend.step();
+
+        const auto staged_store = backend.testing_state().lsq().peek_oldest();
+        if (!expect(staged_store.has_value() && staged_store->kind == LsqEntryKind::Store &&
+                        !staged_store->address_ready && !staged_store->data_ready && !staged_store->order_ready,
+                    "decode should stage an older store into the LSQ before its execute-time address/data are ready")) {
+            return 1;
+        }
+
+        backend.step();
+        const auto prepared_store = backend.testing_state().lsq().peek_oldest();
+        if (!expect(prepared_store.has_value() && prepared_store->kind == LsqEntryKind::Store &&
+                        prepared_store->address_ready && prepared_store->data_ready &&
+                        !prepared_store->order_ready,
+                    "executed store should publish address/data before it releases younger loads")) {
+            return 1;
+        }
+        if (!expect(!backend.testing_state().stalled,
+                    "executed store should stop stalling younger loads once its address/data are published")) {
+            return 1;
+        }
+        if (!expect(backend.testing_state().id_ex.slot.valid &&
+                        backend.testing_state().id_ex.slot.raw == kLbX6FromX10Plus8,
+                    "non-overlapping younger load should enter decode as soon as the older store has published address/data in the LSQ")) {
             return 1;
         }
     }

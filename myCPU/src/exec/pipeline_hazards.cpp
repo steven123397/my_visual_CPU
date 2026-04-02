@@ -137,21 +137,6 @@ bool has_decode_hazard(const StageSlot& id_ex_slot, uint32_t rs1_phys, uint32_t 
     return false;
 }
 
-bool has_load_store_order_hazard(const StageSlot& id_ex_slot,
-                                 const StageSlot& ex_mem_slot,
-                                 const StageSlot& mem_wb_slot,
-                                 bool mem_wb_committed,
-                                 const Insn& insn) {
-    (void)ex_mem_slot;
-    (void)mem_wb_slot;
-    (void)mem_wb_committed;
-    if (insn.opcode != 0x03) {
-        return false;
-    }
-
-    return is_store_slot(id_ex_slot);
-}
-
 uint64_t resolve_register_value(const PipelineForwardingSources& sources,
                                 uint8_t rs,
                                 uint64_t latched_value) {

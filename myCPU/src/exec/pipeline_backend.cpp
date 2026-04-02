@@ -96,6 +96,72 @@ std::string opcode_name(const Insn& insn) {
     }
 }
 
+std::optional<LsqLoadRequest> decode_load_lsq_request(const StageSlot& slot) {
+    if (slot.insn.opcode != 0x03) {
+        return std::nullopt;
+    }
+
+    LsqLoadRequest request{
+        .sequence_id = slot.sequence_id.value,
+        .rd = slot.insn.rd,
+    };
+    switch (slot.insn.funct3) {
+    case 0:
+        request.size = 1;
+        request.sign_extend = true;
+        return request;
+    case 1:
+        request.size = 2;
+        request.sign_extend = true;
+        return request;
+    case 2:
+        request.size = 4;
+        request.sign_extend = true;
+        return request;
+    case 3:
+        request.size = 8;
+        return request;
+    case 4:
+        request.size = 1;
+        return request;
+    case 5:
+        request.size = 2;
+        return request;
+    case 6:
+        request.size = 4;
+        return request;
+    default:
+        return std::nullopt;
+    }
+}
+
+std::optional<LsqStoreRequest> decode_store_lsq_request(const StageSlot& slot) {
+    if (slot.insn.opcode != 0x23) {
+        return std::nullopt;
+    }
+
+    LsqStoreRequest request{
+        .sequence_id = slot.sequence_id.value,
+        .non_speculative = true,
+    };
+    switch (slot.insn.funct3) {
+    case 0:
+        request.size = 1;
+        return request;
+    case 1:
+        request.size = 2;
+        return request;
+    case 2:
+        request.size = 4;
+        return request;
+    case 3:
+        request.size = 8;
+        return request;
+    default:
+        return std::nullopt;
+    }
+}
+
 std::string format_stage_text(const StageSlot& slot) {
     if (!slot.valid) {
         return {};
@@ -327,6 +393,7 @@ void PipelineBackend::step_mem() {
         effects.rd_write.value = extend_loaded_value(result.value, effects.mem.size, effects.mem.sign_extend);
         if (state_.next_mem_wb.slot.lsq_index.value != 0) {
             state_.lsq().mark_data_ready(state_.next_mem_wb.slot.lsq_index, effects.rd_write.value);
+            state_.lsq().mark_order_ready(state_.next_mem_wb.slot.lsq_index);
         }
         effects.mem.kind = MemoryRequest::Kind::None;
         if (state_.next_mem_wb.slot.rd_phys != 0) {
@@ -341,6 +408,9 @@ void PipelineBackend::step_mem() {
         return;
     }
     case MemoryRequest::Kind::Store: {
+        if (state_.next_mem_wb.slot.lsq_index.value != 0) {
+            state_.lsq().mark_order_ready(state_.next_mem_wb.slot.lsq_index);
+        }
         state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {});
         return;
     }
@@ -389,26 +459,25 @@ void PipelineBackend::step_ex() {
     if (!state_.next_ex_mem.slot.effects.trap.valid) {
         switch (state_.next_ex_mem.slot.effects.mem.kind) {
         case MemoryRequest::Kind::Load:
-            state_.next_ex_mem.slot.lsq_index = state_.lsq().enqueue_load({
-                .sequence_id = state_.next_ex_mem.slot.sequence_id.value,
-                .rd = state_.next_ex_mem.slot.effects.mem.rd,
-                .size = state_.next_ex_mem.slot.effects.mem.size,
-                .sign_extend = state_.next_ex_mem.slot.effects.mem.sign_extend,
-                .non_speculative = state_.next_ex_mem.slot.effects.mem.non_speculative,
-            });
+            if (state_.next_ex_mem.slot.lsq_index.value == 0) {
+                state_.next_ex_mem.slot.lsq_index = state_.lsq().enqueue_load({
+                    .sequence_id = state_.next_ex_mem.slot.sequence_id.value,
+                    .rd = state_.next_ex_mem.slot.effects.mem.rd,
+                    .size = state_.next_ex_mem.slot.effects.mem.size,
+                    .sign_extend = state_.next_ex_mem.slot.effects.mem.sign_extend,
+                    .non_speculative = state_.next_ex_mem.slot.effects.mem.non_speculative,
+                });
+            }
             state_.lsq().mark_address_ready(state_.next_ex_mem.slot.lsq_index,
                                             state_.next_ex_mem.slot.effects.mem.addr);
             break;
         case MemoryRequest::Kind::Store:
-            state_.next_ex_mem.slot.lsq_index = state_.lsq().enqueue_store({
-                .sequence_id = state_.next_ex_mem.slot.sequence_id.value,
-                .size = state_.next_ex_mem.slot.effects.mem.size,
-                .non_speculative = state_.next_ex_mem.slot.effects.mem.non_speculative,
-            });
-            state_.lsq().mark_address_ready(state_.next_ex_mem.slot.lsq_index,
-                                            state_.next_ex_mem.slot.effects.mem.addr);
-            state_.lsq().mark_data_ready(state_.next_ex_mem.slot.lsq_index,
-                                         state_.next_ex_mem.slot.effects.mem.store_value);
+            if (state_.next_ex_mem.slot.lsq_index.value != 0) {
+                state_.lsq().mark_address_ready(state_.next_ex_mem.slot.lsq_index,
+                                                state_.next_ex_mem.slot.effects.mem.addr);
+                state_.lsq().mark_data_ready(state_.next_ex_mem.slot.lsq_index,
+                                             state_.next_ex_mem.slot.effects.mem.store_value);
+            }
             break;
         case MemoryRequest::Kind::None:
             break;
@@ -492,17 +561,18 @@ void PipelineBackend::step_id() {
         state_.stalled = true;
         return;
     }
-    if (pipeline_hazards::has_load_store_order_hazard(state_.id_ex.slot,
-                                                      state_.ex_mem.slot,
-                                                      state_.mem_wb.slot,
-                                                      state_.committed,
-                                                      decoded_slot.insn)) {
-        state_.stalled = true;
-        return;
-    }
 
+    const auto load_request = decode_load_lsq_request(decoded_slot);
+    const auto store_request = load_request.has_value() ? std::optional<LsqStoreRequest>{} : decode_store_lsq_request(decoded_slot);
     decoded_slot.rs1v = state_.phys_regs().read(decoded_slot.rs1_phys);
     decoded_slot.rs2v = state_.phys_regs().read(decoded_slot.rs2_phys);
+    if (load_request.has_value()) {
+        const uint64_t load_addr = decoded_slot.rs1v + static_cast<uint64_t>(decoded_slot.insn.imm);
+        if (state_.lsq().has_blocking_older_store(decoded_slot.sequence_id.value, load_addr, load_request->size)) {
+            state_.stalled = true;
+            return;
+        }
+    }
     if (pipeline_hazards::writes_rd(decoded_slot.insn)) {
         const RenameDestResult renamed_dest = state_.rename_map().rename_dest(decoded_slot.insn.rd);
         decoded_slot.rd_phys = renamed_dest.phys;
@@ -517,6 +587,9 @@ void PipelineBackend::step_id() {
         .phys_rd = decoded_slot.rd_phys,
         .previous_phys_rd = decoded_slot.previous_rd_phys,
     });
+    if (store_request.has_value()) {
+        decoded_slot.lsq_index = state_.lsq().enqueue_store(*store_request);
+    }
     state_.next_id_ex.slot = decoded_slot;
     state_.next_if_id = {};
 }

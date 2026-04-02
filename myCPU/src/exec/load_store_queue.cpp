@@ -16,6 +16,12 @@ std::vector<LsqEntry>::const_iterator find_entry(const std::vector<LsqEntry>& en
     });
 }
 
+bool ranges_overlap(uint64_t lhs_addr, int lhs_size, uint64_t rhs_addr, int rhs_size) {
+    const uint64_t lhs_end = lhs_addr + static_cast<uint64_t>(lhs_size);
+    const uint64_t rhs_end = rhs_addr + static_cast<uint64_t>(rhs_size);
+    return lhs_addr < rhs_end && rhs_addr < lhs_end;
+}
+
 }  // namespace
 
 LsqIndex LoadStoreQueue::enqueue_load(const LsqLoadRequest& req) {
@@ -44,6 +50,14 @@ LsqIndex LoadStoreQueue::enqueue_store(const LsqStoreRequest& req) {
         .non_speculative = req.non_speculative,
     });
     return index;
+}
+
+void LoadStoreQueue::mark_order_ready(LsqIndex index) {
+    const auto it = find_entry(entries_, index);
+    if (it == entries_.end()) {
+        return;
+    }
+    it->order_ready = true;
 }
 
 void LoadStoreQueue::mark_address_ready(LsqIndex index, uint64_t addr) {
@@ -79,9 +93,24 @@ std::optional<LsqEntry> LoadStoreQueue::peek_oldest() const {
     return entries_.front();
 }
 
+bool LoadStoreQueue::has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const {
+    for (const LsqEntry& entry : entries_) {
+        if (entry.kind != LsqEntryKind::Store || entry.sequence_id >= sequence_id) {
+            continue;
+        }
+        if (!entry.address_ready || !entry.data_ready) {
+            return true;
+        }
+        if (!entry.order_ready && ranges_overlap(entry.address, entry.size, load_addr, load_size)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::optional<LsqEntry> LoadStoreQueue::retire_entry(LsqIndex index) {
     const auto it = find_entry(entries_, index);
-    if (it == entries_.end() || !it->address_ready || !it->data_ready) {
+    if (it == entries_.end() || !it->address_ready || !it->data_ready || !it->order_ready) {
         return std::nullopt;
     }
 
