@@ -1,6 +1,7 @@
 #include "cpu.h"
 
 #include "exec/memory_ops.h"
+#include "exec/pipeline_commit_boundary.h"
 #include "isa/execution_context.h"
 #include "isa/instruction_semantics.h"
 #include "mem/bus.h"
@@ -14,41 +15,14 @@ namespace {
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
 bool apply_instruction_effects(CPU& cpu, Bus& bus, const InsnEffects& effects, uint64_t next_pc) {
-    CoreState& core = cpu.core();
-
-    if (effects.trap.valid) {
-        cpu.trap().enter_exception(effects.trap.cause, effects.trap.tval);
-        return false;
-    }
-    if (effects.mem.kind != MemoryRequest::Kind::None) {
-        if (!apply_memory_effects(cpu, bus, effects)) {
-            return false;
-        }
-    }
-    if (effects.csr_write.enable) {
-        cpu.csr().write(effects.csr_write.addr, effects.csr_write.value, core);
-    }
-    if (effects.rd_write.enable) {
-        core.write_gpr(effects.rd_write.rd, effects.rd_write.value);
-    }
-    if (effects.control.flush_tlb) {
-        cpu.address_space().flush_tlb();
-    }
-    if (effects.control.halt) {
-        core.set_halted(true);
-    }
-    switch (effects.control.trap_return) {
-    case TrapReturnKind::Mret:
-        cpu.trap().return_from_mret();
-        break;
-    case TrapReturnKind::Sret:
-        cpu.trap().return_from_sret();
-        break;
-    case TrapReturnKind::None:
-        core.set_pc(effects.control.redirect_pc ? effects.control.target_pc : next_pc);
-        break;
-    }
-    return effects.retired;
+    return apply_commit_boundary(cpu,
+                                 bus,
+                                 CommitBoundaryInput{
+                                     .pc = cpu.core().pc(),
+                                     .next_pc = next_pc,
+                                     .effects = effects,
+                                 })
+        .retired;
 }
 
 bool execute(CPU& cpu, Bus& bus, Insn* in) {
@@ -124,9 +98,7 @@ void cpu_step(CPU& cpu, Bus& bus) {
     }
     Insn insn;
     decode(raw, &insn);
-    if (execute(cpu, bus, &insn)) {
-        cpu.core().advance_instret();
-    }
+    execute(cpu, bus, &insn);
 
     cpu.core().advance_cycle();
 }

@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <vector>
 
 #include "../../src/arch/csr_file.h"
 #include "../../src/cpu.h"
@@ -6,6 +7,8 @@
 #include "../../src/devices/plic.h"
 #include "../../src/devices/uart16550.h"
 #include "../../src/exec/pipeline_backend.h"
+#include "../../src/exec/pipeline_core_state.h"
+#include "../../src/exec/pipeline_hazards.h"
 #include "../../src/mem/bus.h"
 #include "../../src/mem/ram.h"
 #include "../../include/platform_mmio.h"
@@ -50,6 +53,15 @@ bool expect(bool condition, const char* message) {
     return true;
 }
 
+bool trace_contains_raw(const std::vector<RetireTraceEntry>& trace, uint32_t raw) {
+    for (const RetireTraceEntry& entry : trace) {
+        if (entry.raw == raw) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void write32(Ram& ram, uint64_t addr, uint32_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
 }
@@ -68,6 +80,110 @@ int run_until_halt_and_count_redirects(PipelineBackend& backend, CPU& cpu, int m
 }  // namespace
 
 int main() {
+    {
+        PipelineCoreState state;
+        const uint64_t first_sequence = state.allocate_sequence();
+        state.record_retire({
+            .sequence_id = first_sequence,
+            .pc = kEntry,
+            .raw = kAddiX1,
+        });
+        state.if_id.slot.valid = true;
+        state.pending_fetch_fault = {.valid = true, .cause = 1, .tval = kEntry};
+        state.pending_fetch_fault_pc = kEntry;
+        state.redirect_pending = true;
+        state.redirect_target = kTrapVector;
+        state.flush(kEntry + 0x20);
+        if (!expect(state.fetch_pc == kEntry + 0x20, "pipeline core state flush should retarget fetch pc")) {
+            return 1;
+        }
+        if (!expect(!state.if_id.slot.valid && !state.pending_fetch_fault.valid && !state.redirect_pending,
+                    "pipeline core state flush should clear in-flight stage and redirect state")) {
+            return 1;
+        }
+        if (!expect(state.last_sequence_id() == first_sequence && state.retire_trace().size() == 1,
+                    "pipeline core state flush should preserve sequence history")) {
+            return 1;
+        }
+
+        state.reset(kEntry + 0x40);
+        if (!expect(state.fetch_pc == kEntry + 0x40, "pipeline core state reset should install the reset fetch pc")) {
+            return 1;
+        }
+        if (!expect(state.last_sequence_id() == 0 && state.retire_trace().empty(),
+                    "pipeline core state reset should clear sequence history")) {
+            return 1;
+        }
+
+        state.next_if_id.slot.valid = true;
+        state.next_id_ex.slot.valid = true;
+        state.stalled = true;
+        state.trap_flush = true;
+        state.committed = true;
+        state.redirect_pending = true;
+        state.redirect_target = kTrapVector;
+        state.begin_cycle(true);
+        if (!expect(state.interrupt_serviceable_at_cycle_start && !state.next_if_id.slot.valid &&
+                        !state.next_id_ex.slot.valid && !state.stalled && !state.trap_flush &&
+                        !state.committed && !state.redirect_pending && state.redirect_target == 0,
+                    "pipeline core state begin_cycle should reset per-cycle transient state")) {
+            return 1;
+        }
+
+        state.next_if_id.slot.valid = true;
+        state.next_id_ex.slot.valid = true;
+        state.commit_next_state();
+        if (!expect(state.if_id.slot.valid && state.id_ex.slot.valid && !state.pipeline_empty(),
+                    "pipeline core state commit_next_state should rotate next registers into the active pipe")) {
+            return 1;
+        }
+    }
+
+    {
+        Insn addi{};
+        decode(kAddiX2FromX1Plus5, &addi);
+        addi.raw = kAddiX2FromX1Plus5;
+        if (!expect(pipeline_hazards::reads_rs1(addi) && !pipeline_hazards::reads_rs2(addi),
+                    "hazard helpers should classify addi as rs1-only")) {
+            return 1;
+        }
+
+        StageSlot load_slot;
+        load_slot.valid = true;
+        decode(kLwX1FromX10, &load_slot.insn);
+        load_slot.insn.raw = kLwX1FromX10;
+        load_slot.effects.mem.kind = MemoryRequest::Kind::Load;
+        load_slot.effects.mem.rd = load_slot.insn.rd;
+        if (!expect(pipeline_hazards::is_load_slot(load_slot) &&
+                        pipeline_hazards::inflight_rd(load_slot) == 1 &&
+                        pipeline_hazards::has_decode_hazard(load_slot, addi),
+                    "hazard helpers should detect load-use interlocks from the ID/EX slot")) {
+            return 1;
+        }
+
+        StageSlot ex_mem_slot;
+        ex_mem_slot.valid = true;
+        ex_mem_slot.effects.rd_write.enable = true;
+        ex_mem_slot.effects.rd_write.rd = 1;
+        ex_mem_slot.effects.rd_write.value = 42;
+        const uint64_t forwarded_rs1 =
+            pipeline_hazards::resolve_ex_operand({.ex_mem = &ex_mem_slot}, addi, true, 0);
+        if (!expect(forwarded_rs1 == 42, "hazard helpers should forward EX/MEM operands into execute")) {
+            return 1;
+        }
+
+        StageSlot mem_wb_slot;
+        mem_wb_slot.valid = true;
+        mem_wb_slot.effects.rd_write.enable = true;
+        mem_wb_slot.effects.rd_write.rd = 1;
+        mem_wb_slot.effects.rd_write.value = 77;
+        const uint64_t forwarded_from_wb =
+            pipeline_hazards::resolve_ex_operand({.mem_wb = &mem_wb_slot}, addi, true, 0);
+        if (!expect(forwarded_from_wb == 77, "hazard helpers should fall back to MEM/WB forwarding")) {
+            return 1;
+        }
+    }
+
     {
         Ram ram;
         Bus bus(ram);
@@ -350,6 +466,23 @@ int main() {
             return 1;
         }
         if (!expect(redirects == 0, "jal predict-hit path should not need execute-time redirect")) {
+            return 1;
+        }
+        const BackendDebugSnapshot snapshot = backend.debug_snapshot();
+        if (!expect(snapshot.pipeline.last_sequence_id >= 3,
+                    "jal predict-hit smoke should expose a non-zero last_sequence_id")) {
+            return 1;
+        }
+        if (!expect(!snapshot.pipeline.retire_trace.empty(),
+                    "jal predict-hit smoke should expose a bounded retire trace")) {
+            return 1;
+        }
+        if (!expect(snapshot.pipeline.retire_trace.front().sequence_id == 1,
+                    "retire trace should preserve the earliest committed sequence id")) {
+            return 1;
+        }
+        if (!expect(!trace_contains_raw(snapshot.pipeline.retire_trace, kAddiX1WrongPath),
+                    "retire trace should not contain jal wrong-path instructions")) {
             return 1;
         }
     }

@@ -66,11 +66,15 @@ void Clint::store(uint64_t addr, uint64_t value, int size) {
     invalid_access(addr, size);
 }
 
-PlatformEvents Clint::tick() {
-    ++mtime_;
+PlatformEvents Clint::peek_events() const {
     return PlatformEvents{
         .timer_interrupt_pending = (mtime_ >= mtimecmp_),
     };
+}
+
+PlatformEvents Clint::tick() {
+    ++mtime_;
+    return peek_events();
 }
 
 uint64_t Clint::mtime() const {

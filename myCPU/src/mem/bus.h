@@ -17,6 +17,7 @@ public:
 
     bool try_load(uint64_t addr, int size, uint64_t& value);
     bool try_store(uint64_t addr, uint64_t value, int size);
+    PlatformEvents peek_events() const;
     PlatformEvents tick();
     const DebugBusAccess& last_access() const;
 

@@ -6,6 +6,8 @@
 #include "../isa/instruction_semantics.h"
 #include "../mem/bus.h"
 #include "memory_ops.h"
+#include "pipeline_commit_boundary.h"
+#include "pipeline_hazards.h"
 
 namespace {
 
@@ -31,10 +33,6 @@ CounterCsrKind classify_counter_csr(uint32_t addr) {
     default:
         return CounterCsrKind::None;
     }
-}
-
-bool wb_commit_needs_flush(const InsnEffects& effects) {
-    return effects.control.halt || effects.control.trap_return != TrapReturnKind::None;
 }
 
 bool is_control_flow_opcode(uint32_t opcode) {
@@ -114,34 +112,25 @@ std::string format_stage_text(const StageSlot& slot) {
 }  // namespace
 
 PipelineBackend::PipelineBackend(CPU& cpu, Bus& bus) : cpu_(cpu), bus_(bus) {
-    reset_stage_state();
+    state_.reset(cpu_.core().pc());
 }
 
 void PipelineBackend::step() {
     cpu_.trap().sync_platform_events(bus_.tick());
 
-    next_if_id_ = {};
-    next_id_ex_ = {};
-    next_ex_mem_ = {};
-    next_mem_wb_ = {};
-    last_cycle_stalled_ = false;
-    last_cycle_trap_flush_ = false;
-    last_cycle_committed_ = false;
-    interrupt_serviceable_at_cycle_start_ = cpu_.trap().has_serviceable_interrupt();
-    redirect_pending_ = false;
-    redirect_target_ = 0;
+    state_.begin_cycle(cpu_.trap().has_serviceable_interrupt());
 
     const bool wb_flushed = step_wb();
     bool deferred_interrupt = false;
     bool committed_fetch_fault = false;
     bool serviced_interrupt = false;
-    if (last_cycle_committed_ && !interrupt_serviceable_at_cycle_start_ &&
+    if (state_.committed && !state_.interrupt_serviceable_at_cycle_start &&
         cpu_.trap().has_serviceable_interrupt()) {
         // A just-retired instruction changed CSR/privilege state and made an
         // interrupt newly serviceable. Flush any younger post-commit work and
         // let the interrupt become the next architectural boundary, matching
         // the functional backend even across trap returns.
-        reset_stage_state();
+        state_.flush(cpu_.core().pc());
         deferred_interrupt = true;
     }
 
@@ -149,7 +138,7 @@ void PipelineBackend::step() {
     // instruction this cycle, defer a younger pending fetch fault until the
     // next cycle instead of collapsing both events into one snapshot.
     if (!wb_flushed && !deferred_interrupt) {
-        if (!last_cycle_committed_) {
+        if (!state_.committed) {
             committed_fetch_fault = try_commit_fetch_fault();
         }
         if (!committed_fetch_fault) {
@@ -157,7 +146,7 @@ void PipelineBackend::step() {
         }
     }
     if (deferred_interrupt || committed_fetch_fault || serviced_interrupt) {
-        last_cycle_trap_flush_ = true;
+        state_.trap_flush = true;
     }
     if (!deferred_interrupt) {
         step_mem();
@@ -170,124 +159,6 @@ void PipelineBackend::step() {
     cpu_.core().advance_cycle();
 }
 
-bool PipelineBackend::pipeline_empty() const {
-    return !if_id_.slot.valid && !id_ex_.slot.valid && !ex_mem_.slot.valid && !mem_wb_.slot.valid;
-}
-
-bool PipelineBackend::reads_rs1(const Insn& insn) const {
-    switch (insn.opcode) {
-    case 0x13:
-    case 0x1B:
-    case 0x33:
-    case 0x3B:
-    case 0x67:
-    case 0x63:
-    case 0x03:
-    case 0x23:
-        return true;
-    case 0x73:
-        switch (insn.funct3) {
-        case 1:
-        case 2:
-        case 3:
-            return true;
-        default:
-            return false;
-        }
-    default:
-        return false;
-    }
-}
-
-bool PipelineBackend::reads_rs2(const Insn& insn) const {
-    switch (insn.opcode) {
-    case 0x33:
-    case 0x3B:
-    case 0x63:
-    case 0x23:
-        return true;
-    default:
-        return false;
-    }
-}
-
-uint8_t PipelineBackend::inflight_rd(const StageSlot& slot) const {
-    if (!slot.valid) {
-        return 0;
-    }
-    if (!slot.effects.rd_write.enable) {
-        switch (slot.insn.opcode) {
-        case 0x37:
-        case 0x17:
-        case 0x13:
-        case 0x1B:
-        case 0x33:
-        case 0x3B:
-        case 0x6F:
-        case 0x67:
-        case 0x03:
-            return slot.insn.rd;
-        default:
-            return 0;
-        }
-    }
-    if (slot.effects.mem.kind == MemoryRequest::Kind::Load) {
-        return slot.effects.mem.rd;
-    }
-    return slot.effects.rd_write.rd;
-}
-
-bool PipelineBackend::has_decode_hazard(const Insn& insn) const {
-    const uint8_t rs1 = reads_rs1(insn) ? insn.rs1 : 0;
-    const uint8_t rs2 = reads_rs2(insn) ? insn.rs2 : 0;
-    if (!is_load_slot(id_ex_.slot)) {
-        return false;
-    }
-
-    const uint8_t id_ex_rd = inflight_rd(id_ex_.slot);
-    if (id_ex_rd == 0) {
-        return false;
-    }
-
-    if (rs1 != 0 && rs1 == id_ex_rd) {
-        return true;
-    }
-    if (rs2 != 0 && rs2 == id_ex_rd) {
-        return true;
-    }
-    return false;
-}
-
-bool PipelineBackend::is_load_slot(const StageSlot& slot) const {
-    return slot.valid && slot.insn.opcode == 0x03;
-}
-
-bool PipelineBackend::forward_operand_from_slot(const StageSlot& slot, uint8_t rs, uint64_t& value) const {
-    if (!slot.valid || rs == 0) {
-        return false;
-    }
-
-    if (slot.effects.rd_write.enable && slot.effects.rd_write.rd == rs) {
-        value = slot.effects.rd_write.value;
-        return true;
-    }
-
-    return false;
-}
-
-uint64_t PipelineBackend::resolve_ex_operand(const Insn& insn, bool use_rs1, uint64_t latched_value) const {
-    const uint8_t rs = use_rs1 ? insn.rs1 : insn.rs2;
-    uint64_t value = latched_value;
-
-    if (forward_operand_from_slot(ex_mem_.slot, rs, value)) {
-        return value;
-    }
-    if (forward_operand_from_slot(mem_wb_.slot, rs, value)) {
-        return value;
-    }
-    return value;
-}
-
 uint64_t PipelineBackend::resolve_ex_counter_value(uint32_t addr) const {
     const CounterCsrKind kind = classify_counter_csr(addr);
     if (kind == CounterCsrKind::None) {
@@ -296,21 +167,21 @@ uint64_t PipelineBackend::resolve_ex_counter_value(uint32_t addr) const {
 
     if (kind == CounterCsrKind::Time) {
         uint64_t value = cpu_.csr().read(addr, cpu_.core());
-        if (ex_mem_.slot.valid) {
+        if (state_.ex_mem.slot.valid) {
             value += 1;
         }
         return value;
     }
 
     const auto ex_mem_writes_same_counter = [&]() {
-        return ex_mem_.slot.valid &&
-               ex_mem_.slot.effects.csr_write.enable &&
-               classify_counter_csr(ex_mem_.slot.effects.csr_write.addr) == kind;
+        return state_.ex_mem.slot.valid &&
+               state_.ex_mem.slot.effects.csr_write.enable &&
+               classify_counter_csr(state_.ex_mem.slot.effects.csr_write.addr) == kind;
     };
 
     if (ex_mem_writes_same_counter()) {
-        uint64_t value = ex_mem_.slot.effects.csr_write.value;
-        if (ex_mem_.slot.effects.retired) {
+        uint64_t value = state_.ex_mem.slot.effects.csr_write.value;
+        if (state_.ex_mem.slot.effects.retired) {
             value += 1;
         }
         return value;
@@ -318,16 +189,16 @@ uint64_t PipelineBackend::resolve_ex_counter_value(uint32_t addr) const {
 
     uint64_t value = cpu_.csr().read(addr, cpu_.core());
     if (kind == CounterCsrKind::Cycle) {
-        if (mem_wb_.slot.valid) {
+        if (state_.mem_wb.slot.valid) {
             value += 1;
         }
-        if (ex_mem_.slot.valid) {
+        if (state_.ex_mem.slot.valid) {
             value += 1;
         }
         return value;
     }
 
-    if (ex_mem_.slot.valid && ex_mem_.slot.effects.retired) {
+    if (state_.ex_mem.slot.valid && state_.ex_mem.slot.effects.retired) {
         value += 1;
     }
     return value;
@@ -341,74 +212,44 @@ uint64_t PipelineBackend::resolve_ex_csr_value(const Insn& insn) const {
 
     CoreState projected_core = cpu_.core();
     CsrFile projected_csr = cpu_.csr();
-    if (ex_mem_.slot.valid && ex_mem_.slot.effects.csr_write.enable) {
-        projected_csr.write(ex_mem_.slot.effects.csr_write.addr, ex_mem_.slot.effects.csr_write.value, projected_core);
+    if (state_.ex_mem.slot.valid && state_.ex_mem.slot.effects.csr_write.enable) {
+        projected_csr.write(state_.ex_mem.slot.effects.csr_write.addr,
+                            state_.ex_mem.slot.effects.csr_write.value,
+                            projected_core);
     }
     return projected_csr.read(addr, projected_core);
 }
 
-void PipelineBackend::reset_stage_state() {
-    if_id_ = {};
-    id_ex_ = {};
-    ex_mem_ = {};
-    mem_wb_ = {};
-    next_if_id_ = {};
-    next_id_ex_ = {};
-    next_ex_mem_ = {};
-    next_mem_wb_ = {};
-    fetch_pc_ = cpu_.core().pc();
-    pending_fetch_fault_ = {};
-    pending_fetch_fault_pc_ = 0;
-}
-
 bool PipelineBackend::step_wb() {
-    if (!mem_wb_.slot.valid) {
+    if (!state_.mem_wb.slot.valid) {
         return false;
     }
 
-    if (mem_wb_.slot.effects.trap.valid) {
-        cpu_.trap().enter_exception(mem_wb_.slot.effects.trap.cause, mem_wb_.slot.effects.trap.tval);
-        reset_stage_state();
-        fetch_pc_ = cpu_.core().pc();
-        last_cycle_trap_flush_ = true;
-        return true;
+    const CommitBoundaryResult result =
+        apply_commit_boundary(cpu_,
+                              bus_,
+                              CommitBoundaryInput{
+                                  .pc = state_.mem_wb.slot.pc,
+                                  .next_pc = state_.mem_wb.slot.pc + 4,
+                                  .effects = state_.mem_wb.slot.effects,
+                              });
+    if (result.platform_state_changed) {
+        cpu_.trap().sync_platform_events(bus_.peek_events());
     }
-
-    if (mem_wb_.slot.effects.csr_write.enable) {
-        cpu_.csr().write(
-            mem_wb_.slot.effects.csr_write.addr, mem_wb_.slot.effects.csr_write.value, cpu_.core());
+    if (state_.mem_wb.slot.valid && state_.mem_wb.slot.sequence_id.value != 0) {
+        state_.record_retire({
+            .sequence_id = state_.mem_wb.slot.sequence_id.value,
+            .pc = state_.mem_wb.slot.pc,
+            .raw = state_.mem_wb.slot.raw,
+            .trap = result.trap_taken,
+            .redirect = state_.mem_wb.slot.effects.control.redirect_pc ||
+                        state_.mem_wb.slot.effects.control.trap_return != TrapReturnKind::None,
+        });
     }
-    if (mem_wb_.slot.effects.rd_write.enable) {
-        cpu_.core().write_gpr(mem_wb_.slot.effects.rd_write.rd, mem_wb_.slot.effects.rd_write.value);
-    }
-    if (mem_wb_.slot.effects.control.flush_tlb) {
-        cpu_.address_space().flush_tlb();
-    }
-    if (mem_wb_.slot.effects.control.halt) {
-        cpu_.core().set_halted(true);
-    }
-
-    switch (mem_wb_.slot.effects.control.trap_return) {
-    case TrapReturnKind::Mret:
-        cpu_.trap().return_from_mret();
-        break;
-    case TrapReturnKind::Sret:
-        cpu_.trap().return_from_sret();
-        break;
-    case TrapReturnKind::None:
-        cpu_.core().set_pc(
-            mem_wb_.slot.effects.control.redirect_pc ? mem_wb_.slot.effects.control.target_pc : mem_wb_.slot.pc + 4);
-        break;
-    }
-    if (mem_wb_.slot.effects.retired) {
-        cpu_.core().advance_instret();
-        last_cycle_committed_ = true;
-    }
-
-    if (wb_commit_needs_flush(mem_wb_.slot.effects)) {
-        reset_stage_state();
-        fetch_pc_ = cpu_.core().pc();
-        last_cycle_trap_flush_ = true;
+    state_.committed = result.retired;
+    if (result.trap_flush) {
+        state_.flush(cpu_.core().pc());
+        state_.trap_flush = true;
         return true;
     }
 
@@ -416,27 +257,26 @@ bool PipelineBackend::step_wb() {
 }
 
 bool PipelineBackend::try_commit_fetch_fault() {
-    if (!pending_fetch_fault_.valid) {
+    if (!state_.pending_fetch_fault.valid) {
         return false;
     }
-    if (if_id_.slot.valid || id_ex_.slot.valid || ex_mem_.slot.valid) {
+    if (state_.if_id.slot.valid || state_.id_ex.slot.valid || state_.ex_mem.slot.valid) {
         return false;
     }
 
-    cpu_.core().set_pc(pending_fetch_fault_pc_);
-    cpu_.trap().enter_exception(pending_fetch_fault_.cause, pending_fetch_fault_.tval);
-    reset_stage_state();
-    fetch_pc_ = cpu_.core().pc();
+    cpu_.core().set_pc(state_.pending_fetch_fault_pc);
+    cpu_.trap().enter_exception(state_.pending_fetch_fault.cause, state_.pending_fetch_fault.tval);
+    state_.flush(cpu_.core().pc());
     return true;
 }
 
 void PipelineBackend::step_mem() {
-    if (!ex_mem_.slot.valid) {
+    if (!state_.ex_mem.slot.valid) {
         return;
     }
 
-    next_mem_wb_.slot = ex_mem_.slot;
-    InsnEffects& effects = next_mem_wb_.slot.effects;
+    state_.next_mem_wb.slot = state_.ex_mem.slot;
+    InsnEffects& effects = state_.next_mem_wb.slot.effects;
     if (effects.trap.valid) {
         return;
     }
@@ -461,6 +301,7 @@ void PipelineBackend::step_mem() {
         if (!result.ok) {
             effects.trap = result.fault;
         }
+        effects.mem.kind = MemoryRequest::Kind::None;
         return;
     }
     case MemoryRequest::Kind::None:
@@ -469,139 +310,145 @@ void PipelineBackend::step_mem() {
 }
 
 void PipelineBackend::step_ex() {
-    if (!id_ex_.slot.valid) {
+    if (!state_.id_ex.slot.valid) {
         return;
     }
 
-    next_ex_mem_.slot = id_ex_.slot;
+    state_.next_ex_mem.slot = state_.id_ex.slot;
 
     ExecutionContext ctx(cpu_, bus_);
     SemanticInputs inputs;
-    inputs.pc = id_ex_.slot.pc;
-    inputs.rs1v = resolve_ex_operand(id_ex_.slot.insn, true, id_ex_.slot.rs1v);
-    inputs.rs2v = resolve_ex_operand(id_ex_.slot.insn, false, id_ex_.slot.rs2v);
-    if (id_ex_.slot.insn.opcode == 0x73 && id_ex_.slot.insn.funct3 != 0) {
+    const PipelineForwardingSources forwarding{
+        .ex_mem = &state_.ex_mem.slot,
+        .mem_wb = &state_.mem_wb.slot,
+    };
+    inputs.pc = state_.id_ex.slot.pc;
+    inputs.rs1v = pipeline_hazards::resolve_ex_operand(
+        forwarding, state_.id_ex.slot.insn, true, state_.id_ex.slot.rs1v);
+    inputs.rs2v = pipeline_hazards::resolve_ex_operand(
+        forwarding, state_.id_ex.slot.insn, false, state_.id_ex.slot.rs2v);
+    if (state_.id_ex.slot.insn.opcode == 0x73 && state_.id_ex.slot.insn.funct3 != 0) {
         inputs.has_csrv = true;
-        inputs.csrv = resolve_ex_csr_value(id_ex_.slot.insn);
+        inputs.csrv = resolve_ex_csr_value(state_.id_ex.slot.insn);
     }
-    if (id_ex_.slot.insn.raw == 0x00000073U) {
+    if (state_.id_ex.slot.insn.raw == 0x00000073U) {
         uint64_t a7v = cpu_.core().read_gpr(17);
-        if (!forward_operand_from_slot(ex_mem_.slot, 17, a7v)) {
-            forward_operand_from_slot(mem_wb_.slot, 17, a7v);
-        }
+        const PipelineForwardingSources ecall_forwarding{
+            .ex_mem = &state_.ex_mem.slot,
+            .mem_wb = &state_.mem_wb.slot,
+        };
+        a7v = pipeline_hazards::resolve_register_value(ecall_forwarding, 17, a7v);
         inputs.has_ecall_a7 = true;
         inputs.ecall_a7 = a7v;
     }
-    next_ex_mem_.slot.effects = InstructionSemantics::execute(id_ex_.slot.insn, ctx, inputs);
+    state_.next_ex_mem.slot.effects = InstructionSemantics::execute(state_.id_ex.slot.insn, ctx, inputs);
 
-    if (!next_ex_mem_.slot.effects.trap.valid && is_control_flow_opcode(id_ex_.slot.insn.opcode)) {
-        const bool actual_taken = next_ex_mem_.slot.effects.control.redirect_pc;
+    if (!state_.next_ex_mem.slot.effects.trap.valid && is_control_flow_opcode(state_.id_ex.slot.insn.opcode)) {
+        const bool actual_taken = state_.next_ex_mem.slot.effects.control.redirect_pc;
         const uint64_t actual_target =
-            actual_taken ? next_ex_mem_.slot.effects.control.target_pc : id_ex_.slot.pc + 4;
-        const bool correct = prediction_matches(id_ex_.slot.prediction, actual_taken, actual_target);
+            actual_taken ? state_.next_ex_mem.slot.effects.control.target_pc : state_.id_ex.slot.pc + 4;
+        const bool correct = prediction_matches(state_.id_ex.slot.prediction, actual_taken, actual_target);
 
-        last_prediction_valid_ = id_ex_.slot.prediction.valid;
-        last_prediction_taken_ = id_ex_.slot.prediction.predicted_taken;
+        last_prediction_valid_ = state_.id_ex.slot.prediction.valid;
+        last_prediction_taken_ = state_.id_ex.slot.prediction.predicted_taken;
         last_prediction_correct_ = correct;
-        last_prediction_pc_ = id_ex_.slot.pc;
-        last_prediction_target_ = id_ex_.slot.prediction.valid ? id_ex_.slot.prediction.predicted_target : 0;
+        last_prediction_pc_ = state_.id_ex.slot.pc;
+        last_prediction_target_ =
+            state_.id_ex.slot.prediction.valid ? state_.id_ex.slot.prediction.predicted_target : 0;
         last_mispredict_valid_ = !correct;
-        last_mispredict_pc_ = !correct ? id_ex_.slot.pc : 0;
+        last_mispredict_pc_ = !correct ? state_.id_ex.slot.pc : 0;
         last_mispredict_target_ = !correct ? actual_target : 0;
 
         predictor_.update({
-            .pc = id_ex_.slot.pc,
-            .raw = id_ex_.slot.raw,
-            .prediction = id_ex_.slot.prediction,
+            .pc = state_.id_ex.slot.pc,
+            .raw = state_.id_ex.slot.raw,
+            .prediction = state_.id_ex.slot.prediction,
             .taken = actual_taken,
             .target = actual_target,
         });
 
         if (!correct) {
-            redirect_pending_ = true;
-            redirect_target_ = actual_target;
-            next_if_id_ = {};
-            next_id_ex_ = {};
-            pending_fetch_fault_ = {};
-            pending_fetch_fault_pc_ = 0;
-            fetch_pc_ = redirect_target_;
+            state_.redirect_pending = true;
+            state_.redirect_target = actual_target;
+            state_.next_if_id = {};
+            state_.next_id_ex = {};
+            state_.pending_fetch_fault = {};
+            state_.pending_fetch_fault_pc = 0;
+            state_.fetch_pc = state_.redirect_target;
         }
     }
 }
 
 void PipelineBackend::step_id() {
-    if (redirect_pending_) {
-        next_if_id_ = {};
+    if (state_.redirect_pending) {
+        state_.next_if_id = {};
         return;
     }
 
-    next_if_id_ = if_id_;
+    state_.next_if_id = state_.if_id;
 
-    if (!if_id_.slot.valid) {
+    if (!state_.if_id.slot.valid) {
         return;
     }
 
-    StageSlot decoded_slot = if_id_.slot;
+    StageSlot decoded_slot = state_.if_id.slot;
     decoded_slot.insn.raw = decoded_slot.raw;
     decode(decoded_slot.raw, &decoded_slot.insn);
 
-    if (has_decode_hazard(decoded_slot.insn)) {
-        last_cycle_stalled_ = true;
+    if (pipeline_hazards::has_decode_hazard(state_.id_ex.slot, decoded_slot.insn)) {
+        state_.stalled = true;
         return;
     }
 
     decoded_slot.rs1v = cpu_.core().read_gpr(decoded_slot.insn.rs1);
     decoded_slot.rs2v = cpu_.core().read_gpr(decoded_slot.insn.rs2);
-    next_id_ex_.slot = decoded_slot;
-    next_if_id_ = {};
+    state_.next_id_ex.slot = decoded_slot;
+    state_.next_if_id = {};
 }
 
 void PipelineBackend::step_if() {
-    if (cpu_.core().halted() || next_if_id_.slot.valid || pending_fetch_fault_.valid) {
+    if (cpu_.core().halted() || state_.next_if_id.slot.valid || state_.pending_fetch_fault.valid) {
         return;
     }
 
-    const uint64_t fetch_pc = fetch_pc_;
+    const uint64_t fetch_pc = state_.fetch_pc;
     const AddressSpace::AccessResult fetch = cpu_.address_space().fetch32_result(bus_, fetch_pc);
     if (!fetch.ok) {
-        pending_fetch_fault_ = fetch.fault;
-        pending_fetch_fault_pc_ = fetch_pc;
+        state_.pending_fetch_fault = fetch.fault;
+        state_.pending_fetch_fault_pc = fetch_pc;
         return;
     }
 
     const PredictorQueryResult prediction = predictor_.query(fetch_pc, static_cast<uint32_t>(fetch.value));
-    next_if_id_.slot.valid = true;
-    next_if_id_.slot.pc = fetch_pc;
-    next_if_id_.slot.raw = static_cast<uint32_t>(fetch.value);
-    next_if_id_.slot.prediction = prediction;
-    fetch_pc_ = prediction.valid && prediction.predicted_taken ? prediction.predicted_target : fetch_pc + 4;
+    state_.next_if_id.slot.valid = true;
+    state_.next_if_id.slot.sequence_id.value = state_.allocate_sequence();
+    state_.next_if_id.slot.pc = fetch_pc;
+    state_.next_if_id.slot.raw = static_cast<uint32_t>(fetch.value);
+    state_.next_if_id.slot.prediction = prediction;
+    state_.fetch_pc = prediction.valid && prediction.predicted_taken ? prediction.predicted_target : fetch_pc + 4;
 }
 
 bool PipelineBackend::try_service_interrupt_at_commit_boundary() {
-    if (!mem_wb_.slot.valid && !pipeline_empty()) {
+    if (!state_.mem_wb.slot.valid && !state_.pipeline_empty()) {
         return false;
     }
     // Match the functional backend's sequencing: an interrupt that only
     // became serviceable because the just-retired instruction updated CSR
     // state must wait until the next architectural step. Older pending
     // interrupts may still preempt here to avoid starvation in tight loops.
-    if (last_cycle_committed_ && !interrupt_serviceable_at_cycle_start_) {
+    if (state_.committed && !state_.interrupt_serviceable_at_cycle_start) {
         return false;
     }
     if (!cpu_.trap().service_pending_interrupts()) {
         return false;
     }
 
-    reset_stage_state();
-    fetch_pc_ = cpu_.core().pc();
+    state_.flush(cpu_.core().pc());
     return true;
 }
 
 void PipelineBackend::commit_next_state() {
-    if_id_ = next_if_id_;
-    id_ex_ = next_id_ex_;
-    ex_mem_ = next_ex_mem_;
-    mem_wb_ = next_mem_wb_;
+    state_.commit_next_state();
 }
 
 const char* PipelineBackend::name() const {
@@ -613,17 +460,19 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     const PredictorStats predictor_stats = predictor_.stats();
     snapshot.backend_name = name();
     snapshot.pipeline.if_stage = build_fetch_stage_snapshot();
-    snapshot.pipeline.id_stage = build_stage_snapshot(if_id_.slot);
-    snapshot.pipeline.ex_stage = build_stage_snapshot(id_ex_.slot);
-    snapshot.pipeline.mem_stage = build_stage_snapshot(ex_mem_.slot);
-    snapshot.pipeline.wb_stage = build_stage_snapshot(mem_wb_.slot);
-    snapshot.pipeline.stalled = last_cycle_stalled_;
-    snapshot.pipeline.redirected = redirect_pending_;
-    snapshot.pipeline.redirect_target = redirect_target_;
-    snapshot.pipeline.pending_fetch_fault = pending_fetch_fault_.valid;
-    snapshot.pipeline.trap_flush = last_cycle_trap_flush_;
-    snapshot.pipeline.committed = last_cycle_committed_;
-    snapshot.pipeline.empty = pipeline_empty();
+    snapshot.pipeline.id_stage = build_stage_snapshot(state_.if_id.slot);
+    snapshot.pipeline.ex_stage = build_stage_snapshot(state_.id_ex.slot);
+    snapshot.pipeline.mem_stage = build_stage_snapshot(state_.ex_mem.slot);
+    snapshot.pipeline.wb_stage = build_stage_snapshot(state_.mem_wb.slot);
+    snapshot.pipeline.last_sequence_id = state_.last_sequence_id();
+    snapshot.pipeline.retire_trace = state_.retire_trace();
+    snapshot.pipeline.stalled = state_.stalled;
+    snapshot.pipeline.redirected = state_.redirect_pending;
+    snapshot.pipeline.redirect_target = state_.redirect_target;
+    snapshot.pipeline.pending_fetch_fault = state_.pending_fetch_fault.valid;
+    snapshot.pipeline.trap_flush = state_.trap_flush;
+    snapshot.pipeline.committed = state_.committed;
+    snapshot.pipeline.empty = state_.pipeline_empty();
     snapshot.pipeline.predictor.mode = kPredictorModeName;
     snapshot.pipeline.predictor.last_prediction_valid = last_prediction_valid_;
     snapshot.pipeline.predictor.last_prediction_taken = last_prediction_taken_;
@@ -641,12 +490,13 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
 
 DebugStageSnapshot PipelineBackend::build_fetch_stage_snapshot() const {
     DebugStageSnapshot snapshot;
-    if (cpu_.core().halted() || pending_fetch_fault_.valid) {
+    if (cpu_.core().halted() || state_.pending_fetch_fault.valid) {
         return snapshot;
     }
 
     snapshot.valid = true;
-    snapshot.pc = fetch_pc_;
+    snapshot.sequence_id = 0;
+    snapshot.pc = state_.fetch_pc;
     snapshot.raw = 0;
     snapshot.text = "fetch";
     return snapshot;
@@ -659,6 +509,7 @@ DebugStageSnapshot PipelineBackend::build_stage_snapshot(const StageSlot& slot) 
     }
 
     snapshot.valid = true;
+    snapshot.sequence_id = slot.sequence_id.value;
     snapshot.pc = slot.pc;
     snapshot.raw = slot.raw;
     snapshot.text = format_stage_text(slot);

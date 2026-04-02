@@ -42,8 +42,11 @@ public:
 
     virtual uint64_t load(uint64_t addr, int size) = 0;
     virtual void store(uint64_t addr, uint64_t value, int size) = 0;
-    virtual PlatformEvents tick() {
+    virtual PlatformEvents peek_events() const {
         return {};
+    }
+    virtual PlatformEvents tick() {
+        return peek_events();
     }
     virtual const char* debug_name() const {
         return "device";

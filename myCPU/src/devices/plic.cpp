@@ -73,11 +73,15 @@ void Plic::store(uint64_t addr, uint64_t value, int size) {
     invalid_access(addr, size);
 }
 
-PlatformEvents Plic::tick() {
+PlatformEvents Plic::peek_events() const {
     return PlatformEvents{
         .machine_external_interrupt_pending = context_has_pending(machine_context_),
         .supervisor_external_interrupt_pending = context_has_pending(supervisor_context_),
     };
+}
+
+PlatformEvents Plic::tick() {
+    return peek_events();
 }
 
 void Plic::set_source_level(uint32_t source_id, bool asserted) {

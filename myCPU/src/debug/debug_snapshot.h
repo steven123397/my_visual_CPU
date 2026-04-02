@@ -7,9 +7,11 @@
 #include <vector>
 
 #include "../arch/core_state.h"
+#include "../exec/pipeline_sequence.h"
 
 struct DebugStageSnapshot {
     bool valid{false};
+    uint64_t sequence_id{0};
     uint64_t pc{0};
     uint32_t raw{0};
     std::string text{};
@@ -36,6 +38,8 @@ struct PipelineDebugSnapshot {
     DebugStageSnapshot ex_stage{};
     DebugStageSnapshot mem_stage{};
     DebugStageSnapshot wb_stage{};
+    uint64_t last_sequence_id{0};
+    std::vector<RetireTraceEntry> retire_trace{};
     bool stalled{false};
     bool redirected{false};
     uint64_t redirect_target{0};

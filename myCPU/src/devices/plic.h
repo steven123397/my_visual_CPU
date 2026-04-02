@@ -14,6 +14,7 @@ public:
 
     uint64_t load(uint64_t addr, int size) override;
     void store(uint64_t addr, uint64_t value, int size) override;
+    PlatformEvents peek_events() const override;
     PlatformEvents tick() override;
 
     void set_source_level(uint32_t source_id, bool asserted);

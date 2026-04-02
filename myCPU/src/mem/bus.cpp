@@ -73,6 +73,14 @@ PlatformEvents Bus::tick() {
     return events;
 }
 
+PlatformEvents Bus::peek_events() const {
+    PlatformEvents events;
+    for (const Device* device : devices_) {
+        events.merge(device->peek_events());
+    }
+    return events;
+}
+
 const DebugBusAccess& Bus::last_access() const {
     return last_access_;
 }

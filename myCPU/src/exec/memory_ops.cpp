@@ -85,6 +85,8 @@ InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v,
     case 0x23:
         effects.mem.kind = MemoryRequest::Kind::Store;
         effects.mem.store_value = rs2v;
+        effects.mem.commit_at_boundary = true;
+        effects.mem.non_speculative = true;
         switch (insn.funct3) {
         case 0:
             effects.mem.size = 1;

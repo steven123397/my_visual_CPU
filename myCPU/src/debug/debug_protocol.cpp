@@ -375,6 +375,7 @@ void append_json_string(std::ostringstream& out, const std::string& value) {
 void append_stage(std::ostringstream& out, const DebugStageSnapshot& stage) {
     out << "{"
         << "\"valid\":" << (stage.valid ? "true" : "false")
+        << ",\"sequence_id\":" << stage.sequence_id
         << ",\"pc\":";
     append_json_string(out, hex_u64(stage.pc));
     out << ",\"raw\":";
@@ -382,6 +383,25 @@ void append_stage(std::ostringstream& out, const DebugStageSnapshot& stage) {
     out << ",\"text\":";
     append_json_string(out, stage.text);
     out << "}";
+}
+
+void append_retire_trace(std::ostringstream& out, const std::vector<RetireTraceEntry>& trace) {
+    out << "[";
+    for (size_t i = 0; i < trace.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "{"
+            << "\"sequence_id\":" << trace[i].sequence_id
+            << ",\"pc\":";
+        append_json_string(out, hex_u64(trace[i].pc));
+        out << ",\"raw\":";
+        append_json_string(out, hex_u64(trace[i].raw));
+        out << ",\"trap\":" << (trace[i].trap ? "true" : "false")
+            << ",\"redirect\":" << (trace[i].redirect ? "true" : "false")
+            << "}";
+    }
+    out << "]";
 }
 
 std::string snapshot_json(const DebugSnapshot& snapshot) {
@@ -409,6 +429,9 @@ std::string snapshot_json(const DebugSnapshot& snapshot) {
     append_stage(out, snapshot.pipeline.mem_stage);
     out << ",\"wb\":";
     append_stage(out, snapshot.pipeline.wb_stage);
+    out << ",\"last_sequence_id\":" << snapshot.pipeline.last_sequence_id
+        << ",\"retire_trace\":";
+    append_retire_trace(out, snapshot.pipeline.retire_trace);
     out << ",\"flags\":{"
         << "\"stalled\":" << (snapshot.pipeline.stalled ? "true" : "false")
         << ",\"redirected\":" << (snapshot.pipeline.redirected ? "true" : "false")

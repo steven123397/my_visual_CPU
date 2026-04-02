@@ -33,6 +33,8 @@ struct MemoryRequest {
     uint8_t rd{0};
     int size{0};
     bool sign_extend{false};
+    bool commit_at_boundary{false};
+    bool non_speculative{false};
 };
 
 enum class TrapReturnKind : uint8_t {

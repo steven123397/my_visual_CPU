@@ -367,6 +367,15 @@ int main() {
             "predictor snapshot should expose branch prediction state and counters")) {
         return 1;
     }
+    if (!expect_contains(predictor_output, "\"last_sequence_id\":", "predictor snapshot should expose last_sequence_id")) {
+        return 1;
+    }
+    if (!expect_contains(predictor_output, "\"retire_trace\":[", "predictor snapshot should expose retire_trace")) {
+        return 1;
+    }
+    if (!expect_contains(predictor_output, "\"sequence_id\":1", "predictor retire trace should include sequence ids")) {
+        return 1;
+    }
 
     return 0;
 }
