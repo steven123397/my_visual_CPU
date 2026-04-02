@@ -18,6 +18,8 @@ constexpr uint32_t kAddiA7Exit = 0x05d00893U;      // addi a7, x0, 93
 constexpr uint32_t kEcall = 0x00000073U;           // ecall
 constexpr uint32_t kMret = 0x30200073U;
 constexpr uint32_t kSbX5ToX10Plus1 = 0x005500a3U;  // sb x5, 1(x10)
+constexpr uint32_t kLbX6FromX10Plus1 = 0x00150303U;
+constexpr uint32_t kSbX6ToX10Plus2 = 0x00650123U;  // sb x6, 2(x10)
 constexpr uint32_t kCsrwMepcX5 = 0x34129073U;      // csrw mepc, x5
 
 bool expect(bool condition, const char* message) {
@@ -44,6 +46,93 @@ bool run_until_halt(PipelineBackend& backend, CPU& cpu, int max_steps) {
 int main() {
     CommitBoundaryInput commit_input{};
     (void)commit_input;
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.core().write_gpr(5, 0x7a);
+        cpu.core().write_gpr(10, kDataAddr);
+
+        write32(ram, kEntry + 0, kSbX5ToX10Plus1);
+        write32(ram, kEntry + 4, kAddiA7Exit);
+        write32(ram, kEntry + 8, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 4; ++i) {
+            backend.step();
+        }
+        if (!expect(ram.load(kDataAddr + 1, 1) == 0, "RAM store must stay invisible before commit boundary")) {
+            return 1;
+        }
+        if (!expect(run_until_halt(backend, cpu, 16), "RAM store commit-boundary contract should halt")) {
+            return 1;
+        }
+        if (!expect(ram.load(kDataAddr + 1, 1) == 0x7a, "RAM store should become visible after commit boundary")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        Plic plic;
+        Uart16550 uart(plic);
+        uart.set_mirror_stdout(false);
+        bus.attach(plic);
+        bus.attach(uart);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.core().write_gpr(5, UART_IER_THRI);
+        cpu.core().write_gpr(10, UART_BASE);
+
+        write32(ram, kEntry + 0, kSbX5ToX10Plus1);
+        write32(ram, kEntry + 4, kLbX6FromX10Plus1);
+        write32(ram, kEntry + 8, kAddiA7Exit);
+        write32(ram, kEntry + 12, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        if (!expect(run_until_halt(backend, cpu, 32), "MMIO store->load ordering contract should halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(6) == UART_IER_THRI,
+                    "younger MMIO load must observe the older MMIO store result")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        Plic plic;
+        Uart16550 uart(plic);
+        uart.set_mirror_stdout(false);
+        bus.attach(plic);
+        bus.attach(uart);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.core().write_gpr(5, UART_IER_THRI);
+        cpu.core().write_gpr(10, UART_BASE);
+
+        write32(ram, kEntry + 0, kSbX5ToX10Plus1);
+        write32(ram, kEntry + 4, kAddiA7Exit);
+        write32(ram, kEntry + 8, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 4; ++i) {
+            backend.step();
+        }
+        if (!expect(uart.ier() == 0, "MMIO store must stay invisible before commit boundary")) {
+            return 1;
+        }
+        if (!expect(run_until_halt(backend, cpu, 16), "MMIO store commit-boundary contract should halt")) {
+            return 1;
+        }
+        if (!expect(uart.ier() == UART_IER_THRI, "MMIO store should become visible at commit boundary")) {
+            return 1;
+        }
+    }
 
     {
         Ram ram;

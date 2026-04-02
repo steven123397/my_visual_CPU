@@ -32,6 +32,13 @@ struct PredictorDebugSnapshot {
     uint64_t mispredictions{0};
 };
 
+struct OooDebugSnapshot {
+    uint64_t rob_depth{0};
+    uint64_t rob_head_sequence_id{0};
+    uint64_t lsq_depth{0};
+    uint64_t lsq_head_sequence_id{0};
+};
+
 struct PipelineDebugSnapshot {
     DebugStageSnapshot if_stage{};
     DebugStageSnapshot id_stage{};
@@ -47,6 +54,7 @@ struct PipelineDebugSnapshot {
     bool trap_flush{false};
     bool committed{false};
     bool empty{true};
+    OooDebugSnapshot ooo{};
     PredictorDebugSnapshot predictor{};
 };
 

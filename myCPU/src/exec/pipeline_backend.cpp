@@ -113,6 +113,7 @@ std::string format_stage_text(const StageSlot& slot) {
 
 PipelineBackend::PipelineBackend(CPU& cpu, Bus& bus) : cpu_(cpu), bus_(bus) {
     state_.reset(cpu_.core().pc());
+    state_.reset_ooo_state(cpu_.core());
 }
 
 void PipelineBackend::step() {
@@ -130,6 +131,7 @@ void PipelineBackend::step() {
         // interrupt newly serviceable. Flush any younger post-commit work and
         // let the interrupt become the next architectural boundary, matching
         // the functional backend even across trap returns.
+        state_.rollback_to_committed_state(cpu_.core());
         state_.flush(cpu_.core().pc());
         deferred_interrupt = true;
     }
@@ -225,16 +227,32 @@ bool PipelineBackend::step_wb() {
         return false;
     }
 
+    const std::optional<RobEntry> rob_head = state_.rob().peek_head();
+    if (!rob_head.has_value() || !rob_head->ready ||
+        rob_head->index.value != state_.mem_wb.slot.rob_index.value) {
+        return false;
+    }
+
+    CommitBoundaryInput commit_input{
+        .pc = state_.mem_wb.slot.pc,
+        .next_pc = state_.mem_wb.slot.pc + 4,
+        .effects = state_.mem_wb.slot.effects,
+    };
+    if (commit_input.effects.mem.kind == MemoryRequest::Kind::Load) {
+        commit_input.effects.mem.kind = MemoryRequest::Kind::None;
+    }
+    commit_input.effects.rd_write = {};
     const CommitBoundaryResult result =
-        apply_commit_boundary(cpu_,
-                              bus_,
-                              CommitBoundaryInput{
-                                  .pc = state_.mem_wb.slot.pc,
-                                  .next_pc = state_.mem_wb.slot.pc + 4,
-                                  .effects = state_.mem_wb.slot.effects,
-                              });
+        apply_commit_boundary(cpu_, bus_, commit_input);
     if (result.platform_state_changed) {
         cpu_.trap().sync_platform_events(bus_.peek_events());
+    }
+    if (result.retired && state_.mem_wb.slot.lsq_index.value != 0) {
+        state_.lsq().retire_entry(state_.mem_wb.slot.lsq_index);
+    }
+    if (result.retired && rob_head->arch_rd != 0 && rob_head->phys_rd != 0) {
+        state_.rename_map().commit_dest(rob_head->arch_rd, rob_head->phys_rd);
+        cpu_.core().write_gpr(rob_head->arch_rd, state_.phys_regs().read(rob_head->phys_rd));
     }
     if (state_.mem_wb.slot.valid && state_.mem_wb.slot.sequence_id.value != 0) {
         state_.record_retire({
@@ -246,8 +264,12 @@ bool PipelineBackend::step_wb() {
                         state_.mem_wb.slot.effects.control.trap_return != TrapReturnKind::None,
         });
     }
+    if (result.retired) {
+        state_.rob().commit_head();
+    }
     state_.committed = result.retired;
     if (result.trap_flush) {
+        state_.rollback_to_committed_state(cpu_.core());
         state_.flush(cpu_.core().pc());
         state_.trap_flush = true;
         return true;
@@ -278,6 +300,11 @@ void PipelineBackend::step_mem() {
     state_.next_mem_wb.slot = state_.ex_mem.slot;
     InsnEffects& effects = state_.next_mem_wb.slot.effects;
     if (effects.trap.valid) {
+        state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
+            .has_fault = true,
+            .cause = effects.trap.cause,
+            .tval = effects.trap.tval,
+        });
         return;
     }
 
@@ -288,23 +315,45 @@ void PipelineBackend::step_mem() {
         if (!result.ok) {
             effects.trap = result.fault;
             effects.rd_write = {};
+            state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
+                .has_fault = true,
+                .cause = result.fault.cause,
+                .tval = result.fault.tval,
+            });
             return;
         }
         effects.rd_write.enable = true;
         effects.rd_write.rd = effects.mem.rd;
         effects.rd_write.value = extend_loaded_value(result.value, effects.mem.size, effects.mem.sign_extend);
+        if (state_.next_mem_wb.slot.lsq_index.value != 0) {
+            state_.lsq().mark_data_ready(state_.next_mem_wb.slot.lsq_index, effects.rd_write.value);
+        }
+        effects.mem.kind = MemoryRequest::Kind::None;
+        if (state_.next_mem_wb.slot.rd_phys != 0) {
+            state_.phys_regs().write(state_.next_mem_wb.slot.rd_phys, effects.rd_write.value);
+        }
+        state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
+            .value_ready = state_.next_mem_wb.slot.rd_phys != 0,
+            .value = effects.rd_write.value,
+            .redirect = effects.control.redirect_pc,
+            .redirect_target = effects.control.target_pc,
+        });
         return;
     }
     case MemoryRequest::Kind::Store: {
-        const AddressSpace::AccessResult result =
-            cpu_.address_space().store_result(bus_, effects.mem.addr, effects.mem.store_value, effects.mem.size);
-        if (!result.ok) {
-            effects.trap = result.fault;
-        }
-        effects.mem.kind = MemoryRequest::Kind::None;
+        state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {});
         return;
     }
     case MemoryRequest::Kind::None:
+        state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
+            .value_ready = state_.next_mem_wb.slot.rd_phys != 0 && effects.rd_write.enable,
+            .value = effects.rd_write.value,
+            .has_fault = effects.trap.valid,
+            .cause = effects.trap.cause,
+            .tval = effects.trap.tval,
+            .redirect = effects.control.redirect_pc,
+            .redirect_target = effects.control.target_pc,
+        });
         return;
     }
 }
@@ -323,25 +372,62 @@ void PipelineBackend::step_ex() {
         .mem_wb = &state_.mem_wb.slot,
     };
     inputs.pc = state_.id_ex.slot.pc;
-    inputs.rs1v = pipeline_hazards::resolve_ex_operand(
-        forwarding, state_.id_ex.slot.insn, true, state_.id_ex.slot.rs1v);
-    inputs.rs2v = pipeline_hazards::resolve_ex_operand(
-        forwarding, state_.id_ex.slot.insn, false, state_.id_ex.slot.rs2v);
+    inputs.rs1v = pipeline_hazards::resolve_ex_operand(forwarding, state_.id_ex.slot.rs1_phys, state_.id_ex.slot.rs1v);
+    inputs.rs2v = pipeline_hazards::resolve_ex_operand(forwarding, state_.id_ex.slot.rs2_phys, state_.id_ex.slot.rs2v);
     if (state_.id_ex.slot.insn.opcode == 0x73 && state_.id_ex.slot.insn.funct3 != 0) {
         inputs.has_csrv = true;
         inputs.csrv = resolve_ex_csr_value(state_.id_ex.slot.insn);
     }
     if (state_.id_ex.slot.insn.raw == 0x00000073U) {
-        uint64_t a7v = cpu_.core().read_gpr(17);
-        const PipelineForwardingSources ecall_forwarding{
-            .ex_mem = &state_.ex_mem.slot,
-            .mem_wb = &state_.mem_wb.slot,
-        };
-        a7v = pipeline_hazards::resolve_register_value(ecall_forwarding, 17, a7v);
         inputs.has_ecall_a7 = true;
-        inputs.ecall_a7 = a7v;
+        inputs.ecall_a7 = pipeline_hazards::resolve_register_value(
+            forwarding,
+            state_.id_ex.slot.ecall_a7_phys,
+            state_.phys_regs().read(state_.id_ex.slot.ecall_a7_phys));
     }
     state_.next_ex_mem.slot.effects = InstructionSemantics::execute(state_.id_ex.slot.insn, ctx, inputs);
+    if (!state_.next_ex_mem.slot.effects.trap.valid) {
+        switch (state_.next_ex_mem.slot.effects.mem.kind) {
+        case MemoryRequest::Kind::Load:
+            state_.next_ex_mem.slot.lsq_index = state_.lsq().enqueue_load({
+                .sequence_id = state_.next_ex_mem.slot.sequence_id.value,
+                .rd = state_.next_ex_mem.slot.effects.mem.rd,
+                .size = state_.next_ex_mem.slot.effects.mem.size,
+                .sign_extend = state_.next_ex_mem.slot.effects.mem.sign_extend,
+                .non_speculative = state_.next_ex_mem.slot.effects.mem.non_speculative,
+            });
+            state_.lsq().mark_address_ready(state_.next_ex_mem.slot.lsq_index,
+                                            state_.next_ex_mem.slot.effects.mem.addr);
+            break;
+        case MemoryRequest::Kind::Store:
+            state_.next_ex_mem.slot.lsq_index = state_.lsq().enqueue_store({
+                .sequence_id = state_.next_ex_mem.slot.sequence_id.value,
+                .size = state_.next_ex_mem.slot.effects.mem.size,
+                .non_speculative = state_.next_ex_mem.slot.effects.mem.non_speculative,
+            });
+            state_.lsq().mark_address_ready(state_.next_ex_mem.slot.lsq_index,
+                                            state_.next_ex_mem.slot.effects.mem.addr);
+            state_.lsq().mark_data_ready(state_.next_ex_mem.slot.lsq_index,
+                                         state_.next_ex_mem.slot.effects.mem.store_value);
+            break;
+        case MemoryRequest::Kind::None:
+            break;
+        }
+    }
+    if (state_.next_ex_mem.slot.rd_phys != 0 && state_.next_ex_mem.slot.effects.rd_write.enable) {
+        state_.phys_regs().write(state_.next_ex_mem.slot.rd_phys, state_.next_ex_mem.slot.effects.rd_write.value);
+    }
+    if (state_.next_ex_mem.slot.effects.mem.kind == MemoryRequest::Kind::None) {
+        state_.rob().mark_ready(state_.next_ex_mem.slot.rob_index, {
+            .value_ready = state_.next_ex_mem.slot.rd_phys != 0 && state_.next_ex_mem.slot.effects.rd_write.enable,
+            .value = state_.next_ex_mem.slot.effects.rd_write.value,
+            .has_fault = state_.next_ex_mem.slot.effects.trap.valid,
+            .cause = state_.next_ex_mem.slot.effects.trap.cause,
+            .tval = state_.next_ex_mem.slot.effects.trap.tval,
+            .redirect = state_.next_ex_mem.slot.effects.control.redirect_pc,
+            .redirect_target = state_.next_ex_mem.slot.effects.control.target_pc,
+        });
+    }
 
     if (!state_.next_ex_mem.slot.effects.trap.valid && is_control_flow_opcode(state_.id_ex.slot.insn.opcode)) {
         const bool actual_taken = state_.next_ex_mem.slot.effects.control.redirect_pc;
@@ -395,13 +481,42 @@ void PipelineBackend::step_id() {
     decoded_slot.insn.raw = decoded_slot.raw;
     decode(decoded_slot.raw, &decoded_slot.insn);
 
-    if (pipeline_hazards::has_decode_hazard(state_.id_ex.slot, decoded_slot.insn)) {
+    decoded_slot.rs1_phys =
+        pipeline_hazards::reads_rs1(decoded_slot.insn) ? state_.rename_map().map_source(decoded_slot.insn.rs1) : 0;
+    decoded_slot.rs2_phys =
+        pipeline_hazards::reads_rs2(decoded_slot.insn) ? state_.rename_map().map_source(decoded_slot.insn.rs2) : 0;
+    decoded_slot.ecall_a7_phys =
+        decoded_slot.insn.raw == 0x00000073U ? state_.rename_map().map_source(17) : 0;
+
+    if (pipeline_hazards::has_decode_hazard(state_.id_ex.slot, decoded_slot.rs1_phys, decoded_slot.rs2_phys)) {
+        state_.stalled = true;
+        return;
+    }
+    if (pipeline_hazards::has_load_store_order_hazard(state_.id_ex.slot,
+                                                      state_.ex_mem.slot,
+                                                      state_.mem_wb.slot,
+                                                      state_.committed,
+                                                      decoded_slot.insn)) {
         state_.stalled = true;
         return;
     }
 
-    decoded_slot.rs1v = cpu_.core().read_gpr(decoded_slot.insn.rs1);
-    decoded_slot.rs2v = cpu_.core().read_gpr(decoded_slot.insn.rs2);
+    decoded_slot.rs1v = state_.phys_regs().read(decoded_slot.rs1_phys);
+    decoded_slot.rs2v = state_.phys_regs().read(decoded_slot.rs2_phys);
+    if (pipeline_hazards::writes_rd(decoded_slot.insn)) {
+        const RenameDestResult renamed_dest = state_.rename_map().rename_dest(decoded_slot.insn.rd);
+        decoded_slot.rd_phys = renamed_dest.phys;
+        decoded_slot.previous_rd_phys = renamed_dest.previous_phys;
+        state_.phys_regs().set_pending(decoded_slot.rd_phys);
+    }
+    decoded_slot.rob_index = state_.rob().allocate({
+        .sequence_id = decoded_slot.sequence_id.value,
+        .pc = decoded_slot.pc,
+        .raw = decoded_slot.raw,
+        .arch_rd = static_cast<uint8_t>(pipeline_hazards::writes_rd(decoded_slot.insn) ? decoded_slot.insn.rd : 0),
+        .phys_rd = decoded_slot.rd_phys,
+        .previous_phys_rd = decoded_slot.previous_rd_phys,
+    });
     state_.next_id_ex.slot = decoded_slot;
     state_.next_if_id = {};
 }
@@ -443,6 +558,7 @@ bool PipelineBackend::try_service_interrupt_at_commit_boundary() {
         return false;
     }
 
+    state_.rollback_to_committed_state(cpu_.core());
     state_.flush(cpu_.core().pc());
     return true;
 }
@@ -455,9 +571,15 @@ const char* PipelineBackend::name() const {
     return "pipeline";
 }
 
+const PipelineCoreState& PipelineBackend::testing_state() const {
+    return state_;
+}
+
 BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     BackendDebugSnapshot snapshot;
     const PredictorStats predictor_stats = predictor_.stats();
+    const std::optional<RobEntry> rob_head = state_.rob().peek_head();
+    const std::optional<LsqEntry> lsq_head = state_.lsq().peek_oldest();
     snapshot.backend_name = name();
     snapshot.pipeline.if_stage = build_fetch_stage_snapshot();
     snapshot.pipeline.id_stage = build_stage_snapshot(state_.if_id.slot);
@@ -473,6 +595,10 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     snapshot.pipeline.trap_flush = state_.trap_flush;
     snapshot.pipeline.committed = state_.committed;
     snapshot.pipeline.empty = state_.pipeline_empty();
+    snapshot.pipeline.ooo.rob_depth = state_.rob().size();
+    snapshot.pipeline.ooo.rob_head_sequence_id = rob_head.has_value() ? rob_head->sequence_id : 0;
+    snapshot.pipeline.ooo.lsq_depth = state_.lsq().size();
+    snapshot.pipeline.ooo.lsq_head_sequence_id = lsq_head.has_value() ? lsq_head->sequence_id : 0;
     snapshot.pipeline.predictor.mode = kPredictorModeName;
     snapshot.pipeline.predictor.last_prediction_valid = last_prediction_valid_;
     snapshot.pipeline.predictor.last_prediction_taken = last_prediction_taken_;

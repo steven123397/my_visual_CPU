@@ -441,7 +441,13 @@ std::string snapshot_json(const DebugSnapshot& snapshot) {
         << "}"
         << ",\"redirect_target\":";
     append_json_string(out, hex_u64(snapshot.pipeline.redirect_target));
-    out << ",\"predictor\":{"
+    out << ",\"ooo\":{"
+        << "\"rob_depth\":" << snapshot.pipeline.ooo.rob_depth
+        << ",\"rob_head_sequence_id\":" << snapshot.pipeline.ooo.rob_head_sequence_id
+        << ",\"lsq_depth\":" << snapshot.pipeline.ooo.lsq_depth
+        << ",\"lsq_head_sequence_id\":" << snapshot.pipeline.ooo.lsq_head_sequence_id
+        << "}"
+        << ",\"predictor\":{"
         << "\"mode\":";
     append_json_string(out, snapshot.pipeline.predictor.mode);
     out << ",\"last_prediction_valid\":" << (snapshot.pipeline.predictor.last_prediction_valid ? "true" : "false")

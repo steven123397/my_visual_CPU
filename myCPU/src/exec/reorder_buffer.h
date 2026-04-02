@@ -14,8 +14,8 @@ struct RobAllocate {
     uint64_t pc{0};
     uint32_t raw{0};
     uint8_t arch_rd{0};
-    uint16_t phys_rd{0};
-    uint16_t previous_phys_rd{0};
+    uint32_t phys_rd{0};
+    uint32_t previous_phys_rd{0};
 };
 
 struct RobReady {
@@ -34,8 +34,8 @@ struct RobEntry {
     uint64_t pc{0};
     uint32_t raw{0};
     uint8_t arch_rd{0};
-    uint16_t phys_rd{0};
-    uint16_t previous_phys_rd{0};
+    uint32_t phys_rd{0};
+    uint32_t previous_phys_rd{0};
     bool ready{false};
     bool value_ready{false};
     uint64_t value{0};
@@ -52,6 +52,7 @@ public:
     void mark_ready(RobIndex index, const RobReady& ready);
     std::optional<RobEntry> peek_head() const;
     void commit_head();
+    void clear();
     void flush_younger_than(uint64_t sequence_id);
     size_t size() const;
 

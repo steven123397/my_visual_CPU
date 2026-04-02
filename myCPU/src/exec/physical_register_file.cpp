@@ -4,7 +4,7 @@
 
 namespace {
 
-constexpr uint16_t kArchitecturalRegisterCount = 32;
+constexpr uint32_t kArchitecturalRegisterCount = 32;
 
 }  // namespace
 
@@ -12,21 +12,21 @@ PhysicalRegisterFile::PhysicalRegisterFile() {
     reset();
 }
 
-uint64_t PhysicalRegisterFile::read(uint16_t phys) const {
+uint64_t PhysicalRegisterFile::read(uint32_t phys) const {
     if (phys >= entries_.size()) {
         return 0;
     }
     return entries_[phys].value;
 }
 
-bool PhysicalRegisterFile::is_ready(uint16_t phys) const {
+bool PhysicalRegisterFile::is_ready(uint32_t phys) const {
     if (phys >= entries_.size()) {
         return false;
     }
     return entries_[phys].ready;
 }
 
-void PhysicalRegisterFile::set_pending(uint16_t phys) {
+void PhysicalRegisterFile::set_pending(uint32_t phys) {
     if (phys == 0) {
         return;
     }
@@ -34,7 +34,7 @@ void PhysicalRegisterFile::set_pending(uint16_t phys) {
     entries_[phys].ready = false;
 }
 
-void PhysicalRegisterFile::write(uint16_t phys, uint64_t value) {
+void PhysicalRegisterFile::write(uint32_t phys, uint64_t value) {
     if (phys == 0) {
         entries_[0].value = 0;
         entries_[0].ready = true;
@@ -79,7 +79,7 @@ void PhysicalRegisterFile::reset() {
     entries_[0].ready = true;
 }
 
-void PhysicalRegisterFile::ensure_index(uint16_t phys) {
+void PhysicalRegisterFile::ensure_index(uint32_t phys) {
     if (phys < entries_.size()) {
         return;
     }

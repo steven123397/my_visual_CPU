@@ -302,7 +302,7 @@ int main() {
 
         PipelineBackend backend(cpu, bus);
 
-        for (int i = 0; i < 24 && !cpu.core().halted(); ++i) {
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
             backend.step();
         }
         if (!expect(cpu.core().halted(), "supervisor timer interrupt path should eventually halt via ecall")) {

@@ -100,8 +100,10 @@
 - `pipeline_backend_smoke` 当前还额外覆盖真实 `CLINT` / `PLIC+UART` 平台事件源驱动的 supervisor timer / external interrupt smoke，避免把 cycle-sensitive 设备递送硬塞进 functional-vs-pipeline 逐事件差分。
 - `pipeline_backend_smoke` 当前也已补上 `jal` predict-hit、predictable branch loop、以及 backend rebuild 后 predictor cold-reset 的 host-side smoke。
 - `pipeline` 当前已经具备 `sequence_id` / bounded retire trace、共享 `commit boundary` helper，以及拆开的 `pipeline_core_state` / `pipeline_hazards`；相关边界由 `pipeline_commit_trace_smoke`、`pipeline_speculation_contracts_smoke`、`pipeline_backend_smoke`、`backend_differential_smoke` 与 `debug_cli_smoke` 一起守住。
-- `Phase 3-B/C` OoO readiness 当前也已形成最小未接线 helper 基线：`rename_map`、`reorder_buffer` 与 `load_store_queue` 已独立存在，并分别由 `rename_map_smoke`、`reorder_buffer_smoke` 与 `load_store_queue_smoke` 守住接口。
-- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照，以及 predictor mode / counters / 最近一次预测字段，守住 `CLINT` / `PLIC` / `UART` 与 predictor 可观察性输出。
+- `Phase 3-B/C` 当前已接上首轮最小 `rename + ROB + LSQ` 主路径：decode 侧会完成 `rename + ROB allocate`，execute / memory 结果先写入 phys-state 与 `ROB ready`，GPR architected write 只在 `ROB head` commit 时生效，load / store 会进入 `LSQ`；当前还没有 store-to-load forwarding / replay，因此 younger load 会保守地等待 older store 离开 `ID/EX`，其中 RAM / MMIO store 只会在 commit boundary 真正落地。
+- `Phase 3-B/C` 的 rollback 合同当前也已接到统一 flush 路径：mispredict、trap、commit-boundary interrupt service 与 trap-return flush 会一起回滚 speculative `rename / ROB / phys / LSQ` younger state；`RenameMap` 继续同时保留 committed / speculative mapping，phys tag 已扩为 `uint32_t` 以支撑长 guest 路径。
+- `pipeline_rename_commit_smoke`、`pipeline_speculation_contracts_smoke` 与 `load_store_queue_smoke` 当前分别守住 `rename + ROB commit`、speculative rollback / non-speculative store 合同，以及 `LSQ` ready / retire / flush 接口。
+- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照、predictor mode / counters / 最近一次预测字段，以及最小 `ROB / LSQ` 队列深度与 head-sequence 观测面，守住 `CLINT` / `PLIC` / `UART`、predictor 和 OoO readiness 可观察性输出。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](Makefile) 为准。
@@ -154,7 +156,7 @@
 5. 当前对 Phase 2 的近期安排，不再是继续做“正式接入”；`pipeline` 的最小 differential / robustness 收口已经基本成立，后续重点转为维护既有门禁、控制低收益 case 膨胀，并在新增问题出现时补最小回归。
    当前 `pipeline` 已经正式接入到 asm / host / guest 验证层：默认 `functional` 继续守 `make test`，`pipeline` 通过 `make test-pipeline` 守住同一批 asm 参考输出、host-side smoke/differential，以及 `guest_supervisor_demo` 与 `kernel_alpha` 正负回归。
 6. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围：加载仓库内现有 demo、查看快照、按 cycle / commit 单步，不要在这一层直接扩成带断点 / 条件暂停 / 任意文件加载的通用调试器。
-7. `Phase 3-B/C` 的 OoO readiness 前置条件已经完成；下一步应单独新开真正的大块 `OoO / rename / ROB / LSQ` 接线计划，而不是继续在 readiness 文档里叠加实现细节。
+7. `Phase 3-B/C` 的首轮 `rename + ROB + LSQ` 最小接线已经开始落地；下一步优先继续守住现有 host / guest / debug 门禁，按新增 bug 补最小持久回归，再决定是否进入更激进的 OoO execute / replay / memory speculation。
 
 ## 验证要求
 
@@ -189,18 +191,23 @@
 
 如果改动主要集中在以下 helper 或对应 smoke：
 
+- `src/exec/physical_register_file.*`
 - `src/exec/rename_map.*`
 - `src/exec/reorder_buffer.*`
 - `src/exec/load_store_queue.*`
+- `tests/host/physical_register_file_smoke.cpp`
 - `tests/host/rename_map_smoke.cpp`
 - `tests/host/reorder_buffer_smoke.cpp`
 - `tests/host/load_store_queue_smoke.cpp`
+- `tests/host/pipeline_rename_commit_smoke.cpp`
 
 还应至少额外关注：
 
+- `cd myCPU && make test-host-physical_register_file_smoke`
 - `cd myCPU && make test-host-rename_map_smoke`
 - `cd myCPU && make test-host-reorder_buffer_smoke`
 - `cd myCPU && make test-host-load_store_queue_smoke`
+- `cd myCPU && make test-host-pipeline_rename_commit_smoke`
 
 如果触及以下任一路径：
 

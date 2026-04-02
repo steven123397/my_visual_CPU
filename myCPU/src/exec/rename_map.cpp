@@ -2,9 +2,9 @@
 
 namespace {
 
-std::array<uint16_t, 32> make_identity_map() {
-    std::array<uint16_t, 32> map{};
-    for (uint16_t index = 0; index < map.size(); ++index) {
+std::array<uint32_t, 32> make_identity_map() {
+    std::array<uint32_t, 32> map{};
+    for (uint32_t index = 0; index < map.size(); ++index) {
         map[index] = index;
     }
     return map;
@@ -23,11 +23,24 @@ RenameCheckpoint RenameMap::checkpoint() const {
     };
 }
 
-uint16_t RenameMap::map_source(uint8_t arch) const {
+RenameCheckpoint RenameMap::committed_checkpoint() const {
+    uint32_t next_phys = 32;
+    for (uint32_t phys : architectural_map_) {
+        if (phys >= next_phys) {
+            next_phys = phys + 1;
+        }
+    }
+    return RenameCheckpoint{
+        .speculative_map = architectural_map_,
+        .next_phys = next_phys,
+    };
+}
+
+uint32_t RenameMap::map_source(uint8_t arch) const {
     return speculative_map_[arch];
 }
 
-uint16_t RenameMap::architectural_source(uint8_t arch) const {
+uint32_t RenameMap::architectural_source(uint8_t arch) const {
     return architectural_map_[arch];
 }
 
@@ -36,8 +49,8 @@ RenameDestResult RenameMap::rename_dest(uint8_t arch) {
         return {};
     }
 
-    const uint16_t previous_phys = speculative_map_[arch];
-    const uint16_t phys = next_phys_++;
+    const uint32_t previous_phys = speculative_map_[arch];
+    const uint32_t phys = next_phys_++;
     speculative_map_[arch] = phys;
     return RenameDestResult{
         .phys = phys,
@@ -45,12 +58,11 @@ RenameDestResult RenameMap::rename_dest(uint8_t arch) {
     };
 }
 
-void RenameMap::commit_dest(uint8_t arch, uint16_t phys) {
+void RenameMap::commit_dest(uint8_t arch, uint32_t phys) {
     if (arch == 0) {
         return;
     }
     architectural_map_[arch] = phys;
-    speculative_map_[arch] = phys;
 }
 
 void RenameMap::rollback(const RenameCheckpoint& checkpoint) {

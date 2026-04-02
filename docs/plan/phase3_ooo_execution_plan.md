@@ -147,7 +147,7 @@
   - `cd myCPU && make test-host-rename_map_smoke`
   - `cd myCPU && make test-host-reorder_buffer_smoke`
 
-- [ ] **步骤 5：提交一个聚焦 commit。**
+- [x] **步骤 5：提交一个聚焦 commit。**
 
 ### 任务 2：接通 `Phase 3-B` 的 decode/rename、phys operand 与 ROB head commit
 
@@ -164,19 +164,19 @@
 - 修改：`myCPU/tests/host/backend_differential_smoke.cpp`
 - 修改：`myCPU/Makefile`
 
-- [ ] **步骤 1：先写失败的 `Phase 3-B` smoke。**
+- [x] **步骤 1：先写失败的 `Phase 3-B` smoke。**
   至少覆盖：
   - younger 指令可通过 renamed source 读到 older 尚未 architecturally commit 的结果。
   - destination 结果在 ROB head commit 前，对 architected GPR 观察仍不可见。
   - ROB head 退休后，architected mapping 和 `instret` 顺序保持一致。
 
-- [ ] **步骤 2：运行失败测试验证红灯。**
+- [x] **步骤 2：运行失败测试验证红灯。**
   运行：
   - `cd myCPU && make test-host-pipeline_rename_commit_smoke`
   - `cd myCPU && make test-host-pipeline_backend_smoke`
   预期：当前 pipeline 仍直接读写 architected GPR，无法满足新合同。
 
-- [ ] **步骤 3：写最小 `Phase 3-B` 接线代码。**
+- [x] **步骤 3：写最小 `Phase 3-B` 接线代码。**
   实现要求：
   - decode 侧完成 `rename + ROB allocate`。
   - stage slot 携带 source phys、destination phys、ROB index 和必要 checkpoint 引用。
@@ -184,7 +184,7 @@
   - head commit 成为 architected mapping 切换的唯一入口。
   - 仍保持单发射、近似顺序 execute，不在本任务引入真正的 memory OoO。
 
-- [ ] **步骤 4：重跑 smoke 与差分门禁。**
+- [x] **步骤 4：重跑 smoke 与差分门禁。**
   运行：
   - `cd myCPU && make test-host-pipeline_rename_commit_smoke`
   - `cd myCPU && make test-host-pipeline_backend_smoke`
@@ -206,25 +206,25 @@
 - 修改：`myCPU/tests/host/backend_differential_smoke.cpp`
 - 修改：`myCPU/tests/host/debug_cli_smoke.cpp`
 
-- [ ] **步骤 1：先写失败的 rollback 合同测试。**
+- [x] **步骤 1：先写失败的 rollback 合同测试。**
   至少覆盖：
   - branch mispredict 后，younger renamed destination 与 ROB entry 会被回滚。
   - trap / fetch fault / trap-return flush 后，younger phys-state 不会泄漏到 architected 观察。
   - retire trace 中不出现已经被 squash 的 younger 指令。
 
-- [ ] **步骤 2：运行失败测试验证红灯。**
+- [x] **步骤 2：运行失败测试验证红灯。**
   运行：
   - `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
   - `cd myCPU && make test-host-backend_differential_smoke`
   - `cd myCPU && make test-host-debug_cli_smoke`
 
-- [ ] **步骤 3：写最小 rollback 实现。**
+- [x] **步骤 3：写最小 rollback 实现。**
   实现要求：
   - branch checkpoint 只做首轮最小能力，不扩展为多级复杂恢复。
   - mispredict、trap、interrupt precision 都沿统一 flush 路径回滚 rename / ROB / phys-state / LSQ younger entry。
   - 被 squash 的 younger CSR / halt / trap-return / store / MMIO side effect 继续保持不可见。
 
-- [ ] **步骤 4：重跑 speculation / debug 门禁。**
+- [x] **步骤 4：重跑 speculation / debug 门禁。**
   运行：
   - `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
   - `cd myCPU && make test-host-backend_differential_smoke`
@@ -243,27 +243,27 @@
 - 修改：`myCPU/tests/host/pipeline_speculation_contracts_smoke.cpp`
 - 修改：`myCPU/tests/host/backend_differential_smoke.cpp`
 
-- [ ] **步骤 1：先写失败的 `LSQ` 合同测试。**
+- [x] **步骤 1：先写失败的 `LSQ` 合同测试。**
   至少覆盖：
   - load / store entry 能携带 sequence、address-ready、data-ready 与 MMIO / non-speculative 标记。
   - RAM store 在 commit 前不可见，commit 后立即可见。
   - 被 squash 的 younger store 不落 RAM / MMIO。
   - MMIO 请求继续按 non-speculative 路径处理。
 
-- [ ] **步骤 2：运行失败测试验证红灯。**
+- [x] **步骤 2：运行失败测试验证红灯。**
   运行：
   - `cd myCPU && make test-host-load_store_queue_smoke`
   - `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
   - `cd myCPU && make test-host-backend_differential_smoke`
 
-- [ ] **步骤 3：写最小 `LSQ` 接线代码。**
+- [x] **步骤 3：写最小 `LSQ` 接线代码。**
   实现要求：
   - load / store 在主路径进入 `LSQ`。
   - load 结果继续走 ROB / phys-state，而不是直接写 architected GPR。
   - store 仅在 commit boundary 时调用 memory / MMIO apply。
   - 首轮不引入激进 memory disambiguation 或复杂 replay。
 
-- [ ] **步骤 4：重跑 `LSQ` 与 speculation 门禁。**
+- [x] **步骤 4：重跑 `LSQ` 与 speculation 门禁。**
   运行：
   - `cd myCPU && make test-host-load_store_queue_smoke`
   - `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
@@ -280,21 +280,21 @@
 - 修改：`myCPU/AGENTS.md`
 - 修改：`docs/status/mainline_status.md`
 
-- [ ] **步骤 1：先写失败的 debug / protocol 断言。**
+- [x] **步骤 1：先写失败的 debug / protocol 断言。**
   至少覆盖：
   - `debug_snapshot` 能暴露 `ROB` / `LSQ` 的最小队列深度、head sequence 或等价调试字段。
   - `debug_cli` JSON 输出与 snapshot 透传字段保持一致。
 
-- [ ] **步骤 2：运行失败测试验证红灯。**
+- [x] **步骤 2：运行失败测试验证红灯。**
   运行：
   - `cd myCPU && make test-host-debug_cli_smoke`
 
-- [ ] **步骤 3：写最小观测面与文档回写。**
+- [x] **步骤 3：写最小观测面与文档回写。**
   实现要求：
   - 只暴露首轮调试真正需要的字段，不把 snapshot 扩成调度器内部实现转储。
   - 回写 `myCPU/AGENTS.md` 与 `docs/status/mainline_status.md` 的当前实现边界、验证基线和剩余风险。
 
-- [ ] **步骤 4：运行总门禁。**
+- [x] **步骤 4：运行总门禁。**
   运行：
   - `cd myCPU && make test-host-physical_register_file_smoke`
   - `cd myCPU && make test-host-rename_map_smoke`
@@ -308,7 +308,7 @@
   - `cd myCPU && make test`
   - `cd frontend && node --test`
 
-- [ ] **步骤 5：提交收尾 commit，并把本计划勾到最新进度。**
+- [x] **步骤 5：提交收尾 commit，并把本计划勾到最新进度。**
 
 ## 完成态回写要求
 

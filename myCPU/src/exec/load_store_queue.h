@@ -52,7 +52,9 @@ public:
     void mark_address_ready(LsqIndex index, uint64_t addr);
     void mark_data_ready(LsqIndex index, uint64_t value);
     std::optional<LsqEntry> peek(LsqIndex index) const;
-    std::optional<LsqEntry> retire_store(LsqIndex index);
+    std::optional<LsqEntry> peek_oldest() const;
+    std::optional<LsqEntry> retire_entry(LsqIndex index);
+    void clear();
     void flush_younger_than(uint64_t sequence_id);
     size_t size() const;
 

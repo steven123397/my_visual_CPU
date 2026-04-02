@@ -15,6 +15,7 @@ public:
     void step() override;
     const char* name() const override;
     BackendDebugSnapshot debug_snapshot() const override;
+    const PipelineCoreState& testing_state() const;
 
 private:
     DebugStageSnapshot build_fetch_stage_snapshot() const;

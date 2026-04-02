@@ -12,10 +12,10 @@ class PhysicalRegisterFile {
 public:
     PhysicalRegisterFile();
 
-    uint64_t read(uint16_t phys) const;
-    bool is_ready(uint16_t phys) const;
-    void set_pending(uint16_t phys);
-    void write(uint16_t phys, uint64_t value);
+    uint64_t read(uint32_t phys) const;
+    bool is_ready(uint32_t phys) const;
+    void set_pending(uint32_t phys);
+    void write(uint32_t phys, uint64_t value);
     PhysicalRegisterCheckpoint checkpoint() const;
     void rollback(const PhysicalRegisterCheckpoint& checkpoint);
     void reset();
@@ -26,7 +26,7 @@ private:
         bool ready{true};
     };
 
-    void ensure_index(uint16_t phys);
+    void ensure_index(uint32_t phys);
 
     std::vector<Entry> entries_{};
 };

@@ -48,6 +48,14 @@ constexpr std::array<uint32_t, 4> kMmioFaultProgram = {
     0x00000073U,
 };
 
+constexpr std::array<uint32_t, 5> kStoreQueueProgram = {
+    0x07a00293U,
+    0x80001537U,
+    0x005500a3U,
+    0x05d00893U,
+    0x00000073U,
+};
+
 bool expect_contains(const std::string& haystack, const char* needle, const char* message) {
     if (haystack.find(needle) == std::string::npos) {
         std::fprintf(stderr, "%s\n", message);
@@ -171,6 +179,7 @@ int main() {
     const TempBinary timer_binary{write_temp_binary("timer", kSupervisorTimerProgram)};
     const TempBinary predictor_binary{write_temp_binary("predictor", kPredictorProgram)};
     const TempBinary mmio_fault_binary{write_temp_binary("mmio_fault", kMmioFaultProgram)};
+    const TempBinary store_queue_binary{write_temp_binary("store_queue", kStoreQueueProgram)};
 
     const std::string external_pending_output =
         run_cli_script(build_flat_load_command(external_binary.path) +
@@ -374,6 +383,25 @@ int main() {
         return 1;
     }
     if (!expect_contains(predictor_output, "\"sequence_id\":1", "predictor retire trace should include sequence ids")) {
+        return 1;
+    }
+
+    const std::string store_queue_output =
+        run_cli_script(build_flat_load_command(store_queue_binary.path) +
+                       repeat_command("{\"cmd\":\"step_cycle\"}", 6) + "{\"cmd\":\"quit\"}\n");
+    const std::vector<std::string> store_queue_lines = split_lines(store_queue_output);
+    if (!expect_line_with_fields(
+            store_queue_lines,
+            store_queue_output,
+            {
+                "\"backend\":\"pipeline\"",
+                "\"ooo\"",
+                "\"rob_depth\":3",
+                "\"rob_head_sequence_id\":3",
+                "\"lsq_depth\":1",
+                "\"lsq_head_sequence_id\":3",
+            },
+            "pipeline snapshot should expose ROB/LSQ queue depth and head sequence")) {
         return 1;
     }
 

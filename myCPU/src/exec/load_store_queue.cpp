@@ -72,16 +72,26 @@ std::optional<LsqEntry> LoadStoreQueue::peek(LsqIndex index) const {
     return *it;
 }
 
-std::optional<LsqEntry> LoadStoreQueue::retire_store(LsqIndex index) {
+std::optional<LsqEntry> LoadStoreQueue::peek_oldest() const {
+    if (entries_.empty()) {
+        return std::nullopt;
+    }
+    return entries_.front();
+}
+
+std::optional<LsqEntry> LoadStoreQueue::retire_entry(LsqIndex index) {
     const auto it = find_entry(entries_, index);
-    if (it == entries_.end() || it->kind != LsqEntryKind::Store ||
-        !it->address_ready || !it->data_ready) {
+    if (it == entries_.end() || !it->address_ready || !it->data_ready) {
         return std::nullopt;
     }
 
     const LsqEntry entry = *it;
     entries_.erase(it);
     return entry;
+}
+
+void LoadStoreQueue::clear() {
+    entries_.clear();
 }
 
 void LoadStoreQueue::flush_younger_than(uint64_t sequence_id) {

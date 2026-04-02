@@ -47,6 +47,10 @@ void ReorderBuffer::commit_head() {
     }
 }
 
+void ReorderBuffer::clear() {
+    entries_.clear();
+}
+
 void ReorderBuffer::flush_younger_than(uint64_t sequence_id) {
     entries_.erase(std::remove_if(entries_.begin(),
                                   entries_.end(),
