@@ -17,9 +17,10 @@
 
 - 状态文档：
   - [status/mainline_status.md](../status/mainline_status.md)
+  - [status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关计划：
-  - [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)
-  - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
+  - [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
+  - [plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan)
 
 ## 背景与问题
 
@@ -131,4 +132,4 @@
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为 `Phase 3-A` 之后首轮 `Phase 3-B/C` 的执行模型设计边界。
-- 当前实时进展、是否已具备真正启动 OoO 接线的条件，以及当前正在执行哪一轮实现计划，以 [status/mainline_status.md](../status/mainline_status.md)、[plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 与 [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md) 为准。
+- 当前实时进展、已完成的首轮收口结果以及下一步是否继续扩更激进的 issue / replay / memory speculation，以 [status/mainline_status.md](../status/mainline_status.md)、[status/project_priority_roadmap.md](../status/project_priority_roadmap.md)、[plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 与 [plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan) 为准。

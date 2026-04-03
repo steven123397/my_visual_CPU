@@ -11,8 +11,8 @@
 - 相关设计：
   - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [design/kernel_alpha_storage_error_contract.md](../design/kernel_alpha_storage_error_contract.md)
-- 已完成计划：
-  - [plan/kernel_alpha_storage_error_contract_plan.md](../plan/kernel_alpha_storage_error_contract_plan.md)
+- 已完成计划归档：
+  - [plan/history_plan.md#kernel-alpha-storage-error-contract-plan](../plan/history_plan.md#kernel-alpha-storage-error-contract-plan)
 
 ## 目标 / 主题
 

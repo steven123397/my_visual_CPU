@@ -21,20 +21,12 @@
   - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
   - [design/pipeline_core_integration.md](../design/pipeline_core_integration.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
+- 相关状态：
+  - [status/project_priority_roadmap.md](project_priority_roadmap.md)
 - 当前计划：
-  - [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)
-- 已完成计划：
-  - [plan/phase3_minimal_ooo_execute_plan.md](../plan/phase3_minimal_ooo_execute_plan.md)
-  - [plan/phase3_lsq_automatic_replay_plan.md](../plan/phase3_lsq_automatic_replay_plan.md)
-  - [plan/phase3_lsq_store_to_load_forwarding_plan.md](../plan/phase3_lsq_store_to_load_forwarding_plan.md)
-  - [plan/phase3_lsq_replay_contract_plan.md](../plan/phase3_lsq_replay_contract_plan.md)
-  - [plan/phase3_phys_free_list_plan.md](../plan/phase3_phys_free_list_plan.md)
-  - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
-  - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
-  - [plan/pipeline_core_integration_plan.md](../plan/pipeline_core_integration_plan.md)
-  - [plan/phase3_branch_prediction_plan.md](../plan/phase3_branch_prediction_plan.md)
-  - [plan/sv39_mprv_semantics_plan.md](../plan/sv39_mprv_semantics_plan.md)
-  - [plan/sv39_pagewalk_contracts_plan.md](../plan/sv39_pagewalk_contracts_plan.md)
+  - 暂无活跃计划；最近完成的 `Phase 3-B/C` 总计划见 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
+- 已完成计划归档：
+  - [plan/history_plan.md](../plan/history_plan.md)
 
 ## 当前状态
 
@@ -48,13 +40,13 @@
 - `Phase 3-B/C` 的基础收口已经继续推进到“最小真实 OoO execute”完成态：当前 `pipeline` 已具备 `rename + ROB` commit 主路径、最小 `LSQ` 接线、统一 speculative rollback、`RAM-only` forwarding、coarse automatic replay，以及 `ROB` 驱动退休 + 最小独立 memory execute；当前剩余工作已不再是“有没有真正进入 OoO execute”，而是更激进的 issue / memory speculation 与 bug-driven hardening。
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
-同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是继续沿 [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 和已完成的 [plan/phase3_minimal_ooo_execute_plan.md](../plan/phase3_minimal_ooo_execute_plan.md) 维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
+同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是以已完成的 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 和 [plan/history_plan.md#phase3-minimal-ooo-execute-plan](../plan/history_plan.md#phase3-minimal-ooo-execute-plan) 作为当前基线，继续维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
 
 ## 2026-04-03 最小真实 OoO execute 补充进展
 
 本轮主线已把 `Phase 3-C` 从“近似顺序 execute”继续推进到最小真实 `OoO execute`：
 
-- [plan/phase3_minimal_ooo_execute_plan.md](../plan/phase3_minimal_ooo_execute_plan.md) 已完成；当前 `pipeline` 的退休逻辑已经从 `mem_wb` 单槽解绑，改由 `ROB head` 直接驱动 commit boundary。
+- [plan/history_plan.md#phase3-minimal-ooo-execute-plan](../plan/history_plan.md#phase3-minimal-ooo-execute-plan) 已完成；当前 `pipeline` 的退休逻辑已经从 `mem_wb` 单槽解绑，改由 `ROB head` 直接驱动 commit boundary。
 - backend 当前已接上最小独立 memory execute：RAM / faulting access 会在 `ROB` 中形成可被 younger ALU 越过的最小 OoO 完成窗口；younger ALU 可以先把结果写入 `phys_regs + ROB ready`，但 architected GPR / CSR / RAM / MMIO 仍只在顺序 commit 时生效。
 - 已知 MMIO load 当前继续维持 non-speculative 执行；这条限制是有意保留的，用来继续守住 `clint_split_access`、UART / CLINT / PLIC 和现有教学调试链路的设备可见性合同。
 - `pipeline_rename_commit_smoke` 与 `pipeline_speculation_contracts_smoke` 现已直接覆盖“older memory 未完成时 younger ALU 先完成但不提前 commit”的新中间态；`pipeline_backend_smoke` 也同步守住了这次改动后的 interrupt commit-boundary 抢占边界。
@@ -64,6 +56,7 @@
 关于当前主线中“回归相关工作做到什么程度可认为阶段性收口”的统一判断口径，见：
 
 - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+- 更清晰的当前优先级排序，见 [status/project_priority_roadmap.md](project_priority_roadmap.md)
 
 ## 2026-04-02 补充进展
 
@@ -97,16 +90,16 @@
 
 本轮主线继续把 `Phase 3-B/C` 的 phys 生命周期与 `LSQ` memory-order 合同收口到更稳的状态：
 
-- [plan/phase3_phys_free_list_plan.md](../plan/phase3_phys_free_list_plan.md) 已完成；当前 `RenameMap` 不再只依赖 `next_phys_++`，而是同时维护 committed / speculative mapping 与 committed / speculative free-list。
+- [plan/history_plan.md#phase3-phys-free-list-plan](../plan/history_plan.md#phase3-phys-free-list-plan) 已完成；当前 `RenameMap` 不再只依赖 `next_phys_++`，而是同时维护 committed / speculative mapping 与 committed / speculative free-list。
 - ROB head commit 现在会先把新 committed phys 从 free-list 移除，再回收 old committed phys；rollback / trap / interrupt flush 继续通过 committed checkpoint 恢复 speculative map 与 free-list 快照。
 - 本轮新补的 `rename_map_smoke`、`pipeline_rename_commit_smoke` 与 `pipeline_speculation_contracts_smoke` 已分别守住 commit 后 stale phys 复用、rollback 后 free-list 恢复，以及 trap-return / flush 后 phys 不泄漏的合同。
 - 本轮调试中还暴露并修正了一处由 free-list 引出的真实回归：如果一个 recycled phys 最终重新成为 committed live phys，而 committed free-list 没有同步移除它，后续 flush 后会把 live phys 再次发出。这个问题曾把 `test-pipeline-timer_interrupt` 打成 `X`，当前已通过 `RenameMap` 的 live-phys remove-on-commit 规则收口。
-- [plan/phase3_lsq_replay_contract_plan.md](../plan/phase3_lsq_replay_contract_plan.md) 现已完成；当前 `LoadStoreQueue` 已提供最小 `LsqLoadState / LsqLoadStatus` 合同，能够显式区分 `none`、`blocked_by_unresolved_store`、`blocked_by_overlapping_store` 与 `replay_required`。
+- [plan/history_plan.md#phase3-lsq-replay-contract-plan](../plan/history_plan.md#phase3-lsq-replay-contract-plan) 现已完成；当前 `LoadStoreQueue` 已提供最小 `LsqLoadState / LsqLoadStatus` 合同，能够显式区分 `none`、`blocked_by_unresolved_store`、`blocked_by_overlapping_store` 与 `replay_required`。
 - 当前 `LSQ` 已能守住一条新的 late-overlap 合同：如果 younger load 已先通过，而 older store 地址稍后解析出来并确认 overlap，这条 younger load 会被稳定标记为 `replay_required`。
 - `pipeline` 当前已把这条 `replay-needed` 中间态暴露到最小观测面：`DebugSnapshot` / debug JSON 现在会输出 `lsq_load_state`、`lsq_load_sequence_id` 与 `lsq_store_sequence_id`，用于说明当前是“需要 replay”而不是“已经 replay 完成”。
-- [plan/phase3_lsq_automatic_replay_plan.md](../plan/phase3_lsq_automatic_replay_plan.md) 已完成；`pipeline` 已接上最小 automatic replay recovery：一旦 `LSQ` 中出现 `replay_required` load，backend 会在下一拍 cycle 入口沿现有 committed rollback + flush 主路径回到安全边界，并通过 `replay_flush` 观测位暴露这次恢复动作。
+- [plan/history_plan.md#phase3-lsq-automatic-replay-plan](../plan/history_plan.md#phase3-lsq-automatic-replay-plan) 已完成；`pipeline` 已接上最小 automatic replay recovery：一旦 `LSQ` 中出现 `replay_required` load，backend 会在下一拍 cycle 入口沿现有 committed rollback + flush 主路径回到安全边界，并通过 `replay_flush` 观测位暴露这次恢复动作。
 - 当前 automatic replay 仍然是 coarse、RAM-only recovery：它依赖 `LSQ` 已经给出 `replay_required`，恢复时直接回到当前 committed 边界重新取指；这条 replay 路径目前更像 recovery machinery，而不是高频自然触发的主执行策略。
-- [plan/phase3_lsq_store_to_load_forwarding_plan.md](../plan/phase3_lsq_store_to_load_forwarding_plan.md) 已完成；`LoadStoreQueue` 已新增最小 forwarding helper，`pipeline` 在 `step_mem(load)` 时会先尝试对 older ready RAM store 做 full-cover forwarding，再决定是否回落到 `AddressSpace::load_result()`。
+- [plan/history_plan.md#phase3-lsq-store-to-load-forwarding-plan](../plan/history_plan.md#phase3-lsq-store-to-load-forwarding-plan) 已完成；`LoadStoreQueue` 已新增最小 forwarding helper，`pipeline` 在 `step_mem(load)` 时会先尝试对 older ready RAM store 做 full-cover forwarding，再决定是否回落到 `AddressSpace::load_result()`。
 - 当前 forwarding 仍然严格停留在最小边界：只支持 `RAM-only`、只支持 full-cover forwarding、不做 MMIO forwarding，也不做复杂 partial merge / 更激进的 memory disambiguation；`backend_differential_smoke` 继续只守 architected 一致性，不让 pipeline 私有中间态泄漏到 `functional` 路径。
 
 本轮已新鲜验证通过：
@@ -322,7 +315,7 @@
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug` 的第一轮 hardening 也已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup / kernel_alpha/common`。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
-6. 继续沿 [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 维护 `Phase 3-B/C` 当前已落地的 `rename + ROB + LSQ + phys free-list / recycle + coarse automatic replay + RAM-only forwarding +` 最小真实 `OoO execute` 形态，优先守住现有 host / guest / debug 门禁，然后再考虑更激进的 issue / replay / memory speculation。
+6. 继续沿 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 维护 `Phase 3-B/C` 当前已落地的 `rename + ROB + LSQ + phys free-list / recycle + coarse automatic replay + RAM-only forwarding +` 最小真实 `OoO execute` 形态，优先守住现有 host / guest / debug 门禁，然后再考虑更激进的 issue / replay / memory speculation。
 7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
 
 ## 建议入口
@@ -333,10 +326,11 @@
 - [myCPU/AGENTS.md](../../myCPU/AGENTS.md)
 - [myCPU/guest/AGENTS.md](../../myCPU/guest/AGENTS.md)
 - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+- [status/project_priority_roadmap.md](project_priority_roadmap.md)
 - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
 - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
-- [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)
-- [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
+- [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
+- [plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan)
   当前作为已完成的 OoO readiness 收口记录保留。
 - [status/code_self_review_status.md](code_self_review_status.md)
 - [status/kernel_alpha_status.md](kernel_alpha_status.md)

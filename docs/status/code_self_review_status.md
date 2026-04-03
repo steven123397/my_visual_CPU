@@ -19,8 +19,8 @@
 - 相关状态：
   - [status/mainline_status.md](mainline_status.md)
   - [status/kernel_alpha_status.md](kernel_alpha_status.md)
-- 重要已完成计划：
-  - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
+- 重要已完成计划归档：
+  - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
 
 ## 当前结论
 

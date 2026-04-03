@@ -12,7 +12,7 @@
   - [status/mainline_status.md](../status/mainline_status.md)
   - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关计划：
-  - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
+  - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
 
 ## 当前有效性说明
 

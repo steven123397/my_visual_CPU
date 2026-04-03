@@ -18,8 +18,8 @@
 - 状态文档：
   - [status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
-  - [plan/phase3_branch_prediction_plan.md](../plan/phase3_branch_prediction_plan.md)
-  - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
+  - [plan/history_plan.md#phase3-branch-prediction-plan](../plan/history_plan.md#phase3-branch-prediction-plan)
+  - [plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan)
 
 ## 背景与问题
 

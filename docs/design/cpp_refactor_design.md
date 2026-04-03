@@ -11,7 +11,7 @@
 - 状态文档：
   - [status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
-  - [plan/pipeline_core_integration_plan.md](../plan/pipeline_core_integration_plan.md)
+  - [plan/history_plan.md#pipeline-core-integration-plan](../plan/history_plan.md#pipeline-core-integration-plan)
 
 ## 当前有效性说明
 

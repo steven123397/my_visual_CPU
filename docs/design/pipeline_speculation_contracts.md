@@ -17,9 +17,10 @@
 
 - 状态文档：
   - [status/mainline_status.md](../status/mainline_status.md)
+  - [status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关计划：
-  - [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)
-  - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
+  - [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
+  - [plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan)
 
 ## 背景与问题
 
@@ -181,5 +182,5 @@ TLB / address-space 相关动作也必须按 architected commit boundary 理解�
 
 ## 当前有效性说明
 
-- 当前有效 / 历史语境：当前有效，作为 `Phase 3-B/C` readiness 阶段的投机执行与 commit contract 说明。
-- 当前实现结果、测试门禁与当前 `rename / ROB / LSQ` 接线进度，以 [status/mainline_status.md](../status/mainline_status.md)、[plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 与 [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md) 为准。
+- 当前有效 / 历史语境：当前有效，作为 `pipeline` 在已落地首轮 `Phase 3-B/C` 形态下的投机执行与 commit contract 说明。
+- 当前实现结果、测试门禁与下一步是否继续扩 `rename / ROB / LSQ` 之后的更激进行为，以 [status/mainline_status.md](../status/mainline_status.md)、[status/project_priority_roadmap.md](../status/project_priority_roadmap.md)、[plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 与 [plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan) 为准。

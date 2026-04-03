@@ -15,7 +15,7 @@
 - [design](design)
   结构设计、阶段设计、模块设计与长期有效的契约 / 收口标准。
 - [plan](plan)
-  具体实现计划、整改计划和已完成计划记录。
+ 具体实现计划、整改计划，以及统一的完成态归档。
 - [status](status)
   当前状态跟踪文档。
 
@@ -39,7 +39,7 @@
 - `design/`
   只回答“要做什么、边界是什么、为什么这么设计”。设计文档应向下关联对应 `status` 和 `plan`，但不承担实时进度更新。
 - `plan/`
-  只回答“怎么落地、任务做到哪一步”。计划文档负责 checklist、执行步骤和完成态记录。
+ 只回答“怎么落地、任务做到哪一步”。执行中的计划文档负责 checklist 和执行步骤；完成态计划统一归档到 `history_plan.md`。
 - `status/`
   只回答“当前是什么状态、还有什么风险、下一步是什么”。同一模块的实时进度只能以对应 `status` 文档为准。
 
@@ -74,11 +74,12 @@
 ## 命名与完成态规则
 
 - 长期维护的主状态文档优先使用稳定文件名，不把日期放进文件名。
-- 计划文档完成后继续保留在 `plan/`，不要再移入单独 `archive/`。
+- 不创建单独 `docs/archive/` 或 `docs/plan/archive/` 目录；完成态计划统一归档到 [plan/history_plan.md](plan/history_plan.md)。
 - 计划文档完成时必须：
   - 把 checklist 勾完
-  - 在文件头明确标记“已完成”或等价完成态说明
   - 在对应 `status` 文档中回写结果摘要、完成情况和必要历史节点
+  - 把“完成时间 + 完成内容 + 必要时的一两句过程摘要”追加到 [plan/history_plan.md](plan/history_plan.md)
+  - 删除原计划文件，不再把完成态 checklist 长期保留在 `plan/`
 - 已完成但仍保留的设计文档，要在开头明确“当前有效”或“历史语境”，避免旧设计被误读为当前待办。
 - 不再创建 `docs/contracts/`、`docs/templates/`、`docs/archive/` 或 `docs/superpowers/` 这类平行正式目录。
 
@@ -86,14 +87,14 @@
 
 - 每份 `design` 文档都应链接：
   - 对应的 `status`
-  - 当前活跃或历史相关的 `plan`
+  - 当前活跃 `plan`，或 [plan/history_plan.md](plan/history_plan.md) 中对应的历史条目
 - 每份 `plan` 文档都应链接：
   - 来源 `design`
   - 目标 `status`
 - 每份 `status` 文档都应链接：
   - 相关 `design`
   - 当前活跃 `plan`
-  - 重要已完成 `plan`
+  - 重要已完成计划在 [plan/history_plan.md](plan/history_plan.md) 中的归档条目，或统一归档入口
 - 新增或重命名正式文档后，必须同步更新 [index.md](index.md)。
 
 ## 文档维护规则
@@ -104,10 +105,11 @@
 - README 要持续可读，尤其 guest 相关描述保持概览化，不要写成长串内部细节。
 - 不要让 `design / plan / status` 同时维护同一件事的实时表述。
 - 如果某份状态文档已经开始堆积完整执行 checklist，应把执行细节下沉到 `plan/`。
+- 如果某份计划文档已经完成，应先回写 `status`，再归档到 `history_plan.md`，随后删除原文件。
 - 如果某份设计文档开始承担实时进度更新，应把实时部分收口到 `status/`。
 - 报告和总结文档需要清楚区分：
   - 项目 owner 既有已完成工作
   - 已落地的当前重构成果
   - 正在进行的下一步工作
   - 更远期阶段规划
-- 每部分任务完成时，自动更新`plan/`和`status/`下相关文档内容，同步到最新进度。
+- 每部分任务完成时，自动更新 `status/`；如果对应 `plan` 已完成，还应同步归档到 `history_plan.md` 并删除原计划文件。

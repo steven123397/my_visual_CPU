@@ -11,7 +11,7 @@
 - 状态文档：
   - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关计划：
-  - [plan/kernel_alpha_storage_error_contract_plan.md](../plan/kernel_alpha_storage_error_contract_plan.md)
+  - [plan/history_plan.md#kernel-alpha-storage-error-contract-plan](../plan/history_plan.md#kernel-alpha-storage-error-contract-plan)
 
 ## 当前有效性说明
 
