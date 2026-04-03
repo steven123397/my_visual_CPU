@@ -3,10 +3,18 @@
 #include <stddef.h>
 
 #include "console.h"
+#include "memory.h"
 #include "platform.h"
 #include "pmm.h"
+#include "runtime_context.h"
 #include "storage.h"
 #include "supervisor_runtime.h"
+
+#if defined(__riscv)
+#include "riscv.h"
+#else
+uint64_t riscv_read_satp(void);
+#endif
 
 void kernel_runtime_init(kernel_runtime_t* runtime) {
     if (runtime == NULL) {
@@ -30,6 +38,55 @@ supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state(
     return runtime != NULL ? &runtime->interrupts : NULL;
 }
 
+bool kernel_runtime_run_entry_bringup(kernel_runtime_t* runtime) {
+    trap_context_t* trap_context = kernel_runtime_trap_context(runtime);
+
+    if (trap_context == NULL) {
+        return false;
+    }
+
+    memory_init();
+    runtime_context_reset();
+    trap_context_init(trap_context);
+    return trap_context_activate(trap_context) &&
+           trap_context_is_active(trap_context) &&
+           trap_active_context() == trap_context;
+}
+
+bool kernel_runtime_run_identity_superpage_bringup(kernel_runtime_t* runtime) {
+    vm_address_space_t* address_space = NULL;
+
+    if (runtime == NULL || !kernel_runtime_run_entry_bringup(runtime)) {
+        return false;
+    }
+
+    console_putc('K');
+    pmm_init();
+    if (pmm_total_pages() == 0 || pmm_free_pages() == 0) {
+        return false;
+    }
+    console_putc('M');
+
+    if (!vm_address_space_create(&address_space) ||
+        !vm_address_space_map_identity_1g(address_space,
+                                          vm_kernel_base(),
+                                          VM_PAGE_READ | VM_PAGE_WRITE |
+                                              VM_PAGE_EXEC) ||
+        !vm_address_space_map_identity_1g(address_space,
+                                          0,
+                                          VM_PAGE_READ | VM_PAGE_WRITE) ||
+        !vm_address_space_enable(address_space) ||
+        !vm_address_space_is_enabled(address_space) ||
+        !vm_address_space_is_active(address_space) ||
+        riscv_read_satp() != vm_address_space_satp_value(address_space)) {
+        return false;
+    }
+
+    runtime->address_space = address_space;
+    console_putc('V');
+    return true;
+}
+
 void kernel_runtime_begin_plic_supervisor_phase(char marker) {
     platform_plic_supervisor_init();
     if (marker != '\0') {
@@ -51,6 +108,17 @@ bool kernel_runtime_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
     return runtime != NULL &&
            supervisor_runtime_schedule_timer_and_wait(
                &runtime->interrupts.timer_interrupts,
+               timer_delta,
+               timeout_delta);
+}
+
+bool kernel_runtime_wait_platform_interrupts(
+    supervisor_runtime_interrupt_state_t* interrupts,
+    uint64_t timer_delta,
+    uint64_t timeout_delta) {
+    return interrupts != NULL &&
+           supervisor_runtime_schedule_platform_interrupts_and_wait(
+               interrupts,
                timer_delta,
                timeout_delta);
 }
@@ -83,6 +151,16 @@ bool kernel_runtime_complete_storage_signature_check(char marker) {
         console_putc(marker);
     }
     return true;
+}
+
+bool kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
+    supervisor_runtime_interrupt_state_t* interrupts,
+    uint64_t timer_delta,
+    uint64_t timeout_delta) {
+    return kernel_runtime_complete_storage_signature_check('\0') &&
+           kernel_runtime_wait_platform_interrupts(interrupts,
+                                                   timer_delta,
+                                                   timeout_delta);
 }
 
 bool kernel_runtime_bind_self_interrupt_handlers(

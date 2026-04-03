@@ -24,6 +24,28 @@ static bool g_common_bringup_result = true;
 static int g_console_chars[16];
 static size_t g_console_char_count = 0;
 static int g_plic_init_calls = 0;
+static int g_memory_init_calls = 0;
+static int g_runtime_context_reset_calls = 0;
+static trap_context_t* g_trap_context_init_arg = NULL;
+static trap_context_t* g_trap_context_activate_arg = NULL;
+static bool g_trap_context_activate_result = true;
+static const trap_context_t* g_trap_context_is_active_arg = NULL;
+static bool g_trap_context_is_active_result = true;
+static trap_context_t* g_trap_active_context = NULL;
+static int g_pmm_init_calls = 0;
+static size_t g_pmm_total_pages_value = 0;
+static size_t g_pmm_free_pages_value = 0;
+static bool g_vm_create_result = true;
+static vm_address_space_t* g_vm_create_address_space = NULL;
+static int g_vm_map_identity_calls = 0;
+static uintptr_t g_vm_map_identity_bases[4];
+static uint64_t g_vm_map_identity_flags[4];
+static bool g_vm_map_identity_results[4] = {true, true, true, true};
+static bool g_vm_enable_result = true;
+static bool g_vm_is_enabled_result = true;
+static bool g_vm_is_active_result = true;
+static uint64_t g_vm_satp_value = 0;
+static uint64_t g_riscv_satp_value = 0;
 static volatile uint32_t* g_external_wait_counter = NULL;
 static uint64_t g_external_wait_timeout = 0;
 static bool g_external_wait_result = true;
@@ -31,6 +53,10 @@ static volatile uint32_t* g_timer_wait_counter = NULL;
 static uint64_t g_timer_wait_delta = 0;
 static uint64_t g_timer_wait_timeout = 0;
 static bool g_timer_wait_result = true;
+static supervisor_runtime_interrupt_state_t* g_platform_interrupt_wait_state = NULL;
+static uint64_t g_platform_interrupt_wait_delta = 0;
+static uint64_t g_platform_interrupt_wait_timeout = 0;
+static bool g_platform_interrupt_wait_result = true;
 static bool g_storage_probe_result = true;
 static storage_info_t g_storage_probe_info = {0};
 static int g_storage_probe_calls = 0;
@@ -47,6 +73,8 @@ static int fail(const char* message);
 static void stub_timer_post_handler(void* context);
 static void stub_external_post_handler(uint32_t source_id, void* context);
 static int test_runtime_init_and_bind_self_handlers(void);
+static int test_runtime_entry_bringup_helper(void);
+static int test_runtime_identity_superpage_bringup_helper(void);
 static int test_external_policy_adapter(void);
 static int test_interrupt_policy_adapter(void);
 static int test_runtime_bringup_helper(void);
@@ -56,6 +84,7 @@ static int test_external_wait_helper(void);
 static int test_timer_wait_helper(void);
 static int test_storage_probe_helper(void);
 static int test_storage_signature_helper(void);
+static int test_storage_platform_tail_helper(void);
 
 void supervisor_runtime_interrupt_state_init(
     supervisor_runtime_interrupt_state_t* state) {
@@ -132,6 +161,100 @@ void platform_plic_supervisor_init(void) {
     g_plic_init_calls += 1;
 }
 
+void memory_init(void) {
+    g_memory_init_calls += 1;
+}
+
+void runtime_context_reset(void) {
+    g_runtime_context_reset_calls += 1;
+}
+
+void trap_context_init(trap_context_t* trap_context) {
+    g_trap_context_init_arg = trap_context;
+}
+
+bool trap_context_activate(trap_context_t* trap_context) {
+    g_trap_context_activate_arg = trap_context;
+    return g_trap_context_activate_result;
+}
+
+bool trap_context_is_active(const trap_context_t* trap_context) {
+    g_trap_context_is_active_arg = trap_context;
+    return g_trap_context_is_active_result;
+}
+
+trap_context_t* trap_active_context(void) {
+    return g_trap_active_context;
+}
+
+size_t pmm_total_pages(void) {
+    return g_pmm_total_pages_value;
+}
+
+void pmm_init(void) {
+    g_pmm_init_calls += 1;
+}
+
+size_t pmm_free_pages(void) {
+    return g_pmm_free_pages_value;
+}
+
+bool vm_address_space_create(vm_address_space_t** out_space) {
+    if (out_space != NULL) {
+        *out_space = g_vm_create_address_space;
+    }
+    return g_vm_create_result;
+}
+
+bool vm_address_space_map_identity_1g(vm_address_space_t* address_space,
+                                      uintptr_t base,
+                                      uint64_t flags) {
+    (void)address_space;
+    if (g_vm_map_identity_calls <
+        (int)(sizeof(g_vm_map_identity_bases) /
+              sizeof(g_vm_map_identity_bases[0]))) {
+        g_vm_map_identity_bases[g_vm_map_identity_calls] = base;
+        g_vm_map_identity_flags[g_vm_map_identity_calls] = flags;
+    }
+
+    if (g_vm_map_identity_calls <
+        (int)(sizeof(g_vm_map_identity_results) /
+              sizeof(g_vm_map_identity_results[0]))) {
+        return g_vm_map_identity_results[g_vm_map_identity_calls++];
+    }
+
+    g_vm_map_identity_calls += 1;
+    return false;
+}
+
+bool vm_address_space_enable(vm_address_space_t* address_space) {
+    (void)address_space;
+    return g_vm_enable_result;
+}
+
+bool vm_address_space_is_enabled(const vm_address_space_t* address_space) {
+    (void)address_space;
+    return g_vm_is_enabled_result;
+}
+
+bool vm_address_space_is_active(const vm_address_space_t* address_space) {
+    (void)address_space;
+    return g_vm_is_active_result;
+}
+
+uint64_t vm_address_space_satp_value(const vm_address_space_t* address_space) {
+    (void)address_space;
+    return g_vm_satp_value;
+}
+
+uintptr_t vm_kernel_base(void) {
+    return UINT64_C(0x80000000);
+}
+
+uint64_t riscv_read_satp(void) {
+    return g_riscv_satp_value;
+}
+
 bool supervisor_runtime_enable_uart_thre_and_wait(
     volatile uint32_t* external_counter,
     uint64_t timeout_delta) {
@@ -147,6 +270,16 @@ bool supervisor_runtime_schedule_timer_and_wait(volatile uint32_t* timer_counter
     g_timer_wait_delta = timer_delta;
     g_timer_wait_timeout = timeout_delta;
     return g_timer_wait_result;
+}
+
+bool supervisor_runtime_schedule_platform_interrupts_and_wait(
+    supervisor_runtime_interrupt_state_t* state,
+    uint64_t timer_delta,
+    uint64_t timeout_delta) {
+    g_platform_interrupt_wait_state = state;
+    g_platform_interrupt_wait_delta = timer_delta;
+    g_platform_interrupt_wait_timeout = timeout_delta;
+    return g_platform_interrupt_wait_result;
 }
 
 bool storage_probe(storage_info_t* info) {
@@ -190,6 +323,31 @@ static void reset_stub_state(void) {
     memset(g_console_chars, 0, sizeof(g_console_chars));
     g_console_char_count = 0;
     g_plic_init_calls = 0;
+    g_memory_init_calls = 0;
+    g_runtime_context_reset_calls = 0;
+    g_trap_context_init_arg = NULL;
+    g_trap_context_activate_arg = NULL;
+    g_trap_context_activate_result = true;
+    g_trap_context_is_active_arg = NULL;
+    g_trap_context_is_active_result = true;
+    g_trap_active_context = NULL;
+    g_pmm_init_calls = 0;
+    g_pmm_total_pages_value = 256U;
+    g_pmm_free_pages_value = 256U;
+    g_vm_create_result = true;
+    g_vm_create_address_space = (vm_address_space_t*)(uintptr_t)0x2468U;
+    g_vm_map_identity_calls = 0;
+    memset(g_vm_map_identity_bases, 0, sizeof(g_vm_map_identity_bases));
+    memset(g_vm_map_identity_flags, 0, sizeof(g_vm_map_identity_flags));
+    g_vm_map_identity_results[0] = true;
+    g_vm_map_identity_results[1] = true;
+    g_vm_map_identity_results[2] = true;
+    g_vm_map_identity_results[3] = true;
+    g_vm_enable_result = true;
+    g_vm_is_enabled_result = true;
+    g_vm_is_active_result = true;
+    g_vm_satp_value = UINT64_C(0x1234);
+    g_riscv_satp_value = UINT64_C(0x1234);
     g_external_wait_counter = NULL;
     g_external_wait_timeout = 0;
     g_external_wait_result = true;
@@ -197,6 +355,10 @@ static void reset_stub_state(void) {
     g_timer_wait_delta = 0;
     g_timer_wait_timeout = 0;
     g_timer_wait_result = true;
+    g_platform_interrupt_wait_state = NULL;
+    g_platform_interrupt_wait_delta = 0;
+    g_platform_interrupt_wait_timeout = 0;
+    g_platform_interrupt_wait_result = true;
     g_storage_probe_result = true;
     memset(&g_storage_probe_info, 0, sizeof(g_storage_probe_info));
     g_storage_probe_calls = 0;
@@ -250,6 +412,86 @@ static int test_runtime_init_and_bind_self_handlers(void) {
     if (kernel_runtime_bind_self_interrupt_handlers(
             NULL, 0, stub_timer_post_handler, stub_external_post_handler)) {
         return fail("expected null runtime self binding to fail");
+    }
+
+    return 0;
+}
+
+static int test_runtime_entry_bringup_helper(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    g_trap_active_context = &runtime.trap_context;
+    if (!kernel_runtime_run_entry_bringup(&runtime)) {
+        return fail("expected runtime entry bring-up helper to succeed");
+    }
+
+    if (g_memory_init_calls != 1 || g_runtime_context_reset_calls != 1 ||
+        g_trap_context_init_arg != &runtime.trap_context ||
+        g_trap_context_activate_arg != &runtime.trap_context ||
+        g_trap_context_is_active_arg != &runtime.trap_context) {
+        return fail("expected runtime entry bring-up helper to initialize and activate trap context");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    g_trap_context_activate_result = false;
+    if (kernel_runtime_run_entry_bringup(&runtime)) {
+        return fail("expected runtime entry bring-up helper to propagate activation failure");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    g_trap_active_context = &runtime.trap_context;
+    g_trap_context_is_active_result = false;
+    if (kernel_runtime_run_entry_bringup(&runtime)) {
+        return fail("expected runtime entry bring-up helper to reject inactive trap context");
+    }
+
+    if (kernel_runtime_run_entry_bringup(NULL)) {
+        return fail("expected runtime entry bring-up helper to reject null runtime");
+    }
+
+    return 0;
+}
+
+static int test_runtime_identity_superpage_bringup_helper(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    g_trap_active_context = &runtime.trap_context;
+    if (!kernel_runtime_run_identity_superpage_bringup(&runtime)) {
+        return fail("expected runtime identity superpage bring-up helper to succeed");
+    }
+
+    if (g_memory_init_calls != 1 || g_runtime_context_reset_calls != 1 ||
+        g_pmm_init_calls != 1 ||
+        g_pmm_total_pages_value == 0 || g_pmm_free_pages_value == 0 ||
+        g_vm_map_identity_calls != 2 ||
+        g_vm_map_identity_bases[0] != UINT64_C(0x80000000) ||
+        g_vm_map_identity_bases[1] != 0U ||
+        runtime.address_space != g_vm_create_address_space ||
+        g_console_char_count != 3 || g_console_chars[0] != 'K' ||
+        g_console_chars[1] != 'M' || g_console_chars[2] != 'V') {
+        return fail("expected runtime identity superpage bring-up helper to run KMV flow");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    g_trap_active_context = &runtime.trap_context;
+    g_vm_map_identity_results[1] = false;
+    if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
+        return fail("expected runtime identity superpage bring-up helper to propagate mapping failure");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    g_trap_active_context = &runtime.trap_context;
+    g_riscv_satp_value = UINT64_C(0x9999);
+    if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
+        return fail("expected runtime identity superpage bring-up helper to validate satp");
     }
 
     return 0;
@@ -560,8 +802,66 @@ static int test_storage_signature_helper(void) {
     return 0;
 }
 
+static int test_storage_platform_tail_helper(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    runtime.interrupts.timer_interrupts = 8U;
+    runtime.interrupts.external_interrupts = 5U;
+    g_storage_page_allocated = true;
+    memcpy(g_storage_page, "Stor", 4);
+    if (!kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
+            &runtime.interrupts,
+            8U,
+            96U)) {
+        return fail("expected runtime platform tail helper to succeed");
+    }
+
+    if (g_storage_read_block_calls != 1 ||
+        g_platform_interrupt_wait_state != &runtime.interrupts ||
+        g_platform_interrupt_wait_delta != 8U ||
+        g_platform_interrupt_wait_timeout != 96U) {
+        return fail("expected runtime platform tail helper to forward storage and interrupt contracts");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    g_storage_page_allocated = true;
+    memcpy(g_storage_page, "Fail", 4);
+    if (kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
+            &runtime.interrupts,
+            8U,
+            96U)) {
+        return fail("expected runtime platform tail helper to fail on bad signature");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    g_storage_page_allocated = true;
+    memcpy(g_storage_page, "Stor", 4);
+    g_platform_interrupt_wait_result = false;
+    if (kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
+            &runtime.interrupts,
+            8U,
+            96U)) {
+        return fail("expected runtime platform tail helper to propagate interrupt wait failure");
+    }
+
+    if (kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
+            NULL,
+            8U,
+            96U)) {
+        return fail("expected runtime platform tail helper to reject null runtime");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_runtime_init_and_bind_self_handlers() != 0 ||
+        test_runtime_entry_bringup_helper() != 0 ||
+        test_runtime_identity_superpage_bringup_helper() != 0 ||
         test_external_policy_adapter() != 0 ||
         test_interrupt_policy_adapter() != 0 ||
         test_runtime_bringup_helper() != 0 ||
@@ -570,7 +870,8 @@ int main(void) {
         test_external_wait_helper() != 0 ||
         test_timer_wait_helper() != 0 ||
         test_storage_probe_helper() != 0 ||
-        test_storage_signature_helper() != 0) {
+        test_storage_signature_helper() != 0 ||
+        test_storage_platform_tail_helper() != 0) {
         return 1;
     }
 

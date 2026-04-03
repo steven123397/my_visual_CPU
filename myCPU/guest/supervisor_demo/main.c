@@ -1,29 +1,23 @@
 #include <stdint.h>
 
 #include "console.h"
-#include "memory.h"
+#include "kernel_runtime.h"
 #include "panic.h"
 #include "platform.h"
-#include "runtime_context.h"
 #include "supervisor_demo_smoke.h"
-#include "trap.h"
 
 extern char user_test_entry[];
 extern char user_test_ecall[];
 
 void kernel_main(void) {
-    trap_context_t supervisor_trap_context;
+    kernel_runtime_t runtime;
 
-    memory_init();
+    kernel_runtime_init(&runtime);
     platform_plic_supervisor_init();
-    runtime_context_reset();
-    trap_context_init(&supervisor_trap_context);
-    if (!trap_context_activate(&supervisor_trap_context) ||
-        !trap_context_is_active(&supervisor_trap_context) ||
-        trap_active_context() != &supervisor_trap_context) {
+    if (!kernel_runtime_run_entry_bringup(&runtime)) {
         panic_shutdown();
     }
-    if (!supervisor_demo_smoke_run(&supervisor_trap_context,
+    if (!supervisor_demo_smoke_run(kernel_runtime_trap_context(&runtime),
                                    (uintptr_t)user_test_entry,
                                    (uintptr_t)user_test_ecall)) {
         panic_shutdown();

@@ -3,13 +3,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "kernel_runtime.h"
 #include "memory.h"
 #include "panic.h"
 #include "platform.h"
 #include "pmm.h"
 #include "riscv.h"
 #include "runtime_context.h"
-#include "storage.h"
 #include "supervisor_runtime.h"
 #include "user_program.h"
 #include "user_program_smoke.h"
@@ -129,10 +129,6 @@ static bool supervisor_demo_smoke_run_user_program(
     trap_context_t* expected_trap_context,
     supervisor_demo_smoke_pages_t* pages,
     user_program_smoke_active_phase_t* active_phase,
-    uint64_t timer_delta);
-static bool supervisor_demo_smoke_read_storage_signature(uint8_t* storage_buffer);
-static bool supervisor_demo_smoke_wait_platform_interrupts(
-    supervisor_demo_smoke_state_t* state,
     uint64_t timer_delta);
 static bool supervisor_demo_smoke_run_platform_tail(
     supervisor_demo_smoke_state_t* state,
@@ -562,30 +558,15 @@ static bool supervisor_demo_smoke_run_user_program(
                timer_delta);
 }
 
-static bool supervisor_demo_smoke_read_storage_signature(uint8_t* storage_buffer) {
-    return storage_buffer != NULL && storage_read_block(0, storage_buffer) == 0 &&
-           storage_buffer[0] == 'S' && storage_buffer[1] == 't' &&
-           storage_buffer[2] == 'o' && storage_buffer[3] == 'r';
-}
-
-static bool supervisor_demo_smoke_wait_platform_interrupts(
-    supervisor_demo_smoke_state_t* state,
-    uint64_t timer_delta) {
-    return state != NULL &&
-           supervisor_runtime_schedule_platform_interrupts_and_wait(
-               &state->interrupts,
-               timer_delta,
-               SUPERVISOR_DEMO_SMOKE_INTERRUPT_TIMEOUT);
-}
-
 static bool supervisor_demo_smoke_run_platform_tail(
     supervisor_demo_smoke_state_t* state,
     uint64_t timer_delta) {
-    uint8_t* storage_buffer = (uint8_t*)pmm_alloc_page();
-
-    return storage_buffer != NULL && pmm_used_pages() >= 6U &&
-           supervisor_demo_smoke_read_storage_signature(storage_buffer) &&
-           supervisor_demo_smoke_wait_platform_interrupts(state, timer_delta);
+    return state != NULL &&
+           pmm_used_pages() >= 5U &&
+           kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
+               &state->interrupts,
+               timer_delta,
+               SUPERVISOR_DEMO_SMOKE_INTERRUPT_TIMEOUT);
 }
 
 static bool supervisor_demo_smoke_run_demo_session(
