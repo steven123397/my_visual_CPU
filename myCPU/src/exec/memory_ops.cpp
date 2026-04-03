@@ -16,6 +16,13 @@ TrapRequest illegal_instruction_trap(uint32_t raw) {
     return trap;
 }
 
+InsnEffects illegal_memory_effect(uint32_t raw) {
+    InsnEffects effects;
+    effects.trap = illegal_instruction_trap(raw);
+    effects.retired = false;
+    return effects;
+}
+
 }  // namespace
 
 uint64_t extend_loaded_value(uint64_t value, int size, bool sign_extend) {
@@ -78,9 +85,7 @@ InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v,
             effects.mem.size = 4;
             return effects;
         default:
-            effects.trap = illegal_instruction_trap(insn.raw);
-            effects.retired = false;
-            return effects;
+            return illegal_memory_effect(insn.raw);
         }
     case 0x23:
         effects.mem.kind = MemoryRequest::Kind::Store;
@@ -101,14 +106,10 @@ InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v,
             effects.mem.size = 8;
             return effects;
         default:
-            effects.trap = illegal_instruction_trap(insn.raw);
-            effects.retired = false;
-            return effects;
+            return illegal_memory_effect(insn.raw);
         }
     default:
-        effects.trap = illegal_instruction_trap(insn.raw);
-        effects.retired = false;
-        return effects;
+        return illegal_memory_effect(insn.raw);
     }
 }
 

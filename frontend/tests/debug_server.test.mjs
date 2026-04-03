@@ -1,9 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import net from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { startServer } from '../server/debug_server.mjs';
+import { listTests } from '../server/tests_manifest.mjs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, '..', '..');
 
 function makeSnapshot(cycle, sessionLabel) {
   return {
@@ -380,6 +388,22 @@ function waitForWebSocketPayload(socket, predicate) {
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+function parseAsmTestsFromMakefile() {
+  const makefilePath = path.join(repoRoot, 'myCPU', 'Makefile');
+  const makefile = fs.readFileSync(makefilePath, 'utf8');
+  const match = makefile.match(/^ASM_TESTS\s*=\s*(.+)$/m);
+  assert.ok(match, 'ASM_TESTS should exist in myCPU/Makefile');
+  return match[1].trim().split(/\s+/).filter(Boolean);
+}
+
+test('built-in asm manifest stays in sync with myCPU Makefile ASM_TESTS', () => {
+  const expectedAsmTests = parseAsmTestsFromMakefile();
+  const actualAsmTests = listTests(repoRoot)
+    .filter((item) => item.kind === 'asm')
+    .map((item) => item.name);
+  assert.deepEqual(actualAsmTests, expectedAsmTests);
+});
 
 test('GET /api/tests returns built-in test manifest', async () => {
   const server = await startServer({

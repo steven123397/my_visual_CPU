@@ -33,6 +33,7 @@ constexpr uint32_t kJalX0Skip8 = 0x0080006fU;            // jal x0, 8
 constexpr uint32_t kBeqX0Taken = 0x00000463U;            // beq x0, x0, 8
 constexpr uint32_t kInvalidInsn = 0xffffffffU;
 constexpr uint32_t kLwX1FromX10 = 0x00052083U;           // lw x1, 0(x10)
+constexpr uint32_t kInvalidLoadFunct3X1FromX10 = 0x00057083U;
 constexpr uint32_t kAddiX2FromX1Plus5 = 0x00508113U;     // addi x2, x1, 5
 constexpr uint32_t kMret = 0x30200073U;
 constexpr uint32_t kSbX5ToX10Plus1 = 0x005500a3U;        // sb x5, 1(x10)
@@ -41,6 +42,7 @@ constexpr uint32_t kLbX6FromX10Plus1 = 0x00150303U;      // lb x6, 1(x10)
 constexpr uint32_t kLbX6FromX10Plus8 = 0x00850303U;      // lb x6, 8(x10)
 constexpr uint32_t kLwX6FromX20 = 0x000a2303U;           // lw x6, 0(x20)
 constexpr uint32_t kSwX6ToX20 = 0x006a2023U;             // sw x6, 0(x20)
+constexpr uint32_t kInvalidStoreFunct3X6ToX20 = 0x006a7023U;
 constexpr uint32_t kSdX21ToX20 = 0x015a3023U;            // sd x21, 0(x20)
 constexpr uint32_t kCsrrcSipX5 = 0x1442b073U;            // csrrc x0, sip, x5
 constexpr uint32_t kCsrwSepcX7 = 0x14139073U;            // csrw sepc, x7
@@ -455,6 +457,60 @@ int main() {
             return 1;
         }
         if (!expect(cpu.csr().read(CSR_MCAUSE, cpu.core()) == 2, "illegal instruction should report illegal-instruction cause")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.csr().write(CSR_MTVEC, kTrapVector, cpu.core());
+
+        write32(ram, kEntry + 0, kInvalidLoadFunct3X1FromX10);
+        write32(ram, kEntry + 4, kAddiX1WrongPath);
+        write32(ram, kTrapVector + 0, kNop);
+
+        PipelineBackend backend(cpu, bus);
+
+        for (int i = 0; i < 8; ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().pc() == kTrapVector, "invalid load funct3 should trap instead of stalling pipeline")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(1) == 0, "invalid load funct3 trap should flush younger writes")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_MCAUSE, cpu.core()) == 2, "invalid load funct3 should report illegal-instruction cause")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.csr().write(CSR_MTVEC, kTrapVector, cpu.core());
+
+        write32(ram, kEntry + 0, kInvalidStoreFunct3X6ToX20);
+        write32(ram, kEntry + 4, kAddiX1WrongPath);
+        write32(ram, kTrapVector + 0, kNop);
+
+        PipelineBackend backend(cpu, bus);
+
+        for (int i = 0; i < 8; ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().pc() == kTrapVector, "invalid store funct3 should trap instead of stalling pipeline")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(1) == 0, "invalid store funct3 trap should flush younger writes")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_MCAUSE, cpu.core()) == 2, "invalid store funct3 should report illegal-instruction cause")) {
             return 1;
         }
     }
