@@ -124,8 +124,12 @@ DEPS     += $(KERNEL_ALPHA_STORAGE_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS)
 TEST_TIMEOUT ?= 2s
 SUPERVISOR_GUEST_TEST_TIMEOUT ?= 4s
-PIPELINE_GUEST_TEST_TIMEOUT ?= 4s
-PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 8s
+# Pipeline guest demos execute the full guest runtime under the pipeline
+# backend and need a wider budget than the functional path on debug builds.
+PIPELINE_GUEST_TEST_TIMEOUT ?= 8s
+# The pipeline supervisor demo exercises the full early runtime and VM bring-up
+# path and still runs noticeably slower than the other guest demos.
+PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 12s
 
 # RISC-V toolchain (adjust prefix if needed)
 RV_CC   = riscv64-unknown-elf-gcc

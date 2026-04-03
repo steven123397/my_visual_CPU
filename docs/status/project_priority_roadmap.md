@@ -105,12 +105,17 @@
 
 ## P1：下一层结构收口
 
-`2026-04-03` 已完成本节首批收口：
+`2026-04-03` 已完成本节两批收口：
 
-- 原 `P1-3`：`supervisor_demo / interactive_os` 入口已分别复用 `kernel_runtime` 的 entry bring-up 和 identity-superpage bring-up helper。
-- 原 `P1-4`：`supervisor_demo_smoke` 的 storage signature + platform-tail 组合逻辑已下沉到 `kernel_runtime`。
-- 原 `P1-7`：Node debug server 已统一 CLI `{type:"error"}` 的 server 侧异常语义。
-- 原 `P1-10`：`Makefile` 的 asm / guest functional-vs-pipeline 测试 contract 已抽成共享宏。
+- 首批：
+  - 原 `P1-3`：`supervisor_demo / interactive_os` 入口已分别复用 `kernel_runtime` 的 entry bring-up 和 identity-superpage bring-up helper。
+  - 原 `P1-4`：`supervisor_demo_smoke` 的 storage signature + platform-tail 组合逻辑已下沉到 `kernel_runtime`。
+  - 原 `P1-7`：Node debug server 已统一 CLI `{type:"error"}` 的 server 侧异常语义。
+  - 原 `P1-10`：`Makefile` 的 asm / guest functional-vs-pipeline 测试 contract 已抽成共享宏。
+- 第二批：
+  - 原 `P1-8`：`DebugCliSession` 已补 timeout、exit/close teardown 和 pending 一致 reject，长会话不再静默悬挂。
+  - 原 `P1-9`：predictor 统计口径已统一为“已解析分支”，前端命中率展示与后端合同一致。
+  - 原 `P1-11`：`CLINT` timer pending 已收口为平台电平语义，`mtimecmp` 条件撤销后不会残留 stale pending。
 
 下文继续只保留仍未收口的 P1 问题，并维持原编号，便于和前面对话及历史记录对照。
 
@@ -154,37 +159,6 @@
   - 调试链路已经不再是最小 demo glue，而是一条真正的协议面；继续堆字段和控制逻辑会把维护成本放大。
 - 建议：
   - 先拆协议层、会话层、terminal 投影层，再谈 richer debugger 能力。
-
-### 8. `debug_cli` 传输层仍然是“严格 FIFO + 一行一个响应”的脆弱模型
-
-- 代码证据：
-  - [frontend/server/debug_server.mjs](../../frontend/server/debug_server.mjs) 的 `DebugCliSession` 用 `pending.shift()` 把下一行 stdout 直接配给下一个请求。
-  - 同一文件里 `send()` 没有 request id，也没有 timeout。
-  - [myCPU/src/debug/debug_protocol.cpp](../../myCPU/src/debug/debug_protocol.cpp) 侧则是同步 JSON-line 循环，出错就直接退出整个进程。
-- 影响：
-  - 任何一条命令不回行、多回一行或子进程卡住，整条 session 队列都会被拖死；这正是当前“长会话稳健性”的真实缺口。
-- 建议：
-  - 至少先把 timeout、error teardown 和 pending 队列的一致性补齐，再决定是否继续扩调试 API。
-
-### 9. predictor 统计口径和前端展示口径并不一致
-
-- 代码证据：
-  - [myCPU/src/exec/branch_predictor.cpp](../../myCPU/src/exec/branch_predictor.cpp) 在 fetch 时就累加 `total_predictions`，但只在真正执行到分支时才更新 `correct_predictions` / `mispredictions`。
-  - [frontend/app/components/panels.js](../../frontend/app/components/panels.js) 直接把命中率算成 `correct_predictions / total_predictions`。
-- 影响：
-  - wrong-path 上被 fetch 但从未执行的 branch 会污染命中率；当前前端看到的 predictor hit-rate 不是稳定合同。
-- 建议：
-  - 先明确“fetch 统计”还是“resolved 分支统计”才是外部语义，再补对应回归。
-
-### 11. CLINT timer pending 现在更像“置位闩锁”，不是纯电平语义
-
-- 代码证据：
-  - [myCPU/src/devices/clint.cpp](../../myCPU/src/devices/clint.cpp) 把 pending 定义成 `mtime >= mtimecmp`。
-  - [myCPU/src/trap.cpp](../../myCPU/src/trap.cpp) 只在 pending 为真时 raise interrupt，没有对应的自动撤销分支。
-- 影响：
-  - 现在更像依赖 handler 手工清 `mip/sip`，而不是随 `mtimecmp` 条件变化稳定撤销；这条平台合同还不够硬。
-- 建议：
-  - 先补“改大 `mtimecmp` 后 pending 撤销”的回归，再决定是设备侧还是 trap 聚合侧修正。
 
 ### 12. page walk 期间的总线失败当前被折叠成 page fault
 
@@ -264,7 +238,7 @@
 - 影响：
   - `step_commit` budget、interactive boot steps、terminal settle budget、guest timeout 分散在多层，随着 `pipeline` 继续演进会越来越容易漂。
 - 建议：
-  - 把预算参数收成少量共享常量，至少先统一“测试预算”和“交互推进预算”的来源。
+  - 当前 `myCPU/Makefile` 已先把 `pipeline` guest demo 的预算收口到 `8s / 12s`，消除了眼前的误报超时；但 `debug_session`、`tests_manifest`、`debug_server` 和 interactive smoke 侧预算来源仍然分散，下一轮仍应继续收成少量共享常量。
 
 ### 6. 当前 `Phase 3` 的真实下一个 blocker 已经不是抽象的“以后再做 memory speculation”
 
@@ -321,10 +295,8 @@
 3. 然后再建一份 `pipeline/debug` 结构 hardening 计划，专门处理：
    - `pipeline_backend` 职责拆分
    - `debug_protocol` / `debug_server` 模块边界
-   - CLI `error` 传播、FIFO pending 队列、predictor 统计口径
    - `Makefile` / manifest / timeout budget 的单一事实来源
 4. 如果前三类问题开始收口，再单开一份 reference / platform contract 计划，专门处理：
-   - CLINT pending 撤销语义
    - page walk access fault 分类
    - PLIC context claim / complete 语义
    - ELF reject 口径与测试范围对齐

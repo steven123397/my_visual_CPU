@@ -56,6 +56,21 @@
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`
 
+## 2026-04-03 P1 第二批结构与门禁收口进展
+
+本轮主线继续按 [status/project_priority_roadmap.md](project_priority_roadmap.md) 的 P1 已知问题做第二批收口，但重点仍然是合同一致性和现有门禁稳定性，而不是继续扩功能面：
+
+- `myCPU/src/trap.cpp` 已把 `CLINT` timer pending 收口为平台电平语义：`TrapController` 当前会跟踪平台事件自己置过的 timer pending 位，并在 `mtime < mtimecmp` 或 handler 改大 `mtimecmp` 后稳定撤销对应 pending，不再把旧 timer pending 留成闩锁态。
+- `myCPU/src/exec/branch_predictor.cpp` 与 `frontend/app/components/panels.js` 已把 predictor 对外统计口径统一成“已解析分支”合同；当前 `total_predictions / correct_predictions / mispredictions` 不再混入 wrong-path 上只被 fetch、从未真正解析的 branch，前端命中率展示也同步按这条口径收口。
+- `frontend/server/debug_server.mjs` 已把 `DebugCliSession` 的 timeout / exit / close 语义收口到同一套 teardown 路径；当前 pending 请求会在超时或子进程退出时一致 reject，后续请求也不会再静默悬挂在失效 session 上。
+- `myCPU/Makefile` 已继续放宽 `pipeline` guest demo 的门禁预算：当前 `PIPELINE_GUEST_TEST_TIMEOUT / PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT` 分别为 `8s / 12s`。这次调整针对的是当前 host 上 `pipeline` guest bring-up 的真实运行时间，目的是避免 `guest_supervisor_demo`、`kernel_alpha_demo` 这类长路径在 debug 构建下被误报超时，而不是放松语义验证标准。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test`
+- `cd myCPU && make test-pipeline`
+- `cd frontend && node --test`
+
 ## 2026-04-03 最小真实 OoO execute 补充进展
 
 本轮主线已把 `Phase 3-C` 从“近似顺序 execute”继续推进到最小真实 `OoO execute`：
@@ -82,7 +97,7 @@
 - 当前 mispredict、trap、trap-return flush，以及 commit-boundary interrupt service 都会统一回滚 speculative `rename / ROB / phys / LSQ` younger state；此前暴露过的 supervisor timer commit-boundary 卡死问题已通过这条 rollback 路径收口。
 - 由于 `guest_supervisor_demo` 这类长 guest 路径会持续分配新 phys tag，phys register tag 已统一扩为 `uint32_t`，避免原先 `uint16_t` 在长时间运行下的回卷风险。
 - 本轮继续把 `LSQ` 的 load-after-store 顺序合同收口成更细粒度的形态：store 会在 decode 侧先进入 `LSQ`，younger load 会按 `sequence_id + address/data-ready + address overlap` 判断是否需要等待；当前非重叠 load 不再被无谓拖慢，而 `clint_split_access` 这类重叠顺序合同仍保持稳定通过。
-- 结合当前 `Phase 3-B/C` 接线后的本机串行实测，`guest_supervisor_demo` 的 `pipeline` 路径约为 `6.18s`，而对照 `538ebf9` 基线约为 `6.33s`；`Makefile` 已把 `PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT` 调整到 `8s`，避免沿用更早阶段的过紧预算导致长 guest 门禁误报超时。
+- 当时 `Makefile` 已把 `guest_supervisor_demo` 切到独立 timeout 预算；截至 `2026-04-03`，随着 `pipeline` guest bring-up 路径继续变长，当前 `PIPELINE_GUEST_TEST_TIMEOUT / PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT` 已进一步调整为 `8s / 12s`，避免 host 上的长 guest 门禁误报超时。
 - `debug_snapshot / debug_cli` 当前已补上最小 `ROB / LSQ` 观测面：能看到队列深度与 head sequence，继续与既有 stage / retire-trace / predictor 字段一起服务本地教学调试链路。
 
 本轮已新鲜验证通过：
