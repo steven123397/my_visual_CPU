@@ -57,11 +57,20 @@ function normalizeCliResponse(response, context = 'debug cli request') {
   return response;
 }
 
-class DebugCliSession {
-  constructor({ binaryPath }) {
+export class DebugCliSession {
+  constructor({
+    binaryPath,
+    spawnImpl = spawn,
+    requestTimeoutMs = 1500,
+    closeWaitTimeoutMs = 200,
+  }) {
     this.binaryPath = binaryPath;
+    this.requestTimeoutMs = requestTimeoutMs;
+    this.closeWaitTimeoutMs = closeWaitTimeoutMs;
     this.pending = [];
-    this.child = spawn(binaryPath, ['--debug-cli'], {
+    this.unavailableError = null;
+    this.closePromise = null;
+    this.child = spawnImpl(binaryPath, ['--debug-cli'], {
       cwd: path.dirname(binaryPath),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -77,12 +86,36 @@ class DebugCliSession {
     this.child.stderr.on('data', (chunk) => {
       this.stderrBuffer += chunk;
     });
-    this.child.on('exit', (code) => {
-      const error = new Error(`debug cli exited with code ${code}`);
-      while (this.pending.length > 0) {
-        this.pending.shift().reject(error);
-      }
+    this.child.on('exit', (code, signal) => {
+      this.teardown(this.buildExitError('exited', code, signal));
     });
+    this.child.on('close', (code, signal) => {
+      this.teardown(this.buildExitError('closed', code, signal));
+    });
+  }
+
+  buildExitError(reason, code, signal) {
+    if (signal) {
+      return new Error(`debug cli ${reason} with signal ${signal}`);
+    }
+    if (code == null) {
+      return new Error(`debug cli ${reason}`);
+    }
+    return new Error(`debug cli ${reason} with code ${code}`);
+  }
+
+  teardown(error) {
+    if (this.unavailableError) {
+      return;
+    }
+    this.unavailableError = error;
+    while (this.pending.length > 0) {
+      const pending = this.pending.shift();
+      if (pending.timeout) {
+        clearTimeout(pending.timeout);
+      }
+      pending.reject(error);
+    }
   }
 
   flushLines() {
@@ -100,19 +133,57 @@ class DebugCliSession {
       if (!pending) {
         continue;
       }
-      pending.resolve(JSON.parse(line));
+      if (pending.timeout) {
+        clearTimeout(pending.timeout);
+      }
+      try {
+        pending.resolve(JSON.parse(line));
+      } catch (error) {
+        pending.reject(new Error(`debug cli returned invalid JSON: ${error.message}`));
+      }
     }
   }
 
-  send(command) {
+  send(command, { timeoutMs = this.requestTimeoutMs } = {}) {
+    if (this.unavailableError) {
+      return Promise.reject(this.unavailableError);
+    }
+
     return new Promise((resolve, reject) => {
-      this.pending.push({ resolve, reject });
-      this.child.stdin.write(`${JSON.stringify(command)}\n`);
+      const commandName = command?.cmd ?? 'request';
+      const pending = {
+        resolve,
+        reject,
+        timeout: null,
+      };
+      if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+        pending.timeout = setTimeout(() => {
+          const index = this.pending.indexOf(pending);
+          if (index >= 0) {
+            this.pending.splice(index, 1);
+          }
+          pending.reject(new Error(`debug cli ${commandName} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }
+
+      this.pending.push(pending);
+      try {
+        this.child.stdin.write(`${JSON.stringify(command)}\n`);
+      } catch (error) {
+        if (pending.timeout) {
+          clearTimeout(pending.timeout);
+        }
+        const index = this.pending.indexOf(pending);
+        if (index >= 0) {
+          this.pending.splice(index, 1);
+        }
+        reject(new Error(`debug cli write failed: ${error.message}`));
+      }
     });
   }
 
-  async request(command) {
-    return normalizeCliResponse(await this.send(command), `debug cli ${command.cmd}`);
+  async request(command, options) {
+    return normalizeCliResponse(await this.send(command, options), `debug cli ${command.cmd}`);
   }
 
   async load(testEntry, backend) {
@@ -163,12 +234,39 @@ class DebugCliSession {
   }
 
   async close() {
-    try {
-      await this.send({ cmd: 'quit' });
-    } catch {
-      // Ignore shutdown races.
+    if (this.closePromise) {
+      return this.closePromise;
     }
-    this.child.kill();
+
+    this.closePromise = (async () => {
+      this.teardown(new Error('debug cli session closed'));
+      try {
+        this.child.stdin.write(`${JSON.stringify({ cmd: 'quit' })}\n`);
+      } catch {
+        // Ignore shutdown races.
+      }
+      this.child.kill();
+
+      await new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve();
+        };
+        const timer = setTimeout(finish, this.closeWaitTimeoutMs);
+        const onCloseOrExit = () => {
+          clearTimeout(timer);
+          finish();
+        };
+        this.child.once('close', onCloseOrExit);
+        this.child.once('exit', onCloseOrExit);
+      });
+    })();
+
+    await this.closePromise;
   }
 }
 
