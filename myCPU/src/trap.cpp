@@ -142,6 +142,10 @@ void TrapController::return_from_sret() {
 void TrapController::sync_platform_events(const PlatformEvents& events) {
     if (events.timer_interrupt_pending) {
         raise_timer_interrupt();
+    } else if (timer_pending_mask_ != 0) {
+        const uint64_t mip = csr_.read(CSR_MIP, core_);
+        csr_.write(CSR_MIP, mip & ~timer_pending_mask_, core_);
+        timer_pending_mask_ = 0;
     }
     sync_external_interrupts(events);
 }
@@ -174,9 +178,11 @@ void TrapController::raise_timer_interrupt() {
     const uint64_t mip = csr_.read(CSR_MIP, core_);
     if (mideleg & MIE_STIE) {
         csr_.write(CSR_MIP, (mip | MIE_STIE) & ~MIE_MTIE, core_);
+        timer_pending_mask_ = MIE_STIE;
         return;
     }
     csr_.write(CSR_MIP, (mip | MIE_MTIE) & ~MIE_STIE, core_);
+    timer_pending_mask_ = MIE_MTIE;
 }
 
 bool TrapController::has_serviceable_interrupt() const {

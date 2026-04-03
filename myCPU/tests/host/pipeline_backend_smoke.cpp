@@ -330,6 +330,30 @@ int main() {
         bus.attach(clint);
         CPU cpu;
         cpu_init(cpu, kEntry);
+        cpu.csr().write(CSR_MIDELEG, MIE_STIE, cpu.core());
+
+        clint.store(CLINT_BASE + CLINT_REG_MTIMECMP, 0, 8);
+        cpu.trap().sync_platform_events(bus.peek_events());
+        if (!expect((cpu.csr().read(CSR_SIP, cpu.core()) & MIE_STIE) != 0,
+                    "delegated timer pending should assert when CLINT level is high")) {
+            return 1;
+        }
+
+        clint.store(CLINT_BASE + CLINT_REG_MTIMECMP, ~0ULL, 8);
+        cpu.trap().sync_platform_events(bus.peek_events());
+        if (!expect((cpu.csr().read(CSR_SIP, cpu.core()) & MIE_STIE) == 0,
+                    "delegated timer pending should clear when mtimecmp is raised above mtime")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        Clint clint;
+        bus.attach(clint);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
         cpu.csr().bind_clint(&clint);
         cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
         cpu.csr().write(CSR_MIDELEG, MIE_STIE, cpu.core());

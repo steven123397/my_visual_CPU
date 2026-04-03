@@ -26,4 +26,5 @@ private:
 
     CoreState& core_;
     CsrFile& csr_;
+    uint64_t timer_pending_mask_{0};
 };
