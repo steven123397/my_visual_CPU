@@ -60,7 +60,6 @@ PredictorQueryResult BranchPredictor::query(uint64_t pc, uint32_t raw) {
 
     switch (kind) {
     case ControlKind::Branch: {
-        ++stats_.total_predictions;
         result.valid = true;
         result.predicted_target = pc + 4;
 
@@ -75,7 +74,6 @@ PredictorQueryResult BranchPredictor::query(uint64_t pc, uint32_t raw) {
         return result;
     }
     case ControlKind::Jal:
-        ++stats_.total_predictions;
         result.valid = true;
         result.predicted_taken = true;
         result.predicted_target = compute_target(pc, raw);
@@ -93,6 +91,7 @@ void BranchPredictor::update(const PredictorUpdate& update) {
 
     switch (kind) {
     case ControlKind::Branch: {
+        ++stats_.total_predictions;
         Entry& entry = table_[index_for(update.pc)];
         const bool table_hit = entry.valid && entry.pc == update.pc;
         const bool predicted_taken = update.prediction.valid && update.prediction.predicted_taken;
@@ -124,6 +123,7 @@ void BranchPredictor::update(const PredictorUpdate& update) {
         return;
     }
     case ControlKind::Jal: {
+        ++stats_.total_predictions;
         const bool predicted_taken = update.prediction.valid && update.prediction.predicted_taken;
         const uint64_t predicted_target =
             update.prediction.valid ? update.prediction.predicted_target : compute_target(update.pc, update.raw);

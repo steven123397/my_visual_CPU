@@ -360,6 +360,24 @@ int main() {
         run_cli_script(build_flat_load_command(predictor_binary.path) +
                        repeat_command("{\"cmd\":\"step_commit\"}", 16) + "{\"cmd\":\"quit\"}\n");
     const std::vector<std::string> predictor_lines = split_lines(predictor_output);
+    const std::string predictor_unresolved_output =
+        run_cli_script(build_flat_load_command(predictor_binary.path) +
+                       repeat_command("{\"cmd\":\"step_cycle\"}", 1) + "{\"cmd\":\"quit\"}\n");
+    const std::vector<std::string> predictor_unresolved_lines = split_lines(predictor_unresolved_output);
+    if (!expect_line_with_fields(
+            predictor_unresolved_lines,
+            predictor_unresolved_output,
+            {
+                "\"halted\":false",
+                "\"backend\":\"pipeline\"",
+                "\"predictor\"",
+                "\"total_predictions\":0",
+                "\"correct_predictions\":0",
+                "\"mispredictions\":0",
+            },
+            "predictor counters should stay at zero before any control-flow outcome is resolved")) {
+        return 1;
+    }
     if (!expect_line_with_fields(
             predictor_lines,
             predictor_output,

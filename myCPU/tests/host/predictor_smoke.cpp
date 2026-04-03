@@ -87,7 +87,7 @@ int main() {
     });
 
     const PredictorStats stats_after_alias = predictor.stats();
-    if (!expect(stats_after_alias.total_predictions == 4, "predictor should count every resolved branch query once")) {
+    if (!expect(stats_after_alias.total_predictions == 4, "predictor should count every resolved control-flow update once")) {
         return 1;
     }
     if (!expect(stats_after_alias.correct_predictions == 2, "alias eviction should not rewrite an older correct prediction into a miss")) {
@@ -122,7 +122,8 @@ int main() {
         return 1;
     }
     const PredictorStats reset_stats = predictor.stats();
-    if (!expect(reset_stats.total_predictions == 1, "first query after reset should restart total prediction count")) {
+    if (!expect(reset_stats.total_predictions == 0,
+                "unresolved query after reset should not count toward resolved branch statistics")) {
         return 1;
     }
     if (!expect(reset_stats.correct_predictions == 0, "query alone should not count as a resolved correct prediction")) {

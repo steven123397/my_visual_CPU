@@ -127,13 +127,14 @@ export function renderBus(snapshot) {
 
 export function renderPredictor(snapshot) {
   const predictor = snapshot?.pipeline?.predictor ?? {};
-  const hasData = predictor.total_predictions > 0;
-  
-  const accuracy = hasData 
-    ? ((predictor.correct_predictions / predictor.total_predictions) * 100).toFixed(1)
+  const resolvedCount = predictor.total_predictions ?? 0;
+  const hasResolvedData = resolvedCount > 0;
+
+  const accuracy = hasResolvedData
+    ? ((predictor.correct_predictions / resolvedCount) * 100).toFixed(1)
     : '0.0';
-  
-  const lastPredClass = predictor.last_prediction_valid 
+
+  const lastPredClass = predictor.last_prediction_valid
     ? (predictor.last_prediction_correct ? 'pred-correct' : 'pred-mispredict')
     : '';
   
@@ -147,8 +148,8 @@ export function renderPredictor(snapshot) {
             <strong class="stat-value">${predictor.mode ?? '-'}</strong>
           </div>
           <div class="stat-box">
-            <span class="stat-label">总预测</span>
-            <strong class="stat-value">${predictor.total_predictions ?? 0}</strong>
+            <span class="stat-label">已解析分支</span>
+            <strong class="stat-value">${resolvedCount}</strong>
           </div>
           <div class="stat-box">
             <span class="stat-label">命中</span>
