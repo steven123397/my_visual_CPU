@@ -10,7 +10,7 @@ _start:
     la   t0, trap_handler
     csrw mtvec, t0
 
-    li   t0, 0x800       # MPP = S
+    li   t0, 0x20800     # MPP = S, MPRV = 1 (must be cleared by mret)
     csrw mstatus, t0
     la   t0, supervisor_to_user
     csrw mepc, t0
@@ -70,11 +70,14 @@ handle_user_ecall:
     li   t1, 0x1800
     and  t2, t0, t1
     bnez t2, trap_fail
+    li   t1, 0x20000
+    and  t2, t0, t1
+    bnez t2, trap_fail
 
     li   t0, 1
     csrw mscratch, t0
 
-    li   t0, 0x800      # MPP = S
+    li   t0, 0x20800    # MPP = S, MPRV = 1 (must be cleared by mret)
     csrw mstatus, t0
     la   t0, supervisor_to_supervisor
     csrw mepc, t0
@@ -94,6 +97,9 @@ handle_supervisor_ecall:
     and  t2, t0, t1
     li   t3, 0x800
     bne  t2, t3, trap_fail
+    li   t1, 0x20000
+    and  t2, t0, t1
+    bnez t2, trap_fail
 
     li   t0, 0x1800     # MPP = M
     csrw mstatus, t0

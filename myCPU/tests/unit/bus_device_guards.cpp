@@ -80,38 +80,68 @@ int main() {
                 failed_uart_store.device != "uart" ||
                 failed_uart_store.detail.empty()) {
                 return fail("expected failed UART store to remain observable via last_access");
-	            }
-	            if (bus.try_load(UART_BASE + 0x4, 1, value)) {
-	                return fail("expected invalid UART offset to fail");
-	            }
-	            if (!bus.try_load(CLINT_BASE + CLINT_REG_MTIME, 8, value) || value != 0) {
-	                return fail("expected valid CLINT register load to succeed");
-	            }
-	            if (bus.try_load(CLINT_BASE + CLINT_REG_MTIME + 7, 2, value)) {
-	                return fail("expected CLINT access crossing register boundary to fail");
-	            }
-	            if (bus.try_store(PLIC_BASE + 0x8, 1, 4)) {
-	                return fail("expected invalid PLIC offset to fail");
-	            }
-	            if (bus.try_load(PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE), 8, value)) {
-	                return fail("expected invalid PLIC width to fail");
-	            }
-	            if (!bus.try_load(STORAGE_BASE + STORAGE_REG_MAGIC, 8, value) || value != STORAGE_MMIO_MAGIC) {
-	                return fail("expected valid storage register load to succeed");
-	            }
-	            if (bus.try_store(STORAGE_BASE + STORAGE_REG_COMMAND, STORAGE_CMD_READ, 4)) {
-	                return fail("expected invalid storage register width to fail");
-	            }
-	            if (!bus.try_store(STORAGE_BASE + STORAGE_DATA_WINDOW_OFFSET + 510, 0xABCD, 2)) {
-	                return fail("expected valid storage window edge write to succeed");
-	            }
-	            if (bus.try_store(STORAGE_BASE + STORAGE_DATA_WINDOW_OFFSET + 511, 0xABCD, 2)) {
-	                return fail("expected storage window write crossing boundary to fail");
-	            }
-	            if (bus.try_load(STORAGE_BASE + 0x48, 8, value)) {
-	                return fail("expected invalid storage register offset to fail");
-	            }
-	        }
+            }
+
+            const uint64_t unmapped_load_addr = 0x40000000;
+            if (bus.try_load(unmapped_load_addr, 4, value)) {
+                return fail("expected unmapped load to fail");
+            }
+            const DebugBusAccess& unmapped_load = bus.last_access();
+            if (!unmapped_load.valid ||
+                unmapped_load.success ||
+                unmapped_load.write ||
+                unmapped_load.addr != unmapped_load_addr ||
+                unmapped_load.size != 4 ||
+                unmapped_load.device != "<unmapped>") {
+                return fail("expected unmapped load to update last_access");
+            }
+
+            const uint64_t unmapped_store_addr = 0x50000000;
+            if (bus.try_store(unmapped_store_addr, 0xAB, 1)) {
+                return fail("expected unmapped store to fail");
+            }
+            const DebugBusAccess& unmapped_store = bus.last_access();
+            if (!unmapped_store.valid ||
+                unmapped_store.success ||
+                !unmapped_store.write ||
+                unmapped_store.addr != unmapped_store_addr ||
+                unmapped_store.size != 1 ||
+                unmapped_store.value != 0xAB ||
+                unmapped_store.device != "<unmapped>") {
+                return fail("expected unmapped store to update last_access");
+            }
+
+            if (bus.try_load(UART_BASE + 0x4, 1, value)) {
+                return fail("expected invalid UART offset to fail");
+            }
+            if (!bus.try_load(CLINT_BASE + CLINT_REG_MTIME, 8, value) || value != 0) {
+                return fail("expected valid CLINT register load to succeed");
+            }
+            if (bus.try_load(CLINT_BASE + CLINT_REG_MTIME + 7, 2, value)) {
+                return fail("expected CLINT access crossing register boundary to fail");
+            }
+            if (bus.try_store(PLIC_BASE + 0x8, 1, 4)) {
+                return fail("expected invalid PLIC offset to fail");
+            }
+            if (bus.try_load(PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE), 8, value)) {
+                return fail("expected invalid PLIC width to fail");
+            }
+            if (!bus.try_load(STORAGE_BASE + STORAGE_REG_MAGIC, 8, value) || value != STORAGE_MMIO_MAGIC) {
+                return fail("expected valid storage register load to succeed");
+            }
+            if (bus.try_store(STORAGE_BASE + STORAGE_REG_COMMAND, STORAGE_CMD_READ, 4)) {
+                return fail("expected invalid storage register width to fail");
+            }
+            if (!bus.try_store(STORAGE_BASE + STORAGE_DATA_WINDOW_OFFSET + 510, 0xABCD, 2)) {
+                return fail("expected valid storage window edge write to succeed");
+            }
+            if (bus.try_store(STORAGE_BASE + STORAGE_DATA_WINDOW_OFFSET + 511, 0xABCD, 2)) {
+                return fail("expected storage window write crossing boundary to fail");
+            }
+            if (bus.try_load(STORAGE_BASE + 0x48, 8, value)) {
+                return fail("expected invalid storage register offset to fail");
+            }
+        }
 
         return 0;
     } catch (const std::exception& ex) {

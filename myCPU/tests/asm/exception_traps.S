@@ -34,6 +34,17 @@ after_reserved_system:
     li   t1, 3
     bne  t0, t1, fail
 
+misaligned_jalr_point:
+    la   t0, after_misaligned_jalr
+    addi t0, t0, 2
+misaligned_jalr_insn:
+    jalr x0, 0(t0)
+
+after_misaligned_jalr:
+    csrr t0, mscratch
+    li   t1, 4
+    bne  t0, t1, fail
+
     li   t0, 'E'
     sb   t0, 0(s0)
     li   t0, 'X'
@@ -53,6 +64,9 @@ trap_handler:
 
     li   t1, 2
     beq  t0, t1, handle_illegal
+
+    li   t1, 0
+    beq  t0, t1, handle_misaligned_jalr
 
     j    trap_fail
 
@@ -100,6 +114,24 @@ handle_reserved_system:
     bne  t0, t1, trap_fail
 
     li   t0, 3
+    csrw mscratch, t0
+
+    csrr t0, mepc
+    addi t0, t0, 4
+    csrw mepc, t0
+    mret
+
+handle_misaligned_jalr:
+    csrr t0, mepc
+    la   t1, misaligned_jalr_insn
+    bne  t0, t1, trap_fail
+
+    csrr t0, mtval
+    la   t1, after_misaligned_jalr
+    addi t1, t1, 2
+    bne  t0, t1, trap_fail
+
+    li   t0, 4
     csrw mscratch, t0
 
     csrr t0, mepc

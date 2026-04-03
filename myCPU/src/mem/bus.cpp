@@ -11,6 +11,18 @@ bool ranges_overlap(const Device& lhs, const Device& rhs) {
     return lhs.base() < rhs.end() && rhs.base() < lhs.end();
 }
 
+void record_unmapped_access(DebugBusAccess& access, bool write, uint64_t addr, uint64_t value, int size) {
+    access.valid = true;
+    access.success = false;
+    access.write = write;
+    access.mmio = false;
+    access.addr = addr;
+    access.value = value;
+    access.size = size;
+    access.device = "<unmapped>";
+    access.detail = "no device mapped for access";
+}
+
 }  // namespace
 
 Bus::Bus(Ram& ram) {
@@ -46,8 +58,11 @@ bool Bus::try_load(uint64_t addr, int size, uint64_t& value) {
             return true;
         } catch (const std::exception& ex) {
             record_access(*device, false, false, addr, 0, size, ex.what());
+            value = 0;
+            return false;
         }
     }
+    record_unmapped_access(last_access_, false, addr, 0, size);
     value = 0;
     return false;
 }
@@ -60,8 +75,10 @@ bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
             return true;
         } catch (const std::exception& ex) {
             record_access(*device, false, true, addr, value, size, ex.what());
+            return false;
         }
     }
+    record_unmapped_access(last_access_, true, addr, value, size);
     return false;
 }
 

@@ -116,6 +116,9 @@ void TrapController::return_from_mret() {
     mstatus = (mstatus & ~MSTATUS_MIE) | (mpie << 3);
     mstatus |= MSTATUS_MPIE;
     mstatus &= ~MSTATUS_MPP_MASK;
+    if (next_mode != PrivilegeMode::Machine) {
+        mstatus &= ~MSTATUS_MPRV;
+    }
     csr_.write(CSR_MSTATUS, mstatus, core_);
 
     core_.set_privilege_mode(next_mode);
@@ -129,6 +132,7 @@ void TrapController::return_from_sret() {
     mstatus = (mstatus & ~MSTATUS_SIE) | (spie << 1);
     mstatus |= MSTATUS_SPIE;
     mstatus &= ~MSTATUS_SPP;
+    mstatus &= ~MSTATUS_MPRV;
     csr_.write(CSR_MSTATUS, mstatus, core_);
 
     core_.set_privilege_mode(next_mode);

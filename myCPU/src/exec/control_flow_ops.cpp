@@ -5,6 +5,7 @@
 
 namespace {
 
+constexpr uint64_t CAUSE_INSN_ADDR_MISALIGNED = 0;
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
 TrapRequest illegal_instruction_trap(uint32_t raw) {
@@ -13,6 +14,18 @@ TrapRequest illegal_instruction_trap(uint32_t raw) {
     trap.cause = CAUSE_ILLEGAL_INSN;
     trap.tval = raw;
     return trap;
+}
+
+TrapRequest instruction_address_misaligned_trap(uint64_t target_pc) {
+    TrapRequest trap;
+    trap.valid = true;
+    trap.cause = CAUSE_INSN_ADDR_MISALIGNED;
+    trap.tval = target_pc;
+    return trap;
+}
+
+bool is_instruction_aligned(uint64_t pc) {
+    return (pc & 0x3ULL) == 0;
 }
 
 void set_rd(InsnEffects& effects, uint8_t rd, uint64_t value) {
@@ -42,16 +55,30 @@ InsnEffects build_control_flow_effects(const Insn& insn, uint64_t rs1v, uint64_t
     const uint64_t next_pc = pc + 4;
 
     switch (insn.opcode) {
-    case 0x6F:
+    case 0x6F: {
+        const uint64_t target = pc + static_cast<uint64_t>(imm);
+        if (!is_instruction_aligned(target)) {
+            effects.trap = instruction_address_misaligned_trap(target);
+            effects.retired = false;
+            return effects;
+        }
         set_rd(effects, insn.rd, next_pc);
         effects.control.redirect_pc = true;
-        effects.control.target_pc = pc + static_cast<uint64_t>(imm);
+        effects.control.target_pc = target;
         return effects;
-    case 0x67:
+    }
+    case 0x67: {
+        const uint64_t target = (rs1v + static_cast<uint64_t>(imm)) & ~1ULL;
+        if (!is_instruction_aligned(target)) {
+            effects.trap = instruction_address_misaligned_trap(target);
+            effects.retired = false;
+            return effects;
+        }
         set_rd(effects, insn.rd, next_pc);
         effects.control.redirect_pc = true;
-        effects.control.target_pc = (rs1v + static_cast<uint64_t>(imm)) & ~1ULL;
+        effects.control.target_pc = target;
         return effects;
+    }
     case 0x63: {
         int taken = 0;
         switch (insn.funct3) {
@@ -79,8 +106,14 @@ InsnEffects build_control_flow_effects(const Insn& insn, uint64_t rs1v, uint64_t
             return effects;
         }
         if (taken) {
+            const uint64_t target = pc + static_cast<uint64_t>(imm);
+            if (!is_instruction_aligned(target)) {
+                effects.trap = instruction_address_misaligned_trap(target);
+                effects.retired = false;
+                return effects;
+            }
             effects.control.redirect_pc = true;
-            effects.control.target_pc = pc + static_cast<uint64_t>(imm);
+            effects.control.target_pc = target;
         }
         return effects;
     }
