@@ -30,6 +30,7 @@ static int g_trap_context_activate_calls = 0;
 static int g_pmm_init_calls = 0;
 static int g_vm_create_calls = 0;
 static int g_vm_enable_calls = 0;
+static int g_vm_destroy_calls = 0;
 static int g_pre_vm_calls = 0;
 static int g_pmm_alloc_calls = 0;
 static int g_pmm_free_calls = 0;
@@ -37,6 +38,7 @@ static bool g_trap_context_activate_result = true;
 static trap_context_t* g_active_trap_context = NULL;
 static bool g_vm_create_result = true;
 static bool g_vm_enable_result = true;
+static bool g_vm_destroy_result = true;
 static range_call_t g_map_calls[8];
 static size_t g_map_call_count = 0;
 static range_call_t g_fault_calls[4];
@@ -73,6 +75,7 @@ static int test_common_bringup_maps_fixed_ranges_and_selected_mmio(void);
 static int test_common_bringup_skips_managed_map_when_disabled(void);
 static int test_common_bringup_propagates_pre_vm_failure(void);
 static int test_common_bringup_propagates_pmm_probe_failure(void);
+static int test_common_bringup_rolls_back_vm_on_setup_failure(void);
 static bool stub_pre_vm_setup(trap_context_t* trap_context, void* context);
 
 void memory_init(void) {
@@ -232,6 +235,17 @@ bool vm_address_space_enable(vm_address_space_t* address_space) {
     return true;
 }
 
+bool vm_address_space_destroy(vm_address_space_t* address_space) {
+    g_vm_destroy_calls += 1;
+    if (!g_vm_destroy_result || address_space == NULL) {
+        return false;
+    }
+
+    address_space->enabled = false;
+    address_space->active = false;
+    return true;
+}
+
 bool vm_address_space_is_enabled(const vm_address_space_t* address_space) {
     return address_space != NULL && address_space->enabled;
 }
@@ -258,6 +272,7 @@ static void reset_stub_state(void) {
     g_pmm_init_calls = 0;
     g_vm_create_calls = 0;
     g_vm_enable_calls = 0;
+    g_vm_destroy_calls = 0;
     g_pre_vm_calls = 0;
     g_pmm_alloc_calls = 0;
     g_pmm_free_calls = 0;
@@ -265,6 +280,7 @@ static void reset_stub_state(void) {
     g_active_trap_context = NULL;
     g_vm_create_result = true;
     g_vm_enable_result = true;
+    g_vm_destroy_result = true;
     memset(g_map_calls, 0, sizeof(g_map_calls));
     g_map_call_count = 0;
     memset(g_fault_calls, 0, sizeof(g_fault_calls));
@@ -501,11 +517,41 @@ static int test_common_bringup_propagates_pmm_probe_failure(void) {
     return 0;
 }
 
+static int test_common_bringup_rolls_back_vm_on_setup_failure(void) {
+    trap_context_t trap_context;
+    vm_address_space_t* address_space = (vm_address_space_t*)(uintptr_t)0x1;
+    const kernel_bringup_options_t options = {
+        .mmio_mask = KERNEL_BRINGUP_MMIO_STORAGE,
+        .pmm_probe_marker = 0,
+        .pre_vm_setup = NULL,
+        .pre_vm_context = NULL,
+        .map_managed_memory = true,
+    };
+
+    reset_stub_state();
+    g_riscv_satp_value = UINT64_C(0xDEADBEEF);
+    if (kernel_bringup_run_common(&trap_context, &address_space, &options)) {
+        return fail("expected VM setup validation failure to propagate");
+    }
+
+    if (expect_console_output("KM") != 0) {
+        return 1;
+    }
+
+    if (address_space != NULL || g_vm_create_calls != 1 || g_vm_enable_calls != 1 ||
+        g_vm_destroy_calls != 1 || g_pmm_alloc_calls != 0 || g_pmm_free_calls != 0) {
+        return fail("expected VM setup failure to rollback created address space");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_common_bringup_maps_fixed_ranges_and_selected_mmio() != 0 ||
         test_common_bringup_skips_managed_map_when_disabled() != 0 ||
         test_common_bringup_propagates_pre_vm_failure() != 0 ||
-        test_common_bringup_propagates_pmm_probe_failure() != 0) {
+        test_common_bringup_propagates_pmm_probe_failure() != 0 ||
+        test_common_bringup_rolls_back_vm_on_setup_failure() != 0) {
         return 1;
     }
 

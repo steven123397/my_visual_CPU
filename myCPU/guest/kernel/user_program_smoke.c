@@ -839,36 +839,45 @@ cleanup:
 bool user_program_smoke_prepare_standard(user_program_smoke_t* smoke,
                                          user_program_t* program,
                                          const user_program_smoke_prepare_t* prepare) {
+    user_program_smoke_t staged_smoke;
+
     if (smoke == NULL || program == NULL || !prepare_args_valid(prepare)) {
         return false;
     }
 
-    return user_program_create(program,
-                               prepare->backing_page_paddr,
-                               prepare->user_stack_paddr) &&
-           user_program_smoke_validate_created_program(program) &&
-           user_program_smoke_prepare_address_space(smoke,
-                                                    program,
-                                                    prepare->backing_page_paddr,
-                                                    prepare->remap_page_paddr,
-                                                    prepare->fault_skip_vaddr,
-                                                    prepare->fault_skip_size,
-                                                    prepare->fault_resume_vaddr,
-                                                    prepare->fault_resume_size,
-                                                    prepare->fault_resume_pc_slot) &&
-           user_program_smoke_prepare_runtime(
-               smoke,
-               prepare->trap_context,
-               prepare->arg0,
-               prepare->trap_stack_base,
-               prepare->trap_stack_size,
-               prepare->validate,
-               prepare->validate_context,
-               prepare->supervisor_timer_post_handler,
-               prepare->supervisor_timer_post_context,
-               prepare->supervisor_external_post_handler,
-               prepare->supervisor_external_post_context) &&
-           user_program_runtime(program) != NULL;
+    user_program_smoke_init(&staged_smoke);
+
+    if (!user_program_create(program,
+                             prepare->backing_page_paddr,
+                             prepare->user_stack_paddr) ||
+        !user_program_smoke_validate_created_program(program) ||
+        !user_program_smoke_prepare_address_space(&staged_smoke,
+                                                  program,
+                                                  prepare->backing_page_paddr,
+                                                  prepare->remap_page_paddr,
+                                                  prepare->fault_skip_vaddr,
+                                                  prepare->fault_skip_size,
+                                                  prepare->fault_resume_vaddr,
+                                                  prepare->fault_resume_size,
+                                                  prepare->fault_resume_pc_slot) ||
+        !user_program_smoke_prepare_runtime(
+            &staged_smoke,
+            prepare->trap_context,
+            prepare->arg0,
+            prepare->trap_stack_base,
+            prepare->trap_stack_size,
+            prepare->validate,
+            prepare->validate_context,
+            prepare->supervisor_timer_post_handler,
+            prepare->supervisor_timer_post_context,
+            prepare->supervisor_external_post_handler,
+            prepare->supervisor_external_post_context) ||
+        user_program_runtime(program) == NULL) {
+        return user_program_destroy(program) && false;
+    }
+
+    *smoke = staged_smoke;
+    return true;
 }
 
 static bool user_program_smoke_validate_created_program(user_program_t* program) {

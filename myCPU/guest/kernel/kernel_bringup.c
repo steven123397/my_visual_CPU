@@ -174,15 +174,18 @@ static bool kernel_bringup_setup_vm(vm_address_space_t** out_space,
     vm_address_space_t* address_space = NULL;
 
     if (out_space == NULL || options == NULL ||
-        !vm_address_space_create(&address_space) ||
-        !kernel_bringup_map_fixed_kernel_ranges(address_space,
+        !vm_address_space_create(&address_space)) {
+        return false;
+    }
+
+    if (!kernel_bringup_map_fixed_kernel_ranges(address_space,
                                                 options->map_managed_memory) ||
         !kernel_bringup_register_selected_mmio_fault_ranges(
             address_space,
             options->mmio_mask) ||
         !vm_address_space_enable(address_space) ||
         !kernel_bringup_validate_active_address_space(address_space)) {
-        return false;
+        return vm_address_space_destroy(address_space) && false;
     }
 
     *out_space = address_space;
