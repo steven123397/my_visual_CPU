@@ -50,3 +50,6 @@ coverage/
 
 # Claude Code
 .claude/
+
+# Local git worktrees
+.worktrees/
