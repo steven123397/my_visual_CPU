@@ -42,6 +42,20 @@
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
 同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是以已完成的 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 和 [plan/history_plan.md#phase3-minimal-ooo-execute-plan](../plan/history_plan.md#phase3-minimal-ooo-execute-plan) 作为当前基线，继续维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
 
+## 2026-04-03 P1 首批结构收口进展
+
+本轮主线没有继续扩功能面，而是按 [status/project_priority_roadmap.md](project_priority_roadmap.md) 的 P1 首批问题做了三条结构收口：
+
+- `myCPU/Makefile` 已把 asm functional / pipeline 测试和 guest functional / pipeline demo 测试收敛成共享 contract 宏；当前 `expected / timeout / extra args / backend` 不再分散成两套大段复制，后续新增或调整门禁时的漂移风险更低。
+- `guest/kernel/kernel_runtime.c` 已继续下沉入口级 bring-up helper：`supervisor_demo` 入口改为复用统一的 trap bring-up，`interactive_os` 入口改为复用 `kernel_runtime_run_identity_superpage_bringup()`，`supervisor_demo_smoke` 的 storage signature + platform-tail 组合逻辑也已收敛到 `kernel_runtime`。
+- `frontend/server/debug_server.mjs` 已统一 `debug_cli` 的 `{type:"error"}` 传播语义；`load / snapshot / step-cycle / step-commit / reset / terminal-input / terminal-output` 当前都不会再把 CLI 错误伪装成 `200` 假成功。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test`
+- `cd myCPU && make test-pipeline`
+- `cd frontend && node --test`
+
 ## 2026-04-03 最小真实 OoO execute 补充进展
 
 本轮主线已把 `Phase 3-C` 从“近似顺序 execute”继续推进到最小真实 `OoO execute`：

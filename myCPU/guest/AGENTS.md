@@ -52,7 +52,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `runtime_context.c`：当前活跃 process / address_space / trap_context 记录
 - `console.c` / `timer.c` / `storage.c`：最小平台驱动封装
 - `kernel_bringup.c`：共享的早期 `K/M/V` bring-up 骨架，负责 memory / PMM / trap / VM 的最小启动编排
-- `kernel_runtime.c`：最小 kernel runtime 对象，承接 `trap_context` / `address_space` / `interrupt_state`，并负责 common bring-up options 的 runtime/self-context 装配，以及 `PLIC / first delivery / storage probe/signature` 这组可复用 phase helper，避免 bring-up 入口继续裸拼三件套
+- `kernel_runtime.c`：最小 kernel runtime 对象，承接 `trap_context` / `address_space` / `interrupt_state`，并负责 entry-level trap bring-up、`interactive_os` 复用的 identity-superpage bring-up、common bring-up options 的 runtime/self-context 装配，以及 `PLIC / first delivery / storage probe/signature` 这组可复用 phase helper，避免 bring-up 入口继续裸拼三件套
 - `supervisor_runtime.c`：`kernel_alpha` 与 `supervisor_demo_smoke` 共享的 supervisor bring-up interrupt state、self-bound contract、policy adapter、delivery / deadline wait 最小编排
 - `user_task.c` / `user_task_bootstrap.c` / `user_program.c`：标准用户生命周期装配
 - `user_program_smoke.c`：标准用户 smoke 编排 helper，当前收口 standard plan 校验、prepare、active memory 与 enter round 最小 orchestration
@@ -61,7 +61,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ### 入口与编排层：`supervisor_demo` / `kernel_alpha` / `interactive_os`
 
 - [supervisor_demo/main.c](supervisor_demo/main.c)
-  只负责基础初始化和调用 `supervisor_demo_smoke_run()`。
+  只负责最小入口编排：`kernel_runtime` 初始化、PLIC supervisor 初始化、入口级 trap bring-up，以及调用 `supervisor_demo_smoke_run()`。
 - [kernel_alpha/main.c](kernel_alpha/main.c)
   独立 `kernel_alpha_demo` 正向入口。
 - [kernel_alpha/fault_main.c](kernel_alpha/fault_main.c)
@@ -89,7 +89,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - [kernel_alpha/storage_contract.c](kernel_alpha/storage_contract.c)
   `kernel_alpha` storage 负向回归共享的合同 helper：当前收口 no-media / not-ready / bad-magic / bad-block-count / lba-range / bad-command 六条独立路径的公共协议检查。
 - [interactive_os/main.c](interactive_os/main.c)
-  独立 `interactive_os` 入口。当前只负责最小 bring-up、进入串口 monitor 主循环，不承载 `kernel_alpha` 的 bring-up 合同。
+  独立 `interactive_os` 入口。当前复用 `kernel_runtime_run_identity_superpage_bringup()` 完成最小 bring-up，再进入串口 monitor 主循环，不承载 `kernel_alpha` 的 bring-up 合同。
 - [kernel/console_input.c](kernel/console_input.c)
   轮询式 UART 输入与最小行编辑。
 - [kernel/monitor.c](kernel/monitor.c)
@@ -284,7 +284,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   - `TRAP_MAX_EXCEPTION_CAUSE`
 - `kernel_alpha` 仍是 alpha 形态，还没有真正的内核对象、调度或设备探测流程。
 - [kernel/kernel_runtime.c](kernel/kernel_runtime.c)
-  当前已继续收口 `kernel_alpha` 入口的基础 runtime 三件套、common bring-up options 的默认 self-context 装配，以及 alpha 共享 phase helper 的真实实现，但后续仍要继续往真正的小内核对象组织推进。
+  当前已继续收口 `kernel_alpha` 入口的基础 runtime 三件套、`supervisor_demo` 的入口级 trap bring-up、`interactive_os` 的最小 identity-superpage bring-up、common bring-up options 的默认 self-context 装配，以及 alpha / demo 共享 phase helper 的真实实现，但后续仍要继续往真正的小内核对象组织推进。
 - [kernel/kernel_bringup.c](kernel/kernel_bringup.c)
   通用 `K/M/V` bring-up 已从 `kernel_alpha` 子树下沉到基础设施层，避免 `supervisor_demo` 再被 alpha 私有骨架反向耦合。
 

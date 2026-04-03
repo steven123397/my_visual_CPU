@@ -134,7 +134,7 @@
 - [src/devices/simple_storage.cpp](src/devices/simple_storage.cpp)
   当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
 - [guest/kernel/kernel_runtime.c](guest/kernel/kernel_runtime.c)
-  `kernel_alpha` 入口的 `trap_context` / `address_space` / `interrupt_state` 已收口为最小 runtime 对象；当前 common bring-up options 的默认 self-context 装配，以及 `PLIC / first delivery / storage probe/signature` 这组早期 phase helper 也已继续下沉到这里，但整体仍只是 Phase 1 的早期内核 runtime 骨架。
+  `kernel_alpha` 入口的 `trap_context` / `address_space` / `interrupt_state` 已收口为最小 runtime 对象；当前 `supervisor_demo` 的入口级 trap bring-up、`interactive_os` 的 identity-superpage bring-up、common bring-up options 的默认 self-context 装配，以及 `PLIC / first delivery / storage probe/signature` 这组早期 phase helper 也已继续下沉到这里，但整体仍只是 Phase 1 的早期内核 runtime 骨架。
 - [guest/kernel/kernel_bringup.c](guest/kernel/kernel_bringup.c)
   通用 `K/M/V` bring-up 已下沉到 guest kernel 基础设施层，`supervisor_demo` 和 `kernel_alpha` 共享同一份早期启动骨架。
 - [guest/kernel_alpha/storage_contract.c](guest/kernel_alpha/storage_contract.c)

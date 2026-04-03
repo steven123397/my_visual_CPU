@@ -105,6 +105,15 @@
 
 ## P1：下一层结构收口
 
+`2026-04-03` 已完成本节首批收口：
+
+- 原 `P1-3`：`supervisor_demo / interactive_os` 入口已分别复用 `kernel_runtime` 的 entry bring-up 和 identity-superpage bring-up helper。
+- 原 `P1-4`：`supervisor_demo_smoke` 的 storage signature + platform-tail 组合逻辑已下沉到 `kernel_runtime`。
+- 原 `P1-7`：Node debug server 已统一 CLI `{type:"error"}` 的 server 侧异常语义。
+- 原 `P1-10`：`Makefile` 的 asm / guest functional-vs-pipeline 测试 contract 已抽成共享宏。
+
+下文继续只保留仍未收口的 P1 问题，并维持原编号，便于和前面对话及历史记录对照。
+
 ### 1. `pipeline_backend.cpp` 已经承担过多职责
 
 - 代码证据：
@@ -123,26 +132,6 @@
   - `smoke` 已经从“最小编排”膨胀成“第二套 bring-up 框架”，后续任何 guest hardening 都会继续堆在这里。
 - 建议：
   - 优先把 `prepare / active-memory / interrupt round / platform tail` 拆成更窄的 helper，再让 `smoke` 只保留组合逻辑。
-
-### 3. `supervisor_demo` 和 `interactive_os` 仍然绕开 `kernel_runtime / kernel_bringup`
-
-- 代码证据：
-  - [myCPU/guest/supervisor_demo/main.c](../../myCPU/guest/supervisor_demo/main.c) 仍手写 `memory_init()`、`platform_plic_supervisor_init()`、`trap_context_activate()`。
-  - [myCPU/guest/interactive_os/main.c](../../myCPU/guest/interactive_os/main.c) 仍手写 memory / PMM / VM bring-up，而不是复用 `kernel_runtime_run_bringup()`。
-- 影响：
-  - 当前 guest bring-up 入口已经分成 `kernel_alpha` 一套、`supervisor_demo` 一套、`interactive_os` 一套，结构收口会越来越难。
-- 建议：
-  - 下一轮 guest hardening 应优先统一 bring-up 骨架，而不是继续给 `interactive_os` 或 demo 加功能。
-
-### 4. storage signature/helper 路径已经出现重复实现，而且失败清理不一致
-
-- 代码证据：
-  - [myCPU/guest/kernel/kernel_runtime.c](../../myCPU/guest/kernel/kernel_runtime.c) 有共享的 `kernel_runtime_complete_storage_signature_check()`。
-  - [myCPU/guest/kernel/supervisor_demo_smoke.c](../../myCPU/guest/kernel/supervisor_demo_smoke.c) 里又有私有 `supervisor_demo_smoke_read_storage_signature()` 和 `supervisor_demo_smoke_run_platform_tail()`。
-- 影响：
-  - 共享 helper 和 demo 私有实现并存，清理路径又不一致，后续 storage 合同扩展会继续双份维护。
-- 建议：
-  - 把 storage probe / signature / cleanup 收成一条共享 helper，再让 demo 只决定 marker 和失败策略。
 
 ### 5. guest 公共头文件还在暴露可变内部布局
 
@@ -166,16 +155,6 @@
 - 建议：
   - 先拆协议层、会话层、terminal 投影层，再谈 richer debugger 能力。
 
-### 7. Node debug server 对 CLI `error` 响应的处理不一致
-
-- 代码证据：
-  - [frontend/server/debug_server.mjs](../../frontend/server/debug_server.mjs) 的 `load()` / `runUntilUartContains()` 会显式检查 `response.type === "error"`。
-  - 同文件的 `snapshot()` / `stepCycle()` / `stepCommit()` / `reset()` 没有同样检查，HTTP handler 会把结果直接当成 `snapshot` 广播。
-- 影响：
-  - 当前调试服务可能返回 `200`，但 body 里包着 `{type:"error"}`；这不是结构洁癖问题，而是实际协议错误传播不一致。
-- 建议：
-  - 先把 CLI error 统一收口成 server 侧异常语义，再继续丰富前端交互。
-
 ### 8. `debug_cli` 传输层仍然是“严格 FIFO + 一行一个响应”的脆弱模型
 
 - 代码证据：
@@ -196,16 +175,6 @@
   - wrong-path 上被 fetch 但从未执行的 branch 会污染命中率；当前前端看到的 predictor hit-rate 不是稳定合同。
 - 建议：
   - 先明确“fetch 统计”还是“resolved 分支统计”才是外部语义，再补对应回归。
-
-### 10. `Makefile` 里的 functional / pipeline / guest 门禁高度复制
-
-- 代码证据：
-  - [myCPU/Makefile](../../myCPU/Makefile) 里 `test-%` 和 `test-pipeline-%` 两套 asm oracle 基本整段复制。
-  - guest demo 的 functional / pipeline 规则也是重复维护，只改 timeout、参数和期望串。
-- 影响：
-  - 新增或调整一条基线时，需要同步修改多处脚本；这正是 manifest 漂移的上游原因之一。
-- 建议：
-  - 把测试清单、期望输出、磁盘参数和 timeout 预算抽成共享表，而不是继续靠复制粘贴。
 
 ### 11. CLINT timer pending 现在更像“置位闩锁”，不是纯电平语义
 
