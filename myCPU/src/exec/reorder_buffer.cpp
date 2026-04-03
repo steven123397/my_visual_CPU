@@ -12,6 +12,7 @@ RobIndex ReorderBuffer::allocate(const RobAllocate& entry) {
         .arch_rd = entry.arch_rd,
         .phys_rd = entry.phys_rd,
         .previous_phys_rd = entry.previous_phys_rd,
+        .lsq_index = entry.lsq_index,
     });
     return index;
 }
@@ -32,6 +33,10 @@ void ReorderBuffer::mark_ready(RobIndex index, const RobReady& ready) {
     it->tval = ready.tval;
     it->redirect = ready.redirect;
     it->redirect_target = ready.redirect_target;
+    it->effects = ready.effects;
+    if (ready.lsq_index.value != 0) {
+        it->lsq_index = ready.lsq_index;
+    }
 }
 
 std::optional<RobEntry> ReorderBuffer::peek_head() const {

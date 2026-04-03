@@ -5,6 +5,9 @@
 #include <deque>
 #include <optional>
 
+#include "../isa/effects.h"
+#include "load_store_queue.h"
+
 struct RobIndex {
     uint64_t value{0};
 };
@@ -16,6 +19,7 @@ struct RobAllocate {
     uint8_t arch_rd{0};
     uint32_t phys_rd{0};
     uint32_t previous_phys_rd{0};
+    LsqIndex lsq_index{};
 };
 
 struct RobReady {
@@ -26,6 +30,8 @@ struct RobReady {
     uint64_t tval{0};
     bool redirect{false};
     uint64_t redirect_target{0};
+    InsnEffects effects{};
+    LsqIndex lsq_index{};
 };
 
 struct RobEntry {
@@ -36,6 +42,7 @@ struct RobEntry {
     uint8_t arch_rd{0};
     uint32_t phys_rd{0};
     uint32_t previous_phys_rd{0};
+    LsqIndex lsq_index{};
     bool ready{false};
     bool value_ready{false};
     uint64_t value{0};
@@ -44,6 +51,7 @@ struct RobEntry {
     uint64_t tval{0};
     bool redirect{false};
     uint64_t redirect_target{0};
+    InsnEffects effects{};
 };
 
 class ReorderBuffer {

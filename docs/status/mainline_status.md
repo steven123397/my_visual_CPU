@@ -24,6 +24,11 @@
 - 当前计划：
   - [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md)
 - 已完成计划：
+  - [plan/phase3_minimal_ooo_execute_plan.md](../plan/phase3_minimal_ooo_execute_plan.md)
+  - [plan/phase3_lsq_automatic_replay_plan.md](../plan/phase3_lsq_automatic_replay_plan.md)
+  - [plan/phase3_lsq_store_to_load_forwarding_plan.md](../plan/phase3_lsq_store_to_load_forwarding_plan.md)
+  - [plan/phase3_lsq_replay_contract_plan.md](../plan/phase3_lsq_replay_contract_plan.md)
+  - [plan/phase3_phys_free_list_plan.md](../plan/phase3_phys_free_list_plan.md)
   - [plan/phase3_ooo_readiness_plan.md](../plan/phase3_ooo_readiness_plan.md)
   - [plan/phase1-hardening-regressions_plan.md](../plan/phase1-hardening-regressions_plan.md)
   - [plan/pipeline_core_integration_plan.md](../plan/pipeline_core_integration_plan.md)
@@ -40,10 +45,21 @@
 - 默认 `functional` reference path、独立 `kernel_alpha` 正向与九条负向回归、`make test` 主门禁均已打通。
 - `pipeline core`、`--backend pipeline`、`make test-pipeline`、`debug_session/protocol`、本地 Node 调试服务与浏览器前端教学演示链路都已经正式接入。
 - `Phase 3-A` 第一轮分支预测增强已经落地：当前 `pipeline` 已具备最小 `branch_predictor`、`jal` static predict-taken、条件分支动态预测与继续复用现有 flush / redirect 的 mispredict 恢复路径。
-- `Phase 3-B/C` 已进入首轮最小接线阶段：当前 `pipeline` 已具备 `rename + ROB` commit 主路径、最小 `LSQ` 接线、统一 speculative rollback，以及 `ROB / LSQ` 的最小 debug 观测面。
+- `Phase 3-B/C` 的基础收口已经继续推进到“最小真实 OoO execute”完成态：当前 `pipeline` 已具备 `rename + ROB` commit 主路径、最小 `LSQ` 接线、统一 speculative rollback、`RAM-only` forwarding、coarse automatic replay，以及 `ROB` 驱动退休 + 最小独立 memory execute；当前剩余工作已不再是“有没有真正进入 OoO execute”，而是更激进的 issue / memory speculation 与 bug-driven hardening。
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
-同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是继续沿 [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 把首轮 `OoO / rename / ROB / LSQ` 收口到更稳的完成态。
+同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是继续沿 [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 和已完成的 [plan/phase3_minimal_ooo_execute_plan.md](../plan/phase3_minimal_ooo_execute_plan.md) 维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
+
+## 2026-04-03 最小真实 OoO execute 补充进展
+
+本轮主线已把 `Phase 3-C` 从“近似顺序 execute”继续推进到最小真实 `OoO execute`：
+
+- [plan/phase3_minimal_ooo_execute_plan.md](../plan/phase3_minimal_ooo_execute_plan.md) 已完成；当前 `pipeline` 的退休逻辑已经从 `mem_wb` 单槽解绑，改由 `ROB head` 直接驱动 commit boundary。
+- backend 当前已接上最小独立 memory execute：RAM / faulting access 会在 `ROB` 中形成可被 younger ALU 越过的最小 OoO 完成窗口；younger ALU 可以先把结果写入 `phys_regs + ROB ready`，但 architected GPR / CSR / RAM / MMIO 仍只在顺序 commit 时生效。
+- 已知 MMIO load 当前继续维持 non-speculative 执行；这条限制是有意保留的，用来继续守住 `clint_split_access`、UART / CLINT / PLIC 和现有教学调试链路的设备可见性合同。
+- `pipeline_rename_commit_smoke` 与 `pipeline_speculation_contracts_smoke` 现已直接覆盖“older memory 未完成时 younger ALU 先完成但不提前 commit”的新中间态；`pipeline_backend_smoke` 也同步守住了这次改动后的 interrupt commit-boundary 抢占边界。
+- 本轮调试中还暴露并修正了一条真实设备时序回归：如果对已知 MMIO 访问也一律施加固定 memory issue delay，会破坏 `clint_split_access` 对 `mtime/time` 的可见 tick 合同。当前 backend 已改成只对 RAM / faulting access 保留最小 OoO 延迟窗口，已知 MMIO 维持原有非投机时序。
+- 这意味着 `Phase 3` 设计文档要求的基础任务目前已经不再差“最小真实 OoO execute”这一块；当前剩余工作主要是 bug-driven hardening，以及是否继续扩 issue / replay / memory speculation。
 
 关于当前主线中“回归相关工作做到什么程度可认为阶段性收口”的统一判断口径，见：
 
@@ -76,6 +92,36 @@
 - `cd myCPU && make test-pipeline`
 - `cd myCPU && make test`
 - `cd frontend && node --test`
+
+## 2026-04-03 补充进展
+
+本轮主线继续把 `Phase 3-B/C` 的 phys 生命周期与 `LSQ` memory-order 合同收口到更稳的状态：
+
+- [plan/phase3_phys_free_list_plan.md](../plan/phase3_phys_free_list_plan.md) 已完成；当前 `RenameMap` 不再只依赖 `next_phys_++`，而是同时维护 committed / speculative mapping 与 committed / speculative free-list。
+- ROB head commit 现在会先把新 committed phys 从 free-list 移除，再回收 old committed phys；rollback / trap / interrupt flush 继续通过 committed checkpoint 恢复 speculative map 与 free-list 快照。
+- 本轮新补的 `rename_map_smoke`、`pipeline_rename_commit_smoke` 与 `pipeline_speculation_contracts_smoke` 已分别守住 commit 后 stale phys 复用、rollback 后 free-list 恢复，以及 trap-return / flush 后 phys 不泄漏的合同。
+- 本轮调试中还暴露并修正了一处由 free-list 引出的真实回归：如果一个 recycled phys 最终重新成为 committed live phys，而 committed free-list 没有同步移除它，后续 flush 后会把 live phys 再次发出。这个问题曾把 `test-pipeline-timer_interrupt` 打成 `X`，当前已通过 `RenameMap` 的 live-phys remove-on-commit 规则收口。
+- [plan/phase3_lsq_replay_contract_plan.md](../plan/phase3_lsq_replay_contract_plan.md) 现已完成；当前 `LoadStoreQueue` 已提供最小 `LsqLoadState / LsqLoadStatus` 合同，能够显式区分 `none`、`blocked_by_unresolved_store`、`blocked_by_overlapping_store` 与 `replay_required`。
+- 当前 `LSQ` 已能守住一条新的 late-overlap 合同：如果 younger load 已先通过，而 older store 地址稍后解析出来并确认 overlap，这条 younger load 会被稳定标记为 `replay_required`。
+- `pipeline` 当前已把这条 `replay-needed` 中间态暴露到最小观测面：`DebugSnapshot` / debug JSON 现在会输出 `lsq_load_state`、`lsq_load_sequence_id` 与 `lsq_store_sequence_id`，用于说明当前是“需要 replay”而不是“已经 replay 完成”。
+- [plan/phase3_lsq_automatic_replay_plan.md](../plan/phase3_lsq_automatic_replay_plan.md) 已完成；`pipeline` 已接上最小 automatic replay recovery：一旦 `LSQ` 中出现 `replay_required` load，backend 会在下一拍 cycle 入口沿现有 committed rollback + flush 主路径回到安全边界，并通过 `replay_flush` 观测位暴露这次恢复动作。
+- 当前 automatic replay 仍然是 coarse、RAM-only recovery：它依赖 `LSQ` 已经给出 `replay_required`，恢复时直接回到当前 committed 边界重新取指；这条 replay 路径目前更像 recovery machinery，而不是高频自然触发的主执行策略。
+- [plan/phase3_lsq_store_to_load_forwarding_plan.md](../plan/phase3_lsq_store_to_load_forwarding_plan.md) 已完成；`LoadStoreQueue` 已新增最小 forwarding helper，`pipeline` 在 `step_mem(load)` 时会先尝试对 older ready RAM store 做 full-cover forwarding，再决定是否回落到 `AddressSpace::load_result()`。
+- 当前 forwarding 仍然严格停留在最小边界：只支持 `RAM-only`、只支持 full-cover forwarding、不做 MMIO forwarding，也不做复杂 partial merge / 更激进的 memory disambiguation；`backend_differential_smoke` 继续只守 architected 一致性，不让 pipeline 私有中间态泄漏到 `functional` 路径。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-host-physical_register_file_smoke`
+- `cd myCPU && make test-host-rename_map_smoke`
+- `cd myCPU && make test-host-reorder_buffer_smoke`
+- `cd myCPU && make test-host-load_store_queue_smoke`
+- `cd myCPU && make test-host-pipeline_rename_commit_smoke`
+- `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
+- `cd myCPU && make test-host-debug_cli_smoke`
+- `cd myCPU && make test-host-backend_differential_smoke`
+- `cd myCPU && make test-pipeline-timer_interrupt`
+- `cd myCPU && make test-pipeline`
+- `cd myCPU && make test`
 
 ## 2026-03-26 补充进展
 
@@ -267,7 +313,7 @@
 - 本轮收尾后，`interactive_os` 相关改动与总门禁已同步恢复到通过状态。
 - `Phase 3-A` predictor 当前仍是首轮最小实现：条件分支 `2-bit` counter + target 记忆、`jal` static predict-taken、`jalr` 不预测；后续应先以 bug-driven hardening 与最小持久回归补洞为主，不急着扩成复杂 BTB / RAS / 多级 predictor。
 - `debug/frontend` 已经正式接入，但仍应避免膨胀成断点 / 条件暂停 / 任意文件加载的通用调试器。
-- `Phase 3-B/C` 虽已接上首轮 `rename + ROB + LSQ`，但当前仍是单发射、in-order retire、近似顺序 execute 的最小形态：没有 phys free-list / recycle、没有激进 memory disambiguation / replay，也还没有真正扩成更激进的 OoO execute。
+- `Phase 3-B/C` 虽已接上首轮 `rename + ROB + LSQ`、最小 phys free-list / recycle、coarse automatic replay recovery、`RAM-only` store-to-load forwarding与最小真实 `OoO execute`，但当前仍是单发射、in-order retire、最小 OoO 完成窗口的克制形态：还没有 MMIO forwarding、复杂 partial merge、显式 issue queue 或更激进的 memory speculation。
 
 ## 下一步
 
@@ -276,7 +322,7 @@
 3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug` 的第一轮 hardening 也已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup / kernel_alpha/common`。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
-6. 继续沿 [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 收口 `Phase 3-B/C` 的首轮 `rename + ROB + LSQ`，优先维护现有 host / guest / debug 门禁，再决定是否进入更激进的 OoO execute / replay / memory speculation。
+6. 继续沿 [plan/phase3_ooo_execution_plan.md](../plan/phase3_ooo_execution_plan.md) 维护 `Phase 3-B/C` 当前已落地的 `rename + ROB + LSQ + phys free-list / recycle + coarse automatic replay + RAM-only forwarding +` 最小真实 `OoO execute` 形态，优先守住现有 host / guest / debug 门禁，然后再考虑更激进的 issue / replay / memory speculation。
 7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
 
 ## 建议入口

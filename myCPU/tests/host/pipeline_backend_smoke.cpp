@@ -293,14 +293,17 @@ int main() {
 
         PipelineBackend backend(cpu, bus);
 
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 3; ++i) {
             backend.step();
         }
-        if (!expect(cpu.core().pc() == kEntry, "timer interrupt should not redirect before the first commit boundary")) {
+        if (!expect(cpu.core().pc() == kEntry && cpu.core().read_gpr(1) == 0,
+                    "timer interrupt should stay pending before the first architected commit becomes visible")) {
             return 1;
         }
 
-        backend.step();
+        for (int i = 0; i < 4 && cpu.core().pc() != kTrapVector; ++i) {
+            backend.step();
+        }
         if (!expect(cpu.core().pc() == kTrapVector, "timer interrupt should redirect at the commit boundary")) {
             return 1;
         }

@@ -38,18 +38,22 @@ public:
     IdExReg id_ex{};
     ExMemReg ex_mem{};
     MemWbReg mem_wb{};
+    uint8_t ex_mem_cycles_remaining{0};
     IfIdReg next_if_id{};
     IdExReg next_id_ex{};
     ExMemReg next_ex_mem{};
     MemWbReg next_mem_wb{};
+    uint8_t next_ex_mem_cycles_remaining{0};
     TrapRequest pending_fetch_fault{};
     uint64_t pending_fetch_fault_pc{0};
     bool stalled{false};
     bool trap_flush{false};
+    bool replay_flush{false};
     bool committed{false};
     bool interrupt_serviceable_at_cycle_start{false};
     bool redirect_pending{false};
     uint64_t redirect_target{0};
+    LsqLoadStatus lsq_observed_load_status{};
 
 private:
     void rebuild_committed_phys_state(const CoreState& core);

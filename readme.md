@@ -2,7 +2,7 @@
 
 `myCPU` 当前已经是一个已可运行的模拟器原型，而不是纯设计稿。主线已经形成 `phase1-stable`（`283aee6`）这一 Phase 1 冻结基线，并在此后继续接入了 `pipeline` 执行后端、本地 `debug_session/protocol`、浏览器前端教学演示链路，以及 `Phase 3-A` 的首轮分支预测增强。
 
-当前 `Phase 3-B/C` 也已经开始落地首轮最小 `OoO` 接线：`pipeline` 现已具备 `rename + ROB` commit 主路径、最小 `LSQ` 接线、统一 speculative rollback，以及 `ROB / LSQ` 的最小 debug 观测面；同时仍保持单发射、共享 ISA 真值来源和 in-order retire 的工程边界。
+当前 `Phase 3-B/C` 已经落地首轮最小 `OoO` 接线：`pipeline` 现已具备 `rename + ROB` commit 主路径、最小 `LSQ` 接线、统一 speculative rollback、coarse automatic replay、`RAM-only` store-to-load forwarding，以及 `ROB` 驱动退休 + 最小独立 memory execute；同时仍保持单发射、共享 ISA 真值来源和 in-order retire 的工程边界。
 
 项目当前的工程重点不是“再证明它能跑”，而是继续稳住 reference path 的 correctness、维护 `kernel_alpha` 与 `interactive_os` 这两条 guest 路线，并把 `pipeline` / `debug/frontend` 收口成更稳定的已接入能力。
 
@@ -14,7 +14,7 @@
 - 可选执行后端：`pipeline`
 - 当前 `pipeline` 额外能力：
   - `Phase 3-A` 最小分支预测
-  - `Phase 3-B/C` 首轮 `rename + ROB + LSQ`
+  - `Phase 3-B/C` 首轮 `rename + ROB + LSQ +` 最小真实 `OoO execute`
 - 当前 guest 主线：
   - `guest_supervisor_demo`
   - `kernel_alpha` 正向 + 负向回归

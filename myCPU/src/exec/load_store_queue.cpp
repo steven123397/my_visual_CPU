@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "../../include/platform_mmio.h"
+
 namespace {
 
 std::vector<LsqEntry>::iterator find_entry(std::vector<LsqEntry>& entries, LsqIndex index) {
@@ -16,10 +18,33 @@ std::vector<LsqEntry>::const_iterator find_entry(const std::vector<LsqEntry>& en
     });
 }
 
+LsqLoadStatus make_load_status(LsqLoadState state, uint64_t load_sequence_id, uint64_t store_sequence_id) {
+    return {
+        .state = state,
+        .load_sequence_id = load_sequence_id,
+        .store_sequence_id = store_sequence_id,
+    };
+}
+
 bool ranges_overlap(uint64_t lhs_addr, int lhs_size, uint64_t rhs_addr, int rhs_size) {
     const uint64_t lhs_end = lhs_addr + static_cast<uint64_t>(lhs_size);
     const uint64_t rhs_end = rhs_addr + static_cast<uint64_t>(rhs_size);
     return lhs_addr < rhs_end && rhs_addr < lhs_end;
+}
+
+uint64_t size_mask(int size) {
+    if (size >= 8) {
+        return ~0ULL;
+    }
+    return (1ULL << (size * 8)) - 1ULL;
+}
+
+bool is_ram_range(uint64_t addr, int size) {
+    if (size <= 0) {
+        return false;
+    }
+    const uint64_t end = addr + static_cast<uint64_t>(size);
+    return addr >= MEM_BASE && end > addr && end <= MEM_BASE + MEM_SIZE;
 }
 
 }  // namespace
@@ -67,6 +92,20 @@ void LoadStoreQueue::mark_address_ready(LsqIndex index, uint64_t addr) {
     }
     it->address_ready = true;
     it->address = addr;
+    if (it->kind != LsqEntryKind::Store) {
+        return;
+    }
+
+    for (LsqEntry& entry : entries_) {
+        if (entry.kind != LsqEntryKind::Load || entry.sequence_id <= it->sequence_id ||
+            !entry.address_ready || !entry.order_ready) {
+            continue;
+        }
+        if (ranges_overlap(it->address, it->size, entry.address, entry.size)) {
+            entry.load_state = LsqLoadState::ReplayRequired;
+            entry.violating_store_sequence_id = it->sequence_id;
+        }
+    }
 }
 
 void LoadStoreQueue::mark_data_ready(LsqIndex index, uint64_t value) {
@@ -93,19 +132,79 @@ std::optional<LsqEntry> LoadStoreQueue::peek_oldest() const {
     return entries_.front();
 }
 
-bool LoadStoreQueue::has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const {
+LsqLoadStatus LoadStoreQueue::classify_load(uint64_t sequence_id, uint64_t load_addr, int load_size) const {
+    for (const LsqEntry& entry : entries_) {
+        if (entry.kind == LsqEntryKind::Load && entry.sequence_id == sequence_id &&
+            entry.load_state == LsqLoadState::ReplayRequired) {
+            return make_load_status(LsqLoadState::ReplayRequired, sequence_id, entry.violating_store_sequence_id);
+        }
+    }
+
     for (const LsqEntry& entry : entries_) {
         if (entry.kind != LsqEntryKind::Store || entry.sequence_id >= sequence_id) {
             continue;
         }
         if (!entry.address_ready || !entry.data_ready) {
-            return true;
+            return make_load_status(LsqLoadState::BlockedByUnresolvedStore, sequence_id, entry.sequence_id);
         }
         if (!entry.order_ready && ranges_overlap(entry.address, entry.size, load_addr, load_size)) {
-            return true;
+            return make_load_status(LsqLoadState::BlockedByOverlappingStore, sequence_id, entry.sequence_id);
         }
     }
-    return false;
+
+    return {};
+}
+
+std::optional<LsqForwardResult> LoadStoreQueue::forwardable_load(uint64_t sequence_id,
+                                                                 uint64_t load_addr,
+                                                                 int load_size) const {
+    if (!is_ram_range(load_addr, load_size)) {
+        return std::nullopt;
+    }
+
+    for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
+        const LsqEntry& entry = *it;
+        if (entry.kind != LsqEntryKind::Store || entry.sequence_id >= sequence_id) {
+            continue;
+        }
+        if (!entry.address_ready || !entry.data_ready || !entry.order_ready) {
+            return std::nullopt;
+        }
+        if (!ranges_overlap(entry.address, entry.size, load_addr, load_size)) {
+            continue;
+        }
+        if (entry.mmio || !is_ram_range(entry.address, entry.size)) {
+            return std::nullopt;
+        }
+
+        const uint64_t load_end = load_addr + static_cast<uint64_t>(load_size);
+        const uint64_t store_end = entry.address + static_cast<uint64_t>(entry.size);
+        if (entry.address <= load_addr && load_end <= store_end) {
+            const uint64_t shift = (load_addr - entry.address) * 8;
+            return LsqForwardResult{
+                .value = (entry.data >> shift) & size_mask(load_size),
+                .store_sequence_id = entry.sequence_id,
+            };
+        }
+        return std::nullopt;
+    }
+
+    return std::nullopt;
+}
+
+LsqLoadStatus LoadStoreQueue::active_replay() const {
+    for (const LsqEntry& entry : entries_) {
+        if (entry.kind == LsqEntryKind::Load && entry.load_state == LsqLoadState::ReplayRequired) {
+            return make_load_status(LsqLoadState::ReplayRequired,
+                                    entry.sequence_id,
+                                    entry.violating_store_sequence_id);
+        }
+    }
+    return {};
+}
+
+bool LoadStoreQueue::has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const {
+    return classify_load(sequence_id, load_addr, load_size).blocks_issue();
 }
 
 std::optional<LsqEntry> LoadStoreQueue::retire_entry(LsqIndex index) {

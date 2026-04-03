@@ -404,7 +404,7 @@ void append_retire_trace(std::ostringstream& out, const std::vector<RetireTraceE
     out << "]";
 }
 
-std::string snapshot_json(const DebugSnapshot& snapshot) {
+std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
     std::ostringstream out;
     out << "{"
         << "\"type\":\"snapshot\""
@@ -437,6 +437,7 @@ std::string snapshot_json(const DebugSnapshot& snapshot) {
         << ",\"redirected\":" << (snapshot.pipeline.redirected ? "true" : "false")
         << ",\"pending_fetch_fault\":" << (snapshot.pipeline.pending_fetch_fault ? "true" : "false")
         << ",\"trap_flush\":" << (snapshot.pipeline.trap_flush ? "true" : "false")
+        << ",\"replay_flush\":" << (snapshot.pipeline.replay_flush ? "true" : "false")
         << ",\"committed\":" << (snapshot.pipeline.committed ? "true" : "false")
         << "}"
         << ",\"redirect_target\":";
@@ -446,6 +447,10 @@ std::string snapshot_json(const DebugSnapshot& snapshot) {
         << ",\"rob_head_sequence_id\":" << snapshot.pipeline.ooo.rob_head_sequence_id
         << ",\"lsq_depth\":" << snapshot.pipeline.ooo.lsq_depth
         << ",\"lsq_head_sequence_id\":" << snapshot.pipeline.ooo.lsq_head_sequence_id
+        << ",\"lsq_load_state\":";
+    append_json_string(out, snapshot.pipeline.ooo.lsq_load_state);
+    out << ",\"lsq_load_sequence_id\":" << snapshot.pipeline.ooo.lsq_load_sequence_id
+        << ",\"lsq_store_sequence_id\":" << snapshot.pipeline.ooo.lsq_store_sequence_id
         << "}"
         << ",\"predictor\":{"
         << "\"mode\":";
@@ -590,6 +595,10 @@ std::string error_json(const std::string& message) {
 
 }  // namespace
 
+std::string debug_snapshot_json(const DebugSnapshot& snapshot) {
+    return serialize_snapshot_json(snapshot);
+}
+
 int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
     DebugSession session;
     std::string line;
@@ -633,7 +642,7 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                 continue;
             }
             if (command == "snapshot") {
-                out << snapshot_json(session.snapshot()) << '\n';
+                out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
             if (command == "step_cycle") {
@@ -641,7 +650,7 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                 for (uint64_t i = 0; i < count; ++i) {
                     session.step_cycle();
                 }
-                out << snapshot_json(session.snapshot()) << '\n';
+                out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
             if (command == "step_commit") {
@@ -649,23 +658,23 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                 for (uint64_t i = 0; i < count; ++i) {
                     session.step_commit();
                 }
-                out << snapshot_json(session.snapshot()) << '\n';
+                out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
             if (command == "run_until_uart_contains") {
                 session.run_until_uart_contains(extract_string(object, "text"),
                                                 try_extract_u64(object, "max_steps", 0));
-                out << snapshot_json(session.snapshot()) << '\n';
+                out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
             if (command == "run_until_halt") {
                 session.run_until_halt(try_extract_u64(object, "max_steps", 0));
-                out << snapshot_json(session.snapshot()) << '\n';
+                out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
             if (command == "reset") {
                 session.reset();
-                out << snapshot_json(session.snapshot()) << '\n';
+                out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
             if (command == "uart_input") {

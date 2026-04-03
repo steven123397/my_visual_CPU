@@ -10,8 +10,35 @@ enum class LsqEntryKind : uint8_t {
     Store,
 };
 
+enum class LsqLoadState : uint8_t {
+    None,
+    BlockedByUnresolvedStore,
+    BlockedByOverlappingStore,
+    ReplayRequired,
+};
+
 struct LsqIndex {
     uint64_t value{0};
+};
+
+struct LsqLoadStatus {
+    LsqLoadState state{LsqLoadState::None};
+    uint64_t load_sequence_id{0};
+    uint64_t store_sequence_id{0};
+
+    bool blocks_issue() const {
+        return state == LsqLoadState::BlockedByUnresolvedStore ||
+               state == LsqLoadState::BlockedByOverlappingStore;
+    }
+
+    bool replay_required() const {
+        return state == LsqLoadState::ReplayRequired;
+    }
+};
+
+struct LsqForwardResult {
+    uint64_t value{0};
+    uint64_t store_sequence_id{0};
 };
 
 struct LsqLoadRequest {
@@ -44,6 +71,8 @@ struct LsqEntry {
     bool sign_extend{false};
     bool mmio{false};
     bool non_speculative{false};
+    LsqLoadState load_state{LsqLoadState::None};
+    uint64_t violating_store_sequence_id{0};
 };
 
 class LoadStoreQueue {
@@ -55,6 +84,9 @@ public:
     void mark_data_ready(LsqIndex index, uint64_t value);
     std::optional<LsqEntry> peek(LsqIndex index) const;
     std::optional<LsqEntry> peek_oldest() const;
+    LsqLoadStatus classify_load(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
+    std::optional<LsqForwardResult> forwardable_load(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
+    LsqLoadStatus active_replay() const;
     bool has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
     std::optional<LsqEntry> retire_entry(LsqIndex index);
     void clear();

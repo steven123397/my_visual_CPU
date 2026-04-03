@@ -2,6 +2,7 @@
 
 #include "../arch/csr_file.h"
 #include "../cpu.h"
+#include "../../include/platform_mmio.h"
 #include "../isa/execution_context.h"
 #include "../isa/instruction_semantics.h"
 #include "../mem/bus.h"
@@ -37,6 +38,37 @@ CounterCsrKind classify_counter_csr(uint32_t addr) {
 
 bool is_control_flow_opcode(uint32_t opcode) {
     return opcode == 0x63 || opcode == 0x67 || opcode == 0x6F;
+}
+
+bool is_serializing_system_opcode(uint32_t opcode) {
+    return opcode == 0x73;
+}
+
+bool is_ram_access(uint64_t addr, int size) {
+    if (size <= 0) {
+        return false;
+    }
+    const uint64_t end = addr + static_cast<uint64_t>(size);
+    return addr >= MEM_BASE && end > addr && end <= MEM_BASE + MEM_SIZE;
+}
+
+bool range_contains(uint64_t addr, int size, uint64_t base, uint64_t span) {
+    if (size <= 0) {
+        return false;
+    }
+    const uint64_t end = addr + static_cast<uint64_t>(size);
+    return addr >= base && end > addr && end <= base + span;
+}
+
+bool is_known_mmio_access(uint64_t addr, int size) {
+    return range_contains(addr, size, UART_BASE, UART_SIZE) ||
+           range_contains(addr, size, STORAGE_BASE, STORAGE_SIZE) ||
+           range_contains(addr, size, CLINT_BASE, CLINT_SIZE) ||
+           range_contains(addr, size, PLIC_BASE, PLIC_SIZE);
+}
+
+bool needs_memory_issue_delay(uint64_t addr, int size) {
+    return is_ram_access(addr, size) || !is_known_mmio_access(addr, size);
 }
 
 bool prediction_matches(const PredictorQueryResult& prediction,
@@ -93,6 +125,21 @@ std::string opcode_name(const Insn& insn) {
         return insn.funct3 == 0 ? "system" : "csr";
     default:
         return "insn";
+    }
+}
+
+const char* lsq_load_state_name(LsqLoadState state) {
+    switch (state) {
+    case LsqLoadState::None:
+        return "none";
+    case LsqLoadState::BlockedByUnresolvedStore:
+        return "blocked_by_unresolved_store";
+    case LsqLoadState::BlockedByOverlappingStore:
+        return "blocked_by_overlapping_store";
+    case LsqLoadState::ReplayRequired:
+        return "replay_required";
+    default:
+        return "unknown";
     }
 }
 
@@ -182,10 +229,41 @@ PipelineBackend::PipelineBackend(CPU& cpu, Bus& bus) : cpu_(cpu), bus_(bus) {
     state_.reset_ooo_state(cpu_.core());
 }
 
+bool PipelineBackend::sources_ready(const StageSlot& slot) const {
+    const auto phys_ready = [&](uint32_t phys) {
+        return phys == 0 || state_.phys_regs().is_ready(phys);
+    };
+
+    return phys_ready(slot.rs1_phys) &&
+           phys_ready(slot.rs2_phys) &&
+           phys_ready(slot.ecall_a7_phys);
+}
+
+bool PipelineBackend::is_serializing_system_slot(const StageSlot& slot) const {
+    if (!slot.valid || !is_serializing_system_opcode(slot.insn.opcode)) {
+        return false;
+    }
+
+    const std::optional<RobEntry> rob_head = state_.rob().peek_head();
+    return !rob_head.has_value() || rob_head->index.value != slot.rob_index.value;
+}
+
+void PipelineBackend::publish_completed_slot(const StageSlot& slot) {
+    if (!state_.next_mem_wb.slot.valid) {
+        state_.next_mem_wb.slot = slot;
+    }
+}
+
 void PipelineBackend::step() {
     cpu_.trap().sync_platform_events(bus_.tick());
 
     state_.begin_cycle(cpu_.trap().has_serviceable_interrupt());
+
+    if (try_replay_flush()) {
+        commit_next_state();
+        cpu_.core().advance_cycle();
+        return;
+    }
 
     const bool wb_flushed = step_wb();
     bool deferred_interrupt = false;
@@ -225,6 +303,18 @@ void PipelineBackend::step() {
 
     commit_next_state();
     cpu_.core().advance_cycle();
+}
+
+bool PipelineBackend::try_replay_flush() {
+    const LsqLoadStatus replay = state_.lsq().active_replay();
+    if (!replay.replay_required()) {
+        return false;
+    }
+
+    state_.rollback_to_committed_state(cpu_.core());
+    state_.flush(cpu_.core().pc());
+    state_.replay_flush = true;
+    return true;
 }
 
 uint64_t PipelineBackend::resolve_ex_counter_value(uint32_t addr) const {
@@ -289,20 +379,15 @@ uint64_t PipelineBackend::resolve_ex_csr_value(const Insn& insn) const {
 }
 
 bool PipelineBackend::step_wb() {
-    if (!state_.mem_wb.slot.valid) {
-        return false;
-    }
-
     const std::optional<RobEntry> rob_head = state_.rob().peek_head();
-    if (!rob_head.has_value() || !rob_head->ready ||
-        rob_head->index.value != state_.mem_wb.slot.rob_index.value) {
+    if (!rob_head.has_value() || !rob_head->ready) {
         return false;
     }
 
     CommitBoundaryInput commit_input{
-        .pc = state_.mem_wb.slot.pc,
-        .next_pc = state_.mem_wb.slot.pc + 4,
-        .effects = state_.mem_wb.slot.effects,
+        .pc = rob_head->pc,
+        .next_pc = rob_head->pc + 4,
+        .effects = rob_head->effects,
     };
     if (commit_input.effects.mem.kind == MemoryRequest::Kind::Load) {
         commit_input.effects.mem.kind = MemoryRequest::Kind::None;
@@ -313,21 +398,21 @@ bool PipelineBackend::step_wb() {
     if (result.platform_state_changed) {
         cpu_.trap().sync_platform_events(bus_.peek_events());
     }
-    if (result.retired && state_.mem_wb.slot.lsq_index.value != 0) {
-        state_.lsq().retire_entry(state_.mem_wb.slot.lsq_index);
+    if (result.retired && rob_head->lsq_index.value != 0) {
+        state_.lsq().retire_entry(rob_head->lsq_index);
     }
     if (result.retired && rob_head->arch_rd != 0 && rob_head->phys_rd != 0) {
         state_.rename_map().commit_dest(rob_head->arch_rd, rob_head->phys_rd);
         cpu_.core().write_gpr(rob_head->arch_rd, state_.phys_regs().read(rob_head->phys_rd));
     }
-    if (state_.mem_wb.slot.valid && state_.mem_wb.slot.sequence_id.value != 0) {
+    if (rob_head->sequence_id != 0) {
         state_.record_retire({
-            .sequence_id = state_.mem_wb.slot.sequence_id.value,
-            .pc = state_.mem_wb.slot.pc,
-            .raw = state_.mem_wb.slot.raw,
+            .sequence_id = rob_head->sequence_id,
+            .pc = rob_head->pc,
+            .raw = rob_head->raw,
             .trap = result.trap_taken,
-            .redirect = state_.mem_wb.slot.effects.control.redirect_pc ||
-                        state_.mem_wb.slot.effects.control.trap_return != TrapReturnKind::None,
+            .redirect = rob_head->effects.control.redirect_pc ||
+                        rob_head->effects.control.trap_return != TrapReturnKind::None,
         });
     }
     if (result.retired) {
@@ -348,7 +433,8 @@ bool PipelineBackend::try_commit_fetch_fault() {
     if (!state_.pending_fetch_fault.valid) {
         return false;
     }
-    if (state_.if_id.slot.valid || state_.id_ex.slot.valid || state_.ex_mem.slot.valid) {
+    if (state_.if_id.slot.valid || state_.id_ex.slot.valid || state_.ex_mem.slot.valid ||
+        state_.rob().size() != 0) {
         return false;
     }
 
@@ -363,6 +449,12 @@ void PipelineBackend::step_mem() {
         return;
     }
 
+    if (state_.ex_mem_cycles_remaining != 0) {
+        state_.next_ex_mem = state_.ex_mem;
+        state_.next_ex_mem_cycles_remaining = static_cast<uint8_t>(state_.ex_mem_cycles_remaining - 1);
+        return;
+    }
+
     state_.next_mem_wb.slot = state_.ex_mem.slot;
     InsnEffects& effects = state_.next_mem_wb.slot.effects;
     if (effects.trap.valid) {
@@ -370,27 +462,43 @@ void PipelineBackend::step_mem() {
             .has_fault = true,
             .cause = effects.trap.cause,
             .tval = effects.trap.tval,
+            .effects = effects,
+            .lsq_index = state_.next_mem_wb.slot.lsq_index,
         });
         return;
     }
 
     switch (effects.mem.kind) {
     case MemoryRequest::Kind::Load: {
-        const AddressSpace::AccessResult result =
-            cpu_.address_space().load_result(bus_, effects.mem.addr, effects.mem.size);
-        if (!result.ok) {
-            effects.trap = result.fault;
-            effects.rd_write = {};
-            state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
-                .has_fault = true,
-                .cause = result.fault.cause,
-                .tval = result.fault.tval,
-            });
-            return;
+        const std::optional<LsqForwardResult> forwarded =
+            state_.lsq().forwardable_load(state_.next_mem_wb.slot.sequence_id.value,
+                                          effects.mem.addr,
+                                          effects.mem.size);
+        if (forwarded.has_value()) {
+            effects.rd_write.enable = true;
+            effects.rd_write.rd = effects.mem.rd;
+            effects.rd_write.value = extend_loaded_value(forwarded->value,
+                                                         effects.mem.size,
+                                                         effects.mem.sign_extend);
+        } else {
+            const AddressSpace::AccessResult result =
+                cpu_.address_space().load_result(bus_, effects.mem.addr, effects.mem.size);
+            if (!result.ok) {
+                effects.trap = result.fault;
+                effects.rd_write = {};
+                state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
+                    .has_fault = true,
+                    .cause = result.fault.cause,
+                    .tval = result.fault.tval,
+                    .effects = effects,
+                    .lsq_index = state_.next_mem_wb.slot.lsq_index,
+                });
+                return;
+            }
+            effects.rd_write.enable = true;
+            effects.rd_write.rd = effects.mem.rd;
+            effects.rd_write.value = extend_loaded_value(result.value, effects.mem.size, effects.mem.sign_extend);
         }
-        effects.rd_write.enable = true;
-        effects.rd_write.rd = effects.mem.rd;
-        effects.rd_write.value = extend_loaded_value(result.value, effects.mem.size, effects.mem.sign_extend);
         if (state_.next_mem_wb.slot.lsq_index.value != 0) {
             state_.lsq().mark_data_ready(state_.next_mem_wb.slot.lsq_index, effects.rd_write.value);
             state_.lsq().mark_order_ready(state_.next_mem_wb.slot.lsq_index);
@@ -404,6 +512,8 @@ void PipelineBackend::step_mem() {
             .value = effects.rd_write.value,
             .redirect = effects.control.redirect_pc,
             .redirect_target = effects.control.target_pc,
+            .effects = effects,
+            .lsq_index = state_.next_mem_wb.slot.lsq_index,
         });
         return;
     }
@@ -411,7 +521,10 @@ void PipelineBackend::step_mem() {
         if (state_.next_mem_wb.slot.lsq_index.value != 0) {
             state_.lsq().mark_order_ready(state_.next_mem_wb.slot.lsq_index);
         }
-        state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {});
+        state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
+            .effects = effects,
+            .lsq_index = state_.next_mem_wb.slot.lsq_index,
+        });
         return;
     }
     case MemoryRequest::Kind::None:
@@ -423,6 +536,8 @@ void PipelineBackend::step_mem() {
             .tval = effects.trap.tval,
             .redirect = effects.control.redirect_pc,
             .redirect_target = effects.control.target_pc,
+            .effects = effects,
+            .lsq_index = state_.next_mem_wb.slot.lsq_index,
         });
         return;
     }
@@ -433,7 +548,11 @@ void PipelineBackend::step_ex() {
         return;
     }
 
-    state_.next_ex_mem.slot = state_.id_ex.slot;
+    if (is_serializing_system_slot(state_.id_ex.slot)) {
+        state_.next_id_ex.slot = state_.id_ex.slot;
+        state_.stalled = true;
+        return;
+    }
 
     ExecutionContext ctx(cpu_, bus_);
     SemanticInputs inputs;
@@ -455,53 +574,87 @@ void PipelineBackend::step_ex() {
             state_.id_ex.slot.ecall_a7_phys,
             state_.phys_regs().read(state_.id_ex.slot.ecall_a7_phys));
     }
-    state_.next_ex_mem.slot.effects = InstructionSemantics::execute(state_.id_ex.slot.insn, ctx, inputs);
-    if (!state_.next_ex_mem.slot.effects.trap.valid) {
-        switch (state_.next_ex_mem.slot.effects.mem.kind) {
+    StageSlot completed_slot = state_.id_ex.slot;
+    completed_slot.effects = InstructionSemantics::execute(state_.id_ex.slot.insn, ctx, inputs);
+    if (!completed_slot.effects.trap.valid) {
+        switch (completed_slot.effects.mem.kind) {
         case MemoryRequest::Kind::Load:
-            if (state_.next_ex_mem.slot.lsq_index.value == 0) {
-                state_.next_ex_mem.slot.lsq_index = state_.lsq().enqueue_load({
-                    .sequence_id = state_.next_ex_mem.slot.sequence_id.value,
-                    .rd = state_.next_ex_mem.slot.effects.mem.rd,
-                    .size = state_.next_ex_mem.slot.effects.mem.size,
-                    .sign_extend = state_.next_ex_mem.slot.effects.mem.sign_extend,
-                    .non_speculative = state_.next_ex_mem.slot.effects.mem.non_speculative,
+            if (!is_ram_access(completed_slot.effects.mem.addr, completed_slot.effects.mem.size)) {
+                const std::optional<RobEntry> rob_head = state_.rob().peek_head();
+                if (!rob_head.has_value() || rob_head->index.value != completed_slot.rob_index.value) {
+                    state_.next_id_ex.slot = state_.id_ex.slot;
+                    state_.stalled = true;
+                    return;
+                }
+            }
+            if (state_.ex_mem.slot.valid || state_.next_ex_mem.slot.valid) {
+                state_.next_id_ex.slot = state_.id_ex.slot;
+                state_.stalled = true;
+                return;
+            }
+            if (completed_slot.lsq_index.value == 0) {
+                completed_slot.lsq_index = state_.lsq().enqueue_load({
+                    .sequence_id = completed_slot.sequence_id.value,
+                    .rd = completed_slot.effects.mem.rd,
+                    .size = completed_slot.effects.mem.size,
+                    .sign_extend = completed_slot.effects.mem.sign_extend,
+                    .non_speculative = completed_slot.effects.mem.non_speculative,
                 });
             }
-            state_.lsq().mark_address_ready(state_.next_ex_mem.slot.lsq_index,
-                                            state_.next_ex_mem.slot.effects.mem.addr);
+            state_.lsq().mark_address_ready(completed_slot.lsq_index,
+                                            completed_slot.effects.mem.addr);
+            state_.next_ex_mem.slot = completed_slot;
+            state_.next_ex_mem_cycles_remaining =
+                needs_memory_issue_delay(completed_slot.effects.mem.addr,
+                                         completed_slot.effects.mem.size)
+                    ? 1
+                    : 0;
             break;
         case MemoryRequest::Kind::Store:
-            if (state_.next_ex_mem.slot.lsq_index.value != 0) {
-                state_.lsq().mark_address_ready(state_.next_ex_mem.slot.lsq_index,
-                                                state_.next_ex_mem.slot.effects.mem.addr);
-                state_.lsq().mark_data_ready(state_.next_ex_mem.slot.lsq_index,
-                                             state_.next_ex_mem.slot.effects.mem.store_value);
+            if (state_.ex_mem.slot.valid || state_.next_ex_mem.slot.valid) {
+                state_.next_id_ex.slot = state_.id_ex.slot;
+                state_.stalled = true;
+                return;
             }
+            if (completed_slot.lsq_index.value != 0) {
+                state_.lsq().mark_address_ready(completed_slot.lsq_index,
+                                                completed_slot.effects.mem.addr);
+                state_.lsq().mark_data_ready(completed_slot.lsq_index,
+                                             completed_slot.effects.mem.store_value);
+            }
+            state_.next_ex_mem.slot = completed_slot;
+            state_.next_ex_mem_cycles_remaining =
+                needs_memory_issue_delay(completed_slot.effects.mem.addr,
+                                         completed_slot.effects.mem.size)
+                    ? 1
+                    : 0;
             break;
         case MemoryRequest::Kind::None:
             break;
         }
     }
-    if (state_.next_ex_mem.slot.rd_phys != 0 && state_.next_ex_mem.slot.effects.rd_write.enable) {
-        state_.phys_regs().write(state_.next_ex_mem.slot.rd_phys, state_.next_ex_mem.slot.effects.rd_write.value);
+    if (completed_slot.rd_phys != 0 && completed_slot.effects.rd_write.enable) {
+        state_.phys_regs().write(completed_slot.rd_phys, completed_slot.effects.rd_write.value);
     }
-    if (state_.next_ex_mem.slot.effects.mem.kind == MemoryRequest::Kind::None) {
-        state_.rob().mark_ready(state_.next_ex_mem.slot.rob_index, {
-            .value_ready = state_.next_ex_mem.slot.rd_phys != 0 && state_.next_ex_mem.slot.effects.rd_write.enable,
-            .value = state_.next_ex_mem.slot.effects.rd_write.value,
-            .has_fault = state_.next_ex_mem.slot.effects.trap.valid,
-            .cause = state_.next_ex_mem.slot.effects.trap.cause,
-            .tval = state_.next_ex_mem.slot.effects.trap.tval,
-            .redirect = state_.next_ex_mem.slot.effects.control.redirect_pc,
-            .redirect_target = state_.next_ex_mem.slot.effects.control.target_pc,
+    if (completed_slot.effects.mem.kind == MemoryRequest::Kind::None) {
+        state_.rob().mark_ready(completed_slot.rob_index, {
+            .value_ready = completed_slot.rd_phys != 0 && completed_slot.effects.rd_write.enable,
+            .value = completed_slot.effects.rd_write.value,
+            .has_fault = completed_slot.effects.trap.valid,
+            .cause = completed_slot.effects.trap.cause,
+            .tval = completed_slot.effects.trap.tval,
+            .redirect = completed_slot.effects.control.redirect_pc,
+            .redirect_target = completed_slot.effects.control.target_pc,
+            .effects = completed_slot.effects,
+            .lsq_index = completed_slot.lsq_index,
         });
+        publish_completed_slot(completed_slot);
     }
 
-    if (!state_.next_ex_mem.slot.effects.trap.valid && is_control_flow_opcode(state_.id_ex.slot.insn.opcode)) {
-        const bool actual_taken = state_.next_ex_mem.slot.effects.control.redirect_pc;
+    if (!completed_slot.effects.trap.valid && is_control_flow_opcode(state_.id_ex.slot.insn.opcode)) {
+        const bool actual_taken = completed_slot.effects.control.redirect_pc;
         const uint64_t actual_target =
-            actual_taken ? state_.next_ex_mem.slot.effects.control.target_pc : state_.id_ex.slot.pc + 4;
+            actual_taken ? completed_slot.effects.control.target_pc : state_.id_ex.slot.pc + 4;
         const bool correct = prediction_matches(state_.id_ex.slot.prediction, actual_taken, actual_target);
 
         last_prediction_valid_ = state_.id_ex.slot.prediction.valid;
@@ -542,6 +695,13 @@ void PipelineBackend::step_id() {
 
     state_.next_if_id = state_.if_id;
 
+    if (state_.next_id_ex.slot.valid) {
+        if (state_.if_id.slot.valid) {
+            state_.stalled = true;
+        }
+        return;
+    }
+
     if (!state_.if_id.slot.valid) {
         return;
     }
@@ -557,7 +717,7 @@ void PipelineBackend::step_id() {
     decoded_slot.ecall_a7_phys =
         decoded_slot.insn.raw == 0x00000073U ? state_.rename_map().map_source(17) : 0;
 
-    if (pipeline_hazards::has_decode_hazard(state_.id_ex.slot, decoded_slot.rs1_phys, decoded_slot.rs2_phys)) {
+    if (!sources_ready(decoded_slot)) {
         state_.stalled = true;
         return;
     }
@@ -568,7 +728,11 @@ void PipelineBackend::step_id() {
     decoded_slot.rs2v = state_.phys_regs().read(decoded_slot.rs2_phys);
     if (load_request.has_value()) {
         const uint64_t load_addr = decoded_slot.rs1v + static_cast<uint64_t>(decoded_slot.insn.imm);
-        if (state_.lsq().has_blocking_older_store(decoded_slot.sequence_id.value, load_addr, load_request->size)) {
+        LsqLoadStatus load_status =
+            state_.lsq().classify_load(decoded_slot.sequence_id.value, load_addr, load_request->size);
+        if (load_status.blocks_issue()) {
+            load_status.load_sequence_id = decoded_slot.sequence_id.value;
+            state_.lsq_observed_load_status = load_status;
             state_.stalled = true;
             return;
         }
@@ -586,6 +750,7 @@ void PipelineBackend::step_id() {
         .arch_rd = static_cast<uint8_t>(pipeline_hazards::writes_rd(decoded_slot.insn) ? decoded_slot.insn.rd : 0),
         .phys_rd = decoded_slot.rd_phys,
         .previous_phys_rd = decoded_slot.previous_rd_phys,
+        .lsq_index = decoded_slot.lsq_index,
     });
     if (store_request.has_value()) {
         decoded_slot.lsq_index = state_.lsq().enqueue_store(*store_request);
@@ -617,14 +782,17 @@ void PipelineBackend::step_if() {
 }
 
 bool PipelineBackend::try_service_interrupt_at_commit_boundary() {
-    if (!state_.mem_wb.slot.valid && !state_.pipeline_empty()) {
-        return false;
-    }
-    // Match the functional backend's sequencing: an interrupt that only
-    // became serviceable because the just-retired instruction updated CSR
-    // state must wait until the next architectural step. Older pending
-    // interrupts may still preempt here to avoid starvation in tight loops.
-    if (state_.committed && !state_.interrupt_serviceable_at_cycle_start) {
+    // A cycle-start serviceable interrupt may preempt immediately after the
+    // current head retires; any younger speculative work must be squashed
+    // instead of being allowed to reach the next commit.
+    if (!state_.committed) {
+        if (!state_.pipeline_empty()) {
+            return false;
+        }
+    } else if (!state_.interrupt_serviceable_at_cycle_start) {
+        // Match the functional backend's sequencing: an interrupt that only
+        // became serviceable because the just-retired instruction updated CSR
+        // state must wait until the next architectural step.
         return false;
     }
     if (!cpu_.trap().service_pending_interrupts()) {
@@ -644,6 +812,10 @@ const char* PipelineBackend::name() const {
     return "pipeline";
 }
 
+PipelineCoreState& PipelineBackend::testing_state() {
+    return state_;
+}
+
 const PipelineCoreState& PipelineBackend::testing_state() const {
     return state_;
 }
@@ -653,6 +825,10 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     const PredictorStats predictor_stats = predictor_.stats();
     const std::optional<RobEntry> rob_head = state_.rob().peek_head();
     const std::optional<LsqEntry> lsq_head = state_.lsq().peek_oldest();
+    LsqLoadStatus visible_lsq_status = state_.lsq().active_replay();
+    if (visible_lsq_status.state == LsqLoadState::None) {
+        visible_lsq_status = state_.lsq_observed_load_status;
+    }
     snapshot.backend_name = name();
     snapshot.pipeline.if_stage = build_fetch_stage_snapshot();
     snapshot.pipeline.id_stage = build_stage_snapshot(state_.if_id.slot);
@@ -666,12 +842,16 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     snapshot.pipeline.redirect_target = state_.redirect_target;
     snapshot.pipeline.pending_fetch_fault = state_.pending_fetch_fault.valid;
     snapshot.pipeline.trap_flush = state_.trap_flush;
+    snapshot.pipeline.replay_flush = state_.replay_flush;
     snapshot.pipeline.committed = state_.committed;
     snapshot.pipeline.empty = state_.pipeline_empty();
     snapshot.pipeline.ooo.rob_depth = state_.rob().size();
     snapshot.pipeline.ooo.rob_head_sequence_id = rob_head.has_value() ? rob_head->sequence_id : 0;
     snapshot.pipeline.ooo.lsq_depth = state_.lsq().size();
     snapshot.pipeline.ooo.lsq_head_sequence_id = lsq_head.has_value() ? lsq_head->sequence_id : 0;
+    snapshot.pipeline.ooo.lsq_load_state = lsq_load_state_name(visible_lsq_status.state);
+    snapshot.pipeline.ooo.lsq_load_sequence_id = visible_lsq_status.load_sequence_id;
+    snapshot.pipeline.ooo.lsq_store_sequence_id = visible_lsq_status.store_sequence_id;
     snapshot.pipeline.predictor.mode = kPredictorModeName;
     snapshot.pipeline.predictor.last_prediction_valid = last_prediction_valid_;
     snapshot.pipeline.predictor.last_prediction_taken = last_prediction_taken_;

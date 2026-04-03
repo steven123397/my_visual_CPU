@@ -9,7 +9,11 @@
 
 #include <unistd.h>
 
+#include "../../src/cpu.h"
+#include "../../src/exec/pipeline_backend.h"
 #include "../../src/debug/debug_protocol.h"
+#include "../../src/mem/bus.h"
+#include "../../src/mem/ram.h"
 
 namespace {
 
@@ -403,6 +407,96 @@ int main() {
             },
             "pipeline snapshot should expose ROB/LSQ queue depth and head sequence")) {
         return 1;
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kDebugProgramAddr);
+
+        PipelineBackend backend(cpu, bus);
+        LoadStoreQueue& lsq = backend.testing_state().lsq();
+        const LsqIndex older_store = lsq.enqueue_store({
+            .sequence_id = 1,
+            .size = 4,
+        });
+        const LsqIndex younger_load = lsq.enqueue_load({
+            .sequence_id = 2,
+            .rd = 6,
+            .size = 4,
+        });
+        lsq.mark_address_ready(younger_load, 0x80000100ULL);
+        lsq.mark_data_ready(younger_load, 0x11223344ULL);
+        lsq.mark_order_ready(younger_load);
+        lsq.mark_address_ready(older_store, 0x80000100ULL);
+
+        DebugSnapshot snapshot{};
+        snapshot.summary.pc = cpu.core().pc();
+        snapshot.summary.privilege = cpu.core().privilege_mode();
+        snapshot.summary.backend = backend.name();
+        snapshot.pipeline = backend.debug_snapshot().pipeline;
+
+        const std::string replay_snapshot_output = debug_snapshot_json(snapshot);
+        if (!expect_contains(replay_snapshot_output,
+                             "\"lsq_load_state\":\"replay_required\"",
+                             "debug snapshot JSON should serialize LSQ replay-needed state")) {
+            return 1;
+        }
+        if (!expect_contains(replay_snapshot_output,
+                             "\"lsq_load_sequence_id\":2",
+                             "debug snapshot JSON should serialize the replaying load sequence id")) {
+            return 1;
+        }
+        if (!expect_contains(replay_snapshot_output,
+                             "\"lsq_store_sequence_id\":1",
+                             "debug snapshot JSON should serialize the conflicting older store sequence id")) {
+            return 1;
+        }
+
+        constexpr uint32_t kReplayPhys = 33;
+        backend.testing_state().phys_regs().write(kReplayPhys, 0x11223344ULL);
+        const RobIndex replay_rob = backend.testing_state().rob().allocate({
+            .sequence_id = 2,
+            .pc = kDebugProgramAddr,
+            .raw = 0x00150303U,
+            .arch_rd = 6,
+            .phys_rd = kReplayPhys,
+            .previous_phys_rd = 6,
+        });
+        backend.testing_state().rob().mark_ready(replay_rob, {
+            .value_ready = true,
+            .value = 0x11223344ULL,
+        });
+        backend.testing_state().mem_wb.slot.valid = true;
+        backend.testing_state().mem_wb.slot.sequence_id.value = 2;
+        backend.testing_state().mem_wb.slot.pc = kDebugProgramAddr;
+        backend.testing_state().mem_wb.slot.raw = 0x00150303U;
+        backend.testing_state().mem_wb.slot.rd_phys = kReplayPhys;
+        backend.testing_state().mem_wb.slot.rob_index = replay_rob;
+        backend.testing_state().mem_wb.slot.lsq_index = younger_load;
+        backend.testing_state().mem_wb.slot.effects.rd_write.enable = true;
+        backend.testing_state().mem_wb.slot.effects.rd_write.rd = 6;
+        backend.testing_state().mem_wb.slot.effects.rd_write.value = 0x11223344ULL;
+
+        backend.step();
+        snapshot.pipeline = backend.debug_snapshot().pipeline;
+        const std::string replay_flush_output = debug_snapshot_json(snapshot);
+        if (!expect_contains(replay_flush_output,
+                             "\"replay_flush\":true",
+                             "debug snapshot JSON should serialize replay flush once automatic replay fires")) {
+            return 1;
+        }
+        if (!expect_contains(replay_flush_output,
+                             "\"trap_flush\":false",
+                             "automatic replay should not be reported as a trap flush")) {
+            return 1;
+        }
+        if (!expect_contains(replay_flush_output,
+                             "\"lsq_depth\":0",
+                             "automatic replay should clear speculative LSQ state in the debug snapshot")) {
+            return 1;
+        }
     }
 
     return 0;

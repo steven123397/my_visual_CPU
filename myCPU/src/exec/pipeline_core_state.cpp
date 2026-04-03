@@ -4,6 +4,7 @@ void PipelineCoreState::reset(uint64_t pc) {
     flush(pc);
     stalled = false;
     trap_flush = false;
+    replay_flush = false;
     committed = false;
     interrupt_serviceable_at_cycle_start = false;
     sequence_state_.clear();
@@ -15,15 +16,18 @@ void PipelineCoreState::flush(uint64_t pc) {
     id_ex = {};
     ex_mem = {};
     mem_wb = {};
+    ex_mem_cycles_remaining = 0;
     next_if_id = {};
     next_id_ex = {};
     next_ex_mem = {};
     next_mem_wb = {};
+    next_ex_mem_cycles_remaining = 0;
     fetch_pc = pc;
     pending_fetch_fault = {};
     pending_fetch_fault_pc = 0;
     redirect_pending = false;
     redirect_target = 0;
+    lsq_observed_load_status = {};
 }
 
 void PipelineCoreState::begin_cycle(bool interrupt_serviceable) {
@@ -31,12 +35,15 @@ void PipelineCoreState::begin_cycle(bool interrupt_serviceable) {
     next_id_ex = {};
     next_ex_mem = {};
     next_mem_wb = {};
+    next_ex_mem_cycles_remaining = 0;
     stalled = false;
     trap_flush = false;
+    replay_flush = false;
     committed = false;
     interrupt_serviceable_at_cycle_start = interrupt_serviceable;
     redirect_pending = false;
     redirect_target = 0;
+    lsq_observed_load_status = {};
 }
 
 void PipelineCoreState::commit_next_state() {
@@ -44,10 +51,12 @@ void PipelineCoreState::commit_next_state() {
     id_ex = next_id_ex;
     ex_mem = next_ex_mem;
     mem_wb = next_mem_wb;
+    ex_mem_cycles_remaining = next_ex_mem_cycles_remaining;
 }
 
 bool PipelineCoreState::pipeline_empty() const {
-    return !if_id.slot.valid && !id_ex.slot.valid && !ex_mem.slot.valid && !mem_wb.slot.valid;
+    return !if_id.slot.valid && !id_ex.slot.valid && !ex_mem.slot.valid && !mem_wb.slot.valid &&
+           rob_.size() == 0 && lsq_.size() == 0;
 }
 
 void PipelineCoreState::reset_ooo_state(const CoreState& core) {

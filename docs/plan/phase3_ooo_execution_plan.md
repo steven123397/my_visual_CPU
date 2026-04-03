@@ -32,8 +32,16 @@
 - 来源设计：
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
+  - [plan/phase3_minimal_ooo_execute_plan.md](./phase3_minimal_ooo_execute_plan.md)
 - 目标状态：
   - [status/mainline_status.md](../status/mainline_status.md)
+
+## 2026-04-03 执行补充
+
+- [plan/phase3_minimal_ooo_execute_plan.md](./phase3_minimal_ooo_execute_plan.md) 已完成；当前 `pipeline` 已把“最小真实 OoO execute”接到主路径。
+- `ROB head` 现在已成为真实退休源头，backend 不再依赖 `mem_wb` 单槽才能退休；younger ALU 可以在 older RAM / faulting memory access 未完成时先写 `phys_regs + ROB ready`，architected side effect 仍只会在顺序 commit 时生效。
+- 当前 memory execute 已收口成一条最小独立路径：RAM / faulting access 会形成最小 OoO 完成窗口；已知 MMIO load 继续维持 non-speculative 执行，以守住 `clint_split_access`、UART / PLIC / CLINT 等现有设备合同。
+- 这意味着 `Phase 3-B/C` 的基础任务已经不再卡在“是不是仍然近似顺序 execute”；剩余工作重点已转向 bug-driven hardening、是否继续扩 issue / replay / memory speculation，以及是否进入更激进的下一轮微架构能力。
 
 ## 目标
 

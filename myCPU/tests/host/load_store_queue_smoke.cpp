@@ -21,14 +21,20 @@ int main() {
         .size = 4,
         .non_speculative = true,
     });
-    if (!expect(lsq.has_blocking_older_store(2, 0x80001000, 4),
-                "older unresolved store should block a younger load from issuing")) {
+    const LsqLoadStatus unresolved_block = lsq.classify_load(2, 0x80001000, 4);
+    if (!expect(unresolved_block.state == LsqLoadState::BlockedByUnresolvedStore &&
+                    unresolved_block.load_sequence_id == 2 &&
+                    unresolved_block.store_sequence_id == 1 &&
+                    unresolved_block.blocks_issue(),
+                "older unresolved store should report an explicit unresolved-store block")) {
         return 1;
     }
 
     lsq.mark_address_ready(older_store, 0x80001000);
-    if (!expect(lsq.has_blocking_older_store(2, 0x80002000, 4),
-                "older store should keep blocking while its data is still unresolved")) {
+    const LsqLoadStatus address_only_block = lsq.classify_load(2, 0x80002000, 4);
+    if (!expect(address_only_block.state == LsqLoadState::BlockedByUnresolvedStore &&
+                    address_only_block.store_sequence_id == 1,
+                "older store should keep reporting unresolved-store block while its data is still unresolved")) {
         return 1;
     }
 
@@ -39,17 +45,21 @@ int main() {
                 "store entry should expose address/data readiness before it becomes order-ready")) {
         return 1;
     }
-    if (!expect(!lsq.has_blocking_older_store(2, 0x80002000, 4),
+    const LsqLoadStatus non_overlap_status = lsq.classify_load(2, 0x80002000, 4);
+    if (!expect(non_overlap_status.state == LsqLoadState::None && !non_overlap_status.blocks_issue(),
                 "non-overlapping younger load should stop blocking once the older store address and data are known")) {
         return 1;
     }
-    if (!expect(lsq.has_blocking_older_store(2, 0x80001000, 1),
-                "overlapping younger load should keep waiting until the older store reaches the release point")) {
+    const LsqLoadStatus overlap_block = lsq.classify_load(2, 0x80001000, 1);
+    if (!expect(overlap_block.state == LsqLoadState::BlockedByOverlappingStore &&
+                    overlap_block.store_sequence_id == 1 &&
+                    overlap_block.blocks_issue(),
+                "overlapping younger load should report an explicit overlap block until the older store reaches the release point")) {
         return 1;
     }
 
     lsq.mark_order_ready(older_store);
-    if (!expect(!lsq.has_blocking_older_store(2, 0x80001000, 1),
+    if (!expect(lsq.classify_load(2, 0x80001000, 1).state == LsqLoadState::None,
                 "overlapping younger load should be released once the older store becomes order-ready")) {
         return 1;
     }
@@ -130,6 +140,88 @@ int main() {
     lsq.flush_younger_than(1);
     if (!expect(lsq.size() == 1 && lsq.peek(preserved).has_value(),
                 "flush_younger_than should drop younger LSQ entries while preserving older ones")) {
+        return 1;
+    }
+
+    LoadStoreQueue replay_lsq;
+    const LsqIndex replay_store = replay_lsq.enqueue_store({
+        .sequence_id = 1,
+        .size = 4,
+    });
+    const LsqIndex replay_load = replay_lsq.enqueue_load({
+        .sequence_id = 2,
+        .rd = 6,
+        .size = 4,
+    });
+    replay_lsq.mark_address_ready(replay_load, 0x4000);
+    replay_lsq.mark_data_ready(replay_load, 0xdeadbeefULL);
+    replay_lsq.mark_order_ready(replay_load);
+
+    if (!expect(replay_lsq.active_replay().state == LsqLoadState::None,
+                "a younger load should not report replay before any late-overlap store arrives")) {
+        return 1;
+    }
+
+    replay_lsq.mark_address_ready(replay_store, 0x4000);
+    const LsqLoadStatus replay_required = replay_lsq.active_replay();
+    if (!expect(replay_required.state == LsqLoadState::ReplayRequired &&
+                    replay_required.load_sequence_id == 2 &&
+                    replay_required.store_sequence_id == 1 &&
+                    replay_required.replay_required(),
+                "late overlap should mark the already-issued younger load as replay-required")) {
+        return 1;
+    }
+
+    const LsqLoadStatus replay_lookup = replay_lsq.classify_load(2, 0x4000, 4);
+    if (!expect(replay_lookup.state == LsqLoadState::ReplayRequired &&
+                    replay_lookup.store_sequence_id == 1,
+                "load classification should surface replay-required once the violating older store address appears")) {
+        return 1;
+    }
+
+    replay_lsq.flush_younger_than(1);
+    if (!expect(replay_lsq.active_replay().state == LsqLoadState::None,
+                "flushing the violating younger load should also clear replay-required state")) {
+        return 1;
+    }
+
+    LoadStoreQueue forwarding_lsq;
+    const LsqIndex forwarding_store = forwarding_lsq.enqueue_store({
+        .sequence_id = 1,
+        .size = 4,
+    });
+    forwarding_lsq.mark_address_ready(forwarding_store, 0x80001000ULL);
+    forwarding_lsq.mark_data_ready(forwarding_store, 0xaabbccddULL);
+    forwarding_lsq.mark_order_ready(forwarding_store);
+    const auto forwarded_word = forwarding_lsq.forwardable_load(2, 0x80001000ULL, 4);
+    if (!expect(forwarded_word.has_value() && forwarded_word->value == 0xaabbccddULL &&
+                    forwarded_word->store_sequence_id == 1,
+                "full-cover older RAM store should provide a forwarding value for the younger load")) {
+        return 1;
+    }
+    const auto forwarded_byte = forwarding_lsq.forwardable_load(2, 0x80001001ULL, 1);
+    if (!expect(forwarded_byte.has_value() && forwarded_byte->value == 0xccULL,
+                "forwarding helper should extract the requested byte range from a covering older store")) {
+        return 1;
+    }
+
+    LoadStoreQueue overshadowed_lsq;
+    const LsqIndex older_covering_store = overshadowed_lsq.enqueue_store({
+        .sequence_id = 1,
+        .size = 4,
+    });
+    overshadowed_lsq.mark_address_ready(older_covering_store, 0x80002000ULL);
+    overshadowed_lsq.mark_data_ready(older_covering_store, 0x11223344ULL);
+    overshadowed_lsq.mark_order_ready(older_covering_store);
+    const LsqIndex newer_partial_store = overshadowed_lsq.enqueue_store({
+        .sequence_id = 2,
+        .size = 1,
+    });
+    overshadowed_lsq.mark_address_ready(newer_partial_store, 0x80002000ULL);
+    overshadowed_lsq.mark_data_ready(newer_partial_store, 0x55ULL);
+    overshadowed_lsq.mark_order_ready(newer_partial_store);
+    if (!expect(!overshadowed_lsq.forwardable_load(3, 0x80002000ULL, 4).has_value(),
+                "a nearer overlapping store that cannot fully cover the load must block fallback to an older store")) {
         return 1;
     }
 

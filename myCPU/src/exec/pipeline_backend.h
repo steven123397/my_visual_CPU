@@ -15,13 +15,18 @@ public:
     void step() override;
     const char* name() const override;
     BackendDebugSnapshot debug_snapshot() const override;
+    PipelineCoreState& testing_state();
     const PipelineCoreState& testing_state() const;
 
 private:
+    bool sources_ready(const StageSlot& slot) const;
+    bool is_serializing_system_slot(const StageSlot& slot) const;
+    void publish_completed_slot(const StageSlot& slot);
     DebugStageSnapshot build_fetch_stage_snapshot() const;
     DebugStageSnapshot build_stage_snapshot(const StageSlot& slot) const;
     uint64_t resolve_ex_counter_value(uint32_t addr) const;
     uint64_t resolve_ex_csr_value(const Insn& insn) const;
+    bool try_replay_flush();
     bool step_wb();
     bool try_commit_fetch_fault();
     void step_mem();

@@ -37,6 +37,9 @@ struct OooDebugSnapshot {
     uint64_t rob_head_sequence_id{0};
     uint64_t lsq_depth{0};
     uint64_t lsq_head_sequence_id{0};
+    std::string lsq_load_state{};
+    uint64_t lsq_load_sequence_id{0};
+    uint64_t lsq_store_sequence_id{0};
 };
 
 struct PipelineDebugSnapshot {
@@ -52,6 +55,7 @@ struct PipelineDebugSnapshot {
     uint64_t redirect_target{0};
     bool pending_fetch_fault{false};
     bool trap_flush{false};
+    bool replay_flush{false};
     bool committed{false};
     bool empty{true};
     OooDebugSnapshot ooo{};

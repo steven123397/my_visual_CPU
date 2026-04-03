@@ -32,9 +32,19 @@
     `pipeline` 投机执行与 commit-visible side-effect 契约。
 14. [plan/phase3_ooo_execution_plan.md](plan/phase3_ooo_execution_plan.md)
     当前活跃的 `Phase 3-B/C` `OoO / rename / ROB / LSQ` 接线计划。
-15. [plan/phase3_ooo_readiness_plan.md](plan/phase3_ooo_readiness_plan.md)
+15. [plan/phase3_minimal_ooo_execute_plan.md](plan/phase3_minimal_ooo_execute_plan.md)
+    已完成的“最小真实 OoO execute”子计划。
+16. [plan/phase3_lsq_automatic_replay_plan.md](plan/phase3_lsq_automatic_replay_plan.md)
+    已完成的 `Phase 3-B/C` LSQ automatic replay 子计划。
+17. [plan/phase3_lsq_store_to_load_forwarding_plan.md](plan/phase3_lsq_store_to_load_forwarding_plan.md)
+    已完成的 `Phase 3-B/C` LSQ store-to-load forwarding 子计划。
+18. [plan/phase3_lsq_replay_contract_plan.md](plan/phase3_lsq_replay_contract_plan.md)
+    已完成的 `Phase 3-B/C` LSQ replay-needed 合同子计划。
+19. [plan/phase3_phys_free_list_plan.md](plan/phase3_phys_free_list_plan.md)
+    已完成的 `Phase 3-B/C` phys free-list / recycle 子计划。
+20. [plan/phase3_ooo_readiness_plan.md](plan/phase3_ooo_readiness_plan.md)
     已完成的 `Phase 3-B/C` OoO readiness 前置准备记录。
-16. [design/kernel_alpha_storage_error_contract.md](design/kernel_alpha_storage_error_contract.md)
+21. [design/kernel_alpha_storage_error_contract.md](design/kernel_alpha_storage_error_contract.md)
     `kernel_alpha` storage 错误合同设计。
 
 ## 目录说明
@@ -58,6 +68,16 @@
   当前仍有效的自检结果和调试链路风险。
 - [plan/phase3_ooo_execution_plan.md](plan/phase3_ooo_execution_plan.md)
   当前正在执行的 `Phase 3-B/C` 接线计划。
+- [plan/phase3_minimal_ooo_execute_plan.md](plan/phase3_minimal_ooo_execute_plan.md)
+  已完成的“最小真实 OoO execute”子计划，记录 `ROB` 驱动退休与最小 memory execute 的收口。
+- [plan/phase3_lsq_automatic_replay_plan.md](plan/phase3_lsq_automatic_replay_plan.md)
+  已完成的 `LSQ automatic replay` 子计划。
+- [plan/phase3_lsq_store_to_load_forwarding_plan.md](plan/phase3_lsq_store_to_load_forwarding_plan.md)
+  已完成的 `LSQ store-to-load forwarding` 子计划。
+- [plan/phase3_lsq_replay_contract_plan.md](plan/phase3_lsq_replay_contract_plan.md)
+  已完成的 `LSQ replay-needed` 合同子计划。
+- [plan/phase3_phys_free_list_plan.md](plan/phase3_phys_free_list_plan.md)
+  已完成的 phys free-list / recycle 子计划。
 - [plan/phase3_ooo_readiness_plan.md](plan/phase3_ooo_readiness_plan.md)
   已完成的 `Phase 3-B/C` OoO readiness 收口记录，也是下一份大块 OoO 接线计划的直接前置入口。
 - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
@@ -71,6 +91,16 @@
 
 - [plan/phase3_ooo_execution_plan.md](plan/phase3_ooo_execution_plan.md)
   当前活跃，承接真正的大块 `OoO / rename / ROB / LSQ` 接线。
+- [plan/phase3_minimal_ooo_execute_plan.md](plan/phase3_minimal_ooo_execute_plan.md)
+  当前已完成，记录“最小真实 OoO execute”这块从近似顺序 execute 到最小真实 OoO 完成窗口的收口。
+- [plan/phase3_lsq_automatic_replay_plan.md](plan/phase3_lsq_automatic_replay_plan.md)
+  当前已完成，记录 `LSQ replay-needed` 到 coarse automatic replay 的收口。
+- [plan/phase3_lsq_store_to_load_forwarding_plan.md](plan/phase3_lsq_store_to_load_forwarding_plan.md)
+  当前已完成，记录最小 `RAM-only store-to-load forwarding` 的收口。
+- [plan/phase3_lsq_replay_contract_plan.md](plan/phase3_lsq_replay_contract_plan.md)
+  当前已完成，记录 `LSQ replay-needed` 这块 memory-order 合同收口。
+- [plan/phase3_phys_free_list_plan.md](plan/phase3_phys_free_list_plan.md)
+  当前已完成，记录 `phys free-list / recycle` 这块结构收口。
 - [plan/phase3_ooo_readiness_plan.md](plan/phase3_ooo_readiness_plan.md)
   当前已完成，保留为下一轮大块 `OoO / rename / ROB / LSQ` 接线的前置记录。
 - [plan/phase1-hardening-regressions_plan.md](plan/phase1-hardening-regressions_plan.md)

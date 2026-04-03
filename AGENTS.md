@@ -52,6 +52,7 @@
 
 - RV64I / RV64M 参考执行路径。
 - `functional` / `pipeline` 两种执行后端。
+- `pipeline` 当前已具备首轮 `rename + ROB + LSQ +` 最小真实 `OoO execute` 主路径。
 - ELF64 与 flat binary 加载。
 - 基础 CSR 访问与 M-mode trap。
 - 初步 `M/S/U` 特权路径。
