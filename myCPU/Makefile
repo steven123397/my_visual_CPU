@@ -203,9 +203,9 @@ test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS
 
 FORCE:
 
-test-%: FORCE $(TARGET) tests/asm/%.elf
+define RUN_ASM_TEST
 	@extra_args=''; \
-	case "$*" in \
+	case "$(1)" in \
 		hello) expected='Hello, RISC-V!' ;; \
 		sum) expected='55' ;; \
 		control_flow) expected='OK' ;; \
@@ -213,10 +213,10 @@ test-%: FORCE $(TARGET) tests/asm/%.elf
 		timer_interrupt) expected='TMR' ;; \
 		mtvec_modes) expected='MTV' ;; \
 		trap_state) expected='STS' ;; \
-			exception_traps) expected='EXC' ;; \
-			access_faults) expected='ACF' ;; \
-			mmio_access_faults) expected='MMIO' ;; \
-			loads_signed_unsigned) expected='LDS' ;; \
+		exception_traps) expected='EXC' ;; \
+		access_faults) expected='ACF' ;; \
+		mmio_access_faults) expected='MMIO' ;; \
+		loads_signed_unsigned) expected='LDS' ;; \
 		alu_word) expected='W32' ;; \
 		branches_signed_unsigned) expected='BRU' ;; \
 		muldiv) expected='MLD' ;; \
@@ -249,13 +249,13 @@ test-%: FORCE $(TARGET) tests/asm/%.elf
 		sv39_tlb_ad_bits) expected='TAD' ;; \
 		csr_semantic_consistency) expected='CSC' ;; \
 		clint_split_access) expected='CLT' ;; \
-		*) echo "Unknown asm test: $*" >&2; exit 1 ;; \
+		*) echo "Unknown asm test: $(1)" >&2; exit 1 ;; \
 	esac; \
-	echo "=== $* ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) $$extra_args tests/asm/$*.elf 2>&1)"; \
+	echo "=== $(1)$(4) ==="; \
+	output="$$(timeout $(2) ./$(TARGET) $(3) $$extra_args tests/asm/$(1).elf 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: $*" >&2; \
+		echo "Test timed out: $(1)$(4)" >&2; \
 		exit 1; \
 	fi; \
 	if [ $$status -ne 0 ]; then \
@@ -263,12 +263,16 @@ test-%: FORCE $(TARGET) tests/asm/%.elf
 		exit $$status; \
 	fi; \
 	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for $*" >&2; \
+		echo "Unexpected output for $(1)$(4)" >&2; \
 		printf 'Expected: %s\n' "$$expected" >&2; \
 		printf 'Actual: %s\n' "$$output" >&2; \
 		exit 1; \
 	fi; \
 	printf '%s\n' "$$output"
+endef
+
+test-%: FORCE $(TARGET) tests/asm/%.elf
+	$(call RUN_ASM_TEST,$*,$(TEST_TIMEOUT),,,)
 
 test-unit-%: FORCE tests/unit/%
 	@echo "=== unit:$* ==="; \
@@ -312,12 +316,12 @@ test-host-interactive_terminal_smoke: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEM
 	fi; \
 	printf '%s\n' "$$output"
 
-test-guest-interactive_os_demo: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEMO) tests/host/interactive_terminal_smoke
-	@echo "=== guest_interactive_os_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/interactive_terminal_smoke functional 2>&1)"; \
+define RUN_INTERACTIVE_GUEST_DEMO_TEST
+	@echo "=== guest_interactive_os_demo$(3) ==="; \
+	output="$$(timeout $(1) ./tests/host/interactive_terminal_smoke $(2) 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_interactive_os_demo" >&2; \
+		echo "Test timed out: guest_interactive_os_demo$(3)" >&2; \
 		exit 1; \
 	fi; \
 	if [ $$status -ne 0 ]; then \
@@ -325,91 +329,20 @@ test-guest-interactive_os_demo: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEMO) tes
 		exit $$status; \
 	fi; \
 	printf '%s\n' "$$output"
+endef
+
+test-guest-interactive_os_demo: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEMO) tests/host/interactive_terminal_smoke
+	$(call RUN_INTERACTIVE_GUEST_DEMO_TEST,$(TEST_TIMEOUT),functional,)
 
 test-pipeline-guest-interactive_os_demo: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEMO) tests/host/interactive_terminal_smoke
-	@echo "=== guest_interactive_os_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./tests/host/interactive_terminal_smoke pipeline 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_interactive_os_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_INTERACTIVE_GUEST_DEMO_TEST,$(PIPELINE_GUEST_TEST_TIMEOUT),pipeline, (pipeline))
 
 test-backend-cli: FORCE $(TARGET) tests/asm/hello.elf
 	@echo "=== backend_cli ==="; \
 	sh tests/host/backend_cli.sh $(TARGET) tests/asm/hello.elf $(TEST_TIMEOUT)
 
 test-pipeline-%: FORCE $(TARGET) tests/asm/%.elf
-	@extra_args=''; \
-	case "$*" in \
-		hello) expected='Hello, RISC-V!' ;; \
-		sum) expected='55' ;; \
-		control_flow) expected='OK' ;; \
-		csr_trap) expected='CSR' ;; \
-		timer_interrupt) expected='TMR' ;; \
-		mtvec_modes) expected='MTV' ;; \
-		trap_state) expected='STS' ;; \
-			exception_traps) expected='EXC' ;; \
-			access_faults) expected='ACF' ;; \
-			mmio_access_faults) expected='MMIO' ;; \
-			loads_signed_unsigned) expected='LDS' ;; \
-		alu_word) expected='W32' ;; \
-		branches_signed_unsigned) expected='BRU' ;; \
-		muldiv) expected='MLD' ;; \
-		muldiv_edge_cases) expected='MDE' ;; \
-		illegal_integer_encodings) expected='ILL' ;; \
-		fence_noop) expected='FNC' ;; \
-		privilege_transitions) expected='PRV' ;; \
-		sret_transitions) expected='SRT' ;; \
-		supervisor_exception_delegation) expected='SDG' ;; \
-		supervisor_timer_interrupt) expected='STI' ;; \
-		csr_access_control) expected='CSR' ;; \
-		csr_illegal_matrix) expected='CRM' ;; \
-		counteren_access_control) expected='CNT' ;; \
-		instret_counting) expected='IRT' ;; \
-		machine_counter_csrs) expected='MCR' ;; \
-		interrupt_csr_views) expected='ICV' ;; \
-		delegation_edge_cases) expected='DEG' ;; \
-		plic_machine_external_interrupt) expected='PME' ;; \
-		plic_supervisor_external_interrupt) expected='PSE' ;; \
-		storage_device_basic) expected='DSK'; extra_args='--disk tests/data/storage_basic.txt' ;; \
-		supervisor_platform_smoke) expected='DRV'; extra_args='--disk tests/data/storage_basic.txt' ;; \
-		sv39_basic) expected='SV39' ;; \
-		sv39_page_fault) expected='PFLT' ;; \
-		sv39_edge_faults) expected='EDG' ;; \
-		sv39_sum_mxr) expected='SMX' ;; \
-		sv39_mprv) expected='MPRV' ;; \
-		sv39_pagewalk_contracts) expected='PWK' ;; \
-		sv39_exec_privilege) expected='XPV' ;; \
-		sv39_tlb_flush) expected='TLB' ;; \
-		sv39_tlb_ad_bits) expected='TAD' ;; \
-		csr_semantic_consistency) expected='CSC' ;; \
-		clint_split_access) expected='CLT' ;; \
-		*) echo "Unknown asm test: $*" >&2; exit 1 ;; \
-	esac; \
-	echo "=== $* (pipeline) ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --backend pipeline $$extra_args tests/asm/$*.elf 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: $* (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for $* (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_ASM_TEST,$*,$(TEST_TIMEOUT),--backend pipeline, (pipeline))
 
 test-pipeline: $(ASM_TESTS:%=test-pipeline-%) test-host-predictor_smoke test-host-pipeline_backend_smoke test-host-pipeline_commit_trace_smoke test-host-pipeline_rename_commit_smoke test-host-pipeline_speculation_contracts_smoke test-host-backend_differential_smoke test-host-debug_cli_smoke test-host-interactive_terminal_smoke test-backend-cli test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo test-pipeline-guest-interactive_os_demo
 
@@ -437,13 +370,13 @@ test-flat-%: FORCE $(TARGET) tests/asm/%.bin
 	fi; \
 	printf '%s\n' "$$output"
 
-test-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
-	@expected='KRN'; \
-	echo "=== guest_supervisor_demo ==="; \
-	output="$$(timeout $(SUPERVISOR_GUEST_TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_SUPERVISOR_DEMO) 2>&1)"; \
+define RUN_GUEST_DEMO_TEST
+	@expected='$(3)'; \
+	echo "=== $(1)$(7) ==="; \
+	output="$$(timeout $(4) ./$(TARGET) $(5) $(6) $(2) 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_supervisor_demo" >&2; \
+		echo "Test timed out: $(1)$(7)" >&2; \
 		exit 1; \
 	fi; \
 	if [ $$status -ne 0 ]; then \
@@ -451,453 +384,79 @@ test-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
 		exit $$status; \
 	fi; \
 	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_supervisor_demo" >&2; \
+		echo "Unexpected output for $(1)$(7)" >&2; \
 		printf 'Expected: %s\n' "$$expected" >&2; \
 		printf 'Actual: %s\n' "$$output" >&2; \
 		exit 1; \
 	fi; \
 	printf '%s\n' "$$output"
+endef
+
+test-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
+	$(call RUN_GUEST_DEMO_TEST,guest_supervisor_demo,$(GUEST_SUPERVISOR_DEMO),KRN,$(SUPERVISOR_GUEST_TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
-	@expected='KRN'; \
-	echo "=== guest_supervisor_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk tests/data/storage_basic.txt $(GUEST_SUPERVISOR_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_supervisor_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_supervisor_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_supervisor_demo,$(GUEST_SUPERVISOR_DEMO),KRN,$(PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	@expected='KMVPETDS'; \
-	echo "=== guest_kernel_alpha_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPETDS,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	@expected='KMVPETDS'; \
-	echo "=== guest_kernel_alpha_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPETDS,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_fault_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_FAULT_DEMO)
-	@expected='KMVX'; \
-	echo "=== guest_kernel_alpha_fault_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_fault_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_fault_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(TEST_TIMEOUT),,,)
 
 test-pipeline-guest-kernel_alpha_fault_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_FAULT_DEMO)
-	@expected='KMVX'; \
-	echo "=== guest_kernel_alpha_fault_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline $(GUEST_KERNEL_ALPHA_FAULT_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_fault_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_fault_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
 
 test-guest-kernel_alpha_storage_no_media_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO)
-	@expected='KMVNX'; \
-	echo "=== guest_kernel_alpha_storage_no_media_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_no_media_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_no_media_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_no_media_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO),KMVNX,$(TEST_TIMEOUT),,,)
 
 test-pipeline-guest-kernel_alpha_storage_no_media_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO)
-	@expected='KMVNX'; \
-	echo "=== guest_kernel_alpha_storage_no_media_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_no_media_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_no_media_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_no_media_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO),KMVNX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
 
 test-guest-kernel_alpha_storage_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO)
-	@expected='KMVRX'; \
-	echo "=== guest_kernel_alpha_storage_not_ready_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk-not-ready tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_not_ready_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_not_ready_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_not_ready_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO),KMVRX,$(TEST_TIMEOUT),,--disk-not-ready tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO)
-	@expected='KMVRX'; \
-	echo "=== guest_kernel_alpha_storage_not_ready_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk-not-ready tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_not_ready_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_not_ready_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_not_ready_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO),KMVRX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk-not-ready tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_storage_bad_magic_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO)
-	@expected='KMVGX'; \
-	echo "=== guest_kernel_alpha_storage_bad_magic_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk-bad-magic tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_bad_magic_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_bad_magic_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_magic_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO),KMVGX,$(TEST_TIMEOUT),,--disk-bad-magic tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_bad_magic_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO)
-	@expected='KMVGX'; \
-	echo "=== guest_kernel_alpha_storage_bad_magic_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk-bad-magic tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_bad_magic_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_bad_magic_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_magic_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO),KMVGX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk-bad-magic tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_storage_bad_block_count_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO)
-	@expected='KMVBX'; \
-	echo "=== guest_kernel_alpha_storage_bad_block_count_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_bad_block_count_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_bad_block_count_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_block_count_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO),KMVBX,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO)
-	@expected='KMVBX'; \
-	echo "=== guest_kernel_alpha_storage_bad_block_count_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_bad_block_count_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_bad_block_count_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_block_count_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO),KMVBX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_storage_lba_range_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO)
-	@expected='KMVLX'; \
-	echo "=== guest_kernel_alpha_storage_lba_range_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_lba_range_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_lba_range_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_lba_range_demo,$(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO),KMVLX,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_lba_range_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO)
-	@expected='KMVLX'; \
-	echo "=== guest_kernel_alpha_storage_lba_range_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_lba_range_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_lba_range_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_lba_range_demo,$(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO),KMVLX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_storage_bad_command_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO)
-	@expected='KMVCX'; \
-	echo "=== guest_kernel_alpha_storage_bad_command_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_bad_command_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_bad_command_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_command_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO),KMVCX,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_bad_command_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO)
-	@expected='KMVCX'; \
-	echo "=== guest_kernel_alpha_storage_bad_command_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline --disk tests/data/storage_basic.txt $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_storage_bad_command_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_storage_bad_command_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_command_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO),KMVCX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_plic_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO)
-	@expected='KMVPX'; \
-	echo "=== guest_kernel_alpha_plic_not_ready_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_plic_not_ready_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_plic_not_ready_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_plic_not_ready_demo,$(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO),KMVPX,$(TEST_TIMEOUT),,,)
 
 test-pipeline-guest-kernel_alpha_plic_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO)
-	@expected='KMVPX'; \
-	echo "=== guest_kernel_alpha_plic_not_ready_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_plic_not_ready_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_plic_not_ready_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_plic_not_ready_demo,$(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO),KMVPX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
 
 test-guest-kernel_alpha_timer_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
-	@expected='KMVPETX'; \
-	echo "=== guest_kernel_alpha_timer_not_ready_demo ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./$(TARGET) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_timer_not_ready_demo" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_timer_not_ready_demo" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_timer_not_ready_demo,$(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO),KMVPETX,$(TEST_TIMEOUT),,,)
 
 test-pipeline-guest-kernel_alpha_timer_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
-	@expected='KMVPETX'; \
-	echo "=== guest_kernel_alpha_timer_not_ready_demo (pipeline) ==="; \
-	output="$$(timeout $(PIPELINE_GUEST_TEST_TIMEOUT) ./$(TARGET) --backend pipeline $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) 2>&1)"; \
-	status=$$?; \
-	if [ $$status -eq 124 ]; then \
-		echo "Test timed out: guest_kernel_alpha_timer_not_ready_demo (pipeline)" >&2; \
-		exit 1; \
-	fi; \
-	if [ $$status -ne 0 ]; then \
-		printf '%s\n' "$$output" >&2; \
-		exit $$status; \
-	fi; \
-	if [ "$$output" != "$$expected" ]; then \
-		echo "Unexpected output for guest_kernel_alpha_timer_not_ready_demo (pipeline)" >&2; \
-		printf 'Expected: %s\n' "$$expected" >&2; \
-		printf 'Actual: %s\n' "$$output" >&2; \
-		exit 1; \
-	fi; \
-	printf '%s\n' "$$output"
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_timer_not_ready_demo,$(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO),KMVPETX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
 
 check-riscv-toolchain:
 	@missing=0; \
