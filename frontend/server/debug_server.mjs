@@ -47,6 +47,16 @@ function contentTypeFor(filePath) {
   return 'text/plain; charset=utf-8';
 }
 
+function normalizeCliResponse(response, context = 'debug cli request') {
+  if (response && typeof response === 'object' && response.type === 'error') {
+    const message = typeof response.message === 'string' && response.message.length > 0
+      ? response.message
+      : `${context} failed`;
+    throw new Error(message);
+  }
+  return response;
+}
+
 class DebugCliSession {
   constructor({ binaryPath }) {
     this.binaryPath = binaryPath;
@@ -101,8 +111,12 @@ class DebugCliSession {
     });
   }
 
+  async request(command) {
+    return normalizeCliResponse(await this.send(command), `debug cli ${command.cmd}`);
+  }
+
   async load(testEntry, backend) {
-    const response = await this.send({
+    return this.request({
       cmd: 'load',
       image: testEntry.image,
       disk: testEntry.disk ?? undefined,
@@ -110,53 +124,38 @@ class DebugCliSession {
       disk_magic_valid: testEntry.diskMagicValid ?? true,
       backend,
     });
-    if (response.type === 'error') {
-      throw new Error(response.message);
-    }
-    return response;
   }
 
   async snapshot() {
-    return this.send({ cmd: 'snapshot' });
+    return this.request({ cmd: 'snapshot' });
   }
 
   async runUntilUartContains(text, maxSteps) {
-    const response = await this.send({
+    return this.request({
       cmd: 'run_until_uart_contains',
       text,
       max_steps: maxSteps,
     });
-    if (response.type === 'error') {
-      throw new Error(response.message);
-    }
-    return response;
   }
 
   async stepCycle() {
-    return this.send({ cmd: 'step_cycle' });
+    return this.request({ cmd: 'step_cycle' });
   }
 
   async stepCommit() {
-    return this.send({ cmd: 'step_commit' });
+    return this.request({ cmd: 'step_commit' });
   }
 
   async reset() {
-    return this.send({ cmd: 'reset' });
+    return this.request({ cmd: 'reset' });
   }
 
   async uartInput(text) {
-    const response = await this.send({ cmd: 'uart_input', text });
-    if (response.type === 'error') {
-      throw new Error(response.message);
-    }
-    return response;
+    return this.request({ cmd: 'uart_input', text });
   }
 
   async uartOutput(offset = 0) {
-    const response = await this.send({ cmd: 'uart_output', offset });
-    if (response.type === 'error') {
-      throw new Error(response.message);
-    }
+    const response = await this.request({ cmd: 'uart_output', offset });
     return {
       text: response.text ?? '',
       nextOffset: response.next_offset ?? offset,
@@ -248,12 +247,20 @@ export async function startServer({
     if (!currentSession) {
       throw new Error('session not loaded');
     }
-    const chunk = await currentSession.uartOutput(offset);
+    const chunk = normalizeCliResponse(await currentSession.uartOutput(offset), 'session uartOutput');
     assertGeneration(generation);
     return {
       text: chunk.text ?? '',
       nextOffset: chunk.nextOffset ?? chunk.next_offset ?? offset,
     };
+  }
+
+  async function callSession(method, ...args) {
+    if (!currentSession) {
+      throw new Error('session not loaded');
+    }
+    const response = await currentSession[method](...args);
+    return normalizeCliResponse(response, `session ${method}`);
   }
 
   function trackTerminalChunk(chunk, { reset = false } = {}) {
@@ -418,7 +425,7 @@ export async function startServer({
               return;
             }
 
-            currentSnapshot = await currentSession.stepCycle();
+            currentSnapshot = await callSession('stepCycle');
             assertGeneration(generation);
             wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
             await syncTerminalDelta({ broadcast: true, generation });
@@ -484,14 +491,15 @@ export async function startServer({
           }
           currentSession = await createSession();
           currentTerminalPrompt = entry.terminalPrompt ?? null;
-          await currentSession.load(entry, body.backend ?? 'pipeline');
+          await callSession('load', entry, body.backend ?? 'pipeline');
           assertGeneration(generation);
           currentSnapshot = entry.bootUntilUartText
-            ? await currentSession.runUntilUartContains(
+            ? await callSession(
+                'runUntilUartContains',
                 entry.bootUntilUartText,
                 entry.bootMaxSteps ?? 0,
               )
-            : await currentSession.snapshot();
+            : await callSession('snapshot');
           assertGeneration(generation);
           resetTerminalTracking();
           wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
@@ -514,7 +522,7 @@ export async function startServer({
             json(response, 400, { error: 'session not loaded' });
             return;
           }
-          currentSnapshot = await currentSession.snapshot();
+          currentSnapshot = await callSession('snapshot');
           assertGeneration(generation);
           json(response, 200, { snapshot: currentSnapshot });
         });
@@ -529,7 +537,7 @@ export async function startServer({
             json(response, 400, { error: 'session not loaded' });
             return;
           }
-          currentSnapshot = await currentSession.stepCycle();
+          currentSnapshot = await callSession('stepCycle');
           assertGeneration(generation);
           wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
           const terminal = await syncTerminalDelta({ broadcast: true, generation });
@@ -546,7 +554,7 @@ export async function startServer({
             json(response, 400, { error: 'session not loaded' });
             return;
           }
-          currentSnapshot = await currentSession.stepCommit();
+          currentSnapshot = await callSession('stepCommit');
           assertGeneration(generation);
           wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
           const terminal = await syncTerminalDelta({ broadcast: true, generation });
@@ -564,7 +572,7 @@ export async function startServer({
             json(response, 400, { error: 'session not loaded' });
             return;
           }
-          currentSnapshot = await currentSession.reset();
+          currentSnapshot = await callSession('reset');
           assertGeneration(generation);
           resetTerminalTracking();
           wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
@@ -605,7 +613,7 @@ export async function startServer({
             json(response, 400, { error: 'session not loaded' });
             return;
           }
-          await currentSession.uartInput(text);
+          await callSession('uartInput', text);
           assertGeneration(generation);
           const advancePlan = buildTerminalAdvancePlan(text);
           let terminal;

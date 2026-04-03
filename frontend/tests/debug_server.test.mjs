@@ -446,6 +446,61 @@ test('POST /api/session/step-cycle returns updated snapshot', async () => {
   }
 });
 
+test('session endpoints propagate CLI {type:error} responses instead of returning fake success', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: async () => ({
+      async load() {
+        return { ok: true };
+      },
+      async snapshot() {
+        return { type: 'error', message: 'snapshot failed' };
+      },
+      async stepCycle() {
+        return { type: 'error', message: 'step-cycle failed' };
+      },
+      async stepCommit() {
+        return { type: 'error', message: 'step-commit failed' };
+      },
+      async reset() {
+        return { type: 'error', message: 'reset failed' };
+      },
+      async uartInput() {
+        return { type: 'error', message: 'uart-input failed' };
+      },
+      async uartOutput() {
+        return { type: 'error', message: 'uart-output failed' };
+      },
+      async close() {},
+    }),
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 500);
+    assert.equal(loadResponse.body.error, 'snapshot failed');
+
+    const endpoints = [
+      ['/api/session/snapshot', {}, 'snapshot failed'],
+      ['/api/session/step-cycle', {}, 'step-cycle failed'],
+      ['/api/session/step-commit', {}, 'step-commit failed'],
+      ['/api/session/reset', {}, 'reset failed'],
+      ['/api/session/terminal-input', { text: 'x' }, 'uart-input failed'],
+      ['/api/session/terminal-output', { offset: 0 }, 'uart-output failed'],
+    ];
+    for (const [pathname, payload, expected] of endpoints) {
+      const response = await postJson(server.baseUrl, pathname, payload);
+      assert.equal(response.status, 500);
+      assert.equal(response.body.error, expected);
+    }
+  } finally {
+    await server.close();
+  }
+});
+
 test('POST /api/session/load boots guest_interactive_os_demo to monitor prompt', async () => {
   const server = await startServer({
     port: 0,
