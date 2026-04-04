@@ -139,3 +139,10 @@
 - 完成内容：完成 `P1-5` guest 公共头文件边界收口，把 `kernel_runtime`、`supervisor_runtime` 与 `user_program_smoke` 的跨模块使用面改成以窄 helper / accessor 为主，减少 direct `struct` layout 依赖。
 - 实现过程摘要：先补 interrupt state 的 configure / counter / delivered / wait helper，再把 `monitor_commands`、`kernel_alpha`、`supervisor_demo_smoke` 和相关单测迁到新访问面；本轮刻意不把这些 public struct 整体改成 opaque handle，也不顺手扩成更大范围的 guest 生命周期重构。
 - 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
+#### p1-pipeline-backend-boundary-refinement-plan
+
+- 原文件：`p1_pipeline_backend_boundary_refinement.md`
+- 完成内容：完成 `P1-1` `pipeline_backend` 边界收口，把原本单文件承载的主调度、commit-replay、execute 和 frontend 职责拆成独立编译单元，并保持 `PipelineBackend` 外部接口与现有 `pipeline` 合同不变。
+- 实现过程摘要：整体采取“只拆文件边界、不改行为合同”的克制路径；`pipeline_backend.cpp` 退回构造与 debug snapshot 侧职责，其余逻辑分别下沉到 `pipeline_backend_cycle.cpp`、`pipeline_backend_execute.cpp` 与 `pipeline_backend_frontend.cpp`。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)

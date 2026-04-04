@@ -18,8 +18,9 @@
   - [status/kernel_alpha_status.md](kernel_alpha_status.md)
   - [status/code_self_review_status.md](code_self_review_status.md)
 - 当前活跃计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
   - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
@@ -122,6 +123,7 @@
 
 `2026-04-04` 已完成本节新增一批收口：
 
+- 原 `P1-1`：`pipeline_backend` 已按“构造+debug / cycle+commit-replay / execute / frontend”拆成四个编译单元，原文件不再继续混挂主调度、memory execute 和 decode/fetch。
 - 原 `P1-2`：`user_program_smoke` 已把 `prepare / enter round / active memory` 收口为更窄的内部阶段 helper，`supervisor_demo_smoke` 已退回 bootstrap / user / session 组合层；当时没有顺手扩到 `P1-5`，该项已在同日后续一轮单独完成。
 - 原 `P1-5`：`kernel_runtime`、`supervisor_runtime` 与 `user_program_smoke` 已补最小 helper / accessor，生产代码和相关单测不再直接依赖 public struct 的 interrupt counter、`address_space` 或 smoke scratch layout。
 
@@ -138,15 +140,6 @@
   - 原 `P1-11`：`CLINT` timer pending 已收口为平台电平语义，`mtimecmp` 条件撤销后不会残留 stale pending。
 
 下文继续只保留仍未收口的 P1 问题，并维持原编号，便于和前面对话及历史记录对照。
-
-### 1. `pipeline_backend.cpp` 已经承担过多职责
-
-- 代码证据：
-  - [myCPU/src/exec/pipeline_backend.cpp](../../myCPU/src/exec/pipeline_backend.cpp) 同时承载 `step_wb`、`step_mem`、`step_ex`、`step_id`、`step_if`、`try_replay_flush`、`try_service_interrupt_at_commit_boundary` 和最终 `commit_next_state`。
-- 影响：
-  - 继续推进 issue / replay / memory speculation 时，任何修复都更容易跨阶段互相污染。
-- 建议：
-  - 先拆“提交边界 / memory execute / interrupt-replay / 前端取指”这几块，而不是继续往单文件塞新行为。
 
 ### 6. `debug_protocol.cpp` 与 `debug_server.mjs` 继续手写协议和运行时状态机
 

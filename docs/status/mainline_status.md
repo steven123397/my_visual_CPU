@@ -24,8 +24,9 @@
 - 相关状态：
   - [status/project_priority_roadmap.md](project_priority_roadmap.md)
 - 当前计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
   - [plan/history_plan.md](../plan/history_plan.md)
 
@@ -42,6 +43,23 @@
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
 同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是以已完成的 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 和 [plan/history_plan.md#phase3-minimal-ooo-execute-plan](../plan/history_plan.md#phase3-minimal-ooo-execute-plan) 作为当前基线，继续维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
+
+## 2026-04-04 P1-1 pipeline_backend 边界收口进展
+
+本轮主线已完成 [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan) 对应的 `P1-1` 收口；目标是把 `pipeline_backend.cpp` 从“大一统单文件”退回到更窄的结构边界，而不是继续在这一轮顺手扩 `pipeline` 行为。
+
+- `myCPU/src/exec/pipeline_backend.cpp` 现已退回构造、`debug_snapshot` 与 stage 文本格式化侧职责，不再继续同时承载周期主调度、commit/replay、memory execute 和 decode/fetch。
+- `myCPU/src/exec/pipeline_backend_cycle.cpp`、`myCPU/src/exec/pipeline_backend_execute.cpp` 与 `myCPU/src/exec/pipeline_backend_frontend.cpp` 已分别承接 `step()/commit-replay`、`resolve_ex_*()/step_mem()/step_ex()` 以及 `sources_ready()/step_id()/step_if()` 这三组职责边界。
+- `myCPU/Makefile` 已把新的 backend 编译单元接入现有 host / asm / guest 门禁；`PipelineBackend` 的类接口和外部调用方式保持不变。
+- 本轮刻意没有扩 `debug snapshot` 字段、predictor 行为、LSQ 合同或 interrupt 语义；这次改动只处理文件职责与后续可维护性。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-host-pipeline_backend_smoke`
+- `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
+- `cd myCPU && make test-host-backend_differential_smoke`
+- `cd myCPU && make test-host-debug_cli_smoke`
+- `cd myCPU && make test-pipeline`
 
 ## 2026-04-04 P0 收口进展
 
