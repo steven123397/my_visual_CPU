@@ -45,6 +45,38 @@ after_misaligned_jalr:
     li   t1, 4
     bne  t0, t1, fail
 
+misaligned_jal_point:
+misaligned_jal_insn:
+    jal  x0, misaligned_jal_target
+    j    fail
+
+    .2byte 0
+misaligned_jal_target:
+    .word 0x00000013
+    .2byte 0
+
+after_misaligned_jal:
+    csrr t0, mscratch
+    li   t1, 5
+    bne  t0, t1, fail
+
+misaligned_branch_point:
+    li   t0, 1
+    li   t1, 1
+misaligned_branch_insn:
+    beq  t0, t1, misaligned_branch_target
+    j    fail
+
+    .2byte 0
+misaligned_branch_target:
+    .word 0x00000013
+    .2byte 0
+
+after_misaligned_branch:
+    csrr t0, mscratch
+    li   t1, 6
+    bne  t0, t1, fail
+
     li   t0, 'E'
     sb   t0, 0(s0)
     li   t0, 'X'
@@ -66,7 +98,7 @@ trap_handler:
     beq  t0, t1, handle_illegal
 
     li   t1, 0
-    beq  t0, t1, handle_misaligned_jalr
+    beq  t0, t1, handle_instruction_address_misaligned
 
     j    trap_fail
 
@@ -121,11 +153,20 @@ handle_reserved_system:
     csrw mepc, t0
     mret
 
-handle_misaligned_jalr:
+handle_instruction_address_misaligned:
     csrr t0, mepc
     la   t1, misaligned_jalr_insn
-    bne  t0, t1, trap_fail
+    beq  t0, t1, handle_misaligned_jalr
 
+    la   t1, misaligned_jal_insn
+    beq  t0, t1, handle_misaligned_jal
+
+    la   t1, misaligned_branch_insn
+    beq  t0, t1, handle_misaligned_branch
+
+    j    trap_fail
+
+handle_misaligned_jalr:
     csrr t0, mtval
     la   t1, after_misaligned_jalr
     addi t1, t1, 2
@@ -134,8 +175,31 @@ handle_misaligned_jalr:
     li   t0, 4
     csrw mscratch, t0
 
-    csrr t0, mepc
-    addi t0, t0, 4
+    la   t0, after_misaligned_jalr
+    csrw mepc, t0
+    mret
+
+handle_misaligned_jal:
+    csrr t0, mtval
+    la   t1, misaligned_jal_target
+    bne  t0, t1, trap_fail
+
+    li   t0, 5
+    csrw mscratch, t0
+
+    la   t0, after_misaligned_jal
+    csrw mepc, t0
+    mret
+
+handle_misaligned_branch:
+    csrr t0, mtval
+    la   t1, misaligned_branch_target
+    bne  t0, t1, trap_fail
+
+    li   t0, 6
+    csrw mscratch, t0
+
+    la   t0, after_misaligned_branch
     csrw mepc, t0
     mret
 
