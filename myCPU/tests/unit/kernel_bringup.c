@@ -74,7 +74,8 @@ static bool range_call_matches(const range_call_t* call,
 static int test_common_bringup_maps_fixed_ranges_and_selected_mmio(void);
 static int test_common_bringup_skips_managed_map_when_disabled(void);
 static int test_common_bringup_propagates_pre_vm_failure(void);
-static int test_common_bringup_propagates_pmm_probe_failure(void);
+static int test_common_bringup_rolls_back_vm_on_pmm_probe_failure(void);
+static int test_common_bringup_preserves_address_space_when_rollback_fails(void);
 static int test_common_bringup_rolls_back_vm_on_setup_failure(void);
 static bool stub_pre_vm_setup(trap_context_t* trap_context, void* context);
 
@@ -487,9 +488,9 @@ static int test_common_bringup_propagates_pre_vm_failure(void) {
     return 0;
 }
 
-static int test_common_bringup_propagates_pmm_probe_failure(void) {
+static int test_common_bringup_rolls_back_vm_on_pmm_probe_failure(void) {
     trap_context_t trap_context;
-    vm_address_space_t* address_space = NULL;
+    vm_address_space_t* address_space = (vm_address_space_t*)(uintptr_t)0x1;
     const kernel_bringup_options_t options = {
         .mmio_mask = KERNEL_BRINGUP_MMIO_STORAGE,
         .pmm_probe_marker = UINT64_C(0x10203040),
@@ -508,10 +509,42 @@ static int test_common_bringup_propagates_pmm_probe_failure(void) {
         return 1;
     }
 
-    if (address_space != &g_address_space || g_vm_enable_calls != 1 ||
+    if (address_space != NULL || g_vm_create_calls != 1 || g_vm_enable_calls != 1 ||
+        g_vm_destroy_calls != 1 || g_pmm_alloc_calls != 1 || g_pmm_free_calls != 1 ||
+        g_probe_page[0] != options.pmm_probe_marker) {
+        return fail("expected PMM probe failure to rollback created address space");
+    }
+
+    return 0;
+}
+
+static int test_common_bringup_preserves_address_space_when_rollback_fails(void) {
+    trap_context_t trap_context;
+    vm_address_space_t* address_space = (vm_address_space_t*)(uintptr_t)0x1;
+    const kernel_bringup_options_t options = {
+        .mmio_mask = KERNEL_BRINGUP_MMIO_STORAGE,
+        .pmm_probe_marker = UINT64_C(0x55667788),
+        .pre_vm_setup = NULL,
+        .pre_vm_context = NULL,
+        .map_managed_memory = true,
+    };
+
+    reset_stub_state();
+    g_pmm_free_result = false;
+    g_vm_destroy_result = false;
+    if (kernel_bringup_run_common(&trap_context, &address_space, &options)) {
+        return fail("expected PMM probe rollback failure to propagate");
+    }
+
+    if (expect_console_output("KM") != 0) {
+        return 1;
+    }
+
+    if (address_space != &g_address_space || g_vm_create_calls != 1 ||
+        g_vm_enable_calls != 1 || g_vm_destroy_calls != 1 ||
         g_pmm_alloc_calls != 1 || g_pmm_free_calls != 1 ||
         g_probe_page[0] != options.pmm_probe_marker) {
-        return fail("expected PMM probe failure to happen after VM setup");
+        return fail("expected rollback failure to preserve created address space");
     }
 
     return 0;
@@ -550,7 +583,8 @@ int main(void) {
     if (test_common_bringup_maps_fixed_ranges_and_selected_mmio() != 0 ||
         test_common_bringup_skips_managed_map_when_disabled() != 0 ||
         test_common_bringup_propagates_pre_vm_failure() != 0 ||
-        test_common_bringup_propagates_pmm_probe_failure() != 0 ||
+        test_common_bringup_rolls_back_vm_on_pmm_probe_failure() != 0 ||
+        test_common_bringup_preserves_address_space_when_rollback_fails() != 0 ||
         test_common_bringup_rolls_back_vm_on_setup_failure() != 0) {
         return 1;
     }
