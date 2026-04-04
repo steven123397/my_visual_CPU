@@ -185,7 +185,12 @@ static bool kernel_bringup_setup_vm(vm_address_space_t** out_space,
             options->mmio_mask) ||
         !vm_address_space_enable(address_space) ||
         !kernel_bringup_validate_active_address_space(address_space)) {
-        return vm_address_space_destroy(address_space) && false;
+        if (!vm_address_space_destroy(address_space)) {
+            *out_space = address_space;
+            return false;
+        }
+        *out_space = NULL;
+        return false;
     }
 
     *out_space = address_space;

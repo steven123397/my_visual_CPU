@@ -77,6 +77,7 @@ static int test_common_bringup_propagates_pre_vm_failure(void);
 static int test_common_bringup_rolls_back_vm_on_pmm_probe_failure(void);
 static int test_common_bringup_preserves_address_space_when_rollback_fails(void);
 static int test_common_bringup_rolls_back_vm_on_setup_failure(void);
+static int test_common_bringup_preserves_address_space_when_setup_rollback_fails(void);
 static bool stub_pre_vm_setup(trap_context_t* trap_context, void* context);
 
 void memory_init(void) {
@@ -579,13 +580,45 @@ static int test_common_bringup_rolls_back_vm_on_setup_failure(void) {
     return 0;
 }
 
+static int test_common_bringup_preserves_address_space_when_setup_rollback_fails(void) {
+    trap_context_t trap_context;
+    vm_address_space_t* address_space = (vm_address_space_t*)(uintptr_t)0x1;
+    const kernel_bringup_options_t options = {
+        .mmio_mask = KERNEL_BRINGUP_MMIO_STORAGE,
+        .pmm_probe_marker = 0,
+        .pre_vm_setup = NULL,
+        .pre_vm_context = NULL,
+        .map_managed_memory = true,
+    };
+
+    reset_stub_state();
+    g_riscv_satp_value = UINT64_C(0xDEADBEEF);
+    g_vm_destroy_result = false;
+    if (kernel_bringup_run_common(&trap_context, &address_space, &options)) {
+        return fail("expected VM setup rollback failure to propagate");
+    }
+
+    if (expect_console_output("KM") != 0) {
+        return 1;
+    }
+
+    if (address_space != &g_address_space || g_vm_create_calls != 1 ||
+        g_vm_enable_calls != 1 || g_vm_destroy_calls != 1 ||
+        g_pmm_alloc_calls != 0 || g_pmm_free_calls != 0) {
+        return fail("expected setup rollback failure to preserve created address space");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_common_bringup_maps_fixed_ranges_and_selected_mmio() != 0 ||
         test_common_bringup_skips_managed_map_when_disabled() != 0 ||
         test_common_bringup_propagates_pre_vm_failure() != 0 ||
         test_common_bringup_rolls_back_vm_on_pmm_probe_failure() != 0 ||
         test_common_bringup_preserves_address_space_when_rollback_fails() != 0 ||
-        test_common_bringup_rolls_back_vm_on_setup_failure() != 0) {
+        test_common_bringup_rolls_back_vm_on_setup_failure() != 0 ||
+        test_common_bringup_preserves_address_space_when_setup_rollback_fails() != 0) {
         return 1;
     }
 

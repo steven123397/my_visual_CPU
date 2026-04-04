@@ -46,8 +46,8 @@
 
 本轮主线已按 [status/project_priority_roadmap.md](project_priority_roadmap.md) 完成剩余 P0 收口；当前 `main` 不再残留 P0 条目，后续优先级应从 P1 开始。
 
-- `guest/kernel/kernel_bringup.c` 已把 VM 建立后的失败路径收口为对称回滚；当 PMM probe 失败且 `vm_address_space_destroy()` 也失败时，bring-up 现在会保留 `out_space` 指针并直接传播失败，不再伪装成“已回滚完成”。
-- `tests/unit/kernel_bringup.c` 已新增 rollback-failure 回归，和既有 probe/setup 失败用例一起守住 `kernel_bringup` 的成功回滚与失败保真合同。
+- `guest/kernel/kernel_bringup.c` 已把 VM 建立后的失败路径收口为对称回滚；当前无论是 `kernel_bringup_setup_vm()` 内部失败，还是后续 PMM probe 失败，只要 `vm_address_space_destroy()` 自己也失败，bring-up 都会保留 `out_space` 指针并直接传播失败，不再伪装成“已回滚完成”。
+- `tests/unit/kernel_bringup.c` 已新增 setup/probe 两类 rollback-failure 回归，和既有 setup/probe 失败用例一起守住 `kernel_bringup` 的成功回滚与失败保真合同。
 - `tests/asm/exception_traps.S` 已补齐 `instruction-address-misaligned` 专用回归；当前 `jal`、`jalr` 与 taken branch 跳到非对齐目标时，都会稳定守住 `mcause / mepc / mtval` 合同。
 
 本轮已新鲜验证通过：
@@ -55,6 +55,8 @@
 - `cd myCPU && make test-unit-kernel_bringup`
 - `cd myCPU && make test-exception_traps`
 - `cd myCPU && make test-guest-supervisor_demo`
+- `cd myCPU && make test-guest-kernel_alpha_demo`
+- `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 
 ## 2026-04-03 P1 首批结构收口进展
 
