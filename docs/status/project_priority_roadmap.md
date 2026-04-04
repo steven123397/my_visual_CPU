@@ -17,6 +17,8 @@
   - [status/mainline_status.md](mainline_status.md)
   - [status/kernel_alpha_status.md](kernel_alpha_status.md)
   - [status/code_self_review_status.md](code_self_review_status.md)
+- 当前活跃计划：
+  - [plan/p1_guest_public_header_boundary_refinement.md](../plan/p1_guest_public_header_boundary_refinement.md)
 - 已完成计划归档：
   - [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
   - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)

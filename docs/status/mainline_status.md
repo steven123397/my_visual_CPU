@@ -24,7 +24,7 @@
 - 相关状态：
   - [status/project_priority_roadmap.md](project_priority_roadmap.md)
 - 当前计划：
-  - 暂无活跃计划；最近完成的 `P1-2` 收口归档见 [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
+  - [plan/p1_guest_public_header_boundary_refinement.md](../plan/p1_guest_public_header_boundary_refinement.md)
 - 已完成计划归档：
   - [plan/history_plan.md](../plan/history_plan.md)
 
