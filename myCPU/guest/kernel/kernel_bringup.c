@@ -227,7 +227,9 @@ bool kernel_bringup_run_common(
 
     if (options->pmm_probe_marker != 0 &&
         !kernel_bringup_probe_pmm_page(options->pmm_probe_marker)) {
-        vm_address_space_destroy(*out_space);
+        if (!vm_address_space_destroy(*out_space)) {
+            return false;
+        }
         *out_space = NULL;
         return false;
     }
