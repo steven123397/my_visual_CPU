@@ -216,11 +216,19 @@ bool kernel_bringup_run_common(
     }
     console_putc('M');
 
-    if ((options->pre_vm_setup != NULL &&
-         !options->pre_vm_setup(trap_context, options->pre_vm_context)) ||
-        !kernel_bringup_setup_vm(out_space, options) ||
-        (options->pmm_probe_marker != 0 &&
-         !kernel_bringup_probe_pmm_page(options->pmm_probe_marker))) {
+    if (options->pre_vm_setup != NULL &&
+        !options->pre_vm_setup(trap_context, options->pre_vm_context)) {
+        return false;
+    }
+
+    if (!kernel_bringup_setup_vm(out_space, options)) {
+        return false;
+    }
+
+    if (options->pmm_probe_marker != 0 &&
+        !kernel_bringup_probe_pmm_page(options->pmm_probe_marker)) {
+        vm_address_space_destroy(*out_space);
+        *out_space = NULL;
         return false;
     }
 
