@@ -146,3 +146,10 @@
 - 完成内容：完成 `P1-1` `pipeline_backend` 边界收口，把原本单文件承载的主调度、commit-replay、execute 和 frontend 职责拆成独立编译单元，并保持 `PipelineBackend` 外部接口与现有 `pipeline` 合同不变。
 - 实现过程摘要：整体采取“只拆文件边界、不改行为合同”的克制路径；`pipeline_backend.cpp` 退回构造与 debug snapshot 侧职责，其余逻辑分别下沉到 `pipeline_backend_cycle.cpp`、`pipeline_backend_execute.cpp` 与 `pipeline_backend_frontend.cpp`。
 - 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
+#### p1-reference-platform-contract-refinement-plan
+
+- 原文件：未单独保留活跃 plan；本轮直接按路线图 `P1-12 / P1-13 / P1-14` 并行收口。
+- 完成内容：完成 `page walk` 总线失败 fault 分类、`PLIC` claim / complete 按 context 记账，以及 ELF header reject 合同三项 reference / platform 边界收口；当前页表物理访问失败与 A/D 位回写失败会稳定回到 access fault，错误 context 的 `PLIC complete` 不再释放 claim，ELF loader 也已明确 reject endianness / ident version / ELF version / type / machine / entry-range 非法输入。
+- 实现过程摘要：代码改动分别在独立 worktree 上并行落地，子分支只改生产代码和测试；最终统一回到 `main` 合并，并在主线文档中一次性回写路线图、状态和归档。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)

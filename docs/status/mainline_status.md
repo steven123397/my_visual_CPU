@@ -24,8 +24,9 @@
 - 相关状态：
   - [status/project_priority_roadmap.md](project_priority_roadmap.md)
 - 当前计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
   - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
   - [plan/history_plan.md](../plan/history_plan.md)
@@ -43,6 +44,31 @@
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
 同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是以已完成的 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 和 [plan/history_plan.md#phase3-minimal-ooo-execute-plan](../plan/history_plan.md#phase3-minimal-ooo-execute-plan) 作为当前基线，继续维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
+
+## 2026-04-04 P1-12 / P1-13 / P1-14 reference / platform 合同收口进展
+
+本轮主线已完成 [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan) 对应的三条 reference / platform 合同收口；目标是把路线图中剩余的 page-walk / PLIC / ELF 三处明确边界补成持久合同，而不是继续把这些问题留在“文档口径”或大类 smoke 里。
+
+- `myCPU/src/mem/address_space.cpp` 已把 page walk 期间的页表项读取失败与 A/D 位回写失败从 page fault 收口为对应 access fault；`tests/host/address_space_faults_smoke.cpp` 已补齐 `fetch/load/store` 三类 cause 与 `tval=原始虚拟地址` 的 host-side 合同。
+- `myCPU/src/devices/plic.cpp` 与 `myCPU/src/devices/plic.h` 已把 claim / complete 改为按 context 记账；错误 context 的 complete 不再释放 claim，`tests/unit/mmio_contract_matrix.cpp`、现有 machine/supervisor asm 以及 `pipeline_backend_smoke` 共同守住这条边界。
+- `myCPU/src/loader/elf_loader.cpp` 已把 ELF header reject 扩到 endianness、ident version、ELF version、type、machine 与 entry-range；`elf_loader_header_rejects`、`elf_loader_rejects` 以及既有正向 ELF 单测 fixture 都已同步到同一口径。
+- 这意味着路线图中的 `P1-12`、`P1-13`、`P1-14` 已全部关闭；当前仍残留的 `P1` 结构项主要是 `debug_protocol.cpp / debug_server.mjs` 的协议与运行时状态机边界。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-host-address_space_faults_smoke`
+- `cd myCPU && make test-sv39_pagewalk_contracts`
+- `cd myCPU && make test-host-backend_differential_smoke`
+- `cd myCPU && make test-unit-mmio_contract_matrix`
+- `cd myCPU && make test-plic_machine_external_interrupt`
+- `cd myCPU && make test-plic_supervisor_external_interrupt`
+- `cd myCPU && make test-host-pipeline_backend_smoke`
+- `cd myCPU && make test-unit-elf_loader_header_rejects`
+- `cd myCPU && make test-unit-elf_loader_rejects`
+- `cd myCPU && make test-guest-supervisor_demo`
+- `cd myCPU && make test-guest-kernel_alpha_demo`
+- `cd myCPU && make test`
+- `cd myCPU && make test-pipeline`
 
 ## 2026-04-04 P1-1 pipeline_backend 边界收口进展
 
@@ -422,7 +448,7 @@
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
 6. 继续沿 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 维护 `Phase 3-B/C` 当前已落地的 `rename + ROB + LSQ + phys free-list / recycle + coarse automatic replay + RAM-only forwarding +` 最小真实 `OoO execute` 形态，优先守住现有 host / guest / debug 门禁，然后再考虑更激进的 issue / replay / memory speculation。
-7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试。
+7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试；如果继续做 `P1`，当前最值得优先收口的就是 `debug_protocol.cpp / debug_server.mjs` 的协议层、会话层与 terminal projection 边界。
 
 ## 建议入口
 

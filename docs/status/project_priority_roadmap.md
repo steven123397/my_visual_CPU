@@ -18,8 +18,9 @@
   - [status/kernel_alpha_status.md](kernel_alpha_status.md)
   - [status/code_self_review_status.md](code_self_review_status.md)
 - 当前活跃计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
   - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
@@ -126,6 +127,9 @@
 - 原 `P1-1`：`pipeline_backend` 已按“构造+debug / cycle+commit-replay / execute / frontend”拆成四个编译单元，原文件不再继续混挂主调度、memory execute 和 decode/fetch。
 - 原 `P1-2`：`user_program_smoke` 已把 `prepare / enter round / active memory` 收口为更窄的内部阶段 helper，`supervisor_demo_smoke` 已退回 bootstrap / user / session 组合层；当时没有顺手扩到 `P1-5`，该项已在同日后续一轮单独完成。
 - 原 `P1-5`：`kernel_runtime`、`supervisor_runtime` 与 `user_program_smoke` 已补最小 helper / accessor，生产代码和相关单测不再直接依赖 public struct 的 interrupt counter、`address_space` 或 smoke scratch layout。
+- 原 `P1-12`：`AddressSpace` 已把 page walk 期间的页表项读取失败与 A/D 位回写失败从 page fault 收口为对应 access fault，并由 host smoke 明确守住 `fetch/load/store cause + tval=原始虚拟地址` 合同。
+- 原 `P1-13`：`PLIC` 的 claim / complete 已改为按 context 记账；错误 context 的 complete 不再释放 claim，现有 machine/supervisor asm 和 host smoke 均保持通过。
+- 原 `P1-14`：ELF loader 已把 endianness、ident version、ELF version、type、machine 和 entry-range 纳入明确 reject 合同，相关 unit fixture 和 guest ELF 正向路径已同步对齐。
 
 `2026-04-03` 已完成本节两批收口：
 
@@ -150,34 +154,6 @@
   - 调试链路已经不再是最小 demo glue，而是一条真正的协议面；继续堆字段和控制逻辑会把维护成本放大。
 - 建议：
   - 先拆协议层、会话层、terminal 投影层，再谈 richer debugger 能力。
-
-### 12. page walk 期间的总线失败当前被折叠成 page fault
-
-- 代码证据：
-  - [myCPU/src/mem/address_space.cpp](../../myCPU/src/mem/address_space.cpp) 在页表项读取失败和 A/D 位回写失败时，当前都走 `page_fault_cause(type)`。
-- 影响：
-  - “页表物理访问本身失败”和“页表内容语义非法”现在没有被区分；fault 分类仍偏粗。
-- 建议：
-  - 这条应该补成明确合同，而不是继续埋在 Sv39 大类测试里。
-
-### 13. PLIC 的 claim / complete 仍是全局记账，不是按 context 记账
-
-- 代码证据：
-  - [myCPU/src/devices/plic.cpp](../../myCPU/src/devices/plic.cpp) claim 后只更新全局 `claimed_[source_id]`，complete 也没有 context 参数。
-- 影响：
-  - 当前 asm 只测单 context 场景；机器态和监督态并发或错误 context complete 仍缺真实合同。
-- 建议：
-  - 如果后续继续推进更完整的平台中断语义，这条需要先做干净。
-
-### 14. ELF reject 合同比文档表述更窄
-
-- 代码证据：
-  - [myCPU/src/loader/elf_loader.cpp](../../myCPU/src/loader/elf_loader.cpp) 当前主要检查 magic、ELF64 class 和 header size。
-  - `e_type`、`e_machine`、`e_version`、endianness、entry 合法性等仍未形成明确 reject 合同。
-- 影响：
-  - 目前文档把 ELF malformed-input reject 说得更宽，但代码和测试实际守住的范围更窄。
-- 建议：
-  - 这条要么补合同，要么把文档口径收窄，不要继续保持模糊表述。
 
 ## P2：测试与验证补洞
 
@@ -272,24 +248,13 @@
 
 ## 建议的下一轮拆分顺序
 
-1. 先建一份 `P0` 计划，专门处理：
-   - `Bus::last_access` unmapped 观测面
-   - `kernel_bringup` 失败回滚
-   - `user_program_smoke_prepare_standard()` staged commit + 回滚
-   - `tests_manifest` 与 canonical 测试集对齐
-   - `pipeline` 非法 `load/store funct3` 的 trap 合同与回归
-   - `MPRV + xRET` 与 `instruction-address-misaligned` 两条 reference 合同
-2. 再建一份 guest 结构 hardening 计划，专门收口：
-   - `user_program_smoke`
-   - `supervisor_demo_smoke`
-   - `supervisor_demo` / `interactive_os` / `kernel_runtime` 的 bring-up 统一
-3. 然后再建一份 `pipeline/debug` 结构 hardening 计划，专门处理：
-   - `pipeline_backend` 职责拆分
+1. 如果继续收 `P1`，当前最值得单开的就是 `pipeline/debug` 结构 hardening：
    - `debug_protocol` / `debug_server` 模块边界
-   - `Makefile` / manifest / timeout budget 的单一事实来源
-4. 如果前三类问题开始收口，再单开一份 reference / platform contract 计划，专门处理：
-   - page walk access fault 分类
-   - PLIC context claim / complete 语义
-   - ELF reject 口径与测试范围对齐
-
-在这 3 类问题没有明显收口前，不建议再把路线图重心放回更远期的 `Phase 3` 扩展或平台功能面扩张。
+   - `tests_manifest`、timeout / budget 常量与调试链路单一事实来源
+2. 然后回到 `P2` 的验证补洞：
+   - `BinaryLoader` 直接单测
+   - `supervisor_demo_smoke / user_program_smoke` 更窄单测
+   - 真实 `debug server + debug CLI` 端到端 smoke
+   - `pipeline` mega-smoke 拆分
+   - `Machine::load_elf()` / `load_binary()` reset 语义说明与回归
+3. 在 `P1/P2` 这些结构和验证问题没有继续明显收口前，不建议再把路线图重心放回更远期的 `Phase 3` 扩展或平台功能面扩张。
