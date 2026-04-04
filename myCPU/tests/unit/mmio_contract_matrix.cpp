@@ -168,6 +168,72 @@ int main() {
             return 1;
         }
 
+        if (!expect_store_ok(bus,
+                             PLIC_BASE + PLIC_ENABLE_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                             (1U << PLIC_SOURCE_UART_THRE),
+                             4,
+                             "expected PLIC supervisor enable write") ||
+            !expect_store_ok(bus,
+                             PLIC_BASE + PLIC_THRESHOLD_OFFSET(PLIC_CONTEXT_MACHINE),
+                             0,
+                             4,
+                             "expected PLIC machine threshold write") ||
+            !expect_store_ok(bus,
+                             PLIC_BASE + PLIC_THRESHOLD_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                             0,
+                             4,
+                             "expected PLIC supervisor threshold write")) {
+            return 1;
+        }
+
+        plic.set_source_level(PLIC_SOURCE_UART_THRE, true);
+        if (!expect_load(bus,
+                         PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                         4,
+                         PLIC_SOURCE_UART_THRE,
+                         "expected supervisor context claim to acquire source") ||
+            !plic.source_claimed(PLIC_SOURCE_UART_THRE) ||
+            plic.source_pending(PLIC_SOURCE_UART_THRE)) {
+            std::fprintf(stderr, "expected claimed source to be owned and not pending\n");
+            return 1;
+        }
+
+        if (!expect_store_ok(bus,
+                             PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_MACHINE),
+                             PLIC_SOURCE_UART_THRE,
+                             4,
+                             "expected machine context complete write to be accepted")) {
+            return 1;
+        }
+        if (!plic.source_claimed(PLIC_SOURCE_UART_THRE) ||
+            plic.source_pending(PLIC_SOURCE_UART_THRE) ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                         4,
+                         0,
+                         "expected supervisor claim to remain blocked after wrong-context complete")) {
+            std::fprintf(stderr, "wrong-context complete should not release claimed source\n");
+            return 1;
+        }
+
+        if (!expect_store_ok(bus,
+                             PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                             PLIC_SOURCE_UART_THRE,
+                             4,
+                             "expected owner context complete write")) {
+            return 1;
+        }
+        if (plic.source_claimed(PLIC_SOURCE_UART_THRE) ||
+            !plic.source_pending(PLIC_SOURCE_UART_THRE) ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                         4,
+                         PLIC_SOURCE_UART_THRE,
+                         "expected source to become claimable again after owner complete")) {
+            std::fprintf(stderr, "owner complete should release and re-pend asserted source\n");
+            return 1;
+        }
+
         if (!expect_load(bus, STORAGE_BASE + STORAGE_REG_MAGIC, 8, STORAGE_MMIO_MAGIC, "expected storage magic load") ||
             !expect_store_ok(bus, STORAGE_BASE + STORAGE_REG_LBA, 3, 8, "expected storage LBA write") ||
             !expect_load(bus, STORAGE_BASE + STORAGE_REG_LBA, 8, 3, "expected storage LBA readback") ||
