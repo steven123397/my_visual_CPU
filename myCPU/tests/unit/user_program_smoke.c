@@ -34,10 +34,12 @@ static int g_user_program_create_calls = 0;
 static int g_user_program_destroy_calls = 0;
 static int g_user_program_prepare_standard_calls = 0;
 static int g_vm_object_init_physical_calls = 0;
+static int g_vm_user_region_unmap_page_calls = 0;
 static bool g_user_program_create_result = true;
 static bool g_user_program_destroy_result = true;
 static bool g_user_program_prepare_standard_result = true;
 static bool g_vm_object_init_physical_result = true;
+static bool g_vm_user_region_unmap_page_result = false;
 
 static void reset_stub_state(void);
 static void fill_created_program_layout(user_program_t* program);
@@ -46,6 +48,7 @@ static int fail(const char* message);
 static int test_smoke_init_and_plan_wrapper(void);
 static int test_validate_standard_plan(void);
 static int test_prepare_standard_rolls_back_failed_address_space_stage(void);
+static int test_prepare_standard_rolls_back_failed_runtime_stage(void);
 
 static bool program_created(const user_program_t* program) {
     return program != NULL &&
@@ -293,12 +296,18 @@ bool user_program_map_object_region(user_program_t* program,
                                     size_t size,
                                     uint64_t flags,
                                     vm_object_t* object) {
-    (void)program;
-    (void)region;
-    (void)vaddr;
-    (void)size;
-    (void)flags;
-    (void)object;
+    if (program == NULL || region == NULL || object == NULL) {
+        return false;
+    }
+
+    region->address_space = user_program_address_space(program);
+    region->vaddr = vaddr;
+    region->size = size;
+    region->flags = flags;
+    region->registered = true;
+    region->object = object;
+    region->object_offset = 0;
+    region->object_mode = VM_REGION_OBJECT_FAULT;
     return true;
 }
 
@@ -511,19 +520,12 @@ bool vm_process_user_region_init(vm_process_t* process,
                                  uintptr_t vaddr,
                                  size_t size,
                                  uint64_t flags) {
-    if (process == NULL || region == NULL) {
-        return false;
-    }
-
-    region->address_space = process->address_space;
-    region->vaddr = vaddr;
-    region->size = size;
-    region->flags = flags;
-    region->registered = false;
-    region->object = NULL;
-    region->object_offset = 0;
-    region->object_mode = VM_REGION_OBJECT_NONE;
-    return true;
+    (void)process;
+    (void)region;
+    (void)vaddr;
+    (void)size;
+    (void)flags;
+    return false;
 }
 
 bool vm_user_region_set_fault_object(vm_user_region_t* region, vm_object_t* object) {
@@ -533,9 +535,9 @@ bool vm_user_region_set_fault_object(vm_user_region_t* region, vm_object_t* obje
 }
 
 bool vm_user_region_unmap_page(vm_user_region_t* region, uintptr_t vaddr) {
-    (void)region;
-    (void)vaddr;
-    return false;
+    g_vm_user_region_unmap_page_calls += 1;
+    return region != NULL && region->registered &&
+           vaddr == region->vaddr && g_vm_user_region_unmap_page_result;
 }
 
 static void reset_stub_state(void) {
@@ -556,10 +558,12 @@ static void reset_stub_state(void) {
     g_user_program_destroy_calls = 0;
     g_user_program_prepare_standard_calls = 0;
     g_vm_object_init_physical_calls = 0;
+    g_vm_user_region_unmap_page_calls = 0;
     g_user_program_create_result = true;
     g_user_program_destroy_result = true;
     g_user_program_prepare_standard_result = true;
     g_vm_object_init_physical_result = true;
+    g_vm_user_region_unmap_page_result = false;
 }
 
 static int fail(const char* message) {
@@ -674,10 +678,62 @@ static int test_prepare_standard_rolls_back_failed_address_space_stage(void) {
     return 0;
 }
 
+static int test_prepare_standard_rolls_back_failed_runtime_stage(void) {
+    user_program_smoke_t smoke;
+    user_program_t program = {0};
+    trap_context_t trap_context = {0};
+    volatile uintptr_t fault_resume_pc_slot = 0;
+    uint8_t trap_stack[TRAP_USER_RUNTIME_MIN_STACK_SIZE] = {0};
+    const user_program_smoke_prepare_t prepare = {
+        .trap_context = &trap_context,
+        .backing_page_paddr = MEM_BASE,
+        .user_stack_paddr = MEM_BASE + MEMORY_PAGE_SIZE,
+        .remap_page_paddr = MEM_BASE + 2U * MEMORY_PAGE_SIZE,
+        .fault_skip_vaddr = 0x2000U,
+        .fault_skip_size = 4U,
+        .fault_resume_vaddr = 0x3000U,
+        .fault_resume_size = 4U,
+        .fault_resume_pc_slot = &fault_resume_pc_slot,
+        .arg0 = 1U,
+        .trap_stack_base = trap_stack,
+        .trap_stack_size = sizeof(trap_stack),
+        .validate = NULL,
+        .validate_context = NULL,
+        .supervisor_timer_post_handler = NULL,
+        .supervisor_timer_post_context = NULL,
+        .supervisor_external_post_handler = NULL,
+        .supervisor_external_post_context = NULL,
+    };
+
+    reset_stub_state();
+    user_program_smoke_init(&smoke);
+    g_vm_user_region_unmap_page_result = true;
+    g_user_program_prepare_standard_result = false;
+
+    if (user_program_smoke_prepare_standard(&smoke, &program, &prepare)) {
+        return fail("expected prepare_standard to fail when runtime prepare fails");
+    }
+
+    if (g_user_program_create_calls != 1 ||
+        g_vm_object_init_physical_calls != 1 ||
+        g_vm_user_region_unmap_page_calls != 1 ||
+        g_user_program_prepare_standard_calls != 1) {
+        return fail("expected prepare_standard to reach the runtime orchestration failure point");
+    }
+
+    if (smoke.program != NULL || g_user_program_destroy_calls != 1 ||
+        program_created(&program)) {
+        return fail("expected runtime-stage failure to rollback smoke/program state");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_smoke_init_and_plan_wrapper() != 0 ||
         test_validate_standard_plan() != 0 ||
-        test_prepare_standard_rolls_back_failed_address_space_stage() != 0) {
+        test_prepare_standard_rolls_back_failed_address_space_stage() != 0 ||
+        test_prepare_standard_rolls_back_failed_runtime_stage() != 0) {
         return 1;
     }
 

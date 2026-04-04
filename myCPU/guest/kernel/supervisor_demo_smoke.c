@@ -32,6 +32,29 @@ typedef struct SupervisorDemoSmokeState {
     uint32_t expected_user_external;
 } supervisor_demo_smoke_state_t;
 
+typedef struct SupervisorDemoSmokeBootstrapStage {
+    supervisor_demo_smoke_state_t* state;
+    supervisor_demo_smoke_pages_t* pages;
+    trap_context_t* trap_context;
+    user_program_t* program;
+    void* early_allocation;
+    const volatile uint32_t* rodata_marker;
+    uintptr_t exec_symbol;
+    uintptr_t ecall_symbol;
+    uint32_t expected_user_data;
+    uint32_t expected_user_timer;
+    uint32_t expected_user_external;
+} supervisor_demo_smoke_bootstrap_stage_t;
+
+typedef struct SupervisorDemoSmokeSessionStage {
+    supervisor_demo_smoke_state_t* state;
+    user_program_smoke_t* smoke;
+    trap_context_t* expected_trap_context;
+    supervisor_demo_smoke_pages_t* pages;
+    user_program_smoke_active_phase_t* active_phase;
+    uint64_t timer_delta;
+} supervisor_demo_smoke_session_stage_t;
+
 enum {
     SUPERVISOR_DEMO_SMOKE_EARLY_ALLOC_SIZE = 96U,
     SUPERVISOR_DEMO_SMOKE_EARLY_ALLOC_ALIGN = 64U,
@@ -55,6 +78,14 @@ static bool supervisor_demo_smoke_pages_ready(
     const supervisor_demo_smoke_pages_t* pages);
 static bool supervisor_demo_smoke_state_ready(
     const supervisor_demo_smoke_state_t* state);
+static bool supervisor_demo_smoke_bootstrap_stage_valid(
+    const supervisor_demo_smoke_bootstrap_stage_t* stage);
+static bool supervisor_demo_smoke_bootstrap_validate_plan_and_layout(
+    const supervisor_demo_smoke_bootstrap_stage_t* stage);
+static bool supervisor_demo_smoke_bootstrap_init_pmm_and_pages(
+    const supervisor_demo_smoke_bootstrap_stage_t* stage);
+static bool supervisor_demo_smoke_session_stage_valid(
+    const supervisor_demo_smoke_session_stage_t* stage);
 static user_program_smoke_prepare_t supervisor_demo_smoke_build_prepare(
     supervisor_demo_smoke_state_t* state,
     user_program_t* program,
@@ -90,17 +121,7 @@ static bool supervisor_demo_smoke_validate_user_program_lifecycle(
     uintptr_t ecall_symbol,
     const supervisor_demo_smoke_pages_t* pages);
 static bool supervisor_demo_smoke_prepare_bootstrap(
-    supervisor_demo_smoke_state_t* state,
-    supervisor_demo_smoke_pages_t* pages,
-    trap_context_t* trap_context,
-    user_program_t* program,
-    void* early_allocation,
-    const volatile uint32_t* rodata_marker,
-    uintptr_t exec_symbol,
-    uintptr_t ecall_symbol,
-    uint32_t expected_user_data,
-    uint32_t expected_user_timer,
-    uint32_t expected_user_external);
+    const supervisor_demo_smoke_bootstrap_stage_t* stage);
 static bool supervisor_demo_smoke_prepare_user_program(
     supervisor_demo_smoke_state_t* state,
     user_program_t* program,
@@ -124,22 +145,14 @@ static bool supervisor_demo_smoke_run_user_round(
     uint32_t external_signal_value,
     uint64_t timer_delta);
 static bool supervisor_demo_smoke_run_user_program(
-    supervisor_demo_smoke_state_t* state,
-    user_program_smoke_t* smoke,
-    trap_context_t* expected_trap_context,
-    supervisor_demo_smoke_pages_t* pages,
-    user_program_smoke_active_phase_t* active_phase,
-    uint64_t timer_delta);
+    const supervisor_demo_smoke_session_stage_t* stage);
+static bool supervisor_demo_smoke_run_signal_rounds(
+    const supervisor_demo_smoke_session_stage_t* stage,
+    trap_user_runtime_t* user_runtime);
 static bool supervisor_demo_smoke_run_platform_tail(
-    supervisor_demo_smoke_state_t* state,
-    uint64_t timer_delta);
+    const supervisor_demo_smoke_session_stage_t* stage);
 static bool supervisor_demo_smoke_run_demo_session(
-    supervisor_demo_smoke_state_t* state,
-    user_program_smoke_t* smoke,
-    trap_context_t* expected_trap_context,
-    supervisor_demo_smoke_pages_t* pages,
-    user_program_smoke_active_phase_t* active_phase,
-    uint64_t timer_delta);
+    const supervisor_demo_smoke_session_stage_t* stage);
 static void supervisor_demo_smoke_external_post_handler(uint32_t source_id,
                                                         void* context);
 static bool supervisor_demo_smoke_user_ecall_validate(
@@ -185,6 +198,53 @@ static bool supervisor_demo_smoke_pages_ready(
 static bool supervisor_demo_smoke_state_ready(
     const supervisor_demo_smoke_state_t* state) {
     return state != NULL && state->user_data_page != NULL;
+}
+
+static bool supervisor_demo_smoke_bootstrap_stage_valid(
+    const supervisor_demo_smoke_bootstrap_stage_t* stage) {
+    return stage != NULL && stage->state != NULL && stage->pages != NULL &&
+           stage->trap_context != NULL && stage->program != NULL &&
+           stage->rodata_marker != NULL;
+}
+
+static bool supervisor_demo_smoke_bootstrap_validate_plan_and_layout(
+    const supervisor_demo_smoke_bootstrap_stage_t* stage) {
+    return supervisor_demo_smoke_bootstrap_stage_valid(stage) &&
+           supervisor_demo_smoke_validate_memory_layout(stage->early_allocation,
+                                                        stage->rodata_marker) &&
+           user_program_smoke_plan_standard(stage->program,
+                                            stage->exec_symbol,
+                                            stage->ecall_symbol) &&
+           user_program_smoke_validate_standard_plan(stage->program,
+                                                     vm_user_base(),
+                                                     vm_user_limit());
+}
+
+static bool supervisor_demo_smoke_bootstrap_init_pmm_and_pages(
+    const supervisor_demo_smoke_bootstrap_stage_t* stage) {
+    const uintptr_t user_anon_vaddr =
+        user_program_value(stage->program, USER_PROGRAM_VALUE_ANON_VADDR);
+    const uintptr_t early_cursor = memory_heap_current();
+    size_t lifecycle_free_before = 0;
+
+    pmm_init();
+    if (!supervisor_demo_smoke_bootstrap_stage_valid(stage) ||
+        !supervisor_demo_smoke_validate_pmm_setup(early_cursor) ||
+        !supervisor_demo_smoke_probe_storage_page()) {
+        return false;
+    }
+
+    lifecycle_free_before = pmm_free_pages();
+    return user_program_smoke_validate_vm_lifecycle(user_anon_vaddr,
+                                                    lifecycle_free_before) &&
+           supervisor_demo_smoke_alloc_pages(stage->pages);
+}
+
+static bool supervisor_demo_smoke_session_stage_valid(
+    const supervisor_demo_smoke_session_stage_t* stage) {
+    return stage != NULL && stage->state != NULL && stage->smoke != NULL &&
+           stage->expected_trap_context != NULL && stage->pages != NULL &&
+           stage->active_phase != NULL && stage->timer_delta != 0;
 }
 
 static user_program_smoke_prepare_t supervisor_demo_smoke_build_prepare(
@@ -375,58 +435,22 @@ static bool supervisor_demo_smoke_validate_user_program_lifecycle(
 }
 
 static bool supervisor_demo_smoke_prepare_bootstrap(
-    supervisor_demo_smoke_state_t* state,
-    supervisor_demo_smoke_pages_t* pages,
-    trap_context_t* trap_context,
-    user_program_t* program,
-    void* early_allocation,
-    const volatile uint32_t* rodata_marker,
-    uintptr_t exec_symbol,
-    uintptr_t ecall_symbol,
-    uint32_t expected_user_data,
-    uint32_t expected_user_timer,
-    uint32_t expected_user_external) {
-    uintptr_t user_anon_vaddr = 0;
-    uintptr_t early_cursor = 0;
-    size_t lifecycle_free_before = 0;
-
-    if (state == NULL || pages == NULL || trap_context == NULL ||
-        program == NULL || rodata_marker == NULL) {
+    const supervisor_demo_smoke_bootstrap_stage_t* stage) {
+    if (!supervisor_demo_smoke_bootstrap_validate_plan_and_layout(stage) ||
+        !supervisor_demo_smoke_bootstrap_init_pmm_and_pages(stage)) {
         return false;
     }
 
-    if (!supervisor_demo_smoke_validate_memory_layout(early_allocation,
-                                                      rodata_marker) ||
-        !user_program_smoke_plan_standard(program, exec_symbol, ecall_symbol) ||
-        !user_program_smoke_validate_standard_plan(program,
-                                                   vm_user_base(),
-                                                   vm_user_limit())) {
-        return false;
-    }
-
-    user_anon_vaddr =
-        user_program_value(program, USER_PROGRAM_VALUE_ANON_VADDR);
-    early_cursor = memory_heap_current();
-    pmm_init();
-    if (!supervisor_demo_smoke_validate_pmm_setup(early_cursor) ||
-        !supervisor_demo_smoke_probe_storage_page()) {
-        return false;
-    }
-
-    lifecycle_free_before = pmm_free_pages();
-    if (!user_program_smoke_validate_vm_lifecycle(user_anon_vaddr,
-                                                  lifecycle_free_before) ||
-        !supervisor_demo_smoke_alloc_pages(pages)) {
-        return false;
-    }
-
-    supervisor_demo_smoke_init(state,
-                               pages->remap_page,
-                               expected_user_data,
-                               expected_user_timer,
-                               expected_user_external);
+    supervisor_demo_smoke_init(stage->state,
+                               stage->pages->remap_page,
+                               stage->expected_user_data,
+                               stage->expected_user_timer,
+                               stage->expected_user_external);
     return supervisor_demo_smoke_validate_user_program_lifecycle(
-        trap_context, exec_symbol, ecall_symbol, pages);
+        stage->trap_context,
+        stage->exec_symbol,
+        stage->ecall_symbol,
+        stage->pages);
 }
 
 static bool supervisor_demo_smoke_prepare_user_program(
@@ -506,83 +530,77 @@ static bool supervisor_demo_smoke_run_user_round(
 }
 
 static bool supervisor_demo_smoke_run_user_program(
-    supervisor_demo_smoke_state_t* state,
-    user_program_smoke_t* smoke,
-    trap_context_t* expected_trap_context,
-    supervisor_demo_smoke_pages_t* pages,
-    user_program_smoke_active_phase_t* active_phase,
-    uint64_t timer_delta) {
+    const supervisor_demo_smoke_session_stage_t* stage) {
     trap_user_runtime_t* user_runtime = NULL;
 
-    if (state == NULL || smoke == NULL || expected_trap_context == NULL ||
-        pages == NULL || pages->backing_page == NULL ||
-        pages->remap_page == NULL || active_phase == NULL ||
-        timer_delta == 0) {
+    if (!supervisor_demo_smoke_session_stage_valid(stage) ||
+        stage->pages->backing_page == NULL || stage->pages->remap_page == NULL) {
         return false;
     }
 
-    user_runtime = smoke->program != NULL ? user_program_runtime(smoke->program)
-                                          : NULL;
+    user_runtime = stage->smoke->program != NULL
+                       ? user_program_runtime(stage->smoke->program)
+                       : NULL;
     return user_runtime != NULL &&
-           supervisor_demo_smoke_prime_active_pages(pages, active_phase) &&
-           user_program_smoke_activate_supervisor_access(smoke,
-                                                         expected_trap_context) &&
-           active_user_program_state_ok(smoke, expected_trap_context) &&
-           user_program_smoke_exercise_active_memory(smoke,
-                                                     pages->backing_page,
-                                                     pages->remap_page,
-                                                     active_phase) &&
-           supervisor_demo_smoke_run_user_round(
-               state,
-               smoke,
-               expected_trap_context,
-               user_runtime,
-               pages->remap_page,
-               SUPERVISOR_DEMO_SMOKE_TIMER_SIGNAL_INDEX,
-               state->expected_user_timer,
-               pages->remap_page,
-               SUPERVISOR_DEMO_SMOKE_EXTERNAL_SIGNAL_INDEX,
-               state->expected_user_external,
-               timer_delta) &&
-           supervisor_demo_smoke_run_user_round(
-               state,
-               smoke,
-               expected_trap_context,
-               user_runtime,
-               pages->remap_page,
-               SUPERVISOR_DEMO_SMOKE_TIMER_SIGNAL_INDEX,
-               state->expected_user_timer,
-               pages->remap_page,
-               SUPERVISOR_DEMO_SMOKE_EXTERNAL_SIGNAL_INDEX,
-               state->expected_user_external,
-               timer_delta);
+           supervisor_demo_smoke_prime_active_pages(stage->pages,
+                                                    stage->active_phase) &&
+           user_program_smoke_activate_supervisor_access(
+               stage->smoke,
+               stage->expected_trap_context) &&
+           active_user_program_state_ok(stage->smoke,
+                                        stage->expected_trap_context) &&
+           user_program_smoke_exercise_active_memory(stage->smoke,
+                                                     stage->pages->backing_page,
+                                                     stage->pages->remap_page,
+                                                     stage->active_phase) &&
+           supervisor_demo_smoke_run_signal_rounds(stage, user_runtime);
 }
 
 static bool supervisor_demo_smoke_run_platform_tail(
-    supervisor_demo_smoke_state_t* state,
-    uint64_t timer_delta) {
-    return state != NULL &&
+    const supervisor_demo_smoke_session_stage_t* stage) {
+    return supervisor_demo_smoke_session_stage_valid(stage) &&
            pmm_used_pages() >= 5U &&
            kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
-               &state->interrupts,
-               timer_delta,
+               &stage->state->interrupts,
+               stage->timer_delta,
                SUPERVISOR_DEMO_SMOKE_INTERRUPT_TIMEOUT);
 }
 
 static bool supervisor_demo_smoke_run_demo_session(
-    supervisor_demo_smoke_state_t* state,
-    user_program_smoke_t* smoke,
-    trap_context_t* expected_trap_context,
-    supervisor_demo_smoke_pages_t* pages,
-    user_program_smoke_active_phase_t* active_phase,
-    uint64_t timer_delta) {
-    return supervisor_demo_smoke_run_user_program(state,
-                                                  smoke,
-                                                  expected_trap_context,
-                                                  pages,
-                                                  active_phase,
-                                                  timer_delta) &&
-           supervisor_demo_smoke_run_platform_tail(state, timer_delta);
+    const supervisor_demo_smoke_session_stage_t* stage) {
+    return supervisor_demo_smoke_run_user_program(stage) &&
+           supervisor_demo_smoke_run_platform_tail(stage);
+}
+
+static bool supervisor_demo_smoke_run_signal_rounds(
+    const supervisor_demo_smoke_session_stage_t* stage,
+    trap_user_runtime_t* user_runtime) {
+    return supervisor_demo_smoke_session_stage_valid(stage) &&
+           user_runtime != NULL &&
+           supervisor_demo_smoke_run_user_round(
+               stage->state,
+               stage->smoke,
+               stage->expected_trap_context,
+               user_runtime,
+               stage->pages->remap_page,
+               SUPERVISOR_DEMO_SMOKE_TIMER_SIGNAL_INDEX,
+               stage->state->expected_user_timer,
+               stage->pages->remap_page,
+               SUPERVISOR_DEMO_SMOKE_EXTERNAL_SIGNAL_INDEX,
+               stage->state->expected_user_external,
+               stage->timer_delta) &&
+           supervisor_demo_smoke_run_user_round(
+               stage->state,
+               stage->smoke,
+               stage->expected_trap_context,
+               user_runtime,
+               stage->pages->remap_page,
+               SUPERVISOR_DEMO_SMOKE_TIMER_SIGNAL_INDEX,
+               stage->state->expected_user_timer,
+               stage->pages->remap_page,
+               SUPERVISOR_DEMO_SMOKE_EXTERNAL_SIGNAL_INDEX,
+               stage->state->expected_user_external,
+               stage->timer_delta);
 }
 
 static void supervisor_demo_smoke_external_post_handler(uint32_t source_id,
@@ -661,6 +679,27 @@ bool supervisor_demo_smoke_run(trap_context_t* trap_context,
     supervisor_demo_smoke_pages_t demo_pages = {0};
     volatile uintptr_t instruction_fault_resume_pc = 0;
     void* early_allocation = NULL;
+    supervisor_demo_smoke_bootstrap_stage_t bootstrap_stage = {
+        .state = &demo_trap_state,
+        .pages = &demo_pages,
+        .trap_context = trap_context,
+        .program = &user_program,
+        .early_allocation = NULL,
+        .rodata_marker = &supervisor_demo_rodata_marker,
+        .exec_symbol = exec_symbol,
+        .ecall_symbol = ecall_symbol,
+        .expected_user_data = supervisor_demo_user_data_marker,
+        .expected_user_timer = supervisor_demo_user_timer_marker,
+        .expected_user_external = supervisor_demo_user_external_marker,
+    };
+    const supervisor_demo_smoke_session_stage_t session_stage = {
+        .state = &demo_trap_state,
+        .smoke = &user_program_smoke,
+        .expected_trap_context = trap_context,
+        .pages = &demo_pages,
+        .active_phase = &active_phase,
+        .timer_delta = SUPERVISOR_DEMO_SMOKE_TIMER_DELTA,
+    };
 
     if (trap_context == NULL || !trap_context_is_active(trap_context) ||
         trap_active_context() != trap_context) {
@@ -674,19 +713,9 @@ bool supervisor_demo_smoke_run(trap_context_t* trap_context,
     supervisor_demo_smoke_init_active_phase(&active_phase,
                                             &supervisor_demo_rodata_marker,
                                             &instruction_fault_resume_pc);
+    bootstrap_stage.early_allocation = early_allocation;
 
-    return supervisor_demo_smoke_prepare_bootstrap(
-               &demo_trap_state,
-               &demo_pages,
-               trap_context,
-               &user_program,
-               early_allocation,
-               &supervisor_demo_rodata_marker,
-               exec_symbol,
-               ecall_symbol,
-               supervisor_demo_user_data_marker,
-               supervisor_demo_user_timer_marker,
-               supervisor_demo_user_external_marker) &&
+    return supervisor_demo_smoke_prepare_bootstrap(&bootstrap_stage) &&
            supervisor_demo_smoke_prepare_user_program(
                &demo_trap_state,
                &user_program,
@@ -695,10 +724,5 @@ bool supervisor_demo_smoke_run(trap_context_t* trap_context,
                &demo_pages,
                &supervisor_demo_rodata_marker,
                &instruction_fault_resume_pc) &&
-           supervisor_demo_smoke_run_demo_session(&demo_trap_state,
-                                                  &user_program_smoke,
-                                                  trap_context,
-                                                  &demo_pages,
-                                                  &active_phase,
-                                                  SUPERVISOR_DEMO_SMOKE_TIMER_DELTA);
+           supervisor_demo_smoke_run_demo_session(&session_stage);
 }

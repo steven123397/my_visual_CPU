@@ -18,6 +18,7 @@
   - [status/kernel_alpha_status.md](kernel_alpha_status.md)
   - [status/code_self_review_status.md](code_self_review_status.md)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
   - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
   - [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
 
@@ -116,6 +117,10 @@
 
 ## P1：下一层结构收口
 
+`2026-04-04` 已完成本节新增一批收口：
+
+- 原 `P1-2`：`user_program_smoke` 已把 `prepare / enter round / active memory` 收口为更窄的内部阶段 helper，`supervisor_demo_smoke` 已退回 bootstrap / user / session 组合层；本轮刻意没有顺手扩到 `P1-5` 的 guest public header API 收口。
+
 `2026-04-03` 已完成本节两批收口：
 
 - 首批：
@@ -138,16 +143,6 @@
   - 继续推进 issue / replay / memory speculation 时，任何修复都更容易跨阶段互相污染。
 - 建议：
   - 先拆“提交边界 / memory execute / interrupt-replay / 前端取指”这几块，而不是继续往单文件塞新行为。
-
-### 2. `user_program_smoke.c` 和 `supervisor_demo_smoke.c` 还在承担第二套 runtime / orchestration
-
-- 代码证据：
-  - [myCPU/guest/kernel/user_program_smoke.c](../../myCPU/guest/kernel/user_program_smoke.c) 已经同时承载标准 plan、生命周期校验、address space 准备、runtime 准备、active memory exercise 和 interrupt round。
-  - [myCPU/guest/kernel/supervisor_demo_smoke.c](../../myCPU/guest/kernel/supervisor_demo_smoke.c) 还在自己做 `pmm_init()`、页分配、lifecycle 校验、平台 tail 和 storage signature 检查。
-- 影响：
-  - `smoke` 已经从“最小编排”膨胀成“第二套 bring-up 框架”，后续任何 guest hardening 都会继续堆在这里。
-- 建议：
-  - 优先把 `prepare / active-memory / interrupt round / platform tail` 拆成更窄的 helper，再让 `smoke` 只保留组合逻辑。
 
 ### 5. guest 公共头文件还在暴露可变内部布局
 
@@ -209,13 +204,13 @@
 - 建议：
   - 给 `BinaryLoader` 补最小单测，至少覆盖 bad path 和 range reject。
 
-### 2. guest 侧最复杂的 smoke 路径缺少直接单测
+### 2. guest 侧最复杂的 smoke 路径仍缺更贴近新边界的直接单测
 
 - 代码证据：
   - [myCPU/Makefile](../../myCPU/Makefile) 没有 `supervisor_demo_smoke` 的单测目标。
-  - [myCPU/tests/unit/user_program_smoke.c](../../myCPU/tests/unit/user_program_smoke.c) 目前只覆盖较外层的 init / plan validator，和实现复杂度不匹配。
+  - [myCPU/tests/unit/user_program_smoke.c](../../myCPU/tests/unit/user_program_smoke.c) 现在已覆盖 `prepare_standard()` 的 address-space/runtime rollback，但 `active-memory`、`interrupt round` 等阶段 helper 仍主要靠 guest demo 间接覆盖。
 - 建议：
-  - 先把 `supervisor_demo_smoke` 和 `user_program_smoke` 的关键失败路径补成窄单测，再继续做 guest 结构拆分。
+  - 下一轮应优先把 `supervisor_demo_smoke` 和 `user_program_smoke` 新收口出来的关键失败路径补成窄单测，再继续做 guest 结构拆分。
 
 ### 3. Node 侧调试服务缺少“真实 server + 真实 debug CLI”端到端回归
 

@@ -78,6 +78,31 @@ typedef struct UserProgramStandardPlanValues {
     uintptr_t user_sp;
 } user_program_standard_plan_values_t;
 
+typedef struct UserProgramSmokePrepareStage {
+    user_program_smoke_t* smoke;
+    user_program_t* program;
+    const user_program_smoke_prepare_t* prepare;
+} user_program_smoke_prepare_stage_t;
+
+typedef struct UserProgramSmokeRoundStage {
+    user_program_smoke_t* smoke;
+    const user_program_smoke_round_t* round;
+} user_program_smoke_round_stage_t;
+
+typedef struct UserProgramSmokeActiveMemoryStage {
+    user_program_smoke_t* smoke;
+    uint32_t* backing_page;
+    uint32_t* remap_page;
+    const user_program_smoke_active_phase_t* phase;
+    uintptr_t alias_vaddr;
+    uintptr_t anon_vaddr;
+    uintptr_t anon_tail_vaddr;
+    uint32_t* alias_page;
+    uint32_t* anon_page;
+    uint32_t* anon_tail_page;
+    uint32_t backing_word0;
+} user_program_smoke_active_memory_stage_t;
+
 static bool load_standard_plan_values(
     const user_program_t* program,
     user_program_standard_plan_values_t* values);
@@ -91,6 +116,20 @@ static bool standard_plan_exec_range_valid(
     const user_program_standard_plan_values_t* values);
 static bool prepare_args_valid(const user_program_smoke_prepare_t* prepare);
 static bool round_args_valid(const user_program_smoke_round_t* round);
+static bool user_program_smoke_prepare_stage_valid(
+    const user_program_smoke_prepare_stage_t* stage);
+static bool user_program_smoke_create_staged_program(
+    const user_program_smoke_prepare_stage_t* stage);
+static bool user_program_smoke_prepare_stage_address_space(
+    const user_program_smoke_prepare_stage_t* stage);
+static bool user_program_smoke_prepare_stage_runtime(
+    const user_program_smoke_prepare_stage_t* stage);
+static bool user_program_smoke_round_stage_valid(
+    const user_program_smoke_round_stage_t* stage);
+static bool user_program_smoke_round_activate_if_needed(
+    const user_program_smoke_round_stage_t* stage);
+static bool user_program_smoke_round_enter_active(
+    const user_program_smoke_round_stage_t* stage);
 static bool active_memory_args_valid(
     const user_program_smoke_t* smoke,
     uint32_t* backing_page,
@@ -99,6 +138,20 @@ static bool active_memory_args_valid(
     uintptr_t alias_vaddr,
     uintptr_t anon_vaddr,
     uintptr_t anon_tail_vaddr);
+static bool user_program_smoke_active_memory_stage_init(
+    user_program_smoke_active_memory_stage_t* stage,
+    user_program_smoke_t* smoke,
+    uint32_t* backing_page,
+    uint32_t* remap_page,
+    const user_program_smoke_active_phase_t* phase);
+static bool user_program_smoke_active_memory_exercise_alias_backing(
+    user_program_smoke_active_memory_stage_t* stage);
+static bool user_program_smoke_active_memory_exercise_anon_regions(
+    user_program_smoke_active_memory_stage_t* stage);
+static bool user_program_smoke_active_memory_exercise_remap_rebind(
+    user_program_smoke_active_memory_stage_t* stage);
+static bool user_program_smoke_active_memory_exercise_faults(
+    const user_program_smoke_active_memory_stage_t* stage);
 
 static bool reject_invalid_region_paths(user_program_smoke_t* smoke);
 static bool user_program_smoke_validate_runtime_reprepare(
@@ -150,16 +203,6 @@ static bool user_program_smoke_prepare_runtime(
     void* supervisor_timer_post_context,
     trap_supervisor_external_post_handler_t supervisor_external_post_handler,
     void* supervisor_external_post_context);
-static bool user_program_smoke_reactivate_and_enter_with_interrupt_signals(
-    user_program_smoke_t* smoke,
-    trap_context_t* expected_trap_context,
-    uint32_t* timer_signal_page,
-    size_t timer_signal_index,
-    uint32_t timer_signal_value,
-    uint32_t* external_signal_page,
-    size_t external_signal_index,
-    uint32_t external_signal_value,
-    uint64_t timer_delta);
 static bool user_program_smoke_enter_with_interrupt_signals(
     user_program_smoke_t* smoke,
     uint32_t* timer_signal_page,
@@ -476,6 +519,68 @@ static bool round_args_valid(const user_program_smoke_round_t* round) {
            round->timer_delta != 0;
 }
 
+static bool user_program_smoke_prepare_stage_valid(
+    const user_program_smoke_prepare_stage_t* stage) {
+    return stage != NULL && stage->smoke != NULL && stage->program != NULL &&
+           prepare_args_valid(stage->prepare);
+}
+
+static bool user_program_smoke_create_staged_program(
+    const user_program_smoke_prepare_stage_t* stage) {
+    return user_program_smoke_prepare_stage_valid(stage) &&
+           user_program_create(stage->program,
+                               stage->prepare->backing_page_paddr,
+                               stage->prepare->user_stack_paddr) &&
+           user_program_smoke_validate_created_program(stage->program);
+}
+
+static bool user_program_smoke_prepare_stage_address_space(
+    const user_program_smoke_prepare_stage_t* stage) {
+    return user_program_smoke_prepare_stage_valid(stage) &&
+           user_program_smoke_prepare_address_space(
+               stage->smoke,
+               stage->program,
+               stage->prepare->backing_page_paddr,
+               stage->prepare->remap_page_paddr,
+               stage->prepare->fault_skip_vaddr,
+               stage->prepare->fault_skip_size,
+               stage->prepare->fault_resume_vaddr,
+               stage->prepare->fault_resume_size,
+               stage->prepare->fault_resume_pc_slot);
+}
+
+static bool user_program_smoke_prepare_stage_runtime(
+    const user_program_smoke_prepare_stage_t* stage) {
+    return user_program_smoke_prepare_stage_valid(stage) &&
+           user_program_smoke_prepare_runtime(
+               stage->smoke,
+               stage->prepare->trap_context,
+               stage->prepare->arg0,
+               stage->prepare->trap_stack_base,
+               stage->prepare->trap_stack_size,
+               stage->prepare->validate,
+               stage->prepare->validate_context,
+               stage->prepare->supervisor_timer_post_handler,
+               stage->prepare->supervisor_timer_post_context,
+               stage->prepare->supervisor_external_post_handler,
+               stage->prepare->supervisor_external_post_context);
+}
+
+static bool user_program_smoke_round_stage_valid(
+    const user_program_smoke_round_stage_t* stage) {
+    return stage != NULL && smoke_ready(stage->smoke) &&
+           round_args_valid(stage->round);
+}
+
+static bool user_program_smoke_round_activate_if_needed(
+    const user_program_smoke_round_stage_t* stage) {
+    return user_program_smoke_round_stage_valid(stage) &&
+           (user_program_is_active(stage->smoke->program) ||
+            user_program_smoke_activate_supervisor_access(
+                stage->smoke,
+                stage->round->expected_trap_context));
+}
+
 static bool active_memory_args_valid(
     const user_program_smoke_t* smoke,
     uint32_t* backing_page,
@@ -493,6 +598,135 @@ static bool active_memory_args_valid(
            vm_range_is_user(alias_vaddr, MEMORY_PAGE_SIZE) &&
            vm_range_is_user(anon_vaddr, MEMORY_PAGE_SIZE) &&
            vm_range_is_user(anon_tail_vaddr, MEMORY_PAGE_SIZE);
+}
+
+static bool user_program_smoke_active_memory_stage_init(
+    user_program_smoke_active_memory_stage_t* stage,
+    user_program_smoke_t* smoke,
+    uint32_t* backing_page,
+    uint32_t* remap_page,
+    const user_program_smoke_active_phase_t* phase) {
+    if (stage == NULL) {
+        return false;
+    }
+
+    *stage = (user_program_smoke_active_memory_stage_t){0};
+    stage->smoke = smoke;
+    stage->backing_page = backing_page;
+    stage->remap_page = remap_page;
+    stage->phase = phase;
+    stage->alias_vaddr =
+        smoke_ready(smoke)
+            ? user_program_value(smoke->program, USER_PROGRAM_VALUE_ALIAS_VADDR)
+            : 0;
+    stage->anon_vaddr =
+        smoke_ready(smoke)
+            ? user_program_value(smoke->program, USER_PROGRAM_VALUE_ANON_VADDR)
+            : 0;
+    stage->anon_tail_vaddr =
+        smoke_ready(smoke)
+            ? user_program_value(smoke->program,
+                                 USER_PROGRAM_VALUE_ANON_TAIL_VADDR)
+            : 0;
+    if (!active_memory_args_valid(smoke,
+                                  backing_page,
+                                  remap_page,
+                                  phase,
+                                  stage->alias_vaddr,
+                                  stage->anon_vaddr,
+                                  stage->anon_tail_vaddr)) {
+        return false;
+    }
+
+    stage->alias_page = (uint32_t*)stage->alias_vaddr;
+    stage->anon_page = (uint32_t*)stage->anon_vaddr;
+    stage->anon_tail_page = (uint32_t*)stage->anon_tail_vaddr;
+    stage->backing_word0 = backing_page[0];
+    return true;
+}
+
+static bool user_program_smoke_active_memory_exercise_alias_backing(
+    user_program_smoke_active_memory_stage_t* stage) {
+    if (stage == NULL || stage->alias_page == NULL || stage->backing_page == NULL ||
+        stage->phase == NULL) {
+        return false;
+    }
+
+    if (stage->alias_page[0] != stage->backing_word0) {
+        return false;
+    }
+
+    stage->alias_page[1] = stage->phase->alias_store_value;
+    if (stage->backing_page[1] != stage->phase->alias_store_value) {
+        return false;
+    }
+
+    stage->backing_page[2] = stage->phase->backing_store_value;
+    return stage->backing_page[2] == stage->phase->backing_store_value &&
+           *stage->phase->rodata_marker == stage->phase->rodata_expected &&
+           !user_program_reset_object(stage->smoke->program,
+                                      USER_PROGRAM_OBJECT_ANON);
+}
+
+static bool user_program_smoke_active_memory_exercise_anon_regions(
+    user_program_smoke_active_memory_stage_t* stage) {
+    if (stage == NULL || stage->anon_page == NULL || stage->anon_tail_page == NULL ||
+        stage->phase == NULL) {
+        return false;
+    }
+
+    if (stage->anon_page[0] != 0U || stage->anon_page[1] != 0U ||
+        stage->anon_tail_page[0] != 0U ||
+        stage->anon_tail_page[1] != 0U) {
+        return false;
+    }
+
+    stage->anon_page[0] = stage->phase->anon_value0;
+    stage->anon_page[1] = stage->phase->anon_value1;
+    stage->anon_tail_page[0] = stage->phase->anon_tail_value0;
+    stage->anon_tail_page[1] = stage->phase->anon_tail_value1;
+    return user_program_unmap_region_base_page(stage->smoke->program,
+                                               USER_PROGRAM_REGION_ANON) &&
+           user_program_unmap_region_base_page(stage->smoke->program,
+                                               USER_PROGRAM_REGION_ANON_TAIL) &&
+           stage->anon_page[0] == stage->phase->anon_value0 &&
+           stage->anon_page[1] == stage->phase->anon_value1 &&
+           stage->anon_tail_page[0] == stage->phase->anon_tail_value0 &&
+           stage->anon_tail_page[1] == stage->phase->anon_tail_value1;
+}
+
+static bool user_program_smoke_active_memory_exercise_remap_rebind(
+    user_program_smoke_active_memory_stage_t* stage) {
+    if (stage == NULL || stage->alias_page == NULL || stage->backing_page == NULL ||
+        stage->remap_page == NULL || stage->phase == NULL) {
+        return false;
+    }
+
+    if (!user_program_smoke_rebind_alias_fault_object(stage->smoke) ||
+        stage->alias_page[0] != stage->remap_page[0] ||
+        stage->backing_page[0] != stage->backing_word0) {
+        return false;
+    }
+
+    stage->alias_page[1] = stage->phase->remap_store_value;
+    return stage->remap_page[1] == stage->phase->remap_store_value &&
+           stage->backing_page[1] == stage->phase->alias_store_value;
+}
+
+static bool user_program_smoke_active_memory_exercise_faults(
+    const user_program_smoke_active_memory_stage_t* stage) {
+    if (stage == NULL || stage->phase == NULL) {
+        return false;
+    }
+
+    provoke_rodata_store_fault(stage->phase->rodata_marker);
+    if (*stage->phase->rodata_marker != stage->phase->rodata_expected) {
+        return false;
+    }
+
+    provoke_instruction_page_fault(stage->phase->instruction_fault_target,
+                                   stage->phase->fault_resume_pc_slot);
+    return *stage->phase->fault_resume_pc_slot == 0;
 }
 
 bool user_program_smoke_validate_vm_lifecycle(uintptr_t user_region_vaddr,
@@ -840,38 +1074,21 @@ bool user_program_smoke_prepare_standard(user_program_smoke_t* smoke,
                                          user_program_t* program,
                                          const user_program_smoke_prepare_t* prepare) {
     user_program_smoke_t staged_smoke;
+    const user_program_smoke_prepare_stage_t stage = {
+        .smoke = &staged_smoke,
+        .program = program,
+        .prepare = prepare,
+    };
 
-    if (smoke == NULL || program == NULL || !prepare_args_valid(prepare)) {
+    if (smoke == NULL || !user_program_smoke_prepare_stage_valid(&stage)) {
         return false;
     }
 
     user_program_smoke_init(&staged_smoke);
 
-    if (!user_program_create(program,
-                             prepare->backing_page_paddr,
-                             prepare->user_stack_paddr) ||
-        !user_program_smoke_validate_created_program(program) ||
-        !user_program_smoke_prepare_address_space(&staged_smoke,
-                                                  program,
-                                                  prepare->backing_page_paddr,
-                                                  prepare->remap_page_paddr,
-                                                  prepare->fault_skip_vaddr,
-                                                  prepare->fault_skip_size,
-                                                  prepare->fault_resume_vaddr,
-                                                  prepare->fault_resume_size,
-                                                  prepare->fault_resume_pc_slot) ||
-        !user_program_smoke_prepare_runtime(
-            &staged_smoke,
-            prepare->trap_context,
-            prepare->arg0,
-            prepare->trap_stack_base,
-            prepare->trap_stack_size,
-            prepare->validate,
-            prepare->validate_context,
-            prepare->supervisor_timer_post_handler,
-            prepare->supervisor_timer_post_context,
-            prepare->supervisor_external_post_handler,
-            prepare->supervisor_external_post_context) ||
+    if (!user_program_smoke_create_staged_program(&stage) ||
+        !user_program_smoke_prepare_stage_address_space(&stage) ||
+        !user_program_smoke_prepare_stage_runtime(&stage) ||
         user_program_runtime(program) == NULL) {
         return user_program_destroy(program) && false;
     }
@@ -1060,55 +1277,13 @@ bool user_program_smoke_deactivate_supervisor_only(
 
 bool user_program_smoke_enter_round(user_program_smoke_t* smoke,
                                     const user_program_smoke_round_t* round) {
-    if (!smoke_ready(smoke) || !round_args_valid(round)) {
-        return false;
-    }
+    const user_program_smoke_round_stage_t stage = {
+        .smoke = smoke,
+        .round = round,
+    };
 
-    if (user_program_is_active(smoke->program)) {
-        return user_program_smoke_enter_with_interrupt_signals(
-            smoke,
-            round->timer_signal_page,
-            round->timer_signal_index,
-            round->timer_signal_value,
-            round->external_signal_page,
-            round->external_signal_index,
-            round->external_signal_value,
-            round->timer_delta);
-    }
-
-    return user_program_smoke_reactivate_and_enter_with_interrupt_signals(
-        smoke,
-        round->expected_trap_context,
-        round->timer_signal_page,
-        round->timer_signal_index,
-        round->timer_signal_value,
-        round->external_signal_page,
-        round->external_signal_index,
-        round->external_signal_value,
-        round->timer_delta);
-}
-
-static bool user_program_smoke_reactivate_and_enter_with_interrupt_signals(
-    user_program_smoke_t* smoke,
-    trap_context_t* expected_trap_context,
-    uint32_t* timer_signal_page,
-    size_t timer_signal_index,
-    uint32_t timer_signal_value,
-    uint32_t* external_signal_page,
-    size_t external_signal_index,
-    uint32_t external_signal_value,
-    uint64_t timer_delta) {
-    return smoke_ready(smoke) && !user_program_is_active(smoke->program) &&
-           user_program_smoke_activate_supervisor_access(smoke,
-                                                         expected_trap_context) &&
-           user_program_smoke_enter_with_interrupt_signals(smoke,
-                                                           timer_signal_page,
-                                                           timer_signal_index,
-                                                           timer_signal_value,
-                                                           external_signal_page,
-                                                           external_signal_index,
-                                                           external_signal_value,
-                                                           timer_delta);
+    return user_program_smoke_round_activate_if_needed(&stage) &&
+           user_program_smoke_round_enter_active(&stage);
 }
 
 bool user_program_smoke_exercise_active_memory(
@@ -1116,95 +1291,32 @@ bool user_program_smoke_exercise_active_memory(
     uint32_t* backing_page,
     uint32_t* remap_page,
     const user_program_smoke_active_phase_t* phase) {
-    const uintptr_t alias_vaddr = smoke_ready(smoke)
-                                      ? user_program_value(
-                                            smoke->program,
-                                            USER_PROGRAM_VALUE_ALIAS_VADDR)
-                                      : 0;
-    const uintptr_t anon_vaddr = smoke_ready(smoke)
-                                     ? user_program_value(
-                                           smoke->program,
-                                           USER_PROGRAM_VALUE_ANON_VADDR)
-                                     : 0;
-    const uintptr_t anon_tail_vaddr = smoke_ready(smoke)
-                                          ? user_program_value(
-                                                smoke->program,
-                                                USER_PROGRAM_VALUE_ANON_TAIL_VADDR)
-                                          : 0;
-    uint32_t* alias_page = NULL;
-    uint32_t* anon_page = NULL;
-    uint32_t* anon_tail_page = NULL;
-    const uint32_t backing_word0 = backing_page != NULL ? backing_page[0] : 0;
+    user_program_smoke_active_memory_stage_t stage;
 
-    if (!active_memory_args_valid(smoke,
-                                  backing_page,
-                                  remap_page,
-                                  phase,
-                                  alias_vaddr,
-                                  anon_vaddr,
-                                  anon_tail_vaddr)) {
-        return false;
-    }
+    return user_program_smoke_active_memory_stage_init(&stage,
+                                                       smoke,
+                                                       backing_page,
+                                                       remap_page,
+                                                       phase) &&
+           user_program_smoke_active_memory_exercise_alias_backing(&stage) &&
+           user_program_smoke_active_memory_exercise_anon_regions(&stage) &&
+           user_program_smoke_active_memory_exercise_remap_rebind(&stage) &&
+           user_program_smoke_active_memory_exercise_faults(&stage);
+}
 
-    alias_page = (uint32_t*)alias_vaddr;
-    anon_page = (uint32_t*)anon_vaddr;
-    anon_tail_page = (uint32_t*)anon_tail_vaddr;
-
-    if (alias_page[0] != backing_word0) {
-        return false;
-    }
-
-    alias_page[1] = phase->alias_store_value;
-    if (backing_page[1] != phase->alias_store_value) {
-        return false;
-    }
-
-    backing_page[2] = phase->backing_store_value;
-    if (backing_page[2] != phase->backing_store_value ||
-        *phase->rodata_marker != phase->rodata_expected ||
-        user_program_reset_object(smoke->program, USER_PROGRAM_OBJECT_ANON)) {
-        return false;
-    }
-
-    if (anon_page[0] != 0U || anon_page[1] != 0U || anon_tail_page[0] != 0U ||
-        anon_tail_page[1] != 0U) {
-        return false;
-    }
-
-    anon_page[0] = phase->anon_value0;
-    anon_page[1] = phase->anon_value1;
-    anon_tail_page[0] = phase->anon_tail_value0;
-    anon_tail_page[1] = phase->anon_tail_value1;
-    if (!user_program_unmap_region_base_page(smoke->program,
-                                             USER_PROGRAM_REGION_ANON) ||
-        !user_program_unmap_region_base_page(smoke->program,
-                                             USER_PROGRAM_REGION_ANON_TAIL) ||
-        anon_page[0] != phase->anon_value0 ||
-        anon_page[1] != phase->anon_value1 ||
-        anon_tail_page[0] != phase->anon_tail_value0 ||
-        anon_tail_page[1] != phase->anon_tail_value1) {
-        return false;
-    }
-
-    if (!user_program_smoke_rebind_alias_fault_object(smoke) ||
-        alias_page[0] != remap_page[0] || backing_page[0] != backing_word0) {
-        return false;
-    }
-
-    alias_page[1] = phase->remap_store_value;
-    if (remap_page[1] != phase->remap_store_value ||
-        backing_page[1] != phase->alias_store_value) {
-        return false;
-    }
-
-    provoke_rodata_store_fault(phase->rodata_marker);
-    if (*phase->rodata_marker != phase->rodata_expected) {
-        return false;
-    }
-
-    provoke_instruction_page_fault(phase->instruction_fault_target,
-                                   phase->fault_resume_pc_slot);
-    return *phase->fault_resume_pc_slot == 0;
+static bool user_program_smoke_round_enter_active(
+    const user_program_smoke_round_stage_t* stage) {
+    return user_program_smoke_round_stage_valid(stage) &&
+           user_program_is_active(stage->smoke->program) &&
+           user_program_smoke_enter_with_interrupt_signals(
+               stage->smoke,
+               stage->round->timer_signal_page,
+               stage->round->timer_signal_index,
+               stage->round->timer_signal_value,
+               stage->round->external_signal_page,
+               stage->round->external_signal_index,
+               stage->round->external_signal_value,
+               stage->round->timer_delta);
 }
 
 static bool user_program_smoke_enter_with_interrupt_signals(

@@ -123,3 +123,12 @@
 - 完成内容：完成 `Phase 3-B/C` 首轮总收口，把 `rename + ROB + LSQ`、最小 phys 生命周期、`LSQ replay-needed` 合同、coarse automatic replay、`RAM-only` store-to-load forwarding、最小真实 `OoO execute` 和最小 `ROB / LSQ` 观测面一起收成当前主线路径。
 - 实现过程摘要：整体采用“先 readiness、再分块子合同、最后回到总计划收口”的推进节奏；当前 `pipeline` 已稳定在“单发射、顺序退休、最小 OoO 完成窗口”的克制形态，后续重点转向 bug-driven hardening 与下一轮微架构取舍。
 - 结果参考：[phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)、[pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)、[mainline_status.md](../status/mainline_status.md)
+
+### 2026-04-04
+
+#### p1-guest-smoke-orchestration-refinement-plan
+
+- 原文件：`p1_guest_smoke_orchestration_refinement.md`
+- 完成内容：完成 `P1-2` guest smoke orchestration 收口，把 `user_program_smoke` 的 `prepare / enter round / active memory` 改成更窄的内部阶段 helper，并让 `supervisor_demo_smoke` 退回 bootstrap / user / session 组合层。
+- 实现过程摘要：先补 `prepare_standard()` runtime-stage rollback characterization，再按 freestanding 约束整理 guest smoke 内部编排；本轮刻意不扩到 `P1-5` 的 guest public header API 收口。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
