@@ -297,7 +297,7 @@ bool AddressSpace::update_pte_access_bits(
     }
 
     if (!bus.try_store(pte_addr, updated_pte, SV39_PTESIZE)) {
-        fault = make_fault(page_fault_cause(type), vaddr);
+        fault = make_fault(access_fault_cause(type), vaddr);
         return false;
     }
 
@@ -390,7 +390,7 @@ bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, ui
 
         // Page table walk uses physical addresses directly, bypassing translation
         if (!bus.try_load(pte_addr, SV39_PTESIZE, pte)) {
-            fault = make_fault(page_fault_cause(type), vaddr);
+            fault = make_fault(access_fault_cause(type), vaddr);
             return false;
         }
 
