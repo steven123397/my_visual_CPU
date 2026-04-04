@@ -44,16 +44,17 @@ private:
     static constexpr uint32_t kSupervisorEnableOffset = PLIC_ENABLE_OFFSET(PLIC_CONTEXT_SUPERVISOR);
     static constexpr uint32_t kMachineContextOffset = PLIC_CONTEXT_OFFSET(PLIC_CONTEXT_MACHINE);
     static constexpr uint32_t kSupervisorContextOffset = PLIC_CONTEXT_OFFSET(PLIC_CONTEXT_SUPERVISOR);
+    static constexpr uint8_t kUnclaimedContext = 0xff;
 
     uint32_t best_pending_source(const ContextState& context) const;
     bool context_has_pending(const ContextState& context) const;
-    uint32_t claim(ContextState& context);
-    void complete(uint32_t source_id);
+    uint32_t claim(uint32_t context_id, ContextState& context);
+    void complete(uint32_t context_id, uint32_t source_id);
 
     std::array<uint32_t, kNumSources + 1> priorities_{};
     std::array<bool, kNumSources + 1> levels_{};
     std::array<bool, kNumSources + 1> pending_{};
-    std::array<bool, kNumSources + 1> claimed_{};
+    std::array<uint8_t, kNumSources + 1> claimed_by_{};
     ContextState machine_context_{};
     ContextState supervisor_context_{};
 };

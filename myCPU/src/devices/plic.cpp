@@ -1,6 +1,8 @@
 #include "plic.h"
 
-Plic::Plic() : Device(PLIC_BASE, PLIC_SIZE) {}
+Plic::Plic() : Device(PLIC_BASE, PLIC_SIZE) {
+    claimed_by_.fill(kUnclaimedContext);
+}
 
 uint64_t Plic::load(uint64_t addr, int size) {
     if (size != 4) {
@@ -28,10 +30,10 @@ uint64_t Plic::load(uint64_t addr, int size) {
         return supervisor_context_.threshold;
     }
     if (offset == kMachineContextOffset + 4) {
-        return claim(machine_context_);
+        return claim(PLIC_CONTEXT_MACHINE, machine_context_);
     }
     if (offset == kSupervisorContextOffset + 4) {
-        return claim(supervisor_context_);
+        return claim(PLIC_CONTEXT_SUPERVISOR, supervisor_context_);
     }
 
     invalid_access(addr, size);
@@ -66,7 +68,9 @@ void Plic::store(uint64_t addr, uint64_t value, int size) {
         return;
     }
     if (offset == kMachineContextOffset + 4 || offset == kSupervisorContextOffset + 4) {
-        complete(value32);
+        const uint32_t context_id =
+            (offset == kMachineContextOffset + 4) ? PLIC_CONTEXT_MACHINE : PLIC_CONTEXT_SUPERVISOR;
+        complete(context_id, value32);
         return;
     }
 
@@ -90,7 +94,7 @@ void Plic::set_source_level(uint32_t source_id, bool asserted) {
     }
 
     levels_[source_id] = asserted;
-    if (asserted && !claimed_[source_id]) {
+    if (asserted && claimed_by_[source_id] == kUnclaimedContext) {
         pending_[source_id] = true;
     }
 }
@@ -120,7 +124,7 @@ bool Plic::source_claimed(uint32_t source_id) const {
     if (source_id == 0 || source_id > kNumSources) {
         return false;
     }
-    return claimed_[source_id];
+    return claimed_by_[source_id] != kUnclaimedContext;
 }
 
 uint32_t Plic::machine_enables() const {
@@ -154,7 +158,7 @@ uint32_t Plic::best_pending_source(const ContextState& context) const {
     for (uint32_t source_id = 1; source_id <= kNumSources; ++source_id) {
         const uint32_t source_bit = 1U << source_id;
         const uint32_t priority = priorities_[source_id];
-        if (!pending_[source_id] || claimed_[source_id] || (context.enables & source_bit) == 0) {
+        if (!pending_[source_id] || claimed_by_[source_id] != kUnclaimedContext || (context.enables & source_bit) == 0) {
             continue;
         }
         if (priority == 0 || priority <= context.threshold) {
@@ -173,22 +177,26 @@ bool Plic::context_has_pending(const ContextState& context) const {
     return best_pending_source(context) != 0;
 }
 
-uint32_t Plic::claim(ContextState& context) {
+uint32_t Plic::claim(uint32_t context_id, ContextState& context) {
     const uint32_t source_id = best_pending_source(context);
     if (source_id == 0) {
         return 0;
     }
 
     pending_[source_id] = false;
-    claimed_[source_id] = true;
+    claimed_by_[source_id] = static_cast<uint8_t>(context_id);
     return source_id;
 }
 
-void Plic::complete(uint32_t source_id) {
-    if (source_id == 0 || source_id > kNumSources || !claimed_[source_id]) {
+void Plic::complete(uint32_t context_id, uint32_t source_id) {
+    if (source_id == 0 || source_id > kNumSources) {
         return;
     }
 
-    claimed_[source_id] = false;
+    if (claimed_by_[source_id] != static_cast<uint8_t>(context_id)) {
+        return;
+    }
+
+    claimed_by_[source_id] = kUnclaimedContext;
     pending_[source_id] = levels_[source_id];
 }
