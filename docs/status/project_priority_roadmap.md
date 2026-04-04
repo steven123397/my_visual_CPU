@@ -18,8 +18,9 @@
   - [status/kernel_alpha_status.md](kernel_alpha_status.md)
   - [status/code_self_review_status.md](code_self_review_status.md)
 - 当前活跃计划：
-  - [plan/p1_guest_public_header_boundary_refinement.md](../plan/p1_guest_public_header_boundary_refinement.md)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
   - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
   - [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
@@ -121,7 +122,8 @@
 
 `2026-04-04` 已完成本节新增一批收口：
 
-- 原 `P1-2`：`user_program_smoke` 已把 `prepare / enter round / active memory` 收口为更窄的内部阶段 helper，`supervisor_demo_smoke` 已退回 bootstrap / user / session 组合层；本轮刻意没有顺手扩到 `P1-5` 的 guest public header API 收口。
+- 原 `P1-2`：`user_program_smoke` 已把 `prepare / enter round / active memory` 收口为更窄的内部阶段 helper，`supervisor_demo_smoke` 已退回 bootstrap / user / session 组合层；当时没有顺手扩到 `P1-5`，该项已在同日后续一轮单独完成。
+- 原 `P1-5`：`kernel_runtime`、`supervisor_runtime` 与 `user_program_smoke` 已补最小 helper / accessor，生产代码和相关单测不再直接依赖 public struct 的 interrupt counter、`address_space` 或 smoke scratch layout。
 
 `2026-04-03` 已完成本节两批收口：
 
@@ -145,18 +147,6 @@
   - 继续推进 issue / replay / memory speculation 时，任何修复都更容易跨阶段互相污染。
 - 建议：
   - 先拆“提交边界 / memory execute / interrupt-replay / 前端取指”这几块，而不是继续往单文件塞新行为。
-
-### 5. guest 公共头文件还在暴露可变内部布局
-
-- 代码证据：
-  - [myCPU/guest/include/kernel_runtime.h](../../myCPU/guest/include/kernel_runtime.h)
-  - [myCPU/guest/include/supervisor_runtime.h](../../myCPU/guest/include/supervisor_runtime.h)
-  - [myCPU/guest/include/user_program_smoke.h](../../myCPU/guest/include/user_program_smoke.h)
-  - 生产代码和测试都直接读写内部字段，而不是通过窄接口访问。
-- 影响：
-  - `process/runtime refinement` 很难真正变成 API 收口，结构边界仍然等于 `struct` layout。
-- 建议：
-  - 下一轮 guest 重构要优先减少跨模块直接碰内部字段的场景。
 
 ### 6. `debug_protocol.cpp` 与 `debug_server.mjs` 继续手写协议和运行时状态机
 

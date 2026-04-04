@@ -132,3 +132,10 @@
 - 完成内容：完成 `P1-2` guest smoke orchestration 收口，把 `user_program_smoke` 的 `prepare / enter round / active memory` 改成更窄的内部阶段 helper，并让 `supervisor_demo_smoke` 退回 bootstrap / user / session 组合层。
 - 实现过程摘要：先补 `prepare_standard()` runtime-stage rollback characterization，再按 freestanding 约束整理 guest smoke 内部编排；本轮刻意不扩到 `P1-5` 的 guest public header API 收口。
 - 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
+#### p1-guest-public-header-boundary-refinement-plan
+
+- 原文件：`p1_guest_public_header_boundary_refinement.md`
+- 完成内容：完成 `P1-5` guest 公共头文件边界收口，把 `kernel_runtime`、`supervisor_runtime` 与 `user_program_smoke` 的跨模块使用面改成以窄 helper / accessor 为主，减少 direct `struct` layout 依赖。
+- 实现过程摘要：先补 interrupt state 的 configure / counter / delivered / wait helper，再把 `monitor_commands`、`kernel_alpha`、`supervisor_demo_smoke` 和相关单测迁到新访问面；本轮刻意不把这些 public struct 整体改成 opaque handle，也不顺手扩成更大范围的 guest 生命周期重构。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)

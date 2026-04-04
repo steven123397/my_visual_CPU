@@ -24,8 +24,9 @@
 - 相关状态：
   - [status/project_priority_roadmap.md](project_priority_roadmap.md)
 - 当前计划：
-  - [plan/p1_guest_public_header_boundary_refinement.md](../plan/p1_guest_public_header_boundary_refinement.md)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
   - [plan/history_plan.md](../plan/history_plan.md)
 
 ## 当前状态
@@ -58,6 +59,30 @@
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`
 
+## 2026-04-04 P1-5 guest 公共头文件边界收口进展
+
+本轮主线已完成 [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan) 对应的 `P1-5` 收口；重点是把 guest public header 的跨模块使用面从直接 `struct` 字段访问收口成更窄的 helper / accessor，而不是把这些 runtime 对象一步推成 opaque handle。
+
+- `guest/include/supervisor_runtime.h` 与 `guest/kernel/supervisor_runtime.c` 已补 interrupt state 的 configure / counter / delivered / wait helper；`kernel_runtime`、`monitor_commands`、`supervisor_demo_smoke` 和 `kernel_alpha` 不再直接碰 interrupt counter、expected source 或 post-handler 配置字段。
+- `guest/include/kernel_runtime.h` 与 `guest/kernel/kernel_runtime.c` 已补 const interrupt-state 观察面与 `address_space` setter；`monitor_commands` 和相关单测改成通过 helper 观察 runtime，不再把 `kernel_runtime_t` 的 public layout 当成外部合同。
+- `guest/include/user_program_smoke.h` 与 `guest/kernel/user_program_smoke.c` 已补 `program / runtime / reset-state` 观察 helper；`supervisor_demo_smoke` 与 `tests/unit/user_program_smoke.c` 不再直接依赖 `smoke.program / remap_region / invalid_region / remap_object` 的 scratch 布局。
+- 相关 guest 输出保持不变：`guest_supervisor_demo = KRN`、`kernel_alpha_demo = KMVPETDS`、`kernel_alpha_fault_demo = KMVX`、`kernel_alpha_plic_not_ready_demo = KMVPX`、`kernel_alpha_timer_not_ready_demo = KMVPETX`。
+- 当前仍保留的克制边界是：这些 public struct 还没有整体 opaque 化；同模块实现和少量测试桩仍可直接访问 layout，但跨模块生产调用面已经完成第一轮收口。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-unit-supervisor_runtime`
+- `cd myCPU && make test-unit-kernel_runtime`
+- `cd myCPU && make test-unit-kernel_alpha_common`
+- `cd myCPU && make test-unit-kernel_alpha_interrupt`
+- `cd myCPU && make test-unit-monitor_commands`
+- `cd myCPU && make test-unit-user_program_smoke`
+- `cd myCPU && make test-guest-supervisor_demo`
+- `cd myCPU && make test-guest-kernel_alpha_demo`
+- `cd myCPU && make test-guest-kernel_alpha_fault_demo`
+- `cd myCPU && make test-guest-kernel_alpha_plic_not_ready_demo`
+- `cd myCPU && make test-guest-kernel_alpha_timer_not_ready_demo`
+
 ## 2026-04-04 P1-2 guest smoke orchestration 收口进展
 
 本轮主线已完成 [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan) 对应的 `P1-2` 收口；重点仍是 guest 结构边界整理，而不是扩 public API 功能面。
@@ -66,7 +91,7 @@
 - `guest/kernel/supervisor_demo_smoke.c` 已退回 bootstrap / user / session 组合层：标准 `prepare / round / active-memory` 继续通过 `user_program_smoke` helper 协作，文件本身主要保留 demo 特有参数组装、结果断言和 platform-tail 组合。
 - `tests/unit/user_program_smoke.c` 已补 `prepare_standard()` runtime-stage rollback 回归；当前 address-space/runtime 失败都会守住 staged rollback 合同。
 - 相关 guest smoke 输出保持不变：`guest_supervisor_demo = KRN`、`kernel_alpha_demo = KMVPETDS`、`kernel_alpha_fault_demo = KMVX`。
-- 本轮明确不扩到 `P1-5` 的 guest public header 收口；这仍是下一轮更合适的 guest 结构任务。
+- 当时明确没有顺手扩到 `P1-5` 的 guest public header 收口；该项已在后续同日另一轮完成，见上节。
 
 本轮已新鲜验证通过：
 
@@ -362,7 +387,7 @@
 ## 当前仍然有效的风险 / 限制
 
 - reference robustness 回归已经完成第一轮系统扩充；当前 `pipeline differential` 的高风险主干矩阵已基本形成闭环，后续剩余工作主要转为低收益变体控制和新增 bug 的定向回归。
-- guest runtime 虽已完成第一轮拆分，`user_program_smoke / supervisor_demo_smoke` 的第一轮 orchestration 收口也已完成，但 `vm*`、`trap*`、`kernel_runtime`、`kernel_bringup` 和 guest public header API 边界仍需要继续守住，避免回退到单个大文件或重新暴露可变内部布局。
+- guest runtime 虽已完成第一轮拆分，`user_program_smoke / supervisor_demo_smoke` 的第一轮 orchestration 收口，以及 `kernel_runtime / supervisor_runtime / user_program_smoke` 的第一轮 public header 收口也已完成，但 `vm*`、`trap*`、`kernel_bringup` 与这些 helper 的后续边界仍需要继续守住，避免回退到单个大文件或重新暴露可变内部布局。
 - guest smoke 当前已把编排边界收窄，但 `supervisor_demo_smoke` 仍缺直接单测，`user_program_smoke` 的 active-memory / interrupt round 失败路径也仍主要靠 guest demo 间接覆盖。
 - `kernel_alpha` 已经达到 Phase 1 核心完成态，但更多 device readiness / fault / panic / runtime refinement 仍属于 post-Phase1 hardening。
 - `pipeline` 已经正式可用，privileged / trap / interrupt / MMIO 行为的一致性验证主干也已基本成体系；后续以维护既有差分门禁和按新增问题补最小持久回归为主。
@@ -375,7 +400,7 @@
 
 1. 先沿 reference path 继续维护已形成闭环的 `privilege / Sv39`、illegal / MMIO / ELF / CSR 合同矩阵，并在新增 bug 出现时补最小持久回归。
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
-3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug` 和 `guest smoke orchestration` 的第一轮 hardening 都已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup`、guest public header API 收口（原 `P1-5`），以及 `supervisor_demo_smoke / user_program_smoke` 的更窄单测补洞。
+3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug`、`guest smoke orchestration` 和 guest public header API 的第一轮 hardening 都已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup` 的继续收口，以及 `supervisor_demo_smoke / user_program_smoke` 的更窄单测补洞。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
 6. 继续沿 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 维护 `Phase 3-B/C` 当前已落地的 `rename + ROB + LSQ + phys free-list / recycle + coarse automatic replay + RAM-only forwarding +` 最小真实 `OoO execute` 形态，优先守住现有 host / guest / debug 门禁，然后再考虑更激进的 issue / replay / memory speculation。

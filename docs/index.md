@@ -32,8 +32,8 @@
     `Phase 3-B/C` 首轮执行模型边界。
 14. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
     `pipeline` 投机执行与 commit-visible side-effect 契约。
-15. [plan/p1_guest_public_header_boundary_refinement.md](plan/p1_guest_public_header_boundary_refinement.md)
-    当前活跃的 `P1-5` guest 公共头文件边界收口计划。
+15. [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
+    最近完成的 `P1-5` guest 公共头文件边界收口归档。
 16. [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
     最近完成的 `P1-2` guest smoke orchestration 收口归档。
 17. [plan/history_plan.md#phase3-ooo-execution-plan](plan/history_plan.md#phase3-ooo-execution-plan)
@@ -64,8 +64,8 @@
   `kernel_alpha` 子线实时状态。
 - [status/code_self_review_status.md](status/code_self_review_status.md)
   当前仍有效的自检结果和调试链路风险。
-- [plan/p1_guest_public_header_boundary_refinement.md](plan/p1_guest_public_header_boundary_refinement.md)
-  当前活跃的 `P1-5` guest 公共头文件边界收口计划。
+- [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
+  最近完成的 `P1-5` guest 公共头文件边界收口归档。
 - [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
   最近完成的 `P1-2` guest smoke orchestration 收口归档。
 - [plan/history_plan.md#phase3-ooo-execution-plan](plan/history_plan.md#phase3-ooo-execution-plan)
@@ -81,8 +81,6 @@
 
 当前 `plan/` 只保留以下正式入口：
 
-- [plan/p1_guest_public_header_boundary_refinement.md](plan/p1_guest_public_header_boundary_refinement.md)
-  当前活跃的 `P1-5` guest 公共头文件边界收口计划。
 - [plan/history_plan.md](plan/history_plan.md)
   已完成计划的统一归档文件；完成态计划先归档到这里，再删除原文件。
 - [plan/template.md](plan/template.md)
