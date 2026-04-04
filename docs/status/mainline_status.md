@@ -468,7 +468,8 @@
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
 6. 继续沿 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 维护 `Phase 3-B/C` 当前已落地的 `rename + ROB + LSQ + phys free-list / recycle + coarse automatic replay + RAM-only forwarding +` 最小真实 `OoO execute` 形态，优先守住现有 host / guest / debug 门禁，然后再考虑更激进的 issue / replay / memory speculation。
-7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试；如果继续做 `P1`，当前最值得优先收口的就是 `debug_protocol.cpp / debug_server.mjs` 的协议层、会话层与 terminal projection 边界。
+7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试；当前下一块更值得优先推进的是 `P2-3` 的真实 `debug server + mycpu --debug-cli` 端到端 smoke 与 `P2-5` 的调试链路预算常量收口。
+8. 如果下一轮打算并行推进 `P2`，当前最稳的 ownership 切法是：`P2-1 + P2-7`、`P2-2`、`P2-3 + P2-5`、`P2-4` 分别独立开发，而 `P2-6` 由主集成线统一根据前面结果回写路线图和阶段判断。
 
 ## 建议入口
 

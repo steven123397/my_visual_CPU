@@ -81,7 +81,9 @@
 browser
   -> frontend/app/*
   -> frontend/server/debug_server.mjs
-  -> mycpu --debug-cli
+      -> debug_server_runtime.mjs
+           -> debug_cli_session.mjs
+                -> mycpu --debug-cli
        -> DebugSession
        -> Machine
             -> ExecutionBackend::debug_snapshot()
@@ -91,8 +93,10 @@ browser
 其中：
 
 - `DebugSession` 负责加载镜像、重置、按 cycle / commit 单步以及汇总快照。
-- `debug_protocol` 负责 CLI 命令解析和 JSON 输出。
-- `frontend/server` 负责静态文件服务、测试清单和 WebSocket 广播。
+- `debug_protocol` 当前已拆成命令解码、响应序列化与 `CLI loop` 三个内部边界，但对外仍保持统一的 `--debug-cli` JSON line 协议。
+- `frontend/server/debug_server.mjs` 负责静态文件服务、HTTP API 入口与 WebSocket 接线。
+- `frontend/server/debug_server_runtime.mjs` 负责 session queue、generation guard、run loop 与 terminal 跟踪。
+- `frontend/server/debug_cli_session.mjs` 负责 `mycpu --debug-cli` 子进程生命周期、请求队列和 teardown。
 - `frontend/app` 只负责状态管理和视图呈现。
 
 ## 最小调试数据面

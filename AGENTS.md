@@ -112,6 +112,7 @@
 - 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，作为 post-Phase1 结构优化。
 - 在不破坏 reference path 清晰性的前提下，继续稳住已接入 Phase 2 能力的语义边界与验证基线。
 - 保持 `pipeline` 与本地调试前端可运行、可验证，但不让它们反向污染 reference path。
+- 当前 `P1` 结构收口已经全部完成；下一步自然转入 `P2` 的验证补洞，优先是 `BinaryLoader` 直接单测、guest smoke 更窄单测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、`pipeline` mega-smoke 拆分，以及 `Machine::load_elf()/load_binary()` 的 reset 语义回归。
 
 当前对 Phase 2 的工程安排是：
 
@@ -119,6 +120,7 @@
 - 当前 Phase 2 的最小收口已经基本成立：`pipeline` 的高风险 differential 主干与 `debug/frontend` 的最小快照 / 协议门禁都已落地。
 - 后续先不继续扩功能面，而是优先维护既有 `pipeline` 差分 / smoke / guest 门禁，并在新增 bug 出现时补最小持久回归，而不是继续堆叠低收益变体。
 - `debug/frontend` 继续限定在“教学演示可用”的最小范围，重点放在快照稳定性、测试门禁和对现有 demo 的可用性维护。
+- 如果下一轮并行推进 `P2`，建议按代码 ownership 拆成几条互不冲突的线：`P2-1 + P2-7`、`P2-2`、`P2-3 + P2-5`、`P2-4`，而 `P2-6` 由主集成线统一回写文档和阶段判断。
 
 相关状态文档见：
 
