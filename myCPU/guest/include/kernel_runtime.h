@@ -16,9 +16,13 @@ typedef struct KernelRuntime {
 
 void kernel_runtime_init(kernel_runtime_t* runtime);
 trap_context_t* kernel_runtime_trap_context(kernel_runtime_t* runtime);
+void kernel_runtime_set_address_space(kernel_runtime_t* runtime,
+                                      vm_address_space_t* address_space);
 vm_address_space_t* kernel_runtime_address_space(const kernel_runtime_t* runtime);
 supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state(
     kernel_runtime_t* runtime);
+const supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state_const(
+    const kernel_runtime_t* runtime);
 bool kernel_runtime_run_entry_bringup(kernel_runtime_t* runtime);
 bool kernel_runtime_run_identity_superpage_bringup(kernel_runtime_t* runtime);
 void kernel_runtime_begin_plic_supervisor_phase(char marker);

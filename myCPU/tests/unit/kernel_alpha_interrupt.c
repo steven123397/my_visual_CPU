@@ -42,6 +42,33 @@ static int test_ready_and_panic_post_handlers(void);
 static bool stub_external_policy_setup(trap_context_t* trap_context, void* context);
 static bool stub_interrupt_policy_setup(trap_context_t* trap_context, void* context);
 
+supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state(
+    kernel_runtime_t* runtime) {
+    return runtime != NULL ? &runtime->interrupts : NULL;
+}
+
+const supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state_const(
+    const kernel_runtime_t* runtime) {
+    return runtime != NULL ? &runtime->interrupts : NULL;
+}
+
+void supervisor_runtime_interrupt_state_set_counters(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t timer_interrupts,
+    uint32_t external_interrupts) {
+    if (state == NULL) {
+        return;
+    }
+
+    state->timer_interrupts = timer_interrupts;
+    state->external_interrupts = external_interrupts;
+}
+
+bool supervisor_runtime_interrupt_state_external_delivered(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return state != NULL && state->external_interrupts != 0U;
+}
+
 bool kernel_runtime_run_bringup(kernel_runtime_t* runtime,
                                 uint32_t mmio_mask,
                                 uint64_t pmm_probe_marker,
@@ -180,8 +207,10 @@ static int test_complete_platform_interrupt_readiness(void) {
     kernel_runtime_t runtime;
 
     reset_stub_state();
-    runtime.interrupts.external_interrupts = 2U;
-    runtime.interrupts.timer_interrupts = 3U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        3U,
+        2U);
     if (!kernel_alpha_complete_platform_interrupt_readiness(&runtime, 8U, 64U)) {
         return fail("expected platform interrupt readiness helper to succeed");
     }
@@ -211,7 +240,10 @@ static int test_plic_not_ready_contract(void) {
     kernel_runtime_t runtime;
 
     reset_stub_state();
-    runtime.interrupts.external_interrupts = 0U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        0U,
+        0U);
     g_external_wait_result = false;
     if (!kernel_alpha_validate_plic_not_ready_contract(&runtime, 48U, 'P')) {
         return fail("expected plic-not-ready helper to accept timeout with zero deliveries");
@@ -224,7 +256,10 @@ static int test_plic_not_ready_contract(void) {
     }
 
     reset_stub_state();
-    runtime.interrupts.external_interrupts = 1U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        0U,
+        1U);
     g_external_wait_result = false;
     if (kernel_alpha_validate_plic_not_ready_contract(&runtime, 48U, 'P')) {
         return fail("expected plic-not-ready helper to reject stray interrupt deliveries");

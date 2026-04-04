@@ -60,6 +60,9 @@ typedef struct UserProgramSmokeRound {
 } user_program_smoke_round_t;
 
 void user_program_smoke_init(user_program_smoke_t* smoke);
+bool user_program_smoke_is_reset(const user_program_smoke_t* smoke);
+user_program_t* user_program_smoke_program(user_program_smoke_t* smoke);
+trap_user_runtime_t* user_program_smoke_runtime(user_program_smoke_t* smoke);
 bool user_program_smoke_plan_standard(user_program_t* program,
                                       uintptr_t exec_symbol,
                                       uintptr_t ecall_symbol);

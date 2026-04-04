@@ -19,6 +19,17 @@ typedef struct SupervisorRuntimeInterruptState {
     void* external_post_context;
 } supervisor_runtime_interrupt_state_t;
 
+void supervisor_runtime_interrupt_state_configure(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t expected_external_source_id,
+    supervisor_runtime_timer_post_handler_t timer_post_handler,
+    void* timer_post_context,
+    supervisor_runtime_external_post_handler_t external_post_handler,
+    void* external_post_context);
+void supervisor_runtime_interrupt_state_set_counters(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t timer_interrupts,
+    uint32_t external_interrupts);
 void supervisor_runtime_interrupt_state_init(
     supervisor_runtime_interrupt_state_t* state);
 void supervisor_runtime_interrupt_state_bind_self_handlers(
@@ -28,6 +39,16 @@ void supervisor_runtime_interrupt_state_bind_self_handlers(
     supervisor_runtime_external_post_handler_t external_post_handler);
 void supervisor_runtime_interrupt_state_reset_counters(
     supervisor_runtime_interrupt_state_t* state);
+uint32_t supervisor_runtime_interrupt_state_timer_interrupts(
+    const supervisor_runtime_interrupt_state_t* state);
+uint32_t supervisor_runtime_interrupt_state_external_interrupts(
+    const supervisor_runtime_interrupt_state_t* state);
+uint32_t supervisor_runtime_interrupt_state_expected_external_source_id(
+    const supervisor_runtime_interrupt_state_t* state);
+bool supervisor_runtime_interrupt_state_timer_delivered(
+    const supervisor_runtime_interrupt_state_t* state);
+bool supervisor_runtime_interrupt_state_external_delivered(
+    const supervisor_runtime_interrupt_state_t* state);
 void supervisor_runtime_timer_counter_post_handler(uint64_t cause,
                                                    void* context);
 void supervisor_runtime_external_counter_post_handler(uint64_t cause,
@@ -48,6 +69,13 @@ bool supervisor_runtime_install_interrupt_counter_policies(
 bool supervisor_runtime_install_interrupt_counter_policies_adapter(
     trap_context_t* trap_context,
     void* context);
+bool supervisor_runtime_wait_for_first_external_delivery(
+    supervisor_runtime_interrupt_state_t* state,
+    uint64_t timeout_delta);
+bool supervisor_runtime_wait_for_first_timer_delivery(
+    supervisor_runtime_interrupt_state_t* state,
+    uint64_t timer_delta,
+    uint64_t timeout_delta);
 bool supervisor_runtime_wait_for_counter(volatile uint32_t* counter,
                                          uint32_t target_value,
                                          uint64_t timeout_delta);

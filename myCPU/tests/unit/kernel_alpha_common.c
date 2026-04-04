@@ -51,6 +51,23 @@ static int test_wait_for_first_timer_delivery(void);
 static int test_complete_storage_probe(void);
 static int test_complete_storage_signature_check(void);
 
+supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state(
+    kernel_runtime_t* runtime) {
+    return runtime != NULL ? &runtime->interrupts : NULL;
+}
+
+void supervisor_runtime_interrupt_state_set_counters(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t timer_interrupts,
+    uint32_t external_interrupts) {
+    if (state == NULL) {
+        return;
+    }
+
+    state->timer_interrupts = timer_interrupts;
+    state->external_interrupts = external_interrupts;
+}
+
 void kernel_runtime_init(kernel_runtime_t* runtime) {
     if (runtime == NULL) {
         return;
@@ -236,7 +253,10 @@ static int test_wait_for_first_external_delivery(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    runtime.interrupts.external_interrupts = 3U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        0U,
+        3U);
 
     if (!kernel_alpha_wait_for_first_external_delivery(&runtime, 64U)) {
         return fail("expected external delivery helper to propagate success");
@@ -263,7 +283,10 @@ static int test_wait_for_first_timer_delivery(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    runtime.interrupts.timer_interrupts = 5U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        5U,
+        0U);
 
     if (!kernel_alpha_wait_for_first_timer_delivery(&runtime, 8U, 96U)) {
         return fail("expected timer delivery helper to propagate success");

@@ -46,10 +46,16 @@ static bool g_vm_is_enabled_result = true;
 static bool g_vm_is_active_result = true;
 static uint64_t g_vm_satp_value = 0;
 static uint64_t g_riscv_satp_value = 0;
-static volatile uint32_t* g_external_wait_counter = NULL;
+static supervisor_runtime_interrupt_state_t* g_bound_self_handlers_state = NULL;
+static uint32_t g_bound_self_handlers_expected_source_id = 0;
+static supervisor_runtime_timer_post_handler_t
+    g_bound_self_handlers_timer_post_handler = NULL;
+static supervisor_runtime_external_post_handler_t
+    g_bound_self_handlers_external_post_handler = NULL;
+static supervisor_runtime_interrupt_state_t* g_external_wait_state = NULL;
 static uint64_t g_external_wait_timeout = 0;
 static bool g_external_wait_result = true;
-static volatile uint32_t* g_timer_wait_counter = NULL;
+static supervisor_runtime_interrupt_state_t* g_timer_wait_state = NULL;
 static uint64_t g_timer_wait_delta = 0;
 static uint64_t g_timer_wait_timeout = 0;
 static bool g_timer_wait_result = true;
@@ -86,19 +92,50 @@ static int test_storage_probe_helper(void);
 static int test_storage_signature_helper(void);
 static int test_storage_platform_tail_helper(void);
 
+void supervisor_runtime_interrupt_state_configure(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t expected_external_source_id,
+    supervisor_runtime_timer_post_handler_t timer_post_handler,
+    void* timer_post_context,
+    supervisor_runtime_external_post_handler_t external_post_handler,
+    void* external_post_context) {
+    if (state == NULL) {
+        return;
+    }
+
+    state->expected_external_source_id = expected_external_source_id;
+    state->timer_post_handler = timer_post_handler;
+    state->timer_post_context = timer_post_context;
+    state->external_post_handler = external_post_handler;
+    state->external_post_context = external_post_context;
+}
+
+void supervisor_runtime_interrupt_state_set_counters(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t timer_interrupts,
+    uint32_t external_interrupts) {
+    if (state == NULL) {
+        return;
+    }
+
+    state->timer_interrupts = timer_interrupts;
+    state->external_interrupts = external_interrupts;
+}
+
 void supervisor_runtime_interrupt_state_init(
     supervisor_runtime_interrupt_state_t* state) {
     if (state == NULL) {
         return;
     }
 
-    state->timer_interrupts = 0;
-    state->external_interrupts = 0;
-    state->expected_external_source_id = 0;
-    state->timer_post_handler = NULL;
-    state->timer_post_context = NULL;
-    state->external_post_handler = NULL;
-    state->external_post_context = NULL;
+    supervisor_runtime_interrupt_state_set_counters(state, 0U, 0U);
+    supervisor_runtime_interrupt_state_configure(
+        state,
+        0U,
+        NULL,
+        NULL,
+        NULL,
+        NULL);
 }
 
 void supervisor_runtime_interrupt_state_bind_self_handlers(
@@ -110,11 +147,21 @@ void supervisor_runtime_interrupt_state_bind_self_handlers(
         return;
     }
 
-    state->expected_external_source_id = expected_external_source_id;
-    state->timer_post_handler = timer_post_handler;
-    state->timer_post_context = state;
-    state->external_post_handler = external_post_handler;
-    state->external_post_context = state;
+    g_bound_self_handlers_state = state;
+    g_bound_self_handlers_expected_source_id = expected_external_source_id;
+    g_bound_self_handlers_timer_post_handler = timer_post_handler;
+    g_bound_self_handlers_external_post_handler = external_post_handler;
+    supervisor_runtime_interrupt_state_configure(state,
+                                                 expected_external_source_id,
+                                                 timer_post_handler,
+                                                 state,
+                                                 external_post_handler,
+                                                 state);
+}
+
+uint32_t supervisor_runtime_interrupt_state_expected_external_source_id(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return state != NULL ? state->expected_external_source_id : 0U;
 }
 
 bool supervisor_runtime_install_external_counter_policy(
@@ -255,18 +302,19 @@ uint64_t riscv_read_satp(void) {
     return g_riscv_satp_value;
 }
 
-bool supervisor_runtime_enable_uart_thre_and_wait(
-    volatile uint32_t* external_counter,
+bool supervisor_runtime_wait_for_first_external_delivery(
+    supervisor_runtime_interrupt_state_t* state,
     uint64_t timeout_delta) {
-    g_external_wait_counter = external_counter;
+    g_external_wait_state = state;
     g_external_wait_timeout = timeout_delta;
     return g_external_wait_result;
 }
 
-bool supervisor_runtime_schedule_timer_and_wait(volatile uint32_t* timer_counter,
-                                                uint64_t timer_delta,
-                                                uint64_t timeout_delta) {
-    g_timer_wait_counter = timer_counter;
+bool supervisor_runtime_wait_for_first_timer_delivery(
+    supervisor_runtime_interrupt_state_t* state,
+    uint64_t timer_delta,
+    uint64_t timeout_delta) {
+    g_timer_wait_state = state;
     g_timer_wait_delta = timer_delta;
     g_timer_wait_timeout = timeout_delta;
     return g_timer_wait_result;
@@ -348,10 +396,14 @@ static void reset_stub_state(void) {
     g_vm_is_active_result = true;
     g_vm_satp_value = UINT64_C(0x1234);
     g_riscv_satp_value = UINT64_C(0x1234);
-    g_external_wait_counter = NULL;
+    g_bound_self_handlers_state = NULL;
+    g_bound_self_handlers_expected_source_id = 0;
+    g_bound_self_handlers_timer_post_handler = NULL;
+    g_bound_self_handlers_external_post_handler = NULL;
+    g_external_wait_state = NULL;
     g_external_wait_timeout = 0;
     g_external_wait_result = true;
-    g_timer_wait_counter = NULL;
+    g_timer_wait_state = NULL;
     g_timer_wait_delta = 0;
     g_timer_wait_timeout = 0;
     g_timer_wait_result = true;
@@ -401,12 +453,14 @@ static int test_runtime_init_and_bind_self_handlers(void) {
         return fail("expected runtime self handler binding to succeed");
     }
 
-    if (runtime.interrupts.expected_external_source_id != 7U ||
-        runtime.interrupts.timer_post_handler != stub_timer_post_handler ||
-        runtime.interrupts.timer_post_context != &runtime.interrupts ||
-        runtime.interrupts.external_post_handler != stub_external_post_handler ||
-        runtime.interrupts.external_post_context != &runtime.interrupts) {
-        return fail("expected runtime to bind self interrupt handlers");
+    if (g_bound_self_handlers_state != kernel_runtime_interrupt_state(&runtime) ||
+        g_bound_self_handlers_expected_source_id != 7U ||
+        g_bound_self_handlers_timer_post_handler != stub_timer_post_handler ||
+        g_bound_self_handlers_external_post_handler !=
+            stub_external_post_handler ||
+        supervisor_runtime_interrupt_state_expected_external_source_id(
+            kernel_runtime_interrupt_state_const(&runtime)) != 7U) {
+        return fail("expected runtime to forward self interrupt binding through supervisor helpers");
     }
 
     if (kernel_runtime_bind_self_interrupt_handlers(
@@ -422,15 +476,15 @@ static int test_runtime_entry_bringup_helper(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    g_trap_active_context = &runtime.trap_context;
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
     if (!kernel_runtime_run_entry_bringup(&runtime)) {
         return fail("expected runtime entry bring-up helper to succeed");
     }
 
     if (g_memory_init_calls != 1 || g_runtime_context_reset_calls != 1 ||
-        g_trap_context_init_arg != &runtime.trap_context ||
-        g_trap_context_activate_arg != &runtime.trap_context ||
-        g_trap_context_is_active_arg != &runtime.trap_context) {
+        g_trap_context_init_arg != kernel_runtime_trap_context(&runtime) ||
+        g_trap_context_activate_arg != kernel_runtime_trap_context(&runtime) ||
+        g_trap_context_is_active_arg != kernel_runtime_trap_context(&runtime)) {
         return fail("expected runtime entry bring-up helper to initialize and activate trap context");
     }
 
@@ -443,7 +497,7 @@ static int test_runtime_entry_bringup_helper(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    g_trap_active_context = &runtime.trap_context;
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
     g_trap_context_is_active_result = false;
     if (kernel_runtime_run_entry_bringup(&runtime)) {
         return fail("expected runtime entry bring-up helper to reject inactive trap context");
@@ -461,7 +515,7 @@ static int test_runtime_identity_superpage_bringup_helper(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    g_trap_active_context = &runtime.trap_context;
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
     if (!kernel_runtime_run_identity_superpage_bringup(&runtime)) {
         return fail("expected runtime identity superpage bring-up helper to succeed");
     }
@@ -472,7 +526,7 @@ static int test_runtime_identity_superpage_bringup_helper(void) {
         g_vm_map_identity_calls != 2 ||
         g_vm_map_identity_bases[0] != UINT64_C(0x80000000) ||
         g_vm_map_identity_bases[1] != 0U ||
-        runtime.address_space != g_vm_create_address_space ||
+        kernel_runtime_address_space(&runtime) != g_vm_create_address_space ||
         g_console_char_count != 3 || g_console_chars[0] != 'K' ||
         g_console_chars[1] != 'M' || g_console_chars[2] != 'V') {
         return fail("expected runtime identity superpage bring-up helper to run KMV flow");
@@ -480,7 +534,7 @@ static int test_runtime_identity_superpage_bringup_helper(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    g_trap_active_context = &runtime.trap_context;
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
     g_vm_map_identity_results[1] = false;
     if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
         return fail("expected runtime identity superpage bring-up helper to propagate mapping failure");
@@ -488,7 +542,7 @@ static int test_runtime_identity_superpage_bringup_helper(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    g_trap_active_context = &runtime.trap_context;
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
     g_riscv_satp_value = UINT64_C(0x9999);
     if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
         return fail("expected runtime identity superpage bring-up helper to validate satp");
@@ -509,7 +563,7 @@ static int test_external_policy_adapter(void) {
     }
 
     if (g_external_policy_trap_context != &trap_context ||
-        g_external_policy_state != &runtime.interrupts) {
+        g_external_policy_state != kernel_runtime_interrupt_state(&runtime)) {
         return fail("expected runtime external policy adapter to forward state");
     }
 
@@ -536,7 +590,7 @@ static int test_interrupt_policy_adapter(void) {
     }
 
     if (g_interrupt_policies_trap_context != &trap_context ||
-        g_interrupt_policies_state != &runtime.interrupts) {
+        g_interrupt_policies_state != kernel_runtime_interrupt_state(&runtime)) {
         return fail("expected runtime interrupt policy adapter to forward state");
     }
 
@@ -564,8 +618,8 @@ static int test_runtime_bringup_helper(void) {
         return fail("expected runtime bring-up helper to succeed");
     }
 
-    if (g_common_bringup_trap_context != &runtime.trap_context ||
-        g_common_bringup_out_space != &runtime.address_space ||
+    if (g_common_bringup_trap_context != kernel_runtime_trap_context(&runtime) ||
+        g_common_bringup_out_space == NULL ||
         g_common_bringup_options == NULL ||
         g_common_bringup_options->mmio_mask !=
             (KERNEL_BRINGUP_MMIO_UART | KERNEL_BRINGUP_MMIO_CLINT) ||
@@ -573,7 +627,8 @@ static int test_runtime_bringup_helper(void) {
         g_common_bringup_options->pre_vm_setup !=
             kernel_runtime_install_external_counter_policy_adapter ||
         g_common_bringup_options->pre_vm_context != &runtime ||
-        !g_common_bringup_options->map_managed_memory) {
+        !g_common_bringup_options->map_managed_memory ||
+        kernel_runtime_address_space(&runtime) != g_common_bringup_address_space) {
         return fail("expected runtime bring-up helper to bind runtime as pre-vm context");
     }
 
@@ -630,8 +685,8 @@ static int test_common_bringup_wrapper(void) {
         return fail("expected runtime common bring-up wrapper to succeed");
     }
 
-    if (g_common_bringup_trap_context != &runtime.trap_context ||
-        g_common_bringup_out_space != &runtime.address_space ||
+    if (g_common_bringup_trap_context != kernel_runtime_trap_context(&runtime) ||
+        g_common_bringup_out_space == NULL ||
         g_common_bringup_options == NULL ||
         g_common_bringup_options->mmio_mask != KERNEL_BRINGUP_MMIO_UART ||
         g_common_bringup_options->pmm_probe_marker != UINT64_C(0x13579BDF) ||
@@ -639,7 +694,7 @@ static int test_common_bringup_wrapper(void) {
             kernel_runtime_install_external_counter_policy_adapter ||
         g_common_bringup_options->pre_vm_context != &runtime ||
         g_common_bringup_options->map_managed_memory ||
-        runtime.address_space != g_common_bringup_address_space) {
+        kernel_runtime_address_space(&runtime) != g_common_bringup_address_space) {
         return fail("expected runtime common bring-up wrapper to bind runtime as default pre-vm context");
     }
 
@@ -692,14 +747,17 @@ static int test_external_wait_helper(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    runtime.interrupts.external_interrupts = 3U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        0U,
+        3U);
     if (!kernel_runtime_wait_for_first_external_delivery(&runtime, 64U)) {
         return fail("expected runtime external wait helper to propagate success");
     }
 
-    if (g_external_wait_counter != &runtime.interrupts.external_interrupts ||
+    if (g_external_wait_state != kernel_runtime_interrupt_state(&runtime) ||
         g_external_wait_timeout != 64U) {
-        return fail("expected runtime external wait helper to forward interrupt counter");
+        return fail("expected runtime external wait helper to forward interrupt state");
     }
 
     reset_stub_state();
@@ -720,14 +778,17 @@ static int test_timer_wait_helper(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    runtime.interrupts.timer_interrupts = 5U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        5U,
+        0U);
     if (!kernel_runtime_wait_for_first_timer_delivery(&runtime, 8U, 96U)) {
         return fail("expected runtime timer wait helper to propagate success");
     }
 
-    if (g_timer_wait_counter != &runtime.interrupts.timer_interrupts ||
+    if (g_timer_wait_state != kernel_runtime_interrupt_state(&runtime) ||
         g_timer_wait_delta != 8U || g_timer_wait_timeout != 96U) {
-        return fail("expected runtime timer wait helper to forward interrupt counter");
+        return fail("expected runtime timer wait helper to forward interrupt state");
     }
 
     reset_stub_state();
@@ -807,19 +868,21 @@ static int test_storage_platform_tail_helper(void) {
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
-    runtime.interrupts.timer_interrupts = 8U;
-    runtime.interrupts.external_interrupts = 5U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        8U,
+        5U);
     g_storage_page_allocated = true;
     memcpy(g_storage_page, "Stor", 4);
     if (!kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
-            &runtime.interrupts,
+            kernel_runtime_interrupt_state(&runtime),
             8U,
             96U)) {
         return fail("expected runtime platform tail helper to succeed");
     }
 
     if (g_storage_read_block_calls != 1 ||
-        g_platform_interrupt_wait_state != &runtime.interrupts ||
+        g_platform_interrupt_wait_state != kernel_runtime_interrupt_state(&runtime) ||
         g_platform_interrupt_wait_delta != 8U ||
         g_platform_interrupt_wait_timeout != 96U) {
         return fail("expected runtime platform tail helper to forward storage and interrupt contracts");
@@ -830,7 +893,7 @@ static int test_storage_platform_tail_helper(void) {
     g_storage_page_allocated = true;
     memcpy(g_storage_page, "Fail", 4);
     if (kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
-            &runtime.interrupts,
+            kernel_runtime_interrupt_state(&runtime),
             8U,
             96U)) {
         return fail("expected runtime platform tail helper to fail on bad signature");
@@ -842,7 +905,7 @@ static int test_storage_platform_tail_helper(void) {
     memcpy(g_storage_page, "Stor", 4);
     g_platform_interrupt_wait_result = false;
     if (kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
-            &runtime.interrupts,
+            kernel_runtime_interrupt_state(&runtime),
             8U,
             96U)) {
         return fail("expected runtime platform tail helper to propagate interrupt wait failure");

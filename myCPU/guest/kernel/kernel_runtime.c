@@ -21,12 +21,21 @@ void kernel_runtime_init(kernel_runtime_t* runtime) {
         return;
     }
 
-    runtime->address_space = NULL;
+    kernel_runtime_set_address_space(runtime, NULL);
     supervisor_runtime_interrupt_state_init(&runtime->interrupts);
 }
 
 trap_context_t* kernel_runtime_trap_context(kernel_runtime_t* runtime) {
     return runtime != NULL ? &runtime->trap_context : NULL;
+}
+
+void kernel_runtime_set_address_space(kernel_runtime_t* runtime,
+                                      vm_address_space_t* address_space) {
+    if (runtime == NULL) {
+        return;
+    }
+
+    runtime->address_space = address_space;
 }
 
 vm_address_space_t* kernel_runtime_address_space(const kernel_runtime_t* runtime) {
@@ -35,6 +44,11 @@ vm_address_space_t* kernel_runtime_address_space(const kernel_runtime_t* runtime
 
 supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state(
     kernel_runtime_t* runtime) {
+    return runtime != NULL ? &runtime->interrupts : NULL;
+}
+
+const supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state_const(
+    const kernel_runtime_t* runtime) {
     return runtime != NULL ? &runtime->interrupts : NULL;
 }
 
@@ -82,7 +96,7 @@ bool kernel_runtime_run_identity_superpage_bringup(kernel_runtime_t* runtime) {
         return false;
     }
 
-    runtime->address_space = address_space;
+    kernel_runtime_set_address_space(runtime, address_space);
     console_putc('V');
     return true;
 }
@@ -96,20 +110,18 @@ void kernel_runtime_begin_plic_supervisor_phase(char marker) {
 
 bool kernel_runtime_wait_for_first_external_delivery(kernel_runtime_t* runtime,
                                                      uint64_t timeout_delta) {
-    return runtime != NULL &&
-           supervisor_runtime_enable_uart_thre_and_wait(
-               &runtime->interrupts.external_interrupts,
-               timeout_delta);
+    return supervisor_runtime_wait_for_first_external_delivery(
+        kernel_runtime_interrupt_state(runtime),
+        timeout_delta);
 }
 
 bool kernel_runtime_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
                                                   uint64_t timer_delta,
                                                   uint64_t timeout_delta) {
-    return runtime != NULL &&
-           supervisor_runtime_schedule_timer_and_wait(
-               &runtime->interrupts.timer_interrupts,
-               timer_delta,
-               timeout_delta);
+    return supervisor_runtime_wait_for_first_timer_delivery(
+        kernel_runtime_interrupt_state(runtime),
+        timer_delta,
+        timeout_delta);
 }
 
 bool kernel_runtime_wait_platform_interrupts(

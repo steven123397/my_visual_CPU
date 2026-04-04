@@ -34,19 +34,50 @@ static bool interrupt_targets_reached(
     const volatile uint32_t* external_counter,
     uint32_t external_target);
 
+void supervisor_runtime_interrupt_state_configure(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t expected_external_source_id,
+    supervisor_runtime_timer_post_handler_t timer_post_handler,
+    void* timer_post_context,
+    supervisor_runtime_external_post_handler_t external_post_handler,
+    void* external_post_context) {
+    if (state == NULL) {
+        return;
+    }
+
+    state->expected_external_source_id = expected_external_source_id;
+    state->timer_post_handler = timer_post_handler;
+    state->timer_post_context = timer_post_context;
+    state->external_post_handler = external_post_handler;
+    state->external_post_context = external_post_context;
+}
+
+void supervisor_runtime_interrupt_state_set_counters(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t timer_interrupts,
+    uint32_t external_interrupts) {
+    if (state == NULL) {
+        return;
+    }
+
+    state->timer_interrupts = timer_interrupts;
+    state->external_interrupts = external_interrupts;
+}
+
 void supervisor_runtime_interrupt_state_init(
     supervisor_runtime_interrupt_state_t* state) {
     if (state == NULL) {
         return;
     }
 
-    state->timer_interrupts = 0;
-    state->external_interrupts = 0;
-    state->expected_external_source_id = 0;
-    state->timer_post_handler = NULL;
-    state->timer_post_context = NULL;
-    state->external_post_handler = NULL;
-    state->external_post_context = NULL;
+    supervisor_runtime_interrupt_state_set_counters(state, 0U, 0U);
+    supervisor_runtime_interrupt_state_configure(
+        state,
+        0U,
+        NULL,
+        NULL,
+        NULL,
+        NULL);
 }
 
 void supervisor_runtime_interrupt_state_bind_self_handlers(
@@ -58,21 +89,42 @@ void supervisor_runtime_interrupt_state_bind_self_handlers(
         return;
     }
 
-    state->expected_external_source_id = expected_external_source_id;
-    state->timer_post_handler = timer_post_handler;
-    state->timer_post_context = state;
-    state->external_post_handler = external_post_handler;
-    state->external_post_context = state;
+    supervisor_runtime_interrupt_state_configure(state,
+                                                 expected_external_source_id,
+                                                 timer_post_handler,
+                                                 state,
+                                                 external_post_handler,
+                                                 state);
 }
 
 void supervisor_runtime_interrupt_state_reset_counters(
     supervisor_runtime_interrupt_state_t* state) {
-    if (state == NULL) {
-        return;
-    }
+    supervisor_runtime_interrupt_state_set_counters(state, 0U, 0U);
+}
 
-    state->timer_interrupts = 0;
-    state->external_interrupts = 0;
+uint32_t supervisor_runtime_interrupt_state_timer_interrupts(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return state != NULL ? state->timer_interrupts : 0U;
+}
+
+uint32_t supervisor_runtime_interrupt_state_external_interrupts(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return state != NULL ? state->external_interrupts : 0U;
+}
+
+uint32_t supervisor_runtime_interrupt_state_expected_external_source_id(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return state != NULL ? state->expected_external_source_id : 0U;
+}
+
+bool supervisor_runtime_interrupt_state_timer_delivered(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return supervisor_runtime_interrupt_state_timer_interrupts(state) != 0U;
+}
+
+bool supervisor_runtime_interrupt_state_external_delivered(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return supervisor_runtime_interrupt_state_external_interrupts(state) != 0U;
 }
 
 void supervisor_runtime_timer_counter_post_handler(uint64_t cause,
@@ -149,6 +201,24 @@ bool supervisor_runtime_install_interrupt_counter_policies_adapter(
     return supervisor_runtime_install_interrupt_counter_policies(
         trap_context,
         (supervisor_runtime_interrupt_state_t*)context);
+}
+
+bool supervisor_runtime_wait_for_first_external_delivery(
+    supervisor_runtime_interrupt_state_t* state,
+    uint64_t timeout_delta) {
+    return state != NULL &&
+           supervisor_runtime_enable_uart_thre_and_wait(&state->external_interrupts,
+                                                       timeout_delta);
+}
+
+bool supervisor_runtime_wait_for_first_timer_delivery(
+    supervisor_runtime_interrupt_state_t* state,
+    uint64_t timer_delta,
+    uint64_t timeout_delta) {
+    return state != NULL &&
+           supervisor_runtime_schedule_timer_and_wait(&state->timer_interrupts,
+                                                     timer_delta,
+                                                     timeout_delta);
 }
 
 bool supervisor_runtime_wait_for_counter(volatile uint32_t* counter,

@@ -135,6 +135,52 @@ static void stub_external_post_handler(uint32_t source_id, void* context) {
     (void)context;
 }
 
+static int test_state_helpers(void) {
+    supervisor_runtime_interrupt_state_t state;
+    uint64_t timer_context = 0;
+    uint64_t external_context = 0;
+
+    supervisor_runtime_interrupt_state_init(&state);
+    if (supervisor_runtime_interrupt_state_timer_interrupts(&state) != 0U ||
+        supervisor_runtime_interrupt_state_external_interrupts(&state) != 0U ||
+        supervisor_runtime_interrupt_state_expected_external_source_id(&state) !=
+            0U ||
+        supervisor_runtime_interrupt_state_timer_delivered(&state) ||
+        supervisor_runtime_interrupt_state_external_delivered(&state)) {
+        return fail("expected interrupt state init to clear counters and delivery flags");
+    }
+
+    supervisor_runtime_interrupt_state_configure(&state,
+                                                 11U,
+                                                 stub_timer_post_handler,
+                                                 &timer_context,
+                                                 stub_external_post_handler,
+                                                 &external_context);
+    if (state.expected_external_source_id != 11U ||
+        state.timer_post_handler != stub_timer_post_handler ||
+        state.timer_post_context != &timer_context ||
+        state.external_post_handler != stub_external_post_handler ||
+        state.external_post_context != &external_context) {
+        return fail("expected interrupt state configure helper to bind explicit handlers");
+    }
+
+    supervisor_runtime_interrupt_state_set_counters(&state, 2U, 3U);
+    if (supervisor_runtime_interrupt_state_timer_interrupts(&state) != 2U ||
+        supervisor_runtime_interrupt_state_external_interrupts(&state) != 3U ||
+        !supervisor_runtime_interrupt_state_timer_delivered(&state) ||
+        !supervisor_runtime_interrupt_state_external_delivered(&state)) {
+        return fail("expected interrupt state counter helpers to expose delivered state");
+    }
+
+    supervisor_runtime_interrupt_state_reset_counters(&state);
+    if (supervisor_runtime_interrupt_state_timer_interrupts(&state) != 0U ||
+        supervisor_runtime_interrupt_state_external_interrupts(&state) != 0U) {
+        return fail("expected interrupt state reset helper to clear counters");
+    }
+
+    return 0;
+}
+
 static int test_bind_self_handlers(void) {
     supervisor_runtime_interrupt_state_t state;
 
@@ -241,8 +287,39 @@ static int test_counter_wait_helpers(void) {
 }
 
 static int test_uart_and_timer_wait_wrappers(void) {
+    supervisor_runtime_interrupt_state_t state;
     uint32_t external_counter = 0U;
     uint32_t timer_counter = 0U;
+
+    supervisor_runtime_interrupt_state_init(&state);
+    reset_stub_state();
+    g_auto_counter = &state.external_interrupts;
+    g_auto_counter_value = 1U;
+    g_auto_counter_at_mtime = 1U;
+    if (!supervisor_runtime_wait_for_first_external_delivery(&state, 8U) ||
+        g_uart_enable_calls != 1 || g_uart_disable_calls != 0) {
+        return fail("expected first-external-delivery helper to enable and observe interrupt");
+    }
+
+    reset_stub_state();
+    if (supervisor_runtime_wait_for_first_external_delivery(&state, 1U) ||
+        g_uart_enable_calls != 1 || g_uart_disable_calls != 1) {
+        return fail("expected first-external-delivery timeout to disable IRQ on failure");
+    }
+
+    reset_stub_state();
+    g_auto_counter = &state.timer_interrupts;
+    g_auto_counter_value = 1U;
+    g_auto_counter_at_mtime = 1U;
+    if (!supervisor_runtime_wait_for_first_timer_delivery(&state, 6U, 8U) ||
+        g_timer_schedule_calls != 1 || g_timer_schedule_delta != 6U) {
+        return fail("expected first-timer-delivery helper to schedule requested delta");
+    }
+
+    reset_stub_state();
+    if (supervisor_runtime_wait_for_first_timer_delivery(&state, 0U, 4U)) {
+        return fail("expected first-timer-delivery helper to reject zero timer delta");
+    }
 
     reset_stub_state();
     g_auto_counter = &external_counter;
@@ -250,13 +327,7 @@ static int test_uart_and_timer_wait_wrappers(void) {
     g_auto_counter_at_mtime = 1U;
     if (!supervisor_runtime_enable_uart_thre_and_wait(&external_counter, 8U) ||
         g_uart_enable_calls != 1 || g_uart_disable_calls != 0) {
-        return fail("expected UART wait wrapper to enable and observe interrupt");
-    }
-
-    reset_stub_state();
-    if (supervisor_runtime_enable_uart_thre_and_wait(&external_counter, 1U) ||
-        g_uart_enable_calls != 1 || g_uart_disable_calls != 1) {
-        return fail("expected UART wait timeout to disable IRQ on failure");
+        return fail("expected low-level UART wait wrapper to remain available");
     }
 
     reset_stub_state();
@@ -265,12 +336,7 @@ static int test_uart_and_timer_wait_wrappers(void) {
     g_auto_counter_at_mtime = 1U;
     if (!supervisor_runtime_schedule_timer_and_wait(&timer_counter, 6U, 8U) ||
         g_timer_schedule_calls != 1 || g_timer_schedule_delta != 6U) {
-        return fail("expected timer wait wrapper to schedule requested delta");
-    }
-
-    reset_stub_state();
-    if (supervisor_runtime_schedule_timer_and_wait(&timer_counter, 0U, 4U)) {
-        return fail("expected timer wait wrapper to reject zero timer delta");
+        return fail("expected low-level timer wait wrapper to remain available");
     }
 
     return 0;
@@ -280,8 +346,7 @@ static int test_schedule_platform_interrupts_success(void) {
     supervisor_runtime_interrupt_state_t state;
 
     supervisor_runtime_interrupt_state_init(&state);
-    state.timer_interrupts = 4U;
-    state.external_interrupts = 5U;
+    supervisor_runtime_interrupt_state_set_counters(&state, 4U, 5U);
 
     reset_stub_state();
     g_auto_deliver_interrupts = true;
@@ -307,8 +372,7 @@ static int test_schedule_platform_interrupts_timeout_cleanup(void) {
     supervisor_runtime_interrupt_state_t state;
 
     supervisor_runtime_interrupt_state_init(&state);
-    state.timer_interrupts = 2U;
-    state.external_interrupts = 3U;
+    supervisor_runtime_interrupt_state_set_counters(&state, 2U, 3U);
 
     reset_stub_state();
     if (supervisor_runtime_schedule_platform_interrupts_and_wait(&state,
@@ -343,7 +407,8 @@ static int test_wait_timeout_and_cancel(void) {
 }
 
 int main(void) {
-    if (test_bind_self_handlers() != 0 ||
+    if (test_state_helpers() != 0 ||
+        test_bind_self_handlers() != 0 ||
         test_external_policy_adapter() != 0 ||
         test_interrupt_policy_adapter() != 0 ||
         test_counter_wait_helpers() != 0 ||

@@ -35,6 +35,21 @@ static void clear_object(vm_object_t* object) {
     object->backing.anon.page_count = 0;
 }
 
+static bool region_cleared(const vm_user_region_t* region) {
+    return region != NULL && region->address_space == NULL && region->vaddr == 0 &&
+           region->size == 0 && region->flags == 0 && !region->registered &&
+           region->object == NULL && region->object_offset == 0 &&
+           region->object_mode == VM_REGION_OBJECT_NONE;
+}
+
+static bool object_cleared(const vm_object_t* object) {
+    return object != NULL && !object->initialized &&
+           object->backing_kind == VM_OBJECT_BACKING_NONE &&
+           object->size == 0 && object->attachment_count == 0 &&
+           object->backing.anon.page_slots == NULL &&
+           object->backing.anon.page_count == 0;
+}
+
 static bool invalid_region_state_ok(const vm_user_region_t* region) {
     return region != NULL && region->address_space == NULL &&
            !region->registered && region->object == NULL;
@@ -215,6 +230,23 @@ static bool user_program_smoke_enter_with_interrupt_signals(
 static bool user_program_smoke_unmap_remap_page(user_program_smoke_t* smoke);
 static bool user_program_smoke_rebind_alias_fault_object(
     user_program_smoke_t* smoke);
+
+bool user_program_smoke_is_reset(const user_program_smoke_t* smoke) {
+    return smoke != NULL && smoke->program == NULL &&
+           region_cleared(&smoke->remap_region) &&
+           region_cleared(&smoke->invalid_region) &&
+           object_cleared(&smoke->remap_object);
+}
+
+user_program_t* user_program_smoke_program(user_program_smoke_t* smoke) {
+    return smoke != NULL ? smoke->program : NULL;
+}
+
+trap_user_runtime_t* user_program_smoke_runtime(user_program_smoke_t* smoke) {
+    user_program_t* program = user_program_smoke_program(smoke);
+
+    return program != NULL ? user_program_runtime(program) : NULL;
+}
 
 __attribute__((noinline)) static void provoke_rodata_store_fault(
     volatile const uint32_t* marker) {

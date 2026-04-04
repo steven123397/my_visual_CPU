@@ -580,12 +580,7 @@ static int test_smoke_init_and_plan_wrapper(void) {
     memset(&program, 0, sizeof(program));
     user_program_smoke_init(&smoke);
 
-    if (smoke.program != NULL || smoke.remap_region.address_space != NULL ||
-        smoke.remap_region.registered || smoke.remap_region.object != NULL ||
-        smoke.invalid_region.address_space != NULL ||
-        smoke.invalid_region.registered || smoke.invalid_region.object != NULL ||
-        smoke.remap_object.initialized ||
-        smoke.remap_object.backing_kind != VM_OBJECT_BACKING_NONE) {
+    if (!user_program_smoke_is_reset(&smoke)) {
         return fail("expected smoke init to clear scratch regions and object state");
     }
 
@@ -670,7 +665,8 @@ static int test_prepare_standard_rolls_back_failed_address_space_stage(void) {
         return fail("expected prepare_standard to reach the address-space orchestration failure point");
     }
 
-    if (smoke.program != NULL || g_user_program_destroy_calls != 1 ||
+    if (!user_program_smoke_is_reset(&smoke) ||
+        g_user_program_destroy_calls != 1 ||
         program_created(&program) || g_user_program_prepare_standard_calls != 0) {
         return fail("expected prepare_standard failure to rollback smoke/program state before runtime prepare");
     }
@@ -721,7 +717,8 @@ static int test_prepare_standard_rolls_back_failed_runtime_stage(void) {
         return fail("expected prepare_standard to reach the runtime orchestration failure point");
     }
 
-    if (smoke.program != NULL || g_user_program_destroy_calls != 1 ||
+    if (!user_program_smoke_is_reset(&smoke) ||
+        g_user_program_destroy_calls != 1 ||
         program_created(&program)) {
         return fail("expected runtime-stage failure to rollback smoke/program state");
     }

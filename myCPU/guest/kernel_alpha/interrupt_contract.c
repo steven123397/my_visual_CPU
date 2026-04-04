@@ -43,9 +43,12 @@ bool kernel_alpha_complete_platform_interrupt_readiness(kernel_runtime_t* runtim
 bool kernel_alpha_validate_plic_not_ready_contract(kernel_runtime_t* runtime,
                                                    uint64_t timeout_delta,
                                                    char marker) {
+    const supervisor_runtime_interrupt_state_t* interrupts =
+        kernel_runtime_interrupt_state_const(runtime);
+
     if (runtime == NULL ||
         kernel_alpha_wait_for_first_external_delivery(runtime, timeout_delta) ||
-        runtime->interrupts.external_interrupts != 0U) {
+        supervisor_runtime_interrupt_state_external_delivered(interrupts)) {
         return false;
     }
 

@@ -238,9 +238,8 @@ static bool monitor_handle_disk(const char* cursor) {
 
 static bool monitor_handle_regs(const kernel_runtime_t* runtime) {
     const supervisor_runtime_interrupt_state_t* interrupts =
-        runtime != NULL ? &runtime->interrupts : NULL;
-    const vm_address_space_t* address_space =
-        runtime != NULL ? runtime->address_space : NULL;
+        kernel_runtime_interrupt_state_const(runtime);
+    const vm_address_space_t* address_space = kernel_runtime_address_space(runtime);
     const uint64_t satp_value =
         address_space != NULL ? vm_address_space_satp_value(address_space) : 0U;
 
@@ -249,13 +248,15 @@ static bool monitor_handle_regs(const kernel_runtime_t* runtime) {
     monitor_write_text(" mtime=");
     monitor_write_uint64(platform_clint_read_mtime());
     monitor_write_text(" timer_interrupts=");
-    monitor_write_uint64(interrupts != NULL ? interrupts->timer_interrupts : 0U);
+    monitor_write_uint64(
+        supervisor_runtime_interrupt_state_timer_interrupts(interrupts));
     monitor_write_text(" external_interrupts=");
-    monitor_write_uint64(interrupts != NULL ? interrupts->external_interrupts : 0U);
+    monitor_write_uint64(
+        supervisor_runtime_interrupt_state_external_interrupts(interrupts));
     monitor_write_text(" expected_external_source=");
-    monitor_write_uint64(interrupts != NULL
-                             ? interrupts->expected_external_source_id
-                             : 0U);
+    monitor_write_uint64(
+        supervisor_runtime_interrupt_state_expected_external_source_id(
+            interrupts));
     monitor_write_line("");
     return true;
 }
@@ -264,8 +265,7 @@ static bool monitor_handle_peek(const kernel_runtime_t* runtime,
                                 const char* cursor) {
     monitor_token_t address_token;
     monitor_token_t width_token;
-    const vm_address_space_t* address_space =
-        runtime != NULL ? runtime->address_space : NULL;
+    const vm_address_space_t* address_space = kernel_runtime_address_space(runtime);
     uint64_t address = 0;
     uint64_t width = 8;
     vm_debug_read_result_t result;
@@ -311,6 +311,7 @@ static bool monitor_handle_peek(const kernel_runtime_t* runtime,
 static bool monitor_handle_pagewalk(const kernel_runtime_t* runtime,
                                     const char* cursor) {
     monitor_token_t address_token;
+    const vm_address_space_t* address_space = kernel_runtime_address_space(runtime);
     uint64_t address = 0;
     vm_debug_walk_result_t result;
 
@@ -321,9 +322,7 @@ static bool monitor_handle_pagewalk(const kernel_runtime_t* runtime,
         return true;
     }
 
-    if (!vm_debug_walk(runtime != NULL ? runtime->address_space : NULL,
-                       (uintptr_t)address,
-                       &result)) {
+    if (!vm_debug_walk(address_space, (uintptr_t)address, &result)) {
         monitor_write_text("pagewalk miss va=");
         monitor_write_hex64(address);
         monitor_write_line("");
@@ -345,6 +344,7 @@ static bool monitor_handle_pagewalk(const kernel_runtime_t* runtime,
 static bool monitor_handle_pte_dump(const kernel_runtime_t* runtime,
                                     const char* cursor) {
     monitor_token_t address_token;
+    const vm_address_space_t* address_space = kernel_runtime_address_space(runtime);
     uint64_t address = 0;
     vm_debug_walk_result_t result;
     unsigned level;
@@ -356,9 +356,7 @@ static bool monitor_handle_pte_dump(const kernel_runtime_t* runtime,
         return true;
     }
 
-    if (!vm_debug_walk(runtime != NULL ? runtime->address_space : NULL,
-                       (uintptr_t)address,
-                       &result)) {
+    if (!vm_debug_walk(address_space, (uintptr_t)address, &result)) {
         monitor_write_text("pte miss va=");
         monitor_write_hex64(address);
         monitor_write_line("");

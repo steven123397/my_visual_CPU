@@ -72,6 +72,74 @@ static void reset_stubs(void) {
     memcpy(g_storage_block, kStorageText, sizeof(kStorageText) - 1U);
 }
 
+vm_address_space_t* kernel_runtime_address_space(const kernel_runtime_t* runtime) {
+    return runtime != NULL ? runtime->address_space : NULL;
+}
+
+void kernel_runtime_set_address_space(kernel_runtime_t* runtime,
+                                      vm_address_space_t* address_space) {
+    if (runtime == NULL) {
+        return;
+    }
+
+    runtime->address_space = address_space;
+}
+
+supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state(
+    kernel_runtime_t* runtime) {
+    return runtime != NULL ? &runtime->interrupts : NULL;
+}
+
+const supervisor_runtime_interrupt_state_t* kernel_runtime_interrupt_state_const(
+    const kernel_runtime_t* runtime) {
+    return runtime != NULL ? &runtime->interrupts : NULL;
+}
+
+void supervisor_runtime_interrupt_state_configure(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t expected_external_source_id,
+    supervisor_runtime_timer_post_handler_t timer_post_handler,
+    void* timer_post_context,
+    supervisor_runtime_external_post_handler_t external_post_handler,
+    void* external_post_context) {
+    if (state == NULL) {
+        return;
+    }
+
+    state->expected_external_source_id = expected_external_source_id;
+    state->timer_post_handler = timer_post_handler;
+    state->timer_post_context = timer_post_context;
+    state->external_post_handler = external_post_handler;
+    state->external_post_context = external_post_context;
+}
+
+void supervisor_runtime_interrupt_state_set_counters(
+    supervisor_runtime_interrupt_state_t* state,
+    uint32_t timer_interrupts,
+    uint32_t external_interrupts) {
+    if (state == NULL) {
+        return;
+    }
+
+    state->timer_interrupts = timer_interrupts;
+    state->external_interrupts = external_interrupts;
+}
+
+uint32_t supervisor_runtime_interrupt_state_timer_interrupts(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return state != NULL ? state->timer_interrupts : 0U;
+}
+
+uint32_t supervisor_runtime_interrupt_state_external_interrupts(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return state != NULL ? state->external_interrupts : 0U;
+}
+
+uint32_t supervisor_runtime_interrupt_state_expected_external_source_id(
+    const supervisor_runtime_interrupt_state_t* state) {
+    return state != NULL ? state->expected_external_source_id : 0U;
+}
+
 void monitor_write_char(char ch) {
     char text[2];
 
@@ -280,9 +348,17 @@ static int test_regs_and_peek(void) {
     memset(level1_table, 0, sizeof(level1_table));
     memset(level0_table, 0, sizeof(level0_table));
     memset(sample_page, 0, sizeof(sample_page));
-    runtime.interrupts.timer_interrupts = 3U;
-    runtime.interrupts.external_interrupts = 2U;
-    runtime.interrupts.expected_external_source_id = 9U;
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        3U,
+        2U);
+    supervisor_runtime_interrupt_state_configure(
+        kernel_runtime_interrupt_state(&runtime),
+        9U,
+        NULL,
+        NULL,
+        NULL,
+        NULL);
     address_space.satp_value = UINT64_C(0x8000000000000088);
     root_table[vpn_index(UINT64_C(0x80001000), 2U)] =
         pte_from_pa((uintptr_t)level1_table, SV39_PTE_VALID);
@@ -293,7 +369,7 @@ static int test_regs_and_peek(void) {
                     SV39_PTE_VALID | VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXEC);
     *(uint64_t*)sample_page = UINT64_C(0x1122334455667788);
     address_space.root_table = root_table;
-    runtime.address_space = &address_space;
+    kernel_runtime_set_address_space(&runtime, &address_space);
     monitor_commands_reset(0);
 
     if (!monitor_execute_line(&runtime, "regs")) {
@@ -328,7 +404,7 @@ static int test_pagewalk_and_pte_dump(void) {
         pte_from_pa(UINT64_C(0x80000000),
                     SV39_PTE_VALID | VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXEC);
     address_space.root_table = root_table;
-    runtime.address_space = &address_space;
+    kernel_runtime_set_address_space(&runtime, &address_space);
     monitor_commands_reset(0);
 
     if (!monitor_execute_line(&runtime, "pagewalk 0x80000000")) {
@@ -360,7 +436,7 @@ static int test_monitor_usage_and_miss_paths(void) {
     memset(&address_space, 0, sizeof(address_space));
     memset(root_table, 0, sizeof(root_table));
     address_space.root_table = root_table;
-    runtime.address_space = &address_space;
+    kernel_runtime_set_address_space(&runtime, &address_space);
     monitor_commands_reset(0);
 
     if (!monitor_execute_line(&runtime, "disk read 0 extra")) {

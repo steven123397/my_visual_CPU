@@ -176,10 +176,13 @@ static void supervisor_demo_smoke_init(supervisor_demo_smoke_state_t* state,
     }
 
     supervisor_runtime_interrupt_state_init(&state->interrupts);
-    state->interrupts.expected_external_source_id = PLIC_SOURCE_UART_THRE;
-    state->interrupts.external_post_handler =
-        supervisor_demo_smoke_external_post_handler;
-    state->interrupts.external_post_context = state;
+    supervisor_runtime_interrupt_state_configure(
+        &state->interrupts,
+        PLIC_SOURCE_UART_THRE,
+        NULL,
+        NULL,
+        supervisor_demo_smoke_external_post_handler,
+        state);
     state->user_ecall_seen = 0;
     state->user_data_page = user_data_page;
     state->expected_user_data = expected_user_data;
@@ -538,9 +541,7 @@ static bool supervisor_demo_smoke_run_user_program(
         return false;
     }
 
-    user_runtime = stage->smoke->program != NULL
-                       ? user_program_runtime(stage->smoke->program)
-                       : NULL;
+    user_runtime = user_program_smoke_runtime(stage->smoke);
     return user_runtime != NULL &&
            supervisor_demo_smoke_prime_active_pages(stage->pages,
                                                     stage->active_phase) &&
@@ -643,13 +644,13 @@ static bool supervisor_demo_smoke_verify_user_return(
     const trap_user_runtime_t* user_runtime) {
     return state != NULL && user_runtime != NULL &&
            state->user_data_page != NULL && state->user_ecall_seen &&
-           state->interrupts.timer_interrupts != 0U &&
+           supervisor_runtime_interrupt_state_timer_delivered(&state->interrupts) &&
            state->user_data_page[2] == state->expected_user_data &&
            state->user_data_page[3] == state->expected_user_timer &&
            state->user_data_page[4] == state->expected_user_external &&
            trap_user_runtime_timer_signal_delivered(user_runtime) &&
            trap_user_runtime_external_signal_delivered(user_runtime) &&
-           state->interrupts.external_interrupts != 0U &&
+           supervisor_runtime_interrupt_state_external_delivered(&state->interrupts) &&
            (riscv_read_sstatus() & RISCV_SSTATUS_SPP) == 0;
 }
 
@@ -661,7 +662,7 @@ static bool active_user_program_state_ok(user_program_smoke_t* smoke,
         return false;
     }
 
-    program = smoke->program;
+    program = user_program_smoke_program(smoke);
     return program != NULL && user_program_is_active(program) &&
            runtime_context_active_process() == user_program_process(program) &&
            runtime_context_active_address_space() ==
