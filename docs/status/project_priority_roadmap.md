@@ -18,8 +18,9 @@
   - [status/kernel_alpha_status.md](kernel_alpha_status.md)
   - [status/code_self_review_status.md](code_self_review_status.md)
 - 当前活跃计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
   - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
@@ -127,6 +128,7 @@
 - 原 `P1-1`：`pipeline_backend` 已按“构造+debug / cycle+commit-replay / execute / frontend”拆成四个编译单元，原文件不再继续混挂主调度、memory execute 和 decode/fetch。
 - 原 `P1-2`：`user_program_smoke` 已把 `prepare / enter round / active memory` 收口为更窄的内部阶段 helper，`supervisor_demo_smoke` 已退回 bootstrap / user / session 组合层；当时没有顺手扩到 `P1-5`，该项已在同日后续一轮单独完成。
 - 原 `P1-5`：`kernel_runtime`、`supervisor_runtime` 与 `user_program_smoke` 已补最小 helper / accessor，生产代码和相关单测不再直接依赖 public struct 的 interrupt counter、`address_space` 或 smoke scratch layout。
+- 原 `P1-6`：`debug_protocol` 已拆成 `CLI loop / command codec / response codec` 三块，`debug_server` 已拆成 HTTP / WebSocket 入口、`DebugCliSession` 与 server runtime，terminal 跟踪不再和子进程管理、路由逻辑揉在同一文件里。
 - 原 `P1-12`：`AddressSpace` 已把 page walk 期间的页表项读取失败与 A/D 位回写失败从 page fault 收口为对应 access fault，并由 host smoke 明确守住 `fetch/load/store cause + tval=原始虚拟地址` 合同。
 - 原 `P1-13`：`PLIC` 的 claim / complete 已改为按 context 记账；错误 context 的 complete 不再释放 claim，现有 machine/supervisor asm 和 host smoke 均保持通过。
 - 原 `P1-14`：ELF loader 已把 endianness、ident version、ELF version、type、machine 和 entry-range 纳入明确 reject 合同，相关 unit fixture 和 guest ELF 正向路径已同步对齐。
@@ -143,17 +145,7 @@
   - 原 `P1-9`：predictor 统计口径已统一为“已解析分支”，前端命中率展示与后端合同一致。
   - 原 `P1-11`：`CLINT` timer pending 已收口为平台电平语义，`mtimecmp` 条件撤销后不会残留 stale pending。
 
-下文继续只保留仍未收口的 P1 问题，并维持原编号，便于和前面对话及历史记录对照。
-
-### 6. `debug_protocol.cpp` 与 `debug_server.mjs` 继续手写协议和运行时状态机
-
-- 代码证据：
-  - [myCPU/src/debug/debug_protocol.cpp](../../myCPU/src/debug/debug_protocol.cpp) 既手写 JSON 解析，又手写完整快照序列化和命令分派。
-  - [frontend/server/debug_server.mjs](../../frontend/server/debug_server.mjs) 同时管 CLI 子进程、HTTP API、WebSocket、terminal projection、run loop、generation 防 stale。
-- 影响：
-  - 调试链路已经不再是最小 demo glue，而是一条真正的协议面；继续堆字段和控制逻辑会把维护成本放大。
-- 建议：
-  - 先拆协议层、会话层、terminal 投影层，再谈 richer debugger 能力。
+这意味着路线图里的 `P1` 结构收口已经全部关闭；后续如果继续推进，应把重心转到 `P2` 的测试与验证补洞。
 
 ## P2：测试与验证补洞
 
@@ -199,7 +191,7 @@
 - 代码证据：
   - [myCPU/src/debug/debug_session.cpp](../../myCPU/src/debug/debug_session.cpp)
   - [frontend/server/tests_manifest.mjs](../../frontend/server/tests_manifest.mjs)
-  - [frontend/server/debug_server.mjs](../../frontend/server/debug_server.mjs)
+  - [frontend/server/debug_server_runtime.mjs](../../frontend/server/debug_server_runtime.mjs)
   - [myCPU/tests/host/interactive_terminal_smoke.cpp](../../myCPU/tests/host/interactive_terminal_smoke.cpp)
   - [myCPU/Makefile](../../myCPU/Makefile)
 - 影响：
@@ -248,13 +240,10 @@
 
 ## 建议的下一轮拆分顺序
 
-1. 如果继续收 `P1`，当前最值得单开的就是 `pipeline/debug` 结构 hardening：
-   - `debug_protocol` / `debug_server` 模块边界
-   - `tests_manifest`、timeout / budget 常量与调试链路单一事实来源
-2. 然后回到 `P2` 的验证补洞：
+1. 下一轮优先回到 `P2` 的验证补洞：
    - `BinaryLoader` 直接单测
    - `supervisor_demo_smoke / user_program_smoke` 更窄单测
    - 真实 `debug server + debug CLI` 端到端 smoke
    - `pipeline` mega-smoke 拆分
    - `Machine::load_elf()` / `load_binary()` reset 语义说明与回归
-3. 在 `P1/P2` 这些结构和验证问题没有继续明显收口前，不建议再把路线图重心放回更远期的 `Phase 3` 扩展或平台功能面扩张。
+2. 在上面这些 `P2` 验证问题没有继续明显收口前，不建议再把路线图重心放回更远期的 `Phase 3` 扩展或平台功能面扩张。

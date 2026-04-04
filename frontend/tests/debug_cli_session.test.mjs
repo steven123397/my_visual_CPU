@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 
-import { DebugCliSession } from '../server/debug_server.mjs';
+import { DebugCliSession } from '../server/debug_cli_session.mjs';
 
 function createMockChild() {
   const child = new EventEmitter();

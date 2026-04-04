@@ -126,6 +126,13 @@
 
 ### 2026-04-04
 
+#### p1-debug-frontend-boundary-refinement-plan
+
+- 原文件：未单独保留活跃 plan；本轮直接按路线图 `P1-6` 收口。
+- 完成内容：完成 `debug_protocol` / `debug_server` 的协议与运行时边界收口；当前 `debug_protocol` 已拆成命令解码、响应序列化与 `CLI loop` 三块，`debug_server` 已拆成 `DebugCliSession`、server runtime 与 HTTP / WebSocket 入口，terminal 跟踪不再和子进程管理、路由分发揉在同一文件里。
+- 实现过程摘要：整体采用“先补新边界测试，再做文件切分”的克制路径；C++ 侧新增 `debug_protocol_command_smoke` 守住协议解码合同，Node 侧新增 `debug_server_runtime` 直测，并继续复用既有 `debug_server` / `interactive_terminal` smoke 守住外部行为不漂移。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[code_self_review_status.md](../status/code_self_review_status.md)
+
 #### p1-guest-smoke-orchestration-refinement-plan
 
 - 原文件：`p1_guest_smoke_orchestration_refinement.md`

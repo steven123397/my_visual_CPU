@@ -1,0 +1,90 @@
+#include <cstdio>
+#include <string>
+
+#include "../../src/debug/debug_protocol_command.h"
+
+namespace {
+
+bool expect(bool condition, const char* message) {
+    if (!condition) {
+        std::fprintf(stderr, "%s\n", message);
+        return false;
+    }
+    return true;
+}
+
+bool expect_parse_error(const char* line) {
+    try {
+        (void)parse_debug_cli_command(line);
+    } catch (...) {
+        return true;
+    }
+    std::fprintf(stderr, "expected parse error for line: %s\n", line);
+    return false;
+}
+
+}  // namespace
+
+int main() {
+    const DebugCliCommand load = parse_debug_cli_command(
+        "{\"cmd\":\"load\",\"image\":\"guest\\/interactive_os.elf\",\"backend\":\"pipeline\","
+        "\"disk\":\"tests\\/data\\/storage_basic.txt\",\"disk_ready\":false,"
+        "\"disk_magic_valid\":true,\"flat\":true,\"addr\":\"0x80000078\"}");
+    if (!expect(load.kind == DebugCliCommandKind::Load, "load command kind mismatch")) {
+        return 1;
+    }
+    if (!expect(load.image == "guest/interactive_os.elf", "load image should decode escaped slash")) {
+        return 1;
+    }
+    if (!expect(load.backend == "pipeline", "load backend mismatch")) {
+        return 1;
+    }
+    if (!expect(load.disk == "tests/data/storage_basic.txt", "load disk should decode escaped slash")) {
+        return 1;
+    }
+    if (!expect(load.disk_ready == false, "load disk_ready mismatch")) {
+        return 1;
+    }
+    if (!expect(load.disk_magic_valid == true, "load disk_magic_valid mismatch")) {
+        return 1;
+    }
+    if (!expect(load.flat == true, "load flat mismatch")) {
+        return 1;
+    }
+    if (!expect(load.addr == 0x80000078ULL, "load addr mismatch")) {
+        return 1;
+    }
+
+    const DebugCliCommand step_commit =
+        parse_debug_cli_command("{\"cmd\":\"step_commit\",\"count\":\"7\"}");
+    if (!expect(step_commit.kind == DebugCliCommandKind::StepCommit, "step_commit kind mismatch")) {
+        return 1;
+    }
+    if (!expect(step_commit.count == 7, "step_commit count mismatch")) {
+        return 1;
+    }
+
+    const DebugCliCommand uart_input =
+        parse_debug_cli_command("{\"cmd\":\"uart_input\",\"text\":\"abc\\u0008\"}");
+    if (!expect(uart_input.kind == DebugCliCommandKind::UartInput, "uart_input kind mismatch")) {
+        return 1;
+    }
+    if (!expect(uart_input.text.size() == 4, "uart_input text size mismatch")) {
+        return 1;
+    }
+    if (!expect(uart_input.text.substr(0, 3) == "abc", "uart_input text prefix mismatch")) {
+        return 1;
+    }
+    if (!expect(uart_input.text[3] == '\b', "uart_input should decode unicode backspace")) {
+        return 1;
+    }
+
+    if (!expect_parse_error("{\"cmd\":\"bogus\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"snapshot\"} trailing")) {
+        return 1;
+    }
+
+    return 0;
+}

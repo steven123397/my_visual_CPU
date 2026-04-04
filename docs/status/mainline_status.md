@@ -24,8 +24,9 @@
 - 相关状态：
   - [status/project_priority_roadmap.md](project_priority_roadmap.md)
 - 当前计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
 - 已完成计划归档：
+  - [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
   - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
@@ -41,9 +42,28 @@
 - `pipeline core`、`--backend pipeline`、`make test-pipeline`、`debug_session/protocol`、本地 Node 调试服务与浏览器前端教学演示链路都已经正式接入。
 - `Phase 3-A` 第一轮分支预测增强已经落地：当前 `pipeline` 已具备最小 `branch_predictor`、`jal` static predict-taken、条件分支动态预测与继续复用现有 flush / redirect 的 mispredict 恢复路径。
 - `Phase 3-B/C` 的基础收口已经继续推进到“最小真实 OoO execute”完成态：当前 `pipeline` 已具备 `rename + ROB` commit 主路径、最小 `LSQ` 接线、统一 speculative rollback、`RAM-only` forwarding、coarse automatic replay，以及 `ROB` 驱动退休 + 最小独立 memory execute；当前剩余工作已不再是“有没有真正进入 OoO execute”，而是更激进的 issue / memory speculation 与 bug-driven hardening。
+- 路线图里原本残留的 `P1` 结构项已经全部关闭；下一轮主线自然转入 `P2` 的验证补洞，而不是继续停留在 `debug/frontend` 或 `pipeline` 的文件边界整理。
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
 同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是以已完成的 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 和 [plan/history_plan.md#phase3-minimal-ooo-execute-plan](../plan/history_plan.md#phase3-minimal-ooo-execute-plan) 作为当前基线，继续维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
+
+## 2026-04-04 P1-6 debug/frontend 协议与运行时边界收口进展
+
+本轮主线已完成 [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan) 对应的 `P1-6` 收口；目标是把 `debug_protocol` 和 `debug_server` 从“功能继续堆在单文件里”退回到更窄、更可测的协议 / 会话 / runtime 边界，而不是继续顺手扩调试功能面。
+
+- `myCPU/src/debug/debug_protocol.cpp` 已退回到 `run_debug_cli()` 会话驱动和命令分派；`myCPU/src/debug/debug_protocol_command.cpp` 负责 JSON line 到命令对象的解码，`myCPU/src/debug/debug_protocol_response.cpp` 负责 snapshot / `ok` / `error` / `uart_output` 的统一序列化。
+- `myCPU/tests/host/debug_protocol_command_smoke.cpp` 已新增最小 host-side 协议回归，明确守住 `load` 参数解码、`step_commit count` 数值提取、`uart_input` Unicode backspace 解码，以及 unknown command / trailing token reject 合同；`myCPU/Makefile` 也已把这条 smoke 接到 `make test` 与 `make test-pipeline`。
+- `frontend/server/debug_server.mjs` 已退回 HTTP API、静态资源和 WebSocket 入口；`frontend/server/debug_cli_session.mjs` 负责 CLI 子进程生命周期，`frontend/server/debug_server_runtime.mjs` 负责 session queue、generation guard、run loop 和 terminal 跟踪。
+- `frontend/tests/debug_cli_session.test.mjs`、`frontend/tests/debug_server_runtime.test.mjs` 与既有 `frontend/tests/debug_server.test.mjs` 现在共同守住 Node 侧会话 teardown、runtime load/reset/terminal 跟踪，以及外部 HTTP / WebSocket 行为合同。
+- 这意味着路线图里原本最后残留的 `P1` 结构项已经关闭；当前下一步更自然的入口是 `P2-1` 的 `BinaryLoader` 直接回归、`P2-3` 的真实 `debug server + debug CLI` 端到端 smoke，以及 `P2-5` 的调试链路预算常量单一事实来源。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-host-debug_protocol_command_smoke`
+- `cd myCPU && make test-host-debug_cli_smoke`
+- `cd myCPU && make test-host-interactive_terminal_smoke`
+- `cd frontend && node --test frontend/tests/debug_cli_session.test.mjs frontend/tests/debug_server_runtime.test.mjs`
+- `cd frontend && node --test frontend/tests/debug_server.test.mjs`
 
 ## 2026-04-04 P1-12 / P1-13 / P1-14 reference / platform 合同收口进展
 
@@ -52,7 +72,7 @@
 - `myCPU/src/mem/address_space.cpp` 已把 page walk 期间的页表项读取失败与 A/D 位回写失败从 page fault 收口为对应 access fault；`tests/host/address_space_faults_smoke.cpp` 已补齐 `fetch/load/store` 三类 cause 与 `tval=原始虚拟地址` 的 host-side 合同。
 - `myCPU/src/devices/plic.cpp` 与 `myCPU/src/devices/plic.h` 已把 claim / complete 改为按 context 记账；错误 context 的 complete 不再释放 claim，`tests/unit/mmio_contract_matrix.cpp`、现有 machine/supervisor asm 以及 `pipeline_backend_smoke` 共同守住这条边界。
 - `myCPU/src/loader/elf_loader.cpp` 已把 ELF header reject 扩到 endianness、ident version、ELF version、type、machine 与 entry-range；`elf_loader_header_rejects`、`elf_loader_rejects` 以及既有正向 ELF 单测 fixture 都已同步到同一口径。
-- 这意味着路线图中的 `P1-12`、`P1-13`、`P1-14` 已全部关闭；当前仍残留的 `P1` 结构项主要是 `debug_protocol.cpp / debug_server.mjs` 的协议与运行时状态机边界。
+- 这意味着路线图中的 `P1-12`、`P1-13`、`P1-14` 已全部关闭；后续同日另一轮 `P1-6` 也已收口，当前路线图已不再残留 `P1` 结构项。
 
 本轮已新鲜验证通过：
 
