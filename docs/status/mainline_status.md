@@ -42,6 +42,20 @@
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
 同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是以已完成的 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 和 [plan/history_plan.md#phase3-minimal-ooo-execute-plan](../plan/history_plan.md#phase3-minimal-ooo-execute-plan) 作为当前基线，继续维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
 
+## 2026-04-04 P0 收口进展
+
+本轮主线已按 [status/project_priority_roadmap.md](project_priority_roadmap.md) 完成剩余 P0 收口；当前 `main` 不再残留 P0 条目，后续优先级应从 P1 开始。
+
+- `guest/kernel/kernel_bringup.c` 已把 VM 建立后的失败路径收口为对称回滚；当 PMM probe 失败且 `vm_address_space_destroy()` 也失败时，bring-up 现在会保留 `out_space` 指针并直接传播失败，不再伪装成“已回滚完成”。
+- `tests/unit/kernel_bringup.c` 已新增 rollback-failure 回归，和既有 probe/setup 失败用例一起守住 `kernel_bringup` 的成功回滚与失败保真合同。
+- `tests/asm/exception_traps.S` 已补齐 `instruction-address-misaligned` 专用回归；当前 `jal`、`jalr` 与 taken branch 跳到非对齐目标时，都会稳定守住 `mcause / mepc / mtval` 合同。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-unit-kernel_bringup`
+- `cd myCPU && make test-exception_traps`
+- `cd myCPU && make test-guest-supervisor_demo`
+
 ## 2026-04-03 P1 首批结构收口进展
 
 本轮主线没有继续扩功能面，而是按 [status/project_priority_roadmap.md](project_priority_roadmap.md) 的 P1 首批问题做了三条结构收口：

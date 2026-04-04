@@ -33,6 +33,18 @@
 
 ## P0：先修的硬问题
 
+`2026-04-04` 更新：本节 7 个 P0 问题已全部在 `main` 收口；以下条目保留为“已完成问题记录”以便后续追溯。当前若继续排优先级，应从 P1 开始。
+
+本轮已完成的 P0 收口包括：
+
+- `Bus::last_access` 已对 unmapped 访问补齐失败记录与回归，debug 快照不再保留旧值。
+- `kernel_bringup` 已把 VM 建立后的失败路径收口为对称回滚，并补齐 rollback-failure 保真测试。
+- `user_program_smoke_prepare_standard()` 已收口 staged commit / rollback 合同。
+- 前端 asm manifest 已重新对齐 canonical 测试集。
+- `pipeline` 非法 `load/store funct3` 已稳定回到 illegal-instruction trap 合同。
+- `xRET` 返回路径已清 `MPRV`，并有交叉回归守护。
+- `instruction-address-misaligned` trap 已补成稳定回归，覆盖 `jal` / `jalr` / taken branch。
+
 ### 1. `Bus::last_access` 对 unmapped 访问不会更新，debug 观测面可能保留旧值
 
 - 代码证据：
