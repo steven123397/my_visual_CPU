@@ -11,6 +11,11 @@
 namespace {
 
 constexpr uint16_t kElfClass64 = 2;
+constexpr uint8_t kElfDataLittleEndian = 1;
+constexpr uint8_t kElfIdentVersionCurrent = 1;
+constexpr uint16_t kElfTypeExec = 2;
+constexpr uint16_t kElfMachineRiscv = 243;
+constexpr uint32_t kElfVersionCurrent = 1;
 constexpr uint32_t kElfMagic = 0x464C457F;
 constexpr uint32_t kProgramHeaderLoad = 1;
 
@@ -71,6 +76,21 @@ uint64_t ElfLoader::load(Ram& ram, const char* path) const {
     if (ehdr.e_ident[4] != kElfClass64) {
         throw std::runtime_error("not ELF64");
     }
+    if (ehdr.e_ident[5] != kElfDataLittleEndian) {
+        throw std::runtime_error("unsupported ELF endianness");
+    }
+    if (ehdr.e_ident[6] != kElfIdentVersionCurrent) {
+        throw std::runtime_error("unsupported ELF ident version");
+    }
+    if (ehdr.e_version != kElfVersionCurrent) {
+        throw std::runtime_error("unsupported ELF version");
+    }
+    if (ehdr.e_type != kElfTypeExec) {
+        throw std::runtime_error("unsupported ELF type");
+    }
+    if (ehdr.e_machine != kElfMachineRiscv) {
+        throw std::runtime_error("unsupported ELF machine");
+    }
     if (ehdr.e_ehsize != sizeof(Elf64_Ehdr)) {
         throw std::runtime_error("unexpected ELF header size");
     }
@@ -79,6 +99,9 @@ uint64_t ElfLoader::load(Ram& ram, const char* path) const {
     }
 
     const uint64_t memory_end = MEM_BASE + MEM_SIZE;
+    if (ehdr.e_entry < MEM_BASE || ehdr.e_entry >= memory_end) {
+        throw std::runtime_error("entry out of memory range");
+    }
     for (uint16_t i = 0; i < ehdr.e_phnum; ++i) {
         file.seekg(static_cast<std::streamoff>(ehdr.e_phoff + static_cast<uint64_t>(i) * ehdr.e_phentsize), std::ios::beg);
         if (!file) {

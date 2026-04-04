@@ -15,6 +15,11 @@ namespace {
 
 constexpr uint32_t kElfMagic = 0x464C457F;
 constexpr uint16_t kElfClass64 = 2;
+constexpr uint8_t kElfDataLittleEndian = 1;
+constexpr uint8_t kElfIdentVersionCurrent = 1;
+constexpr uint16_t kElfTypeExec = 2;
+constexpr uint16_t kElfMachineRiscv = 243;
+constexpr uint32_t kElfVersionCurrent = 1;
 constexpr uint64_t kProbeAddr = MEM_BASE + 0x6000;
 
 struct Elf64Ehdr {
@@ -52,6 +57,11 @@ Elf64Ehdr make_valid_ehdr() {
     Elf64Ehdr ehdr{};
     std::memcpy(ehdr.e_ident, &kElfMagic, sizeof(kElfMagic));
     ehdr.e_ident[4] = kElfClass64;
+    ehdr.e_ident[5] = kElfDataLittleEndian;
+    ehdr.e_ident[6] = kElfIdentVersionCurrent;
+    ehdr.e_type = kElfTypeExec;
+    ehdr.e_machine = kElfMachineRiscv;
+    ehdr.e_version = kElfVersionCurrent;
     ehdr.e_entry = MEM_BASE;
     ehdr.e_phoff = sizeof(Elf64Ehdr);
     ehdr.e_ehsize = sizeof(Elf64Ehdr);
@@ -148,6 +158,66 @@ int main() {
                     file.write(reinterpret_cast<const char*>(&ehdr), sizeof(ehdr));
                 },
                 "not ELF64")) {
+            return 1;
+        }
+
+        if (!write_case_and_expect_failure(
+                [](std::ofstream& file) {
+                    Elf64Ehdr ehdr = make_valid_ehdr();
+                    ehdr.e_ident[5] = 2;
+                    file.write(reinterpret_cast<const char*>(&ehdr), sizeof(ehdr));
+                },
+                "unsupported ELF endianness")) {
+            return 1;
+        }
+
+        if (!write_case_and_expect_failure(
+                [](std::ofstream& file) {
+                    Elf64Ehdr ehdr = make_valid_ehdr();
+                    ehdr.e_ident[6] = 2;
+                    file.write(reinterpret_cast<const char*>(&ehdr), sizeof(ehdr));
+                },
+                "unsupported ELF ident version")) {
+            return 1;
+        }
+
+        if (!write_case_and_expect_failure(
+                [](std::ofstream& file) {
+                    Elf64Ehdr ehdr = make_valid_ehdr();
+                    ehdr.e_version = 2;
+                    file.write(reinterpret_cast<const char*>(&ehdr), sizeof(ehdr));
+                },
+                "unsupported ELF version")) {
+            return 1;
+        }
+
+        if (!write_case_and_expect_failure(
+                [](std::ofstream& file) {
+                    Elf64Ehdr ehdr = make_valid_ehdr();
+                    ehdr.e_type = 3;
+                    file.write(reinterpret_cast<const char*>(&ehdr), sizeof(ehdr));
+                },
+                "unsupported ELF type")) {
+            return 1;
+        }
+
+        if (!write_case_and_expect_failure(
+                [](std::ofstream& file) {
+                    Elf64Ehdr ehdr = make_valid_ehdr();
+                    ehdr.e_machine = 62;
+                    file.write(reinterpret_cast<const char*>(&ehdr), sizeof(ehdr));
+                },
+                "unsupported ELF machine")) {
+            return 1;
+        }
+
+        if (!write_case_and_expect_failure(
+                [](std::ofstream& file) {
+                    Elf64Ehdr ehdr = make_valid_ehdr();
+                    ehdr.e_entry = MEM_BASE + MEM_SIZE;
+                    file.write(reinterpret_cast<const char*>(&ehdr), sizeof(ehdr));
+                },
+                "entry out of memory range")) {
             return 1;
         }
 
