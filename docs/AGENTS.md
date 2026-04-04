@@ -29,7 +29,7 @@
   记录 simulator 主体的实现基线、局部规则和已知问题。
 - [myCPU/guest/AGENTS.md](../myCPU/guest/AGENTS.md)
   记录 guest runtime 的实现基线、局部规则和已知问题。
-- [readme.md](../readme.md)
+- [README.md](../README.md)
   面向读者的项目概览，保持可读、简洁，不承载过细实现流水账。
 
 ## 文档角色规则
@@ -42,6 +42,7 @@
  只回答“怎么落地、任务做到哪一步”。执行中的计划文档负责 checklist 和执行步骤；完成态计划统一归档到 `history_plan.md`。
 - `status/`
   只回答“当前是什么状态、还有什么风险、下一步是什么”。同一模块的实时进度只能以对应 `status` 文档为准。
+  代码审查 / 修改任务的 findings 默认集中到 [status/code_reself_status.md](status/code_reself_status.md)，除非用户明确要求另开专项状态文档。
 
 ## 单一事实来源规则
 
@@ -50,7 +51,7 @@
 - 设计目标、边界、取舍、契约和收口标准，只写在 `design/`。
 - 项目背景和原始目标，只写在 `background/request.md`。
 - `index.md` 只做导航，不重复承载同一主题的当前状态。
-- `AGENTS.md` 只定义规则，不复制模块状态正文。
+- `AGENTS.md` 只定义规则和少量当前主线摘要，不复制模块状态正文。
 
 ## 新文档创建条件
 
@@ -74,6 +75,7 @@
 ## 命名与完成态规则
 
 - 长期维护的主状态文档优先使用稳定文件名，不把日期放进文件名。
+- 代码审查 / 修改 findings 默认使用稳定文件名 [status/code_reself_status.md](status/code_reself_status.md)。
 - 不创建单独 `docs/archive/` 或 `docs/plan/archive/` 目录；完成态计划统一归档到 [plan/history_plan.md](plan/history_plan.md)。
 - 计划文档完成时必须：
   - 把 checklist 勾完
@@ -101,6 +103,7 @@
 
 - 根目录 `AGENTS.md` 不要再次膨胀成实现细节全集。
 - 具体实现方式、局部规则、存留问题优先写入对应子树的 `AGENTS.md`。
+- `AGENTS.md` 可以保留少量“当前主线 / 下一步 / 局部边界”摘要，但详细状态仍以 `status/` 为准。
 - 长篇设计、审查、方案和契约文档放在 `docs/`，不要堆进 README。
 - README 要持续可读，尤其 guest 相关描述保持概览化，不要写成长串内部细节。
 - 不要让 `design / plan / status` 同时维护同一件事的实时表述。

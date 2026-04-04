@@ -1,6 +1,6 @@
 # 《计算机系统结构》项目制教学改革方案（初稿）
 
-> 背景说明：本文是项目最初的课程背景材料，不代表当前实现状态。当前仓库进展、冻结基线和下一步工作请以 [readme.md](../../readme.md)、[AGENTS.md](../../AGENTS.md)、[docs/status/mainline_status.md](../status/mainline_status.md) 与 [docs/status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
+> 背景说明：本文是项目最初的课程背景材料，不代表当前实现状态。当前仓库进展、冻结基线和下一步工作请以 [README.md](../../README.md)、[AGENTS.md](../../AGENTS.md)、[docs/status/mainline_status.md](../status/mainline_status.md) 与 [docs/status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
 
 ## 一、总体思路 
 • 《计算机系统结构》：造一台 “虚拟计算机” 

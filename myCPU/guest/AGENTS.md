@@ -260,7 +260,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - [kernel/user_task.c](kernel/user_task.c)、[kernel/user_task_bootstrap.c](kernel/user_task_bootstrap.c) 和 [kernel/user_program.c](kernel/user_program.c)
   当前已经完成第一轮 lifecycle / plan / binding 收口，并新增 `test-unit-user_task`、`test-unit-user_task_bootstrap` 与 `test-unit-user_program` host-side 门禁；后续仍要避免回退到零散 wrapper 和重复 rollback 分支。
 - [kernel/user_program_smoke.c](kernel/user_program_smoke.c) 和 [kernel/supervisor_demo_smoke.c](kernel/supervisor_demo_smoke.c)
-  当前已经完成第一轮 smoke orchestration helper 收口，并新增 `test-unit-user_program_smoke`；后续仍要避免把 prepare / round / active-memory / platform-tail 再重新写散。
+  当前已经完成第一轮 smoke orchestration helper 收口，并新增 `test-unit-supervisor_demo_smoke` 与 `test-unit-user_program_smoke`；其中 `user_program_smoke` 已直接覆盖 standard plan、prepare、active memory 与 interrupt round 等窄回归，后续仍要避免把 prepare / round / active-memory / platform-tail 再重新写散。
 - 当前 guest runtime 结构收口的 host-side 单元门禁，至少已经覆盖：
   - `test-unit-kernel_bringup`
   - `test-unit-kernel_runtime`
@@ -291,11 +291,10 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
-2. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上；它们当前就是 Phase 1 核心 guest 门禁的一部分。公共 bring-up 编排继续收敛在 `kernel_runtime.c`、`kernel_bringup.c` 和 `kernel/supervisor_runtime.c`；`kernel_alpha/common.c` 只保留轻量 marker wrapper，不要让重复骨架重新散回各入口。
-3. 守住 [kernel/vm.c](kernel/vm.c) / [kernel/vm_address_space.c](kernel/vm_address_space.c) / [kernel/vm_process.c](kernel/vm_process.c) / [kernel/vm_object.c](kernel/vm_object.c) / [kernel/vm_fault.c](kernel/vm_fault.c) 的边界，不要重新耦合。
-4. 在 [kernel/trap.c](kernel/trap.c) 与 [kernel/trap_dispatch.c](kernel/trap_dispatch.c) 的边界上继续保持 lifecycle / dispatch 分离，不要回退。
-5. 继续沿着 process / runtime refinement 与大文件拆分的方向收口 `kernel_runtime`、`kernel_bringup` 和相关基础设施，而不是再把逻辑重新堆回 demo 入口。
-6. 继续补更多 user interrupt / trap coverage，但不要把这条线和 Phase 2 backend 稳定化混在一起。
+2. 继续把 `kernel_alpha_demo`、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 这十条回归守在稳定输出上；它们当前就是 Phase 1 核心 guest 门禁的一部分。
+3. 继续把 guest 生命周期相关回归优先压在 `test-unit-supervisor_demo_smoke` 与 `test-unit-user_program_smoke` 这类窄单测上，尤其是 standard plan、prepare、active memory、interrupt round 和 platform tail 这几类 smoke orchestration 边界。
+4. 守住 [kernel/vm.c](kernel/vm.c) / [kernel/vm_address_space.c](kernel/vm_address_space.c) / [kernel/vm_process.c](kernel/vm_process.c) / [kernel/vm_object.c](kernel/vm_object.c) / [kernel/vm_fault.c](kernel/vm_fault.c) 以及 [kernel/trap.c](kernel/trap.c) / [kernel/trap_dispatch.c](kernel/trap_dispatch.c) 的分层，不要因为修 bug 再把职责揉回大文件或 demo 入口。
+5. 当前 guest 子线以 bug-driven hardening 和边界维护为主，不再把重点放在继续扩新的 bring-up 功能面；`interactive_os` 仍主要服务于 monitor / terminal / 调试链路验证，而不是新的产品主线。
 
 ## 验证要求
 
@@ -306,6 +305,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `cd myCPU && make test-unit-kernel_alpha_common`
 - `cd myCPU && make test-unit-kernel_alpha_interrupt`
 - `cd myCPU && make test-unit-kernel_alpha_storage`
+- `cd myCPU && make test-unit-supervisor_demo_smoke`
+- `cd myCPU && make test-unit-user_program_smoke`
 - `cd myCPU && make test-guest-supervisor_demo`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
 - `cd myCPU && make test-guest-kernel_alpha_fault_demo`

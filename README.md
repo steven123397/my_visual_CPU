@@ -1,24 +1,18 @@
-# myCPU — RISC-V 模拟器
+# myCPU — RISC-V 模拟器原型
 
-`myCPU` 当前已经是一个已可运行的模拟器原型，而不是纯设计稿。主线已经形成 `phase1-stable`（`283aee6`）这一 Phase 1 冻结基线，并在此后继续接入了 `pipeline` 执行后端、本地 `debug_session/protocol`、浏览器前端教学演示链路，以及 `Phase 3-A` 的首轮分支预测增强。
+`my_visual_CPU` 是一个围绕 `myCPU` 演进的 RISC-V 模拟器项目。它不是课程作业式的一次性原型，而是一套已经可运行、可测试、可继续扩展的代码基线：仓库同时提供以 ISA 正确性为主的 `functional` 执行路径、用于执行模型实验的 `pipeline` 后端、能够支撑最小 supervisor / kernel bring-up 的 guest runtime，以及一条本地 `debug_session/protocol + frontend` 教学演示链路。
 
-当前 `Phase 3-B/C` 已经落地首轮最小 `OoO` 接线：`pipeline` 现已具备 `rename + ROB` commit 主路径、最小 `LSQ` 接线、统一 speculative rollback、coarse automatic replay、`RAM-only` store-to-load forwarding，以及 `ROB` 驱动退休 + 最小独立 memory execute；同时仍保持单发射、共享 ISA 真值来源和 in-order retire 的工程边界。
-
-项目当前的工程重点不是“再证明它能跑”，而是继续稳住 reference path 的 correctness、维护 `kernel_alpha` 与 `interactive_os` 这两条 guest 路线，并把 `pipeline` / `debug/frontend` 收口成更稳定的已接入能力。
+这个项目的目标，不只是“跑通几个 demo”，而是持续维护一套统一语义来源下的模拟器原型，并在此基础上逐步推进特权级、虚存、平台设备、guest runtime、pipeline 与更复杂微架构模型的实验与验证。
 
 ## 当前定位
 
 - host simulator：C / C++17
 - guest runtime：C11 + RISC-V assembly
-- 默认 reference path：`functional`
-- 可选执行后端：`pipeline`
-- 当前 `pipeline` 额外能力：
-  - `Phase 3-A` 最小分支预测
-  - `Phase 3-B/C` 首轮 `rename + ROB + LSQ +` 最小真实 `OoO execute`
-- 当前 guest 主线：
-  - `guest_supervisor_demo`
-  - `kernel_alpha` 正向 + 负向回归
-  - `interactive_os` 最小交互 monitor
+- ISA / execution：当前以 `RV64I / RV64M` 为基础，默认执行路径为 `functional`，并提供 `pipeline` 后端
+- privilege / memory：已覆盖最小 `M/S/U` 特权路径、`Sv39` 与基础 trap / page fault 语义
+- platform：已接入 `UART`、`CLINT`、`PLIC` 与 MMIO block storage
+- guest demos：`guest_supervisor_demo`、`kernel_alpha` 正负回归、`interactive_os` 最小交互 monitor
+- debug tooling：本地 `--debug-cli` 协议、Node 调试服务与浏览器前端演示页
 
 ## 仓库结构
 
@@ -27,7 +21,7 @@ my_visual_CPU/
 ├── myCPU/      # 模拟器主体、guest runtime、测试与 Makefile
 ├── frontend/   # 本地调试服务、浏览器前端与 Node 测试
 ├── docs/       # background / design / plan / status 正式文档
-└── readme.md
+└── README.md
 ```
 
 更细的模块边界和局部规则请直接看：
@@ -161,8 +155,8 @@ make test-guest-kernel_alpha_fault_demo
 
 1. [docs/index.md](docs/index.md)
 2. [docs/status/mainline_status.md](docs/status/mainline_status.md)
-3. [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
-4. [docs/status/code_self_review_status.md](docs/status/code_self_review_status.md)
+3. [docs/status/project_priority_roadmap.md](docs/status/project_priority_roadmap.md)
+4. [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
 
 设计边界和回归收口标准见：
 

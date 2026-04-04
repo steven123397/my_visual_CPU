@@ -123,7 +123,7 @@
 - 修改：`myCPU/guest/kernel/storage.c`
 - 修改：`myCPU/Makefile`
 - 修改：`docs/status/kernel_alpha_status.md`
-- 修改：`readme.md`
+- 修改：`README.md`
 
 ## 验证
 

@@ -18,15 +18,15 @@
 
 - 状态文档：
   - [status/mainline_status.md](../status/mainline_status.md)
-  - [status/code_self_review_status.md](../status/code_self_review_status.md)
+  - [status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
   - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关计划：
   - 无。该方向的执行细节已经回写到相关 `status` 文档。
 
 ## 当前有效性说明
 
-- 当前有效 / 历史语境：当前有效，作为当前主线对"最小可交互 OS"目标的结构边界说明。
-- 当前正式进展以 [status/mainline_status.md](../status/mainline_status.md) 为准；当前 terminal 壳层剩余稳定化问题统一写入 [status/code_self_review_status.md](../status/code_self_review_status.md)。
+- 当前有效 / 历史语境：当前有效，作为当前主线对“最小可交互 OS”目标的结构边界说明。
+- 当前正式进展以 [status/mainline_status.md](../status/mainline_status.md) 为准；当前 terminal 壳层剩余稳定化问题统一归入 [status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 的当前优先级。
 
 ## 背景与问题
 
@@ -157,7 +157,7 @@ terminal 相关前端状态至少包括：
 - 鼠标只影响前端壳层焦点与控件行为，不向 guest 暴露更高层点击语义。
 - 调试信息继续保留为辅助观察区，不与 guest monitor 的命令语义耦合。
 
-当前这组合同已经实现完成；剩余工作重点是 session 串行化、terminal 性能和协议稳健性，统一见 [status/code_self_review_status.md](../status/code_self_review_status.md)。
+当前这组合同已经实现完成；剩余工作重点是 session 串行化、terminal 性能和协议稳健性，统一见 [status/mainline_status.md](../status/mainline_status.md) 与 [status/project_priority_roadmap.md](../status/project_priority_roadmap.md)。
 
 #### 4. Guest monitor 合同
 
@@ -221,8 +221,3 @@ guest 侧收口为一个最小串口 monitor：
 - 把命令集定位为开发期调试接口，而不是长期稳定 ABI，能显著降低前期设计压力，但代价是后续若要把它转成正式用户界面，需要再做一次合同收口。
 - 由于 `frontend` ownership 默认归这条设计线，后续若与 `Phase 3-A` 并行推进，预测器的最小可观察性应优先通过 snapshot / 协议落地；否则会在终端桌面壳与 pipeline 可视化之间制造高冲突区。
 - 如果后续要走真正的 guest 图形桌面路线，应新开一份设计文档，单独定义显示设备、指针输入和 guest 图形层，不应在本设计上直接加码。
-
-## 当前有效性说明
-
-- 当前有效 / 历史语境：当前有效，作为当前主线对“最小可交互 OS”目标的结构边界说明。
-- 当前正式进展以 [status/mainline_status.md](../status/mainline_status.md) 为准；若后续为该方向建立专门 `status` 文档，再以对应文档承载实时进度。

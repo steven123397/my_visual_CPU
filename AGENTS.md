@@ -18,7 +18,7 @@
 当前定位：
 
 - 已经是一个已可运行的模拟器原型，不是纯设计稿。
-- 当前已达成 Phase 1 核心 bring-up 目标，正处于 Phase 1 冻结后的稳定化阶段。
+- 当前已达成 Phase 1 核心 bring-up 目标，正处于 Phase 1 冻结后的稳定化，以及Phase2、3、4的有序推进阶段。
 - 正在同步推进一轮有明确结构收益的 C++ 重构。
 
 长期目标：
@@ -34,7 +34,7 @@
   本地调试服务、浏览器前端和 Node 测试。
 - [docs](docs)
   按 `background / design / plan / status` 组织的正式技术文档，以及统一入口 [docs/index.md](docs/index.md)。
-- [readme.md](readme.md)
+- [README.md](README.md)
   面向读者的项目概览、构建和运行说明。
 
 ## 子目录 AGENTS 索引
@@ -77,6 +77,7 @@
 
 最近一轮关键历史节点只保留以下几项：
 
+- `2026-04-04` 已完成 `P1` 最后一批结构收口与 `P2` 首轮验证补洞两轮收口：`BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` / `user_program_smoke` 更窄单测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node/C++ 两侧调试预算常量收口，以及 `pipeline` mega-smoke 拆分都已进入现有门禁。
 - `2026-03-25` 已完成一批 simulator-side correctness 修复：非法整数编码、`DIV/REM` 溢出边界、ELF pure-BSS `PT_LOAD`、bus / device 第一轮边界防御。
 - `2026-03-26` 已完成一轮更系统的 Phase 1 hardening 回归扩充：非法编码样本扩展、CPU 侧 MMIO access-fault asm、ELF segment/reject/header 单元回归、host-side MMIO contract matrix，以及 CSR illegal matrix 均已接入现有门禁。
 - `2026-03-26` 已新增 [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)，作为当前 Phase 1 / Phase 2 回归收口标准。
@@ -107,26 +108,18 @@
 当前阶段的主线工作是：
 
 - 继续稳住 simulator reference path 的 correctness 与可观察性。
-- 继续沿已落地的第一轮 hardening 矩阵，维护非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 合同闭环，并按新增 bug 补最小回归。
-- 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做必要 hardening。
-- 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，作为 post-Phase1 结构优化。
-- 在不破坏 reference path 清晰性的前提下，继续稳住已接入 Phase 2 能力的语义边界与验证基线。
-- 保持 `pipeline` 与本地调试前端可运行、可验证，但不让它们反向污染 reference path。
-- 当前 `P1` 结构收口已经全部完成；下一步自然转入 `P2` 的验证补洞，优先是 `BinaryLoader` 直接单测、guest smoke 更窄单测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、`pipeline` mega-smoke 拆分，以及 `Machine::load_elf()/load_binary()` 的 reset 语义回归。
-
-当前对 Phase 2 的工程安排是：
-
-- `pipeline core` 与 `debug/frontend` 的正式接入工作已经完成，不再把它们当作待合入功能。
-- 当前 Phase 2 的最小收口已经基本成立：`pipeline` 的高风险 differential 主干与 `debug/frontend` 的最小快照 / 协议门禁都已落地。
-- 后续先不继续扩功能面，而是优先维护既有 `pipeline` 差分 / smoke / guest 门禁，并在新增 bug 出现时补最小持久回归，而不是继续堆叠低收益变体。
-- `debug/frontend` 继续限定在“教学演示可用”的最小范围，重点放在快照稳定性、测试门禁和对现有 demo 的可用性维护。
-- 如果下一轮并行推进 `P2`，建议按代码 ownership 拆成几条互不冲突的线：`P2-1 + P2-7`、`P2-2`、`P2-3 + P2-5`、`P2-4`，而 `P2-6` 由主集成线统一回写文档和阶段判断。
+- 继续沿已落地的 hardening 矩阵，维护非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 合同闭环，并按新增 bug 补最小回归。
+- 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做 bug-driven hardening。
+- `P1` 结构收口和 `P2` 首轮验证补洞已经全部完成；当前不再把重点放在继续扩功能面。
+- `debug/frontend` 当前下一步是长会话、持续 `run`、高吞吐输入输出和真实浏览器节奏下的压力验证，而不是继续扩 UI / 协议面。
+- 如果继续推进 `Phase 3`，优先把 decode 级 `BlockedByUnresolvedStore` 串行化边界单列成专项问题，再判断是否继续更激进的 issue / replay / speculation。
+- 继续把 `pipeline`、loader/debug smoke 和 guest runtime 保持在当前已接入、可验证的范围内，不让它们反向污染 reference path。
 
 相关状态文档见：
 
 - [docs/status/mainline_status.md](docs/status/mainline_status.md)
+- [docs/status/project_priority_roadmap.md](docs/status/project_priority_roadmap.md)
 - [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)
-- [docs/status/code_self_review_status.md](docs/status/code_self_review_status.md)
 - [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
 
 ## 技术栈
@@ -157,11 +150,54 @@
   - `myCPU/guest/kernel_alpha_plic_not_ready_demo.elf`
   - `myCPU/guest/kernel_alpha_timer_not_ready_demo.elf`
 
+## Agent 默认工作流
+
+除非用户明确要求跳过、简化或改顺序，否则后续对话默认按下面流程推进。
+
+### 实现 / 设计类任务
+
+1. 先确认上下文。
+   至少阅读仓库根 `AGENTS.md`、目标子树 `AGENTS.md`、相关 `status/design` 文档，并在预计会改代码或文档时先本地确认 `git status`、当前分支和未提交改动。
+2. 遇到新增大模块、大功能面、较大行为变化或新边界时，先和开发者对齐设计，再在 `docs/design/` 撰写或更新设计文档。
+   如果只是小功能、小修复、小范围合同补洞，可以按实际收益决定是否单独写设计文档。
+3. 设计或方向确定后，先同步 `docs/status/` 和相关 `AGENTS.md` 里的当前主线、下一步、优先级或边界说明，不要等代码写完再回头补口径。
+4. 决定实施载体。
+   根据工作规模和风险，明确是在当前根目录直接工作，还是新开 worktree / branch；同时决定是否需要多 agent 并行协作。
+5. 决定是否写 `plan`。
+   任务较大、步骤较多、需要分阶段验收或多人并行时，在 `docs/plan/` 撰写计划文档；简单任务可以不单独写 `plan`。
+6. 根据 `plan` 或用户要求开始执行。
+   优先小步落地，先补最窄回归或最小验证，再扩到实现和更大门禁。
+7. 工作完成后，优先同步文档。
+   至少检查并更新相关 `status`、各级 `AGENTS.md`、必要时的 `README.md` / `docs/index.md`，确保文档口径和当前进度一致。
+8. 汇报结果，并把提交与清理交还给开发者决定。
+   汇报里要说明改动摘要、验证结果、剩余风险和建议下一步；不要默认自动提交，也不要默认自动清理 worktree / branch，除非用户明确要求。
+
+### 代码审查 / 修改类任务
+
+1. 审查发现默认集中写入 `docs/status/code_reself_status.md`。
+   如果文件不存在，就先创建；如果没有发现问题，也要明确写清“当前无活跃问题”。
+2. 审查结论形成后，先同步 `docs/status/` 和相关 `AGENTS.md` 里的下一步、优先级和处理口径。
+3. 后续如果要进入修复，实现流程默认回到上面的第 4 步到第 8 步执行。
+
+### 额外约束
+
+- 不要跳过文档同步。
+- 不要在未经确认的情况下直接提交或清理分支 / worktree。
+- 不要把设计、状态、计划和实现混成一份文档；按 `docs/AGENTS.md` 的分工维护。
+- 如果用户给了更具体的流程或边界，用户指令优先。
+
 ## 全局验证基线
 
 修改架构相关路径后，至少应守住：
 
 - `cd myCPU && make test`
+
+如果改动主要集中在 loader、guest smoke orchestration 或本轮新增窄门禁，还应额外关注：
+
+- `cd myCPU && make test-unit-binary_loader`
+- `cd myCPU && make test-unit-machine_loader_reset`
+- `cd myCPU && make test-unit-supervisor_demo_smoke`
+- `cd myCPU && make test-unit-user_program_smoke`
 
 如果改动主要集中在 guest runtime / demo bring-up，还应额外关注：
 
@@ -177,7 +213,6 @@
 - `cd myCPU && make test-unit-user_task`
 - `cd myCPU && make test-unit-user_task_bootstrap`
 - `cd myCPU && make test-unit-user_program`
-- `cd myCPU && make test-unit-user_program_smoke`
 - `cd myCPU && make test-unit-kernel_alpha_common`
 - `cd myCPU && make test-unit-kernel_alpha_interrupt`
 - `cd myCPU && make test-unit-kernel_alpha_storage`

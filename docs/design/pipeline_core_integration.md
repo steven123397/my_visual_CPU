@@ -2,7 +2,7 @@
 
 ## 文档定位
 
-本文档用于说明如何把你同学在 `my-project-3-24` 分支上完成的 Phase 2 pipeline core 工作，按当前主线边界重新接回仓库。
+本文档记录第一轮 `pipeline core` 正式接入主线时确定下来的结构边界、迁移范围和非目标。
 
 本文档已经吸收当时“集成准备”阶段的冻结基线、不可整体 merge 旧分支以及三类改动分类判断，重点回答以下问题：
 
@@ -11,12 +11,7 @@
 - `pipeline` 后端在当前阶段的正式门禁是什么
 - 如何在不破坏 `phase1-stable` 基线的前提下，把 `--backend pipeline` 正式接入
 
-当前状态补充：
-
-- 本文档对应的第一轮 `pipeline core` 集成已经完成。
-- 当前主线已经在此基础上继续完成了第二轮 `debug/frontend` 接入。
-- 第二轮设计见 [debug_frontend_integration.md](debug_frontend_integration.md)。
-- 下文中的“本轮目标/非目标”仅指第一轮 `pipeline core` 集成语境，不代表当前主线的全部已接入范围。
+本文档不承担实时进度更新。当前主线已经在此基础上继续完成 `debug/frontend` 接入和 `Phase 3` 第一轮收口；这些结果统一以状态文档为准。
 
 ## 关联文档
 

@@ -1,260 +1,65 @@
-# 当前项目修正版优先级路线图
+# 当前项目优先级路线图
 
 ## 文档定位
 
-本文档基于 `2026-04-03` 对当前 `main` 分支实现、测试入口和调试链路的重新审计，记录“当前已经能明确指出的问题”以及修正版优先级。
+本文档只保留当前仍然开放的优先级判断，不再重复记录已经完成的整段执行过程。
 
-它不是执行计划，也不替代 [mainline_status.md](mainline_status.md)；它的作用是在下一轮建新 plan 之前，先把问题单列清楚，避免路线图继续停留在泛泛的方向描述。
+它不替代 [mainline_status.md](mainline_status.md)。`mainline_status` 负责回答“现在主线是什么状态”，本文档负责回答“下一轮最值得做什么，以及什么不该抢跑”。
 
 ## 关联文档
 
 - 相关设计：
   - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
-  - [design/cpp_refactor_design.md](../design/cpp_refactor_design.md)
+  - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
 - 相关状态：
-  - [status/mainline_status.md](mainline_status.md)
-  - [status/kernel_alpha_status.md](kernel_alpha_status.md)
-  - [status/code_self_review_status.md](code_self_review_status.md)
+  - [mainline_status.md](mainline_status.md)
+  - [kernel_alpha_status.md](kernel_alpha_status.md)
 - 当前活跃计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1) 和 [plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
+  - 当前无活跃计划。
 - 已完成计划归档：
   - [plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1)
   - [plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
   - [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
   - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
-  - [plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
-  - [plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
-  - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
-  - [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
 
-## 审计结论
+## 当前判断
 
-- 当前项目不缺“还能往哪里扩”，缺的是一批已经在代码里显形的具体问题。
-- 这些问题主要集中在 4 类：
-  - 失败路径没有回滚，状态可能半初始化泄漏。
-  - 调试/测试工具链存在索引漂移和多处手工复制。
-  - `guest` smoke 与 `pipeline/debug` 入口继续承担过多职责。
-  - 部分关键路径仍缺少更贴近真实边界的持久回归。
-- 因此，近期路线图不应继续写成“继续 hardening / 继续 refinement”这种泛表述，而应先把下面这些明确问题逐条压实。
+- `P0` correctness 修补已经完成，`P1` 结构收口已经全部关闭，`P2` 首轮验证补洞也已经完成两轮收口。
+- 因此，当前路线图不再需要继续维护一长串“已完成问题记录”；现在真正开放的事项已经缩小到少数几个具体边界。
+- 当前如果新开计划，优先级应围绕 `debug/frontend` 的压力验证和 `Phase 3` 的具体串行化边界展开，而不是继续泛泛地写“继续 hardening / 继续 refinement”。
 
-## P0：先修的硬问题
-`2026-04-04` 更新：本节 7 个 P0 问题已全部在 `main` 收口；以下条目保留为“已完成问题记录”以便后续追溯。当前若继续排优先级，应从 `P2` 开始。
+## 当前优先级
 
-本轮已完成的 P0 收口包括：
+### 1. `debug/frontend` 长会话与高吞吐压力验证
 
-- `Bus::last_access` 已对 unmapped 访问补齐失败记录与回归，debug 快照不再保留旧值。
-- `kernel_bringup` 已把 VM 建立后的失败路径收口为对称回滚，并补齐 setup/probe 两类 rollback-failure 保真测试。
-- `user_program_smoke_prepare_standard()` 已收口 staged commit / rollback 合同。
-- 前端 asm manifest 已重新对齐 canonical 测试集。
-- `pipeline` 非法 `load/store funct3` 已稳定回到 illegal-instruction trap 合同。
-- `xRET` 返回路径已清 `MPRV`，并有交叉回归守护。
-- `instruction-address-misaligned` trap 已补成稳定回归，覆盖 `jal` / `jalr` / taken branch。
+- 真实 `debug server + mycpu --debug-cli` 端到端 smoke 已经落地，但它仍主要覆盖最小交互和短会话。
+- 下一轮更值得补的是持续 `run`、更高频 terminal 输入输出、真实浏览器交互时序和会话替换压力，而不是再扩 UI 按钮或协议面。
+- 这条线的目标是把当前“教学演示可用”的链路继续压实成更稳的门禁，而不是把它扩成通用调试器。
 
-### 1. `Bus::last_access` 对 unmapped 访问不会更新，debug 观测面可能保留旧值
+### 2. `Phase 3` decode 级 `BlockedByUnresolvedStore` 串行化边界
 
-- 代码证据：
-  - [myCPU/src/mem/bus.cpp](../../myCPU/src/mem/bus.cpp) 中，`try_load()` / `try_store()` 只有在命中某个 `Device` 时才会 `record_access()`；完全没命中时直接返回失败。
-  - [myCPU/src/debug/debug_session.cpp](../../myCPU/src/debug/debug_session.cpp) 会把 `machine().bus().last_access()` 直接塞进快照。
-- 影响：
-  - 一旦出现 unmapped access fault，调试快照里的总线信息可能还是上一条访问，直接误导排查。
-- 建议：
-  - 给 unmapped load/store 补明确的失败记录与回归，不要继续把“无命中”混成“没有新访存”。
+- 当前 `Phase 3-B/C` 已经完成最小真实 `OoO execute`，下一步最具体的开放问题不是抽象的 “memory speculation”。
+- 更真实的 blocker 是：decode 阶段对 `BlockedByUnresolvedStore` 的处理仍然决定了现有 OoO 模型的保守边界。
+- 如果下一轮继续碰 `Phase 3`，应先把这条边界单列成专项问题，明确合同、风险和最小回归，再判断是否值得继续扩 issue / replay / memory disambiguation。
 
-### 2. `kernel_bringup` 的 VM 建立失败路径没有回滚
+### 3. 常态维护项
 
-- 代码证据：
-  - [myCPU/guest/kernel/kernel_bringup.c](../../myCPU/guest/kernel/kernel_bringup.c) 的 `kernel_bringup_setup_vm()` 在 `vm_address_space_create()` 成功后，只要后续 `map/register/enable/validate` 任一步失败就直接返回。
-  - `kernel_bringup_run_common()` 也没有补清理。
-- 影响：
-  - `vm_address_space` 可能停留在半初始化状态，后续 bring-up hardening 很难建立稳定合同。
-- 建议：
-  - 把 `kernel_bringup` 失败路径补成对称回滚，并新增“创建成功但后续失败”的 guest 单元回归。
+- 继续维护 reference correctness 矩阵，不让 illegal / MMIO / ELF / CSR / Sv39 合同回退。
+- 继续守住 `kernel_alpha` 十条 guest 基线和 `guest_supervisor_demo` 的稳定输出。
+- 继续维护 guest runtime 已经形成的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime`、`user_program*` 边界，不让新增 bug 修复重新把职责揉回去。
 
-### 3. `user_program_smoke_prepare_standard()` 的部分成功路径没有回滚，而且过早绑定 `smoke->program`
+## 当前明确不优先做的事
 
-- 代码证据：
-  - [myCPU/guest/kernel/user_program_smoke.c](../../myCPU/guest/kernel/user_program_smoke.c) 先 `user_program_create()`，再做 address space / runtime 准备。
-  - `user_program_smoke_prepare_address_space()` 会先写 `smoke->program = program`，随后才继续做映射与 fault orchestration。
-- 影响：
-  - 中途失败时，`program` 和 `smoke` 可能留下半绑定状态；这已经不是纯结构债，而是状态污染风险。
-- 建议：
-  - 先把 prepare 路径改成 staged commit：本地临时状态准备完成后再对外发布，并补失败回滚测试。
+1. 不继续把 `debug/frontend` 往断点、条件暂停、任意文件加载或更大 UI 功能面扩张。
+2. 在当前压力验证和具体串行化边界没有继续收口前，不抢跑更激进的 `Phase 3` 扩展。
+3. 不把 `interactive_os` 当作新的产品主线；它当前仍应服务于 monitor / terminal / 调试链路验证。
+4. 不把 `SimpleStorage` 更完整的设备模型抢在当前 correctness / structure hardening 前面推进。
 
-### 4. 前端调试服务的 asm 测试目录已经落后于 canonical 测试集
+## 如需新开计划
 
-- 代码证据：
-  - [frontend/server/tests_manifest.mjs](../../frontend/server/tests_manifest.mjs) 的 `asmTests` 列表缺少 `mmio_access_faults`、`csr_illegal_matrix`、`sv39_mprv`、`sv39_pagewalk_contracts`、`sv39_exec_privilege`。
-  - 这些测试已经在 [myCPU/Makefile](../../myCPU/Makefile) 的 `ASM_TESTS` 中。
-- 影响：
-  - `debug/frontend` 对当前 reference 主线不是完整视图；文档说它已正式接入，但测试入口实际上已经漂移。
-- 建议：
-  - 先把测试清单改成单一事实来源，再决定是否继续扩调试前端能力。
-
-### 5. `pipeline` 对非法 `load/store funct3` 不是稳定进 trap，而是可能卡死
-
-- 代码证据：
-  - [myCPU/src/exec/memory_ops.cpp](../../myCPU/src/exec/memory_ops.cpp) 会先把非法内存编码归到 `Load/Store` 路径。
-  - [myCPU/src/exec/pipeline_backend.cpp](../../myCPU/src/exec/pipeline_backend.cpp) 只有 `mem.kind == None` 时，才会把 trap / ready 结果直接发布到 `ROB`。
-- 影响：
-  - 这会让 `pipeline` 和 `functional` 在非法内存编码上的行为分叉；当前最坏结果不是“trap 错了”，而是直接卡在 `step_commit` 预算里。
-- 建议：
-  - 先把非法 `load/store funct3` 拉回共享 illegal-instruction 合同，并补 host-side 持久回归；这件事优先级高于继续扩更多 OoO 行为。
-
-### 6. `xRET` 返回路径没有清 `MPRV`
-
-- 代码证据：
-  - [myCPU/src/trap.cpp](../../myCPU/src/trap.cpp) 的 `mret/sret` 返回路径会恢复 `MIE/SIE`、`MPIE/SPIE`、`MPP/SPP`，但没有同步清理 `MSTATUS_MPRV`。
-  - 现有 asm 把 `MPRV` 语义和 `xRET` 语义分开测，没有交叉覆盖这条边界。
-- 影响：
-  - 当前文档把 `MPRV` 和 trap-return 都表述成已验证，但这条组合语义仍然可能偏离 RISC-V 合同。
-- 建议：
-  - 先补一条 `MPRV + mret/sret` 交叉回归，再决定是 trap 侧修正还是 CSR 侧收口。
-
-### 7. 当前仍缺 `instruction-address-misaligned` trap
-
-- 代码证据：
-  - [myCPU/src/exec/control_flow_ops.cpp](../../myCPU/src/exec/control_flow_ops.cpp) 会直接安装跳转目标。
-  - [myCPU/src/cpu.cpp](../../myCPU/src/cpu.cpp) 和 [myCPU/src/mem/address_space.cpp](../../myCPU/src/mem/address_space.cpp) 默认按 4 字节继续取指，没有单独的 misaligned control-transfer 异常路径。
-- 影响：
-  - 非对齐控制流当前可能被当成普通取指处理，而不是稳定进入 address-misaligned trap。
-- 建议：
-  - 这条应该按 reference correctness 缺口处理，不要拖到后面的微架构阶段。
-
-## P1：下一层结构收口
-
-`2026-04-04` 已完成本节新增一批收口：
-
-- 原 `P1-1`：`pipeline_backend` 已按“构造+debug / cycle+commit-replay / execute / frontend”拆成四个编译单元，原文件不再继续混挂主调度、memory execute 和 decode/fetch。
-- 原 `P1-2`：`user_program_smoke` 已把 `prepare / enter round / active memory` 收口为更窄的内部阶段 helper，`supervisor_demo_smoke` 已退回 bootstrap / user / session 组合层；当时没有顺手扩到 `P1-5`，该项已在同日后续一轮单独完成。
-- 原 `P1-5`：`kernel_runtime`、`supervisor_runtime` 与 `user_program_smoke` 已补最小 helper / accessor，生产代码和相关单测不再直接依赖 public struct 的 interrupt counter、`address_space` 或 smoke scratch layout。
-- 原 `P1-6`：`debug_protocol` 已拆成 `CLI loop / command codec / response codec` 三块，`debug_server` 已拆成 HTTP / WebSocket 入口、`DebugCliSession` 与 server runtime，terminal 跟踪不再和子进程管理、路由逻辑揉在同一文件里。
-- 原 `P1-12`：`AddressSpace` 已把 page walk 期间的页表项读取失败与 A/D 位回写失败从 page fault 收口为对应 access fault，并由 host smoke 明确守住 `fetch/load/store cause + tval=原始虚拟地址` 合同。
-- 原 `P1-13`：`PLIC` 的 claim / complete 已改为按 context 记账；错误 context 的 complete 不再释放 claim，现有 machine/supervisor asm 和 host smoke 均保持通过。
-- 原 `P1-14`：ELF loader 已把 endianness、ident version、ELF version、type、machine 和 entry-range 纳入明确 reject 合同，相关 unit fixture 和 guest ELF 正向路径已同步对齐。
-
-`2026-04-03` 已完成本节两批收口：
-
-- 首批：
-  - 原 `P1-3`：`supervisor_demo / interactive_os` 入口已分别复用 `kernel_runtime` 的 entry bring-up 和 identity-superpage bring-up helper。
-  - 原 `P1-4`：`supervisor_demo_smoke` 的 storage signature + platform-tail 组合逻辑已下沉到 `kernel_runtime`。
-  - 原 `P1-7`：Node debug server 已统一 CLI `{type:"error"}` 的 server 侧异常语义。
-  - 原 `P1-10`：`Makefile` 的 asm / guest functional-vs-pipeline 测试 contract 已抽成共享宏。
-- 第二批：
-  - 原 `P1-8`：`DebugCliSession` 已补 timeout、exit/close teardown 和 pending 一致 reject，长会话不再静默悬挂。
-  - 原 `P1-9`：predictor 统计口径已统一为“已解析分支”，前端命中率展示与后端合同一致。
-  - 原 `P1-11`：`CLINT` timer pending 已收口为平台电平语义，`mtimecmp` 条件撤销后不会残留 stale pending。
-
-这意味着路线图里的 `P1` 结构收口已经全部关闭；后续如果继续推进，应把重心转到 `P2` 的测试与验证补洞。
-
-## P2：测试与验证补洞
-
-`2026-04-04` 更新：本节列出的首轮验证补洞已经在主线完成两轮同日收口。
-
-- 已完成：
-  - `P2-1`：`BinaryLoader` 直接单测已落地。
-  - `P2-2`：`supervisor_demo_smoke` 直接单测、`user_program_smoke` 的 `active-memory / interrupt round` helper 直测均已落地。
-  - `P2-3`：真实 `debug server + mycpu --debug-cli` 端到端 smoke 已落地。
-  - `P2-4`：`pipeline` mega-smoke 已拆出更易定位的 host smoke。
-  - `P2-5`：Node/C++ 两侧调试预算常量都已收口到各自的共享命名入口，`debug_session.cpp` 与 `interactive_terminal_smoke.cpp` 不再保留相关裸数字。
-  - `P2-7`：`Machine::load_elf()/load_binary()` 的最小 reload/reset 语义回归已落地。
-- 这意味着：本节后续不再把 `P2` 理解成“还有收尾没做完”；当前更值得继续推进的是长会话 / 高吞吐压力验证，以及 `Phase 3` 如果继续推进时是否把 decode 级串行化边界单独拉出来做专项问题。
-
-### 1. `BinaryLoader` 缺少直接回归（已完成问题记录）
-
-- 代码证据：
-  - [myCPU/src/loader/binary_loader.cpp](../../myCPU/src/loader/binary_loader.cpp) 有独立的打开、大小、地址范围和短读错误路径。
-  - 当前测试里没有 `BinaryLoader` 的直接单测；只有 `hello.bin` 这类 flat binary smoke 间接覆盖。
-- 建议：
-  - 本项已完成；后续只在新增 bad path 暴露时补最小持久回归。
-
-### 2. guest 侧最复杂的 smoke 路径曾缺更贴近新边界的直接单测（已完成问题记录）
-
-- 代码证据：
-  - [myCPU/Makefile](../../myCPU/Makefile) 现已接入 `supervisor_demo_smoke` 单测目标，[myCPU/tests/unit/supervisor_demo_smoke.c](../../myCPU/tests/unit/supervisor_demo_smoke.c) 也已作为直接回归落地。
-  - [myCPU/tests/unit/user_program_smoke.c](../../myCPU/tests/unit/user_program_smoke.c) 现已补上 `active-memory` 与 `interrupt round` 的更窄直测，和既有 `prepare_standard()` rollback 回归一起守住 `user_program_smoke` 的关键 helper 编排。
-- 建议：
-  - 本项已完成；后续继续做 guest 结构拆分时，应优先延续这类直接 helper 回归，而不是退回只靠 guest demo 间接覆盖。
-
-### 3. Node 侧调试服务缺少“真实 server + 真实 debug CLI”端到端回归（已完成问题记录）
-
-- 代码证据：
-  - [frontend/tests/debug_server.test.mjs](../../frontend/tests/debug_server.test.mjs) 使用的是 fake `createSession()`。
-  - 当前真实 `mycpu --debug-cli` 主要由 [myCPU/tests/host/debug_cli_smoke.cpp](../../myCPU/tests/host/debug_cli_smoke.cpp) 单独覆盖。
-- 影响：
-  - C++ CLI 和 Node server 各自过测，并不等于整条链路稳定。
-- 建议：
-  - 本项已完成；后续新增协议或会话逻辑时继续优先走这条真实链路回归，而不是退回只靠 fake session 分段证明。
-
-### 4. pipeline 验证过于集中在少数 mega-smoke（已完成首轮拆分）
-
-- 代码证据：
-  - [myCPU/tests/host/backend_differential_smoke.cpp](../../myCPU/tests/host/backend_differential_smoke.cpp)
-  - [myCPU/tests/host/pipeline_backend_smoke.cpp](../../myCPU/tests/host/pipeline_backend_smoke.cpp)
-  - [myCPU/tests/host/pipeline_speculation_contracts_smoke.cpp](../../myCPU/tests/host/pipeline_speculation_contracts_smoke.cpp)
-- 影响：
-  - 覆盖面虽然在增长，但定位成本也在增长；后续再做 `Phase 3` bug-driven hardening 会越来越吃力。
-- 建议：
-  - 首轮拆分已经完成；后续如果再补 `pipeline` 回归，应优先延续这种按合同拆分的方式，而不是重新把场景堆回单个 mega-smoke。
-
-### 5. 调试和交互链路的预算参数曾未完全收口到单一来源（已完成当前收口）
-
-- 代码证据：
-  - [frontend/server/debug_budget.mjs](../../frontend/server/debug_budget.mjs) 现已收口 Node 侧 `debug_cli session`、interactive boot/command，以及 terminal advance 预算。
-  - [myCPU/src/debug/debug_budget.h](../../myCPU/src/debug/debug_budget.h)
-  - [frontend/server/debug_server_runtime.mjs](../../frontend/server/debug_server_runtime.mjs)
-  - [frontend/server/tests_manifest.mjs](../../frontend/server/tests_manifest.mjs)
-  - [myCPU/src/debug/debug_session.cpp](../../myCPU/src/debug/debug_session.cpp)
-  - [myCPU/tests/host/interactive_terminal_smoke.cpp](../../myCPU/tests/host/interactive_terminal_smoke.cpp)
-- 影响：
-  - 当前 Node 与 C++ 各自内部的预算命名和来源已经收口，但两侧仍是分语言实现；随着 `pipeline` 继续演进，这条跨语言边界仍值得继续盯住。
-- 建议：
-  - 本项当前收口已完成；后续若再改 budget，应继续优先维护两侧共享命名口径，而不是重新引入裸数字。
-
-### 6. 当前 `Phase 3` 的真实下一个 blocker 已经不是抽象的“以后再做 memory speculation”
-
-- 代码证据：
-  - [myCPU/src/exec/load_store_queue.cpp](../../myCPU/src/exec/load_store_queue.cpp) 当前对任何 address/data 未 ready 的 older store 都会先把 younger load 标成 `BlockedByUnresolvedStore`。
-  - [myCPU/src/exec/pipeline_backend.cpp](../../myCPU/src/exec/pipeline_backend.cpp) 会在 decode 阶段直接据此把 load 卡住。
-- 影响：
-  - 现在更真实的问题不是“要不要更激进地做 speculation”，而是 decode 级串行化已经成为当前 OoO 模型的明确性能和复杂度边界。
-- 建议：
-  - 下一轮如果继续碰 `Phase 3`，要把这个具体边界写成单独问题，而不是继续写成笼统的 “memory-order hardening”。
-
-### 7. `Machine::load_elf()` / `load_binary()` 不是完整 reset 语义（已完成最小语义回归）
-
-- 代码证据：
-  - [myCPU/src/platform/machine.h](../../myCPU/src/platform/machine.h) 和 [myCPU/src/platform/machine.cpp](../../myCPU/src/platform/machine.cpp) 会长期持有 `Ram`、`Clint`、`Plic`、`Uart`、`SimpleStorage`。
-  - 当前 reload 路径主要重置的是 CPU / CSR / TLB，不是整个平台状态。
-- 影响：
-  - 新镜像加载和“重建一台干净机器”现在不是同一语义；这条 API 级状态边界仍然偏模糊。
-- 建议：
-  - 当前最小回归和语义说明已经补上；长期是否要把 reload 收成真正的平台 reset，仍应作为单独设计问题处理。
-
-## P3：明确暂缓，不要抢跑
-
-### 1. 不要现在就继续扩 `pipeline` 的更激进行为
-
-- 在 `P2` 这轮验证补洞没有继续明显收口前，不建议继续推进更激进的 issue / replay / memory speculation / predictor 组合。
-
-### 2. 不要把 `debug/frontend` 立刻扩成通用调试器
-
-- 当前更真实的问题是长会话压力、真实端到端集成、预算常量与测试清单的一致性，不是功能按钮不够多。
-
-### 3. 不要把 `interactive_os` 当作新的功能主线
-
-- 它当前仍有独立 bring-up 路径和专属 monitor 复杂度，先把它和基础设施边界收紧，再谈扩命令面。
-
-### 4. `SimpleStorage` 的更完整设备模型放到更后面
-
-- [myCPU/include/platform_mmio.h](../../myCPU/include/platform_mmio.h) 和 [myCPU/src/devices/simple_storage.cpp](../../myCPU/src/devices/simple_storage.cpp) 仍然是单块、同步、无 completion interrupt、无宿主持久化的最小模型。
-- 这些限制当前是已知边界，但不应抢在前面的 correctness / structure hardening 之前处理。
-
-## 建议的下一轮拆分顺序
-
-1. 下一轮优先补更长会话 / 更高吞吐的 `debug/frontend` 压力验证，而不是继续扩功能面。
-2. 如果下一轮还要继续碰 `Phase 3`，应先把 decode 级 `BlockedByUnresolvedStore` 串行化边界单列成专项问题，而不是继续泛泛写“memory speculation / replay hardening”。
-3. 本轮推荐的多 worktree 并行拆分已经执行完毕；下一轮如果继续并行，应围绕长会话压力与 `Phase 3` 剩余开放边界重新拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。
-4. 在上面这些 `Phase 2` / `Phase 3` 具体问题没有继续明显收口前，不建议再把路线图重心放回更远期的平台功能面扩张。
+1. 优先单开一份 `debug/frontend` 压力验证计划，目标明确落在长会话、高吞吐和真实浏览器时序。
+2. 如果继续碰 `Phase 3`，优先单开一份 decode 级 `BlockedByUnresolvedStore` 边界计划，不再沿用笼统的 “memory speculation” 表述。
+3. 如果下一轮还要并行推进，建议围绕“压力验证 / Phase 3 边界 / guest runtime bug-driven hardening”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。

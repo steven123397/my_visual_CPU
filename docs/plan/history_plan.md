@@ -46,7 +46,7 @@
 - 原文件：`phase1-hardening-regressions_plan.md`
 - 完成内容：完成第一轮更系统的 Phase 1 hardening 回归扩充，把 illegal 编码、CPU 侧 MMIO access fault、ELF segment / reject / header、bus / device guard、MMIO contract matrix 与 CSR illegal matrix 接入现有门禁。
 - 实现过程摘要：整体策略是优先补回归、只做最小修复，把 reference path 的高风险 correctness 边界压成持续门禁。
-- 结果参考：[regression_completion_criteria.md](../design/regression_completion_criteria.md)、[mainline_status.md](../status/mainline_status.md)、[code_self_review_status.md](../status/code_self_review_status.md)
+- 结果参考：[regression_completion_criteria.md](../design/regression_completion_criteria.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### sv39-mprv-semantics-plan
 
@@ -131,7 +131,7 @@
 - 原文件：未单独保留活跃 plan；本轮直接按路线图 `P1-6` 收口。
 - 完成内容：完成 `debug_protocol` / `debug_server` 的协议与运行时边界收口；当前 `debug_protocol` 已拆成命令解码、响应序列化与 `CLI loop` 三块，`debug_server` 已拆成 `DebugCliSession`、server runtime 与 HTTP / WebSocket 入口，terminal 跟踪不再和子进程管理、路由分发揉在同一文件里。
 - 实现过程摘要：整体采用“先补新边界测试，再做文件切分”的克制路径；C++ 侧新增 `debug_protocol_command_smoke` 守住协议解码合同，Node 侧新增 `debug_server_runtime` 直测，并继续复用既有 `debug_server` / `interactive_terminal` smoke 守住外部行为不漂移。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[code_self_review_status.md](../status/code_self_review_status.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
 
 #### p1-guest-smoke-orchestration-refinement-plan
 
@@ -166,11 +166,11 @@
 - 原文件：未单独保留活跃 plan；本轮直接按路线图 `P2-1 / P2-2 / P2-3 / P2-4 / P2-5 / P2-7` 的建议拆分推进，并由主集成线统一回写状态。
 - 完成内容：完成 `BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` 直接单测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node 侧调试预算常量收口，以及 `pipeline` mega-smoke 首轮拆分。
 - 实现过程摘要：代码线按 `A/B/C/D` worktree 并行落地，子线只改代码和测试；主线最后统一集成并重新跑 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd frontend && node --test`。本轮刻意没有把 `user_program_smoke` 更窄 helper 直测和全部跨语言预算常量一次性收完，后续仍按剩余 gap 继续推进。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[code_self_review_status.md](../status/code_self_review_status.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
 
 #### p2-validation-gap-backfill-round-2
 
 - 原文件：未单独保留活跃 plan；本轮直接沿 `p2-validation-gap-backfill-round-1` 剩余 gap 继续补洞。
 - 完成内容：补齐 `user_program_smoke` 的 `active-memory / interrupt round` 更窄直测，并把 C++ `debug_session.cpp`、`interactive_terminal_smoke.cpp` 的预算常量收口到共享命名入口。
 - 实现过程摘要：继续在主集成线以“先窄门禁、后总验证”的方式推进；guest 侧只扩 host stub 与直测，不改 `user_program_smoke` public surface，C++ 侧新增 `debug_budget.h` 统一 `step_commit` 与 interactive boot/command budget，然后重新跑 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd frontend && node --test`。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[code_self_review_status.md](../status/code_self_review_status.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)

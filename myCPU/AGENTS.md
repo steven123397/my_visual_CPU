@@ -104,7 +104,9 @@
 - `Phase 3-B/C` 的 rollback 合同当前也已接到统一 flush 路径：mispredict、trap、commit-boundary interrupt service 与 trap-return flush 会一起回滚 speculative `rename / ROB / phys / LSQ` younger state；`RenameMap` 现在同时维护 committed / speculative mapping 与 free-list，ROB head commit 会回收 stale phys，phys tag 也已扩为 `uint32_t` 以支撑长 guest 路径。
 - 这轮 phys free-list / recycle 收口还补出并修正了一条实际回归：如果 recycled phys 在后续再次成为 committed live phys，free-list 必须在 commit 时把它移除；否则 trap-return / interrupt flush 之后会把 live phys 再次发出。当前 `rename_map_smoke` 与 `timer_interrupt (pipeline)` 已共同守住这条边界。
 - `pipeline_rename_commit_smoke`、`pipeline_speculation_contracts_smoke` 与 `load_store_queue_smoke` 当前分别守住 `rename + ROB commit +` 最小真实 OoO execute、中间态 rollback / non-speculative store / coarse automatic replay / RAM-only forwarding 合同，以及 `LSQ` ready / retire / flush / replay-needed / forwarding 接口。
+- `BinaryLoader` 直接单测与 `Machine::load_elf()/load_binary()` reload/reset 回归已经接入现有门禁，当前明确语义是“替换 RAM 并 reset CPU/backend”。
 - `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照、predictor mode / counters / 最近一次预测字段，以及最小 `ROB / LSQ` 队列深度、head-sequence、`lsq_load_state / lsq_load_sequence_id / lsq_store_sequence_id` 与 `replay_flush` 观测面，守住 `CLINT` / `PLIC` / `UART`、predictor 和 OoO readiness 可观察性输出。
+- 真实 `debug server + mycpu --debug-cli` 端到端 smoke 与 Node/C++ 两侧预算常量收口已经落地，当前最小调试链路已进入现有门禁。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](Makefile) 为准。
@@ -133,6 +135,12 @@
   非法编码、MMIO 非法偏移 / 宽度、ELF 段布局和 CSR / 特权非法访问回归已经完成第一轮系统扩充；`pipeline differential` 的高风险主干场景也已基本闭环，后续主要按新增 bug 或明确新合同做最小补洞。
 - [src/devices/simple_storage.cpp](src/devices/simple_storage.cpp)
   当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
+- [src/debug](src/debug) 和 [../frontend](../frontend)
+  当前最小调试链路已经正式接入并可用，但长会话、持续 `run`、高吞吐 terminal 输入输出和真实浏览器节奏下的压力验证仍然不足。
+- [src/platform/machine.cpp](src/platform/machine.cpp)
+  `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
+- [src/exec/load_store_queue.cpp](src/exec/load_store_queue.cpp) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
+  `BlockedByUnresolvedStore` 的最小状态机和可观察性已经接通，但 decode 级串行化边界仍是当前 `Phase 3` 最具体的开放问题。
 - [guest/kernel/kernel_runtime.c](guest/kernel/kernel_runtime.c)
   `kernel_alpha` 入口的 `trap_context` / `address_space` / `interrupt_state` 已收口为最小 runtime 对象；当前 `supervisor_demo` 的入口级 trap bring-up、`interactive_os` 的 identity-superpage bring-up、common bring-up options 的默认 self-context 装配，以及 `PLIC / first delivery / storage probe/signature` 这组早期 phase helper 也已继续下沉到这里，但整体仍只是 Phase 1 的早期内核 runtime 骨架。
 - [guest/kernel/kernel_bringup.c](guest/kernel/kernel_bringup.c)
@@ -151,13 +159,10 @@
 近期优先级建议如下：
 
 1. 继续稳住 simulator reference path 的 correctness 与可观察性。
-2. 在已补第一轮 correctness hardening 矩阵的基础上，继续按合同补洞，而不是重复堆叠非法编码、MMIO 边界、ELF 段布局和 CSR / privilege 同类回归。
-3. 继续用 `guest_kernel_alpha_demo`、`guest_kernel_alpha_fault_demo`、`guest_kernel_alpha_storage_no_media_demo`、`guest_kernel_alpha_storage_not_ready_demo`、`guest_kernel_alpha_storage_bad_magic_demo`、`guest_kernel_alpha_storage_bad_block_count_demo`、`guest_kernel_alpha_storage_lba_range_demo`、`guest_kernel_alpha_storage_bad_command_demo`、`guest_kernel_alpha_plic_not_ready_demo` 和 `guest_kernel_alpha_timer_not_ready_demo` 守住 `phase1-stable` bring-up 基线，再把额外 readiness / panic 路径当作 post-Phase1 hardening 渐进扩充。
-4. 在不打破 reference path 简洁性的前提下，继续完善特权 / CSR / 平台边界；当前 `privilege / Sv39` 与 `pipeline` 差分主干已经基本成体系，后续以新增 bug 的最小持久回归为主。
-5. 当前对 Phase 2 的近期安排，不再是继续做“正式接入”；`pipeline` 的最小 differential / robustness 收口已经基本成立，后续重点转为维护既有门禁、控制低收益 case 膨胀，并在新增问题出现时补最小回归。
-   当前 `pipeline` 已经正式接入到 asm / host / guest 验证层：默认 `functional` 继续守 `make test`，`pipeline` 通过 `make test-pipeline` 守住同一批 asm 参考输出、host-side smoke/differential，以及 `guest_supervisor_demo` 与 `kernel_alpha` 正负回归。
-6. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围：加载仓库内现有 demo、查看快照、按 cycle / commit 单步，不要在这一层直接扩成带断点 / 条件暂停 / 任意文件加载的通用调试器。
-7. `Phase 3-B/C` 的首轮 `rename + ROB + LSQ + phys free-list / recycle`、最小 `LSQ replay-needed` 合同、coarse automatic replay recovery、`RAM-only` store-to-load forwarding 与最小真实 `OoO execute` 已经落地；下一步优先继续守住现有 host / guest / debug 门禁，按新增 bug 补最小持久回归，再考虑更激进的 issue / replay / memory speculation。
+2. 在已接通的 correctness hardening、loader、guest smoke、debug smoke 和 `pipeline` 门禁基础上，继续按新增 bug 或新合同补最小回归，不重复堆叠低收益变体。
+3. `debug/frontend` 当前下一步是长会话、持续 `run`、高吞吐输入输出和真实浏览器节奏下的压力验证；不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
+4. 如果继续推进 `Phase 3`，优先把 decode 级 `BlockedByUnresolvedStore` 串行化边界单列成专项问题，再判断是否继续更激进的 issue / replay / speculation。
+5. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
 
 ## 验证要求
 
@@ -203,6 +208,7 @@
 - `tests/host/pipeline_rename_commit_smoke.cpp`
 - `tests/host/pipeline_speculation_contracts_smoke.cpp`
 - `tests/host/debug_cli_smoke.cpp`
+- `tests/host/interactive_terminal_smoke.cpp`
 
 还应至少额外关注：
 
@@ -213,6 +219,17 @@
 - `cd myCPU && make test-host-pipeline_rename_commit_smoke`
 - `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
+- `cd myCPU && make test-host-interactive_terminal_smoke`
+
+如果触及以下任一路径：
+
+- `src/platform/machine.cpp`
+- `src/loader/*`
+
+还应额外关注：
+
+- `cd myCPU && make test-unit-binary_loader`
+- `cd myCPU && make test-unit-machine_loader_reset`
 
 如果触及以下任一路径：
 
