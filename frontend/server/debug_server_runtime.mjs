@@ -4,6 +4,10 @@ import {
   DEFAULT_TERMINAL_MAX_LENGTH,
   resetTerminalProjectionState,
 } from '../shared/terminal_projection.mjs';
+import {
+  DEFAULT_DEBUG_RUN_RATE_HZ,
+  terminalLimits,
+} from './debug_budget.mjs';
 import { normalizeCliResponse } from './debug_cli_session.mjs';
 
 class DebugServerRuntimeError extends Error {
@@ -121,8 +125,8 @@ export function createDebugServerRuntime({
   }
 
   async function advanceUntilTerminalActivity({
-    maxCommits = 4096,
-    settleCommits = 256,
+    maxCommits = terminalLimits.stepCommitBudget,
+    settleCommits = terminalLimits.ascii.settleCommits,
     idleCommitsWithoutOutput = null,
     shouldStop = null,
     generation = currentGeneration,
@@ -201,11 +205,13 @@ export function createDebugServerRuntime({
       return null;
     }
 
+    const { newline, control, ascii, textCommitScale } = terminalLimits;
+
     if (text.includes('\r') || text.includes('\n')) {
       return {
-        maxCommits: 16384,
-        settleCommits: 1024,
-        idleCommitsWithoutOutput: 128,
+        maxCommits: newline.maxCommits,
+        settleCommits: newline.settleCommits,
+        idleCommitsWithoutOutput: newline.idleCommitsWithoutOutput,
         shouldStop: ({ aggregate, currentSnapshot, currentTerminalBuffer: terminalBuffer }) =>
           aggregate.text.length > 0
           && (
@@ -217,17 +223,17 @@ export function createDebugServerRuntime({
 
     if (controlCount > 0) {
       return {
-        maxCommits: Math.max(1024, (visibleAsciiCount + controlCount) * 1024),
-        settleCommits: 64,
-        idleCommitsWithoutOutput: 64,
+        maxCommits: Math.max(control.minMaxCommits, (visibleAsciiCount + controlCount) * textCommitScale),
+        settleCommits: control.settleCommits,
+        idleCommitsWithoutOutput: control.idleCommitsWithoutOutput,
       };
     }
 
     if (visibleAsciiCount > 0) {
       return {
-        maxCommits: Math.max(2048, (visibleAsciiCount + controlCount) * 1024),
-        settleCommits: 256,
-        idleCommitsWithoutOutput: 64,
+        maxCommits: Math.max(ascii.minMaxCommits, (visibleAsciiCount + controlCount) * textCommitScale),
+        settleCommits: ascii.settleCommits,
+        idleCommitsWithoutOutput: ascii.idleCommitsWithoutOutput,
         shouldStop: ({ aggregate }) => aggregate.text.length >= visibleAsciiCount,
       };
     }
@@ -372,7 +378,7 @@ export function createDebugServerRuntime({
       });
     },
 
-    async run(rateHz = 8) {
+    async run(rateHz = DEFAULT_DEBUG_RUN_RATE_HZ) {
       const intervalMs = Math.max(20, Math.floor(1000 / Math.max(1, rateHz)));
       const generation = currentGeneration;
       return runQueued(async () => {

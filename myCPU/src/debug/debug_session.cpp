@@ -1,4 +1,5 @@
 #include "debug_session.h"
+#include "debug_budget.h"
 
 #include <cstdio>
 #include <stdexcept>
@@ -74,7 +75,7 @@ void DebugSession::step_cycle() {
 void DebugSession::step_commit() {
     ensure_loaded();
     const uint64_t instret_before = machine().cpu().core().instret();
-    for (int i = 0; i < 4096; ++i) {
+    for (uint64_t i = 0; i < DebugBudget::kStepCommitCycleBudget; ++i) {
         step_cycle();
         if (machine().cpu().core().halted() || machine().cpu().core().instret() != instret_before) {
             return;

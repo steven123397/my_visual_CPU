@@ -1,5 +1,7 @@
 #include "ram.h"
 
+#include <utility>
+
 Ram::Ram() : Device(MEM_BASE, MEM_SIZE) {
     mem_init(&mem_);
 }
@@ -22,4 +24,8 @@ void Ram::write_bytes(uint64_t addr, const void* data, size_t size) {
 
 void Ram::fill(uint64_t addr, uint8_t value, size_t size) {
     mem_fill_range(&mem_, addr, value, size);
+}
+
+void Ram::swap(Ram& other) {
+    std::swap(mem_, other.mem_);
 }

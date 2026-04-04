@@ -160,3 +160,17 @@
 - 完成内容：完成 `page walk` 总线失败 fault 分类、`PLIC` claim / complete 按 context 记账，以及 ELF header reject 合同三项 reference / platform 边界收口；当前页表物理访问失败与 A/D 位回写失败会稳定回到 access fault，错误 context 的 `PLIC complete` 不再释放 claim，ELF loader 也已明确 reject endianness / ident version / ELF version / type / machine / entry-range 非法输入。
 - 实现过程摘要：代码改动分别在独立 worktree 上并行落地，子分支只改生产代码和测试；最终统一回到 `main` 合并，并在主线文档中一次性回写路线图、状态和归档。
 - 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
+#### p2-validation-gap-backfill-round-1
+
+- 原文件：未单独保留活跃 plan；本轮直接按路线图 `P2-1 / P2-2 / P2-3 / P2-4 / P2-5 / P2-7` 的建议拆分推进，并由主集成线统一回写状态。
+- 完成内容：完成 `BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` 直接单测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node 侧调试预算常量收口，以及 `pipeline` mega-smoke 首轮拆分。
+- 实现过程摘要：代码线按 `A/B/C/D` worktree 并行落地，子线只改代码和测试；主线最后统一集成并重新跑 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd frontend && node --test`。本轮刻意没有把 `user_program_smoke` 更窄 helper 直测和全部跨语言预算常量一次性收完，后续仍按剩余 gap 继续推进。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[code_self_review_status.md](../status/code_self_review_status.md)
+
+#### p2-validation-gap-backfill-round-2
+
+- 原文件：未单独保留活跃 plan；本轮直接沿 `p2-validation-gap-backfill-round-1` 剩余 gap 继续补洞。
+- 完成内容：补齐 `user_program_smoke` 的 `active-memory / interrupt round` 更窄直测，并把 C++ `debug_session.cpp`、`interactive_terminal_smoke.cpp` 的预算常量收口到共享命名入口。
+- 实现过程摘要：继续在主集成线以“先窄门禁、后总验证”的方式推进；guest 侧只扩 host stub 与直测，不改 `user_program_smoke` public surface，C++ 侧新增 `debug_budget.h` 统一 `step_commit` 与 interactive boot/command budget，然后重新跑 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd frontend && node --test`。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[code_self_review_status.md](../status/code_self_review_status.md)

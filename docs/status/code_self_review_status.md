@@ -26,7 +26,7 @@
 
 - 早期触及 reference path correctness 底线的那批问题，已经基本完成第一轮修复和回归化。
 - guest runtime、`kernel_alpha` 基线和 `interactive_os` guest monitor 当前整体边界已经比早期稳定得多。
-- 当前自检焦点已经从“ISA / MMU / loader 基础 correctness”进一步转移到“host/frontend 调试链路的长会话压力、真实端到端集成与功能面控制”。
+- 当前自检焦点已经从“ISA / MMU / loader 基础 correctness”进一步转移到“host/frontend 调试链路的长会话压力、跨语言预算长期一致性与功能面控制”；真实 `debug server + mycpu --debug-cli` 端到端 smoke 已经落地。
 - 就 `interactive_os terminal` 这条链路而言，guest 侧 monitor 本身没有发现新的 CPU 设计、特权语义或 MMU 合同错误；当前活跃风险主要集中在 browser frontend、Node debug server 和 host-side `debug_cli` 的压力与集成场景，而不是先前那批已识别的会话竞态、terminal tail 或协议拆分问题。
 
 ## 已完成的主要收口
@@ -47,6 +47,8 @@
   - terminal 增量同步已和 snapshot 广播解耦，等待回显 / prompt 时会合并 WebSocket 更新，不再把一次输入放大成整页重绘风暴。
   - server / frontend 已共享控制字符投影与有界 projected tail，当前不再沿用“raw tail 先截断、渲染时再解释控制序列”的旧路径。
   - `debug_protocol` 已拆成命令解码、响应序列化与 `CLI loop` 三块，`debug_server` 也已拆成 `DebugCliSession`、server runtime 与 HTTP / WebSocket 入口；调试链路当前不再继续由单个大文件同时承担子进程、协议、terminal 跟踪和路由职责。
+  - 真实 `debug server + mycpu --debug-cli` 端到端 smoke 已接入 Node 门禁；Node 侧 session timeout、interactive boot/command 和 terminal advance 预算也已收口到 `frontend/server/debug_budget.mjs`。
+  - C++ 侧 `debug_session.cpp` 的 `step_commit` budget 与 `interactive_terminal_smoke.cpp` 的 interactive boot/command budget 也已统一收口到 `myCPU/src/debug/debug_budget.h`。
   - 上述边界已由 `frontend/tests/debug_server.test.mjs`、`frontend/tests/terminal_input_pump.test.mjs`、`frontend/tests/terminal_projection.test.mjs`、`frontend/tests/terminal_render.test.mjs` 与 `myCPU/tests/host/interactive_terminal_smoke.cpp` 守住。
 
 ## 2026-03-31 `interactive_os terminal` 专项复检与后续收口结论
@@ -83,8 +85,8 @@
 1. **[建议关注] terminal 链路仍缺更长会话与更高吞吐压力验证。**
    现有 Node / host smoke 已经能把“会话替换污染、广播风暴、有界 tail 与控制字符投影”压成稳定红灯，但它们仍主要覆盖单会话、最小交互和有限输出量。对更长时间 `run`、更高频输入输出和真实浏览器交互时序的压力验证仍然偏少。
 
-2. **[建议关注] Node 调试服务仍缺真实 `debug server + mycpu --debug-cli` 端到端回归。**
-   当前 C++ CLI 和 Node server 已分别有 smoke，server runtime 也已补直接单测，但整条链路仍主要靠 fake `createSession()` 和 host-side CLI smoke 分段证明；如果后续协议或会话逻辑继续演进，这里仍可能出现跨语言接缝回归。
+2. **[建议关注] 调试链路预算常量当前已分别在 Node / C++ 侧完成收口，但仍不是跨语言单一事实来源。**
+   当前 `frontend/server/debug_budget.mjs` 与 `myCPU/src/debug/debug_budget.h` 已分别统一各自语言内的 session / interactive 预算命名；但两侧仍是分语言维护，后续如果只改单边，仍有再次漂移风险。
 
 3. **[建议关注] `debug/frontend` 的功能面仍需继续收住。**
    当前这条链路已经达到“教学演示可用”的最小状态。后续如果继续往断点、条件暂停、任意文件加载或更大 UI 功能面扩张，而不先收口协议与验证边界，很容易重新引入新的耦合和脆弱点。
@@ -92,7 +94,7 @@
 ## 当前建议顺序
 
 1. 为 terminal 输入 / 输出链路补更长会话、持续 `run`、更高吞吐输出和真实浏览器交互节奏下的压力验证。
-2. 给 Node 调试服务补一条真实 `debug server + mycpu --debug-cli` 端到端 smoke，减少跨语言接缝只靠分段测试证明的盲区。
+2. 继续维护 Node `debug_budget.mjs` 与 C++ `debug_budget.h` 的预算口径一致性；如果后续 budget 再变化，应优先同步两侧命名入口，而不是重新引入裸数字。
 3. 继续维持 terminal delta、snapshot 和 UI 渲染之间已经形成的边界，不让新功能把它们重新耦合回去。
 4. `debug/frontend` 后续仍以教学演示可用为边界，避免在现有门禁尚未继续增强前盲目扩功能面。
 
@@ -102,6 +104,7 @@
 
 - `cd frontend && npm test`
 - `cd frontend && node --test`
+- `cd frontend && node --test frontend/tests/debug_server_e2e.test.mjs`
 - `cd myCPU && make test-host-interactive_terminal_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
 - `cd myCPU && make test-host-debug_protocol_command_smoke`

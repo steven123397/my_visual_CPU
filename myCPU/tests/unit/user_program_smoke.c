@@ -6,7 +6,7 @@
 
 #include "../../guest/include/memory.h"
 #include "../../guest/include/platform.h"
-#include "../../guest/include/riscv.h"
+#include "riscv.h"
 #include "../../guest/include/user_program_smoke.h"
 
 struct VmAddressSpace {
@@ -24,6 +24,46 @@ static uintptr_t g_data_start = MEM_BASE + 3U * MEMORY_PAGE_SIZE;
 static uintptr_t g_heap_limit = MEM_BASE + 6U * MEMORY_PAGE_SIZE;
 static uintptr_t g_managed_start = MEM_BASE + 4U * MEMORY_PAGE_SIZE;
 static uintptr_t g_managed_end = MEM_BASE + 6U * MEMORY_PAGE_SIZE;
+
+static uintptr_t g_memory_kernel_start_override = MEM_BASE;
+static uint32_t g_active_memory_backing_page[MEMORY_PAGE_SIZE / sizeof(uint32_t)]
+    __attribute__((aligned(MEMORY_PAGE_SIZE)));
+static uint32_t g_active_memory_remap_page[MEMORY_PAGE_SIZE / sizeof(uint32_t)]
+    __attribute__((aligned(MEMORY_PAGE_SIZE)));
+static uint32_t g_active_memory_anon_page[MEMORY_PAGE_SIZE / sizeof(uint32_t)]
+    __attribute__((aligned(MEMORY_PAGE_SIZE)));
+static uint32_t g_active_memory_anon_tail_page[MEMORY_PAGE_SIZE / sizeof(uint32_t)]
+    __attribute__((aligned(MEMORY_PAGE_SIZE)));
+static volatile uint32_t g_active_memory_rodata_marker = 0;
+static volatile uintptr_t g_active_memory_fault_resume_slot = 0;
+static bool g_user_program_is_active = false;
+static bool g_user_program_is_runnable = false;
+static int g_user_program_unmap_region_base_page_calls = 0;
+static user_program_region_id_t g_last_user_program_unmap_region_base_page_region =
+    USER_PROGRAM_REGION_EXEC;
+static bool g_user_program_unmap_region_base_page_result = false;
+static int g_user_program_reset_object_calls = 0;
+static user_program_object_id_t g_last_user_program_reset_object_id =
+    USER_PROGRAM_OBJECT_EXEC;
+static bool g_user_program_reset_object_result = false;
+static int g_user_program_enter_calls = 0;
+static bool g_user_program_enter_result = false;
+static uint64_t g_sstatus = 0;
+static int g_timer_schedule_delta_calls = 0;
+static uint64_t g_last_timer_schedule_delta = 0;
+static int g_platform_uart_enable_thre_irq_calls = 0;
+static int g_trap_user_runtime_arm_timer_signal_calls = 0;
+static bool g_trap_user_runtime_arm_timer_signal_result = false;
+static bool g_trap_user_runtime_timer_signal_delivered_result = false;
+static uint32_t* g_last_timer_signal_page = NULL;
+static size_t g_last_timer_signal_index = 0;
+static uint32_t g_last_timer_signal_value = 0;
+static int g_trap_user_runtime_arm_external_signal_calls = 0;
+static bool g_trap_user_runtime_arm_external_signal_result = false;
+static bool g_trap_user_runtime_external_signal_delivered_result = false;
+static uint32_t* g_last_external_signal_page = NULL;
+static size_t g_last_external_signal_index = 0;
+static uint32_t g_last_external_signal_value = 0;
 
 static struct VmAddressSpace g_address_space = {0};
 static int g_plan_standard_calls = 0;
@@ -49,6 +89,8 @@ static int test_smoke_init_and_plan_wrapper(void);
 static int test_validate_standard_plan(void);
 static int test_prepare_standard_rolls_back_failed_address_space_stage(void);
 static int test_prepare_standard_rolls_back_failed_runtime_stage(void);
+static int test_active_memory_requires_anon_unmap(void);
+static int test_enter_round_arms_interrupt_signals(void);
 
 static bool program_created(const user_program_t* program) {
     return program != NULL &&
@@ -143,6 +185,8 @@ bool user_program_destroy(user_program_t* program) {
     }
 
     memset(program, 0, sizeof(*program));
+    g_user_program_is_active = false;
+    g_user_program_is_runnable = false;
     return true;
 }
 
@@ -170,7 +214,9 @@ bool user_program_prepare_standard(
     (void)supervisor_external_post_handler;
     (void)supervisor_external_post_context;
     g_user_program_prepare_standard_calls += 1;
-    return g_user_program_prepare_standard_result;
+    g_user_program_is_runnable =
+        g_user_program_prepare_standard_result && program != NULL;
+    return g_user_program_is_runnable;
 }
 
 vm_address_space_t* user_program_address_space(user_program_t* program) {
@@ -267,27 +313,32 @@ bool user_program_region_contains(const user_program_t* program,
 
 bool user_program_is_active(const user_program_t* program) {
     (void)program;
-    return false;
+    return g_user_program_is_active;
 }
 
 bool user_program_is_runnable(const user_program_t* program) {
     (void)program;
-    return false;
+    return g_user_program_is_runnable;
 }
 
 bool user_program_activate(user_program_t* program) {
     (void)program;
-    return false;
+    g_user_program_is_active = true;
+    g_user_program_is_runnable = true;
+    return true;
 }
 
 bool user_program_deactivate(user_program_t* program) {
     (void)program;
-    return false;
+    g_user_program_is_active = false;
+    g_user_program_is_runnable = false;
+    return true;
 }
 
 bool user_program_enter(const user_program_t* program) {
     (void)program;
-    return false;
+    g_user_program_enter_calls += 1;
+    return g_user_program_enter_result;
 }
 
 bool user_program_map_object_region(user_program_t* program,
@@ -322,9 +373,9 @@ bool user_program_unmap_region_page(user_program_t* program,
 
 bool user_program_unmap_region_base_page(user_program_t* program,
                                          user_program_region_id_t region_id) {
-    (void)program;
-    (void)region_id;
-    return false;
+    g_user_program_unmap_region_base_page_calls += 1;
+    g_last_user_program_unmap_region_base_page_region = region_id;
+    return program != NULL && g_user_program_unmap_region_base_page_result;
 }
 
 bool user_program_set_region_fault_object(user_program_t* program,
@@ -359,19 +410,18 @@ bool user_program_rebind_region_fault_object(
     vm_object_t* object) {
     (void)program;
     (void)region_id;
-    (void)object;
-    return false;
+    return object != NULL;
 }
 
 bool user_program_reset_object(user_program_t* program,
                                user_program_object_id_t object_id) {
-    (void)program;
-    (void)object_id;
-    return false;
+    g_user_program_reset_object_calls += 1;
+    g_last_user_program_reset_object_id = object_id;
+    return program != NULL && g_user_program_reset_object_result;
 }
 
 uintptr_t memory_kernel_start(void) {
-    return MEM_BASE;
+    return g_memory_kernel_start_override;
 }
 
 uintptr_t memory_text_start(void) {
@@ -480,6 +530,10 @@ bool vm_address_space_is_active(const vm_address_space_t* address_space) {
     return address_space != NULL && address_space->active;
 }
 
+bool vm_address_space_is_enabled(const vm_address_space_t* address_space) {
+    return address_space != NULL && address_space->enabled;
+}
+
 uintptr_t vm_kernel_base(void) {
     return memory_kernel_start();
 }
@@ -540,6 +594,98 @@ bool vm_user_region_unmap_page(vm_user_region_t* region, uintptr_t vaddr) {
            vaddr == region->vaddr && g_vm_user_region_unmap_page_result;
 }
 
+uint64_t riscv_read_satp(void) {
+    return g_address_space.satp_value;
+}
+
+void riscv_write_satp(uint64_t value) {
+    g_address_space.satp_value = value;
+}
+
+uint64_t riscv_read_sstatus(void) {
+    return g_sstatus;
+}
+
+void riscv_clear_sstatus_bits(uint64_t value) {
+    g_sstatus &= ~value;
+}
+
+void riscv_set_sstatus_bits(uint64_t value) {
+    g_sstatus |= value;
+}
+
+bool trap_user_runtime_arm_timer_signal(trap_user_runtime_t* user_runtime,
+                                        uint32_t* page,
+                                        size_t word_index,
+                                        uint32_t value) {
+    g_trap_user_runtime_arm_timer_signal_calls += 1;
+    g_last_timer_signal_page = page;
+    g_last_timer_signal_index = word_index;
+    g_last_timer_signal_value = value;
+    if (user_runtime != NULL) {
+        user_runtime->timer_signal.page = page;
+        user_runtime->timer_signal.word_index = word_index;
+        user_runtime->timer_signal.value = value;
+        user_runtime->timer_signal.armed = g_trap_user_runtime_arm_timer_signal_result;
+        user_runtime->timer_signal.delivered =
+            g_trap_user_runtime_timer_signal_delivered_result;
+    }
+    return g_trap_user_runtime_arm_timer_signal_result;
+}
+
+bool trap_user_runtime_timer_signal_delivered(
+    const trap_user_runtime_t* user_runtime) {
+    (void)user_runtime;
+    return g_trap_user_runtime_timer_signal_delivered_result;
+}
+
+bool trap_user_runtime_arm_external_signal(trap_user_runtime_t* user_runtime,
+                                           uint32_t* page,
+                                           size_t word_index,
+                                           uint32_t value) {
+    g_trap_user_runtime_arm_external_signal_calls += 1;
+    g_last_external_signal_page = page;
+    g_last_external_signal_index = word_index;
+    g_last_external_signal_value = value;
+    if (user_runtime != NULL) {
+        user_runtime->external_signal.page = page;
+        user_runtime->external_signal.word_index = word_index;
+        user_runtime->external_signal.value = value;
+        user_runtime->external_signal.armed =
+            g_trap_user_runtime_arm_external_signal_result;
+        user_runtime->external_signal.delivered =
+            g_trap_user_runtime_external_signal_delivered_result;
+    }
+    return g_trap_user_runtime_arm_external_signal_result;
+}
+
+bool trap_user_runtime_external_signal_delivered(
+    const trap_user_runtime_t* user_runtime) {
+    (void)user_runtime;
+    return g_trap_user_runtime_external_signal_delivered_result;
+}
+
+void platform_uart_enable_thre_irq(void) {
+    g_platform_uart_enable_thre_irq_calls += 1;
+}
+
+void timer_schedule_delta(uint64_t delta) {
+    g_timer_schedule_delta_calls += 1;
+    g_last_timer_schedule_delta = delta;
+}
+
+vm_address_space_t* runtime_context_active_address_space(void) {
+    return NULL;
+}
+
+vm_process_t* runtime_context_active_process(void) {
+    return NULL;
+}
+
+trap_context_t* trap_active_context(void) {
+    return NULL;
+}
+
 static void reset_stub_state(void) {
     g_text_start = MEM_BASE;
     g_text_end = MEM_BASE + 2U * MEMORY_PAGE_SIZE;
@@ -564,6 +710,39 @@ static void reset_stub_state(void) {
     g_user_program_prepare_standard_result = true;
     g_vm_object_init_physical_result = true;
     g_vm_user_region_unmap_page_result = false;
+    g_memory_kernel_start_override = MEM_BASE;
+    memset(g_active_memory_backing_page, 0, sizeof(g_active_memory_backing_page));
+    memset(g_active_memory_remap_page, 0, sizeof(g_active_memory_remap_page));
+    memset(g_active_memory_anon_page, 0, sizeof(g_active_memory_anon_page));
+    memset(g_active_memory_anon_tail_page, 0, sizeof(g_active_memory_anon_tail_page));
+    g_active_memory_rodata_marker = 0;
+    g_active_memory_fault_resume_slot = 0;
+    g_user_program_is_active = false;
+    g_user_program_is_runnable = false;
+    g_user_program_unmap_region_base_page_calls = 0;
+    g_last_user_program_unmap_region_base_page_region = USER_PROGRAM_REGION_EXEC;
+    g_user_program_unmap_region_base_page_result = false;
+    g_user_program_reset_object_calls = 0;
+    g_last_user_program_reset_object_id = USER_PROGRAM_OBJECT_EXEC;
+    g_user_program_reset_object_result = false;
+    g_user_program_enter_calls = 0;
+    g_user_program_enter_result = false;
+    g_sstatus = 0;
+    g_timer_schedule_delta_calls = 0;
+    g_last_timer_schedule_delta = 0;
+    g_platform_uart_enable_thre_irq_calls = 0;
+    g_trap_user_runtime_arm_timer_signal_calls = 0;
+    g_trap_user_runtime_arm_timer_signal_result = false;
+    g_trap_user_runtime_timer_signal_delivered_result = false;
+    g_last_timer_signal_page = NULL;
+    g_last_timer_signal_index = 0;
+    g_last_timer_signal_value = 0;
+    g_trap_user_runtime_arm_external_signal_calls = 0;
+    g_trap_user_runtime_arm_external_signal_result = false;
+    g_trap_user_runtime_external_signal_delivered_result = false;
+    g_last_external_signal_page = NULL;
+    g_last_external_signal_index = 0;
+    g_last_external_signal_value = 0;
 }
 
 static int fail(const char* message) {
@@ -726,11 +905,148 @@ static int test_prepare_standard_rolls_back_failed_runtime_stage(void) {
     return 0;
 }
 
+static int test_active_memory_requires_anon_unmap(void) {
+    user_program_smoke_t smoke = {0};
+    user_program_t program = {0};
+    user_program_smoke_active_phase_t phase = {0};
+
+    reset_stub_state();
+    user_program_smoke_init(&smoke);
+    if (!user_program_plan_standard(&program, 0x1000U, 0x2000U) ||
+        !user_program_create(&program, MEM_BASE, MEM_BASE + MEMORY_PAGE_SIZE)) {
+        return fail("failed to bootstrap user program for active memory test");
+    }
+
+    program.bootstrap.alias_vaddr = (uintptr_t)g_active_memory_backing_page;
+    program.bootstrap.alias_region.vaddr = program.bootstrap.alias_vaddr;
+    program.bootstrap.anon_vaddr = (uintptr_t)g_active_memory_anon_page;
+    program.bootstrap.anon_region.vaddr = program.bootstrap.anon_vaddr;
+    program.bootstrap.anon_tail_vaddr =
+        (uintptr_t)g_active_memory_anon_tail_page;
+    program.bootstrap.anon_tail_region.vaddr =
+        program.bootstrap.anon_tail_vaddr;
+
+    smoke.program = &program;
+    g_user_program_is_active = true;
+    g_user_program_is_runnable = true;
+    g_user_program_reset_object_result = false;
+    g_user_program_unmap_region_base_page_result = false;
+    g_active_memory_backing_page[0] = 0xBEEFBEEFU;
+    g_active_memory_remap_page[0] = g_active_memory_backing_page[0];
+    g_active_memory_rodata_marker = 0xDEADBEEFU;
+    g_active_memory_fault_resume_slot = 1U;
+
+    phase.alias_store_value = 0x11111111U;
+    phase.backing_store_value = 0x22222222U;
+    phase.anon_value0 = 0x33333333U;
+    phase.anon_value1 = 0x44444444U;
+    phase.anon_tail_value0 = 0x55555555U;
+    phase.anon_tail_value1 = 0x66666666U;
+    phase.remap_store_value = 0x77777777U;
+    phase.rodata_marker = &g_active_memory_rodata_marker;
+    phase.rodata_expected = 0xDEADBEEFU;
+    phase.instruction_fault_target = 0x1234U;
+    phase.fault_resume_pc_slot = &g_active_memory_fault_resume_slot;
+
+    g_sstatus = RISCV_SSTATUS_SUM;
+    g_memory_kernel_start_override = UINTPTR_MAX;
+    if (user_program_smoke_exercise_active_memory(
+            &smoke,
+            g_active_memory_backing_page,
+            g_active_memory_remap_page,
+            &phase)) {
+        return fail("expected active memory exercise to fail when anon unmap fails");
+    }
+
+    if (g_user_program_reset_object_calls != 1 ||
+        g_last_user_program_reset_object_id != USER_PROGRAM_OBJECT_ANON) {
+        return fail("expected active memory exercise to reach anon object reset before anon unmap");
+    }
+
+    if (g_user_program_unmap_region_base_page_calls < 1) {
+        return fail("expected active memory exercise to attempt anon unmap");
+    }
+
+    return 0;
+}
+
+static int test_enter_round_arms_interrupt_signals(void) {
+    user_program_smoke_t smoke = {0};
+    user_program_t program = {0};
+    trap_context_t trap_context = {0};
+    uint32_t timer_signal_page[4] = {0};
+    uint32_t external_signal_page[4] = {0};
+    const user_program_smoke_round_t round = {
+        .expected_trap_context = &trap_context,
+        .timer_signal_page = timer_signal_page,
+        .timer_signal_index = 1U,
+        .timer_signal_value = 0x13572468U,
+        .external_signal_page = external_signal_page,
+        .external_signal_index = 2U,
+        .external_signal_value = 0x24681357U,
+        .timer_delta = 77U,
+    };
+
+    reset_stub_state();
+    user_program_smoke_init(&smoke);
+    if (!user_program_create(&program, MEM_BASE, MEM_BASE + MEMORY_PAGE_SIZE)) {
+        return fail("failed to bootstrap user program for interrupt round test");
+    }
+
+    smoke.program = &program;
+    g_user_program_is_active = true;
+    g_user_program_is_runnable = true;
+    g_user_program_unmap_region_base_page_result = true;
+    g_user_program_enter_result = true;
+    g_trap_user_runtime_arm_timer_signal_result = true;
+    g_trap_user_runtime_arm_external_signal_result = true;
+    g_sstatus = RISCV_SSTATUS_SUM | RISCV_SSTATUS_SIE;
+
+    if (!user_program_smoke_enter_round(&smoke, &round)) {
+        return fail("expected interrupt round helper to arm signals and enter the guest");
+    }
+
+    if ((g_sstatus & RISCV_SSTATUS_SUM) != 0 ||
+        (g_sstatus & RISCV_SSTATUS_SIE) != 0) {
+        return fail("expected interrupt round helper to clear SUM/SIE before entering the guest");
+    }
+
+    if (g_user_program_unmap_region_base_page_calls != 1 ||
+        g_last_user_program_unmap_region_base_page_region != USER_PROGRAM_REGION_ALIAS) {
+        return fail("expected interrupt round helper to unmap the alias base page exactly once");
+    }
+
+    if (g_trap_user_runtime_arm_timer_signal_calls != 1 ||
+        g_last_timer_signal_page != timer_signal_page ||
+        g_last_timer_signal_index != 1U ||
+        g_last_timer_signal_value != 0x13572468U) {
+        return fail("expected interrupt round helper to arm the timer signal with the provided payload");
+    }
+
+    if (g_trap_user_runtime_arm_external_signal_calls != 1 ||
+        g_last_external_signal_page != external_signal_page ||
+        g_last_external_signal_index != 2U ||
+        g_last_external_signal_value != 0x24681357U) {
+        return fail("expected interrupt round helper to arm the external signal with the provided payload");
+    }
+
+    if (g_platform_uart_enable_thre_irq_calls != 1 ||
+        g_timer_schedule_delta_calls != 1 ||
+        g_last_timer_schedule_delta != 77U ||
+        g_user_program_enter_calls != 1) {
+        return fail("expected interrupt round helper to enable UART, schedule the timer, and enter once");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_smoke_init_and_plan_wrapper() != 0 ||
         test_validate_standard_plan() != 0 ||
         test_prepare_standard_rolls_back_failed_address_space_stage() != 0 ||
-        test_prepare_standard_rolls_back_failed_runtime_stage() != 0) {
+        test_prepare_standard_rolls_back_failed_runtime_stage() != 0 ||
+        test_active_memory_requires_anon_unmap() != 0 ||
+        test_enter_round_arms_interrupt_signals() != 0) {
         return 1;
     }
 

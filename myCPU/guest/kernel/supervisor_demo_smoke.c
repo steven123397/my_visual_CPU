@@ -15,6 +15,7 @@
 #include "user_program_smoke.h"
 #include "vm.h"
 
+#ifndef UNIT_TEST_HOST
 typedef struct SupervisorDemoSmokePages {
     uint32_t* backing_page;
     uint32_t* remap_page;
@@ -22,6 +23,7 @@ typedef struct SupervisorDemoSmokePages {
     uint32_t* user_stack_page;
     uint8_t* user_trap_stack_page;
 } supervisor_demo_smoke_pages_t;
+#endif
 
 typedef struct SupervisorDemoSmokeState {
     supervisor_runtime_interrupt_state_t interrupts;
@@ -400,6 +402,13 @@ static bool supervisor_demo_smoke_alloc_pages(supervisor_demo_smoke_pages_t* pag
            pmm_free_pages() + 5U == pmm_total_pages() &&
            pmm_used_pages() == 5U;
 }
+
+#ifdef UNIT_TEST_HOST
+bool supervisor_demo_smoke_alloc_pages_for_test(
+    supervisor_demo_smoke_pages_t* pages) {
+    return supervisor_demo_smoke_alloc_pages(pages);
+}
+#endif
 
 static bool supervisor_demo_smoke_prime_active_pages(
     supervisor_demo_smoke_pages_t* pages,

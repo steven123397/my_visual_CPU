@@ -21,6 +21,7 @@ public:
     void store(uint64_t addr, uint64_t value, int size) override;
     void write_bytes(uint64_t addr, const void* data, size_t size);
     void fill(uint64_t addr, uint8_t value, size_t size);
+    void swap(Ram& other);
     const char* debug_name() const override {
         return "ram";
     }

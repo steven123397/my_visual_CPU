@@ -1,9 +1,11 @@
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "../../src/debug/debug_budget.h"
 #include "../../src/debug/debug_protocol.h"
 
 namespace {
@@ -51,14 +53,15 @@ bool expect_line_with_fields(const std::vector<std::string>& lines,
     return false;
 }
 
-std::string run_until_uart_contains_command(const char* text, int max_steps) {
+std::string run_until_uart_contains_command(const char* text,
+                                            std::uint64_t max_steps) {
     std::ostringstream script;
     script << "{\"cmd\":\"run_until_uart_contains\",\"text\":\"" << text
            << "\",\"max_steps\":" << max_steps << "}\n";
     return script.str();
 }
 
-std::string run_until_halt_command(int max_steps) {
+std::string run_until_halt_command(std::uint64_t max_steps) {
     std::ostringstream script;
     script << "{\"cmd\":\"run_until_halt\",\"max_steps\":" << max_steps << "}\n";
     return script.str();
@@ -87,40 +90,59 @@ int main(int argc, char** argv) {
 
     script << "{\"cmd\":\"load\",\"image\":\"guest/interactive_os.elf\",\"backend\":\""
            << backend << "\",\"disk\":\"tests/data/storage_basic.txt\"}\n"
-           << run_until_uart_contains_command("monitor> ", 5000000)
+           << run_until_uart_contains_command(
+                  "monitor> ", DebugBudget::kInteractiveOsBootMaxSteps)
            << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
            << "{\"cmd\":\"uart_input\",\"text\":\"help\\r\"}\n"
-           << run_until_uart_contains_command("help echo time uptime halt disk regs peek pagewalk pte", 500000)
+           << run_until_uart_contains_command(
+                  "help echo time uptime halt disk regs peek pagewalk pte",
+                  DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
            << "{\"cmd\":\"uart_input\",\"text\":\"echo hi\\r\"}\n"
-           << run_until_uart_contains_command("hi\\r\\nmonitor> ", 500000)
+           << run_until_uart_contains_command(
+                  "hi\\r\\nmonitor> ",
+                  DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
            << "{\"cmd\":\"uart_input\",\"text\":\"time\\r\"}\n"
-           << run_until_uart_contains_command("mtime=", 500000)
+           << run_until_uart_contains_command(
+                  "mtime=", DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"uptime\\r\"}\n"
-           << run_until_uart_contains_command("uptime=", 500000)
+           << run_until_uart_contains_command(
+                  "uptime=", DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"disk info\\r\"}\n"
-           << run_until_uart_contains_command("block_size=", 500000)
+           << run_until_uart_contains_command(
+                  "block_size=", DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"disk read 0\\r\"}\n"
-           << run_until_uart_contains_command("StorageImageData", 500000)
+           << run_until_uart_contains_command(
+                  "StorageImageData",
+                  DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"regs\\r\"}\n"
-           << run_until_uart_contains_command("timer_interrupts=", 500000)
+           << run_until_uart_contains_command(
+                  "timer_interrupts=",
+                  DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"peek 0x80000000 8\\r\"}\n"
-           << run_until_uart_contains_command("0x80000000:", 500000)
+           << run_until_uart_contains_command(
+                  "0x80000000:", DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"peek 0x40000000 4\\r\"}\n"
-           << run_until_uart_contains_command("peek miss va=0x40000000 width=4", 500000)
+           << run_until_uart_contains_command(
+                  "peek miss va=0x40000000 width=4",
+                  DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"pagewalk 0x80000000\\r\"}\n"
-           << run_until_uart_contains_command("leaf=L2", 500000)
+           << run_until_uart_contains_command(
+                  "leaf=L2", DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"pte dump 0x80000000\\r\"}\n"
-           << run_until_uart_contains_command("l2=", 500000)
+           << run_until_uart_contains_command(
+                  "l2=", DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"abc\\b\"}\n"
-           << run_until_uart_contains_command("abc\\b \\b", 500000)
+           << run_until_uart_contains_command(
+                  "abc\\b \\b", DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
            << "{\"cmd\":\"uart_input\",\"text\":\"\\b\\bxy\\u0008\"}\n"
-           << run_until_uart_contains_command("xy\\b \\b", 500000)
+           << run_until_uart_contains_command(
+                  "xy\\b \\b", DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
            << "{\"cmd\":\"uart_input\",\"text\":\"\\bhalt\\r\"}\n"
-           << run_until_halt_command(500000)
+           << run_until_halt_command(DebugBudget::kInteractiveOsCommandMaxSteps)
            << "{\"cmd\":\"snapshot\"}\n"
            << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
            << "{\"cmd\":\"quit\"}\n";

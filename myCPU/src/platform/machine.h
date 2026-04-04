@@ -51,6 +51,7 @@ public:
 
 private:
     void rebuild_backend();
+    void finish_image_load(uint64_t entry, Ram& staged_ram);
 
     CPU cpu_{};
     Ram ram_;

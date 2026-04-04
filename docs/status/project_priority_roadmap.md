@@ -18,8 +18,10 @@
   - [status/kernel_alpha_status.md](kernel_alpha_status.md)
   - [status/code_self_review_status.md](code_self_review_status.md)
 - 当前活跃计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1) 和 [plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
 - 已完成计划归档：
+  - [plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1)
+  - [plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
   - [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
   - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
@@ -149,23 +151,34 @@
 
 ## P2：测试与验证补洞
 
-### 1. `BinaryLoader` 缺少直接回归
+`2026-04-04` 更新：本节列出的首轮验证补洞已经在主线完成两轮同日收口。
+
+- 已完成：
+  - `P2-1`：`BinaryLoader` 直接单测已落地。
+  - `P2-2`：`supervisor_demo_smoke` 直接单测、`user_program_smoke` 的 `active-memory / interrupt round` helper 直测均已落地。
+  - `P2-3`：真实 `debug server + mycpu --debug-cli` 端到端 smoke 已落地。
+  - `P2-4`：`pipeline` mega-smoke 已拆出更易定位的 host smoke。
+  - `P2-5`：Node/C++ 两侧调试预算常量都已收口到各自的共享命名入口，`debug_session.cpp` 与 `interactive_terminal_smoke.cpp` 不再保留相关裸数字。
+  - `P2-7`：`Machine::load_elf()/load_binary()` 的最小 reload/reset 语义回归已落地。
+- 这意味着：本节后续不再把 `P2` 理解成“还有收尾没做完”；当前更值得继续推进的是长会话 / 高吞吐压力验证，以及 `Phase 3` 如果继续推进时是否把 decode 级串行化边界单独拉出来做专项问题。
+
+### 1. `BinaryLoader` 缺少直接回归（已完成问题记录）
 
 - 代码证据：
   - [myCPU/src/loader/binary_loader.cpp](../../myCPU/src/loader/binary_loader.cpp) 有独立的打开、大小、地址范围和短读错误路径。
   - 当前测试里没有 `BinaryLoader` 的直接单测；只有 `hello.bin` 这类 flat binary smoke 间接覆盖。
 - 建议：
-  - 给 `BinaryLoader` 补最小单测，至少覆盖 bad path 和 range reject。
+  - 本项已完成；后续只在新增 bad path 暴露时补最小持久回归。
 
-### 2. guest 侧最复杂的 smoke 路径仍缺更贴近新边界的直接单测
+### 2. guest 侧最复杂的 smoke 路径曾缺更贴近新边界的直接单测（已完成问题记录）
 
 - 代码证据：
-  - [myCPU/Makefile](../../myCPU/Makefile) 没有 `supervisor_demo_smoke` 的单测目标。
-  - [myCPU/tests/unit/user_program_smoke.c](../../myCPU/tests/unit/user_program_smoke.c) 现在已覆盖 `prepare_standard()` 的 address-space/runtime rollback，但 `active-memory`、`interrupt round` 等阶段 helper 仍主要靠 guest demo 间接覆盖。
+  - [myCPU/Makefile](../../myCPU/Makefile) 现已接入 `supervisor_demo_smoke` 单测目标，[myCPU/tests/unit/supervisor_demo_smoke.c](../../myCPU/tests/unit/supervisor_demo_smoke.c) 也已作为直接回归落地。
+  - [myCPU/tests/unit/user_program_smoke.c](../../myCPU/tests/unit/user_program_smoke.c) 现已补上 `active-memory` 与 `interrupt round` 的更窄直测，和既有 `prepare_standard()` rollback 回归一起守住 `user_program_smoke` 的关键 helper 编排。
 - 建议：
-  - 下一轮应优先把 `supervisor_demo_smoke` 和 `user_program_smoke` 新收口出来的关键失败路径补成窄单测，再继续做 guest 结构拆分。
+  - 本项已完成；后续继续做 guest 结构拆分时，应优先延续这类直接 helper 回归，而不是退回只靠 guest demo 间接覆盖。
 
-### 3. Node 侧调试服务缺少“真实 server + 真实 debug CLI”端到端回归
+### 3. Node 侧调试服务缺少“真实 server + 真实 debug CLI”端到端回归（已完成问题记录）
 
 - 代码证据：
   - [frontend/tests/debug_server.test.mjs](../../frontend/tests/debug_server.test.mjs) 使用的是 fake `createSession()`。
@@ -173,9 +186,9 @@
 - 影响：
   - C++ CLI 和 Node server 各自过测，并不等于整条链路稳定。
 - 建议：
-  - 增加一条最小真实集成 smoke，哪怕只守 `load -> snapshot -> terminal-output -> quit`。
+  - 本项已完成；后续新增协议或会话逻辑时继续优先走这条真实链路回归，而不是退回只靠 fake session 分段证明。
 
-### 4. pipeline 验证过于集中在少数 mega-smoke
+### 4. pipeline 验证过于集中在少数 mega-smoke（已完成首轮拆分）
 
 - 代码证据：
   - [myCPU/tests/host/backend_differential_smoke.cpp](../../myCPU/tests/host/backend_differential_smoke.cpp)
@@ -184,20 +197,21 @@
 - 影响：
   - 覆盖面虽然在增长，但定位成本也在增长；后续再做 `Phase 3` bug-driven hardening 会越来越吃力。
 - 建议：
-  - 下一轮不要先扩新场景，而是先把现有 mega-smoke 按合同拆得更易定位。
+  - 首轮拆分已经完成；后续如果再补 `pipeline` 回归，应优先延续这种按合同拆分的方式，而不是重新把场景堆回单个 mega-smoke。
 
-### 5. 调试和交互链路的预算参数散落多处
+### 5. 调试和交互链路的预算参数曾未完全收口到单一来源（已完成当前收口）
 
 - 代码证据：
-  - [myCPU/src/debug/debug_session.cpp](../../myCPU/src/debug/debug_session.cpp)
-  - [frontend/server/tests_manifest.mjs](../../frontend/server/tests_manifest.mjs)
+  - [frontend/server/debug_budget.mjs](../../frontend/server/debug_budget.mjs) 现已收口 Node 侧 `debug_cli session`、interactive boot/command，以及 terminal advance 预算。
+  - [myCPU/src/debug/debug_budget.h](../../myCPU/src/debug/debug_budget.h)
   - [frontend/server/debug_server_runtime.mjs](../../frontend/server/debug_server_runtime.mjs)
+  - [frontend/server/tests_manifest.mjs](../../frontend/server/tests_manifest.mjs)
+  - [myCPU/src/debug/debug_session.cpp](../../myCPU/src/debug/debug_session.cpp)
   - [myCPU/tests/host/interactive_terminal_smoke.cpp](../../myCPU/tests/host/interactive_terminal_smoke.cpp)
-  - [myCPU/Makefile](../../myCPU/Makefile)
 - 影响：
-  - `step_commit` budget、interactive boot steps、terminal settle budget、guest timeout 分散在多层，随着 `pipeline` 继续演进会越来越容易漂。
+  - 当前 Node 与 C++ 各自内部的预算命名和来源已经收口，但两侧仍是分语言实现；随着 `pipeline` 继续演进，这条跨语言边界仍值得继续盯住。
 - 建议：
-  - 当前 `myCPU/Makefile` 已先把 `pipeline` guest demo 的预算收口到 `8s / 12s`，消除了眼前的误报超时；但 `debug_session`、`tests_manifest`、`debug_server` 和 interactive smoke 侧预算来源仍然分散，下一轮仍应继续收成少量共享常量。
+  - 本项当前收口已完成；后续若再改 budget，应继续优先维护两侧共享命名口径，而不是重新引入裸数字。
 
 ### 6. 当前 `Phase 3` 的真实下一个 blocker 已经不是抽象的“以后再做 memory speculation”
 
@@ -209,7 +223,7 @@
 - 建议：
   - 下一轮如果继续碰 `Phase 3`，要把这个具体边界写成单独问题，而不是继续写成笼统的 “memory-order hardening”。
 
-### 7. `Machine::load_elf()` / `load_binary()` 不是完整 reset 语义
+### 7. `Machine::load_elf()` / `load_binary()` 不是完整 reset 语义（已完成最小语义回归）
 
 - 代码证据：
   - [myCPU/src/platform/machine.h](../../myCPU/src/platform/machine.h) 和 [myCPU/src/platform/machine.cpp](../../myCPU/src/platform/machine.cpp) 会长期持有 `Ram`、`Clint`、`Plic`、`Uart`、`SimpleStorage`。
@@ -217,7 +231,7 @@
 - 影响：
   - 新镜像加载和“重建一台干净机器”现在不是同一语义；这条 API 级状态边界仍然偏模糊。
 - 建议：
-  - 短期先补最小回归说明语义，长期再决定是否要把 reload 收成真正的平台 reset。
+  - 当前最小回归和语义说明已经补上；长期是否要把 reload 收成真正的平台 reset，仍应作为单独设计问题处理。
 
 ## P3：明确暂缓，不要抢跑
 
@@ -240,16 +254,7 @@
 
 ## 建议的下一轮拆分顺序
 
-1. 下一轮优先回到 `P2` 的验证补洞：
-   - `BinaryLoader` 直接单测
-   - `supervisor_demo_smoke / user_program_smoke` 更窄单测
-   - 真实 `debug server + debug CLI` 端到端 smoke
-   - `pipeline` mega-smoke 拆分
-   - `Machine::load_elf()` / `load_binary()` reset 语义说明与回归
-2. 如果按多 worktree / 多 agent 并行推进，当前最稳的分法是：
-   - 线 A：`P2-1 + P2-7`
-   - 线 B：`P2-2`
-   - 线 C：`P2-3 + P2-5`
-   - 线 D：`P2-4`
-   - 集成线：`P2-6` 由主分支在前几条结果明确后统一回写 `docs/status/*`、`docs/plan/history_plan.md` 和阶段判断
-3. 在上面这些 `P2` 验证问题没有继续明显收口前，不建议再把路线图重心放回更远期的 `Phase 3` 扩展或平台功能面扩张。
+1. 下一轮优先补更长会话 / 更高吞吐的 `debug/frontend` 压力验证，而不是继续扩功能面。
+2. 如果下一轮还要继续碰 `Phase 3`，应先把 decode 级 `BlockedByUnresolvedStore` 串行化边界单列成专项问题，而不是继续泛泛写“memory speculation / replay hardening”。
+3. 本轮推荐的多 worktree 并行拆分已经执行完毕；下一轮如果继续并行，应围绕长会话压力与 `Phase 3` 剩余开放边界重新拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。
+4. 在上面这些 `Phase 2` / `Phase 3` 具体问题没有继续明显收口前，不建议再把路线图重心放回更远期的平台功能面扩张。

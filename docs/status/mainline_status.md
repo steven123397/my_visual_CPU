@@ -24,8 +24,10 @@
 - 相关状态：
   - [status/project_priority_roadmap.md](project_priority_roadmap.md)
 - 当前计划：
-  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
+  - 当前无活跃计划；最近完成项见 [plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1) 和 [plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
 - 已完成计划归档：
+  - [plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1)
+  - [plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
   - [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
   - [plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
   - [plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
@@ -43,9 +45,32 @@
 - `Phase 3-A` 第一轮分支预测增强已经落地：当前 `pipeline` 已具备最小 `branch_predictor`、`jal` static predict-taken、条件分支动态预测与继续复用现有 flush / redirect 的 mispredict 恢复路径。
 - `Phase 3-B/C` 的基础收口已经继续推进到“最小真实 OoO execute”完成态：当前 `pipeline` 已具备 `rename + ROB` commit 主路径、最小 `LSQ` 接线、统一 speculative rollback、`RAM-only` forwarding、coarse automatic replay，以及 `ROB` 驱动退休 + 最小独立 memory execute；当前剩余工作已不再是“有没有真正进入 OoO execute”，而是更激进的 issue / memory speculation 与 bug-driven hardening。
 - 路线图里原本残留的 `P1` 结构项已经全部关闭；下一轮主线自然转入 `P2` 的验证补洞，而不是继续停留在 `debug/frontend` 或 `pipeline` 的文件边界整理。
+- `P2` 首轮验证补洞已经在主线完成两轮同日收口：`BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node/C++ 两侧调试预算常量收口、`pipeline` mega-smoke 拆分，以及 `supervisor_demo_smoke`、`user_program_smoke` 的更窄直接单测均已落地并接入现有门禁。
 
 这意味着当前主线不再把 `pipeline` 与 `debug/frontend` 视为“待合入功能”，而是把它们视为已经落地、需要继续稳定化的现有能力。
 同时也意味着：当前 `Phase 3` 的主线不再是“准备好接线没有”，而是以已完成的 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 和 [plan/history_plan.md#phase3-minimal-ooo-execute-plan](../plan/history_plan.md#phase3-minimal-ooo-execute-plan) 作为当前基线，继续维持现有基础 OoO 执行模型、补新增 bug 的最小持久回归，并决定是否进入更激进的下一轮微架构扩展。
+
+## 2026-04-04 P2 首轮验证补洞进展
+
+本轮主线已完成 [plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1) 对应的第一轮 `P2` 验证补洞；目标是把路线图里已经明确列出的测试/验证缺口压成持久门禁，而不是继续做无边界的功能扩张。
+
+- `myCPU/tests/unit/binary_loader.cpp` 已补 `BinaryLoader` 直接单测，覆盖成功路径、文件打开失败和 range reject；`myCPU/tests/unit/machine_loader_reset.cpp` 也已补 `Machine::load_elf()/load_binary()` 的最小 reload/reset 回归。
+- `myCPU/src/platform/machine.cpp`、`myCPU/src/platform/machine.h`、`myCPU/src/mem/ram.cpp` 与 `myCPU/src/mem/ram.h` 已把 reload 路径收口为 `staged Ram + swap`：成功加载后会替换整块 RAM 并重建 CPU/backend，避免旧镜像尾部内容残留；与此同时，设备/MMIO 状态仍刻意保持为“不是完整平台 reset”的当前语义。
+- `myCPU/tests/unit/supervisor_demo_smoke.c` 已新增 `supervisor_demo_smoke` 直接单测，`myCPU/guest/include/supervisor_demo_smoke.h` 与 `myCPU/guest/kernel/supervisor_demo_smoke.c` 只在 `UNIT_TEST_HOST` 下暴露最小 test seam；随后同日 `myCPU/tests/unit/user_program_smoke.c` 也已补上 `active-memory` 和 `interrupt round` 的更窄 helper 直测。
+- `frontend/tests/debug_server_e2e.test.mjs` 已补真实 `debug server + mycpu --debug-cli` 端到端 smoke；Node 侧 `debug_cli_session`、`debug_server_runtime` 与 `tests_manifest` 的 session/interactive budget 也已收口到 `frontend/server/debug_budget.mjs`。
+- `myCPU/src/debug/debug_budget.h` 已新增 C++ 侧共享预算常量；`myCPU/src/debug/debug_session.cpp` 的 `step_commit` cycle budget 与 `myCPU/tests/host/interactive_terminal_smoke.cpp` 的 interactive boot/command step budget 不再各自保留裸数字。
+- `myCPU/tests/host/pipeline_backend_smoke.cpp` 已从 mega-smoke 中拆出 `pipeline_core_state_smoke.cpp`、`pipeline_forwarding_smoke.cpp` 与共享的 `pipeline_smoke_common.h`；`myCPU/Makefile` 与 `.gitignore` 已同步接入这两条新增 host smoke。
+
+本轮已新鲜验证通过：
+
+- `cd myCPU && make test-unit-binary_loader test-unit-machine_loader_reset test-unit-supervisor_demo_smoke test-unit-user_program_smoke`
+- `cd myCPU && make test-host-debug_cli_smoke test-host-interactive_terminal_smoke`
+- `cd myCPU && make test-guest-supervisor_demo`
+- `cd myCPU && make test-host-pipeline_core_state_smoke test-host-pipeline_forwarding_smoke test-host-pipeline_backend_smoke test-host-pipeline_speculation_contracts_smoke`
+- `cd frontend && node --test frontend/tests/debug_server_e2e.test.mjs frontend/tests/debug_server.test.mjs frontend/tests/debug_server_runtime.test.mjs frontend/tests/debug_cli_session.test.mjs`
+- `cd myCPU && make test`
+- `cd myCPU && make test-pipeline`
+- `cd frontend && node --test`
 
 ## 2026-04-04 P1-6 debug/frontend 协议与运行时边界收口进展
 
@@ -55,7 +80,7 @@
 - `myCPU/tests/host/debug_protocol_command_smoke.cpp` 已新增最小 host-side 协议回归，明确守住 `load` 参数解码、`step_commit count` 数值提取、`uart_input` Unicode backspace 解码，以及 unknown command / trailing token reject 合同；`myCPU/Makefile` 也已把这条 smoke 接到 `make test` 与 `make test-pipeline`。
 - `frontend/server/debug_server.mjs` 已退回 HTTP API、静态资源和 WebSocket 入口；`frontend/server/debug_cli_session.mjs` 负责 CLI 子进程生命周期，`frontend/server/debug_server_runtime.mjs` 负责 session queue、generation guard、run loop 和 terminal 跟踪。
 - `frontend/tests/debug_cli_session.test.mjs`、`frontend/tests/debug_server_runtime.test.mjs` 与既有 `frontend/tests/debug_server.test.mjs` 现在共同守住 Node 侧会话 teardown、runtime load/reset/terminal 跟踪，以及外部 HTTP / WebSocket 行为合同。
-- 这意味着路线图里原本最后残留的 `P1` 结构项已经关闭；当前下一步更自然的入口是 `P2-1` 的 `BinaryLoader` 直接回归、`P2-3` 的真实 `debug server + debug CLI` 端到端 smoke，以及 `P2-5` 的调试链路预算常量单一事实来源。
+- 这意味着路线图里原本最后残留的 `P1` 结构项已经关闭；上述提到的 `P2-1 / P2-3 / P2-5` 已在后续同日的验证补洞里继续收紧，当前下一步应转向更长会话压力验证和 `Phase 3` 的具体串行化边界。
 
 本轮已新鲜验证通过：
 
@@ -443,33 +468,34 @@
 
 在这个前提下，Phase 2 近期优先级如下：
 
-1. 当前仓库对 Phase 2 的最小完成标准已经基本成立，后续优先维护既有门禁而不是继续扩功能面。
+1. 当前仓库对 Phase 2 的最小完成标准已经不只是“基本成立”，而是已经完成第一轮显性缺口回填；后续优先维护新增门禁，而不是继续扩功能面。
 2. 继续维护 `pipeline` 的 correctness / differential / robustness 门禁；新增问题出现时补最小回归，而不是重复堆叠同类 case。
-3. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围，重点守住快照结构、协议输出和本地测试门禁。
+3. 继续把 `debug/frontend` 限定在“教学演示可用”的最小范围，重点守住真实端到端 smoke、快照结构、协议输出和本地测试门禁。
 4. 在上述工作稳定之前，不急着把更多执行模型或更大的调试功能面并入当前主线。
 
 ## 当前仍然有效的风险 / 限制
 
 - reference robustness 回归已经完成第一轮系统扩充；当前 `pipeline differential` 的高风险主干矩阵已基本形成闭环，后续剩余工作主要转为低收益变体控制和新增 bug 的定向回归。
 - guest runtime 虽已完成第一轮拆分，`user_program_smoke / supervisor_demo_smoke` 的第一轮 orchestration 收口，以及 `kernel_runtime / supervisor_runtime / user_program_smoke` 的第一轮 public header 收口也已完成，但 `vm*`、`trap*`、`kernel_bringup` 与这些 helper 的后续边界仍需要继续守住，避免回退到单个大文件或重新暴露可变内部布局。
-- guest smoke 当前已把编排边界收窄，但 `supervisor_demo_smoke` 仍缺直接单测，`user_program_smoke` 的 active-memory / interrupt round 失败路径也仍主要靠 guest demo 间接覆盖。
+- guest smoke 当前已把编排边界收窄，`supervisor_demo_smoke` 与 `user_program_smoke` 的关键 helper 直测都已补上；后续重点转为继续守住 `vm*` / `trap*` / `kernel_bringup` 的边界，不让更窄 helper 再次退化回 demo 间接覆盖。
 - `kernel_alpha` 已经达到 Phase 1 核心完成态，但更多 device readiness / fault / panic / runtime refinement 仍属于 post-Phase1 hardening。
 - `pipeline` 已经正式可用，privileged / trap / interrupt / MMIO 行为的一致性验证主干也已基本成体系；后续以维护既有差分门禁和按新增问题补最小持久回归为主。
 - 本轮收尾后，`interactive_os` 相关改动与总门禁已同步恢复到通过状态。
 - `Phase 3-A` predictor 当前仍是首轮最小实现：条件分支 `2-bit` counter + target 记忆、`jal` static predict-taken、`jalr` 不预测；后续应先以 bug-driven hardening 与最小持久回归补洞为主，不急着扩成复杂 BTB / RAS / 多级 predictor。
-- `debug/frontend` 已经正式接入，但仍应避免膨胀成断点 / 条件暂停 / 任意文件加载的通用调试器。
+- `debug/frontend` 已经正式接入，真实 `debug server + mycpu --debug-cli` 端到端 smoke 也已补上；当前更值得继续盯住的是长会话压力，以及 Node / C++ 两侧预算口径在后续演进时不要再次漂移。
+- `Machine::load_elf()/load_binary()` 当前已明确成“成功 reload 会替换 RAM 并 reset CPU/backend，但不是完整平台 reset”的最小语义；如果后续要进一步提升成真正的平台 reset，需要单独设计而不是顺手扩大本轮行为。
 - `Phase 3-B/C` 虽已接上首轮 `rename + ROB + LSQ`、最小 phys free-list / recycle、coarse automatic replay recovery、`RAM-only` store-to-load forwarding与最小真实 `OoO execute`，但当前仍是单发射、in-order retire、最小 OoO 完成窗口的克制形态：还没有 MMIO forwarding、复杂 partial merge、显式 issue queue 或更激进的 memory speculation。
 
 ## 下一步
 
 1. 先沿 reference path 继续维护已形成闭环的 `privilege / Sv39`、illegal / MMIO / ELF / CSR 合同矩阵，并在新增 bug 出现时补最小持久回归。
 2. 继续把 `kernel_alpha` 十条回归和 `guest_supervisor_demo` 守在稳定输出上。
-3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug`、`guest smoke orchestration` 和 guest public header API 的第一轮 hardening 都已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup` 的继续收口，以及 `supervisor_demo_smoke / user_program_smoke` 的更窄单测补洞。
+3. 继续推进 guest runtime 的 process / runtime refinement 与大文件拆分，但避免破坏现有层次边界；当前 `interactive_os / monitor / vm_debug`、`guest smoke orchestration` 和 guest public header API 的第一轮 hardening 都已完成，下一块更值得继续推进的是 `kernel_runtime / kernel_bringup` 的继续收口与后续 bug-driven hardening。
 4. 当前 Phase 2 的最小收口已经基本成立；后续按 [design/regression_completion_criteria.md](../design/regression_completion_criteria.md) 以维护既有 `pipeline` 差分 / 快照门禁和新增 bug 定向回归为主，而不是继续做低收益 case 堆叠。
 5. `minimal_interactive_os` 计划当前也已完成；后续只在新增 bug 或设计边界变化时补最小持久回归，而不是继续把它扩成图形桌面项目。
-6. 继续沿 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 维护 `Phase 3-B/C` 当前已落地的 `rename + ROB + LSQ + phys free-list / recycle + coarse automatic replay + RAM-only forwarding +` 最小真实 `OoO execute` 形态，优先守住现有 host / guest / debug 门禁，然后再考虑更激进的 issue / replay / memory speculation。
-7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试；当前下一块更值得优先推进的是 `P2-3` 的真实 `debug server + mycpu --debug-cli` 端到端 smoke 与 `P2-5` 的调试链路预算常量收口。
-8. 如果下一轮打算并行推进 `P2`，当前最稳的 ownership 切法是：`P2-1 + P2-7`、`P2-2`、`P2-3 + P2-5`、`P2-4` 分别独立开发，而 `P2-6` 由主集成线统一根据前面结果回写路线图和阶段判断。
+6. 继续沿 [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 维护 `Phase 3-B/C` 当前已落地的 `rename + ROB + LSQ + phys free-list / recycle + coarse automatic replay + RAM-only forwarding +` 最小真实 `OoO execute` 形态；如果下一轮真的继续碰 `Phase 3`，应优先把 decode 级 `BlockedByUnresolvedStore` 串行化边界写成单独问题，而不是继续泛泛地写“memory speculation”。
+7. 在不扩功能面的前提下，继续维护 `debug/frontend` 教学演示链路的稳定测试；真实端到端 smoke 和 Node/C++ 两侧预算常量已经落地，当前下一块更值得优先推进的是更长会话 / 更高吞吐压力验证。
+8. 本轮建议的 `P2` 并行拆分已经执行完毕；下一轮如果继续并行，应围绕长会话压力验证与 `Phase 3` 剩余开放边界重新拆 ownership，不再机械沿用旧的 `P2-1..P2-7` 分线。
 
 ## 建议入口
 
@@ -493,6 +519,9 @@
 - `cd myCPU && make test`
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`
+- `cd myCPU && make test-unit-binary_loader`
+- `cd myCPU && make test-unit-machine_loader_reset`
+- `cd myCPU && make test-unit-supervisor_demo_smoke`
 - `cd myCPU && make test-unit-supervisor_runtime`
 - `cd myCPU && make test-unit-kernel_runtime`
 - `cd myCPU && make test-unit-kernel_alpha_common`

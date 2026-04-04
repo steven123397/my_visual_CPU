@@ -31,18 +31,26 @@ void Machine::rebuild_backend() {
     }
 }
 
-void Machine::load_elf(const std::string& path) {
-    const uint64_t entry = elf_loader_.load(ram_, path.c_str());
+void Machine::finish_image_load(uint64_t entry, Ram& staged_ram) {
+    // Image reload swaps in a freshly loaded RAM image; MMIO/device state is
+    // intentionally left intact until we decide whether Machine should grow a
+    // full platform reset contract.
+    ram_.swap(staged_ram);
     cpu_init(cpu_, entry);
     rebuild_backend();
     loaded_ = true;
 }
 
+void Machine::load_elf(const std::string& path) {
+    Ram staged_ram;
+    const uint64_t entry = elf_loader_.load(staged_ram, path.c_str());
+    finish_image_load(entry, staged_ram);
+}
+
 void Machine::load_binary(const std::string& path, uint64_t addr) {
-    binary_loader_.load(ram_, path.c_str(), addr);
-    cpu_init(cpu_, addr);
-    rebuild_backend();
-    loaded_ = true;
+    Ram staged_ram;
+    binary_loader_.load(staged_ram, path.c_str(), addr);
+    finish_image_load(addr, staged_ram);
 }
 
 void Machine::attach_storage_image(const std::string& path,

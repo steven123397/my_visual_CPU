@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
+import { DEBUG_CLI_SESSION_BUDGET } from './debug_budget.mjs';
+
 export function normalizeCliResponse(response, context = 'debug cli request') {
   if (response && typeof response === 'object' && response.type === 'error') {
     const message = typeof response.message === 'string' && response.message.length > 0
@@ -15,8 +17,8 @@ export class DebugCliSession {
   constructor({
     binaryPath,
     spawnImpl = spawn,
-    requestTimeoutMs = 1500,
-    closeWaitTimeoutMs = 200,
+    requestTimeoutMs = DEBUG_CLI_SESSION_BUDGET.requestTimeoutMs,
+    closeWaitTimeoutMs = DEBUG_CLI_SESSION_BUDGET.closeWaitTimeoutMs,
   }) {
     this.binaryPath = binaryPath;
     this.requestTimeoutMs = requestTimeoutMs;
@@ -28,6 +30,9 @@ export class DebugCliSession {
       cwd: path.dirname(binaryPath),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+    if (typeof this.child.stdin.on === 'function') {
+      this.child.stdin.on('error', () => {});
+    }
     this.stdoutBuffer = '';
     this.stderrBuffer = '';
 
@@ -194,10 +199,12 @@ export class DebugCliSession {
 
     this.closePromise = (async () => {
       this.teardown(new Error('debug cli session closed'));
-      try {
-        this.child.stdin.write(`${JSON.stringify({ cmd: 'quit' })}\n`);
-      } catch {
-        // Ignore shutdown races.
+      if (!this.child.stdin.destroyed && this.child.stdin.writable) {
+        try {
+          this.child.stdin.write(`${JSON.stringify({ cmd: 'quit' })}\n`);
+        } catch {
+          // Ignore shutdown races.
+        }
       }
       this.child.kill();
 

@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { interactiveOsBudgets } from './debug_budget.mjs';
+
 const asmTestsCache = new Map();
 
 function parseAsmTestsFromMakefile(myCpuRoot) {
@@ -55,9 +57,10 @@ export function listTests(repoRoot) {
   manifest.push(guestEntry(myCpuRoot, 'guest_supervisor_demo', 'ready'));
   manifest.push({
     ...guestEntry(myCpuRoot, 'guest_interactive_os_demo', 'ready', 'interactive_os'),
-    bootUntilUartText: 'monitor> ',
-    bootMaxSteps: 5000000,
-    terminalPrompt: 'monitor> ',
+    bootUntilUartText: interactiveOsBudgets.prompt,
+    bootMaxSteps: interactiveOsBudgets.bootMaxSteps,
+    terminalPrompt: interactiveOsBudgets.prompt,
+    commandMaxSteps: interactiveOsBudgets.commandMaxSteps,
   });
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_demo', 'ready'));
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_fault_demo'));
