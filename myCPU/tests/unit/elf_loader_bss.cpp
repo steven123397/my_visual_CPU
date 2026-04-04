@@ -16,6 +16,11 @@ namespace {
 
 constexpr uint32_t kElfMagic = 0x464C457F;
 constexpr uint16_t kElfClass64 = 2;
+constexpr uint8_t kElfDataLittleEndian = 1;
+constexpr uint8_t kElfIdentVersionCurrent = 1;
+constexpr uint16_t kElfTypeExec = 2;
+constexpr uint16_t kElfMachineRiscv = 243;
+constexpr uint32_t kElfVersionCurrent = 1;
 constexpr uint32_t kProgramHeaderLoad = 1;
 constexpr uint64_t kSegmentAddr = MEM_BASE + 0x2000;
 constexpr uint64_t kSegmentSize = 32;
@@ -62,6 +67,11 @@ std::string create_test_elf() {
     Elf64Ehdr ehdr{};
     std::memcpy(ehdr.e_ident, &kElfMagic, sizeof(kElfMagic));
     ehdr.e_ident[4] = kElfClass64;
+    ehdr.e_ident[5] = kElfDataLittleEndian;
+    ehdr.e_ident[6] = kElfIdentVersionCurrent;
+    ehdr.e_type = kElfTypeExec;
+    ehdr.e_machine = kElfMachineRiscv;
+    ehdr.e_version = kElfVersionCurrent;
     ehdr.e_entry = kSegmentAddr;
     ehdr.e_phoff = sizeof(Elf64Ehdr);
     ehdr.e_ehsize = sizeof(Elf64Ehdr);
