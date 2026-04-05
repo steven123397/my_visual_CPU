@@ -425,6 +425,23 @@ test('GET /api/tests returns built-in test manifest', async () => {
   }
 });
 
+test('GET /shared/terminal_projection.mjs serves the browser-shared terminal projection module', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/shared/terminal_projection.mjs`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\/javascript/);
+    assert.match(body, /projectTerminalText/);
+  } finally {
+    await server.close();
+  }
+});
+
 test('POST /api/session/step-cycle returns updated snapshot', async () => {
   const server = await startServer({
     port: 0,

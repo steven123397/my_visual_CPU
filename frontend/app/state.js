@@ -34,6 +34,8 @@ export function createAppState() {
     terminal: createTerminalState(),
     layout: {
       debugPanelOpen: true,
+      architectureGroupOpen: false,
+      platformGroupOpen: false,
     },
   };
 }
@@ -94,6 +96,13 @@ export function setDebugPanelOpen(state, open) {
   state.layout.debugPanelOpen = open;
 }
 
+export function setInspectorGroupOpen(state, key, open) {
+  if (!(key in state.layout)) {
+    return;
+  }
+  state.layout[key] = open;
+}
+
 export function normalizeTerminalInput(event) {
   if (!event || event.ctrlKey || event.metaKey || event.altKey) {
     return null;
@@ -119,19 +128,28 @@ export function buildTimelineRows(history) {
   return history.map((snapshot) => {
     const flags = snapshot.pipeline?.flags ?? {};
     let flag = 'normal';
+    let flagLabel = 'normal';
     if (flags.stalled) {
       flag = 'stall';
+      flagLabel =
+        typeof flags.stall_reason === 'string' && flags.stall_reason.length > 0 && flags.stall_reason !== 'none'
+          ? `stall: ${flags.stall_reason}`
+          : 'stall';
     } else if (flags.redirected) {
       flag = 'redirect';
+      flagLabel = 'redirect';
     } else if (flags.trap_flush) {
       flag = 'flush';
+      flagLabel = 'flush';
     } else if (flags.committed) {
       flag = 'commit';
+      flagLabel = 'commit';
     }
 
     return {
       cycle: snapshot.summary?.cycle ?? 0,
       flag,
+      flagLabel,
       stages: {
         if: snapshot.pipeline?.if?.text ?? '',
         id: snapshot.pipeline?.id?.text ?? '',

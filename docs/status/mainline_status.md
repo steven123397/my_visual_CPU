@@ -42,6 +42,7 @@
 - `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界按专项设计落地为“仅 unknown-address 阻塞”：地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续返回 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已守住。
 - `2026-04-05` 已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：考虑到当前 backend 仍是 decode 级 load 前置分类、单 memory execute 通道与 coarse replay flush，继续主动扩大更激进的 `issue / replay / speculation` 当前收益不足；后续仅在出现真实 workload 证据或明确研究目标时重开。
 - `2026-04-05` 也已补上一层更窄的 `pipeline stall attribution` 观测：当前 debug snapshot / CLI 已能直接暴露 `stall_reason`，区分 `blocked_by_unresolved_store`、`blocked_by_overlapping_store`、`memory_path_busy`、`non_ram_load_waiting_for_rob_head`、`serializing_system_wait_for_rob_head`、`source_operands_not_ready` 和 `decode_backpressure`，供后续是否重开 issue decoupling 判断使用。
+- `2026-04-05` 同日也已把浏览器前端调试面板按工程调试视角重排为分层布局：常显区保留 `运行摘要 / 五级流水线 / OoO / 微架构 / 分支预测器 / 最近周期`，`架构状态` 与 `平台与 I/O` 改为折叠分组，并把 `stall_reason`、`lsq_load_state` 与最小 `ROB / LSQ` 观测轻量接入 UI。
 
 ## 近期时间线（按时间倒序）
 
@@ -52,6 +53,7 @@
   - decode 级 `BlockedByUnresolvedStore` 边界已按专项设计收窄为“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续暴露 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已通过。
   - 同日也已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：在 decode 级 load 前置分类、单 memory execute 通道和 coarse replay flush 仍然成立的前提下，当前不主动继续扩大更激进的 `issue / replay / speculation`。
   - 同日也已补上更窄的 `pipeline stall attribution`：debug snapshot / CLI 新增 `stall_reason`，可直接区分 decode 级 `LSQ block`、`memory_path_busy`、`non_ram_load_waiting_for_rob_head`、`serializing_system_wait_for_rob_head`、`source_operands_not_ready` 与 `decode_backpressure`。
+  - 浏览器前端调试面板也同日按工程调试视角重排为分层布局：`OoO / 微架构` 面板进入常显区，`架构状态` 与 `平台与 I/O` 改为折叠分组，timeline 和五级流水线头部可直接显示 `stall_reason` / `lsq_load_state`。
 - `2026-04-04`
   - 完成 `P2` 首轮验证补洞两轮收口：`BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` 与 `user_program_smoke` 更窄直测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node/C++ 两侧调试预算常量收口，以及 `pipeline` mega-smoke 拆分。
   - 同日也完成最后一批 `P1` 结构收口：`pipeline_backend` 拆分、`debug/frontend` 协议与运行时边界收口、guest public header 与 smoke orchestration 收口，以及 reference / platform 合同补洞。

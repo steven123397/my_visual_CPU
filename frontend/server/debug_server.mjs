@@ -11,7 +11,9 @@ import { createWebSocketHub } from './ws.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
+const frontendRoot = path.join(repoRoot, 'frontend');
 const appRoot = path.join(repoRoot, 'frontend', 'app');
+const sharedRoot = path.join(repoRoot, 'frontend', 'shared');
 
 function json(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
@@ -30,7 +32,7 @@ function contentTypeFor(filePath) {
   if (filePath.endsWith('.html')) {
     return 'text/html; charset=utf-8';
   }
-  if (filePath.endsWith('.js')) {
+  if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
     return 'text/javascript; charset=utf-8';
   }
   if (filePath.endsWith('.css')) {
@@ -44,8 +46,12 @@ function contentTypeFor(filePath) {
 
 async function serveStatic(response, pathname) {
   const relative = pathname === '/' ? '/index.html' : pathname;
-  const filePath = path.join(appRoot, relative.replace(/^\/+/, ''));
-  if (!filePath.startsWith(appRoot)) {
+  const root = relative.startsWith('/shared/') ? sharedRoot : appRoot;
+  const trimmed = relative.startsWith('/shared/')
+    ? relative.replace(/^\/shared\/+/, '')
+    : relative.replace(/^\/+/, '');
+  const filePath = path.join(root, trimmed);
+  if (!filePath.startsWith(root) || !filePath.startsWith(frontendRoot)) {
     json(response, 403, { error: 'forbidden' });
     return;
   }

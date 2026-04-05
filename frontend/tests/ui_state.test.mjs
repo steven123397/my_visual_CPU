@@ -7,7 +7,18 @@ test('buildTimelineRows highlights stalls and redirects', () => {
   const rows = buildTimelineRows([
     {
       summary: { cycle: 1 },
-      pipeline: { if: { text: 'lw' }, id: { text: 'add' }, ex: { text: '' }, mem: { text: '' }, wb: { text: '' }, flags: { stalled: true, redirected: false } },
+      pipeline: {
+        if: { text: 'lw' },
+        id: { text: 'add' },
+        ex: { text: '' },
+        mem: { text: '' },
+        wb: { text: '' },
+        flags: {
+          stalled: true,
+          stall_reason: 'memory_path_busy',
+          redirected: false,
+        },
+      },
     },
     {
       summary: { cycle: 2 },
@@ -16,7 +27,9 @@ test('buildTimelineRows highlights stalls and redirects', () => {
   ]);
 
   assert.equal(rows[0].flag, 'stall');
+  assert.equal(rows[0].flagLabel, 'stall: memory_path_busy');
   assert.equal(rows[1].flag, 'redirect');
+  assert.equal(rows[1].flagLabel, 'redirect');
   assert.equal(rows[0].cycle, 1);
   assert.equal(rows[1].stages.ex, 'beq');
 });

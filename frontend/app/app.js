@@ -18,6 +18,7 @@ import {
   resetHistory,
   resetTerminalState,
   setTerminalFocus,
+  setInspectorGroupOpen,
   setTerminalPendingInput,
   setTests,
 } from './state.js';
@@ -130,12 +131,25 @@ async function init() {
   });
 
   document.addEventListener('click', (event) => {
+    let needsPaint = false;
+    const summary = event.target.closest?.('.panel-group__summary[data-layout-key]');
+    if (summary) {
+      const layoutKey = summary.dataset.layoutKey;
+      event.preventDefault();
+      setInspectorGroupOpen(state, layoutKey, !state.layout[layoutKey]);
+      needsPaint = true;
+    }
+
     const shouldFocusTerminal = state.terminal.connected && elements.terminal.contains(event.target);
     if (!state.terminal.connected && elements.terminal.contains(event.target)) {
       showNotice('先点击 Load，建立一个 interactive_os 会话。');
     }
     if (state.terminal.focused !== shouldFocusTerminal) {
       setTerminalFocus(state, shouldFocusTerminal);
+      needsPaint = true;
+    }
+
+    if (needsPaint) {
       paint();
     }
   });

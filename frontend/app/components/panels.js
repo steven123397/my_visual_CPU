@@ -9,6 +9,23 @@ function card(title, body, extraClass = '') {
   `;
 }
 
+function groupPanel(title, detail, panels, layoutKey, isOpen = false, extraClass = '') {
+  return `
+    <details class="panel panel-group ${extraClass}" data-layout-key="${layoutKey}" ${isOpen ? 'open' : ''}>
+      <summary class="panel-group__summary" data-layout-key="${layoutKey}">
+        <div>
+          <h2>${title}</h2>
+          <span>${detail}</span>
+        </div>
+        <span class="panel-group__toggle">展开</span>
+      </summary>
+      <div class="panel-group__body">
+        ${panels.join('')}
+      </div>
+    </details>
+  `;
+}
+
 export function renderSummary(snapshot, runState) {
   const summary = snapshot?.summary ?? {};
   return card(
@@ -205,5 +222,69 @@ export function renderPredictor(snapshot) {
       </div>
     `,
     'panel-predictor',
+  );
+}
+
+export function renderOooPanel(snapshot) {
+  const ooo = snapshot?.pipeline?.ooo ?? {};
+  const flags = snapshot?.pipeline?.flags ?? {};
+  const fields = [
+    ['rob_depth', ooo.rob_depth ?? 0],
+    ['rob_head_sequence_id', ooo.rob_head_sequence_id ?? 0],
+    ['lsq_depth', ooo.lsq_depth ?? 0],
+    ['lsq_head_sequence_id', ooo.lsq_head_sequence_id ?? 0],
+    ['lsq_load_state', ooo.lsq_load_state ?? 'none'],
+    ['lsq_load_sequence_id', ooo.lsq_load_sequence_id ?? 0],
+    ['lsq_store_sequence_id', ooo.lsq_store_sequence_id ?? 0],
+    ['stall_reason', flags.stall_reason ?? 'none'],
+  ];
+
+  return card(
+    'OoO / 微架构',
+    `
+      <div class="ooo-grid">
+        ${fields.map(([label, value]) => `
+          <div class="ooo-metric">
+            <span>${label}</span>
+            <strong>${value}</strong>
+          </div>
+        `).join('')}
+      </div>
+      <div class="ooo-flag-strip">
+        <span class="ooo-flag ${flags.replay_flush ? 'is-hot' : ''}">replay_flush: ${flags.replay_flush ? 'true' : 'false'}</span>
+        <span class="ooo-flag ${flags.trap_flush ? 'is-hot' : ''}">trap_flush: ${flags.trap_flush ? 'true' : 'false'}</span>
+        <span class="ooo-flag ${flags.committed ? 'is-hot' : ''}">committed: ${flags.committed ? 'true' : 'false'}</span>
+      </div>
+    `,
+    'panel-ooo',
+  );
+}
+
+export function renderArchitectureGroup(snapshot, registers, isOpen = false) {
+  return groupPanel(
+    '架构状态',
+    'CSR / Trap · 通用寄存器',
+    [
+      renderCsrs(snapshot),
+      renderRegisters(registers),
+    ],
+    'architectureGroupOpen',
+    isOpen,
+    'panel-group-architecture',
+  );
+}
+
+export function renderPlatformGroup(snapshot, isOpen = false) {
+  return groupPanel(
+    '平台与 I/O',
+    '设备状态 · 总线访问 · 事件流',
+    [
+      renderDevices(snapshot),
+      renderBus(snapshot),
+      renderEvents(snapshot),
+    ],
+    'platformGroupOpen',
+    isOpen,
+    'panel-group-platform',
   );
 }

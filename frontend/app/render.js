@@ -1,14 +1,30 @@
 import { buildTimelineRows, diffRegisters, shouldAutoScrollToBottom } from './state.js';
 import { renderTerminal } from './components/terminal.js';
 import { renderPipelineBoard, renderTimeline } from './components/pipeline.js';
-import { renderSummary, renderEvents, renderDevices, renderRegisters, renderCsrs, renderBus, renderPredictor } from './components/panels.js';
+import {
+  renderSummary,
+  renderPredictor,
+  renderOooPanel,
+  renderArchitectureGroup,
+  renderPlatformGroup,
+} from './components/panels.js';
+
+function queryEventList(...slots) {
+  for (const slot of slots) {
+    const list = slot?.querySelector?.('.event-list');
+    if (list) {
+      return list;
+    }
+  }
+  return null;
+}
 
 export function renderApp(elements, state) {
   const snapshot = state.currentSnapshot;
   const previous = state.history.length > 1 ? state.history[state.history.length - 2] : null;
   const registers = diffRegisters(previous, snapshot);
   const timelineRows = buildTimelineRows(state.history).slice().reverse();
-  const previousEventList = elements.events.querySelector('.event-list');
+  const previousEventList = queryEventList(elements.devices, elements.events);
   const keepEventsPinned = shouldAutoScrollToBottom(previousEventList);
   const previousTerminal = elements.terminal.querySelector('.terminal-scrollport');
   const keepTerminalPinned = shouldAutoScrollToBottom(previousTerminal);
@@ -20,13 +36,13 @@ export function renderApp(elements, state) {
   elements.summary.innerHTML = renderSummary(snapshot, state.runState);
   elements.predictor.innerHTML = renderPredictor(snapshot);
   elements.pipeline.innerHTML = `${renderPipelineBoard(snapshot)}${renderTimeline(timelineRows)}`;
-  elements.events.innerHTML = renderEvents(snapshot);
-  elements.devices.innerHTML = renderDevices(snapshot);
-  elements.registers.innerHTML = renderRegisters(registers);
-  elements.csrs.innerHTML = renderCsrs(snapshot);
-  elements.bus.innerHTML = renderBus(snapshot);
+  elements.events.innerHTML = renderOooPanel(snapshot);
+  elements.devices.innerHTML = renderPlatformGroup(snapshot, state.layout.platformGroupOpen);
+  elements.registers.innerHTML = renderArchitectureGroup(snapshot, registers, state.layout.architectureGroupOpen);
+  elements.csrs.innerHTML = '';
+  elements.bus.innerHTML = '';
 
-  const nextEventList = elements.events.querySelector('.event-list');
+  const nextEventList = queryEventList(elements.devices, elements.events);
   if (nextEventList && keepEventsPinned) {
     nextEventList.scrollTop = nextEventList.scrollHeight;
   }

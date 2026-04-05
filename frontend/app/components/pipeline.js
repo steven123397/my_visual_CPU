@@ -10,9 +10,26 @@ function renderStage(label, stage) {
   `;
 }
 
+function renderPipelineMeta(flags, ooo) {
+  const chips = [
+    `<span class="pipeline-meta-chip ${flags.stalled ? 'is-hot' : ''}">stall_reason: ${flags.stall_reason ?? 'none'}</span>`,
+  ];
+
+  if (ooo.lsq_load_state && ooo.lsq_load_state !== 'none') {
+    chips.push(`<span class="pipeline-meta-chip is-warm">lsq: ${ooo.lsq_load_state}</span>`);
+  }
+
+  return `
+    <div class="pipeline-meta">
+      ${chips.join('')}
+    </div>
+  `;
+}
+
 export function renderPipelineBoard(snapshot) {
   const pipeline = snapshot?.pipeline ?? {};
   const flags = pipeline.flags ?? {};
+  const ooo = pipeline.ooo ?? {};
 
   return `
     <section class="panel panel-pipeline">
@@ -25,6 +42,7 @@ export function renderPipelineBoard(snapshot) {
           <span class="flag-chip ${flags.committed ? 'is-hot' : ''}">commit</span>
         </div>
       </div>
+      ${renderPipelineMeta(flags, ooo)}
       <div class="stages-grid">
         ${renderStage('IF', pipeline.if)}
         ${renderStage('ID', pipeline.id)}
@@ -50,7 +68,7 @@ export function renderTimeline(rows) {
         ${rows.map((row) => `
           <div class="timeline-row is-${row.flag}">
             <span>${row.cycle}</span>
-            <span>${row.flag}</span>
+            <span>${row.flagLabel ?? row.flag}</span>
             <span>${row.stages.if || '·'}</span>
             <span>${row.stages.id || '·'}</span>
             <span>${row.stages.ex || '·'}</span>

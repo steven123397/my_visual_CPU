@@ -216,12 +216,11 @@ http://127.0.0.1:4173
 - 切换 `functional` / `pipeline`
 - `Load / Run / Pause / Step Cycle / Step Commit / Reset`
 - 查看：
-  - 五级流水线
+  - 五级流水线与 `stall_reason` / `lsq_load_state` 的轻量可视化
   - 最近周期时间线
-  - 寄存器变化
-  - 关键 CSR / Trap
-  - 最近一次总线访问
-  - UART / CLINT / PLIC / Storage 状态
+  - `OoO / 微架构` 摘要：`ROB / LSQ` 深度、head sequence、`replay_flush / trap_flush / committed`
+  - 以折叠分组方式查看 `架构状态`（寄存器变化、关键 CSR / Trap）
+  - 以折叠分组方式查看 `平台与 I/O`（最近一次总线访问、UART / CLINT / PLIC / Storage、事件流）
 
 ## 测试清单策略
 
