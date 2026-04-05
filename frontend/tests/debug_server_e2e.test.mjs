@@ -62,3 +62,43 @@ test('real debug server + debug CLI can load hello and surface UART output', asy
     await server.close();
   }
 });
+
+test('real debug server + debug CLI can keep guest_interactive_os_demo responsive across run/pause and terminal input', async () => {
+  const tests = listTests(repoRoot);
+  const interactiveTest = tests.find((item) => item.name === 'guest_interactive_os_demo');
+  assert.ok(interactiveTest, 'guest_interactive_os_demo should be part of the manifest');
+
+  const server = await startServer({ port: 0 });
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: interactiveTest.name,
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+    assert.match(loadResponse.body.terminal.text, /monitor> /);
+
+    const initialCycle = loadResponse.body.snapshot.summary.cycle;
+    const runResponse = await postJson(server.baseUrl, '/api/session/run', { rateHz: 1000 });
+    assert.equal(runResponse.status, 200);
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const pauseResponse = await postJson(server.baseUrl, '/api/session/pause', {});
+    assert.equal(pauseResponse.status, 200);
+    assert.ok(pauseResponse.body.snapshot.summary.cycle > initialCycle);
+
+    const helpResponse = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'help\r',
+    });
+    assert.equal(helpResponse.status, 200);
+    assert.match(helpResponse.body.text, /help echo time uptime halt/);
+    assert.match(helpResponse.body.text, /monitor> $/);
+
+    const snapshotResponse = await postJson(server.baseUrl, '/api/session/snapshot', {});
+    assert.equal(snapshotResponse.status, 200);
+    assert.equal(snapshotResponse.body.snapshot.summary.backend, 'pipeline');
+    assert.ok(snapshotResponse.body.snapshot.summary.cycle >= pauseResponse.body.snapshot.summary.cycle);
+  } finally {
+    await server.close();
+  }
+});

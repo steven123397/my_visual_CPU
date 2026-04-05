@@ -186,6 +186,46 @@ test('createDebugServerRuntime run keeps broadcasting snapshots and terminal del
   await runtime.close();
 });
 
+test('createDebugServerRuntime can resume a long-running session across repeated run/pause cycles without leaking stale broadcasts', async () => {
+  const session = createFakeSession({
+    label: 'loop-session',
+    stepCycleTerminalPrefix: 'tick:',
+  });
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => session,
+    wsHub,
+  });
+
+  await runtime.load({
+    name: 'hello',
+    image: 'tests/asm/hello.elf',
+    terminalPrompt: '> ',
+  }, 'pipeline');
+
+  let lastPausedCycle = 0;
+  for (let round = 0; round < 3; ++round) {
+    wsHub.messages.length = 0;
+    await runtime.run(1000);
+    await wait(80);
+    const paused = await runtime.pause();
+    const messageCountAfterPause = wsHub.messages.length;
+    await wait(60);
+
+    const snapshotMessages = wsHub.messages.filter((message) => message.type === 'snapshot');
+    const terminalMessages = wsHub.messages.filter((message) => message.type === 'terminal');
+
+    assert.ok(snapshotMessages.length >= 1, `round ${round + 1} should emit at least one snapshot update while running`);
+    assert.ok(terminalMessages.some((message) => /tick:/.test(message.text)), `round ${round + 1} should keep surfacing terminal deltas while running`);
+    assert.ok(paused.snapshot.summary.cycle > lastPausedCycle, `round ${round + 1} should continue advancing the live session instead of restarting it`);
+    assert.equal(wsHub.messages.length, messageCountAfterPause, `round ${round + 1} pause should stop later broadcasts`);
+
+    lastPausedCycle = paused.snapshot.summary.cycle;
+  }
+
+  await runtime.close();
+});
+
 test('createDebugServerRuntime load replacement suppresses stale run-loop output from the previous session', async () => {
   let releaseFirstStepCycle;
   const firstStepCycleGate = new Promise((resolve) => {

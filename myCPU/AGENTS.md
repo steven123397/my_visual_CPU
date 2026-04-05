@@ -138,7 +138,7 @@
 - [src/devices/simple_storage.cpp](src/devices/simple_storage.cpp)
   当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
 - [src/debug](src/debug) 和 [../frontend](../frontend)
-  当前最小调试链路已经正式接入并可用，Node/runtime 级持续 `run`、session replacement 与高吞吐 terminal 输入聚合回归也已补上；但更长会话和真实浏览器节奏下的压力验证仍然不足。
+  当前最小调试链路已经正式接入并可用，Node/runtime 级持续 `run`、session replacement、高吞吐 terminal 输入聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e 回归也已补上；对当前单用户、本地教学/调试使用，这组门禁已经足够。
 - [src/platform/machine.cpp](src/platform/machine.cpp)
   `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
 - [src/exec/load_store_queue.cpp](src/exec/load_store_queue.cpp) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
@@ -162,7 +162,7 @@
 
 1. 继续稳住 simulator reference path 的 correctness 与可观察性。
 2. 在已接通的 correctness hardening、loader、guest smoke、debug smoke 和 `pipeline` 门禁基础上，继续按新增 bug 或新合同补最小回归，不重复堆叠低收益变体。
-3. `debug/frontend` 当前下一步是在新增 Node/runtime 窄门禁基础上，继续做更长会话和真实浏览器节奏下的压力验证；不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
+3. `debug/frontend` 当前不再主动扩大浏览器端压力验证；后续按真实 bug 或明确新需求补最小回归，不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
 4. 如果继续推进 `Phase 3`，优先评估是否要在当前已完成的 `BlockedByUnresolvedStore` 最小收窄基线上继续扩 issue / replay / speculation，而不是回头重复实现同一条 decode 边界。
 5. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
 

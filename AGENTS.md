@@ -77,7 +77,9 @@
 
 最近一轮关键历史节点只保留以下几项：
 
+- `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界收窄到“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续走 `BlockedByOverlappingStore`。
 - `2026-04-05` 已为 `debug/frontend` 补上一组更窄的压力验证：Node/runtime 级持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` timeout fail-closed，避免迟到 CLI 响应错配后续请求。
+- `2026-04-05` 同日也继续把 `debug/frontend` 压力验证外推到 repeated `run/pause` 长会话、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
 - `2026-04-04` 已完成 `P1` 最后一批结构收口与 `P2` 首轮验证补洞两轮收口：`BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` / `user_program_smoke` 更窄单测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node/C++ 两侧调试预算常量收口，以及 `pipeline` mega-smoke 拆分都已进入现有门禁。
 - `2026-03-25` 已完成一批 simulator-side correctness 修复：非法整数编码、`DIV/REM` 溢出边界、ELF pure-BSS `PT_LOAD`、bus / device 第一轮边界防御。
 - `2026-03-26` 已完成一轮更系统的 Phase 1 hardening 回归扩充：非法编码样本扩展、CPU 侧 MMIO access-fault asm、ELF segment/reject/header 单元回归、host-side MMIO contract matrix，以及 CSR illegal matrix 均已接入现有门禁。
@@ -112,8 +114,8 @@
 - 继续沿已落地的 hardening 矩阵，维护非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 合同闭环，并按新增 bug 补最小回归。
 - 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做 bug-driven hardening。
 - `P1` 结构收口和 `P2` 首轮验证补洞已经全部完成；当前不再把重点放在继续扩功能面。
-- `debug/frontend` 当前已经补上 Node/runtime 级持续 `run/pause`、session replacement 与高吞吐 terminal 聚合窄门禁；下一步仍是更长会话和真实浏览器节奏下的压力验证，而不是继续扩 UI / 协议面。
-- 如果继续推进 `Phase 3`，优先把 decode 级 `BlockedByUnresolvedStore` 串行化边界单列成专项问题，再判断是否继续更激进的 issue / replay / speculation。
+- `debug/frontend` 当前已经补上 Node/runtime 级持续 `run/pause`、session replacement、高吞吐 terminal 聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e；对当前单用户、本地教学/调试使用，这组门禁已经足够，后续按真实 bug 或明确新需求补最小回归即可。
+- 如果继续推进 `Phase 3`，优先评估是否值得在当前已完成的 `BlockedByUnresolvedStore` 最小收窄基线上继续扩 issue / replay / speculation，而不是回头重复讨论同一条 decode 边界。
 - 继续把 `pipeline`、loader/debug smoke 和 guest runtime 保持在当前已接入、可验证的范围内，不让它们反向污染 reference path。
 
 相关状态文档见：

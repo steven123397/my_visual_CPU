@@ -19,7 +19,7 @@
   - [status/mainline_status.md](../status/mainline_status.md)
   - [status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关计划：
-  - [plan/phase3_blocked_by_unresolved_store_boundary_plan.md](../plan/phase3_blocked_by_unresolved_store_boundary_plan.md)
+  - [plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan](../plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan)
 - 相关设计：
   - [phase3_ooo_execution_model_design.md](phase3_ooo_execution_model_design.md)
   - [pipeline_speculation_contracts.md](pipeline_speculation_contracts.md)

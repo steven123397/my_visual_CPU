@@ -825,6 +825,61 @@ test('POST /api/session/load stops a previous run before replacing the session',
   }
 });
 
+test('POST /api/session/reset broadcasts a terminal reset and restarts output tracking for browser-style cadence', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+  const socket = await openTestWebSocket(`${server.baseUrl.replace('http', 'ws')}/ws`);
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const initialOutput = await postJson(server.baseUrl, '/api/session/terminal-output', { offset: 0 });
+    assert.equal(initialOutput.status, 200);
+
+    const inputResponse = await postJson(server.baseUrl, '/api/session/terminal-input', { text: 'help\r' });
+    assert.equal(inputResponse.status, 200);
+    assert.equal(inputResponse.body.text, 'help\r');
+    assert.ok(inputResponse.body.nextOffset > initialOutput.body.nextOffset);
+
+    const resetTerminalMessage = waitForWebSocketPayload(
+      socket,
+      (payload) => payload.type === 'terminal' && payload.reset === true,
+    );
+    const resetResponse = await postJson(server.baseUrl, '/api/session/reset', {});
+    assert.equal(resetResponse.status, 200);
+    assert.equal(resetResponse.body.terminal.reset, true);
+    assert.equal(resetResponse.body.terminal.text, '');
+    assert.equal(resetResponse.body.terminal.nextOffset, 0);
+    assert.deepEqual(await resetTerminalMessage, {
+      type: 'terminal',
+      text: '',
+      nextOffset: 0,
+      reset: true,
+    });
+
+    const resetOutput = await postJson(server.baseUrl, '/api/session/terminal-output', { offset: 0 });
+    assert.equal(resetOutput.status, 200);
+    assert.equal(resetOutput.body.text, '');
+    assert.equal(resetOutput.body.nextOffset, 0);
+
+    const staleOffsetOutput = await postJson(server.baseUrl, '/api/session/terminal-output', {
+      offset: inputResponse.body.nextOffset,
+    });
+    assert.equal(staleOffsetOutput.status, 200);
+    assert.equal(staleOffsetOutput.body.text, '');
+    assert.equal(staleOffsetOutput.body.nextOffset, 0);
+  } finally {
+    socket.close();
+    await server.close();
+  }
+});
+
 test('terminal output API returns UART deltas and resets across session reloads', async () => {
   const server = await startServer({
     port: 0,

@@ -35,14 +35,16 @@
 - 默认 `functional` reference path、`make test` 主门禁，以及 `kernel_alpha` 正向与九条负向回归都已稳定接通。
 - `pipeline core`、`make test-pipeline`、`debug_session/protocol`、本地 Node 调试服务和浏览器前端都已经正式接入主线，不再是待合入功能。
 - `P1` 结构收口已经全部完成；`P2` 首轮验证补洞也已完成两轮收口，新增 loader 单测、guest smoke 窄单测、真实 debug e2e smoke、预算常量收口和 pipeline smoke 拆分都已进入现有门禁。
-- 当前主线不再把重点放在继续扩功能面，而是转向两件更具体的事：`debug/frontend` 的长会话 / 高吞吐压力验证，以及 `Phase 3` decode 级 `BlockedByUnresolvedStore` 串行化边界。
+- 当前主线不再把重点放在继续扩功能面；`debug/frontend` 对当前单用户、本地教学/调试使用已经有足够门禁，下一步回到 reference correctness、guest 基线和 `Phase 3` 后续取舍这类更核心的问题。
 - `2026-04-05` 已为 `debug/frontend` 新增一组更窄的 Node/runtime 压力验证：持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` 请求超时后的 fail-closed 边界，避免迟到 CLI 响应错配后续请求。
+- `2026-04-05` 也已继续把 `debug/frontend` 压力验证外推到更长会话和更像浏览器的操作节奏：新增 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
 - `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界按专项设计落地为“仅 unknown-address 阻塞”：地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续返回 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已守住。
 
 ## 近期时间线（按时间倒序）
 
 - `2026-04-05`
   - `debug/frontend` 新增一组更窄的 runtime 级压力验证：持续 `run/pause` 广播、运行中 session replacement generation guard，以及更高吞吐 terminal 输入聚合。
+  - `debug/frontend` 同日也继续外推到更长会话和更像浏览器的节奏：repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
   - `DebugCliSession` 补上 timeout fail-closed 行为：一旦 CLI 请求超时，当前 session 直接失效并 teardown，避免没有 request id 的 JSON line 响应在迟到时错配后续请求。
   - decode 级 `BlockedByUnresolvedStore` 边界已按专项设计收窄为“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续暴露 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已通过。
 - `2026-04-04`
@@ -62,7 +64,7 @@
 
 ## 当前仍然有效的风险 / 限制
 
-- `debug/frontend` 当前已经可用，并且 Node/runtime 级持续 `run`、session replacement 与高吞吐 terminal 输入聚合回归已经落地；但更长会话、真实浏览器时序和更厚的 e2e 压力验证仍然不足。
+- `debug/frontend` 当前已经可用，并且 Node/runtime 级持续 `run`、session replacement、高吞吐 terminal 输入聚合、repeated `run/pause` 长会话、`reset` 后 terminal reset / offset 重启，以及真实 `interactive_os` `run/pause + terminal-input` e2e 都已接入；对当前单用户、本地教学/调试使用，这组门禁已经足够。
 - Node 侧 `debug_budget.mjs` 与 C++ 侧 `debug_budget.h` 已分别收口，但它们仍是分语言维护，不是跨语言单一事实来源。
 - guest runtime 的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime` 等边界已经比早期清晰得多，但后续仍要防止重新膨胀回大文件或重新暴露临时内部布局。
 - `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
@@ -71,10 +73,9 @@
 
 ## 下一步
 
-1. 在新增的 runtime 级窄门禁基础上，为 `debug/frontend` 继续补更长会话、真实浏览器节奏和更厚的 e2e 压力验证。
-2. 如果继续推进 `Phase 3`，优先评估是否值得在当前最小收窄基线上继续扩 issue / replay / speculation，而不是回头重复讨论 decode 级 `BlockedByUnresolvedStore` 的基础边界。
-3. 继续以 bug-driven hardening 的方式维护 guest runtime、`kernel_alpha` 十条基线和 reference correctness 矩阵，不做无关大重构。
-4. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内，避免在现有门禁没有继续增强前再扩更多功能面。
+1. 如果继续推进 `Phase 3`，优先评估是否值得在当前最小收窄基线上继续扩 issue / replay / speculation，而不是回头重复讨论 decode 级 `BlockedByUnresolvedStore` 的基础边界。
+2. 继续以 bug-driven hardening 的方式维护 guest runtime、`kernel_alpha` 十条基线和 reference correctness 矩阵，不做无关大重构。
+3. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内；`debug/frontend` 后续按真实 bug 或明确新需求补最小回归，不再主动扩大浏览器端压力面。
 
 ## 验证基线
 

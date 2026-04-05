@@ -30,16 +30,17 @@
 
 - `P0` correctness 修补已经完成，`P1` 结构收口已经全部关闭，`P2` 首轮验证补洞也已经完成两轮收口。
 - 因此，当前路线图不再需要继续维护一长串“已完成问题记录”；现在真正开放的事项已经缩小到少数几个具体边界。
-- 当前如果新开计划，优先级应围绕 `debug/frontend` 的压力验证和 `Phase 3` 的具体串行化边界展开，而不是继续泛泛地写“继续 hardening / 继续 refinement”。
+- 当前如果新开计划，优先级应围绕 `Phase 3` 的具体串行化边界后续判断，以及 reference / guest 的 bug-driven hardening 展开；`debug/frontend` 不再需要主动新开更重的浏览器压力验证计划。
 
 ## 当前优先级
 
-### 1. `debug/frontend` 长会话与高吞吐压力验证
+### 1. `debug/frontend` 维持当前够用门禁，不再主动扩大压力面
 
 - 真实 `debug server + mycpu --debug-cli` 端到端 smoke 已经落地，但它仍主要覆盖最小交互和短会话。
 - 当前已经补上一组更窄的 Node/runtime 回归：持续 `run/pause`、运行中 session replacement，以及更高吞吐 terminal 输入聚合。
-- 下一轮更值得补的是把这些窄门禁继续外推到更长会话、真实浏览器交互时序和更厚的 e2e 压力，而不是再扩 UI 按钮或协议面。
-- 这条线的目标是把当前“教学演示可用”的链路继续压实成更稳的门禁，而不是把它扩成通用调试器。
+- 当前也已经进一步补到 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
+- 对当前单用户、本地教学/调试使用，这组门禁已经足够；后续按真实 bug 或明确新需求补最小回归即可，不再主动扩大到更长时间 soak 或更重浏览器压力。
+- 这条线的目标仍然只是“教学演示可用”，不是通用调试器，也不需要为当前使用方式预先建设更重的浏览器端压测体系。
 
 ### 2. `Phase 3` decode 级 `BlockedByUnresolvedStore` 边界后续判断
 
@@ -56,12 +57,12 @@
 ## 当前明确不优先做的事
 
 1. 不继续把 `debug/frontend` 往断点、条件暂停、任意文件加载或更大 UI 功能面扩张。
-2. 在当前压力验证和具体串行化边界没有继续收口前，不抢跑更激进的 `Phase 3` 扩展。
+2. 不为了当前单用户本地使用场景，继续主动补更重的浏览器端压力验证或多客户端门禁。
 3. 不把 `interactive_os` 当作新的产品主线；它当前仍应服务于 monitor / terminal / 调试链路验证。
 4. 不把 `SimpleStorage` 更完整的设备模型抢在当前 correctness / structure hardening 前面推进。
 
 ## 如需新开计划
 
-1. 优先单开一份 `debug/frontend` 压力验证计划，目标明确落在长会话、高吞吐和真实浏览器时序。
-2. 如果继续碰 `Phase 3`，优先单开一份 decode 级 `BlockedByUnresolvedStore` 边界计划，不再沿用笼统的 “memory speculation” 表述。
-3. 如果下一轮还要并行推进，建议围绕“压力验证 / Phase 3 边界 / guest runtime bug-driven hardening”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。
+1. 如果继续碰 `Phase 3`，优先单开一份后续 issue / replay / memory disambiguation 取舍计划，不再回头为已完成的 decode 边界重复开计划。
+2. 如果后续出现真实 `debug/frontend` bug，再围绕具体故障单开最小修复 / 回归计划，而不是泛化成新的浏览器压力专项。
+3. 如果下一轮还要并行推进，建议围绕“Phase 3 后续判断 / guest runtime bug-driven hardening / reference correctness 补洞”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。

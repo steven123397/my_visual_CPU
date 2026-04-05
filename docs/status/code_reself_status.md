@@ -18,8 +18,12 @@
 
 ## 当前状态
 
+- `2026-04-05` 对 `8403a563c3578291990220f56010488d37e18dd4`（`fix(phase3): 收窄 decode 级 blocked-by-unresolved-store 边界`）完成一轮提交级复查。
+- 代码路径本身未发现新的 `LSQ` / `pipeline` correctness 回归；相关 `host smoke` 与 `make test-pipeline` 已通过。
+- 本轮复查暴露的两条文档同步问题已关闭：
+  - [docs/design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md) 已改为指向 [plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan](../plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan)，不再保留已删除的活跃 plan 死链。
+  - [AGENTS.md](../../AGENTS.md) 已同步最新 `Phase 3` 口径：decode 级 `BlockedByUnresolvedStore` 边界专项已完成，当前下一步改为评估是否继续扩 issue / replay / speculation。
 - 当前无活跃代码审查 / 复查问题。
-- 后续如有新 findings，先在本文档追加或更新问题列表，再同步相关 `status` 与 `AGENTS.md` 的下一步、优先级和处理口径。
 
 ## 记录规则
 
