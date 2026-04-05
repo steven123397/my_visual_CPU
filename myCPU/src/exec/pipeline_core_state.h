@@ -9,6 +9,17 @@
 #include "rename_map.h"
 #include "reorder_buffer.h"
 
+enum class PipelineStallReason : uint8_t {
+    None,
+    DecodeBackpressure,
+    SourceOperandsNotReady,
+    BlockedByUnresolvedStore,
+    BlockedByOverlappingStore,
+    SerializingSystemWaitForRobHead,
+    NonRamLoadWaitForRobHead,
+    MemoryPathBusy,
+};
+
 class PipelineCoreState {
 public:
     void reset(uint64_t pc);
@@ -18,6 +29,7 @@ public:
     bool pipeline_empty() const;
     void reset_ooo_state(const CoreState& core);
     void rollback_to_committed_state(const CoreState& core);
+    void note_stall(PipelineStallReason reason);
 
     uint64_t allocate_sequence();
     void record_retire(const RetireTraceEntry& entry);
@@ -47,6 +59,7 @@ public:
     TrapRequest pending_fetch_fault{};
     uint64_t pending_fetch_fault_pc{0};
     bool stalled{false};
+    PipelineStallReason stall_reason{PipelineStallReason::None};
     bool trap_flush{false};
     bool replay_flush{false};
     bool committed{false};

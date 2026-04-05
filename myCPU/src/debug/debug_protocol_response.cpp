@@ -133,6 +133,9 @@ std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
     append_retire_trace(out, snapshot.pipeline.retire_trace);
     out << ",\"flags\":{"
         << "\"stalled\":" << (snapshot.pipeline.stalled ? "true" : "false")
+        << ",\"stall_reason\":";
+    append_json_string(out, snapshot.pipeline.stall_reason);
+    out
         << ",\"redirected\":" << (snapshot.pipeline.redirected ? "true" : "false")
         << ",\"pending_fetch_fault\":" << (snapshot.pipeline.pending_fetch_fault ? "true" : "false")
         << ",\"trap_flush\":" << (snapshot.pipeline.trap_flush ? "true" : "false")

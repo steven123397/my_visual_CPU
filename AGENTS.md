@@ -77,6 +77,8 @@
 
 最近一轮关键历史节点只保留以下几项：
 
+- `2026-04-05` 已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：在当前单发射、decode 级 load 前置分类、单 memory execute 通道与 coarse replay flush 基线上，不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 是否值得做。
+- `2026-04-05` 同日也已补上一层更窄的 `pipeline stall attribution` 观测：当前 debug snapshot / CLI 已能直接暴露 `stall_reason`，为后续是否值得重开 issue decoupling 提供更直接的证据。
 - `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界收窄到“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续走 `BlockedByOverlappingStore`。
 - `2026-04-05` 已为 `debug/frontend` 补上一组更窄的压力验证：Node/runtime 级持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` timeout fail-closed，避免迟到 CLI 响应错配后续请求。
 - `2026-04-05` 同日也继续把 `debug/frontend` 压力验证外推到 repeated `run/pause` 长会话、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
@@ -115,7 +117,7 @@
 - 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做 bug-driven hardening。
 - `P1` 结构收口和 `P2` 首轮验证补洞已经全部完成；当前不再把重点放在继续扩功能面。
 - `debug/frontend` 当前已经补上 Node/runtime 级持续 `run/pause`、session replacement、高吞吐 terminal 聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e；对当前单用户、本地教学/调试使用，这组门禁已经足够，后续按真实 bug 或明确新需求补最小回归即可。
-- 如果继续推进 `Phase 3`，优先评估是否值得在当前已完成的 `BlockedByUnresolvedStore` 最小收窄基线上继续扩 issue / replay / speculation，而不是回头重复讨论同一条 decode 边界。
+- `Phase 3` 的 decode 级 `BlockedByUnresolvedStore` 最小收窄之后，主线判断已经完成：当前不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 这类有明确结构收益的最小切片，而不是直接放大 memory speculation / replay。
 - 继续把 `pipeline`、loader/debug smoke 和 guest runtime 保持在当前已接入、可验证的范围内，不让它们反向污染 reference path。
 
 相关状态文档见：

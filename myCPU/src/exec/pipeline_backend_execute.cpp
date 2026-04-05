@@ -255,7 +255,7 @@ void PipelineBackend::step_ex() {
 
     if (is_serializing_system_slot(state_.id_ex.slot)) {
         state_.next_id_ex.slot = state_.id_ex.slot;
-        state_.stalled = true;
+        state_.note_stall(PipelineStallReason::SerializingSystemWaitForRobHead);
         return;
     }
 
@@ -293,13 +293,13 @@ void PipelineBackend::step_ex() {
                 if (!rob_head.has_value() ||
                     rob_head->index.value != completed_slot.rob_index.value) {
                     state_.next_id_ex.slot = state_.id_ex.slot;
-                    state_.stalled = true;
+                    state_.note_stall(PipelineStallReason::NonRamLoadWaitForRobHead);
                     return;
                 }
             }
             if (state_.ex_mem.slot.valid || state_.next_ex_mem.slot.valid) {
                 state_.next_id_ex.slot = state_.id_ex.slot;
-                state_.stalled = true;
+                state_.note_stall(PipelineStallReason::MemoryPathBusy);
                 return;
             }
             if (completed_slot.lsq_index.value == 0) {
@@ -323,7 +323,7 @@ void PipelineBackend::step_ex() {
         case MemoryRequest::Kind::Store:
             if (state_.ex_mem.slot.valid || state_.next_ex_mem.slot.valid) {
                 state_.next_id_ex.slot = state_.id_ex.slot;
-                state_.stalled = true;
+                state_.note_stall(PipelineStallReason::MemoryPathBusy);
                 return;
             }
             if (completed_slot.lsq_index.value != 0) {

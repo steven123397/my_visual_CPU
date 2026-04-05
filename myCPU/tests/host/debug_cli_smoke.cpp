@@ -517,5 +517,41 @@ int main() {
         }
     }
 
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kDebugProgramAddr);
+        cpu.core().write_gpr(10, 0x80000100ULL);
+
+        PipelineBackend backend(cpu, bus);
+        LoadStoreQueue& lsq = backend.testing_state().lsq();
+        const LsqIndex older_store = lsq.enqueue_store({
+            .sequence_id = 1,
+            .size = 4,
+        });
+        lsq.mark_address_ready(older_store, 0x80000100ULL);
+
+        backend.testing_state().if_id.slot.valid = true;
+        backend.testing_state().if_id.slot.sequence_id.value = 2;
+        backend.testing_state().if_id.slot.pc = kDebugProgramAddr;
+        backend.testing_state().if_id.slot.raw = 0x00052083U;
+
+        backend.step();
+
+        DebugSnapshot snapshot{};
+        snapshot.summary.pc = cpu.core().pc();
+        snapshot.summary.privilege = cpu.core().privilege_mode();
+        snapshot.summary.backend = backend.name();
+        snapshot.pipeline = backend.debug_snapshot().pipeline;
+
+        const std::string stalled_output = debug_snapshot_json(snapshot);
+        if (!expect_contains(stalled_output,
+                             "\"stall_reason\":\"blocked_by_overlapping_store\"",
+                             "debug snapshot JSON should serialize the decode overlapping-store stall attribution")) {
+            return 1;
+        }
+    }
+
     return 0;
 }

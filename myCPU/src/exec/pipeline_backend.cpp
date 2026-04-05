@@ -70,6 +70,29 @@ const char* lsq_load_state_name(LsqLoadState state) {
     }
 }
 
+const char* stall_reason_name(PipelineStallReason reason) {
+    switch (reason) {
+    case PipelineStallReason::None:
+        return "none";
+    case PipelineStallReason::DecodeBackpressure:
+        return "decode_backpressure";
+    case PipelineStallReason::SourceOperandsNotReady:
+        return "source_operands_not_ready";
+    case PipelineStallReason::BlockedByUnresolvedStore:
+        return "blocked_by_unresolved_store";
+    case PipelineStallReason::BlockedByOverlappingStore:
+        return "blocked_by_overlapping_store";
+    case PipelineStallReason::SerializingSystemWaitForRobHead:
+        return "serializing_system_wait_for_rob_head";
+    case PipelineStallReason::NonRamLoadWaitForRobHead:
+        return "non_ram_load_waiting_for_rob_head";
+    case PipelineStallReason::MemoryPathBusy:
+        return "memory_path_busy";
+    default:
+        return "unknown";
+    }
+}
+
 std::string format_stage_text(const StageSlot& slot) {
     if (!slot.valid) {
         return {};
@@ -120,6 +143,7 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     snapshot.pipeline.last_sequence_id = state_.last_sequence_id();
     snapshot.pipeline.retire_trace = state_.retire_trace();
     snapshot.pipeline.stalled = state_.stalled;
+    snapshot.pipeline.stall_reason = stall_reason_name(state_.stall_reason);
     snapshot.pipeline.redirected = state_.redirect_pending;
     snapshot.pipeline.redirect_target = state_.redirect_target;
     snapshot.pipeline.pending_fetch_fault = state_.pending_fetch_fault.valid;

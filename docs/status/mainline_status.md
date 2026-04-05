@@ -13,6 +13,7 @@
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)
+  - [design/phase3_issue_replay_speculation_assessment.md](../design/phase3_issue_replay_speculation_assessment.md)
   - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
 - 相关状态：
   - [project_priority_roadmap.md](project_priority_roadmap.md)
@@ -39,6 +40,8 @@
 - `2026-04-05` 已为 `debug/frontend` 新增一组更窄的 Node/runtime 压力验证：持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` 请求超时后的 fail-closed 边界，避免迟到 CLI 响应错配后续请求。
 - `2026-04-05` 也已继续把 `debug/frontend` 压力验证外推到更长会话和更像浏览器的操作节奏：新增 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
 - `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界按专项设计落地为“仅 unknown-address 阻塞”：地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续返回 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已守住。
+- `2026-04-05` 已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：考虑到当前 backend 仍是 decode 级 load 前置分类、单 memory execute 通道与 coarse replay flush，继续主动扩大更激进的 `issue / replay / speculation` 当前收益不足；后续仅在出现真实 workload 证据或明确研究目标时重开。
+- `2026-04-05` 也已补上一层更窄的 `pipeline stall attribution` 观测：当前 debug snapshot / CLI 已能直接暴露 `stall_reason`，区分 `blocked_by_unresolved_store`、`blocked_by_overlapping_store`、`memory_path_busy`、`non_ram_load_waiting_for_rob_head`、`serializing_system_wait_for_rob_head`、`source_operands_not_ready` 和 `decode_backpressure`，供后续是否重开 issue decoupling 判断使用。
 
 ## 近期时间线（按时间倒序）
 
@@ -47,6 +50,8 @@
   - `debug/frontend` 同日也继续外推到更长会话和更像浏览器的节奏：repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
   - `DebugCliSession` 补上 timeout fail-closed 行为：一旦 CLI 请求超时，当前 session 直接失效并 teardown，避免没有 request id 的 JSON line 响应在迟到时错配后续请求。
   - decode 级 `BlockedByUnresolvedStore` 边界已按专项设计收窄为“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续暴露 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已通过。
+  - 同日也已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：在 decode 级 load 前置分类、单 memory execute 通道和 coarse replay flush 仍然成立的前提下，当前不主动继续扩大更激进的 `issue / replay / speculation`。
+  - 同日也已补上更窄的 `pipeline stall attribution`：debug snapshot / CLI 新增 `stall_reason`，可直接区分 decode 级 `LSQ block`、`memory_path_busy`、`non_ram_load_waiting_for_rob_head`、`serializing_system_wait_for_rob_head`、`source_operands_not_ready` 与 `decode_backpressure`。
 - `2026-04-04`
   - 完成 `P2` 首轮验证补洞两轮收口：`BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` 与 `user_program_smoke` 更窄直测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node/C++ 两侧调试预算常量收口，以及 `pipeline` mega-smoke 拆分。
   - 同日也完成最后一批 `P1` 结构收口：`pipeline_backend` 拆分、`debug/frontend` 协议与运行时边界收口、guest public header 与 smoke orchestration 收口，以及 reference / platform 合同补洞。
@@ -68,12 +73,13 @@
 - Node 侧 `debug_budget.mjs` 与 C++ 侧 `debug_budget.h` 已分别收口，但它们仍是分语言维护，不是跨语言单一事实来源。
 - guest runtime 的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime` 等边界已经比早期清晰得多，但后续仍要防止重新膨胀回大文件或重新暴露临时内部布局。
 - `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
-- `Phase 3-B/C` 当前仍是单发射、顺序退休、最小完成窗口的克制形态；decode 级 `BlockedByUnresolvedStore` 的第一轮边界收窄已经落地，下一步是否继续扩 issue / replay / memory disambiguation 仍需单独判断。
+- `Phase 3-B/C` 当前仍是单发射、顺序退休、最小完成窗口的克制形态；decode 级 `BlockedByUnresolvedStore` 的第一轮边界收窄之后，主线也已完成后续判断：当前不主动继续扩更激进的 `issue / replay / memory disambiguation`。
 - 当前这条 decode 级边界已经明确：`BlockedByUnresolvedStore` 只保留给 older store 地址未知场景；对地址已知但 data 未 ready 的 older store，仅在与年轻 load 明确重叠时继续阻塞。
+- 当前如果未来重开 `Phase 3` 这条线，首个最小切片应优先评估 issue decoupling，而不是直接放宽 unknown-address speculation 或扩大 replay 触发面。
 
 ## 下一步
 
-1. 如果继续推进 `Phase 3`，优先评估是否值得在当前最小收窄基线上继续扩 issue / replay / speculation，而不是回头重复讨论 decode 级 `BlockedByUnresolvedStore` 的基础边界。
+1. 当前不主动重开更激进的 `Phase 3` issue / replay / speculation 扩展；后续仅在出现真实 stall hotspot 证据或明确研究目标时再单开专项。
 2. 继续以 bug-driven hardening 的方式维护 guest runtime、`kernel_alpha` 十条基线和 reference correctness 矩阵，不做无关大重构。
 3. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内；`debug/frontend` 后续按真实 bug 或明确新需求补最小回归，不再主动扩大浏览器端压力面。
 

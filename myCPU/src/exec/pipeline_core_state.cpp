@@ -3,6 +3,7 @@
 void PipelineCoreState::reset(uint64_t pc) {
     flush(pc);
     stalled = false;
+    stall_reason = PipelineStallReason::None;
     trap_flush = false;
     replay_flush = false;
     committed = false;
@@ -28,6 +29,7 @@ void PipelineCoreState::flush(uint64_t pc) {
     redirect_pending = false;
     redirect_target = 0;
     lsq_observed_load_status = {};
+    stall_reason = PipelineStallReason::None;
 }
 
 void PipelineCoreState::begin_cycle(bool interrupt_serviceable) {
@@ -37,6 +39,7 @@ void PipelineCoreState::begin_cycle(bool interrupt_serviceable) {
     next_mem_wb = {};
     next_ex_mem_cycles_remaining = 0;
     stalled = false;
+    stall_reason = PipelineStallReason::None;
     trap_flush = false;
     replay_flush = false;
     committed = false;
@@ -44,6 +47,13 @@ void PipelineCoreState::begin_cycle(bool interrupt_serviceable) {
     redirect_pending = false;
     redirect_target = 0;
     lsq_observed_load_status = {};
+}
+
+void PipelineCoreState::note_stall(PipelineStallReason reason) {
+    stalled = true;
+    if (stall_reason == PipelineStallReason::None) {
+        stall_reason = reason;
+    }
 }
 
 void PipelineCoreState::commit_next_state() {

@@ -11,6 +11,17 @@ bool is_serializing_system_opcode(uint32_t opcode) {
     return opcode == 0x73;
 }
 
+PipelineStallReason stall_reason_for_load_status(const LsqLoadStatus& status) {
+    switch (status.state) {
+    case LsqLoadState::BlockedByUnresolvedStore:
+        return PipelineStallReason::BlockedByUnresolvedStore;
+    case LsqLoadState::BlockedByOverlappingStore:
+        return PipelineStallReason::BlockedByOverlappingStore;
+    default:
+        return PipelineStallReason::None;
+    }
+}
+
 std::optional<LsqLoadRequest> decode_load_lsq_request(const StageSlot& slot) {
     if (slot.insn.opcode != 0x03) {
         return std::nullopt;
@@ -108,7 +119,7 @@ void PipelineBackend::step_id() {
 
     if (state_.next_id_ex.slot.valid) {
         if (state_.if_id.slot.valid) {
-            state_.stalled = true;
+            state_.note_stall(PipelineStallReason::DecodeBackpressure);
         }
         return;
     }
@@ -133,7 +144,7 @@ void PipelineBackend::step_id() {
         decoded_slot.insn.raw == 0x00000073U ? state_.rename_map().map_source(17) : 0;
 
     if (!sources_ready(decoded_slot)) {
-        state_.stalled = true;
+        state_.note_stall(PipelineStallReason::SourceOperandsNotReady);
         return;
     }
 
@@ -152,7 +163,7 @@ void PipelineBackend::step_id() {
         if (load_status.blocks_issue()) {
             load_status.load_sequence_id = decoded_slot.sequence_id.value;
             state_.lsq_observed_load_status = load_status;
-            state_.stalled = true;
+            state_.note_stall(stall_reason_for_load_status(load_status));
             return;
         }
     }

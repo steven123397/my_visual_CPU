@@ -22,9 +22,11 @@
    `Phase 3-B/C` 执行模型边界。
 9. [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
    decode 级 `BlockedByUnresolvedStore` 串行化边界专项设计。
-10. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+10. [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
+   decode 边界收窄之后，`Phase 3` 是否继续扩更激进 `issue / replay / speculation` 的取舍结论。
+11. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
    `pipeline` 投机执行与提交契约。
-11. [plan/history_plan.md](plan/history_plan.md)
+12. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -34,6 +36,7 @@
   - [design/phase3_branch_prediction_design.md](design/phase3_branch_prediction_design.md)
   - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
   - [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
+  - [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
 - `debug/frontend`
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)

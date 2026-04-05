@@ -4,6 +4,7 @@
 #include "../../src/cpu.h"
 #include "../../src/devices/plic.h"
 #include "../../src/devices/uart16550.h"
+#include "../../src/debug/debug_protocol.h"
 #include "../../src/exec/pipeline_backend.h"
 #include "../../src/exec/pipeline_commit_boundary.h"
 #include "../../src/mem/bus.h"
@@ -31,6 +32,15 @@ constexpr uint32_t kInvalidInsn = 0xffffffffU;
 bool expect(bool condition, const char* message) {
     if (!condition) {
         std::fprintf(stderr, "%s\n", message);
+        return false;
+    }
+    return true;
+}
+
+bool expect_contains(const std::string& haystack, const char* needle, const char* message) {
+    if (haystack.find(needle) == std::string::npos) {
+        std::fprintf(stderr, "%s\n", message);
+        std::fprintf(stderr, "output was:\n%s\n", haystack.c_str());
         return false;
     }
     return true;
@@ -403,6 +413,18 @@ int main() {
                     "debug snapshot should continue exposing the overlapping-store decode stall reason")) {
             return 1;
         }
+
+        DebugSnapshot exported{};
+        exported.summary.pc = cpu.core().pc();
+        exported.summary.privilege = cpu.core().privilege_mode();
+        exported.summary.backend = backend.name();
+        exported.pipeline = snapshot.pipeline;
+        const std::string output = debug_snapshot_json(exported);
+        if (!expect_contains(output,
+                             "\"stall_reason\":\"blocked_by_overlapping_store\"",
+                             "serialized snapshot should expose the decode overlapping-store stall attribution")) {
+            return 1;
+        }
     }
 
     {
@@ -501,6 +523,50 @@ int main() {
         }
         if (!expect(snapshot.pipeline.replay_flush && !snapshot.pipeline.trap_flush,
                     "automatic replay should surface replay_flush without pretending a trap occurred")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.core().write_gpr(10, kDataAddr);
+
+        PipelineBackend backend(cpu, bus);
+        PipelineCoreState& state = backend.testing_state();
+
+        state.id_ex.slot.valid = true;
+        state.id_ex.slot.sequence_id.value = 1;
+        state.id_ex.slot.pc = kEntry;
+        state.id_ex.slot.raw = kLwX1FromX10;
+        state.id_ex.slot.insn.raw = kLwX1FromX10;
+        decode(kLwX1FromX10, &state.id_ex.slot.insn);
+        state.id_ex.slot.rs1v = kDataAddr;
+
+        state.ex_mem.slot.valid = true;
+        state.ex_mem.slot.sequence_id.value = 99;
+        state.ex_mem.slot.pc = kEntry + 4;
+        state.ex_mem.slot.raw = kSbX5ToX10Plus1;
+
+        backend.step();
+
+        const BackendDebugSnapshot snapshot = backend.debug_snapshot();
+        if (!expect(state.stalled,
+                    "load should stall when execute tries to issue into an occupied memory path")) {
+            return 1;
+        }
+
+        DebugSnapshot exported{};
+        exported.summary.pc = cpu.core().pc();
+        exported.summary.privilege = cpu.core().privilege_mode();
+        exported.summary.backend = backend.name();
+        exported.pipeline = snapshot.pipeline;
+        const std::string output = debug_snapshot_json(exported);
+        if (!expect_contains(output,
+                             "\"stall_reason\":\"memory_path_busy\"",
+                             "serialized snapshot should expose memory-path busy stall attribution")) {
             return 1;
         }
     }

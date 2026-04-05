@@ -51,6 +51,7 @@ struct PipelineDebugSnapshot {
     uint64_t last_sequence_id{0};
     std::vector<RetireTraceEntry> retire_trace{};
     bool stalled{false};
+    std::string stall_reason{"none"};
     bool redirected{false};
     uint64_t redirect_target{0};
     bool pending_fetch_fault{false};
