@@ -48,6 +48,7 @@
 - 当前 `Phase 3-B/C` 已经完成最小真实 `OoO execute`，而 decode 级 `BlockedByUnresolvedStore` 的第一轮边界收窄也已经落地。
 - 现在已确认：`BlockedByUnresolvedStore` 只表示“older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠年轻 load，而重叠场景继续暴露 `BlockedByOverlappingStore`。
 - 进一步评估后，当前主线结论已经明确：在 decode 级 load 前置分类、单 memory execute 通道和 coarse replay flush 仍然成立的前提下，主动继续扩更激进的 `issue / replay / memory disambiguation` 收益不足。
+- 最近又用真实 `debug server + pipeline` 对 `hello`、`guest_interactive_os_demo` 和 `guest_kernel_alpha_demo` 做了一轮短 smoke，观察到的主导 stall 仍主要是 `memory_path_busy` 和 `source_operands_not_ready`；没有形成稳定的 decode 级 load/store 串行化或 replay hotspot，因此当前也没有新的证据支持优先重开 issue decoupling。
 - 因此，这条线当前不再作为主动推进事项；只有在出现真实 workload stall 证据或明确研究目标时，才值得重开。
 - 如果未来重开，第一刀也应优先评估 issue decoupling，而不是直接放宽 unknown-address speculation 或进一步扩大 replay 触发面。
 
