@@ -21,7 +21,15 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
-## 完成时间线
+### 2026-04-05
+
+#### phase3-blocked-by-unresolved-store-boundary-plan
+
+- 原文件：`phase3_blocked_by_unresolved_store_boundary_plan.md`
+- 完成内容：把 decode 级 `BlockedByUnresolvedStore` 收窄到“仅 older store 地址未知才阻塞”，并补齐 `LSQ` / `pipeline` host smoke，守住 overlap block、automatic replay、forwarding 和 commit-boundary 既有合同。
+- 实现过程摘要：本轮只调整 `classify_load()` 判定顺序，不扩状态枚举，也不把问题直接放大为更激进的 memory speculation。
+- 结果参考：[blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)、[mainline_status.md](../status/mainline_status.md)
+
 
 ### 2026-03-25
 

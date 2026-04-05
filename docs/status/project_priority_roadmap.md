@@ -12,6 +12,7 @@
   - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
+  - [design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)
   - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
@@ -40,11 +41,11 @@
 - 下一轮更值得补的是把这些窄门禁继续外推到更长会话、真实浏览器交互时序和更厚的 e2e 压力，而不是再扩 UI 按钮或协议面。
 - 这条线的目标是把当前“教学演示可用”的链路继续压实成更稳的门禁，而不是把它扩成通用调试器。
 
-### 2. `Phase 3` decode 级 `BlockedByUnresolvedStore` 串行化边界
+### 2. `Phase 3` decode 级 `BlockedByUnresolvedStore` 边界后续判断
 
-- 当前 `Phase 3-B/C` 已经完成最小真实 `OoO execute`，下一步最具体的开放问题不是抽象的 “memory speculation”。
-- 更真实的 blocker 是：decode 阶段对 `BlockedByUnresolvedStore` 的处理仍然决定了现有 OoO 模型的保守边界。
-- 如果下一轮继续碰 `Phase 3`，应先把这条边界单列成专项问题，明确合同、风险和最小回归，再判断是否值得继续扩 issue / replay / memory disambiguation。
+- 当前 `Phase 3-B/C` 已经完成最小真实 `OoO execute`，而 decode 级 `BlockedByUnresolvedStore` 的第一轮边界收窄也已经落地。
+- 现在已确认：`BlockedByUnresolvedStore` 只表示“older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠年轻 load，而重叠场景继续暴露 `BlockedByOverlappingStore`。
+- 下一步如果还要继续碰这条线，重点应转向“是否值得继续扩 issue / replay / memory disambiguation”，而不是再重复讨论当前最小收窄本身。
 
 ### 3. 常态维护项
 

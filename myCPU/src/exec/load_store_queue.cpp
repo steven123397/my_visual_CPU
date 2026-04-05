@@ -144,7 +144,7 @@ LsqLoadStatus LoadStoreQueue::classify_load(uint64_t sequence_id, uint64_t load_
         if (entry.kind != LsqEntryKind::Store || entry.sequence_id >= sequence_id) {
             continue;
         }
-        if (!entry.address_ready || !entry.data_ready) {
+        if (!entry.address_ready) {
             return make_load_status(LsqLoadState::BlockedByUnresolvedStore, sequence_id, entry.sequence_id);
         }
         if (!entry.order_ready && ranges_overlap(entry.address, entry.size, load_addr, load_size)) {

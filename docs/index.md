@@ -20,9 +20,11 @@
    最小可交互 `interactive_os` 的 host / frontend / guest 合同。
 8. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
    `Phase 3-B/C` 执行模型边界。
-9. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+9. [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
+   decode 级 `BlockedByUnresolvedStore` 串行化边界专项设计。
+10. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
    `pipeline` 投机执行与提交契约。
-10. [plan/history_plan.md](plan/history_plan.md)
+11. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -31,6 +33,7 @@
   - [design/pipeline_core_integration.md](design/pipeline_core_integration.md)
   - [design/phase3_branch_prediction_design.md](design/phase3_branch_prediction_design.md)
   - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
+  - [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
 - `debug/frontend`
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)

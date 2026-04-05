@@ -31,10 +31,17 @@ int main() {
     }
 
     lsq.mark_address_ready(older_store, 0x80001000);
-    const LsqLoadStatus address_only_block = lsq.classify_load(2, 0x80002000, 4);
-    if (!expect(address_only_block.state == LsqLoadState::BlockedByUnresolvedStore &&
-                    address_only_block.store_sequence_id == 1,
-                "older store should keep reporting unresolved-store block while its data is still unresolved")) {
+    const LsqLoadStatus address_known_non_overlap = lsq.classify_load(2, 0x80002000, 4);
+    if (!expect(address_known_non_overlap.state == LsqLoadState::None &&
+                    !address_known_non_overlap.blocks_issue(),
+                "address-known non-overlapping younger load should no longer be blocked by unresolved-store semantics")) {
+        return 1;
+    }
+    const LsqLoadStatus address_known_overlap = lsq.classify_load(2, 0x80001000, 1);
+    if (!expect(address_known_overlap.state == LsqLoadState::BlockedByOverlappingStore &&
+                    address_known_overlap.store_sequence_id == 1 &&
+                    address_known_overlap.blocks_issue(),
+                "address-known overlapping younger load should report overlapping-store block even before store data is ready")) {
         return 1;
     }
 

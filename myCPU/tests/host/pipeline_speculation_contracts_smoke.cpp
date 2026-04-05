@@ -332,6 +332,84 @@ int main() {
         Bus bus(ram);
         CPU cpu;
         cpu_init(cpu, kEntry);
+        cpu.core().write_gpr(10, kDataAddr + 0x20);
+
+        PipelineBackend backend(cpu, bus);
+        PipelineCoreState& state = backend.testing_state();
+        LoadStoreQueue& lsq = state.lsq();
+        const LsqIndex older_store = lsq.enqueue_store({
+            .sequence_id = 1,
+            .size = 4,
+        });
+        lsq.mark_address_ready(older_store, kDataAddr);
+
+        state.if_id.slot.valid = true;
+        state.if_id.slot.sequence_id.value = 2;
+        state.if_id.slot.pc = kEntry;
+        state.if_id.slot.raw = kLwX1FromX10;
+
+        backend.step();
+
+        const BackendDebugSnapshot snapshot = backend.debug_snapshot();
+        if (!expect(!state.stalled && state.lsq_observed_load_status.state == LsqLoadState::None,
+                    "non-overlapping younger load should no longer stall decode once the older store address is known")) {
+            return 1;
+        }
+        if (!expect(state.id_ex.slot.valid && state.id_ex.slot.sequence_id.value == 2,
+                    "non-overlapping younger load should advance past decode instead of being held in if/id")) {
+            return 1;
+        }
+        if (!expect(snapshot.pipeline.ooo.lsq_load_state == "none",
+                    "debug snapshot should stop reporting unresolved-store block for the non-overlapping decode case")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.core().write_gpr(10, kDataAddr);
+
+        PipelineBackend backend(cpu, bus);
+        PipelineCoreState& state = backend.testing_state();
+        LoadStoreQueue& lsq = state.lsq();
+        const LsqIndex older_store = lsq.enqueue_store({
+            .sequence_id = 1,
+            .size = 4,
+        });
+        lsq.mark_address_ready(older_store, kDataAddr);
+
+        state.if_id.slot.valid = true;
+        state.if_id.slot.sequence_id.value = 2;
+        state.if_id.slot.pc = kEntry;
+        state.if_id.slot.raw = kLwX1FromX10;
+
+        backend.step();
+
+        const BackendDebugSnapshot snapshot = backend.debug_snapshot();
+        if (!expect(state.stalled &&
+                        state.lsq_observed_load_status.state == LsqLoadState::BlockedByOverlappingStore &&
+                        state.lsq_observed_load_status.load_sequence_id == 2 &&
+                        state.lsq_observed_load_status.store_sequence_id == 1,
+                    "overlapping younger load should still stall at decode with an explicit overlapping-store reason")) {
+            return 1;
+        }
+        if (!expect(snapshot.pipeline.stalled &&
+                        snapshot.pipeline.ooo.lsq_load_state == "blocked_by_overlapping_store" &&
+                        snapshot.pipeline.ooo.lsq_load_sequence_id == 2 &&
+                        snapshot.pipeline.ooo.lsq_store_sequence_id == 1,
+                    "debug snapshot should continue exposing the overlapping-store decode stall reason")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
 
         PipelineBackend backend(cpu, bus);
         LoadStoreQueue& lsq = backend.testing_state().lsq();
