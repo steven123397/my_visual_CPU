@@ -92,7 +92,7 @@ browser
 - `debug_protocol` 当前已拆成命令解码、响应序列化与 `CLI loop` 三个内部边界，但对外仍保持统一的 `--debug-cli` JSON line 协议。
 - `frontend/server/debug_server.mjs` 负责静态文件服务、HTTP API 入口与 WebSocket 接线。
 - `frontend/server/debug_server_runtime.mjs` 负责 session queue、generation guard、run loop 与 terminal 跟踪。
-- `frontend/server/debug_cli_session.mjs` 负责 `mycpu --debug-cli` 子进程生命周期、请求队列和 teardown。
+- `frontend/server/debug_cli_session.mjs` 负责 `mycpu --debug-cli` 子进程生命周期、请求队列和 teardown；当前 timeout 合同是 fail-closed，一旦某条请求超时，整个 session 直接失效并 teardown，避免没有 request id 的 JSON line 响应在迟到时错配后续请求。
 - `frontend/app` 只负责状态管理和视图呈现。
 
 ## 最小调试数据面
@@ -270,7 +270,16 @@ http://127.0.0.1:4173
 
 - 加 `debug_cli_smoke`
 - 加 Node server / state tests
+- 加 runtime 级持续 `run`、session replacement 与高吞吐 terminal 聚合回归
 - 保持 `make test` 与 `make test-pipeline` 为主线 correctness 门禁
+
+### 风险 4：CLI 请求超时后，迟到响应错配后续请求
+
+控制方式：
+
+- `debug_cli_session` 的 timeout 直接 fail-closed
+- timeout 后 teardown 当前子进程，要求上层通过 reload / 新 session 恢复
+- 用 Node 单测直接守住“timeout 后拒绝后续请求，避免响应串味”这条边界
 
 ## 实施顺序
 

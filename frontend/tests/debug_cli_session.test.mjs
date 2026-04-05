@@ -23,7 +23,7 @@ function createMockChild() {
   return child;
 }
 
-test('DebugCliSession request times out and keeps pending queue consistent', { timeout: 1000 }, async () => {
+test('DebugCliSession timeout invalidates the session before a late response can desync later requests', { timeout: 1000 }, async () => {
   const child = createMockChild();
   const session = new DebugCliSession({
     binaryPath: '/tmp/fake-mycpu',
@@ -36,11 +36,13 @@ test('DebugCliSession request times out and keeps pending queue consistent', { t
     /timed out/i,
   );
   assert.equal(session.pending.length, 0);
+  assert.equal(child.killed, true);
 
-  const next = session.request({ cmd: 'snapshot' });
   child.stdout.write(`${JSON.stringify({ type: 'snapshot', summary: { cycle: 7 } })}\n`);
-  const response = await next;
-  assert.equal(response.summary.cycle, 7);
+  await assert.rejects(
+    session.request({ cmd: 'snapshot' }),
+    /timed out|closed|exit|unavailable/i,
+  );
 
   await session.close();
 });

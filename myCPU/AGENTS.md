@@ -107,6 +107,7 @@
 - `BinaryLoader` 直接单测与 `Machine::load_elf()/load_binary()` reload/reset 回归已经接入现有门禁，当前明确语义是“替换 RAM 并 reset CPU/backend”。
 - `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照、predictor mode / counters / 最近一次预测字段，以及最小 `ROB / LSQ` 队列深度、head-sequence、`lsq_load_state / lsq_load_sequence_id / lsq_store_sequence_id` 与 `replay_flush` 观测面，守住 `CLINT` / `PLIC` / `UART`、predictor 和 OoO readiness 可观察性输出。
 - 真实 `debug server + mycpu --debug-cli` 端到端 smoke 与 Node/C++ 两侧预算常量收口已经落地，当前最小调试链路已进入现有门禁。
+- `2026-04-05` 又补上一组更窄的 `debug/frontend` 压力验证：Node/runtime 级持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` timeout fail-closed，避免迟到 CLI 响应错配后续请求。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](Makefile) 为准。
@@ -136,7 +137,7 @@
 - [src/devices/simple_storage.cpp](src/devices/simple_storage.cpp)
   当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
 - [src/debug](src/debug) 和 [../frontend](../frontend)
-  当前最小调试链路已经正式接入并可用，但长会话、持续 `run`、高吞吐 terminal 输入输出和真实浏览器节奏下的压力验证仍然不足。
+  当前最小调试链路已经正式接入并可用，Node/runtime 级持续 `run`、session replacement 与高吞吐 terminal 输入聚合回归也已补上；但更长会话和真实浏览器节奏下的压力验证仍然不足。
 - [src/platform/machine.cpp](src/platform/machine.cpp)
   `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
 - [src/exec/load_store_queue.cpp](src/exec/load_store_queue.cpp) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
@@ -160,7 +161,7 @@
 
 1. 继续稳住 simulator reference path 的 correctness 与可观察性。
 2. 在已接通的 correctness hardening、loader、guest smoke、debug smoke 和 `pipeline` 门禁基础上，继续按新增 bug 或新合同补最小回归，不重复堆叠低收益变体。
-3. `debug/frontend` 当前下一步是长会话、持续 `run`、高吞吐输入输出和真实浏览器节奏下的压力验证；不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
+3. `debug/frontend` 当前下一步是在新增 Node/runtime 窄门禁基础上，继续做更长会话和真实浏览器节奏下的压力验证；不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
 4. 如果继续推进 `Phase 3`，优先把 decode 级 `BlockedByUnresolvedStore` 串行化边界单列成专项问题，再判断是否继续更激进的 issue / replay / speculation。
 5. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
 

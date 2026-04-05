@@ -35,9 +35,13 @@
 - `pipeline core`、`make test-pipeline`、`debug_session/protocol`、本地 Node 调试服务和浏览器前端都已经正式接入主线，不再是待合入功能。
 - `P1` 结构收口已经全部完成；`P2` 首轮验证补洞也已完成两轮收口，新增 loader 单测、guest smoke 窄单测、真实 debug e2e smoke、预算常量收口和 pipeline smoke 拆分都已进入现有门禁。
 - 当前主线不再把重点放在继续扩功能面，而是转向两件更具体的事：`debug/frontend` 的长会话 / 高吞吐压力验证，以及 `Phase 3` decode 级 `BlockedByUnresolvedStore` 串行化边界。
+- `2026-04-05` 已为 `debug/frontend` 新增一组更窄的 Node/runtime 压力验证：持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` 请求超时后的 fail-closed 边界，避免迟到 CLI 响应错配后续请求。
 
 ## 近期时间线（按时间倒序）
 
+- `2026-04-05`
+  - `debug/frontend` 新增一组更窄的 runtime 级压力验证：持续 `run/pause` 广播、运行中 session replacement generation guard，以及更高吞吐 terminal 输入聚合。
+  - `DebugCliSession` 补上 timeout fail-closed 行为：一旦 CLI 请求超时，当前 session 直接失效并 teardown，避免没有 request id 的 JSON line 响应在迟到时错配后续请求。
 - `2026-04-04`
   - 完成 `P2` 首轮验证补洞两轮收口：`BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` 与 `user_program_smoke` 更窄直测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node/C++ 两侧调试预算常量收口，以及 `pipeline` mega-smoke 拆分。
   - 同日也完成最后一批 `P1` 结构收口：`pipeline_backend` 拆分、`debug/frontend` 协议与运行时边界收口、guest public header 与 smoke orchestration 收口，以及 reference / platform 合同补洞。
@@ -55,7 +59,7 @@
 
 ## 当前仍然有效的风险 / 限制
 
-- `debug/frontend` 当前已经可用，但长会话、持续 `run`、更高吞吐输入输出和真实浏览器时序下的压力验证仍然不足。
+- `debug/frontend` 当前已经可用，并且 Node/runtime 级持续 `run`、session replacement 与高吞吐 terminal 输入聚合回归已经落地；但更长会话、真实浏览器时序和更厚的 e2e 压力验证仍然不足。
 - Node 侧 `debug_budget.mjs` 与 C++ 侧 `debug_budget.h` 已分别收口，但它们仍是分语言维护，不是跨语言单一事实来源。
 - guest runtime 的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime` 等边界已经比早期清晰得多，但后续仍要防止重新膨胀回大文件或重新暴露临时内部布局。
 - `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
@@ -63,7 +67,7 @@
 
 ## 下一步
 
-1. 为 `debug/frontend` 补更长会话、持续 `run`、更高吞吐输入输出和真实浏览器节奏下的压力验证。
+1. 在新增的 runtime 级窄门禁基础上，为 `debug/frontend` 继续补更长会话、真实浏览器节奏和更厚的 e2e 压力验证。
 2. 如果继续推进 `Phase 3`，先把 decode 级 `BlockedByUnresolvedStore` 串行化边界单列成专项问题，再决定是否做更激进的 issue / replay / speculation。
 3. 继续以 bug-driven hardening 的方式维护 guest runtime、`kernel_alpha` 十条基线和 reference correctness 矩阵，不做无关大重构。
 4. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内，避免在现有门禁没有继续增强前再扩更多功能面。

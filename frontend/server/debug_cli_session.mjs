@@ -117,11 +117,16 @@ export class DebugCliSession {
       };
       if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
         pending.timeout = setTimeout(() => {
-          const index = this.pending.indexOf(pending);
-          if (index >= 0) {
-            this.pending.splice(index, 1);
+          if (this.unavailableError) {
+            return;
           }
-          pending.reject(new Error(`debug cli ${commandName} timed out after ${timeoutMs}ms`));
+          const error = new Error(`debug cli ${commandName} timed out after ${timeoutMs}ms`);
+          this.teardown(error);
+          try {
+            this.child.kill();
+          } catch {
+            // Ignore shutdown races once the session is already unavailable.
+          }
         }, timeoutMs);
       }
 

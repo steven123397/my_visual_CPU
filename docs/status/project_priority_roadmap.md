@@ -36,7 +36,8 @@
 ### 1. `debug/frontend` 长会话与高吞吐压力验证
 
 - 真实 `debug server + mycpu --debug-cli` 端到端 smoke 已经落地，但它仍主要覆盖最小交互和短会话。
-- 下一轮更值得补的是持续 `run`、更高频 terminal 输入输出、真实浏览器交互时序和会话替换压力，而不是再扩 UI 按钮或协议面。
+- 当前已经补上一组更窄的 Node/runtime 回归：持续 `run/pause`、运行中 session replacement，以及更高吞吐 terminal 输入聚合。
+- 下一轮更值得补的是把这些窄门禁继续外推到更长会话、真实浏览器交互时序和更厚的 e2e 压力，而不是再扩 UI 按钮或协议面。
 - 这条线的目标是把当前“教学演示可用”的链路继续压实成更稳的门禁，而不是把它扩成通用调试器。
 
 ### 2. `Phase 3` decode 级 `BlockedByUnresolvedStore` 串行化边界
