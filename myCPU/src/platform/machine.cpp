@@ -32,10 +32,11 @@ void Machine::rebuild_backend() {
 }
 
 void Machine::finish_image_load(uint64_t entry, Ram& staged_ram) {
-    // Image reload swaps in a freshly loaded RAM image; MMIO/device state is
-    // intentionally left intact until we decide whether Machine should grow a
-    // full platform reset contract.
+    // Image reload swaps in a freshly loaded RAM image; device state is still
+    // intentionally preserved, but reload should not carry over stale storage
+    // command errors into the next guest image.
     ram_.swap(staged_ram);
+    bus_.try_store(STORAGE_BASE + STORAGE_REG_COMMAND, STORAGE_CMD_NONE, 8);
     cpu_init(cpu_, entry);
     rebuild_backend();
     loaded_ = true;

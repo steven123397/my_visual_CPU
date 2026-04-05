@@ -37,6 +37,9 @@ static size_t g_pmm_total_pages_value = 0;
 static size_t g_pmm_free_pages_value = 0;
 static bool g_vm_create_result = true;
 static vm_address_space_t* g_vm_create_address_space = NULL;
+static int g_vm_destroy_calls = 0;
+static vm_address_space_t* g_vm_destroy_arg = NULL;
+static bool g_vm_destroy_result = true;
 static int g_vm_map_identity_calls = 0;
 static uintptr_t g_vm_map_identity_bases[4];
 static uint64_t g_vm_map_identity_flags[4];
@@ -253,6 +256,12 @@ bool vm_address_space_create(vm_address_space_t** out_space) {
     return g_vm_create_result;
 }
 
+bool vm_address_space_destroy(vm_address_space_t* address_space) {
+    g_vm_destroy_calls += 1;
+    g_vm_destroy_arg = address_space;
+    return g_vm_destroy_result;
+}
+
 bool vm_address_space_map_identity_1g(vm_address_space_t* address_space,
                                       uintptr_t base,
                                       uint64_t flags) {
@@ -384,6 +393,9 @@ static void reset_stub_state(void) {
     g_pmm_free_pages_value = 256U;
     g_vm_create_result = true;
     g_vm_create_address_space = (vm_address_space_t*)(uintptr_t)0x2468U;
+    g_vm_destroy_calls = 0;
+    g_vm_destroy_arg = NULL;
+    g_vm_destroy_result = true;
     g_vm_map_identity_calls = 0;
     memset(g_vm_map_identity_bases, 0, sizeof(g_vm_map_identity_bases));
     memset(g_vm_map_identity_flags, 0, sizeof(g_vm_map_identity_flags));
@@ -512,6 +524,9 @@ static int test_runtime_entry_bringup_helper(void) {
 
 static int test_runtime_identity_superpage_bringup_helper(void) {
     kernel_runtime_t runtime;
+    vm_address_space_t* owned_address_space = NULL;
+    vm_address_space_t* stale_address_space =
+        (vm_address_space_t*)(uintptr_t)0x1357U;
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
@@ -531,6 +546,7 @@ static int test_runtime_identity_superpage_bringup_helper(void) {
         g_console_chars[1] != 'M' || g_console_chars[2] != 'V') {
         return fail("expected runtime identity superpage bring-up helper to run KMV flow");
     }
+    owned_address_space = kernel_runtime_address_space(&runtime);
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
@@ -539,6 +555,10 @@ static int test_runtime_identity_superpage_bringup_helper(void) {
     if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
         return fail("expected runtime identity superpage bring-up helper to propagate mapping failure");
     }
+    if (g_vm_destroy_calls != 1 || g_vm_destroy_arg != g_vm_create_address_space ||
+        kernel_runtime_address_space(&runtime) != NULL) {
+        return fail("expected runtime identity superpage bring-up helper to destroy failed address space after mapping failure");
+    }
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
@@ -546,6 +566,46 @@ static int test_runtime_identity_superpage_bringup_helper(void) {
     g_riscv_satp_value = UINT64_C(0x9999);
     if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
         return fail("expected runtime identity superpage bring-up helper to validate satp");
+    }
+    if (g_vm_destroy_calls != 1 || g_vm_destroy_arg != g_vm_create_address_space ||
+        kernel_runtime_address_space(&runtime) != NULL) {
+        return fail("expected runtime identity superpage bring-up helper to destroy failed address space after satp mismatch");
+    }
+
+    reset_stub_state();
+    kernel_runtime_set_address_space(&runtime, owned_address_space);
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
+    g_pmm_free_pages_value = 0;
+    if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
+        return fail("expected runtime identity superpage bring-up helper to fail when reused runtime exhausts PMM pages");
+    }
+    if (g_vm_destroy_calls != 1 || g_vm_destroy_arg != owned_address_space ||
+        kernel_runtime_address_space(&runtime) != NULL) {
+        return fail("expected runtime identity superpage bring-up helper to destroy previously owned address space before retry failure");
+    }
+
+    reset_stub_state();
+    kernel_runtime_set_address_space(&runtime, owned_address_space);
+    g_vm_destroy_result = false;
+    if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
+        return fail("expected runtime identity superpage bring-up helper to fail closed when prior teardown fails");
+    }
+    if (g_vm_destroy_calls != 1 || g_vm_destroy_arg != owned_address_space ||
+        kernel_runtime_address_space(&runtime) != owned_address_space ||
+        g_memory_init_calls != 0 || g_pmm_init_calls != 0) {
+        return fail("expected runtime identity superpage bring-up helper to preserve owned address space when prior teardown fails");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    kernel_runtime_set_address_space(&runtime, stale_address_space);
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
+    g_pmm_free_pages_value = 0;
+    if (kernel_runtime_run_identity_superpage_bringup(&runtime)) {
+        return fail("expected runtime identity superpage bring-up helper to fail when PMM free pages are exhausted");
+    }
+    if (kernel_runtime_address_space(&runtime) != NULL) {
+        return fail("expected runtime identity superpage bring-up helper to clear stale address space on early failure");
     }
 
     return 0;
@@ -607,6 +667,8 @@ static int test_interrupt_policy_adapter(void) {
 
 static int test_runtime_bringup_helper(void) {
     kernel_runtime_t runtime;
+    vm_address_space_t* owned_address_space =
+        (vm_address_space_t*)(uintptr_t)0x1357U;
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
@@ -648,6 +710,37 @@ static int test_runtime_bringup_helper(void) {
         g_common_bringup_options->pre_vm_context != NULL ||
         !g_common_bringup_options->map_managed_memory) {
         return fail("expected runtime bring-up helper to clear pre-vm context when unused");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    kernel_runtime_set_address_space(&runtime, owned_address_space);
+    g_common_bringup_result = false;
+    if (kernel_runtime_run_bringup(&runtime,
+                                   KERNEL_BRINGUP_MMIO_STORAGE,
+                                   0,
+                                   NULL)) {
+        return fail("expected runtime bring-up helper to fail when reused runtime common bring-up fails");
+    }
+    if (g_vm_destroy_calls != 1 || g_vm_destroy_arg != owned_address_space ||
+        kernel_runtime_address_space(&runtime) != NULL) {
+        return fail("expected runtime bring-up helper to destroy previously owned address space before common bring-up failure");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    kernel_runtime_set_address_space(&runtime, owned_address_space);
+    g_vm_destroy_result = false;
+    if (kernel_runtime_run_bringup(&runtime,
+                                   KERNEL_BRINGUP_MMIO_STORAGE,
+                                   0,
+                                   NULL)) {
+        return fail("expected runtime bring-up helper to fail closed when prior common bring-up teardown fails");
+    }
+    if (g_vm_destroy_calls != 1 || g_vm_destroy_arg != owned_address_space ||
+        kernel_runtime_address_space(&runtime) != owned_address_space ||
+        g_common_bringup_trap_context != NULL) {
+        return fail("expected runtime bring-up helper to preserve owned address space when prior common bring-up teardown fails");
     }
 
     if (kernel_runtime_run_bringup(NULL,
@@ -850,6 +943,19 @@ static int test_storage_signature_helper(void) {
     memcpy(g_storage_page, "Fail", 4);
     if (kernel_runtime_complete_storage_signature_check('S')) {
         return fail("expected runtime storage signature helper to reject bad signature");
+    }
+    if (g_last_freed_page != g_storage_page) {
+        return fail("expected runtime storage signature helper to free page on bad signature");
+    }
+
+    reset_stub_state();
+    g_storage_page_allocated = true;
+    g_storage_read_block_result = 1U;
+    if (kernel_runtime_complete_storage_signature_check('S')) {
+        return fail("expected runtime storage signature helper to propagate storage read failure");
+    }
+    if (g_last_freed_page != g_storage_page) {
+        return fail("expected runtime storage signature helper to free page on read failure");
     }
 
     reset_stub_state();

@@ -36,9 +36,11 @@
 - 默认 `functional` reference path、`make test` 主门禁，以及 `kernel_alpha` 正向与九条负向回归都已稳定接通。
 - `pipeline core`、`make test-pipeline`、`debug_session/protocol`、本地 Node 调试服务和浏览器前端都已经正式接入主线，不再是待合入功能。
 - `P1` 结构收口已经全部完成；`P2` 首轮验证补洞也已完成两轮收口，新增 loader 单测、guest smoke 窄单测、真实 debug e2e smoke、预算常量收口和 pipeline smoke 拆分都已进入现有门禁。
-- 当前主线不再把重点放在继续扩功能面；`debug/frontend` 对当前单用户、本地教学/调试使用已经有足够门禁，下一步回到 reference correctness、guest 基线和 `Phase 3` 后续取舍这类更核心的问题。
-- `2026-04-05` 已为 `debug/frontend` 新增一组更窄的 Node/runtime 压力验证：持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` 请求超时后的 fail-closed 边界，避免迟到 CLI 响应错配后续请求。
-- `2026-04-05` 也已继续把 `debug/frontend` 压力验证外推到更长会话和更像浏览器的操作节奏：新增 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
+- `2026-04-05` 又补上一条更窄的 platform hardening：`Machine::load_elf()/load_binary()` 在保留“非完整平台 reset”语义的前提下，image reload 不再把上一轮 guest 留下的 `SimpleStorage` sticky error 带进新镜像；对应 `machine_loader_reset` 已补上 binary/ELF 两侧回归。
+- `2026-04-05` 又补上一条更窄的 guest runtime hardening：`kernel_runtime_complete_storage_signature_check()` 现在即使在 storage read 失败或签名不匹配时也会释放临时 PMM 页，避免把页泄漏藏在 `kernel_alpha` storage probe/signature 的失败路径里；对应 `kernel_runtime` 单测已补上坏签名与读失败两侧回归。
+- `2026-04-05` 又补上一条更窄的 guest runtime rollback hardening：`kernel_runtime_run_identity_superpage_bringup()` 现在在复用同一个 `kernel_runtime_t` 时会先清空旧 `address_space`，因此即使随后在 PMM 早期检查、mapping failure 或 satp mismatch 上失败，也不会把上一轮 stale VM 指针泄露给后续路径；对应 `kernel_runtime` 单测已补上 runtime reuse + early failure 回归。
+- `2026-04-05` 又继续补上一条更深一层的 guest runtime reuse teardown hardening：`kernel_runtime_run_identity_superpage_bringup()` 与 `kernel_runtime_run_common_bringup()` 在复用同一个 `kernel_runtime_t` 时，现在都会先走 `vm_address_space_destroy()` 正式 teardown 已拥有的旧 VM；若 teardown 失败则直接 fail-closed，不再只是把旧 `address_space` 指针藏起来。对应 `kernel_runtime` / `kernel_bringup` 窄门禁，以及 `make test`、`make test-pipeline` 已全部守住。
+- `2026-04-05` 已为 `debug/frontend` 新增一组更窄的 Node/runtime 压力验证：持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` 请求超时后的 fail-closed 边界，避免迟到 CLI 响应错配后续请求。- `2026-04-05` 也已继续把 `debug/frontend` 压力验证外推到更长会话和更像浏览器的操作节奏：新增 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
 - `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界按专项设计落地为“仅 unknown-address 阻塞”：地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续返回 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已守住。
 - `2026-04-05` 已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：考虑到当前 backend 仍是 decode 级 load 前置分类、单 memory execute 通道与 coarse replay flush，继续主动扩大更激进的 `issue / replay / speculation` 当前收益不足；后续仅在出现真实 workload 证据或明确研究目标时重开。
 - `2026-04-05` 也已补上一层更窄的 `pipeline stall attribution` 观测：当前 debug snapshot / CLI 已能直接暴露 `stall_reason`，区分 `blocked_by_unresolved_store`、`blocked_by_overlapping_store`、`memory_path_busy`、`non_ram_load_waiting_for_rob_head`、`serializing_system_wait_for_rob_head`、`source_operands_not_ready` 和 `decode_backpressure`，供后续是否重开 issue decoupling 判断使用。
@@ -48,6 +50,8 @@
 ## 近期时间线（按时间倒序）
 
 - `2026-04-05`
+  - `kernel_runtime_run_identity_superpage_bringup()` 补上一条更窄的 runtime reuse rollback 合同：函数入口先清空旧 `address_space`，避免复用同一个 `kernel_runtime_t` 时在 PMM 早退、mapping failure 或 satp mismatch 后仍暴露 stale VM 指针；对应 `kernel_runtime` 单测已补上 runtime reuse + early failure 回归。
+  - `kernel_runtime_run_identity_superpage_bringup()` 与 `kernel_runtime_run_common_bringup()` 随后又继续补上一层更深的 runtime reuse teardown 合同：复用同一个 `kernel_runtime_t` 时，现在都会先走 `vm_address_space_destroy()` 正式 teardown 已拥有的旧 VM；若 teardown 失败则直接 fail-closed，不再只是把旧 `address_space` 指针藏起来。对应 `kernel_runtime` / `kernel_bringup` 窄门禁，以及 `make test`、`make test-pipeline` 已全部通过。
   - `debug/frontend` 新增一组更窄的 runtime 级压力验证：持续 `run/pause` 广播、运行中 session replacement generation guard，以及更高吞吐 terminal 输入聚合。
   - `debug/frontend` 同日也继续外推到更长会话和更像浏览器的节奏：repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
   - `DebugCliSession` 补上 timeout fail-closed 行为：一旦 CLI 请求超时，当前 session 直接失效并 teardown，避免没有 request id 的 JSON line 响应在迟到时错配后续请求。

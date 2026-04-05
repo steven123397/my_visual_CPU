@@ -67,10 +67,30 @@ bool kernel_runtime_run_entry_bringup(kernel_runtime_t* runtime) {
            trap_active_context() == trap_context;
 }
 
+static bool kernel_runtime_destroy_owned_address_space(kernel_runtime_t* runtime) {
+    vm_address_space_t* address_space = kernel_runtime_address_space(runtime);
+
+    if (address_space == NULL) {
+        return true;
+    }
+
+    if (!vm_address_space_destroy(address_space)) {
+        return false;
+    }
+
+    kernel_runtime_set_address_space(runtime, NULL);
+    return true;
+}
+
 bool kernel_runtime_run_identity_superpage_bringup(kernel_runtime_t* runtime) {
     vm_address_space_t* address_space = NULL;
 
-    if (runtime == NULL || !kernel_runtime_run_entry_bringup(runtime)) {
+    if (runtime == NULL) {
+        return false;
+    }
+
+    if (!kernel_runtime_destroy_owned_address_space(runtime) ||
+        !kernel_runtime_run_entry_bringup(runtime)) {
         return false;
     }
 
@@ -93,6 +113,9 @@ bool kernel_runtime_run_identity_superpage_bringup(kernel_runtime_t* runtime) {
         !vm_address_space_is_enabled(address_space) ||
         !vm_address_space_is_active(address_space) ||
         riscv_read_satp() != vm_address_space_satp_value(address_space)) {
+        if (address_space != NULL && !vm_address_space_destroy(address_space)) {
+            kernel_runtime_set_address_space(runtime, address_space);
+        }
         return false;
     }
 
@@ -154,8 +177,12 @@ bool kernel_runtime_complete_storage_signature_check(char marker) {
         storage_page != NULL && storage_read_block(0, storage_page) == 0 &&
         storage_page[0] == 'S' && storage_page[1] == 't' &&
         storage_page[2] == 'o' && storage_page[3] == 'r';
+    bool freed = false;
 
-    if (storage_page == NULL || !valid_signature || !pmm_free_page(storage_page)) {
+    if (storage_page != NULL) {
+        freed = pmm_free_page(storage_page);
+    }
+    if (storage_page == NULL || !valid_signature || !freed) {
         return false;
     }
 
@@ -227,6 +254,10 @@ bool kernel_runtime_run_common_bringup(
     }
 
     if (options == NULL) {
+        return false;
+    }
+
+    if (!kernel_runtime_destroy_owned_address_space(runtime)) {
         return false;
     }
 

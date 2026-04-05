@@ -82,6 +82,20 @@ std::string write_temp_binary(const std::array<uint8_t, 4>& bytes, size_t count)
     return path;
 }
 
+std::string write_temp_storage_image() {
+    const std::string path = create_temp_path("mycpu_storage_img");
+    const std::array<uint8_t, 4> bytes = {'S', 't', 'o', 'r'};
+    std::ofstream file(path, std::ios::binary);
+    if (!file) {
+        std::remove(path.c_str());
+        throw std::runtime_error("failed to open temp storage image for writing");
+    }
+    file.write(reinterpret_cast<const char*>(bytes.data()),
+               static_cast<std::streamsize>(bytes.size()));
+    file.close();
+    return path;
+}
+
 Elf64Ehdr make_ehdr(uint64_t entry) {
     Elf64Ehdr ehdr{};
     std::memcpy(ehdr.e_ident, &kElfMagic, sizeof(kElfMagic));
@@ -163,6 +177,25 @@ bool expect_loaded_bytes(Machine& machine,
                   "reloaded image should clear stale fourth-byte data from the previous image");
 }
 
+bool expect_storage_error_cleared(const Machine& machine) {
+    return expect((machine.storage().status() & STORAGE_STATUS_ERROR) == 0,
+                  "image reload should clear sticky storage error status") &&
+           expect(machine.storage().error_code() == STORAGE_ERR_NONE,
+                  "image reload should clear sticky storage error code");
+}
+
+bool trigger_no_media_storage_error(Machine& machine) {
+    machine.storage().clear_image();
+    return expect(machine.bus().try_store(STORAGE_BASE + STORAGE_REG_COMMAND,
+                                          STORAGE_CMD_READ,
+                                          8),
+                  "storage error setup should issue a read command after detaching media") &&
+           expect((machine.storage().status() & STORAGE_STATUS_ERROR) != 0,
+                  "storage error setup should raise sticky error status before reload") &&
+           expect(machine.storage().error_code() == STORAGE_ERR_NO_MEDIA,
+                  "storage error setup should raise no-media before reload");
+}
+
 }  // namespace
 
 int main() {
@@ -174,43 +207,66 @@ int main() {
         const std::string second_binary = write_temp_binary(second_bytes, 2);
         const std::string first_elf = write_temp_elf(first_bytes, 4, kElfAddr);
         const std::string second_elf = write_temp_elf(second_bytes, 2, kElfAddr);
+        const std::string storage_image = write_temp_storage_image();
 
         {
             Machine machine;
+            machine.attach_storage_image(storage_image);
             machine.load_binary(first_binary, kBinaryAddr);
             machine.cpu().core().write_gpr(1, 0xDEADBEEF);
             machine.cpu().core().set_cycle(17);
             machine.cpu().core().set_instret(9);
             machine.cpu().core().set_halted(true);
             machine.cpu().core().set_privilege_mode(PrivilegeMode::Supervisor);
-
-            machine.load_binary(second_binary, kBinaryAddr);
-            if (!expect_core_reset(machine, kBinaryAddr) ||
-                !expect_loaded_bytes(machine, kBinaryAddr, second_bytes[0], second_bytes[1])) {
+            if (!trigger_no_media_storage_error(machine)) {
                 std::remove(first_binary.c_str());
                 std::remove(second_binary.c_str());
                 std::remove(first_elf.c_str());
                 std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
+                return 1;
+            }
+
+            machine.load_binary(second_binary, kBinaryAddr);
+            if (!expect_core_reset(machine, kBinaryAddr) ||
+                !expect_loaded_bytes(machine, kBinaryAddr, second_bytes[0], second_bytes[1]) ||
+                !expect_storage_error_cleared(machine)) {
+                std::remove(first_binary.c_str());
+                std::remove(second_binary.c_str());
+                std::remove(first_elf.c_str());
+                std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
                 return 1;
             }
         }
 
         {
             Machine machine;
+            machine.attach_storage_image(storage_image);
             machine.load_elf(first_elf);
             machine.cpu().core().write_gpr(1, 0x1234);
             machine.cpu().core().set_cycle(21);
             machine.cpu().core().set_instret(5);
             machine.cpu().core().set_halted(true);
             machine.cpu().core().set_privilege_mode(PrivilegeMode::Supervisor);
-
-            machine.load_elf(second_elf);
-            if (!expect_core_reset(machine, kElfAddr) ||
-                !expect_loaded_bytes(machine, kElfAddr, second_bytes[0], second_bytes[1])) {
+            if (!trigger_no_media_storage_error(machine)) {
                 std::remove(first_binary.c_str());
                 std::remove(second_binary.c_str());
                 std::remove(first_elf.c_str());
                 std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
+                return 1;
+            }
+
+            machine.load_elf(second_elf);
+            if (!expect_core_reset(machine, kElfAddr) ||
+                !expect_loaded_bytes(machine, kElfAddr, second_bytes[0], second_bytes[1]) ||
+                !expect_storage_error_cleared(machine)) {
+                std::remove(first_binary.c_str());
+                std::remove(second_binary.c_str());
+                std::remove(first_elf.c_str());
+                std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
                 return 1;
             }
         }
@@ -219,6 +275,7 @@ int main() {
         std::remove(second_binary.c_str());
         std::remove(first_elf.c_str());
         std::remove(second_elf.c_str());
+        std::remove(storage_image.c_str());
         return 0;
     } catch (const std::exception& ex) {
         std::fprintf(stderr, "%s\n", ex.what());
