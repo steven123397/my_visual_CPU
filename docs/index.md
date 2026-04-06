@@ -14,19 +14,21 @@
    `kernel_alpha` bring-up 子线状态。
 5. [design/regression_completion_criteria.md](design/regression_completion_criteria.md)
    当前 Phase 1 / Phase 2 回归收口标准。
-6. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+6. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+   Spike 外部差分验证的当前实现边界、用户入口和扩展方向。
+7. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
    `debug_session/protocol + frontend` 的正式接入边界。
-7. [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
+8. [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
    最小可交互 `interactive_os` 的 host / frontend / guest 合同。
-8. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
+9. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
    `Phase 3-B/C` 执行模型边界。
-9. [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
+10. [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
    decode 级 `BlockedByUnresolvedStore` 串行化边界专项设计。
-10. [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
+11. [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
    decode 边界收窄之后，`Phase 3` 是否继续扩更激进 `issue / replay / speculation` 的取舍结论。
-11. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+12. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
    `pipeline` 投机执行与提交契约。
-12. [plan/history_plan.md](plan/history_plan.md)
+13. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -49,6 +51,9 @@
   - [design/kernel_alpha_storage_error_contract.md](design/kernel_alpha_storage_error_contract.md)
 - `代码审查 / 修改`
   - [status/code_reself_status.md](status/code_reself_status.md)
+- `Spike 外部差分验证`
+  - [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+  - [plan/history_plan.md#spike-external-differential-validation-plan](plan/history_plan.md#spike-external-differential-validation-plan)
 
 ## 目录说明
 

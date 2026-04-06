@@ -30,6 +30,8 @@ Thumbs.db
 !/myCPU/tests/host/*.cpp
 !/myCPU/tests/host/*.h
 !/myCPU/tests/host/*.sh
+!/myCPU/tests/host/spike_differential/
+!/myCPU/tests/host/spike_differential/*.h
 
 # Logs and coverage
 *.log

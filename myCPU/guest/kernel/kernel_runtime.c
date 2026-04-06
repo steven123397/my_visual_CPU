@@ -59,6 +59,7 @@ bool kernel_runtime_run_entry_bringup(kernel_runtime_t* runtime) {
         return false;
     }
 
+    supervisor_runtime_interrupt_state_init(&runtime->interrupts);
     memory_init();
     runtime_context_reset();
     trap_context_init(trap_context);
@@ -260,6 +261,8 @@ bool kernel_runtime_run_common_bringup(
     if (!kernel_runtime_destroy_owned_address_space(runtime)) {
         return false;
     }
+
+    supervisor_runtime_interrupt_state_reset_counters(&runtime->interrupts);
 
     bound_options = *options;
     if (bound_options.pre_vm_setup != NULL &&

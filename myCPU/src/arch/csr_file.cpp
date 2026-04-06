@@ -15,7 +15,7 @@ constexpr uint64_t SATP_MODE_BARE = 0ULL;
 constexpr uint64_t SATP_MODE_SV39 = 8ULL;
 constexpr uint64_t SATP_PPN_MASK = (1ULL << 44) - 1ULL;
 constexpr uint64_t MISA_IMPLEMENTED_VALUE =
-    (2ULL << 62) | (1ULL << 12) | (1ULL << 8) | (1ULL << 2) | (1ULL << 0);
+    (2ULL << 62) | (1ULL << 20) | (1ULL << 18) | (1ULL << 12) | (1ULL << 8);
 constexpr uint64_t MEDELEG_MASK =
     (1ULL << 1) |   // instruction access fault
     (1ULL << 2) |   // illegal instruction

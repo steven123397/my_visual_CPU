@@ -21,6 +21,7 @@
 - 当前活跃计划：
   - 当前无活跃计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#spike-external-differential-validation-plan](../plan/history_plan.md#spike-external-differential-validation-plan)
   - [plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1)
   - [plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
   - [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
@@ -30,6 +31,7 @@
 ## 当前判断
 
 - `P0` correctness 修补已经完成，`P1` 结构收口已经全部关闭，`P2` 首轮验证补洞也已经完成两轮收口。
+- Spike 外部差分验证 V1 也已完成第一轮落地；当前已经有一条独立离线的 `myCPU vs Spike` final-state oracle，但它还不构成新的主线扩展任务。
 - 因此，当前路线图不再需要继续维护一长串“已完成问题记录”；现在真正开放的事项已经缩小到少数几个具体边界。
 - 当前如果新开计划，优先级应围绕 reference / guest 的 bug-driven hardening 展开；`Phase 3` 的 decode 边界后续判断已经完成，`debug/frontend` 也不再需要主动新开更重的浏览器压力验证计划。
 
@@ -52,7 +54,13 @@
 - 因此，这条线当前不再作为主动推进事项；只有在出现真实 workload stall 证据或明确研究目标时，才值得重开。
 - 如果未来重开，第一刀也应优先评估 issue decoupling，而不是直接放宽 unknown-address speculation 或进一步扩大 replay 触发面。
 
-### 3. 常态维护项
+### 3. Spike 外部差分进入维护态，不主动扩成更大框架
+
+- `make test-host-spike_differential` 当前已经可用，能为一批 host 微场景提供真实 `myCPU vs Spike` final-state oracle。
+- 这条线当前最有价值的角色，是在 reference correctness 出现疑点时提供外部真值，而不是立刻扩成默认主门禁或统一多后端框架。
+- 因此，后续只按真实 bug 或明确收益继续补最小场景面，例如 `Sv39 / page fault`、更细 trap checkpoint、以及不依赖设备 side effect 的 privilege / CSR 合同；当前不主动扩到设备场景、guest workload 或逐提交 trace framework。
+
+### 4. 常态维护项
 
 - 继续维护 reference correctness 矩阵，不让 illegal / MMIO / ELF / CSR / Sv39 合同回退。
 - 继续守住 `kernel_alpha` 十条 guest 基线和 `guest_supervisor_demo` 的稳定输出。
@@ -65,9 +73,11 @@
 3. 不把 `interactive_os` 当作新的产品主线；它当前仍应服务于 monitor / terminal / 调试链路验证。
 4. 不把 `SimpleStorage` 更完整的设备模型抢在当前 correctness / structure hardening 前面推进。
 5. 不在当前单发射 + coarse replay 基线上，继续主动扩大更激进的 `Phase 3` issue / replay / memory disambiguation。
+6. 不把 Spike 外部差分在当前阶段直接扩大成默认主门禁、统一多 oracle framework，或设备 / guest 系统级大场景验证。
 
 ## 如需新开计划
 
 1. 如果后续出现真实 `Phase 3` stall hotspot，再围绕“issue decoupling 是否值得单开最小计划”建专项，而不是直接为 unknown-address speculation 或更宽 replay 开计划。
 2. 如果后续出现真实 `debug/frontend` bug，再围绕具体故障单开最小修复 / 回归计划，而不是泛化成新的浏览器压力专项。
-3. 如果下一轮还要并行推进，建议围绕“guest runtime bug-driven hardening / reference correctness 补洞 / 条件触发后的 `Phase 3` 专项”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。
+3. 如果后续 Spike 外部差分暴露出 reference correctness 缺口，再围绕具体语义面单开最小计划，例如 `Sv39 final-state subset`、`returning trap handler checkpoint` 或 `device-free privilege contract`，而不是一开始就做大一统 trace framework。
+4. 如果下一轮还要并行推进，建议围绕“guest runtime bug-driven hardening / reference correctness 补洞 / 条件触发后的 `Phase 3` 专项”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。

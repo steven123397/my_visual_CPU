@@ -21,6 +21,15 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-04-06
+
+#### spike-external-differential-validation-plan
+
+- 原文件：`spike_differential_validation_plan.md`
+- 完成内容：完成 Spike 外部差分验证 V1 第一轮落地，新增显式入口 `cd myCPU && make test-host-spike_differential`，并把 `alu_mem_csr`、`control_flow`、`predictable_branch_loop`、`trap_return`、`illegal_trap`、`delegated_user_ecall_to_supervisor` 这 6 条 host 微场景接成真实的 `myCPU vs Spike` 正向 final-state differential。
+- 实现过程摘要：本轮把共享 `Scenario / FinalState / DiffReport` 规格抽出到 `tests/host/spike_differential/`，为 Spike 侧补齐 bootstrap 初始化、合法 ELF 封装、严格 debug CLI 解析、final privilege 读取，以及 trap-program controlled-exit / 非 M-mode 初始态支持；同时保持 `make test` 与 `make test-pipeline` 不依赖 Spike。
+- 结果参考：[spike_differential_validation_design.md](../design/spike_differential_validation_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 ### 2026-04-05
 
 #### phase3-blocked-by-unresolved-store-boundary-plan

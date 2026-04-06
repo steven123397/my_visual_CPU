@@ -83,6 +83,7 @@ static void stub_timer_post_handler(void* context);
 static void stub_external_post_handler(uint32_t source_id, void* context);
 static int test_runtime_init_and_bind_self_handlers(void);
 static int test_runtime_entry_bringup_helper(void);
+static int test_runtime_reuse_resets_interrupt_state(void);
 static int test_runtime_identity_superpage_bringup_helper(void);
 static int test_external_policy_adapter(void);
 static int test_interrupt_policy_adapter(void);
@@ -160,6 +161,11 @@ void supervisor_runtime_interrupt_state_bind_self_handlers(
                                                  state,
                                                  external_post_handler,
                                                  state);
+}
+
+void supervisor_runtime_interrupt_state_reset_counters(
+    supervisor_runtime_interrupt_state_t* state) {
+    supervisor_runtime_interrupt_state_set_counters(state, 0U, 0U);
 }
 
 uint32_t supervisor_runtime_interrupt_state_expected_external_source_id(
@@ -517,6 +523,82 @@ static int test_runtime_entry_bringup_helper(void) {
 
     if (kernel_runtime_run_entry_bringup(NULL)) {
         return fail("expected runtime entry bring-up helper to reject null runtime");
+    }
+
+    return 0;
+}
+
+static int test_runtime_reuse_resets_interrupt_state(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    if (!kernel_runtime_bind_self_interrupt_handlers(
+            &runtime,
+            7U,
+            stub_timer_post_handler,
+            stub_external_post_handler)) {
+        return fail("expected runtime self handler binding to succeed before reuse");
+    }
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        5U,
+        3U);
+
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
+    if (!kernel_runtime_run_entry_bringup(&runtime)) {
+        return fail("expected runtime entry bring-up helper to succeed on reused runtime");
+    }
+
+    if (kernel_runtime_interrupt_state(&runtime)->timer_interrupts != 0U ||
+        kernel_runtime_interrupt_state(&runtime)->external_interrupts != 0U ||
+        kernel_runtime_interrupt_state(&runtime)->expected_external_source_id != 0U ||
+        kernel_runtime_interrupt_state(&runtime)->timer_post_handler != NULL ||
+        kernel_runtime_interrupt_state(&runtime)->timer_post_context != NULL ||
+        kernel_runtime_interrupt_state(&runtime)->external_post_handler != NULL ||
+        kernel_runtime_interrupt_state(&runtime)->external_post_context != NULL) {
+        return fail("expected runtime entry bring-up helper to reset interrupt state on reuse");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    if (!kernel_runtime_bind_self_interrupt_handlers(
+            &runtime,
+            11U,
+            stub_timer_post_handler,
+            stub_external_post_handler)) {
+        return fail("expected runtime self handler binding to succeed before common bring-up reuse");
+    }
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        9U,
+        4U);
+    if (!kernel_runtime_run_common_bringup(
+            &runtime,
+            &(const kernel_bringup_options_t){
+                .mmio_mask = KERNEL_BRINGUP_MMIO_UART,
+                .pmm_probe_marker = UINT64_C(0x55),
+                .pre_vm_setup = NULL,
+                .pre_vm_context = NULL,
+                .map_managed_memory = true,
+            })) {
+        return fail("expected runtime common bring-up wrapper to succeed on reused runtime");
+    }
+
+    if (kernel_runtime_interrupt_state(&runtime)->timer_interrupts != 0U ||
+        kernel_runtime_interrupt_state(&runtime)->external_interrupts != 0U) {
+        return fail("expected runtime common bring-up wrapper to reset interrupt counters on reuse");
+    }
+    if (kernel_runtime_interrupt_state(&runtime)->expected_external_source_id != 11U ||
+        kernel_runtime_interrupt_state(&runtime)->timer_post_handler !=
+            stub_timer_post_handler ||
+        kernel_runtime_interrupt_state(&runtime)->timer_post_context !=
+            kernel_runtime_interrupt_state(&runtime) ||
+        kernel_runtime_interrupt_state(&runtime)->external_post_handler !=
+            stub_external_post_handler ||
+        kernel_runtime_interrupt_state(&runtime)->external_post_context !=
+            kernel_runtime_interrupt_state(&runtime)) {
+        return fail("expected runtime common bring-up wrapper to preserve interrupt handler bindings on reuse");
     }
 
     return 0;
@@ -1030,6 +1112,7 @@ static int test_storage_platform_tail_helper(void) {
 int main(void) {
     if (test_runtime_init_and_bind_self_handlers() != 0 ||
         test_runtime_entry_bringup_helper() != 0 ||
+        test_runtime_reuse_resets_interrupt_state() != 0 ||
         test_runtime_identity_superpage_bringup_helper() != 0 ||
         test_external_policy_adapter() != 0 ||
         test_interrupt_policy_adapter() != 0 ||

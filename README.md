@@ -149,6 +149,55 @@ make test-guest-kernel_alpha_fault_demo
 - `node --test` 守本地调试服务、terminal API 和前端纯状态逻辑。
 - 更细的目标名称以 [myCPU/Makefile](myCPU/Makefile) 为准。
 
+### 可选：Spike 外部差分验证
+
+Spike 外部差分是独立离线能力，用来给一批 host 微场景提供 `myCPU vs Spike` 的外部 oracle。它当前不属于默认主门禁，所以：
+
+- 没装 Spike 时，`make test` 和 `make test-pipeline` 仍然可以正常跑
+- 只有你主动运行 Spike 差分入口时，才要求本机能找到 `spike`
+
+最小使用方式：
+
+```bash
+cd myCPU
+
+# 只跑本地 helper / parser 自测，不要求安装 Spike
+make test-host-spike_differential_smoke
+
+# 真实运行 myCPU vs Spike final-state differential
+make test-host-spike_differential
+```
+
+如果 `spike` 不在默认 `PATH`，可以显式指定：
+
+```bash
+cd myCPU
+SPIKE_PATH=/path/to/spike make test-host-spike_differential
+```
+
+也可以先把 Spike 放进当前 shell 的 `PATH`：
+
+```bash
+export PATH=/path/to/spike/bin:$PATH
+cd myCPU
+make test-host-spike_differential
+```
+
+当前这条差分默认会跑一组已接入的 host 微场景。若要本地只看单个场景，可以先编译目标，再直接执行：
+
+```bash
+cd myCPU
+make tests/host/spike_differential_smoke
+./tests/host/spike_differential_smoke --run-differential trap_return
+```
+
+如果需要保留临时 ELF 和 Spike debug script 便于排障，可以加：
+
+```bash
+cd myCPU
+SPIKE_DIFF_KEEP_TEMPS=1 make test-host-spike_differential
+```
+
 ## 文档入口
 
 想快速了解当前状态，建议按下面顺序看：
@@ -165,3 +214,4 @@ make test-guest-kernel_alpha_fault_demo
 - [docs/design/minimal_interactive_os_design.md](docs/design/minimal_interactive_os_design.md)
 - [docs/design/platform_mmio_contract.md](docs/design/platform_mmio_contract.md)
 - [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)
+- [docs/design/spike_differential_validation_design.md](docs/design/spike_differential_validation_design.md)
