@@ -68,6 +68,39 @@ std::array<uint64_t, kTrackedCsrs.size()> make_initial_csrs(
     return csrs;
 }
 
+constexpr uint64_t kSatpSv39 = 8ULL << 60;
+constexpr uint64_t kRootPageTable = 0x80100000ULL;
+constexpr uint64_t kLevel1PageTable = 0x80101000ULL;
+constexpr uint64_t kLevel0PageTable = 0x80102000ULL;
+constexpr uint64_t kLevel0ReservedPageTable = 0x80103000ULL;
+constexpr uint64_t kUserExecBackingPage = 0x80104000ULL;
+constexpr uint64_t kReservedFaultBackingPage = 0x80105000ULL;
+constexpr uint64_t kUserExecVirtualPage = 0x80001000ULL;
+constexpr uint64_t kLoadPageFaultVirtualAddr = 0xC0000000ULL;
+constexpr uint64_t kStorePageFaultVirtualAddr = 0xC0001000ULL;
+constexpr uint64_t kReservedNonLeafFaultVirtualAddr = 0x80400000ULL;
+constexpr uint64_t kPteNonLeaf = 0x1ULL;
+constexpr uint64_t kPteSupervisorCode = 0x4FULL;
+constexpr uint64_t kPteUserExecutable = 0x59ULL;
+constexpr uint64_t kPteReservedNonLeafWithU = 0x11ULL;
+constexpr uint64_t kPteSupervisorData = 0xC7ULL;
+
+uint64_t make_sv39_pte(uint64_t target, uint64_t flags) {
+    return ((target >> 12) << 10) | flags;
+}
+
+MemoryInit init32(uint64_t addr, uint32_t value) {
+    return {addr, value, 4};
+}
+
+MemoryInit init64(uint64_t addr, uint64_t value) {
+    return {addr, value, 8};
+}
+
+std::vector<MemoryInit> make_initial_memory(std::initializer_list<MemoryInit> values) {
+    return {values};
+}
+
 std::vector<Scenario> build_smoke_scenarios() {
     return {
         {
@@ -193,6 +226,126 @@ std::vector<Scenario> build_smoke_scenarios() {
             {},
             PrivilegeMode::User,
         },
+        {
+            "sv39_instruction_page_fault",
+            {
+                0x00030067U,  // jalr x0, x6, 0
+                kAddiX1WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                kCsrwSepcX7,
+                kSret,
+            },
+            {},
+            128,
+            {},
+            Scenario::PlatformFixture::None,
+            make_initial_gprs({{6, kUserExecVirtualPage}, {7, kEntry + 8}}),
+            make_initial_csrs({
+                {CSR_SATP, kSatpSv39 | (kRootPageTable >> 12)},
+                {CSR_MEDELEG, 1ULL << 12},
+                {CSR_STVEC, kTrapVector},
+            }),
+            make_initial_memory({
+                init64(kRootPageTable + 16, make_sv39_pte(kLevel1PageTable, kPteNonLeaf)),
+                init64(kLevel1PageTable + 0, make_sv39_pte(kLevel0PageTable, kPteNonLeaf)),
+                init64(kLevel0PageTable + 0, make_sv39_pte(kEntry, kPteSupervisorCode)),
+                init64(kLevel0PageTable + 8,
+                       make_sv39_pte(kUserExecBackingPage, kPteUserExecutable)),
+                init32(kUserExecBackingPage, kAddiX1WrongPath),
+            }),
+            PrivilegeMode::Supervisor,
+        },
+        {
+            "sv39_load_page_fault",
+            {
+                kLwX1FromX10,
+                kAddiX2WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                kCsrwSepcX7,
+                kSret,
+            },
+            {},
+            128,
+            {},
+            Scenario::PlatformFixture::None,
+            make_initial_gprs({{10, kLoadPageFaultVirtualAddr}, {7, kEntry + 8}}),
+            make_initial_csrs({
+                {CSR_SATP, kSatpSv39 | (kRootPageTable >> 12)},
+                {CSR_MEDELEG, 1ULL << 13},
+                {CSR_STVEC, kTrapVector},
+            }),
+            make_initial_memory({
+                init64(kRootPageTable + 16, make_sv39_pte(kEntry, kPteSupervisorCode)),
+            }),
+            PrivilegeMode::Supervisor,
+        },
+        {
+            "sv39_store_page_fault",
+            {
+                kSwX11ToX10,
+                kAddiX3WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                kCsrwSepcX7,
+                kSret,
+            },
+            {},
+            128,
+            {},
+            Scenario::PlatformFixture::None,
+            make_initial_gprs({{10, kStorePageFaultVirtualAddr}, {11, 0x12345678U}, {7, kEntry + 8}}),
+            make_initial_csrs({
+                {CSR_SATP, kSatpSv39 | (kRootPageTable >> 12)},
+                {CSR_MEDELEG, 1ULL << 15},
+                {CSR_STVEC, kTrapVector},
+            }),
+            make_initial_memory({
+                init64(kRootPageTable + 16, make_sv39_pte(kEntry, kPteSupervisorCode)),
+            }),
+            PrivilegeMode::Supervisor,
+        },
+        {
+            "sv39_reserved_non_leaf_fault",
+            {
+                kLwX1FromX10,
+                kAddiX4WrongPath,
+                kAddiA7Exit,
+                kEcall,
+            },
+            {
+                kCsrwSepcX7,
+                kSret,
+            },
+            {},
+            128,
+            {},
+            Scenario::PlatformFixture::None,
+            make_initial_gprs({{10, kReservedNonLeafFaultVirtualAddr}, {7, kEntry + 8}}),
+            make_initial_csrs({
+                {CSR_SATP, kSatpSv39 | (kRootPageTable >> 12)},
+                {CSR_MEDELEG, 1ULL << 13},
+                {CSR_STVEC, kTrapVector},
+            }),
+            make_initial_memory({
+                init64(kRootPageTable + 16, make_sv39_pte(kLevel1PageTable, kPteNonLeaf)),
+                init64(kLevel1PageTable + 0, make_sv39_pte(kLevel0PageTable, kPteNonLeaf)),
+                init64(kLevel0PageTable + 0, make_sv39_pte(kEntry, kPteSupervisorCode)),
+                init64(kLevel1PageTable + 16,
+                       make_sv39_pte(kLevel0ReservedPageTable, kPteReservedNonLeafWithU)),
+                init64(kLevel0ReservedPageTable + 0,
+                       make_sv39_pte(kReservedFaultBackingPage, kPteSupervisorData)),
+                init32(kReservedFaultBackingPage, 0xCAFEBABEU),
+            }),
+            PrivilegeMode::Supervisor,
+        },
     };
 }
 
@@ -237,6 +390,56 @@ std::string render_fake_spike_output(const FinalState& state) {
     for (uint64_t value : state.watched_memory) {
         output << hex_u64(value) << '\n';
     }
+    return output.str();
+}
+
+FinalState make_fake_spike_checkpoint_state(const Scenario& scenario, const FinalState& state) {
+    FinalState checkpoint = state;
+    SpikeScenarioPlan plan;
+    std::string error;
+    if (!build_spike_scenario_plan(scenario, plan, error)) {
+        return FinalState{};
+    }
+
+    checkpoint.pc = plan.first_trap_capture_pc;
+    checkpoint.privilege = state.first_trap_summary.privilege_at_trap;
+
+    const size_t mcause_index = tracked_csr_index(CSR_MCAUSE);
+    const size_t mepc_index = tracked_csr_index(CSR_MEPC);
+    const size_t mtval_index = tracked_csr_index(CSR_MTVAL);
+    const size_t scause_index = tracked_csr_index(CSR_SCAUSE);
+    const size_t sepc_index = tracked_csr_index(CSR_SEPC);
+    const size_t stval_index = tracked_csr_index(CSR_STVAL);
+
+    checkpoint.csrs[mcause_index] = scenario_effective_initial_csr_value(scenario, CSR_MCAUSE);
+    checkpoint.csrs[mepc_index] = scenario_effective_initial_csr_value(scenario, CSR_MEPC);
+    checkpoint.csrs[mtval_index] = scenario_effective_initial_csr_value(scenario, CSR_MTVAL);
+    checkpoint.csrs[scause_index] = scenario_effective_initial_csr_value(scenario, CSR_SCAUSE);
+    checkpoint.csrs[sepc_index] = scenario_effective_initial_csr_value(scenario, CSR_SEPC);
+    checkpoint.csrs[stval_index] = scenario_effective_initial_csr_value(scenario, CSR_STVAL);
+
+    if (state.first_trap_summary.privilege_at_trap == PrivilegeMode::Supervisor) {
+        checkpoint.csrs[scause_index] = state.first_trap_summary.cause;
+        checkpoint.csrs[sepc_index] = state.first_trap_summary.epc;
+        checkpoint.csrs[stval_index] = state.first_trap_summary.tval;
+    } else {
+        checkpoint.csrs[mcause_index] = state.first_trap_summary.cause;
+        checkpoint.csrs[mepc_index] = state.first_trap_summary.epc;
+        checkpoint.csrs[mtval_index] = state.first_trap_summary.tval;
+    }
+
+    return checkpoint;
+}
+
+std::string render_fake_spike_output(const Scenario& scenario, const FinalState& state) {
+    if (!scenario_contains_returning_trap_handler(scenario) || !state.first_trap_summary.trapped) {
+        return render_fake_spike_output(state);
+    }
+
+    const FinalState checkpoint = make_fake_spike_checkpoint_state(scenario, state);
+    std::ostringstream output;
+    output << render_fake_spike_output(checkpoint);
+    output << render_fake_spike_output(state);
     return output.str();
 }
 
@@ -318,11 +521,10 @@ DifferentialRunResult run_differential_scenario(const Scenario& scenario,
     CompareOptions compare_options;
     compare_options.include_instret = false;
     compare_options.include_trap_summary = true;
-    for (uint32_t instruction : scenario.trap_program) {
-        if (instruction == kMret || instruction == kSret) {
-            compare_options.include_trap_summary = false;
-            break;
-        }
+    compare_options.include_first_trap_summary = false;
+    if (scenario_contains_returning_trap_handler(scenario)) {
+        compare_options.include_trap_summary = false;
+        compare_options.include_first_trap_summary = true;
     }
     result.diff_report = compare_final_state(scenario.name, mycpu, spike_state, compare_options);
     if (!result.diff_report.matched) {
@@ -440,6 +642,24 @@ bool test_trap_mismatch_report() {
                   "expected trap mismatch field");
 }
 
+bool test_first_trap_mismatch_report() {
+    FinalState expected;
+    expected.halted = true;
+    FinalState actual = expected;
+    actual.first_trap_summary.trapped = true;
+    actual.first_trap_summary.cause = 11;
+    actual.first_trap_summary.epc = kEntry;
+
+    CompareOptions options;
+    options.include_trap_summary = false;
+    options.include_first_trap_summary = true;
+
+    const DiffReport report = compare_final_state("first_trap_mismatch", expected, actual, options);
+    return expect(!report.matched, "expected first trap mismatch to fail compare") &&
+           expect(report.first_mismatch_field == "first_trap_summary.trapped",
+                  "expected first trap mismatch field");
+}
+
 bool test_mycpu_runner_controlled_exit() {
     const Scenario scenario = find_scenario("alu_mem_csr");
     const FinalState state = run_mycpu_final_state(scenario);
@@ -462,10 +682,18 @@ bool test_mycpu_runner_trap_return_preserves_first_trap_summary() {
     return expect(state.halted, "expected trap_return to halt") &&
            expect(!state.timed_out, "expected trap_return not to time out") &&
            expect(state.trap_summary.trapped, "expected trap_return to record trap summary") &&
+           expect(state.first_trap_summary.trapped,
+                  "expected trap_return to record first trap summary") &&
            expect(state.trap_summary.cause == 11, "expected trap_return machine ecall cause") &&
+           expect(state.first_trap_summary.cause == 11,
+                  "expected trap_return first trap machine ecall cause") &&
            expect(state.trap_summary.epc == kEntry, "expected trap_return original epc") &&
+           expect(state.first_trap_summary.epc == kEntry,
+                  "expected trap_return first trap original epc") &&
            expect(state.trap_summary.privilege_at_trap == PrivilegeMode::Machine,
                   "expected trap_return trap privilege") &&
+           expect(state.first_trap_summary.privilege_at_trap == PrivilegeMode::Machine,
+                  "expected trap_return first trap privilege") &&
            expect(state.gprs[2] == 7, "expected trap_return resumed path to execute") &&
            expect(state.exit_reason == "controlled_exit",
                   "expected trap_return controlled exit reason");
@@ -575,8 +803,10 @@ bool test_spike_runner_parse_failure_on_extra_numeric_output() {
     const bool parsed =
         parse_spike_final_state_output(scenario, plan, output, parsed_state, error);
     return expect(!parsed, "expected extra numeric line to fail parse") &&
-           expect(error.find("unexpected field count") != std::string::npos,
-                  "expected parse failure reason to mention field count");
+           expect(error.find("unexpected snapshot count") != std::string::npos ||
+                      error.find("unexpected field count") != std::string::npos ||
+                      error.find("incomplete snapshot") != std::string::npos,
+                  "expected parse failure reason to mention snapshot, field count, or incomplete snapshot");
 }
 
 bool test_spike_runner_timeout() {
@@ -613,6 +843,28 @@ bool test_spike_runner_supervisor_trap_inference_from_final_csrs() {
     }
 
     std::ostringstream output;
+    output << "0x" << std::hex << kTrapVector << '\n';
+    output << "S\n";
+    output << "0x11\n";
+    for (int i = 0; i < 32; ++i) {
+        output << "0x" << std::hex << (0x10 + i) << '\n';
+    }
+    for (uint32_t csr : kTrackedCsrs) {
+        uint64_t value = 0;
+        if (csr == CSR_STVEC) {
+            value = kTrapVector;
+        } else if (csr == CSR_SCAUSE) {
+            value = 8;
+        } else if (csr == CSR_SEPC) {
+            value = kEntry;
+        } else if (csr == CSR_STVAL) {
+            value = 0x44;
+        } else if (csr == CSR_MEPC) {
+            value = kEntry;
+        }
+        output << "0x" << std::hex << value << '\n';
+    }
+
     output << "0x" << std::hex << (kEntry + 8) << '\n';
     output << "S\n";
     output << "0x23\n";
@@ -629,6 +881,8 @@ bool test_spike_runner_supervisor_trap_inference_from_final_csrs() {
             value = kEntry;
         } else if (csr == CSR_STVAL) {
             value = 0x44;
+        } else if (csr == CSR_MEPC) {
+            value = kEntry;
         }
         output << "0x" << std::hex << value << '\n';
     }
@@ -640,9 +894,17 @@ bool test_spike_runner_supervisor_trap_inference_from_final_csrs() {
            expect(state.privilege == PrivilegeMode::Supervisor,
                   "expected supervisor trap privilege") &&
            expect(state.trap_summary.trapped, "expected supervisor trap summary") &&
+           expect(state.first_trap_summary.trapped,
+                  "expected supervisor first trap summary") &&
            expect(state.trap_summary.cause == 8, "expected supervisor trap cause") &&
+           expect(state.first_trap_summary.cause == 8,
+                  "expected supervisor first trap cause") &&
            expect(state.trap_summary.epc == kEntry, "expected supervisor trap epc") &&
+           expect(state.first_trap_summary.epc == kEntry,
+                  "expected supervisor first trap epc") &&
            expect(state.trap_summary.tval == 0x44, "expected supervisor trap tval") &&
+           expect(state.first_trap_summary.tval == 0x44,
+                  "expected supervisor first trap tval") &&
            expect(state.trap_summary.privilege_at_trap == PrivilegeMode::Supervisor,
                   "expected supervisor trap privilege at trap");
 }
@@ -657,6 +919,26 @@ bool test_spike_runner_machine_trap_inference_from_final_csrs() {
     }
 
     std::ostringstream output;
+    output << "0x" << std::hex << kTrapVector << '\n';
+    output << "M\n";
+    output << "0x11\n";
+    for (int i = 0; i < 32; ++i) {
+        output << "0x" << std::hex << (0x10 + i) << '\n';
+    }
+    for (uint32_t csr : kTrackedCsrs) {
+        uint64_t value = 0;
+        if (csr == CSR_MTVEC) {
+            value = kTrapVector;
+        } else if (csr == CSR_MCAUSE) {
+            value = 11;
+        } else if (csr == CSR_MEPC) {
+            value = kEntry;
+        } else if (csr == CSR_MTVAL) {
+            value = 0;
+        }
+        output << "0x" << std::hex << value << '\n';
+    }
+
     output << "0x" << std::hex << (kEntry + 8) << '\n';
     output << "M\n";
     output << "0x2a\n";
@@ -684,10 +966,76 @@ bool test_spike_runner_machine_trap_inference_from_final_csrs() {
            expect(state.privilege == PrivilegeMode::Machine,
                   "expected machine trap privilege") &&
            expect(state.trap_summary.trapped, "expected machine trap summary") &&
+           expect(state.first_trap_summary.trapped,
+                  "expected machine first trap summary") &&
            expect(state.trap_summary.cause == 11, "expected machine trap cause") &&
+           expect(state.first_trap_summary.cause == 11,
+                  "expected machine first trap cause") &&
            expect(state.trap_summary.epc == kEntry, "expected machine trap epc") &&
+           expect(state.first_trap_summary.epc == kEntry,
+                  "expected machine first trap epc") &&
            expect(state.trap_summary.privilege_at_trap == PrivilegeMode::Machine,
                   "expected machine trap privilege at trap");
+}
+
+bool test_spike_runner_multistage_output_captures_first_trap_checkpoint() {
+    const Scenario scenario = find_scenario("trap_return");
+    SpikeScenarioPlan plan;
+    std::string error;
+    if (!expect(build_spike_scenario_plan(scenario, plan, error),
+                "expected trap_return spike plan to build")) {
+        return false;
+    }
+
+    std::ostringstream output;
+
+    output << "0x" << std::hex << kTrapVector << '\n';
+    output << "M\n";
+    output << "0x11\n";
+    for (int i = 0; i < 32; ++i) {
+        output << "0x" << std::hex << (0x10 + i) << '\n';
+    }
+    for (uint32_t csr : kTrackedCsrs) {
+        uint64_t value = 0;
+        if (csr == CSR_MTVEC) {
+            value = kTrapVector;
+        } else if (csr == CSR_MCAUSE) {
+            value = 11;
+        } else if (csr == CSR_MEPC) {
+            value = kEntry;
+        }
+        output << "0x" << std::hex << value << '\n';
+    }
+
+    output << "0x" << std::hex << (kEntry + 8) << '\n';
+    output << "M\n";
+    output << "0x2a\n";
+    for (int i = 0; i < 32; ++i) {
+        output << "0x" << std::hex << (0x100 + i) << '\n';
+    }
+    for (uint32_t csr : kTrackedCsrs) {
+        uint64_t value = 0;
+        if (csr == CSR_MTVEC) {
+            value = kTrapVector;
+        } else if (csr == CSR_MCAUSE) {
+            value = 11;
+        } else if (csr == CSR_MEPC) {
+            value = kEntry;
+        }
+        output << "0x" << std::hex << value << '\n';
+    }
+
+    FinalState state;
+    const bool parsed = parse_spike_final_state_output(scenario, plan, output.str(), state, error);
+    return expect(parsed, "expected multistage trap_return output to parse") &&
+           expect(state.first_trap_summary.trapped,
+                  "expected multistage parse to capture first trap summary") &&
+           expect(state.first_trap_summary.cause == 11,
+                  "expected multistage first trap cause") &&
+           expect(state.first_trap_summary.epc == kEntry,
+                  "expected multistage first trap epc") &&
+           expect(state.first_trap_summary.privilege_at_trap == PrivilegeMode::Machine,
+                  "expected multistage first trap privilege");
 }
 
 bool test_spike_runner_ambiguous_trap_state_does_not_infer_trap() {
@@ -740,14 +1088,48 @@ bool test_mycpu_runner_supervisor_trap_summary() {
            expect(!state.timed_out, "expected delegated_user_ecall_to_supervisor not to time out") &&
            expect(state.trap_summary.trapped,
                   "expected delegated_user_ecall_to_supervisor trap summary") &&
+           expect(state.first_trap_summary.trapped,
+                  "expected delegated_user_ecall_to_supervisor first trap summary") &&
            expect(state.trap_summary.cause == 8, "expected delegated user ecall cause") &&
+           expect(state.first_trap_summary.cause == 8,
+                  "expected delegated user first trap cause") &&
            expect(state.trap_summary.epc == kEntry, "expected delegated user ecall epc") &&
+           expect(state.first_trap_summary.epc == kEntry,
+                  "expected delegated user first trap epc") &&
            expect(state.trap_summary.privilege_at_trap == PrivilegeMode::Supervisor,
                   "expected delegated user ecall trap privilege") &&
+           expect(state.first_trap_summary.privilege_at_trap == PrivilegeMode::Supervisor,
+                  "expected delegated user first trap privilege") &&
            expect(state.privilege == PrivilegeMode::Supervisor,
                   "expected delegated scenario to remain in supervisor before exit") &&
            expect(state.exit_reason == "controlled_exit",
                   "expected delegated scenario controlled exit reason");
+}
+
+bool test_mycpu_runner_sv39_instruction_page_fault_final_state() {
+    const Scenario scenario = find_scenario("sv39_instruction_page_fault");
+    if (!expect(scenario.name != nullptr,
+                "expected sv39_instruction_page_fault scenario to exist")) {
+        return false;
+    }
+
+    const FinalState state = run_mycpu_final_state(scenario);
+    return expect(state.halted, "expected sv39_instruction_page_fault to halt") &&
+           expect(!state.timed_out, "expected sv39_instruction_page_fault not to time out") &&
+           expect(state.privilege == PrivilegeMode::Supervisor,
+                  "expected sv39_instruction_page_fault to return to supervisor mode") &&
+           expect(state.pc == kEntry + 16,
+                  "expected sv39_instruction_page_fault final pc after controlled exit") &&
+           expect(state.gprs[1] == 0,
+                  "expected sv39_instruction_page_fault wrong path not to execute") &&
+           expect(state.csrs[tracked_csr_index(CSR_SCAUSE)] == 12,
+                  "expected sv39_instruction_page_fault scause") &&
+           expect(state.csrs[tracked_csr_index(CSR_SEPC)] == kEntry + 8,
+                  "expected sv39_instruction_page_fault resume sepc") &&
+           expect(state.csrs[tracked_csr_index(CSR_STVAL)] == 0x80001000ULL,
+                  "expected sv39_instruction_page_fault stval") &&
+           expect(state.exit_reason == "controlled_exit",
+                  "expected sv39_instruction_page_fault controlled exit reason");
 }
 
 bool test_scripted_positive_differential_supports_privilege_scenario() {
@@ -758,7 +1140,7 @@ bool test_scripted_positive_differential_supports_privilege_scenario() {
         return false;
     }
     const std::string script = std::string("#!/bin/sh\ncat <<'EOF'\n") +
-                               render_fake_spike_output(mycpu) + "EOF\n";
+                               render_fake_spike_output(scenario, mycpu) + "EOF\n";
     if (!expect(write_executable_text(fake_spike, script),
                 "expected positive fake spike script to be written")) {
         unlink(fake_spike.c_str());
@@ -773,6 +1155,61 @@ bool test_scripted_positive_differential_supports_privilege_scenario() {
     }
     return expect(result.ok,
                   "expected scripted positive differential to pass delegated privilege scenario");
+}
+
+bool test_scripted_positive_differential_supports_returning_trap_checkpoint() {
+    const Scenario scenario = find_scenario("trap_return");
+    const FinalState mycpu = run_mycpu_final_state(scenario);
+    const std::string fake_spike = make_temp_exec_path("fake_spike_trap_checkpoint");
+    if (!expect(!fake_spike.empty(), "expected temp trap checkpoint fake spike path")) {
+        return false;
+    }
+    const std::string script = std::string("#!/bin/sh\ncat <<'EOF'\n") +
+                               render_fake_spike_output(scenario, mycpu) + "EOF\n";
+    if (!expect(write_executable_text(fake_spike, script),
+                "expected trap checkpoint fake spike script to be written")) {
+        unlink(fake_spike.c_str());
+        return false;
+    }
+
+    const DifferentialRunResult result =
+        run_differential_scenario(scenario, SpikeRunnerOptions{fake_spike, 100, {}});
+    unlink(fake_spike.c_str());
+    if (!result.ok && !result.message.empty()) {
+        std::fprintf(stderr, "%s\n", result.message.c_str());
+    }
+    return expect(result.ok,
+                  "expected scripted positive differential to pass returning trap checkpoint scenario");
+}
+
+bool test_scripted_positive_differential_supports_sv39_instruction_page_fault() {
+    const Scenario scenario = find_scenario("sv39_instruction_page_fault");
+    if (!expect(scenario.name != nullptr,
+                "expected sv39_instruction_page_fault scenario to exist")) {
+        return false;
+    }
+
+    const FinalState mycpu = run_mycpu_final_state(scenario);
+    const std::string fake_spike = make_temp_exec_path("fake_spike_sv39_positive");
+    if (!expect(!fake_spike.empty(), "expected temp sv39 positive fake spike path")) {
+        return false;
+    }
+    const std::string script = std::string("#!/bin/sh\ncat <<'EOF'\n") +
+                               render_fake_spike_output(scenario, mycpu) + "EOF\n";
+    if (!expect(write_executable_text(fake_spike, script),
+                "expected sv39 positive fake spike script to be written")) {
+        unlink(fake_spike.c_str());
+        return false;
+    }
+
+    const DifferentialRunResult result =
+        run_differential_scenario(scenario, SpikeRunnerOptions{fake_spike, 100, {}});
+    unlink(fake_spike.c_str());
+    if (!result.ok && !result.message.empty()) {
+        std::fprintf(stderr, "%s\n", result.message.c_str());
+    }
+    return expect(result.ok,
+                  "expected scripted positive differential to pass sv39 instruction page fault scenario");
 }
 
 bool test_differential_reports_mycpu_timeout() {
@@ -797,6 +1234,7 @@ bool run_self_tests() {
     return test_match_report() && test_gpr_mismatch_report() && test_instret_mismatch_report() &&
            test_csr_mismatch_report() && test_watched_memory_mismatch_report() &&
            test_trap_subfields_ignored_when_not_trapped() && test_trap_mismatch_report() &&
+           test_first_trap_mismatch_report() &&
            test_mycpu_runner_controlled_exit() &&
            test_mycpu_runner_trap_return_preserves_first_trap_summary() &&
            test_mycpu_runner_illegal_trap_controlled_exit() &&
@@ -807,9 +1245,13 @@ bool run_self_tests() {
            test_spike_runner_timeout() &&
            test_spike_runner_supervisor_trap_inference_from_final_csrs() &&
            test_spike_runner_machine_trap_inference_from_final_csrs() &&
+           test_spike_runner_multistage_output_captures_first_trap_checkpoint() &&
            test_spike_runner_ambiguous_trap_state_does_not_infer_trap() &&
            test_mycpu_runner_supervisor_trap_summary() &&
+           test_mycpu_runner_sv39_instruction_page_fault_final_state() &&
            test_scripted_positive_differential_supports_privilege_scenario() &&
+           test_scripted_positive_differential_supports_returning_trap_checkpoint() &&
+           test_scripted_positive_differential_supports_sv39_instruction_page_fault() &&
            test_differential_reports_mycpu_timeout();
 }
 
@@ -832,14 +1274,9 @@ int run_real_differential_mode(const char* selected_scenario) {
     if (selected_scenario != nullptr) {
         scenario_names.push_back(selected_scenario);
     } else {
-        scenario_names = {
-            "alu_mem_csr",
-            "control_flow",
-            "predictable_branch_loop",
-            "trap_return",
-            "illegal_trap",
-            "delegated_user_ecall_to_supervisor",
-        };
+        for (const Scenario& scenario : build_smoke_scenarios()) {
+            scenario_names.push_back(scenario.name);
+        }
     }
     const SpikeRunnerOptions options{default_spike_path(), 5000, {}};
     for (const char* scenario_name : scenario_names) {

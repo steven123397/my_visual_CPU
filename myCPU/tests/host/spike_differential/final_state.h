@@ -33,6 +33,11 @@ enum class MismatchKind : uint8_t {
     TrapTval,
     TrapEpc,
     TrapPrivilege,
+    FirstTrapTrapped,
+    FirstTrapCause,
+    FirstTrapTval,
+    FirstTrapEpc,
+    FirstTrapPrivilege,
 };
 
 struct DiffReport {
@@ -51,6 +56,7 @@ struct FinalState {
     std::array<uint64_t, kTrackedCsrs.size()> csrs{};
     std::vector<uint64_t> watched_memory{};
     TrapSummary trap_summary{};
+    TrapSummary first_trap_summary{};
     uint64_t instret{0};
     std::string exit_reason{};
 };

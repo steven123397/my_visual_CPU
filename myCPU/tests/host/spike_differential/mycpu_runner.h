@@ -151,6 +151,7 @@ inline FinalState run_mycpu_final_state(const Scenario& scenario) {
             trap_captured = capture_trap_summary(previous, current, trap_summary);
         }
         if (trap_captured) {
+            current.first_trap_summary = trap_summary;
             current.trap_summary = trap_summary;
         }
         if (current.halted) {
@@ -164,6 +165,7 @@ inline FinalState run_mycpu_final_state(const Scenario& scenario) {
     previous.timed_out = true;
     previous.exit_reason = "step_budget_exhausted";
     if (trap_captured) {
+        previous.first_trap_summary = trap_summary;
         previous.trap_summary = trap_summary;
     }
     return previous;

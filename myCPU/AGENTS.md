@@ -96,6 +96,7 @@
 - host-side MMIO guard 与 contract matrix。
 - `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 `pipeline` 的 asm / host / guest 门禁。
 - `pipeline` host-side differential 当前已覆盖基础 ALU / 控制流 / trap-return / illegal trap、machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store-page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及由 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer/external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 场景；用户态 delegated supervisor timer / external interrupt 已都纳入差分门禁。
+- 独立 `Spike` 外部差分当前已覆盖基础 ALU / control-flow / trap / delegated privilege、第一批 device-free `Sv39/page fault` final-state 子集，以及带 `mret / sret` 的 returning trap handler first-trap checkpoint summary；这条线保持独立离线入口，不进入默认 `make test` / `make test-pipeline` 依赖。
 - `Phase 3-A` 首轮分支预测增强：最小 `branch_predictor` 子模块、`jal` static predict-taken、条件分支 `2-bit` bimodal counter + target 记忆，以及继续复用现有 flush / redirect 的 mispredict 恢复路径。
 - `pipeline_backend_smoke` 当前还额外覆盖真实 `CLINT` / `PLIC+UART` 平台事件源驱动的 supervisor timer / external interrupt smoke，避免把 cycle-sensitive 设备递送硬塞进 functional-vs-pipeline 逐事件差分。
 - `pipeline_backend_smoke` 当前也已补上 `jal` predict-hit、predictable branch loop、以及 backend rebuild 后 predictor cold-reset 的 host-side smoke。
@@ -143,6 +144,8 @@
   `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
 - [src/exec/load_store_queue.cpp](src/exec/load_store_queue.cpp) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
   decode 级 `BlockedByUnresolvedStore` 当前最小收窄已经落地：它只保留给 older store 地址未知场景；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load。后续这条线的取舍判断也已经完成：在当前 decode 级 load 前置分类、单 `ex_mem` memory 通道与 coarse replay flush 基线上，不主动继续扩大更激进的 `issue / replay / speculation`；只有在出现真实 workload 证据或明确研究目标时，才值得重开，且应先看 issue decoupling。
+- [tests/host/spike_differential/*](tests/host/spike_differential)
+  当前独立 `Spike` 外部差分已经接上 first-trap checkpoint，但仍只保持“单次运行抓首个 trap 入口 + 最终态”的最小形态；后续按真实 bug 或明确收益补更广 `Sv39 / privilege` 或更复杂多 checkpoint 变体，不主动扩大到设备场景、`configure hook` 或逐提交 trace。
 - [src/debug](src/debug) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
   当前 debug snapshot / CLI 已新增更窄的 `stall_reason` 观测，可直接区分 `blocked_by_unresolved_store`、`blocked_by_overlapping_store`、`memory_path_busy`、`non_ram_load_waiting_for_rob_head`、`serializing_system_wait_for_rob_head`、`source_operands_not_ready` 与 `decode_backpressure`；后续若要重开 `Phase 3`，应优先用这组观测去判断 stall hotspot，而不是先拍脑袋扩 speculation。
 - [guest/kernel/kernel_runtime.c](guest/kernel/kernel_runtime.c)

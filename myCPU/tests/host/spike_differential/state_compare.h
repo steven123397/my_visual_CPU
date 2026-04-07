@@ -9,6 +9,7 @@ namespace spike_differential {
 struct CompareOptions {
     bool include_instret{true};
     bool include_trap_summary{true};
+    bool include_first_trap_summary{false};
 };
 
 inline const char* mismatch_kind_name(MismatchKind kind) {
@@ -43,6 +44,16 @@ inline const char* mismatch_kind_name(MismatchKind kind) {
         return "trap_epc";
     case MismatchKind::TrapPrivilege:
         return "trap_privilege";
+    case MismatchKind::FirstTrapTrapped:
+        return "first_trap_trapped";
+    case MismatchKind::FirstTrapCause:
+        return "first_trap_cause";
+    case MismatchKind::FirstTrapTval:
+        return "first_trap_tval";
+    case MismatchKind::FirstTrapEpc:
+        return "first_trap_epc";
+    case MismatchKind::FirstTrapPrivilege:
+        return "first_trap_privilege";
     }
     return "unknown";
 }
@@ -82,6 +93,51 @@ inline DiffReport mismatch_bool_report(MismatchKind kind,
                            scenario_name,
                            expected ? 1ULL : 0ULL,
                            actual ? 1ULL : 0ULL);
+}
+
+inline DiffReport compare_trap_summary(const char* scenario_name,
+                                       const TrapSummary& expected,
+                                       const TrapSummary& actual,
+                                       const char* field_prefix,
+                                       MismatchKind trapped_kind,
+                                       MismatchKind cause_kind,
+                                       MismatchKind tval_kind,
+                                       MismatchKind epc_kind,
+                                       MismatchKind privilege_kind) {
+    char field[64];
+    std::snprintf(field, sizeof(field), "%s.trapped", field_prefix);
+    if (expected.trapped != actual.trapped) {
+        return mismatch_bool_report(trapped_kind,
+                                    field,
+                                    scenario_name,
+                                    expected.trapped,
+                                    actual.trapped);
+    }
+    if (!expected.trapped) {
+        return match_report();
+    }
+
+    std::snprintf(field, sizeof(field), "%s.cause", field_prefix);
+    if (expected.cause != actual.cause) {
+        return mismatch_report(cause_kind, field, scenario_name, expected.cause, actual.cause);
+    }
+    std::snprintf(field, sizeof(field), "%s.tval", field_prefix);
+    if (expected.tval != actual.tval) {
+        return mismatch_report(tval_kind, field, scenario_name, expected.tval, actual.tval);
+    }
+    std::snprintf(field, sizeof(field), "%s.epc", field_prefix);
+    if (expected.epc != actual.epc) {
+        return mismatch_report(epc_kind, field, scenario_name, expected.epc, actual.epc);
+    }
+    std::snprintf(field, sizeof(field), "%s.privilege_at_trap", field_prefix);
+    if (expected.privilege_at_trap != actual.privilege_at_trap) {
+        return mismatch_report(privilege_kind,
+                               field,
+                               scenario_name,
+                               static_cast<unsigned long long>(expected.privilege_at_trap),
+                               static_cast<unsigned long long>(actual.privilege_at_trap));
+    }
+    return match_report();
 }
 
 inline uint64_t normalize_csr_for_compare(uint32_t csr, uint64_t value) {
@@ -178,45 +234,34 @@ inline DiffReport compare_final_state(const char* scenario_name,
         }
     }
     if (!options.include_trap_summary) {
-        return match_report();
+        if (!options.include_first_trap_summary) {
+            return match_report();
+        }
+    } else {
+        const DiffReport trap_report = compare_trap_summary(scenario_name,
+                                                            expected.trap_summary,
+                                                            actual.trap_summary,
+                                                            "trap_summary",
+                                                            MismatchKind::TrapTrapped,
+                                                            MismatchKind::TrapCause,
+                                                            MismatchKind::TrapTval,
+                                                            MismatchKind::TrapEpc,
+                                                            MismatchKind::TrapPrivilege);
+        if (!trap_report.matched) {
+            return trap_report;
+        }
     }
-    if (expected.trap_summary.trapped != actual.trap_summary.trapped) {
-        return mismatch_bool_report(MismatchKind::TrapTrapped,
-                                    "trap_summary.trapped",
-                                    scenario_name,
-                                    expected.trap_summary.trapped,
-                                    actual.trap_summary.trapped);
-    }
-    if (!expected.trap_summary.trapped) {
-        return match_report();
-    }
-    if (expected.trap_summary.cause != actual.trap_summary.cause) {
-        return mismatch_report(MismatchKind::TrapCause,
-                               "trap_summary.cause",
-                               scenario_name,
-                               expected.trap_summary.cause,
-                               actual.trap_summary.cause);
-    }
-    if (expected.trap_summary.tval != actual.trap_summary.tval) {
-        return mismatch_report(MismatchKind::TrapTval,
-                               "trap_summary.tval",
-                               scenario_name,
-                               expected.trap_summary.tval,
-                               actual.trap_summary.tval);
-    }
-    if (expected.trap_summary.epc != actual.trap_summary.epc) {
-        return mismatch_report(MismatchKind::TrapEpc,
-                               "trap_summary.epc",
-                               scenario_name,
-                               expected.trap_summary.epc,
-                               actual.trap_summary.epc);
-    }
-    if (expected.trap_summary.privilege_at_trap != actual.trap_summary.privilege_at_trap) {
-        return mismatch_report(MismatchKind::TrapPrivilege,
-                               "trap_summary.privilege_at_trap",
-                               scenario_name,
-                               static_cast<unsigned long long>(expected.trap_summary.privilege_at_trap),
-                               static_cast<unsigned long long>(actual.trap_summary.privilege_at_trap));
+
+    if (options.include_first_trap_summary) {
+        return compare_trap_summary(scenario_name,
+                                    expected.first_trap_summary,
+                                    actual.first_trap_summary,
+                                    "first_trap_summary",
+                                    MismatchKind::FirstTrapTrapped,
+                                    MismatchKind::FirstTrapCause,
+                                    MismatchKind::FirstTrapTval,
+                                    MismatchKind::FirstTrapEpc,
+                                    MismatchKind::FirstTrapPrivilege);
     }
     return match_report();
 }

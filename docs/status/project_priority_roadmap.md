@@ -31,7 +31,7 @@
 ## 当前判断
 
 - `P0` correctness 修补已经完成，`P1` 结构收口已经全部关闭，`P2` 首轮验证补洞也已经完成两轮收口。
-- Spike 外部差分验证 V1 也已完成第一轮落地；当前已经有一条独立离线的 `myCPU vs Spike` final-state oracle，但它还不构成新的主线扩展任务。
+- Spike 外部差分验证 V1 也已完成第一轮落地；当前已经有一条独立离线的 `myCPU vs Spike` final-state oracle，并已补上 returning trap handler 的 first-trap checkpoint，但它还不构成新的主线扩展任务。
 - 因此，当前路线图不再需要继续维护一长串“已完成问题记录”；现在真正开放的事项已经缩小到少数几个具体边界。
 - 当前如果新开计划，优先级应围绕 reference / guest 的 bug-driven hardening 展开；`Phase 3` 的 decode 边界后续判断已经完成，`debug/frontend` 也不再需要主动新开更重的浏览器压力验证计划。
 
@@ -56,9 +56,9 @@
 
 ### 3. Spike 外部差分进入维护态，不主动扩成更大框架
 
-- `make test-host-spike_differential` 当前已经可用，能为一批 host 微场景提供真实 `myCPU vs Spike` final-state oracle。
+- `make test-host-spike_differential` 当前已经可用，能为一批 host 微场景提供真实 `myCPU vs Spike` final-state oracle；当前也已经接上第一批 device-free `Sv39/page fault` final-state subset，以及 returning trap handler 的 first-trap checkpoint。
 - 这条线当前最有价值的角色，是在 reference correctness 出现疑点时提供外部真值，而不是立刻扩成默认主门禁或统一多后端框架。
-- 因此，后续只按真实 bug 或明确收益继续补最小场景面，例如 `Sv39 / page fault`、更细 trap checkpoint、以及不依赖设备 side effect 的 privilege / CSR 合同；当前不主动扩到设备场景、guest workload 或逐提交 trace framework。
+- 因此，后续只按真实 bug 或明确收益继续补最小场景面，例如更广 `Sv39 / page fault`、不依赖设备 side effect 的 privilege / CSR 合同，或确有必要时的更复杂多 checkpoint 变体；当前不主动扩到设备场景、guest workload 或逐提交 trace framework。
 
 ### 4. 常态维护项
 
@@ -79,5 +79,5 @@
 
 1. 如果后续出现真实 `Phase 3` stall hotspot，再围绕“issue decoupling 是否值得单开最小计划”建专项，而不是直接为 unknown-address speculation 或更宽 replay 开计划。
 2. 如果后续出现真实 `debug/frontend` bug，再围绕具体故障单开最小修复 / 回归计划，而不是泛化成新的浏览器压力专项。
-3. 如果后续 Spike 外部差分暴露出 reference correctness 缺口，再围绕具体语义面单开最小计划，例如 `Sv39 final-state subset`、`returning trap handler checkpoint` 或 `device-free privilege contract`，而不是一开始就做大一统 trace framework。
+3. 如果后续 Spike 外部差分暴露出 reference correctness 缺口，再围绕具体语义面单开最小计划，例如更广 `Sv39 final-state subset`、`device-free privilege contract` 或必要时的多 checkpoint / nested trap 变体，而不是一开始就做大一统 trace framework。
 4. 如果下一轮还要并行推进，建议围绕“guest runtime bug-driven hardening / reference correctness 补洞 / 条件触发后的 `Phase 3` 专项”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。

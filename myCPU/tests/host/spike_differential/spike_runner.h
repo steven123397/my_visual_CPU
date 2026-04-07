@@ -48,6 +48,8 @@ enum class SpikeCaptureRegion : uint8_t {
 struct SpikeScenarioPlan {
     SpikeCaptureMode capture_mode{SpikeCaptureMode::StepBudget};
     SpikeCaptureRegion capture_region{SpikeCaptureRegion::Program};
+    bool capture_first_trap_summary{false};
+    uint64_t first_trap_capture_pc{0};
     uint64_t capture_pc{0};
     uint64_t final_pc{0};
     bool halted{false};
@@ -87,7 +89,7 @@ struct SpikeRunResult {
     std::string raw_output{};
 };
 
-struct ParsedSpikeOutput {
+struct ParsedSpikeSnapshot {
     std::vector<uint64_t> numeric_values{};
     bool has_privilege{false};
     PrivilegeMode privilege{PrivilegeMode::Machine};
@@ -295,6 +297,13 @@ inline uint64_t scenario_initial_csr_value(const Scenario& scenario, uint32_t cs
     return 0;
 }
 
+inline uint64_t scenario_effective_initial_csr_value(const Scenario& scenario, uint32_t csr) {
+    if (csr == CSR_MEPC && scenario.initial_privilege != PrivilegeMode::Machine) {
+        return kEntry;
+    }
+    return scenario_initial_csr_value(scenario, csr);
+}
+
 inline std::string hex_u64(uint64_t value) {
     char buffer[32];
     std::snprintf(buffer, sizeof(buffer), "0x%llx", static_cast<unsigned long long>(value));
@@ -447,6 +456,44 @@ inline bool scenario_requires_spike_unsupported_setup(const Scenario& scenario,
     return false;
 }
 
+inline bool scenario_contains_returning_trap_handler(const Scenario& scenario) {
+    for (uint32_t instruction : scenario.trap_program) {
+        if (instruction == kMret || instruction == kSret) {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline bool first_trap_delegates_to_supervisor(const Scenario& scenario, uint64_t& delegated_cause) {
+    if (scenario.program.empty()) {
+        return false;
+    }
+
+    uint64_t cause = 0;
+    switch (scenario.program.front()) {
+    case kEcall:
+        if (scenario.initial_privilege == PrivilegeMode::User) {
+            cause = 8;
+        } else if (scenario.initial_privilege == PrivilegeMode::Supervisor) {
+            cause = 9;
+        } else {
+            cause = 11;
+        }
+        break;
+    case kInvalidInsn:
+        cause = 2;
+        break;
+    default:
+        return false;
+    }
+
+    delegated_cause = cause;
+    const uint64_t medeleg = scenario_initial_csr_value(scenario, CSR_MEDELEG);
+    return scenario.initial_privilege != PrivilegeMode::Machine &&
+           (medeleg & (UINT64_C(1) << cause)) != 0;
+}
+
 inline bool build_spike_scenario_plan(const Scenario& scenario,
                                       SpikeScenarioPlan& plan,
                                       std::string& error) {
@@ -457,6 +504,19 @@ inline bool build_spike_scenario_plan(const Scenario& scenario,
     if (scenario.program.empty()) {
         error = "scenario program is empty";
         return false;
+    }
+    if (scenario_contains_returning_trap_handler(scenario)) {
+        uint64_t delegated_cause = 0;
+        const bool supervisor_trap = first_trap_delegates_to_supervisor(scenario, delegated_cause);
+        (void)delegated_cause;
+        const uint64_t tvec = supervisor_trap ? scenario_initial_csr_value(scenario, CSR_STVEC)
+                                              : scenario_initial_csr_value(scenario, CSR_MTVEC);
+        if (tvec == 0) {
+            error = "unable to infer first trap capture pc for returning trap scenario";
+            return false;
+        }
+        plan.capture_first_trap_summary = true;
+        plan.first_trap_capture_pc = tvec & ~0x3ULL;
     }
     if (ends_with_controlled_exit(scenario.program)) {
         plan.capture_mode = SpikeCaptureMode::ControlledExit;
@@ -777,14 +837,7 @@ inline bool write_spike_elf(const ScopedTempPath& path,
     return true;
 }
 
-inline std::string build_spike_debug_script(const Scenario& scenario,
-                                            const SpikeScenarioPlan& plan) {
-    std::ostringstream script;
-    if (plan.capture_mode == SpikeCaptureMode::ControlledExit) {
-        script << "until pc 0 " << hex_u64(plan.capture_pc) << '\n';
-    } else {
-        script << "rs " << scenario.max_steps << '\n';
-    }
+inline void append_spike_snapshot_commands(std::ostringstream& script, const Scenario& scenario) {
     script << "pc 0\n";
     script << "priv 0\n";
     script << "reg 0 instret\n";
@@ -797,6 +850,21 @@ inline std::string build_spike_debug_script(const Scenario& scenario,
     for (const MemoryWatch& watch : scenario.watches) {
         script << "mem " << hex_u64(watch.addr) << '\n';
     }
+}
+
+inline std::string build_spike_debug_script(const Scenario& scenario,
+                                            const SpikeScenarioPlan& plan) {
+    std::ostringstream script;
+    if (plan.capture_first_trap_summary) {
+        script << "until pc 0 " << hex_u64(plan.first_trap_capture_pc) << '\n';
+        append_spike_snapshot_commands(script, scenario);
+    }
+    if (plan.capture_mode == SpikeCaptureMode::ControlledExit) {
+        script << "until pc 0 " << hex_u64(plan.capture_pc) << '\n';
+    } else {
+        script << "rs " << scenario.max_steps << '\n';
+    }
+    append_spike_snapshot_commands(script, scenario);
     script << "quit\n";
     return script.str();
 }
@@ -1034,9 +1102,18 @@ inline bool extract_hex_token(std::string_view line, uint64_t& value) {
     return false;
 }
 
-inline bool extract_spike_output(std::string_view output,
-                                 ParsedSpikeOutput& parsed,
-                                 std::string& error) {
+inline size_t spike_snapshot_numeric_field_count(const Scenario& scenario) {
+    return 2 + 32 + kTrackedCsrs.size() + scenario.watches.size();
+}
+
+inline bool extract_spike_snapshots(std::string_view output,
+                                    const Scenario& scenario,
+                                    const SpikeScenarioPlan& plan,
+                                    std::vector<ParsedSpikeSnapshot>& snapshots,
+                                    std::string& error) {
+    const size_t expected_numeric_values = spike_snapshot_numeric_field_count(scenario);
+    const size_t expected_snapshot_count = plan.capture_first_trap_summary ? 2 : 1;
+    ParsedSpikeSnapshot current;
     size_t line_start = 0;
     while (line_start < output.size()) {
         size_t line_end = output.find('\n', line_start);
@@ -1051,18 +1128,34 @@ inline bool extract_spike_output(std::string_view output,
 
         PrivilegeMode privilege = PrivilegeMode::Machine;
         if (parse_privilege_mode(raw_line, privilege)) {
-            if (parsed.has_privilege) {
-                error = "duplicate privilege line in spike debug output";
+            if (current.numeric_values.size() != 1 || current.has_privilege) {
+                error = "unexpected privilege line ordering in spike debug output";
                 return false;
             }
-            parsed.has_privilege = true;
-            parsed.privilege = privilege;
+            current.has_privilege = true;
+            current.privilege = privilege;
             continue;
         }
 
         uint64_t numeric_value = 0;
         if (extract_hex_token(raw_line, numeric_value) || parse_u64(raw_line, numeric_value)) {
-            parsed.numeric_values.push_back(numeric_value);
+            if (current.numeric_values.empty()) {
+                current.numeric_values.push_back(numeric_value);
+                continue;
+            }
+            if (!current.has_privilege) {
+                error = "missing privilege line in spike debug output";
+                return false;
+            }
+            current.numeric_values.push_back(numeric_value);
+            if (current.numeric_values.size() > expected_numeric_values) {
+                error = "unexpected field count in spike debug output";
+                return false;
+            }
+            if (current.numeric_values.size() == expected_numeric_values) {
+                snapshots.push_back(current);
+                current = ParsedSpikeSnapshot{};
+            }
             continue;
         }
 
@@ -1070,28 +1163,39 @@ inline bool extract_spike_output(std::string_view output,
         return false;
     }
 
-    if (!parsed.has_privilege) {
-        error = "missing privilege line in spike debug output";
+    if (!current.numeric_values.empty() || current.has_privilege) {
+        error = "incomplete snapshot in spike debug output";
         return false;
     }
-    if (parsed.numeric_values.empty()) {
-        error = "no numeric spike debug output captured";
+    if (snapshots.size() != expected_snapshot_count) {
+        std::ostringstream message;
+        message << "unexpected snapshot count: expected " << expected_snapshot_count
+                << " snapshots, got " << snapshots.size();
+        error = message.str();
+        return false;
+    }
+    if (snapshots.empty()) {
+        error = "missing privilege line in spike debug output";
         return false;
     }
     return true;
 }
 
 inline bool trap_state_present(const FinalState& state,
+                               const Scenario& scenario,
                                uint32_t cause_csr,
                                uint32_t epc_csr,
                                uint32_t tval_csr) {
-    return spike_tracked_csr_value(state, cause_csr) != 0 ||
-           spike_tracked_csr_value(state, epc_csr) != 0 ||
-           spike_tracked_csr_value(state, tval_csr) != 0;
+    return spike_tracked_csr_value(state, cause_csr) !=
+               scenario_effective_initial_csr_value(scenario, cause_csr) ||
+           spike_tracked_csr_value(state, epc_csr) !=
+               scenario_effective_initial_csr_value(scenario, epc_csr) ||
+           spike_tracked_csr_value(state, tval_csr) !=
+               scenario_effective_initial_csr_value(scenario, tval_csr);
 }
 
-inline bool infer_supervisor_trap_summary(FinalState& state) {
-    if (!trap_state_present(state, CSR_SCAUSE, CSR_SEPC, CSR_STVAL)) {
+inline bool infer_supervisor_trap_summary(FinalState& state, const Scenario& scenario) {
+    if (!trap_state_present(state, scenario, CSR_SCAUSE, CSR_SEPC, CSR_STVAL)) {
         return false;
     }
     state.trap_summary = {
@@ -1104,8 +1208,8 @@ inline bool infer_supervisor_trap_summary(FinalState& state) {
     return true;
 }
 
-inline bool infer_machine_trap_summary(FinalState& state) {
-    if (!trap_state_present(state, CSR_MCAUSE, CSR_MEPC, CSR_MTVAL)) {
+inline bool infer_machine_trap_summary(FinalState& state, const Scenario& scenario) {
+    if (!trap_state_present(state, scenario, CSR_MCAUSE, CSR_MEPC, CSR_MTVAL)) {
         return false;
     }
     state.trap_summary = {
@@ -1118,40 +1222,26 @@ inline bool infer_machine_trap_summary(FinalState& state) {
     return true;
 }
 
-inline void infer_spike_trap_summary(FinalState& state) {
-    const bool has_supervisor_trap = trap_state_present(state, CSR_SCAUSE, CSR_SEPC, CSR_STVAL);
-    const bool has_machine_trap = trap_state_present(state, CSR_MCAUSE, CSR_MEPC, CSR_MTVAL);
+inline void infer_spike_trap_summary(FinalState& state, const Scenario& scenario) {
+    const bool has_supervisor_trap =
+        trap_state_present(state, scenario, CSR_SCAUSE, CSR_SEPC, CSR_STVAL);
+    const bool has_machine_trap =
+        trap_state_present(state, scenario, CSR_MCAUSE, CSR_MEPC, CSR_MTVAL);
     state.trap_summary = TrapSummary{};
     if (has_supervisor_trap == has_machine_trap) {
         return;
     }
     if (has_supervisor_trap) {
-        (void)infer_supervisor_trap_summary(state);
+        (void)infer_supervisor_trap_summary(state, scenario);
         return;
     }
-    (void)infer_machine_trap_summary(state);
+    (void)infer_machine_trap_summary(state, scenario);
 }
 
-inline bool parse_spike_final_state_output(const Scenario& scenario,
-                                           const SpikeScenarioPlan& plan,
-                                           const std::string& output,
-                                           FinalState& state,
-                                           std::string& error) {
-    ParsedSpikeOutput parsed;
-    if (!extract_spike_output(output, parsed, error)) {
-        return false;
-    }
-
-    const size_t expected_value_count = 2 + state.gprs.size() + kTrackedCsrs.size() +
-                                        scenario.watches.size();
-    if (parsed.numeric_values.size() != expected_value_count) {
-        std::ostringstream message;
-        message << "unexpected field count: expected " << expected_value_count
-                << " captured values, got " << parsed.numeric_values.size();
-        error = message.str();
-        return false;
-    }
-
+inline void populate_state_from_snapshot(const ParsedSpikeSnapshot& parsed,
+                                         const Scenario& scenario,
+                                         const SpikeScenarioPlan& plan,
+                                         FinalState& state) {
     size_t index = 0;
     state.pc = parsed.numeric_values[index++];
     state.privilege = parsed.privilege;
@@ -1171,7 +1261,30 @@ inline bool parse_spike_final_state_output(const Scenario& scenario,
         state.watched_memory[i] =
             mask_low_bytes(parsed.numeric_values[index++], scenario.watches[i].size);
     }
-    infer_spike_trap_summary(state);
+    infer_spike_trap_summary(state, scenario);
+}
+
+inline bool parse_spike_final_state_output(const Scenario& scenario,
+                                           const SpikeScenarioPlan& plan,
+                                           const std::string& output,
+                                           FinalState& state,
+                                           std::string& error) {
+    std::vector<ParsedSpikeSnapshot> snapshots;
+    if (!extract_spike_snapshots(output, scenario, plan, snapshots, error)) {
+        return false;
+    }
+
+    if (plan.capture_first_trap_summary) {
+        FinalState checkpoint_state;
+        populate_state_from_snapshot(snapshots.front(), scenario, plan, checkpoint_state);
+        if (!checkpoint_state.trap_summary.trapped) {
+            error = "failed to infer first trap summary from checkpoint snapshot";
+            return false;
+        }
+        state.first_trap_summary = checkpoint_state.trap_summary;
+    }
+
+    populate_state_from_snapshot(snapshots.back(), scenario, plan, state);
     return true;
 }
 

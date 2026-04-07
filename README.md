@@ -168,6 +168,8 @@ make test-host-spike_differential_smoke
 make test-host-spike_differential
 ```
 
+当前默认正向场景已经覆盖基础 ALU / control-flow / trap / delegated privilege，以及第一批 device-free `Sv39/page fault` final-state 子集：`sv39_instruction_page_fault`、`sv39_load_page_fault`、`sv39_store_page_fault` 和 `sv39_reserved_non_leaf_fault`。对带 `mret / sret` 的 returning trap handler，Spike 侧现在也会在单次运行里额外抓一个 first-trap checkpoint，用来比较最小 trap summary，而不是只看最终恢复态。
+
 如果 `spike` 不在默认 `PATH`，可以显式指定：
 
 ```bash

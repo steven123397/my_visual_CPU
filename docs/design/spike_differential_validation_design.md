@@ -31,7 +31,8 @@
 ## 设计目标
 
 - 为 host 微场景提供独立的 `myCPU vs Spike` 外部 oracle。
-- 当前以 final state 为比较核心，统一比较 `pc`、`halted/timed_out`、privilege、GPR、tracked CSR、watched memory 和最小 trap summary。
+- 当前以 final state 为比较核心；默认统一比较 `pc`、`halted/timed_out`、privilege、GPR、tracked CSR、watched memory 和最小 trap summary。
+- 对执行 `mret / sret` 的 returning trap handler，额外比较“第一次入 trap”的最小 checkpoint summary，而不是把整段中间态扩成 trace differential。
 - 尽量复用现有 host differential 的场景资产与状态口径，而不是另起一套测试 DSL。
 - 把 Spike 的镜像生成、进程调用、输出解析全部收口在 adapter / runner 层，不把外部工具细节扩散到 compare 逻辑。
 - 默认不把 Spike 变成 `make test` 或 `make test-pipeline` 的必需依赖。
@@ -54,6 +55,7 @@
   - 复用 host 微场景常量、入口地址和 trap vector 约定
 - `final_state.h`
   - 定义 `FinalState`、`TrapSummary`、`DiffReport`
+  - `FinalState` 当前同时保留最终 `trap_summary` 与 returning trap handler 使用的 `first_trap_summary`
 - `state_compare.h`
   - 负责 final-state compare 和必要归一化
 
@@ -104,6 +106,10 @@
   - `reg 0 <0..31>`
   - tracked CSR 集合
   - `mem <watch-addr>`
+- 对执行 `mret / sret` 的场景，Spike runner 当前会在同一个 Spike 进程里分两段采集同构 snapshot：
+  - 第一段在首个 trap handler 入口的 `mtvec/stvec` 处抓 first-trap checkpoint
+  - 第二段在受控退出点或步数预算结束后抓最终 snapshot
+- first-trap trap summary 的推断会按 Spike bootstrap 的“有效初始 CSR 值”做比较，避免把 non-`M-mode` 入口预写的 `mepc` 噪音误判成 machine trap。
 - 解析是严格 fail-closed：
   - `privilege` 行必须且只能出现一次
   - 数值字段数量必须精确匹配
@@ -134,11 +140,13 @@ Spike runner 当前会显式拒绝以下 setup：
 - tracked CSR
 - watched memory
 - trap summary
+- returning trap handler 场景下的 `first_trap_summary`
 
 当前 compare 还做了两类必要归一化：
 
 - 对 `sstatus / mstatus` 只比较 myCPU 当前已建模的位，避免把 Spike 更完整实现的一些非目标位混进结果。
 - 对 non-`M-mode` bootstrap 必然带来的少量 `mstatus.MPIE / mepc` 噪音做场景级剥离，避免把初始化机制差异误报成 privilege 语义错误。
+- 对 returning trap handler，只比较 first-trap 的最小 trap summary，不比较完整 checkpoint 架构态。
 
 ## 用户入口
 
@@ -167,7 +175,7 @@ Spike runner 当前会显式拒绝以下 setup：
 当前这条链路是“离线 final-state differential”，不是更大的通用 trace framework。具体边界如下：
 
 - 当前已接入并适合作为正向样例的，是 host 微场景，不是 guest workload。
-- 当前重点覆盖 ALU、memory、control flow、CSR、machine trap 和 delegated privilege 这类架构可见语义面。
+- 当前重点覆盖 ALU、memory、control flow、CSR、machine trap、delegated privilege、returning trap handler first-trap checkpoint，以及第一批 device-free `Sv39/page fault` final-state 子集这类架构可见语义面。
 - 当前不比较设备 side effect、平台状态或 pipeline 内部状态。
 - 当前不要求 `make test` / `make test-pipeline` 依赖 Spike。
 
@@ -177,17 +185,17 @@ Spike runner 当前会显式拒绝以下 setup：
 
 - 只比较 final state，不比较逐提交轨迹。
 - 当前不比较 `instret`，因为 Spike bootstrap 会引入额外初始化指令。
-- 对执行 `mret / sret` 的 returning trap handler，当前不比较“第一次入 trap”的 checkpoint，只比较最终可恢复状态。
-- Spike 侧 trap summary 当前主要来自最终保留下来的 trap CSR；因此 returning trap handler 的首个 trap 现场还不是 V1 的比较对象。
-- `configure hook`、platform fixture、设备 side effect、`Sv39 / page fault` 子集都还不在当前覆盖面内。
+- 对执行 `mret / sret` 的 returning trap handler，当前只比较 first-trap 的最小 trap summary，不比较完整中间态寄存器轨迹。
+- Spike 侧 first-trap checkpoint 当前仍限制为“单次运行里抓第一段 trap 入口 + 最终态”这一个最小形态，不扩成多 checkpoint / nested trap trace。
+- 当前虽已覆盖第一批 device-free `Sv39/page fault` final-state 子集和 returning trap handler checkpoint，但 `configure hook`、platform fixture、设备 side effect、更广 `Sv39` 语义面以及逐提交 trace 仍不在当前覆盖面内。
 
 ## 后续扩展方向
 
 如果未来要继续增强这条 oracle，最值得做的切片是：
 
-1. `Sv39 / page fault` 的 final-state 子集
-2. returning trap handler 的 trap checkpoint
-3. 不依赖设备 side effect 的更细 privilege / CSR 合同
+1. 更广的 `Sv39 / page fault` final-state 子集，例如 `MPRV` 一类更细 privilege-memory 合同
+2. 不依赖设备 side effect 的更细 privilege / CSR 合同
+3. 必要时再把 returning trap handler 从“单 first-trap checkpoint”外推到更复杂的多 checkpoint / nested trap 变体
 
 只有当这些 final-state / checkpoint 级能力已经不足以定位问题时，才值得再评估 commit-level 或 trace-level differential。当前阶段不建议直接把 Spike 线扩成更大的统一框架。
 
