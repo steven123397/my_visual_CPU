@@ -440,6 +440,109 @@ test('renderApp keeps grouped inspector sections expanded when layout state requ
   assert.match(elements.devices.innerHTML, /<details class="panel panel-group panel-group-platform" data-layout-key="platformGroupOpen" open>/);
 });
 
+test('renderApp marks the desktop layout when terminal is collapsed', () => {
+  const state = createAppState();
+  state.runState = 'paused';
+  state.selectedTest = 'hello';
+  state.backend = 'pipeline';
+  state.terminal.connected = true;
+  state.terminal.buffer = 'boot\nmonitor> help';
+  state.layout.debugPanelOpen = true;
+  state.layout.terminalCollapsed = true;
+
+  pushSnapshot(state, {
+    summary: {
+      cycle: 9,
+      instret: 4,
+      pc: '0x80000090',
+      halted: false,
+      privilege: 'S',
+      backend: 'pipeline',
+    },
+    pipeline: {
+      if: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      id: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      ex: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      mem: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      wb: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      flags: {
+        stalled: false,
+        stall_reason: 'none',
+        redirected: false,
+        trap_flush: false,
+        replay_flush: false,
+        committed: true,
+      },
+      ooo: {
+        rob_depth: 0,
+        rob_head_sequence_id: 0,
+        lsq_depth: 0,
+        lsq_head_sequence_id: 0,
+        lsq_load_state: 'none',
+        lsq_load_sequence_id: 0,
+        lsq_store_sequence_id: 0,
+      },
+      predictor: {
+        mode: 'bimodal-2bit',
+        total_predictions: 1,
+        correct_predictions: 1,
+        mispredictions: 0,
+      },
+    },
+    gpr: Array.from({ length: 32 }, () => '0x0'),
+    csrs: {
+      mstatus: '0x0',
+      sstatus: '0x0',
+      mepc: '0x0',
+      sepc: '0x0',
+      mcause: '0x0',
+      scause: '0x0',
+      mie: '0x0',
+      mip: '0x0',
+      satp: '0x0',
+    },
+    devices: {
+      uart: { ier: 0, output_size: 0 },
+      clint: { mtime: 9, mtimecmp: 0, timer_interrupt_pending: false },
+      plic: { pending: false, level: false },
+      storage: { attached: false, lba: 0 },
+    },
+    bus: {
+      valid: false,
+      success: true,
+      write: false,
+      mmio: false,
+      device: '',
+      addr: '0x0',
+      value: '0x0',
+      size: 0,
+      detail: '',
+    },
+    events: [],
+  });
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.equal(elements.desktop.dataset.terminalCollapsed, 'true');
+  assert.match(elements.terminal.innerHTML, /terminal-window is-collapsed/);
+  assert.match(elements.terminal.innerHTML, /展开 terminal/);
+});
+
+
 test('renderApp does not let stale closed DOM state override requested group expansion', () => {
   const state = createAppState();
   state.runState = 'running';

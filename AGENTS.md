@@ -116,7 +116,7 @@
 - 继续沿已落地的 hardening 矩阵，维护非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 合同闭环，并按新增 bug 补最小回归。
 - 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做 bug-driven hardening。
 - `P1` 结构收口和 `P2` 首轮验证补洞已经全部完成；当前不再把重点放在继续扩功能面。
-- `debug/frontend` 当前已经补上 Node/runtime 级持续 `run/pause`、session replacement、高吞吐 terminal 聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e；对当前单用户、本地教学/调试使用，这组门禁已经足够，后续按真实 bug 或明确新需求补最小回归即可。
+- `debug/frontend` 的 Node/runtime 级持续 `run/pause`、session replacement、高吞吐 terminal 聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e 门禁已经够用；当前工作区正在此基线上推进一轮不扩功能面的 UI refresh，范围仅限浏览器壳层的布局、视觉层级和 `terminal` 收起交互语义，后续也继续按真实 bug 或明确 UI 需求补最小回归，不主动扩大协议或压力面。
 - `Phase 3` 的 decode 级 `BlockedByUnresolvedStore` 最小收窄之后，主线判断已经完成：当前不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 这类有明确结构收益的最小切片，而不是直接放大 memory speculation / replay。
 - 继续把 `pipeline`、loader/debug smoke 和 guest runtime 保持在当前已接入、可验证的范围内，不让它们反向污染 reference path。
 

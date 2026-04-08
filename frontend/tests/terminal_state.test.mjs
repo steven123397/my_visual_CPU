@@ -8,6 +8,7 @@ import {
   normalizeTerminalInput,
   setDebugPanelOpen,
   setInspectorGroupOpen,
+  setTerminalCollapsed,
   setTerminalFocus,
   setTerminalPendingInput,
 } from '../app/state.js';
@@ -26,6 +27,7 @@ test('createAppState starts with an open inspector and inactive terminal', () =>
     debugPanelOpen: true,
     architectureGroupOpen: false,
     platformGroupOpen: false,
+    terminalCollapsed: false,
   });
 });
 
@@ -78,22 +80,26 @@ test('terminal focus, pending input and inspector visibility update independentl
   setTerminalFocus(state, true);
   setTerminalPendingInput(state, true);
   setDebugPanelOpen(state, true);
+  setTerminalCollapsed(state, true);
   setInspectorGroupOpen(state, 'architectureGroupOpen', true);
   setInspectorGroupOpen(state, 'platformGroupOpen', true);
   assert.equal(state.terminal.focused, true);
   assert.equal(state.terminal.pendingInput, true);
   assert.equal(state.layout.debugPanelOpen, true);
+  assert.equal(state.layout.terminalCollapsed, true);
   assert.equal(state.layout.architectureGroupOpen, true);
   assert.equal(state.layout.platformGroupOpen, true);
 
   setTerminalFocus(state, false);
   setTerminalPendingInput(state, false);
   setDebugPanelOpen(state, false);
+  setTerminalCollapsed(state, false);
   setInspectorGroupOpen(state, 'architectureGroupOpen', false);
   setInspectorGroupOpen(state, 'platformGroupOpen', false);
   assert.equal(state.terminal.focused, false);
   assert.equal(state.terminal.pendingInput, false);
   assert.equal(state.layout.debugPanelOpen, false);
+  assert.equal(state.layout.terminalCollapsed, false);
   assert.equal(state.layout.architectureGroupOpen, false);
   assert.equal(state.layout.platformGroupOpen, false);
 });

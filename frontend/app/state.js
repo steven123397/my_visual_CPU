@@ -36,6 +36,7 @@ export function createAppState() {
       debugPanelOpen: true,
       architectureGroupOpen: false,
       platformGroupOpen: false,
+      terminalCollapsed: false,
     },
   };
 }
@@ -94,6 +95,10 @@ export function setTerminalPendingInput(state, pending) {
 
 export function setDebugPanelOpen(state, open) {
   state.layout.debugPanelOpen = open;
+}
+
+export function setTerminalCollapsed(state, collapsed) {
+  state.layout.terminalCollapsed = collapsed;
 }
 
 export function setInspectorGroupOpen(state, key, open) {

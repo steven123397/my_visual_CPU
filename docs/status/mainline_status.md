@@ -11,6 +11,7 @@
 - 相关设计：
   - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
+  - [design/debug_frontend_ui_refresh_design.md](../design/debug_frontend_ui_refresh_design.md)
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)
   - [design/phase3_issue_replay_speculation_assessment.md](../design/phase3_issue_replay_speculation_assessment.md)
@@ -40,6 +41,7 @@
 - `2026-04-06` 已完成 Spike 外部差分验证 V1 第一轮落地：`make test-host-spike_differential` 作为显式离线入口已经可用，当前真实接通的正向场景包括 `alu_mem_csr`、`control_flow`、`predictable_branch_loop`、`trap_return`、`illegal_trap` 与 `delegated_user_ecall_to_supervisor`；`make test` 与 `make test-pipeline` 继续不依赖 Spike。
 - `2026-04-07` 已把 Spike 外部差分继续外推到第一批 device-free `Sv39/page fault` final-state subset：`make test-host-spike_differential` 当前已额外接通 `sv39_instruction_page_fault`、`sv39_load_page_fault`、`sv39_store_page_fault` 与 `sv39_reserved_non_leaf_fault`；对应场景不再依赖 `configure hook`，而是统一改写成显式 `initial_gprs / initial_csrs / initial_memory`。
 - `2026-04-07` 同日也已把 Spike 外部差分的 returning trap handler checkpoint 正式接通：当前对带 `mret / sret` 的场景会在单次 Spike 运行里额外抓 first-trap checkpoint，并比较 `first_trap_summary`；`trap_return`、`delegated_user_ecall_to_supervisor` 以及新增的 returning `Sv39/page fault` 场景都已进入真实差分门禁。
+- `2026-04-08` 当前工作区正在推进一轮不扩功能面的 `debug/frontend` UI refresh：范围限于浏览器壳层的 Hero / 控制带 / `terminal` / `inspector` 布局收口，以及 `terminal collapsed` 交互语义；当前边界仍明确为不修改 `debug_session/protocol`、`DebugSnapshot`、guest 合同或更重浏览器压力面。
 - `2026-04-05` 又补上一条更窄的 platform hardening：`Machine::load_elf()/load_binary()` 在保留“非完整平台 reset”语义的前提下，image reload 不再把上一轮 guest 留下的 `SimpleStorage` sticky error 带进新镜像；对应 `machine_loader_reset` 已补上 binary/ELF 两侧回归。
 - `2026-04-05` 又补上一条更窄的 guest runtime hardening：`kernel_runtime_complete_storage_signature_check()` 现在即使在 storage read 失败或签名不匹配时也会释放临时 PMM 页，避免把页泄漏藏在 `kernel_alpha` storage probe/signature 的失败路径里；对应 `kernel_runtime` 单测已补上坏签名与读失败两侧回归。
 - `2026-04-05` 又补上一条更窄的 guest runtime rollback hardening：`kernel_runtime_run_identity_superpage_bringup()` 现在在复用同一个 `kernel_runtime_t` 时会先清空旧 `address_space`，因此即使随后在 PMM 早期检查、mapping failure 或 satp mismatch 上失败，也不会把上一轮 stale VM 指针泄露给后续路径；对应 `kernel_runtime` 单测已补上 runtime reuse + early failure 回归。
@@ -87,6 +89,7 @@
 ## 当前仍然有效的风险 / 限制
 
 - `debug/frontend` 当前已经可用，并且 Node/runtime 级持续 `run`、session replacement、高吞吐 terminal 输入聚合、repeated `run/pause` 长会话、`reset` 后 terminal reset / offset 重启，以及真实 `interactive_os` `run/pause + terminal-input` e2e 都已接入；对当前单用户、本地教学/调试使用，这组门禁已经足够。
+- 当前工作区中的 `debug/frontend` UI refresh 仍是浏览器壳层收口，不扩成新的协议或压力专项；其中 `terminal collapsed` 视图必须继续如实反映连接、待输入和不可交互状态，不能把“尚未加载会话”或“仍在发送输入”伪装成“可直接继续交互”。
 - Spike 外部差分验证当前仍是独立离线能力，不进入默认主门禁；当前仍以 final state 为主体，并对 `instret` 与 non-`M-mode` bootstrap 带来的少量 `mstatus/mepc` 噪音做了受控收窄。对执行 `mret / sret` 的 returning trap handler，当前已额外比较 first-trap checkpoint summary，但还不扩成更大的中间态 trace。
 - Spike 外部差分当前已经覆盖第一批 device-free `Sv39/page fault` final-state subset 和 returning trap handler 的首个 checkpoint summary，但仍不覆盖 `configure hook`、`PlatformFixture::UartPlic`、设备 side effect、更广 `Sv39` 语义面、更复杂的多 checkpoint / nested trap 变体和逐提交 trace；如果未来要把它升级成更强 oracle，下一刀应优先看更广 `Sv39` / device-free privilege 或确有收益的多 checkpoint 变体，而不是直接做更大的统一框架。
 - Node 侧 `debug_budget.mjs` 与 C++ 侧 `debug_budget.h` 已分别收口，但它们仍是分语言维护，不是跨语言单一事实来源。
@@ -101,7 +104,7 @@
 1. 当前不主动重开更激进的 `Phase 3` issue / replay / speculation 扩展；后续仅在出现真实 stall hotspot 证据或明确研究目标时再单开专项。
 2. Spike 外部差分验证当前转入 bug-driven 扩展阶段：保留离线 oracle 入口，后续只在出现真实 correctness 缺口时，按最小切片继续补更广 `Sv39 / page fault`、设备无关 privilege / CSR，或必要时的更复杂多 checkpoint 变体。
 3. 继续以 bug-driven hardening 的方式维护 guest runtime、`kernel_alpha` 十条基线和 reference correctness 矩阵，不做无关大重构。
-4. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内；`debug/frontend` 后续按真实 bug 或明确新需求补最小回归，不再主动扩大浏览器端压力面。
+4. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内；当前这轮 `debug/frontend` UI refresh 也只收口浏览器壳层布局和真实状态表达，不扩大协议或浏览器端压力面，后续仍按真实 bug 或明确新需求补最小回归。
 
 ## 验证基线
 

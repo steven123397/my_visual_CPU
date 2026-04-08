@@ -18,17 +18,19 @@
    Spike 外部差分验证的当前实现边界、用户入口和扩展方向。
 7. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
    `debug_session/protocol + frontend` 的正式接入边界。
-8. [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
+8. [design/debug_frontend_ui_refresh_design.md](design/debug_frontend_ui_refresh_design.md)
+   `debug/frontend` 当前这一轮 UI 美化的结构边界与视觉方案。
+9. [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
    最小可交互 `interactive_os` 的 host / frontend / guest 合同。
-9. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
+10. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
    `Phase 3-B/C` 执行模型边界。
-10. [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
+11. [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
    decode 级 `BlockedByUnresolvedStore` 串行化边界专项设计。
-11. [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
+12. [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
    decode 边界收窄之后，`Phase 3` 是否继续扩更激进 `issue / replay / speculation` 的取舍结论。
-12. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+13. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
    `pipeline` 投机执行与提交契约。
-13. [plan/history_plan.md](plan/history_plan.md)
+14. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -42,6 +44,7 @@
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
 - `debug/frontend`
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+  - [design/debug_frontend_ui_refresh_design.md](design/debug_frontend_ui_refresh_design.md)
   - [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
 - `platform / MMIO`
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)

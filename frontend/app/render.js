@@ -31,6 +31,7 @@ export function renderApp(elements, state) {
   const previousTerminalScrollTop = previousTerminal?.scrollTop ?? 0;
 
   elements.desktop.dataset.debugOpen = state.layout.debugPanelOpen ? 'true' : 'false';
+  elements.desktop.dataset.terminalCollapsed = state.layout.terminalCollapsed ? 'true' : 'false';
   elements.debugInspector.dataset.open = state.layout.debugPanelOpen ? 'true' : 'false';
   elements.terminal.innerHTML = renderTerminal(state);
   elements.summary.innerHTML = renderSummary(snapshot, state.runState);

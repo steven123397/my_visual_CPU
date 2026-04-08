@@ -17,6 +17,7 @@ import {
   pushSnapshot,
   resetHistory,
   resetTerminalState,
+  setTerminalCollapsed,
   setTerminalFocus,
   setInspectorGroupOpen,
   setTerminalPendingInput,
@@ -140,8 +141,19 @@ async function init() {
       needsPaint = true;
     }
 
-    const shouldFocusTerminal = state.terminal.connected && elements.terminal.contains(event.target);
-    if (!state.terminal.connected && elements.terminal.contains(event.target)) {
+    const terminalToggle = event.target.closest?.('[data-action="toggle-terminal-collapsed"]');
+    if (terminalToggle) {
+      event.preventDefault();
+      setTerminalCollapsed(state, !state.layout.terminalCollapsed);
+      needsPaint = true;
+    }
+
+    const shouldFocusTerminal =
+      !state.layout.terminalCollapsed &&
+      state.terminal.connected &&
+      elements.terminal.contains(event.target) &&
+      !event.target.closest?.('[data-action="toggle-terminal-collapsed"]');
+    if (!state.terminal.connected && elements.terminal.contains(event.target) && !terminalToggle) {
       showNotice('先点击 Load，建立一个 interactive_os 会话。');
     }
     if (state.terminal.focused !== shouldFocusTerminal) {

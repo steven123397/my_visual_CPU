@@ -18,7 +18,16 @@
 
 ## 当前状态
 
-- `2026-04-08` 当前无活跃复查问题。
+- `2026-04-08` 对当前 `debug/frontend` UI 刷新工作区的一轮复查问题已关闭。
+- 关闭结论：
+  - [../../frontend/app/components/terminal.js#L20](../../frontend/app/components/terminal.js#L20)
+    `renderTerminal()` 现在会继续以 `terminal.connected` / `terminal.pendingInput` 作为更高优先级状态来源；`terminal collapsed` 视图下，未加载会话与输入仍在排队都不再被伪装成“展开后即可继续交互”。
+  - [../../frontend/tests/terminal_render.test.mjs#L71](../../frontend/tests/terminal_render.test.mjs#L71)
+    新增了 collapsed + disconnected、collapsed + pending-input 两条前端回归，锁住上述提示语义。
+  - [../../AGENTS.md](../../AGENTS.md) 、 [mainline_status.md](mainline_status.md) 和 [project_priority_roadmap.md](project_priority_roadmap.md)
+    `AGENTS`、`mainline_status` 与 `project_priority_roadmap` 已同步这一轮 `debug/frontend` UI refresh 的当前边界：只收口浏览器壳层布局与状态表达，不扩大协议或浏览器压力面。
+  - [../../frontend/tests/render.test.mjs#L645](../../frontend/tests/render.test.mjs#L645)
+    末尾多余空行已清掉；`git diff --check` 当前为干净状态。
 - `2026-04-07` 对 guest/runtime 主线边界做的一轮并行普查里的最后一条活跃问题已关闭：
   - [../../myCPU/guest/kernel/supervisor_demo_smoke.c#L375](../../myCPU/guest/kernel/supervisor_demo_smoke.c#L375) 和 [../../myCPU/guest/kernel/supervisor_demo_smoke.c#L386](../../myCPU/guest/kernel/supervisor_demo_smoke.c#L386)
     `supervisor_demo_smoke_probe_storage_page()` 与 `supervisor_demo_smoke_alloc_pages()` 都已改成显式 staged cleanup；`supervisor_demo_smoke` 单测也补上了 storage-page probe 失败、部分分配失败和尾部统计失败后的对称释放回归。

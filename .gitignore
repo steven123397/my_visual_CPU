@@ -53,6 +53,7 @@ coverage/
 
 # Claude Code
 .claude/
+.superpowers/
 
 # Local git worktrees
 .worktrees/

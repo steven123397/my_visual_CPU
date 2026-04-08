@@ -11,6 +11,7 @@
 - 相关设计：
   - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
+  - [design/debug_frontend_ui_refresh_design.md](../design/debug_frontend_ui_refresh_design.md)
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)
   - [design/phase3_issue_replay_speculation_assessment.md](../design/phase3_issue_replay_speculation_assessment.md)
@@ -37,12 +38,13 @@
 
 ## 当前优先级
 
-### 1. `debug/frontend` 维持当前够用门禁，不再主动扩大压力面
+### 1. `debug/frontend` 维持当前够用门禁，并只做不扩功能面的 UI 收口
 
 - 真实 `debug server + mycpu --debug-cli` 端到端 smoke 已经落地，但它仍主要覆盖最小交互和短会话。
 - 当前已经补上一组更窄的 Node/runtime 回归：持续 `run/pause`、运行中 session replacement，以及更高吞吐 terminal 输入聚合。
 - 当前也已经进一步补到 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
 - 对当前单用户、本地教学/调试使用，这组门禁已经足够；后续按真实 bug 或明确新需求补最小回归即可，不再主动扩大到更长时间 soak 或更重浏览器压力。
+- 当前工作区也在推进一轮 `debug/frontend` UI refresh，但它的边界仍应收窄在浏览器壳层的布局、视觉层级和 `terminal collapsed` 交互语义，不得顺手扩大 `debug_session/protocol`、guest 合同或新的浏览器压力验证面。
 - 这条线的目标仍然只是“教学演示可用”，不是通用调试器，也不需要为当前使用方式预先建设更重的浏览器端压测体系。
 
 ### 2. `Phase 3` 后续取舍已收口：当前不主动扩大更激进的 `issue / replay / speculation`

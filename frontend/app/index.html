@@ -10,54 +10,81 @@
     <div class="background-layer"></div>
     <main class="app-shell">
       <header class="hero">
-        <div>
+        <div class="hero-copy-block">
           <p class="eyebrow">my_visual_CPU</p>
           <h1>交互式终端调试台</h1>
-          <p class="hero-copy">终端现在是主舞台，guest monitor 的串口输出和输入都通过浏览器壳层直达。调试器退到下边，在你需要查看流水线、CSR 和设备快照时再展开。</p>
+          <p class="hero-copy">浅色实验台承载控制与观察，深色 terminal 作为主舞台；当你只想看快照和流水线时，可以直接把 terminal 收起，把空间让给下方 inspector。</p>
         </div>
-        <div class="status-card">
-          <span class="status-label">run state</span>
-          <strong id="status-badge">idle</strong>
+        <div class="hero-status-grid">
+          <article class="status-card status-card-primary">
+            <span class="status-label">run state</span>
+            <strong id="status-badge">idle</strong>
+            <span class="status-note">本地教学 / 调试壳层</span>
+          </article>
+          <article class="status-card status-card-secondary">
+            <span class="status-label">workflow</span>
+            <strong>terminal-first</strong>
+            <span class="status-note">可切回纯状态观察</span>
+          </article>
         </div>
       </header>
 
       <section class="control-bar">
-        <label>
-          <span>测试</span>
-          <select id="test-select"></select>
-        </label>
-        <label>
-          <span>后端</span>
-          <select id="backend-select">
-            <option value="pipeline">pipeline</option>
-            <option value="functional">functional</option>
-          </select>
-        </label>
-        <div class="button-row">
-          <button id="load-button">Load</button>
-          <button id="run-button">Run</button>
-          <button id="pause-button">Pause</button>
-          <button id="step-cycle-button">Step Cycle</button>
-          <button id="step-commit-button">Step Commit</button>
-          <button id="reset-button">Reset</button>
+        <div class="control-group control-group-session">
+          <p class="control-group__title">会话选择</p>
+          <div class="control-group__body control-group__body-fields">
+            <label>
+              <span>测试</span>
+              <select id="test-select"></select>
+            </label>
+            <label>
+              <span>后端</span>
+              <select id="backend-select">
+                <option value="pipeline">pipeline</option>
+                <option value="functional">functional</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="control-group control-group-actions">
+          <p class="control-group__title">主操作</p>
+          <div class="control-group__body button-row button-row-primary">
+            <button id="load-button">Load</button>
+            <button id="run-button">Run</button>
+            <button id="pause-button">Pause</button>
+            <button id="reset-button">Reset</button>
+          </div>
+        </div>
+
+        <div class="control-group control-group-detail">
+          <p class="control-group__title">精细控制</p>
+          <div class="control-group__body button-row button-row-secondary">
+            <button id="step-cycle-button">Step Cycle</button>
+            <button id="step-commit-button">Step Commit</button>
+          </div>
         </div>
       </section>
 
       <section id="notice" class="notice" data-kind="info">正在连接本地调试服务…</section>
 
-      <section class="desktop-shell" id="desktop-shell" data-debug-open="true">
-        <div class="terminal-stage">
-          <div id="terminal-slot"></div>
+      <section class="desktop-shell" id="desktop-shell" data-debug-open="true" data-terminal-collapsed="false">
+        <div class="desktop-stage">
+          <div class="terminal-stage">
+            <div id="terminal-slot"></div>
+          </div>
+          <aside class="stage-sidebar">
+            <div id="summary-slot"></div>
+            <div id="predictor-slot"></div>
+          </aside>
         </div>
         <aside class="debug-inspector" id="debug-inspector" data-open="true">
           <div class="debug-inspector-grid">
-            <div id="summary-slot"></div>
             <div id="pipeline-slot"></div>
             <div id="events-slot"></div>
             <div id="devices-slot"></div>
             <div id="csrs-slot"></div>
             <div id="registers-slot"></div>
-            <div id="predictor-slot"></div>
             <div id="bus-slot"></div>
           </div>
         </aside>
