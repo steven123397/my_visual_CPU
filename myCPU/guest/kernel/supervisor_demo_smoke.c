@@ -113,6 +113,9 @@ static bool supervisor_demo_smoke_validate_memory_layout(
     const volatile uint32_t* rodata_marker);
 static bool supervisor_demo_smoke_validate_pmm_setup(uintptr_t early_cursor);
 static bool supervisor_demo_smoke_probe_storage_page(void);
+static void supervisor_demo_smoke_reset_pages(supervisor_demo_smoke_pages_t* pages);
+static void supervisor_demo_smoke_release_allocated_pages(
+    supervisor_demo_smoke_pages_t* pages);
 static bool supervisor_demo_smoke_alloc_pages(supervisor_demo_smoke_pages_t* pages);
 static bool supervisor_demo_smoke_prime_active_pages(
     supervisor_demo_smoke_pages_t* pages,
@@ -374,13 +377,69 @@ static bool supervisor_demo_smoke_validate_pmm_setup(uintptr_t early_cursor) {
 
 static bool supervisor_demo_smoke_probe_storage_page(void) {
     uint8_t* storage_page = (uint8_t*)pmm_alloc_page();
+    bool storage_page_released = false;
 
-    return storage_page != NULL &&
-           (((uintptr_t)storage_page) & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
-           pmm_free_pages() + 1U == pmm_total_pages() &&
-           pmm_used_pages() == 1U && pmm_free_page(storage_page) &&
-           !pmm_free_page(storage_page) &&
-           pmm_free_pages() == pmm_total_pages() && pmm_used_pages() == 0U;
+    if (storage_page == NULL) {
+        return false;
+    }
+    if ((((uintptr_t)storage_page) & (MEMORY_PAGE_SIZE - 1U)) != 0) {
+        goto fail;
+    }
+    if (pmm_free_pages() + 1U != pmm_total_pages() || pmm_used_pages() != 1U) {
+        goto fail;
+    }
+    if (!pmm_free_page(storage_page)) {
+        goto fail;
+    }
+
+    storage_page_released = true;
+    if (pmm_free_page(storage_page)) {
+        return false;
+    }
+    return pmm_free_pages() == pmm_total_pages() && pmm_used_pages() == 0U;
+
+fail:
+    if (!storage_page_released) {
+        (void)pmm_free_page(storage_page);
+    }
+    return false;
+}
+
+static void supervisor_demo_smoke_reset_pages(supervisor_demo_smoke_pages_t* pages) {
+    if (pages == NULL) {
+        return;
+    }
+
+    pages->backing_page = NULL;
+    pages->remap_page = NULL;
+    pages->nx_page = NULL;
+    pages->user_stack_page = NULL;
+    pages->user_trap_stack_page = NULL;
+}
+
+static void supervisor_demo_smoke_release_allocated_pages(
+    supervisor_demo_smoke_pages_t* pages) {
+    if (pages == NULL) {
+        return;
+    }
+
+    if (pages->user_trap_stack_page != NULL) {
+        (void)pmm_free_page(pages->user_trap_stack_page);
+    }
+    if (pages->user_stack_page != NULL) {
+        (void)pmm_free_page(pages->user_stack_page);
+    }
+    if (pages->nx_page != NULL) {
+        (void)pmm_free_page(pages->nx_page);
+    }
+    if (pages->remap_page != NULL) {
+        (void)pmm_free_page(pages->remap_page);
+    }
+    if (pages->backing_page != NULL) {
+        (void)pmm_free_page(pages->backing_page);
+    }
+
+    supervisor_demo_smoke_reset_pages(pages);
 }
 
 static bool supervisor_demo_smoke_alloc_pages(supervisor_demo_smoke_pages_t* pages) {
@@ -388,25 +447,51 @@ static bool supervisor_demo_smoke_alloc_pages(supervisor_demo_smoke_pages_t* pag
         return false;
     }
 
-    pages->backing_page = (uint32_t*)pmm_alloc_page();
-    pages->remap_page = (uint32_t*)pmm_alloc_page();
-    pages->nx_page = (uint32_t*)pmm_alloc_page();
-    pages->user_stack_page = (uint32_t*)pmm_alloc_page();
-    pages->user_trap_stack_page = (uint8_t*)pmm_alloc_page();
+    supervisor_demo_smoke_reset_pages(pages);
 
-    return pages->backing_page != NULL && pages->remap_page != NULL &&
-           pages->nx_page != NULL && pages->user_stack_page != NULL &&
-           pages->user_trap_stack_page != NULL &&
-           (((uintptr_t)pages->user_trap_stack_page) &
-            (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) == 0 &&
-           pmm_free_pages() + 5U == pmm_total_pages() &&
-           pmm_used_pages() == 5U;
+    pages->backing_page = (uint32_t*)pmm_alloc_page();
+    if (pages->backing_page == NULL) {
+        return false;
+    }
+    pages->remap_page = (uint32_t*)pmm_alloc_page();
+    if (pages->remap_page == NULL) {
+        goto fail;
+    }
+    pages->nx_page = (uint32_t*)pmm_alloc_page();
+    if (pages->nx_page == NULL) {
+        goto fail;
+    }
+    pages->user_stack_page = (uint32_t*)pmm_alloc_page();
+    if (pages->user_stack_page == NULL) {
+        goto fail;
+    }
+    pages->user_trap_stack_page = (uint8_t*)pmm_alloc_page();
+    if (pages->user_trap_stack_page == NULL) {
+        goto fail;
+    }
+    if ((((uintptr_t)pages->user_trap_stack_page) &
+         (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) != 0) {
+        goto fail;
+    }
+    if (pmm_free_pages() + 5U != pmm_total_pages() || pmm_used_pages() != 5U) {
+        goto fail;
+    }
+
+    return true;
+
+fail:
+    supervisor_demo_smoke_release_allocated_pages(pages);
+    return false;
 }
 
 #ifdef UNIT_TEST_HOST
 bool supervisor_demo_smoke_alloc_pages_for_test(
     supervisor_demo_smoke_pages_t* pages) {
     return supervisor_demo_smoke_alloc_pages(pages);
+}
+
+bool supervisor_demo_smoke_probe_storage_page_for_test(void) {
+    return supervisor_demo_smoke_probe_storage_page();
 }
 #endif
 

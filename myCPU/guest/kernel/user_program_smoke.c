@@ -230,6 +230,7 @@ static bool user_program_smoke_enter_with_interrupt_signals(
 static bool user_program_smoke_unmap_remap_page(user_program_smoke_t* smoke);
 static bool user_program_smoke_rebind_alias_fault_object(
     user_program_smoke_t* smoke);
+static void user_program_smoke_best_effort_deactivate(user_program_smoke_t* smoke);
 
 bool user_program_smoke_is_reset(const user_program_smoke_t* smoke) {
     return smoke != NULL && smoke->program == NULL &&
@@ -1270,11 +1271,17 @@ bool user_program_smoke_activate_supervisor_access(
         !vm_address_space_is_enabled(address_space) ||
         riscv_read_satp() != vm_address_space_satp_value(address_space) ||
         (riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0) {
+        user_program_smoke_best_effort_deactivate(smoke);
         return false;
     }
 
     riscv_set_sstatus_bits(RISCV_SSTATUS_SUM);
-    return (riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0;
+    if ((riscv_read_sstatus() & RISCV_SSTATUS_SUM) != 0) {
+        return true;
+    }
+
+    user_program_smoke_best_effort_deactivate(smoke);
+    return false;
 }
 
 bool user_program_smoke_deactivate_supervisor_only(
@@ -1314,8 +1321,13 @@ bool user_program_smoke_enter_round(user_program_smoke_t* smoke,
         .round = round,
     };
 
-    return user_program_smoke_round_activate_if_needed(&stage) &&
-           user_program_smoke_round_enter_active(&stage);
+    if (user_program_smoke_round_activate_if_needed(&stage) &&
+        user_program_smoke_round_enter_active(&stage)) {
+        return true;
+    }
+
+    user_program_smoke_best_effort_deactivate(smoke);
+    return false;
 }
 
 bool user_program_smoke_exercise_active_memory(
@@ -1419,4 +1431,12 @@ static bool user_program_smoke_rebind_alias_fault_object(
            user_program_rebind_region_fault_object(smoke->program,
                                                   USER_PROGRAM_REGION_ALIAS,
                                                   &smoke->remap_object);
+}
+
+static void user_program_smoke_best_effort_deactivate(user_program_smoke_t* smoke) {
+    if (!smoke_ready(smoke) || !user_program_is_active(smoke->program)) {
+        return;
+    }
+
+    (void)user_program_deactivate(smoke->program);
 }

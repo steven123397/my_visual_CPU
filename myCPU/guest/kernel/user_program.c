@@ -137,9 +137,10 @@ bool user_program_create(user_program_t* program,
         return true;
     }
 
-    return !user_program_replan_after_create_failure(program,
-                                                     exec_symbol,
-                                                     ecall_symbol);
+    (void)user_program_replan_after_create_failure(program,
+                                                   exec_symbol,
+                                                   ecall_symbol);
+    return false;
 }
 
 vm_address_space_t* user_program_address_space(user_program_t* program) {

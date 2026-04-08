@@ -43,13 +43,20 @@ static bool user_task_release_runtime(user_task_t* user_task) {
 static bool user_task_release_process_and_address_space(user_task_t* user_task) {
     vm_address_space_t* address_space = NULL;
     vm_process_t* process = user_task_process_mut(user_task);
+    bool process_reset_ok = false;
 
     if (process == NULL) {
         return false;
     }
 
     address_space = user_task->address_space;
-    return vm_process_reset(process) && vm_address_space_destroy(address_space);
+    process_reset_ok = vm_process_reset(process);
+    if (!process_reset_ok) {
+        return false;
+    }
+
+    user_task->address_space = NULL;
+    return vm_address_space_destroy(address_space);
 }
 
 void user_task_init(user_task_t* user_task) {
@@ -85,12 +92,22 @@ bool user_task_create(user_task_t* user_task) {
 }
 
 bool user_task_destroy(user_task_t* user_task) {
+    bool released_ok = false;
+
     if (!user_task_created(user_task)) {
         return false;
     }
 
-    if (!user_task_release_runtime(user_task) ||
-        !user_task_release_process_and_address_space(user_task)) {
+    if (!user_task_release_runtime(user_task)) {
+        return false;
+    }
+
+    released_ok = user_task_release_process_and_address_space(user_task);
+    if (!released_ok) {
+        if (user_task->address_space == NULL &&
+            user_task->process.address_space == NULL) {
+            user_task_init(user_task);
+        }
         return false;
     }
 

@@ -68,6 +68,7 @@ static void reset_stub_state(void);
 static int fail(const char* message);
 static int test_user_program_lifecycle_and_helpers(void);
 static int test_user_program_create_failure_replans_bootstrap(void);
+static int test_user_program_create_failure_still_fails_when_cleanup_breaks(void);
 static void clear_bootstrap_state(user_task_bootstrap_t* bootstrap);
 static void fill_standard_bootstrap_layout(user_task_bootstrap_t* bootstrap,
                                            uintptr_t exec_symbol,
@@ -654,9 +655,35 @@ static int test_user_program_create_failure_replans_bootstrap(void) {
     return 0;
 }
 
+static int test_user_program_create_failure_still_fails_when_cleanup_breaks(void) {
+    user_program_t program;
+
+    reset_stub_state();
+    memset(&program, 0, sizeof(program));
+    user_program_init(&program);
+    if (!user_program_plan_standard(&program, 0x3000U + 0x88U, 0x3000U + 0xA8U)) {
+        return fail("expected initial user program plan to succeed");
+    }
+
+    g_bootstrap_bind_result = false;
+    g_user_task_destroy_result = false;
+    if (user_program_create(&program, 0x9000U, 0xA000U)) {
+        return fail("expected create failure to stay failed when cleanup also fails");
+    }
+
+    if (g_user_task_create_calls != 1 || g_bootstrap_configure_calls != 1 ||
+        g_bootstrap_bind_calls != 1 || g_user_task_destroy_calls != 1 ||
+        g_bootstrap_plan_calls != 1) {
+        return fail("expected create failure to stop after failed cleanup");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_user_program_lifecycle_and_helpers() != 0 ||
-        test_user_program_create_failure_replans_bootstrap() != 0) {
+        test_user_program_create_failure_replans_bootstrap() != 0 ||
+        test_user_program_create_failure_still_fails_when_cleanup_breaks() != 0) {
         return 1;
     }
 

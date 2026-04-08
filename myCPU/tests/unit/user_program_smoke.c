@@ -38,6 +38,8 @@ static volatile uint32_t g_active_memory_rodata_marker = 0;
 static volatile uintptr_t g_active_memory_fault_resume_slot = 0;
 static bool g_user_program_is_active = false;
 static bool g_user_program_is_runnable = false;
+static int g_user_program_activate_calls = 0;
+static int g_user_program_deactivate_calls = 0;
 static int g_user_program_unmap_region_base_page_calls = 0;
 static user_program_region_id_t g_last_user_program_unmap_region_base_page_region =
     USER_PROGRAM_REGION_EXEC;
@@ -89,8 +91,10 @@ static int test_smoke_init_and_plan_wrapper(void);
 static int test_validate_standard_plan(void);
 static int test_prepare_standard_rolls_back_failed_address_space_stage(void);
 static int test_prepare_standard_rolls_back_failed_runtime_stage(void);
+static int test_activate_supervisor_access_rolls_back_on_failure(void);
 static int test_active_memory_requires_anon_unmap(void);
 static int test_enter_round_arms_interrupt_signals(void);
+static int test_enter_round_rolls_back_active_state_on_failure(void);
 
 static bool program_created(const user_program_t* program) {
     return program != NULL &&
@@ -323,6 +327,7 @@ bool user_program_is_runnable(const user_program_t* program) {
 
 bool user_program_activate(user_program_t* program) {
     (void)program;
+    g_user_program_activate_calls += 1;
     g_user_program_is_active = true;
     g_user_program_is_runnable = true;
     return true;
@@ -330,6 +335,7 @@ bool user_program_activate(user_program_t* program) {
 
 bool user_program_deactivate(user_program_t* program) {
     (void)program;
+    g_user_program_deactivate_calls += 1;
     g_user_program_is_active = false;
     g_user_program_is_runnable = false;
     return true;
@@ -719,6 +725,8 @@ static void reset_stub_state(void) {
     g_active_memory_fault_resume_slot = 0;
     g_user_program_is_active = false;
     g_user_program_is_runnable = false;
+    g_user_program_activate_calls = 0;
+    g_user_program_deactivate_calls = 0;
     g_user_program_unmap_region_base_page_calls = 0;
     g_last_user_program_unmap_region_base_page_region = USER_PROGRAM_REGION_EXEC;
     g_user_program_unmap_region_base_page_result = false;
@@ -905,6 +913,31 @@ static int test_prepare_standard_rolls_back_failed_runtime_stage(void) {
     return 0;
 }
 
+static int test_activate_supervisor_access_rolls_back_on_failure(void) {
+    user_program_smoke_t smoke = {0};
+    user_program_t program = {0};
+    trap_context_t trap_context = {0};
+
+    reset_stub_state();
+    user_program_smoke_init(&smoke);
+    if (!user_program_create(&program, MEM_BASE, MEM_BASE + MEMORY_PAGE_SIZE)) {
+        return fail("failed to bootstrap user program for activate rollback test");
+    }
+
+    smoke.program = &program;
+    g_user_program_is_runnable = true;
+    if (user_program_smoke_activate_supervisor_access(&smoke, &trap_context)) {
+        return fail("expected activate helper to fail under mismatched active-context stubs");
+    }
+
+    if (g_user_program_activate_calls != 1 || g_user_program_deactivate_calls != 1 ||
+        g_user_program_is_active || g_user_program_is_runnable) {
+        return fail("expected failed activate helper to best-effort deactivate the program");
+    }
+
+    return 0;
+}
+
 static int test_active_memory_requires_anon_unmap(void) {
     user_program_smoke_t smoke = {0};
     user_program_t program = {0};
@@ -1040,13 +1073,58 @@ static int test_enter_round_arms_interrupt_signals(void) {
     return 0;
 }
 
+static int test_enter_round_rolls_back_active_state_on_failure(void) {
+    user_program_smoke_t smoke = {0};
+    user_program_t program = {0};
+    trap_context_t trap_context = {0};
+    uint32_t timer_signal_page[4] = {0};
+    uint32_t external_signal_page[4] = {0};
+    const user_program_smoke_round_t round = {
+        .expected_trap_context = &trap_context,
+        .timer_signal_page = timer_signal_page,
+        .timer_signal_index = 1U,
+        .timer_signal_value = 0x13572468U,
+        .external_signal_page = external_signal_page,
+        .external_signal_index = 2U,
+        .external_signal_value = 0x24681357U,
+        .timer_delta = 77U,
+    };
+
+    reset_stub_state();
+    user_program_smoke_init(&smoke);
+    if (!user_program_create(&program, MEM_BASE, MEM_BASE + MEMORY_PAGE_SIZE)) {
+        return fail("failed to bootstrap user program for enter rollback test");
+    }
+
+    smoke.program = &program;
+    g_user_program_is_active = true;
+    g_user_program_is_runnable = true;
+    g_user_program_unmap_region_base_page_result = true;
+    g_trap_user_runtime_arm_timer_signal_result = true;
+    g_trap_user_runtime_arm_external_signal_result = false;
+    g_sstatus = RISCV_SSTATUS_SUM | RISCV_SSTATUS_SIE;
+
+    if (user_program_smoke_enter_round(&smoke, &round)) {
+        return fail("expected interrupt round helper to fail when external signal arm fails");
+    }
+
+    if (g_user_program_deactivate_calls != 1 || g_user_program_is_active ||
+        g_user_program_is_runnable) {
+        return fail("expected failed interrupt round to best-effort deactivate the program");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_smoke_init_and_plan_wrapper() != 0 ||
         test_validate_standard_plan() != 0 ||
         test_prepare_standard_rolls_back_failed_address_space_stage() != 0 ||
         test_prepare_standard_rolls_back_failed_runtime_stage() != 0 ||
+        test_activate_supervisor_access_rolls_back_on_failure() != 0 ||
         test_active_memory_requires_anon_unmap() != 0 ||
-        test_enter_round_arms_interrupt_signals() != 0) {
+        test_enter_round_arms_interrupt_signals() != 0 ||
+        test_enter_round_rolls_back_active_state_on_failure() != 0) {
         return 1;
     }
 

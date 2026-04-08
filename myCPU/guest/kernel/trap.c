@@ -16,11 +16,283 @@ extern void trap_user_runtime_arch_resume(void);
 
 static trap_user_runtime_t* active_user_runtime = NULL;
 static bool user_runtime_stack_valid(const trap_user_runtime_t* user_runtime);
+typedef struct TrapUserRuntimeRollbackEntry {
+    trap_user_runtime_t* runtime;
+    trap_user_runtime_t snapshot;
+} trap_user_runtime_rollback_entry_t;
+
+typedef struct TrapContextBindingSnapshot {
+    trap_supervisor_timer_policy_t supervisor_timer_policy;
+    trap_supervisor_external_policy_t supervisor_external_policy;
+    trap_user_ecall_policy_t user_ecall_policy;
+} trap_context_binding_snapshot_t;
+
+typedef struct TrapContextStandardHandlerSnapshot {
+    trap_interrupt_handler_entry_t supervisor_timer_handler;
+    trap_interrupt_handler_entry_t supervisor_external_handler;
+    trap_exception_handler_entry_t user_ecall_handler;
+} trap_context_standard_handler_snapshot_t;
+
+typedef struct TrapUserRuntimeBindRollback {
+    trap_context_t* target_trap_context;
+    trap_context_binding_snapshot_t target_trap_context_snapshot;
+    bool target_trap_context_valid;
+    trap_context_t* previous_trap_context;
+    trap_context_binding_snapshot_t previous_trap_context_snapshot;
+    bool previous_trap_context_valid;
+    trap_user_runtime_t* active_runtime_snapshot;
+    trap_user_runtime_rollback_entry_t runtime_entries[4];
+    size_t runtime_entry_count;
+} trap_user_runtime_bind_rollback_t;
+
+typedef struct TrapUserRuntimeStandardRollback {
+    trap_user_runtime_bind_rollback_t bind;
+    trap_context_standard_handler_snapshot_t target_handler_snapshot;
+    bool target_handler_snapshot_valid;
+} trap_user_runtime_standard_rollback_t;
+
+_Static_assert(sizeof(trap_user_runtime_bind_rollback_t) <= 1024U,
+               "trap runtime bind rollback grew too large for guest stack budget");
+_Static_assert(sizeof(trap_user_runtime_standard_rollback_t) <= 1152U,
+               "trap runtime standard rollback grew too large for guest stack budget");
 
 static bool user_runtime_valid(const trap_user_runtime_t* user_runtime) {
     return user_runtime != NULL &&
            user_runtime->trap_context != NULL &&
            user_runtime->process != NULL;
+}
+
+static bool user_runtime_prepare_binding_valid(trap_user_runtime_t* user_runtime,
+                                               trap_context_t* trap_context,
+                                               vm_process_t* process) {
+    return user_runtime != NULL && trap_context != NULL && process != NULL &&
+           process->address_space != NULL;
+}
+
+static bool user_runtime_stack_args_valid(void* trap_stack_base,
+                                          size_t trap_stack_size) {
+    const uintptr_t stack_base = (uintptr_t)trap_stack_base;
+
+    return trap_stack_base != NULL &&
+           trap_stack_size >= TRAP_USER_RUNTIME_MIN_STACK_SIZE &&
+           (stack_base & (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) == 0 &&
+           (trap_stack_size & (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) == 0 &&
+           stack_base <= UINTPTR_MAX - (uintptr_t)trap_stack_size;
+}
+
+static bool user_runtime_prepare_args_valid(trap_user_runtime_t* user_runtime,
+                                            trap_context_t* trap_context,
+                                            vm_process_t* process,
+                                            void* trap_stack_base,
+                                            size_t trap_stack_size,
+                                            uintptr_t expected_ecall_pc) {
+    return user_runtime_prepare_binding_valid(user_runtime, trap_context, process) &&
+           user_runtime_stack_args_valid(trap_stack_base, trap_stack_size) &&
+           expected_ecall_pc != 0;
+}
+
+static trap_context_binding_snapshot_t capture_context_binding_snapshot(
+    const trap_context_t* trap_context) {
+    trap_context_binding_snapshot_t snapshot;
+
+    snapshot.supervisor_timer_policy.user_runtime = NULL;
+    snapshot.supervisor_timer_policy.post_handler = NULL;
+    snapshot.supervisor_timer_policy.post_context = NULL;
+    snapshot.supervisor_external_policy.user_runtime = NULL;
+    snapshot.supervisor_external_policy.post_handler = NULL;
+    snapshot.supervisor_external_policy.post_context = NULL;
+    snapshot.user_ecall_policy.user_runtime = NULL;
+    snapshot.user_ecall_policy.validate = NULL;
+    snapshot.user_ecall_policy.validate_context = NULL;
+    snapshot.user_ecall_policy.resume_pc = 0;
+
+    if (trap_context == NULL) {
+        return snapshot;
+    }
+
+    snapshot.supervisor_timer_policy = trap_context->supervisor_timer_policy;
+    snapshot.supervisor_external_policy =
+        trap_context->supervisor_external_policy;
+    snapshot.user_ecall_policy = trap_context->user_ecall_policy;
+    return snapshot;
+}
+
+static void restore_context_binding_snapshot(
+    trap_context_t* trap_context,
+    const trap_context_binding_snapshot_t* snapshot) {
+    if (trap_context == NULL || snapshot == NULL) {
+        return;
+    }
+
+    trap_context->supervisor_timer_policy = snapshot->supervisor_timer_policy;
+    trap_context->supervisor_external_policy =
+        snapshot->supervisor_external_policy;
+    trap_context->user_ecall_policy = snapshot->user_ecall_policy;
+}
+
+static trap_context_standard_handler_snapshot_t capture_standard_handler_snapshot(
+    const trap_context_t* trap_context) {
+    trap_context_standard_handler_snapshot_t snapshot;
+
+    snapshot.supervisor_timer_handler.handler = NULL;
+    snapshot.supervisor_timer_handler.context = NULL;
+    snapshot.supervisor_external_handler.handler = NULL;
+    snapshot.supervisor_external_handler.context = NULL;
+    snapshot.user_ecall_handler.handler = NULL;
+    snapshot.user_ecall_handler.context = NULL;
+
+    if (trap_context == NULL) {
+        return snapshot;
+    }
+
+    snapshot.supervisor_timer_handler =
+        trap_context->interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT];
+    snapshot.supervisor_external_handler =
+        trap_context->interrupt_handlers[RISCV_SUPERVISOR_EXTERNAL_INTERRUPT];
+    snapshot.user_ecall_handler =
+        trap_context->exception_handlers[RISCV_EXC_ECALL_FROM_U];
+    return snapshot;
+}
+
+static void restore_standard_handler_snapshot(
+    trap_context_t* trap_context,
+    const trap_context_standard_handler_snapshot_t* snapshot) {
+    if (trap_context == NULL || snapshot == NULL) {
+        return;
+    }
+
+    trap_context->interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT] =
+        snapshot->supervisor_timer_handler;
+    trap_context->interrupt_handlers[RISCV_SUPERVISOR_EXTERNAL_INTERRUPT] =
+        snapshot->supervisor_external_handler;
+    trap_context->exception_handlers[RISCV_EXC_ECALL_FROM_U] =
+        snapshot->user_ecall_handler;
+}
+
+static void capture_runtime_rollback_entry(
+    trap_user_runtime_bind_rollback_t* rollback,
+    trap_user_runtime_t* runtime) {
+    size_t i = 0;
+
+    if (rollback == NULL || runtime == NULL) {
+        return;
+    }
+
+    for (i = 0; i < rollback->runtime_entry_count; ++i) {
+        if (rollback->runtime_entries[i].runtime == runtime) {
+            return;
+        }
+    }
+
+    if (rollback->runtime_entry_count >=
+        (sizeof(rollback->runtime_entries) /
+         sizeof(rollback->runtime_entries[0]))) {
+        return;
+    }
+
+    rollback->runtime_entries[rollback->runtime_entry_count].runtime = runtime;
+    rollback->runtime_entries[rollback->runtime_entry_count].snapshot = *runtime;
+    rollback->runtime_entry_count += 1U;
+}
+
+static void prepare_runtime_bind_rollback(
+    trap_user_runtime_bind_rollback_t* rollback,
+    trap_user_runtime_t* user_runtime,
+    trap_context_t* trap_context) {
+    if (rollback == NULL) {
+        return;
+    }
+
+    rollback->target_trap_context = trap_context;
+    rollback->target_trap_context_valid = trap_context != NULL;
+    if (trap_context != NULL) {
+        rollback->target_trap_context_snapshot =
+            capture_context_binding_snapshot(trap_context);
+    }
+
+    rollback->previous_trap_context =
+        user_runtime != NULL ? user_runtime->trap_context : NULL;
+    rollback->previous_trap_context_valid =
+        rollback->previous_trap_context != NULL &&
+        rollback->previous_trap_context != trap_context;
+    if (rollback->previous_trap_context_valid) {
+        rollback->previous_trap_context_snapshot = capture_context_binding_snapshot(
+            rollback->previous_trap_context);
+    }
+
+    rollback->active_runtime_snapshot = active_user_runtime;
+    rollback->runtime_entry_count = 0;
+    capture_runtime_rollback_entry(rollback, user_runtime);
+    if (trap_context != NULL) {
+        capture_runtime_rollback_entry(
+            rollback,
+            trap_context->supervisor_timer_policy.user_runtime);
+        capture_runtime_rollback_entry(
+            rollback,
+            trap_context->supervisor_external_policy.user_runtime);
+        capture_runtime_rollback_entry(rollback,
+                                       trap_context->user_ecall_policy.user_runtime);
+    }
+}
+
+static void prepare_runtime_standard_rollback(
+    trap_user_runtime_standard_rollback_t* rollback,
+    trap_user_runtime_t* user_runtime,
+    trap_context_t* trap_context) {
+    if (rollback == NULL) {
+        return;
+    }
+
+    prepare_runtime_bind_rollback(&rollback->bind, user_runtime, trap_context);
+    rollback->target_handler_snapshot_valid = trap_context != NULL;
+    if (rollback->target_handler_snapshot_valid) {
+        rollback->target_handler_snapshot =
+            capture_standard_handler_snapshot(trap_context);
+    }
+}
+
+static void rollback_prepared_bind_runtime(
+    const trap_user_runtime_bind_rollback_t* rollback) {
+    size_t i = 0;
+
+    if (rollback == NULL) {
+        return;
+    }
+
+    for (i = 0; i < rollback->runtime_entry_count; ++i) {
+        trap_user_runtime_rollback_entry_t entry = rollback->runtime_entries[i];
+
+        if (entry.runtime != NULL) {
+            *entry.runtime = entry.snapshot;
+        }
+    }
+
+    if (rollback->previous_trap_context_valid) {
+        restore_context_binding_snapshot(
+            rollback->previous_trap_context,
+            &rollback->previous_trap_context_snapshot);
+    }
+    if (rollback->target_trap_context_valid) {
+        restore_context_binding_snapshot(
+            rollback->target_trap_context,
+            &rollback->target_trap_context_snapshot);
+    }
+
+    active_user_runtime = rollback->active_runtime_snapshot;
+}
+
+static void rollback_prepared_standard_runtime(
+    const trap_user_runtime_standard_rollback_t* rollback) {
+    if (rollback == NULL) {
+        return;
+    }
+
+    rollback_prepared_bind_runtime(&rollback->bind);
+    if (rollback->target_handler_snapshot_valid) {
+        restore_standard_handler_snapshot(
+            rollback->bind.target_trap_context,
+            &rollback->target_handler_snapshot);
+    }
 }
 
 static bool user_runtime_activation_ready(const trap_user_runtime_t* user_runtime) {
@@ -238,14 +510,31 @@ bool trap_user_runtime_prepare(trap_user_runtime_t* user_runtime,
                                uintptr_t expected_ecall_pc,
                                trap_user_runtime_validate_t validate,
                                void* validate_context) {
-    return trap_user_runtime_bind(user_runtime, trap_context, process, arg0) &&
-           trap_user_runtime_configure_supervisor_trap_stack(user_runtime,
-                                                             trap_stack_base,
-                                                             trap_stack_size) &&
-           trap_user_runtime_configure_ecall_resume(user_runtime,
-                                                    expected_ecall_pc,
-                                                    validate,
-                                                    validate_context);
+    trap_user_runtime_bind_rollback_t rollback;
+
+    if (!user_runtime_prepare_args_valid(user_runtime,
+                                         trap_context,
+                                         process,
+                                         trap_stack_base,
+                                         trap_stack_size,
+                                         expected_ecall_pc)) {
+        return false;
+    }
+
+    prepare_runtime_bind_rollback(&rollback, user_runtime, trap_context);
+    if (trap_user_runtime_bind(user_runtime, trap_context, process, arg0) &&
+        trap_user_runtime_configure_supervisor_trap_stack(user_runtime,
+                                                          trap_stack_base,
+                                                          trap_stack_size) &&
+        trap_user_runtime_configure_ecall_resume(user_runtime,
+                                                 expected_ecall_pc,
+                                                 validate,
+                                                 validate_context)) {
+        return true;
+    }
+
+    rollback_prepared_bind_runtime(&rollback);
+    return false;
 }
 
 bool trap_user_runtime_prepare_standard(
@@ -264,23 +553,45 @@ bool trap_user_runtime_prepare_standard(
     void* supervisor_timer_post_context,
     trap_supervisor_external_post_handler_t supervisor_external_post_handler,
     void* supervisor_external_post_context) {
-    return vm_process_set_user_context(process, entry_pc, user_sp) &&
-           trap_user_runtime_prepare(user_runtime,
-                                     trap_context,
-                                     process,
-                                     arg0,
-                                     trap_stack_base,
-                                     trap_stack_size,
-                                     expected_ecall_pc,
-                                     validate,
-                                     validate_context) &&
-           trap_context_install_standard_user_runtime_policies(
-               trap_context,
-               user_runtime,
-               supervisor_timer_post_handler,
-               supervisor_timer_post_context,
-               supervisor_external_post_handler,
-               supervisor_external_post_context);
+    trap_user_runtime_standard_rollback_t rollback;
+    const uintptr_t previous_entry_pc = process != NULL ? process->entry_pc : 0;
+    const uintptr_t previous_user_sp = process != NULL ? process->user_sp : 0;
+
+    if (!user_runtime_prepare_args_valid(user_runtime,
+                                         trap_context,
+                                         process,
+                                         trap_stack_base,
+                                         trap_stack_size,
+                                         expected_ecall_pc)) {
+        return false;
+    }
+
+    prepare_runtime_standard_rollback(&rollback, user_runtime, trap_context);
+    if (vm_process_set_user_context(process, entry_pc, user_sp) &&
+        trap_user_runtime_bind(user_runtime, trap_context, process, arg0) &&
+        trap_user_runtime_configure_supervisor_trap_stack(user_runtime,
+                                                          trap_stack_base,
+                                                          trap_stack_size) &&
+        trap_user_runtime_configure_ecall_resume(user_runtime,
+                                                 expected_ecall_pc,
+                                                 validate,
+                                                 validate_context) &&
+        trap_context_install_standard_user_runtime_policies(
+            trap_context,
+            user_runtime,
+            supervisor_timer_post_handler,
+            supervisor_timer_post_context,
+            supervisor_external_post_handler,
+            supervisor_external_post_context)) {
+        return true;
+    }
+
+    if (process != NULL) {
+        process->entry_pc = previous_entry_pc;
+        process->user_sp = previous_user_sp;
+    }
+    rollback_prepared_standard_runtime(&rollback);
+    return false;
 }
 
 bool trap_user_runtime_configure_supervisor_trap_stack(

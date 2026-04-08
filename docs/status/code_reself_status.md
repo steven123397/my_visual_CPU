@@ -18,6 +18,21 @@
 
 ## 当前状态
 
+- `2026-04-08` 当前无活跃复查问题。
+- `2026-04-07` 对 guest/runtime 主线边界做的一轮并行普查里的最后一条活跃问题已关闭：
+  - [../../myCPU/guest/kernel/supervisor_demo_smoke.c#L375](../../myCPU/guest/kernel/supervisor_demo_smoke.c#L375) 和 [../../myCPU/guest/kernel/supervisor_demo_smoke.c#L386](../../myCPU/guest/kernel/supervisor_demo_smoke.c#L386)
+    `supervisor_demo_smoke_probe_storage_page()` 与 `supervisor_demo_smoke_alloc_pages()` 都已改成显式 staged cleanup；`supervisor_demo_smoke` 单测也补上了 storage-page probe 失败、部分分配失败和尾部统计失败后的对称释放回归。
+- `2026-04-07` 同一轮 guest/runtime 复查里的以下问题已关闭：
+  - [../../myCPU/guest/kernel/user_program.c#L120](../../myCPU/guest/kernel/user_program.c#L120)
+    `user_program_create()` 配置失败后现在会 best-effort 做 cleanup / replan，但 `create()` 本身稳定返回 `false`；对应 `user_program` 单测已补 cleanup/replan 失败场景。
+  - [../../myCPU/guest/kernel/trap.c#L217](../../myCPU/guest/kernel/trap.c#L217) 、 [../../myCPU/guest/kernel/trap.c#L241](../../myCPU/guest/kernel/trap.c#L241) 、 [../../myCPU/guest/kernel/trap.c#L251](../../myCPU/guest/kernel/trap.c#L251) 和 [../../myCPU/guest/kernel/vm_process.c#L446](../../myCPU/guest/kernel/vm_process.c#L446)
+    `trap_user_runtime_prepare()` / `trap_user_runtime_prepare_standard()` 已改成事务性 rollback；rollback 载体也从整块 `trap_context` 全量快照收窄到 policy/handler 级快照，并补了 policy-install failure 的 host 单测，避免再次把 guest `supervisor_demo` 的 boot stack 顶穿。
+  - [../../myCPU/guest/kernel_alpha/interrupt_contract.c#L43](../../myCPU/guest/kernel_alpha/interrupt_contract.c#L43)
+    `kernel_alpha_validate_plic_not_ready_contract()` 现在会先拒绝 `timeout_delta == 0`，对应 invalid-input 单测已补齐。
+  - [../../myCPU/guest/kernel/user_task.c#L43](../../myCPU/guest/kernel/user_task.c#L43)
+    `user_task_destroy()` 在 address-space destroy 半失败后会 fail-closed 回到 create-ready 状态，不再残留半销毁对象；对应半失败状态断言已补。
+  - [../../myCPU/guest/kernel/user_program_smoke.c#L1250](../../myCPU/guest/kernel/user_program_smoke.c#L1250) 、 [../../myCPU/guest/kernel/user_program_smoke.c#L1310](../../myCPU/guest/kernel/user_program_smoke.c#L1310) 和 [../../myCPU/guest/kernel/user_program_smoke.c#L1354](../../myCPU/guest/kernel/user_program_smoke.c#L1354)
+    `user_program_smoke` 的 activate / enter helper 失败后已统一走 best-effort deactivate 回滚，`enter` / arm-signal 失败回归已补上。
 - `2026-04-06` 对当前 `spike` 外部差分验证工作区完成的实现级复查已关闭。
 - 关闭结论：
   - `make test-host-spike_differential` 显式入口已经补齐，本地验证可直接跑通，不再与 `tests/host/spike_differential/` 目录名冲突。
@@ -29,7 +44,6 @@
 - 本轮复查暴露的两条文档同步问题已关闭：
   - [docs/design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md) 已改为指向 [plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan](../plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan)，不再保留已删除的活跃 plan 死链。
   - [AGENTS.md](../../AGENTS.md) 已同步最新 `Phase 3` 口径：decode 级 `BlockedByUnresolvedStore` 边界专项已完成，当前下一步改为评估是否继续扩 issue / replay / speculation。
-- 当前无活跃复查问题。
 
 ## 记录规则
 

@@ -46,7 +46,7 @@ bool kernel_alpha_validate_plic_not_ready_contract(kernel_runtime_t* runtime,
     const supervisor_runtime_interrupt_state_t* interrupts =
         kernel_runtime_interrupt_state_const(runtime);
 
-    if (runtime == NULL ||
+    if (runtime == NULL || timeout_delta == 0 ||
         kernel_alpha_wait_for_first_external_delivery(runtime, timeout_delta) ||
         supervisor_runtime_interrupt_state_external_delivered(interrupts)) {
         return false;

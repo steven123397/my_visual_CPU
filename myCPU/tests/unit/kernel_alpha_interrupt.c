@@ -36,6 +36,7 @@ static int fail(const char* message);
 static int test_run_interrupt_bringup(void);
 static int test_complete_platform_interrupt_readiness(void);
 static int test_plic_not_ready_contract(void);
+static int test_plic_not_ready_contract_rejects_invalid_timeout(void);
 static int test_timer_not_ready_contract(void);
 static int test_run_fault_bringup(void);
 static int test_ready_and_panic_post_handlers(void);
@@ -274,6 +275,26 @@ static int test_plic_not_ready_contract(void) {
     return 0;
 }
 
+static int test_plic_not_ready_contract_rejects_invalid_timeout(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        0U,
+        0U);
+    g_external_wait_result = false;
+    if (kernel_alpha_validate_plic_not_ready_contract(&runtime, 0U, 'P')) {
+        return fail("expected plic-not-ready helper to reject zero timeout");
+    }
+
+    if (g_external_wait_runtime != NULL || g_console_char_count != 0) {
+        return fail("expected invalid timeout to fail before waiting or printing markers");
+    }
+
+    return 0;
+}
+
 static int test_timer_not_ready_contract(void) {
     reset_stub_state();
     if (!kernel_alpha_validate_timer_not_ready_contract(96U, 'T')) {
@@ -364,6 +385,7 @@ int main(void) {
     if (test_run_interrupt_bringup() != 0 ||
         test_complete_platform_interrupt_readiness() != 0 ||
         test_plic_not_ready_contract() != 0 ||
+        test_plic_not_ready_contract_rejects_invalid_timeout() != 0 ||
         test_timer_not_ready_contract() != 0 ||
         test_run_fault_bringup() != 0 ||
         test_ready_and_panic_post_handlers() != 0) {

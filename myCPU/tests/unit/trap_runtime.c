@@ -17,6 +17,7 @@ static int g_standard_policy_calls = 0;
 static trap_context_t* g_last_policy_trap_context = NULL;
 static trap_user_runtime_t* g_last_policy_user_runtime = NULL;
 static bool g_standard_policy_result = true;
+static bool g_standard_policy_mutates_on_failure = false;
 static bool g_vm_process_is_runnable_result = true;
 static int g_vm_process_activate_calls = 0;
 static bool g_vm_process_activate_result = true;
@@ -34,11 +35,17 @@ static void reset_stub_state(void);
 static int fail(const char* message);
 static int test_trap_context_init_and_activate(void);
 static int test_user_runtime_prepare_standard(void);
+static int test_user_runtime_prepare_standard_is_transactional_on_failure(void);
+static int test_user_runtime_prepare_standard_rolls_back_after_policy_install_failure(void);
 static int test_user_runtime_activate_enter_and_deactivate(void);
 static bool stub_runtime_validate(const trap_user_runtime_t* user_runtime,
                                   uint64_t epc,
                                   uint64_t tval,
                                   void* context);
+static void stub_exception_handler(uint64_t cause,
+                                   uint64_t epc,
+                                   uint64_t tval,
+                                   void* context);
 static void stub_timer_post_handler(uint64_t cause, void* context);
 static void stub_external_post_handler(uint64_t cause,
                                        uint32_t source_id,
@@ -98,6 +105,36 @@ bool trap_context_install_standard_user_runtime_policies(
     g_standard_policy_calls += 1;
     g_last_policy_trap_context = trap_context;
     g_last_policy_user_runtime = user_runtime;
+    if (trap_context != NULL &&
+        (g_standard_policy_result || g_standard_policy_mutates_on_failure)) {
+        trap_context->supervisor_timer_policy.user_runtime = user_runtime;
+        trap_context->supervisor_timer_policy.post_handler =
+            supervisor_timer_post_handler;
+        trap_context->supervisor_timer_policy.post_context =
+            supervisor_timer_post_context;
+        trap_context->supervisor_external_policy.user_runtime = user_runtime;
+        trap_context->supervisor_external_policy.post_handler =
+            supervisor_external_post_handler;
+        trap_context->supervisor_external_policy.post_context =
+            supervisor_external_post_context;
+        trap_context->user_ecall_policy.user_runtime = user_runtime;
+        trap_context->user_ecall_policy.validate = NULL;
+        trap_context->user_ecall_policy.validate_context = NULL;
+        trap_context->user_ecall_policy.resume_pc =
+            user_runtime != NULL ? user_runtime->resume_pc : 0;
+        trap_context->interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT].handler =
+            stub_timer_post_handler;
+        trap_context->interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT].context =
+            supervisor_timer_post_context;
+        trap_context->interrupt_handlers[RISCV_SUPERVISOR_EXTERNAL_INTERRUPT].handler =
+            stub_timer_post_handler;
+        trap_context->interrupt_handlers[RISCV_SUPERVISOR_EXTERNAL_INTERRUPT].context =
+            supervisor_external_post_context;
+        trap_context->exception_handlers[RISCV_EXC_ECALL_FROM_U].handler =
+            stub_exception_handler;
+        trap_context->exception_handlers[RISCV_EXC_ECALL_FROM_U].context =
+            user_runtime;
+    }
     return g_standard_policy_result;
 }
 
@@ -141,6 +178,7 @@ static void reset_stub_state(void) {
     g_last_policy_trap_context = NULL;
     g_last_policy_user_runtime = NULL;
     g_standard_policy_result = true;
+    g_standard_policy_mutates_on_failure = false;
     g_vm_process_is_runnable_result = true;
     g_vm_process_activate_calls = 0;
     g_vm_process_activate_result = true;
@@ -169,6 +207,16 @@ static bool stub_runtime_validate(const trap_user_runtime_t* user_runtime,
     (void)tval;
     (void)context;
     return true;
+}
+
+static void stub_exception_handler(uint64_t cause,
+                                   uint64_t epc,
+                                   uint64_t tval,
+                                   void* context) {
+    (void)cause;
+    (void)epc;
+    (void)tval;
+    (void)context;
 }
 
 static void stub_timer_post_handler(uint64_t cause, void* context) {
@@ -264,6 +312,182 @@ static int test_user_runtime_prepare_standard(void) {
     return 0;
 }
 
+static int test_user_runtime_prepare_standard_is_transactional_on_failure(void) {
+    trap_context_t trap_context;
+    trap_user_runtime_t prepared_runtime;
+    trap_user_runtime_t candidate_runtime;
+    vm_address_space_t address_space;
+    vm_process_t process;
+    static uint8_t prepared_stack[TRAP_USER_RUNTIME_MIN_STACK_SIZE]
+        __attribute__((aligned(TRAP_USER_RUNTIME_STACK_ALIGNMENT)));
+    static uint8_t invalid_stack[TRAP_USER_RUNTIME_MIN_STACK_SIZE]
+        __attribute__((aligned(TRAP_USER_RUNTIME_STACK_ALIGNMENT)));
+
+    reset_stub_state();
+    memset(&trap_context, 0, sizeof(trap_context));
+    memset(&prepared_runtime, 0, sizeof(prepared_runtime));
+    memset(&candidate_runtime, 0, sizeof(candidate_runtime));
+    memset(&address_space, 0, sizeof(address_space));
+    memset(&process, 0, sizeof(process));
+    address_space.allocated = true;
+    address_space.root_table = (uint64_t*)MEM_BASE;
+    address_space.root_table_pa = MEM_BASE;
+    process.address_space = &address_space;
+    trap_context_init(&trap_context);
+    trap_user_runtime_init(&prepared_runtime);
+    trap_user_runtime_init(&candidate_runtime);
+
+    if (!trap_user_runtime_prepare_standard(&prepared_runtime,
+                                            &trap_context,
+                                            &process,
+                                            0x1000,
+                                            0x2000,
+                                            7,
+                                            prepared_stack,
+                                            sizeof(prepared_stack),
+                                            0x3000,
+                                            stub_runtime_validate,
+                                            &process,
+                                            stub_timer_post_handler,
+                                            &trap_context,
+                                            stub_external_post_handler,
+                                            prepared_stack)) {
+        return fail("expected baseline prepare_standard to succeed");
+    }
+
+    if (trap_user_runtime_prepare_standard(&candidate_runtime,
+                                           &trap_context,
+                                           &process,
+                                           0x4000,
+                                           0x5000,
+                                           9,
+                                           invalid_stack,
+                                           TRAP_USER_RUNTIME_MIN_STACK_SIZE - 8U,
+                                           0x6000,
+                                           stub_runtime_validate,
+                                           &trap_context,
+                                           stub_timer_post_handler,
+                                           NULL,
+                                           stub_external_post_handler,
+                                           NULL)) {
+        return fail("expected invalid stack prepare_standard to fail");
+    }
+
+    if (process.entry_pc != 0x1000 || process.user_sp != 0x2000 ||
+        prepared_runtime.trap_context != &trap_context ||
+        prepared_runtime.process != &process ||
+        trap_context.supervisor_timer_policy.user_runtime != &prepared_runtime ||
+        trap_context.supervisor_external_policy.user_runtime != &prepared_runtime ||
+        trap_context.user_ecall_policy.user_runtime != &prepared_runtime ||
+        candidate_runtime.trap_context != NULL ||
+        candidate_runtime.process != NULL ||
+        candidate_runtime.expected_ecall_pc != 0 ||
+        candidate_runtime.resume_pc != 0) {
+        return fail("expected failed prepare_standard to preserve previous bindings and process context");
+    }
+
+    return 0;
+}
+
+static int test_user_runtime_prepare_standard_rolls_back_after_policy_install_failure(
+    void) {
+    trap_context_t trap_context;
+    trap_user_runtime_t prepared_runtime;
+    trap_user_runtime_t candidate_runtime;
+    vm_address_space_t address_space;
+    vm_process_t process;
+    static uint8_t prepared_stack[TRAP_USER_RUNTIME_MIN_STACK_SIZE]
+        __attribute__((aligned(TRAP_USER_RUNTIME_STACK_ALIGNMENT)));
+    static uint8_t candidate_stack[TRAP_USER_RUNTIME_MIN_STACK_SIZE]
+        __attribute__((aligned(TRAP_USER_RUNTIME_STACK_ALIGNMENT)));
+
+    reset_stub_state();
+    memset(&trap_context, 0, sizeof(trap_context));
+    memset(&prepared_runtime, 0, sizeof(prepared_runtime));
+    memset(&candidate_runtime, 0, sizeof(candidate_runtime));
+    memset(&address_space, 0, sizeof(address_space));
+    memset(&process, 0, sizeof(process));
+    address_space.allocated = true;
+    address_space.root_table = (uint64_t*)MEM_BASE;
+    address_space.root_table_pa = MEM_BASE;
+    process.address_space = &address_space;
+    trap_context_init(&trap_context);
+    trap_user_runtime_init(&prepared_runtime);
+    trap_user_runtime_init(&candidate_runtime);
+
+    if (!trap_user_runtime_prepare_standard(&prepared_runtime,
+                                            &trap_context,
+                                            &process,
+                                            0x1000,
+                                            0x2000,
+                                            7,
+                                            prepared_stack,
+                                            sizeof(prepared_stack),
+                                            0x3000,
+                                            stub_runtime_validate,
+                                            &process,
+                                            stub_timer_post_handler,
+                                            &trap_context,
+                                            stub_external_post_handler,
+                                            prepared_stack)) {
+        return fail("expected baseline prepare_standard to succeed before policy rollback test");
+    }
+
+    g_standard_policy_result = false;
+    g_standard_policy_mutates_on_failure = true;
+    if (trap_user_runtime_prepare_standard(&candidate_runtime,
+                                           &trap_context,
+                                           &process,
+                                           0x4000,
+                                           0x5000,
+                                           9,
+                                           candidate_stack,
+                                           sizeof(candidate_stack),
+                                           0x6000,
+                                           stub_runtime_validate,
+                                           candidate_stack,
+                                           stub_timer_post_handler,
+                                           candidate_stack,
+                                           stub_external_post_handler,
+                                           &process)) {
+        return fail("expected policy-install failure to roll back prepare_standard");
+    }
+
+    if (process.entry_pc != 0x1000 || process.user_sp != 0x2000 ||
+        prepared_runtime.trap_context != &trap_context ||
+        prepared_runtime.process != &process || prepared_runtime.arg0 != 7 ||
+        prepared_runtime.resume_pc != (uintptr_t)trap_user_runtime_arch_resume ||
+        trap_context.supervisor_timer_policy.user_runtime != &prepared_runtime ||
+        trap_context.supervisor_timer_policy.post_handler != stub_timer_post_handler ||
+        trap_context.supervisor_timer_policy.post_context != &trap_context ||
+        trap_context.supervisor_external_policy.user_runtime != &prepared_runtime ||
+        trap_context.supervisor_external_policy.post_handler !=
+            stub_external_post_handler ||
+        trap_context.supervisor_external_policy.post_context != prepared_stack ||
+        trap_context.user_ecall_policy.user_runtime != &prepared_runtime ||
+        trap_context.user_ecall_policy.resume_pc != prepared_runtime.resume_pc ||
+        trap_context.interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT].handler !=
+            stub_timer_post_handler ||
+        trap_context.interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT].context !=
+            &trap_context ||
+        trap_context.interrupt_handlers[RISCV_SUPERVISOR_EXTERNAL_INTERRUPT].handler !=
+            stub_timer_post_handler ||
+        trap_context.interrupt_handlers[RISCV_SUPERVISOR_EXTERNAL_INTERRUPT].context !=
+            prepared_stack ||
+        trap_context.exception_handlers[RISCV_EXC_ECALL_FROM_U].handler !=
+            stub_exception_handler ||
+        trap_context.exception_handlers[RISCV_EXC_ECALL_FROM_U].context !=
+            &prepared_runtime ||
+        candidate_runtime.trap_context != NULL ||
+        candidate_runtime.process != NULL ||
+        candidate_runtime.expected_ecall_pc != 0 ||
+        candidate_runtime.resume_pc != 0) {
+        return fail("expected policy-install failure rollback to restore runtime, handlers and process context");
+    }
+
+    return 0;
+}
+
 static int test_user_runtime_activate_enter_and_deactivate(void) {
     trap_context_t trap_context;
     trap_user_runtime_t user_runtime;
@@ -331,6 +555,9 @@ static int test_user_runtime_activate_enter_and_deactivate(void) {
 int main(void) {
     if (test_trap_context_init_and_activate() != 0 ||
         test_user_runtime_prepare_standard() != 0 ||
+        test_user_runtime_prepare_standard_is_transactional_on_failure() != 0 ||
+        test_user_runtime_prepare_standard_rolls_back_after_policy_install_failure() !=
+            0 ||
         test_user_runtime_activate_enter_and_deactivate() != 0) {
         return 1;
     }

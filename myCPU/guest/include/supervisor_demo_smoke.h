@@ -20,4 +20,5 @@ typedef struct SupervisorDemoSmokePages {
 
 bool supervisor_demo_smoke_alloc_pages_for_test(
     supervisor_demo_smoke_pages_t* pages);
+bool supervisor_demo_smoke_probe_storage_page_for_test(void);
 #endif

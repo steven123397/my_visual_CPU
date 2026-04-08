@@ -58,6 +58,7 @@ static void reset_stub_state(void);
 static int fail(const char* message);
 static int test_user_task_lifecycle_and_wrappers(void);
 static int test_user_task_create_rolls_back_failed_process_create(void);
+static int test_user_task_destroy_leaves_create_ready_state_on_partial_failure(void);
 static bool stub_runtime_validate(const trap_user_runtime_t* user_runtime,
                                   uint64_t epc,
                                   uint64_t tval,
@@ -473,9 +474,41 @@ static int test_user_task_create_rolls_back_failed_process_create(void) {
     return 0;
 }
 
+static int test_user_task_destroy_leaves_create_ready_state_on_partial_failure(void) {
+    user_task_t user_task;
+
+    reset_stub_state();
+    memset(&user_task, 0, sizeof(user_task));
+    user_task_init(&user_task);
+    if (!user_task_create(&user_task)) {
+        return fail("expected create to succeed before partial destroy failure");
+    }
+
+    g_address_space_destroy_result = false;
+    if (user_task_destroy(&user_task)) {
+        return fail("expected destroy to report address-space destroy failure");
+    }
+
+    if (g_process_reset_calls != 1 || g_address_space_destroy_calls != 1 ||
+        g_runtime_init_calls != 2 || user_task.address_space != NULL ||
+        user_task.process.address_space != NULL ||
+        user_task_address_space(&user_task) != NULL ||
+        user_task_process(&user_task) != NULL) {
+        return fail("expected partial destroy failure to leave task in local create-ready state");
+    }
+
+    g_address_space_destroy_result = true;
+    if (!user_task_create(&user_task)) {
+        return fail("expected task to remain create-ready after partial destroy failure");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_user_task_lifecycle_and_wrappers() != 0 ||
-        test_user_task_create_rolls_back_failed_process_create() != 0) {
+        test_user_task_create_rolls_back_failed_process_create() != 0 ||
+        test_user_task_destroy_leaves_create_ready_state_on_partial_failure() != 0) {
         return 1;
     }
 

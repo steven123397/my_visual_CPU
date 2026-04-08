@@ -2,6 +2,7 @@
 .option norelax
 
 .equ TRAP_FRAME_SIZE, 240
+.equ BOOT_STACK_SIZE, 8192    # keep smoke validation stack frames clear of boot BSS
 
 .section .text.start
 .global _start
@@ -157,5 +158,5 @@ user_test_fail:
 .section .bss
 .balign 16
 boot_stack:
-    .space 4096
+    .space BOOT_STACK_SIZE
 boot_stack_top:
