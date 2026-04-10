@@ -9,6 +9,7 @@
 #include "../isa/instruction_semantics.h"
 #include "memory_ops.h"
 #include "pipeline_hazards.h"
+#include "vector_ops.h"
 
 namespace {
 
@@ -258,6 +259,13 @@ void PipelineBackend::step_ex() {
         state_.note_stall(PipelineStallReason::SerializingSystemWaitForRobHead);
         return;
     }
+    const OlderVectorDependency vector_dependency =
+        older_vector_dependency(state_.id_ex.slot);
+    if (vector_dependency.blocks) {
+        state_.next_id_ex.slot = state_.id_ex.slot;
+        state_.note_stall(PipelineStallReason::VectorStateBusy);
+        return;
+    }
 
     ExecutionContext ctx(cpu_, bus_);
     SemanticInputs inputs;
@@ -285,6 +293,27 @@ void PipelineBackend::step_ex() {
     }
     StageSlot completed_slot = state_.id_ex.slot;
     completed_slot.effects = InstructionSemantics::execute(state_.id_ex.slot.insn, ctx, inputs);
+    if (!completed_slot.effects.trap.valid &&
+        is_non_memory_vector_alu(completed_slot.effects.vector)) {
+        VectorState execute_vector_state = cpu_.core().vector();
+        if (vector_dependency.vs1_valid) {
+            execute_vector_state.write_reg(completed_slot.effects.vector.vs1,
+                                           vector_dependency.vs1);
+        }
+        if (vector_dependency.vs2_valid) {
+            execute_vector_state.write_reg(completed_slot.effects.vector.vs2,
+                                           vector_dependency.vs2);
+        }
+        const VectorComputeResult vector_compute =
+            compute_vector_alu_result(execute_vector_state, completed_slot.effects.vector);
+        if (!vector_compute.ok) {
+            completed_slot.effects.trap = vector_compute.trap;
+            completed_slot.effects.retired = false;
+        } else {
+            completed_slot.effects.vector.result_valid = true;
+            completed_slot.effects.vector.result = vector_compute.result;
+        }
+    }
     if (!completed_slot.effects.trap.valid) {
         switch (completed_slot.effects.mem.kind) {
         case MemoryRequest::Kind::Load:

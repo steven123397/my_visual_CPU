@@ -21,6 +21,8 @@ public:
 private:
     bool sources_ready(const StageSlot& slot) const;
     bool is_serializing_system_slot(const StageSlot& slot) const;
+    OlderVectorDependency older_vector_dependency(const StageSlot& slot) const;
+    bool vector_state_busy(const StageSlot& slot) const;
     void publish_completed_slot(const StageSlot& slot);
     DebugStageSnapshot build_fetch_stage_snapshot() const;
     DebugStageSnapshot build_stage_snapshot(const StageSlot& slot) const;

@@ -21,6 +21,43 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-04-10
+
+#### vector-v0-v1-plan
+
+- 原文件：`vector_v0_v1_plan.md`
+- 完成内容：完成 `V-lite` `V0 / V1` 首轮落地，新增 `VectorState`、共享 `VectorRequest`、`vsetcfg / vle.v / vse.v / vadd.vv / vmul.vv / vmax.vv / vdot.vv`、最小 host smoke，以及 `pipeline` 的正确 serializing fallback。
+- 实现过程摘要：整体采用“先设计冻结、再补窄 smoke、再把状态修改统一收口到 commit boundary”的克制路径；`pipeline` 当前只保证正确的串行化 fallback，不提前扩成 vector-aware 执行模型，并最终守住 `cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
+- 结果参考：[vector_vlite_v0_v1_design.md](../design/vector_vlite_v0_v1_design.md)、[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### vector-v2-plan
+
+- 原文件：`vector_v2_plan.md`
+- 完成内容：完成 `V-lite` `V2` 首刀落地，新增 `vector_operator_smoke` 的 `dot / GEMM / Conv / ReLU` workload 回归、独立 `guest/vector_demo`，以及 functional / pipeline 两侧 guest 门禁。
+- 实现过程摘要：整体采用“先补 host 算子 smoke、再补独立最小 guest demo、最后统一回写状态与归档”的克制路径；这一轮明确不改现有 `V-lite` ISA 面、不接 `guest/kernel/*` 主线，也不把 `pipeline` 扩成 vector-aware 执行模型，并最终守住 `cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
+- 结果参考：[vector_v2_operator_guest_design.md](../design/vector_v2_operator_guest_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
+#### vector-v3-plan
+
+- 原文件：`vector_v3_plan.md`
+- 完成内容：完成 `V-lite` `V3` 首刀落地，新增独立 `guest/vector_cnn_demo`，以固定 `conv -> relu` 链路形成最小 CNN-style guest 闭环，并接通 functional / pipeline 两侧 guest 门禁；同轮也补上 `test-host-vector_vlite_smoke` 与 `test-host-vector_backend_smoke` 的显式 `make` alias。
+- 实现过程摘要：整体继续采用“先补最小工程卫生改动、再补独立固定 guest workload、最后统一回写状态与归档”的克制路径；这一轮保持现有 `V-lite` ISA 面与 `pipeline` serializing fallback 不变，不把问题顺势放大到 `Pool / FC`、模型加载、`guest/kernel/*` 主线或 vector-aware `pipeline`，并最终守住 `cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
+- 结果参考：[vector_v3_minimal_cnn_guest_design.md](../design/vector_v3_minimal_cnn_guest_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
+#### vector-v3-hardening-v4-design-plan
+
+- 原文件：`vector_v3_hardening_v4_plan.md`
+- 完成内容：完成一轮很窄的 `V3 hardening`，新增 `vector_cnn_smoke` host 回归，直接守住 mixed `SEW/VL` 的 `conv -> relu` 链路与全负卷积输出的 `relu` 零钳位；同轮也完成 `V4` 首刀设计收口，明确下一步只收窄 non-memory vector ALU 的最小 vector-aware pipeline 边界。
+- 实现过程摘要：整体继续采用“先补最窄 host regression、再顺手把下一刀设计冻结”的克制路径；这一轮不扩 guest 新 demo、不改现有 `V-lite` ISA 面，也不把问题顺势放大到向量 load/store path、lane 模型或更重 `Phase 4`，并最终守住 `cd myCPU && make test-host-vector_cnn_smoke`、`cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
+- 结果参考：[vector_v4_minimal_vector_pipeline_design.md](../design/vector_v4_minimal_vector_pipeline_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
+#### vector-v4-plan
+
+- 原文件：`vector_v4_minimal_vector_pipeline_plan.md`
+- 完成内容：完成 `V4` 首刀落地，让 non-memory vector ALU 脱离统一 serializing fallback，形成“execute 先 materialize、commit 再落地 architected vector state”的最小 vector-aware pipeline；同轮也新增 `vector_pipeline_smoke`，直接守住“older scalar ROB head 未退休时 vector ALU 仍可先执行”与“older vector state 未提交时 younger vector ALU 必须保守等待”的边界。
+- 实现过程摘要：整体继续采用“先补最窄红灯 smoke、再以最小 payload / ROB / commit 接线收窄当前边界”的克制路径；这一轮明确不扩到向量 load/store path、lane 模型、vector rename、vector phys file 或更重 memory speculation，并最终守住 `cd myCPU && make test-host-vector_pipeline_smoke`、`cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
+- 结果参考：[vector_v4_minimal_vector_pipeline_design.md](../design/vector_v4_minimal_vector_pipeline_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
 ### 2026-04-06
 
 #### spike-external-differential-validation-plan

@@ -37,7 +37,9 @@ bool reads_rs1(const Insn& insn) {
     case 0x67:
     case 0x63:
     case 0x03:
+    case 0x07:
     case 0x23:
+    case 0x27:
         return true;
     case 0x73:
         switch (insn.funct3) {

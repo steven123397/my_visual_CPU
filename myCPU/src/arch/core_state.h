@@ -3,6 +3,8 @@
 #include <array>
 #include <cstdint>
 
+#include "vector_state.h"
+
 enum class PrivilegeMode : uint8_t {
     User = 0,
     Supervisor = 1,
@@ -26,6 +28,9 @@ public:
     void advance_instret(uint64_t delta = 1);
     void set_instret(uint64_t value);
 
+    VectorState& vector();
+    const VectorState& vector() const;
+
     bool halted() const;
     void set_halted(bool halted);
 
@@ -37,6 +42,7 @@ private:
     uint64_t pc_{0};
     uint64_t cycle_{0};
     uint64_t instret_{0};
+    VectorState vector_{};
     bool halted_{false};
     PrivilegeMode privilege_mode_{PrivilegeMode::Machine};
 };

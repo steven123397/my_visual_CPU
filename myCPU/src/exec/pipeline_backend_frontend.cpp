@@ -3,12 +3,13 @@
 #include <optional>
 
 #include "../cpu.h"
+#include "vector_ops.h"
 #include "pipeline_hazards.h"
 
 namespace {
 
-bool is_serializing_system_opcode(uint32_t opcode) {
-    return opcode == 0x73;
+bool is_serializing_system_insn(const Insn& insn) {
+    return insn.opcode == 0x73 || is_serializing_vector_insn(insn);
 }
 
 PipelineStallReason stall_reason_for_load_status(const LsqLoadStatus& status) {
@@ -101,12 +102,25 @@ bool PipelineBackend::sources_ready(const StageSlot& slot) const {
 }
 
 bool PipelineBackend::is_serializing_system_slot(const StageSlot& slot) const {
-    if (!slot.valid || !is_serializing_system_opcode(slot.insn.opcode)) {
+    if (!slot.valid || !is_serializing_system_insn(slot.insn)) {
         return false;
     }
 
     const std::optional<RobEntry> rob_head = state_.rob().peek_head();
     return !rob_head.has_value() || rob_head->index.value != slot.rob_index.value;
+}
+
+OlderVectorDependency PipelineBackend::older_vector_dependency(const StageSlot& slot) const {
+    if (!slot.valid || !is_non_memory_vector_alu_insn(slot.insn)) {
+        return {};
+    }
+    return state_.rob().inspect_older_vector_dependencies(slot.sequence_id.value,
+                                                          slot.insn.rs1,
+                                                          slot.insn.rs2);
+}
+
+bool PipelineBackend::vector_state_busy(const StageSlot& slot) const {
+    return older_vector_dependency(slot).blocks;
 }
 
 void PipelineBackend::step_id() {

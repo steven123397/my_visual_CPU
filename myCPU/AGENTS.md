@@ -110,6 +110,7 @@
 - 真实 `debug server + mycpu --debug-cli` 端到端 smoke 与 Node/C++ 两侧预算常量收口已经落地，当前最小调试链路已进入现有门禁。
 - `2026-04-05` 又补上一组更窄的 `debug/frontend` 压力验证：Node/runtime 级持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` timeout fail-closed，避免迟到 CLI 响应错配后续请求。
 - `2026-04-05` 也已把 decode 级 `BlockedByUnresolvedStore` 收窄到“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 已不再全局阻塞非重叠 younger load，重叠场景继续走 `BlockedByOverlappingStore`，相关 `load_store_queue_smoke`、`pipeline_speculation_contracts_smoke` 与 `make test-pipeline` 已守住。
+- `2026-04-11` 已在 `V4` 首刀之上补上一轮更窄的 direct dependency hardening：pending serializing vector 仍会阻塞 younger vector ALU，但 ready older non-memory vector ALU 如果只是被更老 scalar ROB head 挡住 commit，direct dependent younger vector ALU 现在可以以前驱 materialized result 完成 execute；对应 `vector_pipeline_smoke` 也已补上更像真实依赖链的 host 回归。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](Makefile) 为准。
@@ -144,6 +145,8 @@
   `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
 - [src/exec/load_store_queue.cpp](src/exec/load_store_queue.cpp) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
   decode 级 `BlockedByUnresolvedStore` 当前最小收窄已经落地：它只保留给 older store 地址未知场景；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load。后续这条线的取舍判断也已经完成：在当前 decode 级 load 前置分类、单 `ex_mem` memory 通道与 coarse replay flush 基线上，不主动继续扩大更激进的 `issue / replay / speculation`；只有在出现真实 workload 证据或明确研究目标时，才值得重开，且应先看 issue decoupling。
+- [src/exec/reorder_buffer.cpp](src/exec/reorder_buffer.cpp)、[src/exec/pipeline_backend_execute.cpp](src/exec/pipeline_backend_execute.cpp) 和 [tests/host/vector_pipeline_smoke.cpp](tests/host/vector_pipeline_smoke.cpp)
+  当前 `V4` 已经补上第一轮 direct dependency hardening：pending serializing vector 仍会阻塞 younger vector ALU，但 ready older non-memory vector ALU 如果只是被更老 scalar ROB head 挡住 commit，direct dependent younger vector ALU 现在可以以前驱 materialized result 完成 execute。后续若继续扩，优先仍是 bug-driven hardening 与更窄 workload 观察，不直接跳到向量 memory path / lane 模型。
 - [tests/host/spike_differential/*](tests/host/spike_differential)
   当前独立 `Spike` 外部差分已经接上 first-trap checkpoint，但仍只保持“单次运行抓首个 trap 入口 + 最终态”的最小形态；后续按真实 bug 或明确收益补更广 `Sv39 / privilege` 或更复杂多 checkpoint 变体，不主动扩大到设备场景、`configure hook` 或逐提交 trace。
 - [src/debug](src/debug) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
@@ -170,6 +173,7 @@
 3. `debug/frontend` 当前不再主动扩大浏览器端压力验证；后续按真实 bug 或明确新需求补最小回归，不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
 4. `Phase 3` 当前不主动继续扩大更激进的 `issue / replay / speculation`；后续若出现真实 stall hotspot，再优先评估 issue decoupling 这类更有结构收益的最小切片，而不是回头重复讨论已完成的 decode 边界。
 5. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
+6. 当前 `V-lite` `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`、`V4` 首刀与第一轮更窄的 `V4` hardening 都已落地：shared semantics、`functional` reference path、最小 host 回归、non-memory vector ALU 的最小 vector-aware execute/commit 边界、独立最小 guest 向量 demo、固定 `conv -> relu` 的最小 CNN-style guest demo，以及守住 mixed `SEW/VL` `conv -> relu` 链路、全负 `relu` 零钳位、ready older vector producer -> direct dependent consumer 依赖链，以及 pending serializing vector guard 的 host smoke 都已接通。当前更健康的下一步不是顺势扩到 `Pool / FC`、向量 load/store path 或更重 `Phase 4`，而是继续围绕已落地的 `V4` 边界做 bug-driven hardening，再决定下一刀。
 
 ## 验证要求
 
@@ -216,6 +220,7 @@
 - `tests/host/pipeline_speculation_contracts_smoke.cpp`
 - `tests/host/debug_cli_smoke.cpp`
 - `tests/host/interactive_terminal_smoke.cpp`
+- `tests/host/vector_pipeline_smoke.cpp`
 
 还应至少额外关注：
 
@@ -227,6 +232,8 @@
 - `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
 - `cd myCPU && make test-host-interactive_terminal_smoke`
+- `cd myCPU && make test-host-vector_pipeline_smoke`
+- `cd myCPU && make test-host-vector_cnn_smoke`
 
 如果触及以下任一路径：
 

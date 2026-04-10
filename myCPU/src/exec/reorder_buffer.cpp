@@ -2,6 +2,21 @@
 
 #include <algorithm>
 
+#include "vector_ops.h"
+
+extern "C" {
+#include "../decode.h"
+}
+
+namespace {
+
+bool is_vector_raw(uint32_t raw) {
+    const uint32_t opcode = raw & 0x7FU;
+    return opcode == 0x57 || opcode == 0x07 || opcode == 0x27;
+}
+
+}  // namespace
+
 RobIndex ReorderBuffer::allocate(const RobAllocate& entry) {
     const RobIndex index{.value = next_index_++};
     entries_.push_back({
@@ -44,6 +59,56 @@ std::optional<RobEntry> ReorderBuffer::peek_head() const {
         return std::nullopt;
     }
     return entries_.front();
+}
+
+bool ReorderBuffer::has_older_vector_pending(uint64_t sequence_id) const {
+    return std::any_of(entries_.begin(),
+                       entries_.end(),
+                       [&](const RobEntry& entry) {
+                           return entry.sequence_id < sequence_id &&
+                                  is_vector_raw(entry.raw);
+                       });
+}
+
+OlderVectorDependency ReorderBuffer::inspect_older_vector_dependencies(uint64_t sequence_id,
+                                                                       uint8_t vs1,
+                                                                       uint8_t vs2) const {
+    OlderVectorDependency dependency;
+    for (const RobEntry& entry : entries_) {
+        if (entry.sequence_id >= sequence_id) {
+            continue;
+        }
+        if (!is_vector_raw(entry.raw)) {
+            continue;
+        }
+
+        Insn insn{};
+        decode(entry.raw, &insn);
+        insn.raw = entry.raw;
+        if (is_serializing_vector_insn(insn)) {
+            dependency.blocks = true;
+            return dependency;
+        }
+        if (!is_non_memory_vector_alu_insn(insn)) {
+            continue;
+        }
+        if (insn.rd != vs1 && insn.rd != vs2) {
+            continue;
+        }
+        if (!entry.ready || !entry.effects.vector.result_valid) {
+            dependency.blocks = true;
+            return dependency;
+        }
+        if (insn.rd == vs1) {
+            dependency.vs1_valid = true;
+            dependency.vs1 = entry.effects.vector.result;
+        }
+        if (insn.rd == vs2) {
+            dependency.vs2_valid = true;
+            dependency.vs2 = entry.effects.vector.result;
+        }
+    }
+    return dependency;
 }
 
 void ReorderBuffer::commit_head() {

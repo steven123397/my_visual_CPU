@@ -5,6 +5,7 @@ void CoreState::reset(uint64_t entry) {
     pc_ = entry;
     cycle_ = 0;
     instret_ = 0;
+    vector_.reset();
     halted_ = false;
     privilege_mode_ = PrivilegeMode::Machine;
 }
@@ -49,6 +50,14 @@ void CoreState::advance_instret(uint64_t delta) {
 
 void CoreState::set_instret(uint64_t value) {
     instret_ = value;
+}
+
+VectorState& CoreState::vector() {
+    return vector_;
+}
+
+const VectorState& CoreState::vector() const {
+    return vector_;
 }
 
 bool CoreState::halted() const {

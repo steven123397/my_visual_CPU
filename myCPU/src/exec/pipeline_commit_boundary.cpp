@@ -1,6 +1,7 @@
 #include "pipeline_commit_boundary.h"
 
 #include "memory_ops.h"
+#include "vector_ops.h"
 
 #include "../cpu.h"
 #include "../mem/bus.h"
@@ -57,6 +58,15 @@ CommitBoundaryResult apply_commit_boundary(CPU& cpu,
             return enter_precise_trap(access.fault);
         }
         result.platform_state_changed = bus.last_access().valid && bus.last_access().mmio;
+    }
+
+    if (effects.vector.kind != VectorRequest::Kind::None) {
+        const VectorApplyResult vector_result =
+            apply_vector_request(cpu, bus, effects.vector);
+        if (!vector_result.ok) {
+            return enter_precise_trap(vector_result.trap);
+        }
+        result.platform_state_changed |= vector_result.platform_state_changed;
     }
 
     if (effects.csr_write.enable) {

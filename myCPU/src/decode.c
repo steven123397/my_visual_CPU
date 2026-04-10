@@ -11,10 +11,10 @@ void decode(uint32_t raw, Insn *insn) {
 
     // Immediate decoding by format
     switch (insn->opcode) {
-    case 0x03: case 0x13: case 0x1B: case 0x67: case 0x73: // I-type
+    case 0x03: case 0x07: case 0x13: case 0x1B: case 0x67: case 0x73: // I-type
         insn->imm = (int64_t)(int32_t)(raw & 0xFFF00000) >> 20;
         break;
-    case 0x23: // S-type
+    case 0x23: case 0x27: // S-type
         insn->imm = (int64_t)(int32_t)(
             ((raw & 0xFE000000)) | ((raw & 0xF80) << 13)) >> 20;
         break;

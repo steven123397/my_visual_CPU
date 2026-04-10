@@ -16,6 +16,7 @@ enum class PipelineStallReason : uint8_t {
     BlockedByUnresolvedStore,
     BlockedByOverlappingStore,
     SerializingSystemWaitForRobHead,
+    VectorStateBusy,
     NonRamLoadWaitForRobHead,
     MemoryPathBusy,
 };

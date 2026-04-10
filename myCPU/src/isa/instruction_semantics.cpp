@@ -7,6 +7,7 @@
 #include "../exec/integer_ops.h"
 #include "../exec/memory_ops.h"
 #include "../exec/system_ops.h"
+#include "../exec/vector_ops.h"
 
 namespace {
 
@@ -38,6 +39,9 @@ bool InstructionSemantics::supports(const Insn& insn) {
     case 0x03:
     case 0x23:
     case 0x73:
+    case 0x07:
+    case 0x27:
+    case 0x57:
         return true;
     default:
         return false;
@@ -69,6 +73,10 @@ InsnEffects InstructionSemantics::execute(const Insn& insn, ExecutionContext& ct
     case 0x03:
     case 0x23:
         return build_memory_effects(insn, inputs.rs1v, inputs.rs2v, insn.imm);
+    case 0x07:
+    case 0x27:
+    case 0x57:
+        return build_vector_effects(insn, inputs.rs1v);
     case 0x73:
         return build_system_effects(insn, ctx, inputs);
     default:

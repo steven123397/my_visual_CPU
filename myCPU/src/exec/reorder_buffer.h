@@ -5,6 +5,7 @@
 #include <deque>
 #include <optional>
 
+#include "../arch/vector_state.h"
 #include "../isa/effects.h"
 #include "load_store_queue.h"
 
@@ -54,11 +55,23 @@ struct RobEntry {
     InsnEffects effects{};
 };
 
+struct OlderVectorDependency {
+    bool blocks{false};
+    bool vs1_valid{false};
+    VectorState::VectorReg vs1{};
+    bool vs2_valid{false};
+    VectorState::VectorReg vs2{};
+};
+
 class ReorderBuffer {
 public:
     RobIndex allocate(const RobAllocate& entry);
     void mark_ready(RobIndex index, const RobReady& ready);
     std::optional<RobEntry> peek_head() const;
+    bool has_older_vector_pending(uint64_t sequence_id) const;
+    OlderVectorDependency inspect_older_vector_dependencies(uint64_t sequence_id,
+                                                            uint8_t vs1,
+                                                            uint8_t vs2) const;
     void commit_head();
     void clear();
     void flush_younger_than(uint64_t sequence_id);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 struct TrapRequest {
@@ -37,6 +38,29 @@ struct MemoryRequest {
     bool non_speculative{false};
 };
 
+struct VectorRequest {
+    enum class Kind : uint8_t {
+        None,
+        SetConfig,
+        Load,
+        Store,
+        Add,
+        Mul,
+        Max,
+        Dot,
+    };
+
+    Kind kind{Kind::None};
+    uint8_t vd{0};
+    uint8_t vs1{0};
+    uint8_t vs2{0};
+    uint64_t addr{0};
+    uint8_t sew_bytes{0};
+    uint8_t vl{0};
+    bool result_valid{false};
+    std::array<uint8_t, 16> result{};
+};
+
 enum class TrapReturnKind : uint8_t {
     None,
     Mret,
@@ -55,6 +79,7 @@ struct InsnEffects {
     RegWrite rd_write{};
     CsrWrite csr_write{};
     MemoryRequest mem{};
+    VectorRequest vector{};
     TrapRequest trap{};
     ControlEffect control{};
     bool retired{true};

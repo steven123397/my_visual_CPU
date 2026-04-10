@@ -84,6 +84,8 @@ const char* stall_reason_name(PipelineStallReason reason) {
         return "blocked_by_overlapping_store";
     case PipelineStallReason::SerializingSystemWaitForRobHead:
         return "serializing_system_wait_for_rob_head";
+    case PipelineStallReason::VectorStateBusy:
+        return "vector_state_busy";
     case PipelineStallReason::NonRamLoadWaitForRobHead:
         return "non_ram_load_waiting_for_rob_head";
     case PipelineStallReason::MemoryPathBusy:

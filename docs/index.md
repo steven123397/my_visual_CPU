@@ -30,8 +30,26 @@
    decode 边界收窄之后，`Phase 3` 是否继续扩更激进 `issue / replay / speculation` 的取舍结论。
 13. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
    `pipeline` 投机执行与提交契约。
-14. [plan/history_plan.md](plan/history_plan.md)
-    已完成计划的统一归档入口。
+14. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+   “向量扩展 + ML workload” 长期主线候选的方向设计，以及它与 `Phase 4` 的优先级关系。
+15. [design/vector_vlite_v0_v1_design.md](design/vector_vlite_v0_v1_design.md)
+   `V-lite` `V0 / V1` 的最小状态、编码和执行合同。
+16. [design/vector_v2_operator_guest_design.md](design/vector_v2_operator_guest_design.md)
+   `V-lite` `V2` 的算子级回归与最小 guest 闭环设计。
+17. [design/vector_v3_minimal_cnn_guest_design.md](design/vector_v3_minimal_cnn_guest_design.md)
+   `V-lite` `V3` 的固定 `conv -> relu` guest demo 设计。
+18. [design/vector_v4_minimal_vector_pipeline_design.md](design/vector_v4_minimal_vector_pipeline_design.md)
+   `V-lite` `V4` 的最小 vector-aware pipeline 首刀设计。
+19. [plan/history_plan.md#vector-v4-plan](plan/history_plan.md#vector-v4-plan)
+   `V-lite` `V4` 最小 vector-aware pipeline 首刀实现计划的归档结果。
+20. [plan/history_plan.md#vector-v3-hardening-v4-design-plan](plan/history_plan.md#vector-v3-hardening-v4-design-plan)
+   `V3 hardening` 与 `V4` 首刀设计收口计划的归档结果。
+21. [plan/history_plan.md#vector-v3-plan](plan/history_plan.md#vector-v3-plan)
+   `V-lite` `V3` 首刀计划的归档结果。
+22. [plan/history_plan.md#vector-v2-plan](plan/history_plan.md#vector-v2-plan)
+   `V-lite` `V2` 首刀计划的归档结果。
+23. [plan/history_plan.md](plan/history_plan.md)
+   已完成计划的统一归档入口。
 
 ## 专题入口
 
@@ -42,6 +60,17 @@
   - [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
   - [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+- `向量 / ML workload`
+  - [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+  - [design/vector_vlite_v0_v1_design.md](design/vector_vlite_v0_v1_design.md)
+  - [design/vector_v2_operator_guest_design.md](design/vector_v2_operator_guest_design.md)
+  - [design/vector_v3_minimal_cnn_guest_design.md](design/vector_v3_minimal_cnn_guest_design.md)
+  - [design/vector_v4_minimal_vector_pipeline_design.md](design/vector_v4_minimal_vector_pipeline_design.md)
+  - [plan/history_plan.md#vector-v4-plan](plan/history_plan.md#vector-v4-plan)
+  - [plan/history_plan.md#vector-v3-hardening-v4-design-plan](plan/history_plan.md#vector-v3-hardening-v4-design-plan)
+  - [plan/history_plan.md#vector-v3-plan](plan/history_plan.md#vector-v3-plan)
+  - [plan/history_plan.md#vector-v2-plan](plan/history_plan.md#vector-v2-plan)
+  - [plan/history_plan.md#vector-v0-v1-plan](plan/history_plan.md#vector-v0-v1-plan)
 - `debug/frontend`
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
   - [design/debug_frontend_ui_refresh_design.md](design/debug_frontend_ui_refresh_design.md)

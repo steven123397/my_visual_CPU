@@ -119,12 +119,16 @@
 - `debug/frontend` 的 Node/runtime 级持续 `run/pause`、session replacement、高吞吐 terminal 聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e 门禁已经够用；当前工作区正在此基线上推进一轮不扩功能面的 UI refresh，范围仅限浏览器壳层的布局、视觉层级和 `terminal` 收起交互语义，后续也继续按真实 bug 或明确 UI 需求补最小回归，不主动扩大协议或压力面。
 - `Phase 3` 的 decode 级 `BlockedByUnresolvedStore` 最小收窄之后，主线判断已经完成：当前不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 这类有明确结构收益的最小切片，而不是直接放大 memory speculation / replay。
 - 继续把 `pipeline`、loader/debug smoke 和 guest runtime 保持在当前已接入、可验证的范围内，不让它们反向污染 reference path。
+- 更远期方向上，`向量扩展 + ML workload` 已被确认为长期候选主线之一；其 `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`、`V4` 首刀与第一轮更窄的 `V4` hardening 都已落地，当前已具备固定 `conv -> relu` 的最小 CNN-style guest 闭环、non-memory vector ALU 的最小 vector-aware pipeline 边界，以及更像真实依赖链的 host smoke；后续更健康的下一步仍是先围绕这条已落地边界做 bug-driven hardening，而不是直接抢跑 `Pool / FC`、向量 load/store path 或更重的 `Phase 4`。
 
 相关状态文档见：
 
 - [docs/status/mainline_status.md](docs/status/mainline_status.md)
 - [docs/status/project_priority_roadmap.md](docs/status/project_priority_roadmap.md)
 - [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)
+- [docs/design/vector_ml_workload_direction_design.md](docs/design/vector_ml_workload_direction_design.md)
+- [docs/design/vector_v2_operator_guest_design.md](docs/design/vector_v2_operator_guest_design.md)
+- [docs/design/vector_v4_minimal_vector_pipeline_design.md](docs/design/vector_v4_minimal_vector_pipeline_design.md)
 - [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
 
 ## 技术栈
