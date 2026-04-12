@@ -11,22 +11,18 @@
 - 相关设计：
   - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
-  - [design/debug_frontend_ui_refresh_design.md](../design/debug_frontend_ui_refresh_design.md)
-  - [design/vector_frontend_visualization_design.md](../design/vector_frontend_visualization_design.md)
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)
   - [design/phase3_issue_replay_speculation_assessment.md](../design/phase3_issue_replay_speculation_assessment.md)
   - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
   - [design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)
-  - [design/vector_vlite_v0_v1_design.md](../design/vector_vlite_v0_v1_design.md)
-  - [design/vector_v2_operator_guest_design.md](../design/vector_v2_operator_guest_design.md)
-  - [design/vector_v3_minimal_cnn_guest_design.md](../design/vector_v3_minimal_cnn_guest_design.md)
-  - [design/vector_v4_minimal_vector_pipeline_design.md](../design/vector_v4_minimal_vector_pipeline_design.md)
+  - [design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
 - 相关状态：
   - [project_priority_roadmap.md](project_priority_roadmap.md)
   - [kernel_alpha_status.md](kernel_alpha_status.md)
 - 当前计划：
-  - 当前无活跃计划。
+  - [../plan/phase4_prep1_bus_memory_region_plan.md](../plan/phase4_prep1_bus_memory_region_plan.md)
+    `P4-prep-1` 的可执行实施计划。
 - 已完成计划归档：
   - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
   - [../plan/history_plan.md#vector-v4-plan](../plan/history_plan.md#vector-v4-plan)
@@ -59,10 +55,11 @@
 - `2026-04-10` 同日也已完成 `V4` 首刀实现：当前 `pipeline` 已让 non-memory vector ALU 脱离统一 serializing fallback，改为“execute 先 materialize 结果、commit 再落地 architected vector state”；同时以保守 `vector_state_busy` stall 守住 older vector state 未提交时的年轻向量 ALU 读取边界，并新增 `vector_pipeline_smoke` 接入 `make test` 与 `make test-pipeline`。
 - `2026-04-11` 已在 `V4` 首刀之上补上一轮更窄的 hardening：当前 `vector_state_busy` 已从“任何 older vector pending 都阻塞”收窄到“pending serializing vector 或 direct older source dependency 未 materialize 才阻塞”；若 older non-memory vector ALU 结果已经 materialize、只是被更老 scalar ROB head 挡住 commit，则 direct dependent younger vector ALU 现在可以先完成 execute。对应 `vector_pipeline_smoke` 也已补上更像真实依赖链的 host 回归。
 - `2026-04-12` 已把 `vector / NN` 这条线正式接进 `debug/frontend`：当前浏览器端可直接选择 `guest_vector_demo` 与 `guest_vector_cnn_demo`，并展示 workload 说明卡、向量指令 `config / memory / ALU` 高亮、`SEW / VL + v0..v31` 最小寄存器快照、固定 `conv -> relu` 专题卡，以及当前 `vector_state_busy` / serializing guard 的最小执行边界提示；这一轮继续保持“教学演示可用”定位，不把前端扩成通用调试器。
+- `2026-04-12` 同日也已完成一轮不扩功能面的 `debug/frontend` UI refresh 收口：浏览器壳层的 Hero / 控制带 / `terminal` / `inspector` 布局与 `terminal collapsed` 交互语义已经稳定接入当前前端设计边界。
+- `2026-04-12` 同日也已完成 `Phase 4` 准备性方向设计收口：当前把 `Phase 4` 第一刀正式收窄为 `P4-prep-1`，即 `bus / memory region` 合同收口；它当前只服务后续 `cache / DMA` 准备，不改变 guest 可见语义。
 - `2026-04-06` 已完成 Spike 外部差分验证 V1 第一轮落地：`make test-host-spike_differential` 作为显式离线入口已经可用，当前真实接通的正向场景包括 `alu_mem_csr`、`control_flow`、`predictable_branch_loop`、`trap_return`、`illegal_trap` 与 `delegated_user_ecall_to_supervisor`；`make test` 与 `make test-pipeline` 继续不依赖 Spike。
 - `2026-04-07` 已把 Spike 外部差分继续外推到第一批 device-free `Sv39/page fault` final-state subset：`make test-host-spike_differential` 当前已额外接通 `sv39_instruction_page_fault`、`sv39_load_page_fault`、`sv39_store_page_fault` 与 `sv39_reserved_non_leaf_fault`；对应场景不再依赖 `configure hook`，而是统一改写成显式 `initial_gprs / initial_csrs / initial_memory`。
 - `2026-04-07` 同日也已把 Spike 外部差分的 returning trap handler checkpoint 正式接通：当前对带 `mret / sret` 的场景会在单次 Spike 运行里额外抓 first-trap checkpoint，并比较 `first_trap_summary`；`trap_return`、`delegated_user_ecall_to_supervisor` 以及新增的 returning `Sv39/page fault` 场景都已进入真实差分门禁。
-- `2026-04-08` 当前工作区正在推进一轮不扩功能面的 `debug/frontend` UI refresh：范围限于浏览器壳层的 Hero / 控制带 / `terminal` / `inspector` 布局收口，以及 `terminal collapsed` 交互语义；当前边界仍明确为不修改 `debug_session/protocol`、`DebugSnapshot`、guest 合同或更重浏览器压力面。
 - `2026-04-05` 又补上一条更窄的 platform hardening：`Machine::load_elf()/load_binary()` 在保留“非完整平台 reset”语义的前提下，image reload 不再把上一轮 guest 留下的 `SimpleStorage` sticky error 带进新镜像；对应 `machine_loader_reset` 已补上 binary/ELF 两侧回归。
 - `2026-04-05` 又补上一条更窄的 guest runtime hardening：`kernel_runtime_complete_storage_signature_check()` 现在即使在 storage read 失败或签名不匹配时也会释放临时 PMM 页，避免把页泄漏藏在 `kernel_alpha` storage probe/signature 的失败路径里；对应 `kernel_runtime` 单测已补上坏签名与读失败两侧回归。
 - `2026-04-05` 又补上一条更窄的 guest runtime rollback hardening：`kernel_runtime_run_identity_superpage_bringup()` 现在在复用同一个 `kernel_runtime_t` 时会先清空旧 `address_space`，因此即使随后在 PMM 早期检查、mapping failure 或 satp mismatch 上失败，也不会把上一轮 stale VM 指针泄露给后续路径；对应 `kernel_runtime` 单测已补上 runtime reuse + early failure 回归。
@@ -88,6 +85,8 @@
 - `2026-04-12`
   - `debug/frontend` 已补上 `vector / NN` 教学可视化：可直接选择 `guest_vector_demo` / `guest_vector_cnn_demo`，并在浏览器端观察 workload 导览、向量指令高亮、`SEW / VL + v0..v31` 最小寄存器 dump，以及固定 `conv -> relu` 的 live / expected 对照。
   - 同日也补上 `DebugSnapshot` 的最小向量状态：CLI / JSON 当前会暴露 `sew_bytes`、`vl` 与 32 个 16-byte 向量寄存器原始 dump，为后续继续围绕已落地的 `V4` 边界做 workload 观察提供最小只读观测面。
+  - 同日也完成一轮不扩功能面的 `debug/frontend` UI refresh 收口：Hero / 控制带 / `terminal` / `inspector` 的页面骨架和 `terminal collapsed` 语义已经并入当前正式前端设计边界。
+  - 同日也完成 `Phase 4` 准备性方向设计收口：第一刀正式定义为 `P4-prep-1`，即 `bus / memory region` 合同收口；它当前只服务后续 `cache / DMA` 准备，不改变 guest 可见语义。
 - `2026-04-07`
   - Spike 外部差分验证继续补上第一批 device-free `Sv39/page fault` final-state subset：`sv39_instruction_page_fault`、`sv39_load_page_fault`、`sv39_store_page_fault` 和 `sv39_reserved_non_leaf_fault` 已接入 `make test-host-spike_differential`。
   - 同时也把这组 `Sv39` 场景从 backend differential 里的 `configure hook` 形态收口为显式 `initial_gprs / initial_csrs / initial_memory`，避免为了 Spike adapter 去扩大通用 `configure hook` 支持面。
@@ -121,7 +120,7 @@
 ## 当前仍然有效的风险 / 限制
 
 - `debug/frontend` 当前已经可用，并且 Node/runtime 级持续 `run`、session replacement、高吞吐 terminal 输入聚合、repeated `run/pause` 长会话、`reset` 后 terminal reset / offset 重启，以及真实 `interactive_os` `run/pause + terminal-input` e2e 都已接入；对当前单用户、本地教学/调试使用，这组门禁已经足够。
-- 当前工作区中的 `debug/frontend` UI refresh 仍是浏览器壳层收口，不扩成新的协议或压力专项；其中 `terminal collapsed` 视图必须继续如实反映连接、待输入和不可交互状态，不能把“尚未加载会话”或“仍在发送输入”伪装成“可直接继续交互”。
+- 当前已落地的 `debug/frontend` UI refresh 仍只覆盖浏览器壳层收口，不扩成新的协议或压力专项；其中 `terminal collapsed` 视图必须继续如实反映连接、待输入和不可交互状态，不能把“尚未加载会话”或“仍在发送输入”伪装成“可直接继续交互”。
 - 当前新增的向量 / CNN 可视化继续保持克制：浏览器端只消费 `SEW / VL + raw register dump` 与固定 demo 元信息，不提供通用模型可视化、任意 memory watch、lane 级性能图或更重 trace 下载。
 - Spike 外部差分验证当前仍是独立离线能力，不进入默认主门禁；当前仍以 final state 为主体，并对 `instret` 与 non-`M-mode` bootstrap 带来的少量 `mstatus/mepc` 噪音做了受控收窄。对执行 `mret / sret` 的 returning trap handler，当前已额外比较 first-trap checkpoint summary，但还不扩成更大的中间态 trace。
 - Spike 外部差分当前已经覆盖第一批 device-free `Sv39/page fault` final-state subset 和 returning trap handler 的首个 checkpoint summary，但仍不覆盖 `configure hook`、`PlatformFixture::UartPlic`、设备 side effect、更广 `Sv39` 语义面、更复杂的多 checkpoint / nested trap 变体和逐提交 trace；如果未来要把它升级成更强 oracle，下一刀应优先看更广 `Sv39` / device-free privilege 或确有收益的多 checkpoint 变体，而不是直接做更大的统一框架。
@@ -137,11 +136,12 @@
 
 ## 下一步
 
-1. 当前如果继续推进 `向量扩展 + ML workload` 这条线，更健康的下一步仍是围绕已落地的 [../design/vector_v4_minimal_vector_pipeline_design.md](../design/vector_v4_minimal_vector_pipeline_design.md) 与 [../design/vector_frontend_visualization_design.md](../design/vector_frontend_visualization_design.md) 做 bug-driven hardening 与观测补洞；但 `vector_state_busy` 的第一轮粗全局阻塞已经收窄，后续应优先继续围绕 direct dependency、mixed config / serializing guard 和 workload 观察补最小回归，而不是立刻跳到向量 load/store path、`Pool / FC` 或更重的 `Phase 4`。
-2. 当前不主动重开更激进的 `Phase 3` issue / replay / speculation 扩展；后续仅在出现真实 stall hotspot 证据或明确研究目标时再单开专项。
-3. Spike 外部差分验证当前转入 bug-driven 扩展阶段：保留离线 oracle 入口，后续只在出现真实 correctness 缺口时，按最小切片继续补更广 `Sv39 / page fault`、设备无关 privilege / CSR，或必要时的更复杂多 checkpoint 变体。
-4. 继续以 bug-driven hardening 的方式维护 guest runtime、`kernel_alpha` 十条基线和 reference correctness 矩阵，不做无关大重构。
-5. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内；当前这轮 `debug/frontend` UI refresh 也只收口浏览器壳层布局和真实状态表达，不扩大协议或浏览器端压力面，后续仍按真实 bug 或明确新需求补最小回归。
+1. 当前如果继续推进 `向量扩展 + ML workload` 这条线，更健康的下一步仍是围绕已落地的 [../design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md) 与 [../design/debug_frontend_integration.md](../design/debug_frontend_integration.md) 做 bug-driven hardening 与观测补洞；后续应优先继续围绕 direct dependency、mixed config / serializing guard 和 workload 观察补最小回归，而不是立刻跳到向量 load/store path、`Pool / FC` 或更重的 `Phase 4`。
+2. 当前如果要正式打开 `Phase 4`，唯一健康的第一刀是围绕 [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md) 里的 `P4-prep-1` 做最小收口：统一 `bus / memory region` 合同，不把 `cache / DMA / multicore` 混入同一轮。
+3. 当前不主动重开更激进的 `Phase 3` issue / replay / speculation 扩展；后续仅在出现真实 stall hotspot 证据或明确研究目标时再单开专项。
+4. Spike 外部差分验证当前转入 bug-driven 扩展阶段：保留离线 oracle 入口，后续只在出现真实 correctness 缺口时，按最小切片继续补更广 `Sv39 / page fault`、设备无关 privilege / CSR，或必要时的更复杂多 checkpoint 变体。
+5. 继续以 bug-driven hardening 的方式维护 guest runtime、`kernel_alpha` 十条基线和 reference correctness 矩阵，不做无关大重构。
+6. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内；已落地的 `debug/frontend` UI refresh 也继续只收口浏览器壳层布局和真实状态表达，不扩大协议或浏览器端压力面，后续仍按真实 bug 或明确新需求补最小回归。
 
 ## 验证基线
 

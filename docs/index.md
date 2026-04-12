@@ -17,42 +17,24 @@
 6. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
    Spike 外部差分验证的当前实现边界、用户入口和扩展方向。
 7. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
-   `debug_session/protocol + frontend` 的正式接入边界。
-8. [design/debug_frontend_ui_refresh_design.md](design/debug_frontend_ui_refresh_design.md)
-   `debug/frontend` 当前这一轮 UI 美化的结构边界与视觉方案。
-9. [design/vector_frontend_visualization_design.md](design/vector_frontend_visualization_design.md)
-   当前已落地的向量 / 最小 `conv -> relu` workload 如何在 frontend 里做教学式可视化。
-10. [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
+   `debug_session / protocol + frontend` 的统一设计边界，涵盖正式接入、UI 壳层和向量教学可视化。
+8. [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
    最小可交互 `interactive_os` 的 host / frontend / guest 合同。
-11. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
+9. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
    `Phase 3-B/C` 执行模型边界。
-12. [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
+10. [design/blocked_by_unresolved_store_boundary.md](design/blocked_by_unresolved_store_boundary.md)
    decode 级 `BlockedByUnresolvedStore` 串行化边界专项设计。
-13. [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
+11. [design/phase3_issue_replay_speculation_assessment.md](design/phase3_issue_replay_speculation_assessment.md)
    decode 边界收窄之后，`Phase 3` 是否继续扩更激进 `issue / replay / speculation` 的取舍结论。
-14. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+12. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
    `pipeline` 投机执行与提交契约。
-15. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
-   “向量扩展 + ML workload” 长期主线候选的方向设计，以及它与 `Phase 4` 的优先级关系。
-16. [design/vector_vlite_v0_v1_design.md](design/vector_vlite_v0_v1_design.md)
-   `V-lite` `V0 / V1` 的最小状态、编码和执行合同。
-17. [design/vector_v2_operator_guest_design.md](design/vector_v2_operator_guest_design.md)
-   `V-lite` `V2` 的算子级回归与最小 guest 闭环设计。
-18. [design/vector_v3_minimal_cnn_guest_design.md](design/vector_v3_minimal_cnn_guest_design.md)
-   `V-lite` `V3` 的固定 `conv -> relu` guest demo 设计。
-19. [design/vector_v4_minimal_vector_pipeline_design.md](design/vector_v4_minimal_vector_pipeline_design.md)
-   `V-lite` `V4` 的最小 vector-aware pipeline 首刀设计。
-20. [plan/history_plan.md#vector-frontend-visualization-plan](plan/history_plan.md#vector-frontend-visualization-plan)
-   向量 / 神经网络 frontend 可视化计划的归档结果。
-21. [plan/history_plan.md#vector-v4-plan](plan/history_plan.md#vector-v4-plan)
-   `V-lite` `V4` 最小 vector-aware pipeline 首刀实现计划的归档结果。
-22. [plan/history_plan.md#vector-v3-hardening-v4-design-plan](plan/history_plan.md#vector-v3-hardening-v4-design-plan)
-   `V3 hardening` 与 `V4` 首刀设计收口计划的归档结果。
-23. [plan/history_plan.md#vector-v3-plan](plan/history_plan.md#vector-v3-plan)
-   `V-lite` `V3` 首刀计划的归档结果。
-24. [plan/history_plan.md#vector-v2-plan](plan/history_plan.md#vector-v2-plan)
-   `V-lite` `V2` 首刀计划的归档结果。
-25. [plan/history_plan.md](plan/history_plan.md)
+13. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+   `V-lite` 当前统一设计边界：最小 ISA、workload、vector-aware `pipeline` 与 `Phase 4` 衔接口径。
+14. [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
+   `Phase 4` 当前准备性入口设计，以及 `P4-prep-1` 的正式边界。
+15. [plan/phase4_prep1_bus_memory_region_plan.md](plan/phase4_prep1_bus_memory_region_plan.md)
+   `P4-prep-1` 的可执行实施计划。
+16. [plan/history_plan.md](plan/history_plan.md)
    已完成计划的统一归档入口。
 
 ## 专题入口
@@ -66,22 +48,21 @@
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
 - `向量 / ML workload`
   - [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
-  - [design/vector_vlite_v0_v1_design.md](design/vector_vlite_v0_v1_design.md)
-  - [design/vector_v2_operator_guest_design.md](design/vector_v2_operator_guest_design.md)
-  - [design/vector_v3_minimal_cnn_guest_design.md](design/vector_v3_minimal_cnn_guest_design.md)
-  - [design/vector_v4_minimal_vector_pipeline_design.md](design/vector_v4_minimal_vector_pipeline_design.md)
-  - [design/vector_frontend_visualization_design.md](design/vector_frontend_visualization_design.md)
-  - [plan/history_plan.md#vector-frontend-visualization-plan](plan/history_plan.md#vector-frontend-visualization-plan)
-  - [plan/history_plan.md#vector-v4-plan](plan/history_plan.md#vector-v4-plan)
-  - [plan/history_plan.md#vector-v3-hardening-v4-design-plan](plan/history_plan.md#vector-v3-hardening-v4-design-plan)
-  - [plan/history_plan.md#vector-v3-plan](plan/history_plan.md#vector-v3-plan)
-  - [plan/history_plan.md#vector-v2-plan](plan/history_plan.md#vector-v2-plan)
   - [plan/history_plan.md#vector-v0-v1-plan](plan/history_plan.md#vector-v0-v1-plan)
+  - [plan/history_plan.md#vector-v2-plan](plan/history_plan.md#vector-v2-plan)
+  - [plan/history_plan.md#vector-v3-plan](plan/history_plan.md#vector-v3-plan)
+  - [plan/history_plan.md#vector-v3-hardening-v4-design-plan](plan/history_plan.md#vector-v3-hardening-v4-design-plan)
+  - [plan/history_plan.md#vector-v4-plan](plan/history_plan.md#vector-v4-plan)
 - `debug/frontend`
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
-  - [design/debug_frontend_ui_refresh_design.md](design/debug_frontend_ui_refresh_design.md)
-  - [design/vector_frontend_visualization_design.md](design/vector_frontend_visualization_design.md)
   - [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
+  - [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
+  - [plan/history_plan.md#vector-frontend-visualization-plan](plan/history_plan.md#vector-frontend-visualization-plan)
+- `Phase 4 准备`
+  - [plan/phase4_prep1_bus_memory_region_plan.md](plan/phase4_prep1_bus_memory_region_plan.md)
+  - [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
+  - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)
+  - [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
 - `platform / MMIO`
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)
   - [design/regression_completion_criteria.md](design/regression_completion_criteria.md)

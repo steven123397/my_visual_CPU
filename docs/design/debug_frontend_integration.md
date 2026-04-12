@@ -1,80 +1,64 @@
-# Debug / Frontend 集成设计
+# Debug / Frontend 统一设计
 
 ## 文档定位
 
-本文档记录 `debug_session/protocol + frontend` 正式接入主线时确定下来的结构边界、目标和非目标。
+本文档是当前仓库关于 `debug_session / protocol + frontend` 的统一设计来源，用于吸收此前分散维护的：
 
-它承接 [pipeline_core_integration.md](pipeline_core_integration.md) 已完成的 `pipeline core` 集成，聚焦第二轮“教学演示可用”目标：
+- `debug/frontend` 正式接入边界
+- 浏览器壳层 UI 收口
+- 向量 / 神经网络教学可视化
 
-- 仓库使用者可以本地启动一个调试服务和前端页面
-- 可以对现有 asm、guest、`kernel_alpha` demo 做可视化单步演示
-- 不扩大为一个新的通用调试器项目
+它重点回答：
 
-本文档不承担实时进度更新；当前运行方式、验证入口和近期稳定化重点以状态文档和 [README.md](../../README.md) 为准。
+- 当前本地调试链路的正式边界是什么
+- 浏览器端的页面结构、状态语义和交互边界是什么
+- `vector / NN` 如何在前端中以教学方式只读展示
+- 这条线当前明确不做哪些功能
+
+本文档不承担实时进度更新。当前实现状态、验证入口和后续优先级，以对应 `status` 文档与 README 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](../status/mainline_status.md)
-  - [status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
-- 相关计划：
-  - 无。该轮执行细节已回写到相关 `status` 文档。
-- 后续设计补充：
-  - [vector_frontend_visualization_design.md](vector_frontend_visualization_design.md)
+  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 相关设计：
+  - [minimal_interactive_os_design.md](minimal_interactive_os_design.md)
+  - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
+  - [platform_mmio_contract.md](platform_mmio_contract.md)
+- 已完成计划归档：
+  - [../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
+  - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
 
-## 当前有效性说明
+## 背景与问题
 
-- 当前有效 / 历史语境：当前有效，记录 `debug/frontend` 已落地的设计边界与非目标。
-- 当前运行方式、验证入口和近期稳定化重点以 [status/mainline_status.md](../status/mainline_status.md)、[status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 与 [README.md](../../README.md) 为准。
+当前仓库已经是一个已可运行的模拟器原型。`pipeline core`、`debug_session/protocol`、本地 Node 调试服务和浏览器前端都已经正式接入主线；浏览器端不再只是旧分支遗留资产，而是当前主线维护的一部分。
 
-## 背景
+与此同时，前端的目标也已经很明确：它服务于本地教学演示、实验观察和最小调试，而不是新的通用调试器产品线。此前这条线被拆成“正式接入”“UI 刷新”“向量 / CNN 可视化”三份设计文档，在阶段推进时有价值；但当前这些能力都已经落地，继续拆开维护会让长期边界重复。
 
-截至 `2026-03-25`，当前主线已经具备：
+因此，当前更健康的做法，是把 `debug/frontend` 的长期有效设计收口到一份统一文档中：既保留当前架构链路，也把 UI 壳层和向量 / NN 教学视图纳入同一事实来源。
 
-- `ExecutionBackend + FunctionalBackend + PipelineBackend`
-- 共享 `InstructionSemantics` 语义层
-- `make test` 守住 Phase 1 / guest / `kernel_alpha`
-- `make test-pipeline` 守住 asm、host、guest 与 `kernel_alpha` 的 `pipeline` 验证
+## 目标
 
-此前 pipeline core 集成明确排除了：
+- 把 `debug_session / protocol + frontend` 的长期有效边界收口成一份统一设计文档。
+- 保持浏览器端继续服务“教学演示可用”的定位，而不是扩成通用调试器。
+- 明确当前前端的统一页面骨架、关键状态语义和 `terminal collapsed` 交互边界。
+- 明确当前可视化范围，包括 `pipeline` 摘要、平台状态和 `vector / NN` 教学视图。
+- 保持前端所有新增展示都建立在现有只读快照与 manifest 元信息之上，不额外发明第二套执行语义。
 
-- `myCPU/src/debug/*`
-- `frontend/*`
+## 非目标
 
-而远端 `my-project-3-24` 中的调试前端依赖一套比当前主线更大的 debug surface。第二轮不应把那套接口整体搬回主线，而应基于当前主线边界，只补前端演示真正需要的最小只读调试面。
+- 不引入断点、条件暂停、差分视图、任意文件上传或任意表达式求值。
+- 不修改 `functional / pipeline` 的执行语义。
+- 不为了浏览器 UI 去重写 `Machine`、backend 或 guest 合同。
+- 不把当前前端扩成 profiler、trace studio、waveform viewer 或通用模型可视化器。
+- 不迁移到 React、Vue 或其他前端框架；继续保留原生 HTML / CSS / ESM。
 
-## 本轮目标
+## 统一设计边界
 
-本轮目标如下：
+### 1. 调试链路架构
 
-1. 为 `functional` 和 `pipeline` 提供统一的只读调试快照。
-2. 正式接入 `DebugSession` 与 `--debug-cli` JSON line protocol。
-3. 接入本地 Node 调试服务和浏览器端前端页面。
-4. 让仓库内现有 asm、`guest_supervisor_demo`、向量 demo 与 `kernel_alpha` demo 可以直接作为演示数据源。
-5. 增加最小可维护的 host / frontend 验证门禁。
-6. 在不改变调试器定位的前提下，把当前已落地的向量 / 最小 CNN workload 变成可视化教学素材。
-
-## 本轮非目标
-
-本轮明确不做以下事情：
-
-1. 不引入断点、条件暂停、差分视图或任意文件上传。
-2. 不改变 `functional` / `pipeline` 的执行语义。
-3. 不为了调试 UI 重新设计 `Machine` 或 backend 的主执行边界。
-4. 不让 debug 路径成为新的 ISA 语义来源。
-5. 不引入浏览器框架迁移；前端继续使用原生 HTML / CSS / ESM。
-
-## 集成原则
-
-1. `functional` 继续是默认 reference path，debug 只观察，不干预执行。
-2. `pipeline` 的快照来自当前 backend 内部真实状态，不复制一套流水线模拟逻辑。
-3. `Machine`、`Bus`、各设备只暴露前端真正需要的最小只读 helper。
-4. `step_commit` 继续基于 `instret` 前后变化寻找提交边界，不新增第二套提交语义。
-5. CLI、Node server、frontend 都围绕“仓库内现成 demo 可演示”这一目标收口。
-
-## 目标架构
-
-接入后的调试链路如下：
+当前正式调试链路如下：
 
 ```text
 browser
@@ -83,216 +67,152 @@ browser
       -> debug_server_runtime.mjs
            -> debug_cli_session.mjs
                 -> mycpu --debug-cli
-       -> DebugSession
-       -> Machine
-            -> ExecutionBackend::debug_snapshot()
-            -> CPU / CSR / Bus / UART / CLINT / PLIC / Storage
+                     -> DebugSession
+                     -> Machine
+                     -> ExecutionBackend::debug_snapshot()
 ```
 
 其中：
 
-- `DebugSession` 负责加载镜像、重置、按 cycle / commit 单步以及汇总快照。
-- `debug_protocol` 当前已拆成命令解码、响应序列化与 `CLI loop` 三个内部边界，但对外仍保持统一的 `--debug-cli` JSON line 协议。
-- `frontend/server/debug_server.mjs` 负责静态文件服务、HTTP API 入口与 WebSocket 接线。
-- `frontend/server/debug_server_runtime.mjs` 负责 session queue、generation guard、run loop 与 terminal 跟踪。
-- `frontend/server/debug_cli_session.mjs` 负责 `mycpu --debug-cli` 子进程生命周期、请求队列和 teardown；当前 timeout 合同是 fail-closed，一旦某条请求超时，整个 session 直接失效并 teardown，避免没有 request id 的 JSON line 响应在迟到时错配后续请求。
-- `frontend/app` 只负责状态管理和视图呈现。
+- `DebugSession` 负责 `load / snapshot / step / reset` 等最小调试控制。
+- `debug_protocol` 继续保持单行 JSON 的 `--debug-cli` 协议。
+- `frontend/server/debug_server.mjs` 负责静态文件服务、HTTP API 与 WebSocket 广播。
+- `debug_server_runtime.mjs` 负责 session queue、run loop、generation guard 和 terminal 状态聚合。
+- `debug_cli_session.mjs` 负责 `mycpu --debug-cli` 子进程生命周期与 fail-closed timeout 合同。
+- 浏览器端只负责状态管理和视图呈现，不直接解释执行语义。
 
-## 最小调试数据面
+### 2. 最小调试数据面
 
-### 1. backend 调试快照
+当前前端建立在统一只读快照之上，主要包括：
 
-`ExecutionBackend` 补最小只读接口：
+- backend 侧：
+  - `name()`
+  - `debug_snapshot()`
+- `Machine` 侧：
+  - `cpu()`、`bus()`、`uart()`、`clint()`、`plic()`、`storage()`、`backend()`
+  - `loaded()`、`reset_loaded_image()`、局部调试用 reset helper
+- `Bus / 设备` introspection：
+  - 最近一次总线访问
+  - UART / CLINT / PLIC / Storage 的最小只读状态
+- `DebugSnapshot`：
+  - 五级流水线、`stall_reason`、最小 `ROB / LSQ` 观测
+  - 标量寄存器、关键 CSR / trap 摘要
+  - 平台与 I/O 状态
+  - 当前已落地的向量状态：`SEW / VL + v0..v31 raw dump`
 
-- `name()`
-- `debug_snapshot()`
+这组数据面的原则是：只暴露当前仓库里真实、稳定、可解释的状态，不为了 UI 便利发明第二套推导数据。
 
-其中：
+### 3. 前端页面骨架
 
-- `FunctionalBackend` 返回空流水线快照，但保留统一字段结构。
-- `PipelineBackend` 返回真实的 IF / ID / EX / MEM / WB 五级状态，以及：
-  - `stalled`
-  - `redirected`
-  - `redirect_target`
-  - `pending_fetch_fault`
-  - `trap_flush`
-  - `committed`
-  - `empty`
+当前浏览器壳层收口为 4 层结构：
 
-### 2. Machine 调试入口
+1. **Hero 总览层**
+   - 展示页面定位、当前后端与运行摘要
+2. **控制带层**
+   - 承载 workload 选择、backend 选择、`Load / Run / Pause / Step / Reset`
+   - 提供 `terminal` 展开 / 收起入口
+3. **主舞台层**
+   - 默认保持“深色终端主舞台 + 轻量观察区”结构
+   - 适配依赖 UART / terminal 的演示路径
+4. **Inspector 深度观察层**
+   - 聚合 `执行观察 / 架构状态 / 平台与 I/O`
+   - 在 `terminal` 收起时上升为主视区
 
-`Machine` 补最小只读 / 控制接口：
+这套骨架已经是当前前端的正式布局边界；后续继续修 UI，也应只在这套骨架内做收口，而不是再发明新的页面模型。
 
-- `cpu()`
-- `bus()`
-- `uart()`
-- `clint()`
-- `plic()`
-- `storage()`
-- `backend()`
-- `loaded()`
-- `clear_storage_image()`
-- `reset_loaded_image()`
+### 4. `terminal collapsed` 状态语义
 
-这组接口仅供 debug session 使用，不改现有 run path。
+`terminal` 收起当前只影响布局与视觉主次，不改变协议语义：
 
-### 3. Bus 与设备 introspection
+- 不销毁 buffer
+- 不重置 `nextOffset`
+- 不改变 `connected / pendingInput / focused` 的真实含义
+- 不隐式触发重连、会话切换或 terminal 清空
 
-前端需要展示最近一次总线访问与关键 MMIO 设备状态，因此补以下最小 helper：
+也就是说，`terminal collapsed` 是视图层状态，不是调试协议状态。页面必须继续如实表达“已连接 / 未连接 / 正在发送输入 / 当前不可交互”的真实情况。
 
-- `Bus::last_access()`
-- `Uart16550`
-  - `ier()`
-  - `thre_interrupt_asserted()`
-  - `output()`
-  - `output_size()`
-  - `set_mirror_stdout(bool)`
-- `Clint`
-  - `mtimecmp()`
-  - `timer_interrupt_pending()`
-- `Plic`
-  - `priority()`
-  - `source_level()`
-  - `source_pending()`
-  - `source_claimed()`
-  - `machine_enables()`
-  - `supervisor_enables()`
-  - `machine_threshold()`
-  - `supervisor_threshold()`
-  - `machine_has_pending()`
-  - `supervisor_has_pending()`
-- `SimpleStorage`
-  - `attached()`
-  - `status()`
-  - `capacity_blocks()`
-  - `lba()`
-  - `block_count()`
-  - `error_code()`
-  - `clear_image()`
+### 5. 当前支持的 workload 与演示入口
 
-这些接口都只读或局部 reset，不改变设备合同。
+前端测试清单当前直接暴露仓库内现有演示入口，包括：
 
-## Debug CLI 设计
-
-CLI 入口为：
-
-```text
-./mycpu --debug-cli
-```
-
-首版命令集维持最小集合：
-
-- `load`
-- `snapshot`
-- `step_cycle`
-- `step_commit`
-- `reset`
-- `quit`
-
-协议格式继续使用单行 JSON 输入 / 输出，便于 Node 子进程直接驱动。
-
-## Frontend 设计
-
-前端保持远端分支的轻量结构：
-
-- `frontend/app`
-  - 静态页面
-  - 浏览器状态管理
-  - 渲染函数
-  - pipeline / 面板组件
-- `frontend/server`
-  - 测试清单
-  - 本地 HTTP 服务
-  - WebSocket 广播
-- `frontend/tests`
-  - Node 内置测试
-
-默认运行地址保持：
-
-```text
-http://127.0.0.1:4173
-```
-
-演示能力保持在以下范围：
-
-- 选择仓库内现有测试
-- 切换 `functional` / `pipeline`
-- `Load / Run / Pause / Step Cycle / Step Commit / Reset`
-- 查看：
-  - 当前 workload 说明卡，以及 `guest_vector_demo` / `guest_vector_cnn_demo` 的最小导览
-  - 五级流水线与 `stall_reason` / `lsq_load_state` 的轻量可视化
-  - 向量指令的 `config / memory / ALU` 高亮
-  - 最近周期时间线
-  - `OoO / 微架构` 摘要：`ROB / LSQ` 深度、head sequence、`replay_flush / trap_flush / committed`
-  - `Vector State`：`SEW / VL` 与 `v0..v31` 的最小 dump / diff 观察
-  - 固定 `conv -> relu` demo 的专题说明卡
-  - 以折叠分组方式查看 `架构状态`（寄存器变化、关键 CSR / Trap）
-  - 以折叠分组方式查看 `平台与 I/O`（最近一次总线访问、UART / CLINT / PLIC / Storage、事件流）
-
-## 测试清单策略
-
-旧分支前端测试清单只覆盖 asm 和 `guest_supervisor_demo`。本轮应扩到当前主线已有演示入口：
-
-- 全部 `tests/asm/*.elf`
+- `tests/asm/*.elf`
 - `guest_supervisor_demo`
 - `guest_vector_demo`
 - `guest_vector_cnn_demo`
-- `kernel_alpha_demo`
-- `kernel_alpha_fault_demo`
-- 六条 storage 负向 demo
-- `kernel_alpha_plic_not_ready_demo`
-- `kernel_alpha_timer_not_ready_demo`
+- `kernel_alpha_demo` 及其负向 demo
+- `guest_interactive_os_demo`
 
-这样前端才能直接展示当前主线真正维护的 Phase 1 / post-Phase1 基线。
+其中 manifest 会提供只读元信息，例如：
 
-## 验证门禁
+- `title`
+- `summary`
+- `badge`
+- `workload`
+- 对固定 `vector_cnn_demo` 额外提供 `conv_input / conv_kernel / expected outputs`
 
-本轮至少守住：
+这些字段只服务浏览器展示，不参与执行协议。
+
+### 6. 当前统一可视化范围
+
+浏览器端当前统一支持以下几类视图：
+
+- **执行观察**
+  - 五级流水线
+  - 最近周期时间线
+  - `stall_reason`、`lsq_load_state`
+  - 最小 `ROB / LSQ` 摘要
+- **架构状态**
+  - GPR diff
+  - 关键 CSR / trap 信息
+- **平台与 I/O**
+  - 最近一次总线访问
+  - UART / CLINT / PLIC / Storage 状态
+- **向量 / NN 教学视图**
+  - `guest_vector_demo` 与 `guest_vector_cnn_demo` 的 workload 导览
+  - 向量指令 `config / memory / ALU` 分类高亮
+  - `Vector State`：`SEW / VL + v0..v31`
+  - 固定 `conv -> relu` 专题卡
+  - 当前 `vector_state_busy` / serializing guard 的边界提示
+
+这里的定位仍然是“当前已落地能力的教学式表达”，不是完整通用调试器。
+
+### 7. 当前 `vector / NN` 教学可视化边界
+
+当前向量 / 神经网络展示严格遵守以下边界：
+
+- 前端只消费只读快照与固定 demo 元信息。
+- `functional` 仍是参考语义真值来源；`pipeline` 只暴露自己的真实状态，不复制第二套向量解释器。
+- `guest_vector_cnn_demo` 的专题卡只解释固定 `conv -> relu` workload，不扩展到 `Pool / FC`、模型文件加载或 memory hierarchy 图。
+- 当前 `pipeline` 的向量边界必须如实表达：
+  - non-memory vector ALU 已经脱离统一 serializing fallback
+  - `vsetcfg / vle.v / vse.v` 仍然保守 serializing
+  - 这不是 lane / latency / vector rename 级模型
+
+## 验证思路
+
+当前这条线至少应持续守住：
 
 - `cd myCPU && make test`
 - `cd myCPU && make test-pipeline`
 - `cd myCPU && make test-host-debug_cli_smoke`
 - `cd frontend && node --test`
 
-必要时，把前端测试聚合进根 README 的演示说明，但不把 Node 前端测试并入 `myCPU/Makefile`。
+如果改动集中在 terminal / runtime / interaction shell，至少额外关注：
 
-## 风险与控制
+- `cd myCPU && make test-host-interactive_terminal_smoke`
 
-### 风险 1：debug surface 反向污染执行路径
+如果改动集中在当前向量教学视图，至少额外关注：
 
-控制方式：
+- `cd myCPU && make test-host-vector_vlite_smoke`
+- `cd myCPU && make test-host-vector_cnn_smoke`
 
-- 所有新增接口都保持只读或局部 reset
-- 不在 backend 中加入影响语义的“调试专用执行分支”
+## 风险与取舍
 
-### 风险 2：前端依赖旧分支字段格式，与主线现状不匹配
+- 保持原生 HTML / CSS / ESM 架构，会让某些布局表达不如框架方案灵活，但更符合当前仓库的小步演进边界。
+- 把 UI、integration 和 vector 可视化统一收口到一份设计文档，会让单文档信息量更大，但能减少长期边界重复和链接分散。
+- 把前端限制在教学演示和工程调试视角，会让“更像产品”的功能继续缺席，但这正是当前仓库刻意维持的边界。
 
-控制方式：
+## 当前有效性说明
 
-- 保持 `DebugSnapshot` 结构稳定
-- 由 `debug_protocol` 做统一 JSON 输出，不让前端直接推导 backend 内部结构
-
-### 风险 3：前端可运行，但没有真实门禁
-
-控制方式：
-
-- 加 `debug_cli_smoke`
-- 加 Node server / state tests
-- 加 runtime 级持续 `run`、session replacement 与高吞吐 terminal 聚合回归
-- 保持 `make test` 与 `make test-pipeline` 为主线 correctness 门禁
-
-### 风险 4：CLI 请求超时后，迟到响应错配后续请求
-
-控制方式：
-
-- `debug_cli_session` 的 timeout 直接 fail-closed
-- timeout 后 teardown 当前子进程，要求上层通过 reload / 新 session 恢复
-- 用 Node 单测直接守住“timeout 后拒绝后续请求，避免响应串味”这条边界
-
-## 实施顺序
-
-1. 先补调试快照值对象、backend / machine / bus / device 最小 introspection。
-2. 接入 `DebugSession`、`debug_protocol` 和 `--debug-cli`。
-3. 用 host smoke 守住 CLI 基本路径。
-4. 接入 `frontend/` 目录与 Node tests。
-5. 更新 README、`AGENTS.md` 与状态文档。
+- 当前有效 / 历史语境：当前有效，作为 `debug/frontend` 的统一设计边界。
+- 当前实现进度、当前优先级和后续是否继续扩浏览器功能面，以 [../status/mainline_status.md](../status/mainline_status.md)、[../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 与 [../../README.md](../../README.md) 为准。

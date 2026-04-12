@@ -11,22 +11,18 @@
 - 相关设计：
   - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
-  - [design/debug_frontend_ui_refresh_design.md](../design/debug_frontend_ui_refresh_design.md)
-  - [design/vector_frontend_visualization_design.md](../design/vector_frontend_visualization_design.md)
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)
   - [design/phase3_issue_replay_speculation_assessment.md](../design/phase3_issue_replay_speculation_assessment.md)
   - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
   - [design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)
-  - [design/vector_vlite_v0_v1_design.md](../design/vector_vlite_v0_v1_design.md)
-  - [design/vector_v2_operator_guest_design.md](../design/vector_v2_operator_guest_design.md)
-  - [design/vector_v3_minimal_cnn_guest_design.md](../design/vector_v3_minimal_cnn_guest_design.md)
-  - [design/vector_v4_minimal_vector_pipeline_design.md](../design/vector_v4_minimal_vector_pipeline_design.md)
+  - [design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
   - [kernel_alpha_status.md](kernel_alpha_status.md)
 - 当前计划：
-  - 当前无活跃计划。
+  - [../plan/phase4_prep1_bus_memory_region_plan.md](../plan/phase4_prep1_bus_memory_region_plan.md)
+    `P4-prep-1` 的可执行实施计划。
 - 已完成计划归档：
   - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
   - [../plan/history_plan.md#vector-v4-plan](../plan/history_plan.md#vector-v4-plan)
@@ -61,7 +57,7 @@
 - 当前已经补上一组更窄的 Node/runtime 回归：持续 `run/pause`、运行中 session replacement，以及更高吞吐 terminal 输入聚合。
 - 当前也已经进一步补到 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
 - 对当前单用户、本地教学/调试使用，这组门禁已经足够；后续按真实 bug 或明确新需求补最小回归即可，不再主动扩大到更长时间 soak 或更重浏览器压力。
-- 当前工作区也在推进一轮 `debug/frontend` UI refresh，但它的边界仍应收窄在浏览器壳层的布局、视觉层级和 `terminal collapsed` 交互语义，不得顺手扩大 `debug_session/protocol`、guest 合同或新的浏览器压力验证面。
+- 当前这一轮不扩功能面的 `debug/frontend` UI refresh 已经完成，浏览器壳层的 Hero / 控制带 / `terminal` / `inspector` 布局和 `terminal collapsed` 交互语义都已收口；后续继续只按真实 bug 或明确 UI 需求补最小回归，不再顺手扩大 `debug_session/protocol`、guest 合同或浏览器压力面。
 - 当前这条线已经顺手把向量 / NN 的最小可视化补到前端，但这仍属于“教学演示可用”的窄扩面：workload 卡、向量寄存器视图和 `conv -> relu` 专题都只消费现有只读快照与固定 demo 元信息，不构成新的调试器功能面。
 - 这条线的目标仍然只是“教学演示可用”，不是通用调试器，也不需要为当前使用方式预先建设更重的浏览器端压测体系。
 
@@ -90,7 +86,15 @@
 - 因此，如果未来只能新开一条重主线，默认应先开“向量扩展 + ML workload”，再由真实 workload 决定哪些 `Phase 4` 工作值得推进。
 - 唯一适合提前做的 `Phase 4` 相关事项，只应是那些有独立结构收益、且不会提前扩大外部语义面的准备性收口，例如更清晰的 bus / memory contract 或更好的 memory 观测面。
 
-### 5. 常态维护项
+### 5. `Phase 4` 当前只打开准备性第一刀 `P4-prep-1`
+
+- 当前不把 `Phase 4` 理解成“马上做 `cache / DMA / multicore / coherence`”，而是只打开有独立结构收益的准备性切片。
+- 当前已经完成 [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md) 的设计收口；第一刀明确为 `P4-prep-1`：统一 `bus / memory region` 的分类、属性与查询合同。
+- 这一步的直接收益，是把 RAM / MMIO / unmapped / live side effect 的事实来源收口起来，为现有 reference hardening、后续 memory observation，以及未来 `cache / DMA` 准备提供统一边界。
+- `P4-prep-1` 当前明确不改变 guest 可见语义，不实现真正 `cache / DMA`，也不提前打开 multicore / coherence。
+- 只有在 `P4-prep-1` 落地并形成更稳定的 workload 证据之后，才继续评估 `P4-prep-2`（memory observation / shadow cache）或更后的准备项。
+
+### 6. 常态维护项
 
 - 继续维护 reference correctness 矩阵，不让 illegal / MMIO / ELF / CSR / Sv39 合同回退。
 - 继续守住 `kernel_alpha` 十条 guest 基线和 `guest_supervisor_demo` 的稳定输出。
@@ -111,5 +115,6 @@
 1. 如果后续出现真实 `Phase 3` stall hotspot，再围绕“issue decoupling 是否值得单开最小计划”建专项，而不是直接为 unknown-address speculation 或更宽 replay 开计划。
 2. 如果后续出现真实 `debug/frontend` bug，再围绕具体故障单开最小修复 / 回归计划，而不是泛化成新的浏览器压力专项。
 3. 如果后续 Spike 外部差分暴露出 reference correctness 缺口，再围绕具体语义面单开最小计划，例如更广 `Sv39 final-state subset`、`device-free privilege contract` 或必要时的多 checkpoint / nested trap 变体，而不是一开始就做大一统 trace framework。
-4. 当前如果要新开向量子线计划，应继续围绕已落地的 [../design/vector_v4_minimal_vector_pipeline_design.md](../design/vector_v4_minimal_vector_pipeline_design.md) 与 [../design/vector_frontend_visualization_design.md](../design/vector_frontend_visualization_design.md) 做更窄的 `V4` hardening / observation：优先继续守住 direct dependency、serializing guard 与 workload 观察，而不是直接跳到向量 load/store path、`Pool / FC` 或更远的 cache / DMA / multicore 大专项。
-5. 如果下一轮还要并行推进，建议围绕“guest runtime bug-driven hardening / reference correctness 补洞 / 条件触发后的 `Phase 3` 专项”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。
+4. 当前如果要新开向量子线计划，应继续围绕已落地的 [../design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md) 与 [../design/debug_frontend_integration.md](../design/debug_frontend_integration.md) 做更窄的 `V4` hardening / observation：优先继续守住 direct dependency、serializing guard 与 workload 观察，而不是直接跳到向量 load/store path、`Pool / FC` 或更远的 `Phase 4` 大专项。
+5. 当前如果要正式打开 `Phase 4`，第一刀应围绕 [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md) 的 `P4-prep-1` 单开最小计划：只收口 `bus / memory region` 合同，不把 `cache / DMA / multicore` 混入同一轮。
+6. 如果下一轮还要并行推进，建议围绕“guest runtime bug-driven hardening / reference correctness 补洞 / 条件触发后的 `Phase 3` 专项”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。
