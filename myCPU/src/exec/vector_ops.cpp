@@ -1,6 +1,5 @@
 #include "vector_ops.h"
 
-#include "../../include/platform_mmio.h"
 #include "../cpu.h"
 #include "../mem/bus.h"
 
@@ -74,12 +73,9 @@ TrapRequest access_fault(AccessType type, uint64_t tval) {
     return trap;
 }
 
-bool is_ram_physical_access(uint64_t addr, int size) {
-    if (size <= 0) {
-        return false;
-    }
-    const uint64_t end = addr + static_cast<uint64_t>(size);
-    return addr >= MEM_BASE && end > addr && end <= MEM_BASE + MEM_SIZE;
+bool is_ram_span(const Bus& bus, uint64_t addr, uint64_t bytes) {
+    const PhysicalSpanInfo span = bus.describe_span(addr, bytes);
+    return span.ok && span.region.kind == PhysicalRegionKind::Ram;
 }
 
 bool validate_vector_memory_span(CPU& cpu,
@@ -88,6 +84,11 @@ bool validate_vector_memory_span(CPU& cpu,
                                  size_t bytes,
                                  AccessType type,
                                  TrapRequest& fault) {
+    uint64_t span_paddr = 0;
+    uint64_t span_bytes = 0;
+    uint64_t previous_paddr = 0;
+    bool span_active = false;
+
     for (size_t i = 0; i < bytes; ++i) {
         const uint64_t current_addr = addr + i;
         const AddressSpace::TranslateResult translated =
@@ -96,10 +97,34 @@ bool validate_vector_memory_span(CPU& cpu,
             fault = translated.fault;
             return false;
         }
-        if (!is_ram_physical_access(translated.paddr, 1)) {
+
+        if (!span_active) {
+            if (!is_ram_span(bus, translated.paddr, 1)) {
+                fault = access_fault(type, current_addr);
+                return false;
+            }
+            span_paddr = translated.paddr;
+            span_bytes = 1;
+            previous_paddr = translated.paddr;
+            span_active = true;
+            continue;
+        }
+
+        const bool physically_contiguous = translated.paddr == previous_paddr + 1;
+        if (physically_contiguous && is_ram_span(bus, span_paddr, span_bytes + 1)) {
+            ++span_bytes;
+            previous_paddr = translated.paddr;
+            continue;
+        }
+
+        if (!is_ram_span(bus, translated.paddr, 1)) {
             fault = access_fault(type, current_addr);
             return false;
         }
+
+        span_paddr = translated.paddr;
+        span_bytes = 1;
+        previous_paddr = translated.paddr;
     }
     return true;
 }

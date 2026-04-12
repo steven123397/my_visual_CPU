@@ -20,10 +20,9 @@
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
   - [kernel_alpha_status.md](kernel_alpha_status.md)
-- 当前计划：
-  - [../plan/phase4_prep1_bus_memory_region_plan.md](../plan/phase4_prep1_bus_memory_region_plan.md)
-    `P4-prep-1` 的可执行实施计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#phase4-prep1-bus-memory-region-plan](../plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
+    `P4-prep-1` 的完成归档。
   - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
   - [../plan/history_plan.md#vector-v4-plan](../plan/history_plan.md#vector-v4-plan)
   - [../plan/history_plan.md#vector-v3-hardening-v4-design-plan](../plan/history_plan.md#vector-v3-hardening-v4-design-plan)
@@ -48,6 +47,7 @@
 - 当前也已经完成 `V3` 与一轮更窄的 `V3 hardening`：固定 `conv -> relu` guest demo、functional / pipeline 两侧 guest 门禁、`vector_vlite_smoke` / `vector_backend_smoke` 的显式 `make` alias，以及新的 `vector_cnn_smoke` host regression 都已落地；这一轮继续保持现有 `V-lite` 语义面和 `pipeline` serializing fallback 不变。
 - 当前也已经完成 `V4` 首刀落地，并补上一轮很窄的 `V4 hardening`：non-memory vector ALU 已脱离统一 serializing fallback，改为“execute 先 materialize、commit 再落地”的最小 vector-aware pipeline；`vector_state_busy` 也已从粗粒度“任何 older vector pending 都阻塞”收窄到“pending serializing vector 或 direct older source dependency 未 materialize 才阻塞”，同时继续不扩到向量 load/store path、lane 模型或更重 memory speculation。
 - 当前也已经把这条线补上一层很窄的 `debug/frontend` 教学可视化：`guest_vector_demo` / `guest_vector_cnn_demo`、workload 导览、向量指令高亮、`SEW / VL + v0..v31` 快照，以及固定 `conv -> relu` 专题卡都已接通；它们当前服务于观察与讲解，不改变后续优先级判断。
+- 当前也已经完成 `P4-prep-1` 的实现收口：`Bus` 已能统一描述 `RAM / MMIO / unmapped` 与最小 region 属性，现有 `vector` / `pipeline` / `LSQ` memory 判断也都已经改走同一条物理 region 查询路径；这一轮继续不改变 guest 可见语义。
 
 ## 当前优先级
 
@@ -86,13 +86,13 @@
 - 因此，如果未来只能新开一条重主线，默认应先开“向量扩展 + ML workload”，再由真实 workload 决定哪些 `Phase 4` 工作值得推进。
 - 唯一适合提前做的 `Phase 4` 相关事项，只应是那些有独立结构收益、且不会提前扩大外部语义面的准备性收口，例如更清晰的 bus / memory contract 或更好的 memory 观测面。
 
-### 5. `Phase 4` 当前只打开准备性第一刀 `P4-prep-1`
+### 5. `Phase 4` 当前已完成 `P4-prep-1`，后续只评估是否值得继续 `P4-prep-2`
 
-- 当前不把 `Phase 4` 理解成“马上做 `cache / DMA / multicore / coherence`”，而是只打开有独立结构收益的准备性切片。
-- 当前已经完成 [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md) 的设计收口；第一刀明确为 `P4-prep-1`：统一 `bus / memory region` 的分类、属性与查询合同。
+- 当前不把 `Phase 4` 理解成“马上做 `cache / DMA / multicore / coherence`”；已经落地的也只是有独立结构收益的准备性第一刀。
+- 当前 [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md) 里的 `P4-prep-1` 已经完成：`Bus` 统一暴露 `RAM / MMIO / unmapped`、`cacheable / dma_visible / has_side_effect / supports_burst / label`，并把 `vector` span 预校验、`pipeline` RAM/MMIO 判定与 `LSQ` forwarding 收口到同一事实来源。
 - 这一步的直接收益，是把 RAM / MMIO / unmapped / live side effect 的事实来源收口起来，为现有 reference hardening、后续 memory observation，以及未来 `cache / DMA` 准备提供统一边界。
-- `P4-prep-1` 当前明确不改变 guest 可见语义，不实现真正 `cache / DMA`，也不提前打开 multicore / coherence。
-- 只有在 `P4-prep-1` 落地并形成更稳定的 workload 证据之后，才继续评估 `P4-prep-2`（memory observation / shadow cache）或更后的准备项。
+- `P4-prep-1` 当前继续不改变 guest 可见语义，不实现真正 `cache / DMA`，也不提前打开 multicore / coherence。
+- 只有在这组新边界之上形成更稳定的 workload 证据之后，才值得继续评估 `P4-prep-2`（memory observation / shadow cache）或更后的准备项；当前不把它自动升级成新的重主线。
 
 ### 6. 常态维护项
 
@@ -116,5 +116,5 @@
 2. 如果后续出现真实 `debug/frontend` bug，再围绕具体故障单开最小修复 / 回归计划，而不是泛化成新的浏览器压力专项。
 3. 如果后续 Spike 外部差分暴露出 reference correctness 缺口，再围绕具体语义面单开最小计划，例如更广 `Sv39 final-state subset`、`device-free privilege contract` 或必要时的多 checkpoint / nested trap 变体，而不是一开始就做大一统 trace framework。
 4. 当前如果要新开向量子线计划，应继续围绕已落地的 [../design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md) 与 [../design/debug_frontend_integration.md](../design/debug_frontend_integration.md) 做更窄的 `V4` hardening / observation：优先继续守住 direct dependency、serializing guard 与 workload 观察，而不是直接跳到向量 load/store path、`Pool / FC` 或更远的 `Phase 4` 大专项。
-5. 当前如果要正式打开 `Phase 4`，第一刀应围绕 [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md) 的 `P4-prep-1` 单开最小计划：只收口 `bus / memory region` 合同，不把 `cache / DMA / multicore` 混入同一轮。
+5. 当前如果后续还要继续 `Phase 4`，应在已落地的 [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md) `P4-prep-1` 之上，先围绕 `P4-prep-2` 是否值得单开最小计划做取舍：优先看 `memory observation / shadow cache` 的独立结构收益，而不是直接跳到 `cache / DMA / multicore`。
 6. 如果下一轮还要并行推进，建议围绕“guest runtime bug-driven hardening / reference correctness 补洞 / 条件触发后的 `Phase 3` 专项”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。

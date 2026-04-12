@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "../../include/platform_mmio.h"
+#include "../mem/bus.h"
 
 namespace {
 
@@ -39,12 +39,8 @@ uint64_t size_mask(int size) {
     return (1ULL << (size * 8)) - 1ULL;
 }
 
-bool is_ram_range(uint64_t addr, int size) {
-    if (size <= 0) {
-        return false;
-    }
-    const uint64_t end = addr + static_cast<uint64_t>(size);
-    return addr >= MEM_BASE && end > addr && end <= MEM_BASE + MEM_SIZE;
+bool is_ram_range(const Bus& bus, uint64_t addr, int size) {
+    return bus.describe_region(addr, size).kind == PhysicalRegionKind::Ram;
 }
 
 }  // namespace
@@ -155,10 +151,11 @@ LsqLoadStatus LoadStoreQueue::classify_load(uint64_t sequence_id, uint64_t load_
     return {};
 }
 
-std::optional<LsqForwardResult> LoadStoreQueue::forwardable_load(uint64_t sequence_id,
+std::optional<LsqForwardResult> LoadStoreQueue::forwardable_load(const Bus& bus,
+                                                                 uint64_t sequence_id,
                                                                  uint64_t load_addr,
                                                                  int load_size) const {
-    if (!is_ram_range(load_addr, load_size)) {
+    if (!is_ram_range(bus, load_addr, load_size)) {
         return std::nullopt;
     }
 
@@ -173,7 +170,7 @@ std::optional<LsqForwardResult> LoadStoreQueue::forwardable_load(uint64_t sequen
         if (!ranges_overlap(entry.address, entry.size, load_addr, load_size)) {
             continue;
         }
-        if (entry.mmio || !is_ram_range(entry.address, entry.size)) {
+        if (entry.mmio || !is_ram_range(bus, entry.address, entry.size)) {
             return std::nullopt;
         }
 

@@ -77,6 +77,7 @@
 
 最近一轮关键历史节点只保留以下几项：
 
+- `2026-04-12` 已完成 `P4-prep-1`：`Bus` 当前已统一暴露 `RAM / MMIO / unmapped` 与 `cacheable / dma_visible / has_side_effect / supports_burst / label`，`vector` span 预校验、`pipeline` memory 判断与 `LSQ` forwarding 也已改为复用这一路径；这一轮继续不改变 guest 可见语义，也不顺势扩大到 `cache / DMA / multicore`。
 - `2026-04-05` 已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：在当前单发射、decode 级 load 前置分类、单 memory execute 通道与 coarse replay flush 基线上，不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 是否值得做。
 - `2026-04-05` 同日也已补上一层更窄的 `pipeline stall attribution` 观测：当前 debug snapshot / CLI 已能直接暴露 `stall_reason`，为后续是否值得重开 issue decoupling 提供更直接的证据。
 - `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界收窄到“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续走 `BlockedByOverlappingStore`。
@@ -118,6 +119,7 @@
 - `P1` 结构收口和 `P2` 首轮验证补洞已经全部完成；当前不再把重点放在继续扩功能面。
 - `debug/frontend` 的 Node/runtime 级持续 `run/pause`、session replacement、高吞吐 terminal 聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e 门禁已经够用；当前这轮不扩功能面的 UI refresh 也已完成，范围继续收窄在浏览器壳层布局、视觉层级和 `terminal` 收起交互语义，后续仍按真实 bug 或明确 UI 需求补最小回归，不主动扩大协议或压力面。
 - `Phase 3` 的 decode 级 `BlockedByUnresolvedStore` 最小收窄之后，主线判断已经完成：当前不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 这类有明确结构收益的最小切片，而不是直接放大 memory speculation / replay。
+- `Phase 4` 当前已经完成准备性第一刀 `P4-prep-1`：`bus / memory region` 合同已经收口成统一事实来源；后续只在有更稳定 workload 证据时，再评估 `P4-prep-2` 这类准备项，不直接跳到 `cache / DMA / multicore / coherence`。
 - 继续把 `pipeline`、loader/debug smoke 和 guest runtime 保持在当前已接入、可验证的范围内，不让它们反向污染 reference path。
 - 更远期方向上，`向量扩展 + ML workload` 已被确认为长期候选主线之一；其 `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`、`V4` 首刀与第一轮更窄的 `V4` hardening 都已落地，当前已具备固定 `conv -> relu` 的最小 CNN-style guest 闭环、non-memory vector ALU 的最小 vector-aware pipeline 边界，以及更像真实依赖链的 host smoke；后续更健康的下一步仍是先围绕这条已落地边界做 bug-driven hardening，而不是直接抢跑 `Pool / FC`、向量 load/store path 或更重的 `Phase 4`。
 

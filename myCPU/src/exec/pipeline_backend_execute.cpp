@@ -2,11 +2,11 @@
 
 #include <optional>
 
-#include "../../include/platform_mmio.h"
 #include "../arch/csr_file.h"
 #include "../cpu.h"
 #include "../isa/execution_context.h"
 #include "../isa/instruction_semantics.h"
+#include "../mem/bus.h"
 #include "memory_ops.h"
 #include "pipeline_hazards.h"
 #include "vector_ops.h"
@@ -39,31 +39,20 @@ bool is_control_flow_opcode(uint32_t opcode) {
     return opcode == 0x63 || opcode == 0x67 || opcode == 0x6F;
 }
 
-bool is_ram_access(uint64_t addr, int size) {
-    if (size <= 0) {
-        return false;
-    }
-    const uint64_t end = addr + static_cast<uint64_t>(size);
-    return addr >= MEM_BASE && end > addr && end <= MEM_BASE + MEM_SIZE;
+PhysicalRegionInfo describe_access_region(const Bus& bus, uint64_t addr, int size) {
+    return bus.describe_region(addr, size);
 }
 
-bool range_contains(uint64_t addr, int size, uint64_t base, uint64_t span) {
-    if (size <= 0) {
-        return false;
-    }
-    const uint64_t end = addr + static_cast<uint64_t>(size);
-    return addr >= base && end > addr && end <= base + span;
+bool is_ram_access(const Bus& bus, uint64_t addr, int size) {
+    return describe_access_region(bus, addr, size).kind == PhysicalRegionKind::Ram;
 }
 
-bool is_known_mmio_access(uint64_t addr, int size) {
-    return range_contains(addr, size, UART_BASE, UART_SIZE) ||
-           range_contains(addr, size, STORAGE_BASE, STORAGE_SIZE) ||
-           range_contains(addr, size, CLINT_BASE, CLINT_SIZE) ||
-           range_contains(addr, size, PLIC_BASE, PLIC_SIZE);
+bool is_known_mmio_access(const Bus& bus, uint64_t addr, int size) {
+    return describe_access_region(bus, addr, size).kind == PhysicalRegionKind::Mmio;
 }
 
-bool needs_memory_issue_delay(uint64_t addr, int size) {
-    return is_ram_access(addr, size) || !is_known_mmio_access(addr, size);
+bool needs_memory_issue_delay(const Bus& bus, uint64_t addr, int size) {
+    return is_ram_access(bus, addr, size) || !is_known_mmio_access(bus, addr, size);
 }
 
 bool prediction_matches(const PredictorQueryResult& prediction,
@@ -175,7 +164,8 @@ void PipelineBackend::step_mem() {
     switch (effects.mem.kind) {
     case MemoryRequest::Kind::Load: {
         const std::optional<LsqForwardResult> forwarded =
-            state_.lsq().forwardable_load(state_.next_mem_wb.slot.sequence_id.value,
+            state_.lsq().forwardable_load(bus_,
+                                          state_.next_mem_wb.slot.sequence_id.value,
                                           effects.mem.addr,
                                           effects.mem.size);
         if (forwarded.has_value()) {
@@ -317,7 +307,9 @@ void PipelineBackend::step_ex() {
     if (!completed_slot.effects.trap.valid) {
         switch (completed_slot.effects.mem.kind) {
         case MemoryRequest::Kind::Load:
-            if (!is_ram_access(completed_slot.effects.mem.addr, completed_slot.effects.mem.size)) {
+            if (!is_ram_access(bus_,
+                               completed_slot.effects.mem.addr,
+                               completed_slot.effects.mem.size)) {
                 const std::optional<RobEntry> rob_head = state_.rob().peek_head();
                 if (!rob_head.has_value() ||
                     rob_head->index.value != completed_slot.rob_index.value) {
@@ -344,7 +336,8 @@ void PipelineBackend::step_ex() {
                                             completed_slot.effects.mem.addr);
             state_.next_ex_mem.slot = completed_slot;
             state_.next_ex_mem_cycles_remaining =
-                needs_memory_issue_delay(completed_slot.effects.mem.addr,
+                needs_memory_issue_delay(bus_,
+                                         completed_slot.effects.mem.addr,
                                          completed_slot.effects.mem.size)
                     ? 1
                     : 0;
@@ -363,7 +356,8 @@ void PipelineBackend::step_ex() {
             }
             state_.next_ex_mem.slot = completed_slot;
             state_.next_ex_mem_cycles_remaining =
-                needs_memory_issue_delay(completed_slot.effects.mem.addr,
+                needs_memory_issue_delay(bus_,
+                                         completed_slot.effects.mem.addr,
                                          completed_slot.effects.mem.size)
                     ? 1
                     : 0;

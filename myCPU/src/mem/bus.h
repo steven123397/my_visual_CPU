@@ -6,6 +6,7 @@
 #include "../debug/debug_snapshot.h"
 #include "../devices/device.h"
 #include "../platform/platform_events.h"
+#include "memory_region.h"
 
 class Ram;
 
@@ -15,6 +16,8 @@ public:
 
     void attach(Device& device);
 
+    PhysicalRegionInfo describe_region(uint64_t addr, int size) const;
+    PhysicalSpanInfo describe_span(uint64_t addr, uint64_t bytes) const;
     bool try_load(uint64_t addr, int size, uint64_t& value);
     bool try_store(uint64_t addr, uint64_t value, int size);
     PlatformEvents peek_events() const;
@@ -23,6 +26,7 @@ public:
 
 private:
     Device* find_device(uint64_t addr, int size);
+    const Device* find_device(uint64_t addr, int size) const;
     void record_access(
         const Device& device,
         bool success,

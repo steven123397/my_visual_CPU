@@ -32,8 +32,8 @@
    `V-lite` 当前统一设计边界：最小 ISA、workload、vector-aware `pipeline` 与 `Phase 4` 衔接口径。
 14. [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
    `Phase 4` 当前准备性入口设计，以及 `P4-prep-1` 的正式边界。
-15. [plan/phase4_prep1_bus_memory_region_plan.md](plan/phase4_prep1_bus_memory_region_plan.md)
-   `P4-prep-1` 的可执行实施计划。
+15. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
+   `P4-prep-1` 的完成归档与结果摘要。
 16. [plan/history_plan.md](plan/history_plan.md)
    已完成计划的统一归档入口。
 
@@ -59,7 +59,7 @@
   - [plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
   - [plan/history_plan.md#vector-frontend-visualization-plan](plan/history_plan.md#vector-frontend-visualization-plan)
 - `Phase 4 准备`
-  - [plan/phase4_prep1_bus_memory_region_plan.md](plan/phase4_prep1_bus_memory_region_plan.md)
+  - [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
   - [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)
   - [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)

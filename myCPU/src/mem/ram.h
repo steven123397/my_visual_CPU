@@ -28,6 +28,16 @@ public:
     bool is_mmio() const override {
         return false;
     }
+    PhysicalRegionInfo region_info() const override {
+        return {
+            .kind = PhysicalRegionKind::Ram,
+            .cacheable = true,
+            .dma_visible = true,
+            .has_side_effect = false,
+            .supports_burst = true,
+            .label = debug_name(),
+        };
+    }
 
 private:
     Memory mem_{};

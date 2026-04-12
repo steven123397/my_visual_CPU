@@ -75,6 +75,8 @@ struct LsqEntry {
     uint64_t violating_store_sequence_id{0};
 };
 
+class Bus;
+
 class LoadStoreQueue {
 public:
     LsqIndex enqueue_load(const LsqLoadRequest& req);
@@ -85,7 +87,10 @@ public:
     std::optional<LsqEntry> peek(LsqIndex index) const;
     std::optional<LsqEntry> peek_oldest() const;
     LsqLoadStatus classify_load(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
-    std::optional<LsqForwardResult> forwardable_load(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
+    std::optional<LsqForwardResult> forwardable_load(const Bus& bus,
+                                                     uint64_t sequence_id,
+                                                     uint64_t load_addr,
+                                                     int load_size) const;
     LsqLoadStatus active_replay() const;
     bool has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
     std::optional<LsqEntry> retire_entry(LsqIndex index);

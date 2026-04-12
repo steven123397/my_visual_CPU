@@ -23,6 +23,13 @@
 
 ### 2026-04-12
 
+#### phase4-prep1-bus-memory-region-plan
+
+- 原文件：`phase4_prep1_bus_memory_region_plan.md`
+- 完成内容：完成 `P4-prep-1`，新增统一 `memory_region` 类型与 `Bus::describe_region()/describe_span()`，把 `RAM / MMIO / unmapped` 与 `cacheable / dma_visible / has_side_effect / supports_burst / label` 收口成单一事实来源；同轮也把 `vector` span 预校验、`pipeline` RAM/MMIO 判断与 `LSQ` RAM-only forwarding 迁到这一路径，并新增 `bus_region_contract` unit test 守住 region / span 合同。
+- 实现过程摘要：整体继续采用“先补红灯 unit test、再做最小 contract 落地、最后迁移现有调用点并守总门禁”的克制路径；这一轮明确不把问题顺势放大到 `cache / DMA / multicore / coherence`，也不改变现有 guest fault / MMIO side effect 口径，并最终守住 `cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
+- 结果参考：[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
 #### vector-frontend-visualization-plan
 
 - 原文件：`vector_frontend_visualization_plan.md`

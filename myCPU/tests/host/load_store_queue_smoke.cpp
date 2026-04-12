@@ -1,6 +1,8 @@
 #include <cstdio>
 
 #include "../../src/exec/load_store_queue.h"
+#include "../../src/mem/bus.h"
+#include "../../src/mem/ram.h"
 
 namespace {
 
@@ -15,6 +17,9 @@ bool expect(bool condition, const char* message) {
 }  // namespace
 
 int main() {
+    Ram ram;
+    Bus bus(ram);
+
     LoadStoreQueue lsq;
     const LsqIndex older_store = lsq.enqueue_store({
         .sequence_id = 1,
@@ -200,13 +205,13 @@ int main() {
     forwarding_lsq.mark_address_ready(forwarding_store, 0x80001000ULL);
     forwarding_lsq.mark_data_ready(forwarding_store, 0xaabbccddULL);
     forwarding_lsq.mark_order_ready(forwarding_store);
-    const auto forwarded_word = forwarding_lsq.forwardable_load(2, 0x80001000ULL, 4);
+    const auto forwarded_word = forwarding_lsq.forwardable_load(bus, 2, 0x80001000ULL, 4);
     if (!expect(forwarded_word.has_value() && forwarded_word->value == 0xaabbccddULL &&
                     forwarded_word->store_sequence_id == 1,
                 "full-cover older RAM store should provide a forwarding value for the younger load")) {
         return 1;
     }
-    const auto forwarded_byte = forwarding_lsq.forwardable_load(2, 0x80001001ULL, 1);
+    const auto forwarded_byte = forwarding_lsq.forwardable_load(bus, 2, 0x80001001ULL, 1);
     if (!expect(forwarded_byte.has_value() && forwarded_byte->value == 0xccULL,
                 "forwarding helper should extract the requested byte range from a covering older store")) {
         return 1;
@@ -227,7 +232,7 @@ int main() {
     overshadowed_lsq.mark_address_ready(newer_partial_store, 0x80002000ULL);
     overshadowed_lsq.mark_data_ready(newer_partial_store, 0x55ULL);
     overshadowed_lsq.mark_order_ready(newer_partial_store);
-    if (!expect(!overshadowed_lsq.forwardable_load(3, 0x80002000ULL, 4).has_value(),
+    if (!expect(!overshadowed_lsq.forwardable_load(bus, 3, 0x80002000ULL, 4).has_value(),
                 "a nearer overlapping store that cannot fully cover the load must block fallback to an older store")) {
         return 1;
     }

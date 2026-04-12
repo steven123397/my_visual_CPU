@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <stdexcept>
 
+#include "../mem/memory_region.h"
 #include "../platform/platform_events.h"
 
 class Device {
@@ -53,6 +54,16 @@ public:
     }
     virtual bool is_mmio() const {
         return true;
+    }
+    virtual PhysicalRegionInfo region_info() const {
+        return {
+            .kind = PhysicalRegionKind::Mmio,
+            .cacheable = false,
+            .dma_visible = false,
+            .has_side_effect = true,
+            .supports_burst = false,
+            .label = debug_name(),
+        };
     }
 
 protected:

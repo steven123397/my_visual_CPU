@@ -50,6 +50,46 @@ Device* Bus::find_device(uint64_t addr, int size) {
     return nullptr;
 }
 
+const Device* Bus::find_device(uint64_t addr, int size) const {
+    if (size <= 0) {
+        return nullptr;
+    }
+    for (const Device* device : devices_) {
+        if (device->contains(addr, static_cast<uint64_t>(size))) {
+            return device;
+        }
+    }
+    return nullptr;
+}
+
+PhysicalRegionInfo Bus::describe_region(uint64_t addr, int size) const {
+    const Device* device = find_device(addr, size);
+    return device != nullptr ? device->region_info() : make_unmapped_region_info();
+}
+
+PhysicalSpanInfo Bus::describe_span(uint64_t addr, uint64_t bytes) const {
+    PhysicalSpanInfo span;
+    span.first_addr = addr;
+    span.size = bytes;
+    if (bytes == 0) {
+        return span;
+    }
+
+    span.region = describe_region(addr, 1);
+    if (span.region.kind == PhysicalRegionKind::Unmapped) {
+        return span;
+    }
+
+    for (const Device* device : devices_) {
+        if (device->contains(addr, bytes)) {
+            span.ok = true;
+            span.region = device->region_info();
+            return span;
+        }
+    }
+    return span;
+}
+
 bool Bus::try_load(uint64_t addr, int size, uint64_t& value) {
     if (Device* device = find_device(addr, size)) {
         try {

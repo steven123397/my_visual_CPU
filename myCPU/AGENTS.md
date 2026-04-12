@@ -13,6 +13,7 @@
 当前 simulator 侧已经落地的关键边界包括：
 
 - `Machine + Bus + Ram + Device`
+- `memory_region + Bus::describe_region()/describe_span()`
 - `ExecutionBackend + FunctionalBackend + PipelineBackend`
 - `pipeline_sequence + pipeline_commit_boundary + pipeline_core_state + pipeline_hazards`
 - `rename_map + reorder_buffer + load_store_queue`
@@ -46,7 +47,7 @@
 - [src/trap.cpp](src/trap.cpp)
   trap / interrupt 路由与返回。
 - [src/mem](src/mem)
-  `Ram` / `Bus` / `AddressSpace`。
+  `Ram` / `Bus` / `memory_region` / `AddressSpace`。
 - [src/devices](src/devices)
   平台设备对象。
 - [src/loader](src/loader)
@@ -112,6 +113,7 @@
 - `2026-04-05` 也已把 decode 级 `BlockedByUnresolvedStore` 收窄到“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 已不再全局阻塞非重叠 younger load，重叠场景继续走 `BlockedByOverlappingStore`，相关 `load_store_queue_smoke`、`pipeline_speculation_contracts_smoke` 与 `make test-pipeline` 已守住。
 - `2026-04-11` 已在 `V4` 首刀之上补上一轮更窄的 direct dependency hardening：pending serializing vector 仍会阻塞 younger vector ALU，但 ready older non-memory vector ALU 如果只是被更老 scalar ROB head 挡住 commit，direct dependent younger vector ALU 现在可以以前驱 materialized result 完成 execute；对应 `vector_pipeline_smoke` 也已补上更像真实依赖链的 host 回归。
 - `2026-04-11` 同日也补上一轮更窄的 vector memory hardening：`vle.v / vse.v` 在 commit boundary 现在会先对整段 span 做预校验；live `MMIO` 与非 RAM span 会直接 `access-fault` fail-closed，不再留下 UART 输入消费、UART 输出 / `IER` 改写或 RAM 部分写入副作用；对应 `vector_vlite_smoke` 已补齐 UART / RAM fault 回归。
+- `2026-04-12` 已完成 `P4-prep-1`：新增统一 `memory_region` 类型与 `Bus::describe_region()/describe_span()`，把 `RAM / MMIO / unmapped` 与最小 region 属性收口成单一事实来源；`vector_ops.cpp`、`pipeline_backend_execute.cpp` 与 `load_store_queue.cpp` 也都已迁到这一路径，`bus_region_contract`、`vector_vlite_smoke`、`vector_pipeline_smoke`、`make test` 与 `make test-pipeline` 已共同守住现有行为不变。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](Makefile) 为准。
@@ -161,7 +163,7 @@
 - [guest/kernel_alpha/interrupt_contract.c](guest/kernel_alpha/interrupt_contract.c)
   non-storage readiness / panic 合同也已开始从入口下沉到共享 helper，`fault`、`PLIC not-ready`、`timer not-ready` 与标准 interrupt post-handler 不再分散在各入口。
 - [src/mem/bus.cpp](src/mem/bus.cpp) 和 [src/devices](src/devices)
-  已完成第一轮收口，但未来若继续扩设备，仍需要更系统的契约和回归。
+  当前 `memory_region` 合同已经落地，`Bus` 已能统一描述 `RAM / MMIO / unmapped` 与保守属性；但它目前仍只覆盖物理 window 级分类，不替代各设备自身的 offset / width 合法性合同，也还没有展开 `memory observation / shadow cache` 或 DMA initiator 模型。
 - [src/exec/branch_predictor.cpp](src/exec/branch_predictor.cpp)
   当前仍是 `Phase 3-A` 首轮最小 predictor：条件分支使用 `2-bit` counter + target 记忆，`jal` 走静态 predict-taken，`jalr` 仍不预测；后续应先以 bug-driven hardening 和最小回归补洞为主，不急着扩成复杂 BTB / RAS 组合。
 
@@ -175,6 +177,7 @@
 4. `Phase 3` 当前不主动继续扩大更激进的 `issue / replay / speculation`；后续若出现真实 stall hotspot，再优先评估 issue decoupling 这类更有结构收益的最小切片，而不是回头重复讨论已完成的 decode 边界。
 5. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
 6. 当前 `V-lite` `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`、`V4` 首刀与第一轮更窄的 `V4` hardening 都已落地：shared semantics、`functional` reference path、最小 host 回归、non-memory vector ALU 的最小 vector-aware execute/commit 边界、独立最小 guest 向量 demo、固定 `conv -> relu` 的最小 CNN-style guest demo，以及守住 mixed `SEW/VL` `conv -> relu` 链路、全负 `relu` 零钳位、ready older vector producer -> direct dependent consumer 依赖链，以及 pending serializing vector guard 的 host smoke 都已接通。当前更健康的下一步不是顺势扩到 `Pool / FC`、向量 load/store path 或更重 `Phase 4`，而是继续围绕已落地的 `V4` 边界做 bug-driven hardening，再决定下一刀。
+7. `P4-prep-1` 当前已经完成；如果后续继续评估 `Phase 4`，应先围绕现有 `memory_region` 边界判断 `P4-prep-2`（例如更克制的 `memory observation / shadow cache`）是否有独立结构收益，不直接跳到 `cache / DMA / multicore`。
 
 ## 验证要求
 
