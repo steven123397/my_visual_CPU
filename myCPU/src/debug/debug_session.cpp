@@ -182,6 +182,11 @@ DebugSnapshot DebugSession::collect_snapshot() const {
     for (size_t i = 0; i < snapshot.gpr.size(); ++i) {
         snapshot.gpr[i] = core.read_gpr(static_cast<uint32_t>(i));
     }
+    snapshot.vector.sew_bytes = core.vector().sew_bytes();
+    snapshot.vector.vl = core.vector().vl();
+    for (size_t i = 0; i < snapshot.vector.registers.size(); ++i) {
+        snapshot.vector.registers[i] = core.vector().read_reg(static_cast<uint32_t>(i));
+    }
 
     snapshot.csrs.mstatus = cpu.csr().read(CSR_MSTATUS, core);
     snapshot.csrs.sstatus = cpu.csr().read(CSR_SSTATUS, core);

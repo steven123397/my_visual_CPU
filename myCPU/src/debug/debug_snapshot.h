@@ -146,6 +146,12 @@ struct DebugDeviceSnapshot {
     DebugStorageSnapshot storage{};
 };
 
+struct DebugVectorSnapshot {
+    uint8_t sew_bytes{1};
+    uint8_t vl{0};
+    std::array<std::array<uint8_t, VectorState::kRegBytes>, VectorState::kRegCount> registers{};
+};
+
 struct DebugSummarySnapshot {
     uint64_t cycle{0};
     uint64_t instret{0};
@@ -159,6 +165,7 @@ struct DebugSnapshot {
     DebugSummarySnapshot summary{};
     PipelineDebugSnapshot pipeline{};
     std::array<uint64_t, 32> gpr{};
+    DebugVectorSnapshot vector{};
     DebugCsrSnapshot csrs{};
     DebugBusAccess bus{};
     DebugDeviceSnapshot devices{};

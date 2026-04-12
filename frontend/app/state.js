@@ -166,6 +166,64 @@ export function buildTimelineRows(history) {
   });
 }
 
+export function classifyInstructionFlavor(text = '') {
+  const normalized = String(text).trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const mnemonic = normalized.split(/[ ,\t]+/, 1)[0];
+  if (!mnemonic.startsWith('v')) {
+    return null;
+  }
+
+  if (mnemonic === 'vsetcfg') {
+    return {
+      family: 'vector',
+      kind: 'config',
+      label: 'vector cfg',
+    };
+  }
+
+  if (mnemonic.startsWith('vle') || mnemonic.startsWith('vse')) {
+    return {
+      family: 'vector',
+      kind: 'memory',
+      label: 'vector mem',
+    };
+  }
+
+  if (mnemonic.startsWith('vdot')) {
+    return {
+      family: 'vector',
+      kind: 'dot',
+      label: 'vector dot',
+    };
+  }
+
+  if (mnemonic.startsWith('vmax')) {
+    return {
+      family: 'vector',
+      kind: 'relu',
+      label: 'vector relu',
+    };
+  }
+
+  if (mnemonic.startsWith('vadd') || mnemonic.startsWith('vmul')) {
+    return {
+      family: 'vector',
+      kind: 'alu',
+      label: 'vector alu',
+    };
+  }
+
+  return {
+    family: 'vector',
+    kind: 'generic',
+    label: 'vector',
+  };
+}
+
 function hexToBigInt(value) {
   try {
     return BigInt(value ?? '0x0');
@@ -190,6 +248,27 @@ export function diffRegisters(previous, current) {
                 ? 'clear'
                 : 'mutate',
   }));
+}
+
+export function diffVectorRegisters(previous, current) {
+  const before = previous?.vector?.registers ?? [];
+  const after = current?.vector?.registers ?? [];
+  return after.map((value, index) => {
+    const normalized = typeof value === 'string' ? value : '0x00000000000000000000000000000000';
+    const changed = before[index] !== undefined && before[index] !== normalized;
+    const empty = /^0x0+$/.test(normalized);
+    return {
+      index,
+      value: normalized,
+      changed,
+      empty,
+      emphasis:
+        !changed ? (empty ? 'idle' : 'steady')
+          : empty ? 'clear'
+            : /^0x0+$/.test(before[index] ?? '0x0') ? 'rise'
+              : 'mutate',
+    };
+  });
 }
 
 export function classifyEventTone(kind) {

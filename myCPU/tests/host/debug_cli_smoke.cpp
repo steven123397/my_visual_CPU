@@ -553,5 +553,41 @@ int main() {
         }
     }
 
+    {
+        CPU cpu;
+        cpu_init(cpu, kDebugProgramAddr);
+        if (!cpu.core().vector().set_config(4, 3)) {
+            std::fprintf(stderr, "vector config should accept sew=4 vl=3 for debug snapshot smoke\n");
+            return 1;
+        }
+
+        VectorState::VectorReg relu{};
+        relu.fill(0);
+        relu[0] = 0x07;
+        relu[4] = 0x00;
+        relu[8] = 0x07;
+        cpu.core().vector().write_reg(5, relu);
+
+        DebugSnapshot snapshot{};
+        snapshot.summary.pc = cpu.core().pc();
+        snapshot.summary.privilege = cpu.core().privilege_mode();
+        snapshot.summary.backend = "functional";
+        snapshot.vector.sew_bytes = cpu.core().vector().sew_bytes();
+        snapshot.vector.vl = cpu.core().vector().vl();
+        snapshot.vector.registers[5] = cpu.core().vector().read_reg(5);
+
+        const std::string vector_output = debug_snapshot_json(snapshot);
+        if (!expect_contains(vector_output,
+                             "\"vector\":{\"sew_bytes\":4,\"vl\":3,\"registers\":[",
+                             "debug snapshot JSON should serialize vector config")) {
+            return 1;
+        }
+        if (!expect_contains(vector_output,
+                             "\"0x07000000000000000700000000000000\"",
+                             "debug snapshot JSON should serialize vector register dumps")) {
+            return 1;
+        }
+    }
+
     return 0;
 }

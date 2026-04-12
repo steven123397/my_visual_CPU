@@ -420,6 +420,14 @@ test('GET /api/tests returns built-in test manifest', async () => {
     assert.ok(body.tests.some((item) => item.name === 'guest_interactive_os_demo'));
     assert.ok(body.tests.some((item) => item.name === 'guest_kernel_alpha_demo'));
     assert.ok(body.tests.some((item) => item.name === 'guest_kernel_alpha_storage_not_ready_demo'));
+    const vectorDemo = body.tests.find((item) => item.name === 'guest_vector_demo');
+    const vectorCnnDemo = body.tests.find((item) => item.name === 'guest_vector_cnn_demo');
+    assert.ok(vectorDemo);
+    assert.ok(vectorCnnDemo);
+    assert.equal(vectorDemo.title, 'V-lite Operator Demo');
+    assert.equal(vectorDemo.workload.expectedMarker, 'V2OK');
+    assert.equal(vectorCnnDemo.badge, 'Vector + NN');
+    assert.deepEqual(vectorCnnDemo.workload.cnn.relu, [7, 0, 7]);
   } finally {
     await server.close();
   }

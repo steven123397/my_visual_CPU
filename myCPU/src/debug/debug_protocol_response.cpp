@@ -67,6 +67,19 @@ std::string hex_u64(uint64_t value) {
     return buffer;
 }
 
+template <size_t N>
+std::string hex_bytes(const std::array<uint8_t, N>& bytes) {
+    static constexpr char kHexDigits[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(2 + N * 2);
+    out += "0x";
+    for (uint8_t byte : bytes) {
+      out.push_back(kHexDigits[(byte >> 4) & 0x0fU]);
+      out.push_back(kHexDigits[byte & 0x0fU]);
+    }
+    return out;
+}
+
 void append_json_string(std::ostringstream& out, const std::string& value) {
     out << '"' << json_escape(value) << '"';
 }
@@ -180,7 +193,17 @@ std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
         }
         append_json_string(out, hex_u64(snapshot.gpr[i]));
     }
-    out << "],\"csrs\":{"
+    out << "],\"vector\":{"
+        << "\"sew_bytes\":" << static_cast<unsigned>(snapshot.vector.sew_bytes)
+        << ",\"vl\":" << static_cast<unsigned>(snapshot.vector.vl)
+        << ",\"registers\":[";
+    for (size_t i = 0; i < snapshot.vector.registers.size(); ++i) {
+        if (i != 0) {
+            out << ',';
+        }
+        append_json_string(out, hex_bytes(snapshot.vector.registers[i]));
+    }
+    out << "]},\"csrs\":{"
         << "\"mstatus\":";
     append_json_string(out, hex_u64(snapshot.csrs.mstatus));
     out << ",\"sstatus\":";

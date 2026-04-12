@@ -1,9 +1,28 @@
+import { classifyInstructionFlavor } from '../state.js';
+
+function renderVectorBadge(text) {
+  const flavor = classifyInstructionFlavor(text);
+  if (!flavor) {
+    return '';
+  }
+  return `<span class="vector-chip vector-chip-${flavor.kind}">${flavor.label}</span>`;
+}
+
+function stageToneClass(stage) {
+  const flavor = classifyInstructionFlavor(stage?.text ?? '');
+  if (!flavor) {
+    return '';
+  }
+  return ` stage-card-vector stage-card-vector-${flavor.kind}`;
+}
+
 function renderStage(label, stage) {
   const valid = stage?.valid;
   return `
-    <article class="stage-card ${valid ? 'is-valid' : 'is-empty'}">
+    <article class="stage-card ${valid ? 'is-valid' : 'is-empty'}${stageToneClass(stage)}">
       <div class="stage-label">${label}</div>
       <div class="stage-pc">${stage?.pc ?? '0x0'}</div>
+      ${valid ? renderVectorBadge(stage?.text ?? '') : ''}
       <div class="stage-text">${valid ? stage?.text ?? 'unknown' : 'bubble'}</div>
       <div class="stage-raw">${stage?.raw ?? '0x0'}</div>
     </article>
@@ -54,6 +73,18 @@ export function renderPipelineBoard(snapshot) {
   `;
 }
 
+function renderTimelineCell(text) {
+  const flavor = classifyInstructionFlavor(text);
+  const toneClass = flavor ? `timeline-stage-vector timeline-stage-vector-${flavor.kind}` : '';
+  const vectorHint = flavor ? `<span class="timeline-stage-chip">${flavor.label}</span>` : '';
+  return `
+    <span class="timeline-stage ${toneClass}">
+      <span class="timeline-stage-text">${text || '·'}</span>
+      ${vectorHint}
+    </span>
+  `;
+}
+
 export function renderTimeline(rows) {
   return `
     <section class="panel panel-timeline">
@@ -69,11 +100,11 @@ export function renderTimeline(rows) {
           <div class="timeline-row is-${row.flag}">
             <span>${row.cycle}</span>
             <span>${row.flagLabel ?? row.flag}</span>
-            <span>${row.stages.if || '·'}</span>
-            <span>${row.stages.id || '·'}</span>
-            <span>${row.stages.ex || '·'}</span>
-            <span>${row.stages.mem || '·'}</span>
-            <span>${row.stages.wb || '·'}</span>
+            ${renderTimelineCell(row.stages.if)}
+            ${renderTimelineCell(row.stages.id)}
+            ${renderTimelineCell(row.stages.ex)}
+            ${renderTimelineCell(row.stages.mem)}
+            ${renderTimelineCell(row.stages.wb)}
           </div>
         `).join('')}
       </div>

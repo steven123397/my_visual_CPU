@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildTimelineRows, classifyEventTone, diffRegisters, shouldAutoScrollToBottom } from '../app/state.js';
+import {
+  buildTimelineRows,
+  classifyEventTone,
+  classifyInstructionFlavor,
+  diffRegisters,
+  diffVectorRegisters,
+  shouldAutoScrollToBottom,
+} from '../app/state.js';
 
 test('buildTimelineRows highlights stalls and redirects', () => {
   const rows = buildTimelineRows([
@@ -52,6 +59,24 @@ test('classifyEventTone groups event kinds for clearer highlighting', () => {
   assert.equal(classifyEventTone('store'), 'memory');
   assert.equal(classifyEventTone('halt'), 'lifecycle');
   assert.equal(classifyEventTone('unknown'), 'neutral');
+});
+
+test('classifyInstructionFlavor marks vector cfg / mem / alu instructions', () => {
+  assert.deepEqual(classifyInstructionFlavor('vsetcfg'), { family: 'vector', kind: 'config', label: 'vector cfg' });
+  assert.deepEqual(classifyInstructionFlavor('vle.v v1, (a0)'), { family: 'vector', kind: 'memory', label: 'vector mem' });
+  assert.deepEqual(classifyInstructionFlavor('vdot.vv v3, v1, v2'), { family: 'vector', kind: 'dot', label: 'vector dot' });
+  assert.equal(classifyInstructionFlavor('addi x0, x0, 0'), null);
+});
+
+test('diffVectorRegisters tracks changes and idle vector registers', () => {
+  const registers = diffVectorRegisters(
+    { vector: { registers: ['0x0', '0x01000000000000000000000000000000'] } },
+    { vector: { registers: ['0x0', '0x02000000000000000000000000000000'] } },
+  );
+
+  assert.equal(registers[0].emphasis, 'idle');
+  assert.equal(registers[1].changed, true);
+  assert.equal(registers[1].emphasis, 'mutate');
 });
 
 test('shouldAutoScrollToBottom only sticks when user is near the latest event', () => {

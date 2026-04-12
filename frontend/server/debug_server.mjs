@@ -85,7 +85,25 @@ export async function startServer({
       const url = new URL(request.url, `http://${request.headers.host}`);
       if (request.method === 'GET' && url.pathname === '/api/tests') {
         json(response, 200, {
-          tests: tests.map(({ name, disk, kind }) => ({ name, hasDisk: Boolean(disk), kind })),
+          tests: tests.map(({
+            name,
+            disk,
+            kind,
+            menuLabel,
+            title,
+            badge,
+            summary,
+            workload,
+          }) => ({
+            name,
+            hasDisk: Boolean(disk),
+            kind,
+            menuLabel,
+            title,
+            badge,
+            summary,
+            workload,
+          })),
         });
         return;
       }

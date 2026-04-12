@@ -12,6 +12,7 @@
   - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
   - [design/debug_frontend_ui_refresh_design.md](../design/debug_frontend_ui_refresh_design.md)
+  - [design/vector_frontend_visualization_design.md](../design/vector_frontend_visualization_design.md)
   - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)
   - [design/phase3_issue_replay_speculation_assessment.md](../design/phase3_issue_replay_speculation_assessment.md)
@@ -27,6 +28,7 @@
 - 当前计划：
   - 当前无活跃计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
   - [../plan/history_plan.md#vector-v4-plan](../plan/history_plan.md#vector-v4-plan)
   - [../plan/history_plan.md#vector-v3-hardening-v4-design-plan](../plan/history_plan.md#vector-v3-hardening-v4-design-plan)
   - [../plan/history_plan.md#vector-v3-plan](../plan/history_plan.md#vector-v3-plan)
@@ -49,6 +51,7 @@
 - 当前这条线的 `V0 / V1` 与 `V2` 首刀都已经完成：`V-lite` 设计冻结、shared semantics / `functional` reference path、host 回归、`pipeline` 的正确 serializing fallback、`dot / GEMM / Conv / ReLU` workload smoke，以及独立最小 guest 向量 demo 都已接通。
 - 当前也已经完成 `V3` 与一轮更窄的 `V3 hardening`：固定 `conv -> relu` guest demo、functional / pipeline 两侧 guest 门禁、`vector_vlite_smoke` / `vector_backend_smoke` 的显式 `make` alias，以及新的 `vector_cnn_smoke` host regression 都已落地；这一轮继续保持现有 `V-lite` 语义面和 `pipeline` serializing fallback 不变。
 - 当前也已经完成 `V4` 首刀落地，并补上一轮很窄的 `V4 hardening`：non-memory vector ALU 已脱离统一 serializing fallback，改为“execute 先 materialize、commit 再落地”的最小 vector-aware pipeline；`vector_state_busy` 也已从粗粒度“任何 older vector pending 都阻塞”收窄到“pending serializing vector 或 direct older source dependency 未 materialize 才阻塞”，同时继续不扩到向量 load/store path、lane 模型或更重 memory speculation。
+- 当前也已经把这条线补上一层很窄的 `debug/frontend` 教学可视化：`guest_vector_demo` / `guest_vector_cnn_demo`、workload 导览、向量指令高亮、`SEW / VL + v0..v31` 快照，以及固定 `conv -> relu` 专题卡都已接通；它们当前服务于观察与讲解，不改变后续优先级判断。
 
 ## 当前优先级
 
@@ -59,6 +62,7 @@
 - 当前也已经进一步补到 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
 - 对当前单用户、本地教学/调试使用，这组门禁已经足够；后续按真实 bug 或明确新需求补最小回归即可，不再主动扩大到更长时间 soak 或更重浏览器压力。
 - 当前工作区也在推进一轮 `debug/frontend` UI refresh，但它的边界仍应收窄在浏览器壳层的布局、视觉层级和 `terminal collapsed` 交互语义，不得顺手扩大 `debug_session/protocol`、guest 合同或新的浏览器压力验证面。
+- 当前这条线已经顺手把向量 / NN 的最小可视化补到前端，但这仍属于“教学演示可用”的窄扩面：workload 卡、向量寄存器视图和 `conv -> relu` 专题都只消费现有只读快照与固定 demo 元信息，不构成新的调试器功能面。
 - 这条线的目标仍然只是“教学演示可用”，不是通用调试器，也不需要为当前使用方式预先建设更重的浏览器端压测体系。
 
 ### 2. `Phase 3` 后续取舍已收口：当前不主动扩大更激进的 `issue / replay / speculation`
@@ -80,6 +84,7 @@
 
 - 当前更健康的后续大方向，不是直接去做更重的 `Phase 4`，而是沿已落地的“向量扩展 + ML workload”这条 workload-guided、ISA-first 主线继续前推。
 - 当前已完成的部分，不再只有最小整数 `V-lite` 的 `V0 / V1`、`V2` 与 `V3`；`V3 hardening` 也已落地，具体包括新的 `vector_cnn_smoke` host regression，用于守住 mixed `SEW/VL` 的 `conv -> relu` 数据链和全负卷积输出的 `relu` 零钳位。更完整的最小 CNN inference demo 与 vector-aware `pipeline` 仍是后续阶段。
+- 当前也已经把这条线的结果补进了 frontend：浏览器现在能把 `guest_vector_demo`、固定 `conv -> relu`、`SEW / VL` 与当前 vector-aware `pipeline` 边界直观看出来，因此后续 workload 观察已经不再只依赖文档或 UART marker。
 - 当前更健康的下一步，不是顺着 `V4` 立刻继续扩到向量 load/store path、`Pool / FC`、模型文件加载或更重 guest runtime，而是继续围绕已落地的 `V4` 首刀做 bug-driven hardening 和 workload 观察；当前第一轮 hardening 已经补上更像真实依赖链的 host smoke，并把 direct dependency 的执行边界收窄了一步，这也比直接跳到更重 memory path 扩面更符合当前 reference-first 方法论。
 - 与 `Phase 4` 的主要冲突在于：在尚无稳定向量 workload 之前，cache / DMA / scratchpad 的收益判断缺少足够信号，而 multicore / coherence 则会过早放大平台状态空间与验证成本。
 - 因此，如果未来只能新开一条重主线，默认应先开“向量扩展 + ML workload”，再由真实 workload 决定哪些 `Phase 4` 工作值得推进。
@@ -106,5 +111,5 @@
 1. 如果后续出现真实 `Phase 3` stall hotspot，再围绕“issue decoupling 是否值得单开最小计划”建专项，而不是直接为 unknown-address speculation 或更宽 replay 开计划。
 2. 如果后续出现真实 `debug/frontend` bug，再围绕具体故障单开最小修复 / 回归计划，而不是泛化成新的浏览器压力专项。
 3. 如果后续 Spike 外部差分暴露出 reference correctness 缺口，再围绕具体语义面单开最小计划，例如更广 `Sv39 final-state subset`、`device-free privilege contract` 或必要时的多 checkpoint / nested trap 变体，而不是一开始就做大一统 trace framework。
-4. 当前如果要新开向量子线计划，应继续围绕已落地的 [../design/vector_v4_minimal_vector_pipeline_design.md](../design/vector_v4_minimal_vector_pipeline_design.md) 做更窄的 `V4` hardening / observation：优先继续守住 direct dependency、serializing guard 与 workload 观察，而不是直接跳到向量 load/store path、`Pool / FC` 或更远的 cache / DMA / multicore 大专项。
+4. 当前如果要新开向量子线计划，应继续围绕已落地的 [../design/vector_v4_minimal_vector_pipeline_design.md](../design/vector_v4_minimal_vector_pipeline_design.md) 与 [../design/vector_frontend_visualization_design.md](../design/vector_frontend_visualization_design.md) 做更窄的 `V4` hardening / observation：优先继续守住 direct dependency、serializing guard 与 workload 观察，而不是直接跳到向量 load/store path、`Pool / FC` 或更远的 cache / DMA / multicore 大专项。
 5. 如果下一轮还要并行推进，建议围绕“guest runtime bug-driven hardening / reference correctness 补洞 / 条件触发后的 `Phase 3` 专项”拆 ownership，而不是继续机械沿用旧的 `P2-1..P2-7` 编号分线。

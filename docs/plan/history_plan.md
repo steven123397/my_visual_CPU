@@ -21,6 +21,15 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-04-12
+
+#### vector-frontend-visualization-plan
+
+- 原文件：`vector_frontend_visualization_plan.md`
+- 完成内容：完成 `vector / NN frontend visualization`，当前浏览器端已经能直接选择 `guest_vector_demo` 与 `guest_vector_cnn_demo`，并展示 workload 说明卡、向量指令 `config / memory / ALU` 高亮、`SEW / VL + v0..v31` 最小寄存器快照、固定 `conv -> relu` 专题卡，以及当前 `vector_state_busy` / serializing guard 的最小执行边界提示。
+- 实现过程摘要：整体继续采用“先设计冻结、再按 `P0 -> P3` 顺序小步落地、最后统一回写状态与归档”的克制路径；这一轮只新增最小 `DebugSnapshot` 向量状态与前端只读展示，不扩成通用调试器，也不把问题顺势放大到通用模型可视化、lane 级性能图或更大协议面，并最终守住 `cd frontend && node --test`、`cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd myCPU && make test-host-debug_cli_smoke`。
+- 结果参考：[vector_frontend_visualization_design.md](../design/vector_frontend_visualization_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
 ### 2026-04-10
 
 #### vector-v0-v1-plan

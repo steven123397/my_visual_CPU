@@ -14,6 +14,19 @@
 - guest demos：`guest_supervisor_demo`、`kernel_alpha` 正负回归、`interactive_os` 最小交互 monitor
 - debug tooling：本地 `--debug-cli` 协议、Node 调试服务与浏览器前端演示页
 
+## 向量 / ML workload 简介
+
+当前仓库已经补上一条克制但可运行的 `V-lite` 向量路径，用来把“向量扩展 + ML workload”从方向讨论推进到最小可验证实现。现阶段重点不是性能研究，而是先围绕共享 ISA 语义、guest demo 和最小 vector-aware `pipeline` 边界，建立一条可观察、可回归的教学 / 实验链路。
+
+当前已落地的向量能力包括：
+
+- 最小向量状态与指令子集：`vsetcfg`、`vle.v`、`vse.v`、`vadd.vv`、`vmul.vv`、`vmax.vv`、`vdot.vv`
+- 两条独立 guest demo：
+  - `guest_vector_demo`：覆盖 `dot / GEMM / Conv / ReLU`，成功输出 `V2OK`
+  - `guest_vector_cnn_demo`：固定 `conv -> relu` 链路，成功输出 `V3OK`
+- `pipeline` 当前已让 non-memory vector ALU 脱离统一 serializing fallback；`vsetcfg / vle.v / vse.v` 仍保持保守处理
+- 浏览器前端当前也能直接展示 workload 导览、向量指令高亮、`SEW / VL + v0..v31` 快照，以及固定 `conv -> relu` 的专题卡
+
 ## 仓库结构
 
 ```text

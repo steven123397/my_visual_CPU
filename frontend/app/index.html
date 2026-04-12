@@ -13,7 +13,7 @@
         <div class="hero-copy-block">
           <p class="eyebrow">my_visual_CPU</p>
           <h1>交互式终端调试台</h1>
-          <p class="hero-copy">浅色实验台承载控制与观察，深色 terminal 作为主舞台；当你只想看快照和流水线时，可以直接把 terminal 收起，把空间让给下方 inspector。</p>
+          <p class="hero-copy">浅色实验台承载控制与观察，深色 terminal 作为主舞台；现在它也能把 <code>V-lite</code> 向量 demo、固定 <code>conv -&gt; relu</code> workload，以及当前最小 vector-aware pipeline 边界一起讲清楚。</p>
         </div>
         <div class="hero-status-grid">
           <article class="status-card status-card-primary">
@@ -75,12 +75,14 @@
           </div>
           <aside class="stage-sidebar">
             <div id="summary-slot"></div>
+            <div id="workload-slot"></div>
             <div id="predictor-slot"></div>
           </aside>
         </div>
         <aside class="debug-inspector" id="debug-inspector" data-open="true">
           <div class="debug-inspector-grid">
             <div id="pipeline-slot"></div>
+            <div id="vector-slot"></div>
             <div id="events-slot"></div>
             <div id="devices-slot"></div>
             <div id="csrs-slot"></div>

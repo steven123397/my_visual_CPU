@@ -19,6 +19,8 @@
   - [status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关计划：
   - 无。该轮执行细节已回写到相关 `status` 文档。
+- 后续设计补充：
+  - [vector_frontend_visualization_design.md](vector_frontend_visualization_design.md)
 
 ## 当前有效性说明
 
@@ -48,8 +50,9 @@
 1. 为 `functional` 和 `pipeline` 提供统一的只读调试快照。
 2. 正式接入 `DebugSession` 与 `--debug-cli` JSON line protocol。
 3. 接入本地 Node 调试服务和浏览器端前端页面。
-4. 让仓库内现有 asm、`guest_supervisor_demo` 与 `kernel_alpha` demo 可以直接作为演示数据源。
+4. 让仓库内现有 asm、`guest_supervisor_demo`、向量 demo 与 `kernel_alpha` demo 可以直接作为演示数据源。
 5. 增加最小可维护的 host / frontend 验证门禁。
+6. 在不改变调试器定位的前提下，把当前已落地的向量 / 最小 CNN workload 变成可视化教学素材。
 
 ## 本轮非目标
 
@@ -216,9 +219,13 @@ http://127.0.0.1:4173
 - 切换 `functional` / `pipeline`
 - `Load / Run / Pause / Step Cycle / Step Commit / Reset`
 - 查看：
+  - 当前 workload 说明卡，以及 `guest_vector_demo` / `guest_vector_cnn_demo` 的最小导览
   - 五级流水线与 `stall_reason` / `lsq_load_state` 的轻量可视化
+  - 向量指令的 `config / memory / ALU` 高亮
   - 最近周期时间线
   - `OoO / 微架构` 摘要：`ROB / LSQ` 深度、head sequence、`replay_flush / trap_flush / committed`
+  - `Vector State`：`SEW / VL` 与 `v0..v31` 的最小 dump / diff 观察
+  - 固定 `conv -> relu` demo 的专题说明卡
   - 以折叠分组方式查看 `架构状态`（寄存器变化、关键 CSR / Trap）
   - 以折叠分组方式查看 `平台与 I/O`（最近一次总线访问、UART / CLINT / PLIC / Storage、事件流）
 
@@ -228,6 +235,8 @@ http://127.0.0.1:4173
 
 - 全部 `tests/asm/*.elf`
 - `guest_supervisor_demo`
+- `guest_vector_demo`
+- `guest_vector_cnn_demo`
 - `kernel_alpha_demo`
 - `kernel_alpha_fault_demo`
 - 六条 storage 负向 demo

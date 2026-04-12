@@ -35,11 +35,16 @@ http://127.0.0.1:4173
 ## 当前首版能力
 
 - 选择仓库内现有 asm、`guest_supervisor_demo` 和 `kernel_alpha` 正负 demo 并加载
+- 直接选择 `guest_vector_demo` 与 `guest_vector_cnn_demo`
 - 切换 `pipeline` / `functional` backend
 - `Load / Run / Pause / Step Cycle / Step Commit / Reset`
 - 实时查看：
+  - 当前 workload 说明卡
   - 五级流水线当前状态
+  - 向量指令在 pipeline / timeline 里的 `config / memory / ALU` 高亮
   - 最近周期时间线
+  - `Vector State`：`SEW / VL` 与 `v0..v31` 的最小寄存器 dump / diff
+  - 固定 `conv -> relu` demo 的专题卡
   - 寄存器变化
   - 关键 CSR / Trap 状态
   - 最近一次总线访问
@@ -50,6 +55,7 @@ http://127.0.0.1:4173
 - `Run` 目前由 Node 服务按定时器重复发送 `step_cycle`
 - WebSocket 只用于服务端向浏览器推送快照
 - 首版没有断点、条件暂停、差分对比和任意文件加载
+- 向量 / CNN 可视化当前只服务于已经落地的固定 demo，不是通用模型可视化器
 
 ## 验证
 

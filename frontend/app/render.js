@@ -3,7 +3,9 @@ import { renderTerminal } from './components/terminal.js';
 import { renderPipelineBoard, renderTimeline } from './components/pipeline.js';
 import {
   renderSummary,
+  renderWorkloadPanel,
   renderPredictor,
+  renderVectorPanel,
   renderOooPanel,
   renderArchitectureGroup,
   renderPlatformGroup,
@@ -19,11 +21,16 @@ function queryEventList(...slots) {
   return null;
 }
 
+function selectedTestEntry(state) {
+  return state.tests.find((item) => item.name === state.selectedTest) ?? null;
+}
+
 export function renderApp(elements, state) {
   const snapshot = state.currentSnapshot;
   const previous = state.history.length > 1 ? state.history[state.history.length - 2] : null;
   const registers = diffRegisters(previous, snapshot);
   const timelineRows = buildTimelineRows(state.history).slice().reverse();
+  const currentTest = selectedTestEntry(state);
   const previousEventList = queryEventList(elements.devices, elements.events);
   const keepEventsPinned = shouldAutoScrollToBottom(previousEventList);
   const previousTerminal = elements.terminal.querySelector('.terminal-scrollport');
@@ -35,9 +42,15 @@ export function renderApp(elements, state) {
   elements.debugInspector.dataset.open = state.layout.debugPanelOpen ? 'true' : 'false';
   elements.terminal.innerHTML = renderTerminal(state);
   elements.summary.innerHTML = renderSummary(snapshot, state.runState);
+  if (elements.workload) {
+    elements.workload.innerHTML = renderWorkloadPanel(currentTest, snapshot);
+  }
   elements.predictor.innerHTML = renderPredictor(snapshot);
   elements.pipeline.innerHTML = `${renderPipelineBoard(snapshot)}${renderTimeline(timelineRows)}`;
   elements.events.innerHTML = renderOooPanel(snapshot);
+  if (elements.vector) {
+    elements.vector.innerHTML = renderVectorPanel(snapshot, previous, currentTest, state.backend);
+  }
   elements.devices.innerHTML = renderPlatformGroup(snapshot, state.layout.platformGroupOpen);
   elements.registers.innerHTML = renderArchitectureGroup(snapshot, registers, state.layout.architectureGroupOpen);
   elements.csrs.innerHTML = '';
@@ -61,7 +74,7 @@ export function renderApp(elements, state) {
 export function updateControls(elements, state) {
   elements.testSelect.innerHTML = state.tests.map((item) => `
     <option value="${item.name}" ${item.name === state.selectedTest ? 'selected' : ''}>
-      ${item.name}${item.hasDisk ? ' [disk]' : ''}
+      ${item.menuLabel ?? item.name}${item.hasDisk ? ' [disk]' : ''}
     </option>
   `).join('');
   elements.backendSelect.value = state.backend;
