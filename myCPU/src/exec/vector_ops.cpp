@@ -1,11 +1,14 @@
 #include "vector_ops.h"
 
+#include "../../include/platform_mmio.h"
 #include "../cpu.h"
 #include "../mem/bus.h"
 
 namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
+constexpr uint64_t CAUSE_LOAD_ACCESS_FAULT = 5;
+constexpr uint64_t CAUSE_STORE_ACCESS_FAULT = 7;
 
 TrapRequest illegal_trap(uint64_t tval) {
     TrapRequest trap;
@@ -61,6 +64,44 @@ bool read_runtime_config(const VectorState& state, uint8_t& sew_bytes, uint8_t& 
     sew_bytes = state.sew_bytes();
     vl = state.vl();
     return VectorState::is_valid_config(sew_bytes, vl, true);
+}
+
+TrapRequest access_fault(AccessType type, uint64_t tval) {
+    TrapRequest trap;
+    trap.valid = true;
+    trap.cause = (type == AccessType::Store) ? CAUSE_STORE_ACCESS_FAULT : CAUSE_LOAD_ACCESS_FAULT;
+    trap.tval = tval;
+    return trap;
+}
+
+bool is_ram_physical_access(uint64_t addr, int size) {
+    if (size <= 0) {
+        return false;
+    }
+    const uint64_t end = addr + static_cast<uint64_t>(size);
+    return addr >= MEM_BASE && end > addr && end <= MEM_BASE + MEM_SIZE;
+}
+
+bool validate_vector_memory_span(CPU& cpu,
+                                 Bus& bus,
+                                 uint64_t addr,
+                                 size_t bytes,
+                                 AccessType type,
+                                 TrapRequest& fault) {
+    for (size_t i = 0; i < bytes; ++i) {
+        const uint64_t current_addr = addr + i;
+        const AddressSpace::TranslateResult translated =
+            cpu.address_space().translate_result(bus, current_addr, type, false);
+        if (!translated.ok) {
+            fault = translated.fault;
+            return false;
+        }
+        if (!is_ram_physical_access(translated.paddr, 1)) {
+            fault = access_fault(type, current_addr);
+            return false;
+        }
+    }
+    return true;
 }
 
 }  // namespace
@@ -261,6 +302,10 @@ VectorApplyResult apply_vector_request(CPU& cpu, Bus& bus, const VectorRequest& 
         VectorState::VectorReg reg{};
         reg.fill(0);
         const size_t bytes = static_cast<size_t>(vl) * static_cast<size_t>(sew_bytes);
+        if (!validate_vector_memory_span(cpu, bus, request.addr, bytes, AccessType::Load, result.trap)) {
+            result.ok = false;
+            return result;
+        }
         for (size_t i = 0; i < bytes; ++i) {
             const AddressSpace::AccessResult access =
                 cpu.address_space().load_result(bus, request.addr + i, 1);
@@ -288,6 +333,10 @@ VectorApplyResult apply_vector_request(CPU& cpu, Bus& bus, const VectorRequest& 
 
         const VectorState::VectorReg& reg = vector.read_reg(request.vs2);
         const size_t bytes = static_cast<size_t>(vl) * static_cast<size_t>(sew_bytes);
+        if (!validate_vector_memory_span(cpu, bus, request.addr, bytes, AccessType::Store, result.trap)) {
+            result.ok = false;
+            return result;
+        }
         for (size_t i = 0; i < bytes; ++i) {
             const AddressSpace::AccessResult access =
                 cpu.address_space().store_result(bus, request.addr + i, reg[i], 1);

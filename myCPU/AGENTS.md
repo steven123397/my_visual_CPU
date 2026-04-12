@@ -111,6 +111,7 @@
 - `2026-04-05` 又补上一组更窄的 `debug/frontend` 压力验证：Node/runtime 级持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` timeout fail-closed，避免迟到 CLI 响应错配后续请求。
 - `2026-04-05` 也已把 decode 级 `BlockedByUnresolvedStore` 收窄到“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 已不再全局阻塞非重叠 younger load，重叠场景继续走 `BlockedByOverlappingStore`，相关 `load_store_queue_smoke`、`pipeline_speculation_contracts_smoke` 与 `make test-pipeline` 已守住。
 - `2026-04-11` 已在 `V4` 首刀之上补上一轮更窄的 direct dependency hardening：pending serializing vector 仍会阻塞 younger vector ALU，但 ready older non-memory vector ALU 如果只是被更老 scalar ROB head 挡住 commit，direct dependent younger vector ALU 现在可以以前驱 materialized result 完成 execute；对应 `vector_pipeline_smoke` 也已补上更像真实依赖链的 host 回归。
+- `2026-04-11` 同日也补上一轮更窄的 vector memory hardening：`vle.v / vse.v` 在 commit boundary 现在会先对整段 span 做预校验；live `MMIO` 与非 RAM span 会直接 `access-fault` fail-closed，不再留下 UART 输入消费、UART 输出 / `IER` 改写或 RAM 部分写入副作用；对应 `vector_vlite_smoke` 已补齐 UART / RAM fault 回归。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](Makefile) 为准。

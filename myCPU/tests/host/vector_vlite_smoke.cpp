@@ -7,6 +7,9 @@
 #include "../../include/platform_mmio.h"
 #include "../../src/arch/csr_file.h"
 #include "../../src/cpu.h"
+#include "../../src/devices/plic.h"
+#include "../../src/devices/uart16550.h"
+#include "../../src/exec/vector_ops.h"
 #include "../../src/exec/functional_backend.h"
 #include "../../src/mem/bus.h"
 #include "../../src/mem/ram.h"
@@ -30,6 +33,8 @@ constexpr uint64_t kArithOutMax = kEntry + 0x380;
 constexpr uint64_t kArithOutDot = kEntry + 0x3a0;
 
 constexpr uint8_t kRegisterBytes = 16;
+constexpr uint64_t kCauseLoadAccessFault = 5;
+constexpr uint64_t kCauseStoreAccessFault = 7;
 
 template <typename>
 struct always_false : std::false_type {};
@@ -162,6 +167,21 @@ std::array<uint8_t, N> read_buffer(Ram& ram, uint64_t addr) {
         out[i] = static_cast<uint8_t>(ram.load(addr + i, 1));
     }
     return out;
+}
+
+bool expect_trap(const TrapRequest& trap,
+                 uint64_t expected_cause,
+                 uint64_t expected_tval,
+                 const char* message) {
+    if (!trap.valid || trap.cause != expected_cause || trap.tval != expected_tval) {
+        std::fprintf(stderr,
+                     "%s (cause=%llu tval=0x%llx)\n",
+                     message,
+                     static_cast<unsigned long long>(trap.cause),
+                     static_cast<unsigned long long>(trap.tval));
+        return false;
+    }
+    return true;
 }
 
 bool run_until_halt(FunctionalBackend& backend, CPU& cpu, int max_steps) {
@@ -406,6 +426,165 @@ bool test_vector_alu() {
     return true;
 }
 
+bool test_vector_load_fault_does_not_consume_uart_input() {
+    Ram ram;
+    Bus bus(ram);
+    Plic plic;
+    Uart16550 uart(plic);
+    uart.set_mirror_stdout(false);
+    bus.attach(plic);
+    bus.attach(uart);
+
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    if (!expect(cpu.core().vector().set_config(1, 4),
+                "vector load fault test should accept sew=1, vl=4")) {
+        return false;
+    }
+
+    VectorState::VectorReg sentinel{};
+    sentinel.fill(0x5a);
+    cpu.core().vector().write_reg(3, sentinel);
+    uart.inject_input("A");
+
+    VectorRequest request;
+    request.kind = VectorRequest::Kind::Load;
+    request.vd = 3;
+    request.addr = UART_BASE + UART_REG_RBR;
+
+    const VectorApplyResult result = apply_vector_request(cpu, bus, request);
+    if (!expect(!result.ok,
+                "vector load that crosses into invalid UART offsets should fail")) {
+        return false;
+    }
+    if (!expect_trap(result.trap,
+                     kCauseLoadAccessFault,
+                     UART_BASE + UART_REG_RBR,
+                     "vector load fault should reject live UART MMIO at the first byte")) {
+        return false;
+    }
+    if (!expect(cpu.core().vector().read_reg(3) == sentinel,
+                "faulting vector load should leave destination register unchanged")) {
+        return false;
+    }
+
+    uint64_t lsr = 0;
+    if (!expect(bus.try_load(UART_BASE + UART_REG_LSR, 1, lsr),
+                "vector load fault test should be able to read UART LSR")) {
+        return false;
+    }
+    if (!expect((lsr & UART_LSR_DR) != 0,
+                "faulting vector load should not consume UART RX data")) {
+        return false;
+    }
+
+    uint64_t rbr = 0;
+    if (!expect(bus.try_load(UART_BASE + UART_REG_RBR, 1, rbr),
+                "vector load fault test should be able to read UART RBR")) {
+        return false;
+    }
+    if (!expect(rbr == static_cast<uint64_t>('A'),
+                "faulting vector load should preserve the queued UART byte")) {
+        return false;
+    }
+
+    return true;
+}
+
+bool test_vector_store_fault_does_not_partially_write_ram() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    if (!expect(cpu.core().vector().set_config(1, 2),
+                "vector store RAM fault test should accept sew=1, vl=2")) {
+        return false;
+    }
+
+    VectorState::VectorReg src{};
+    src.fill(0);
+    src[0] = 0xde;
+    src[1] = 0xad;
+    cpu.core().vector().write_reg(4, src);
+
+    const uint64_t tail_addr = MEM_BASE + MEM_SIZE - 1;
+    const uint8_t before = static_cast<uint8_t>(ram.load(tail_addr, 1));
+
+    VectorRequest request;
+    request.kind = VectorRequest::Kind::Store;
+    request.vs2 = 4;
+    request.addr = tail_addr;
+
+    const VectorApplyResult result = apply_vector_request(cpu, bus, request);
+    if (!expect(!result.ok,
+                "vector store that crosses past RAM should fail")) {
+        return false;
+    }
+    if (!expect_trap(result.trap,
+                     kCauseStoreAccessFault,
+                     tail_addr + 1,
+                     "vector store RAM fault should report the first unmapped byte")) {
+        return false;
+    }
+    if (!expect(static_cast<uint8_t>(ram.load(tail_addr, 1)) == before,
+                "faulting vector store should not leave a partial RAM write behind")) {
+        return false;
+    }
+
+    return true;
+}
+
+bool test_vector_store_fault_does_not_touch_uart_side_effects() {
+    Ram ram;
+    Bus bus(ram);
+    Plic plic;
+    Uart16550 uart(plic);
+    uart.set_mirror_stdout(false);
+    bus.attach(plic);
+    bus.attach(uart);
+
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    if (!expect(cpu.core().vector().set_config(1, 3),
+                "vector store UART fault test should accept sew=1, vl=3")) {
+        return false;
+    }
+
+    VectorState::VectorReg src{};
+    src.fill(0);
+    src[0] = static_cast<uint8_t>('Z');
+    src[1] = UART_IER_THRI;
+    src[2] = 0x55;
+    cpu.core().vector().write_reg(5, src);
+
+    VectorRequest request;
+    request.kind = VectorRequest::Kind::Store;
+    request.vs2 = 5;
+    request.addr = UART_BASE + UART_REG_THR;
+
+    const VectorApplyResult result = apply_vector_request(cpu, bus, request);
+    if (!expect(!result.ok,
+                "vector store that crosses into invalid UART offsets should fail")) {
+        return false;
+    }
+    if (!expect_trap(result.trap,
+                     kCauseStoreAccessFault,
+                     UART_BASE + UART_REG_THR,
+                     "vector store UART fault should reject live UART MMIO at the first byte")) {
+        return false;
+    }
+    if (!expect(uart.output_size() == 0,
+                "faulting vector store should not emit UART output before trapping")) {
+        return false;
+    }
+    if (!expect(uart.ier() == 0 && !uart.thre_interrupt_asserted(),
+                "faulting vector store should not modify UART interrupt state")) {
+        return false;
+    }
+
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -424,6 +603,15 @@ int main() {
         return 1;
     }
     if (!test_vector_alu()) {
+        return 1;
+    }
+    if (!test_vector_load_fault_does_not_consume_uart_input()) {
+        return 1;
+    }
+    if (!test_vector_store_fault_does_not_partially_write_ram()) {
+        return 1;
+    }
+    if (!test_vector_store_fault_does_not_touch_uart_side_effects()) {
         return 1;
     }
     return 0;

@@ -18,6 +18,11 @@
 
 ## 当前状态
 
+- `2026-04-11` 对最新提交 `1bbce86`（`feat(向量流水线): 收窄 V4 依赖链阻塞边界`）完成一轮 adversarial review；当日新增的 2 条向量访存活跃问题现已关闭：
+  - [../../myCPU/src/exec/vector_ops.cpp](../../myCPU/src/exec/vector_ops.cpp)
+    `VectorRequest::Load` 现在会先对整段 span 做无副作用预校验；如果映射落到 live `MMIO` 或非 RAM 区间，会直接以 `access fault` fail-closed，不再先消费 `UART_REG_RBR` 之类读即取走状态。对应 [../../myCPU/tests/host/vector_vlite_smoke.cpp](../../myCPU/tests/host/vector_vlite_smoke.cpp) 已补上 UART 输入不被提前消费的 host 回归。
+  - [../../myCPU/src/exec/vector_ops.cpp](../../myCPU/src/exec/vector_ops.cpp)
+    `VectorRequest::Store` 现在同样先做整段预校验，再逐字节提交；跨出 RAM 的向量 `store` 不再留下部分写入，而 live `MMIO` 也会在首字节直接 fail-closed，不再先输出 UART 字符或改写 `IER`。对应 [../../myCPU/tests/host/vector_vlite_smoke.cpp](../../myCPU/tests/host/vector_vlite_smoke.cpp) 已补上 RAM tail partial-write 与 UART side-effect 两条 host 回归。
 - `2026-04-08` 对当前 `debug/frontend` UI 刷新工作区的一轮复查问题已关闭。
 - 关闭结论：
   - [../../frontend/app/components/terminal.js#L20](../../frontend/app/components/terminal.js#L20)

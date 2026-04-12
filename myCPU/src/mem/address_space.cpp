@@ -145,6 +145,15 @@ AddressSpace::AccessResult AddressSpace::load_result(Bus& bus, uint64_t addr, in
     return access_result(bus, addr, size, AccessType::Load);
 }
 
+AddressSpace::TranslateResult AddressSpace::translate_result(Bus& bus,
+                                                             uint64_t addr,
+                                                             AccessType type,
+                                                             bool update_access_bits) {
+    TranslateResult result;
+    result.ok = translate(bus, addr, type, result.paddr, result.fault, update_access_bits);
+    return result;
+}
+
 AddressSpace::AccessResult AddressSpace::store_result(Bus& bus, uint64_t addr, uint64_t value, int size) {
     AccessResult result;
     uint64_t current_addr = addr;
@@ -154,7 +163,7 @@ AddressSpace::AccessResult AddressSpace::store_result(Bus& bus, uint64_t addr, u
     while (remaining > 0) {
         const int chunk = page_chunk_size(current_addr, remaining);
         uint64_t paddr = 0;
-        if (!translate(bus, current_addr, AccessType::Store, paddr, result.fault)) {
+        if (!translate(bus, current_addr, AccessType::Store, paddr, result.fault, true)) {
             return result;
         }
 
@@ -305,7 +314,12 @@ bool AddressSpace::update_pte_access_bits(
     return true;
 }
 
-bool AddressSpace::translate(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr, TrapRequest& fault) {
+bool AddressSpace::translate(Bus& bus,
+                             uint64_t vaddr,
+                             AccessType type,
+                             uint64_t& paddr,
+                             TrapRequest& fault,
+                             bool update_access_bits) {
     const uint64_t satp = csr_.read(CSR_SATP, core_);
     const uint64_t mode = (satp & SATP_MODE_MASK) >> SATP_MODE_SHIFT;
     const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
@@ -332,10 +346,13 @@ bool AddressSpace::translate(Bus& bus, uint64_t vaddr, AccessType type, uint64_t
         if (!check_leaf_permissions(entry->pte, type, effective_mode, vaddr, fault)) {
             return false;
         }
+        if (!update_access_bits) {
+            return true;
+        }
         return update_pte_access_bits(bus, entry->pte_addr, entry->pte, type, vaddr, fault);
     }
 
-    return walk_page_table(bus, vaddr, type, paddr, fault);
+    return walk_page_table(bus, vaddr, type, paddr, fault, update_access_bits);
 }
 
 AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr, int size, AccessType type) {
@@ -347,7 +364,7 @@ AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr,
     while (remaining > 0) {
         const int chunk = page_chunk_size(current_addr, remaining);
         uint64_t paddr = 0;
-        if (!translate(bus, current_addr, type, paddr, result.fault)) {
+        if (!translate(bus, current_addr, type, paddr, result.fault, true)) {
             return result;
         }
 
@@ -372,7 +389,12 @@ void AddressSpace::apply_fault(const TrapRequest& fault) {
     }
 }
 
-bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, uint64_t& paddr, TrapRequest& fault) {
+bool AddressSpace::walk_page_table(Bus& bus,
+                                   uint64_t vaddr,
+                                   AccessType type,
+                                   uint64_t& paddr,
+                                   TrapRequest& fault,
+                                   bool update_access_bits) {
     const uint64_t satp = csr_.read(CSR_SATP, core_);
     const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
     const PrivilegeMode effective_mode = effective_privilege_mode(type, core_, mstatus);
@@ -407,7 +429,8 @@ bool AddressSpace::walk_page_table(Bus& bus, uint64_t vaddr, AccessType type, ui
             }
 
             uint64_t updated_pte = pte;
-            if (!update_pte_access_bits(bus, pte_addr, updated_pte, type, vaddr, fault)) {
+            if (update_access_bits &&
+                !update_pte_access_bits(bus, pte_addr, updated_pte, type, vaddr, fault)) {
                 return false;
             }
 
