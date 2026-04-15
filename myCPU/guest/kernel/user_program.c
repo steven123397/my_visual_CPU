@@ -86,6 +86,26 @@ static const vm_user_region_t* user_program_region_view(
     return NULL;
 }
 
+static bool restore_region_object_binding(vm_user_region_t* region,
+                                          vm_object_t* object,
+                                          size_t object_offset,
+                                          vm_region_object_mode_t object_mode) {
+    if (region == NULL || object == NULL) {
+        return true;
+    }
+
+    switch (object_mode) {
+    case VM_REGION_OBJECT_MAPPED:
+        return vm_user_region_map_object_at(region, object, object_offset);
+    case VM_REGION_OBJECT_FAULT:
+        return vm_user_region_set_fault_object_at(region, object, object_offset);
+    case VM_REGION_OBJECT_NONE:
+        return true;
+    }
+
+    return false;
+}
+
 void user_program_init(user_program_t* program) {
     if (program == NULL) {
         return;
@@ -375,10 +395,30 @@ bool user_program_rebind_region_fault_object(
     user_program_region_id_t region_id,
     vm_object_t* object) {
     vm_user_region_t* region = user_program_region(program, region_id);
+    vm_object_t* previous_object = NULL;
+    size_t previous_offset = 0;
+    vm_region_object_mode_t previous_mode = VM_REGION_OBJECT_NONE;
 
-    return region != NULL && object != NULL &&
-           vm_user_region_clear_object(region) &&
-           vm_user_region_set_fault_object(region, object);
+    if (region == NULL || object == NULL) {
+        return false;
+    }
+
+    previous_object = region->object;
+    previous_offset = region->object_offset;
+    previous_mode = region->object_mode;
+    if (!vm_user_region_clear_object(region)) {
+        return false;
+    }
+
+    if (vm_user_region_set_fault_object(region, object)) {
+        return true;
+    }
+
+    (void)restore_region_object_binding(region,
+                                        previous_object,
+                                        previous_offset,
+                                        previous_mode);
+    return false;
 }
 
 bool user_program_reset_object(user_program_t* program,

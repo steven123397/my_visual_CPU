@@ -426,6 +426,45 @@ static int test_pagewalk_and_pte_dump(void) {
     return 0;
 }
 
+static int test_pagewalk_rejects_invalid_sv39_entries(void) {
+    kernel_runtime_t runtime;
+    vm_address_space_t address_space;
+    static uint64_t root_table[SV39_LEVEL_ENTRIES] __attribute__((aligned(MEMORY_PAGE_SIZE)));
+    static uint64_t level1_table[SV39_LEVEL_ENTRIES] __attribute__((aligned(MEMORY_PAGE_SIZE)));
+
+    reset_stubs();
+    memset(&runtime, 0, sizeof(runtime));
+    memset(&address_space, 0, sizeof(address_space));
+    memset(root_table, 0, sizeof(root_table));
+    memset(level1_table, 0, sizeof(level1_table));
+    address_space.root_table = root_table;
+    kernel_runtime_set_address_space(&runtime, &address_space);
+    monitor_commands_reset(0);
+
+    root_table[vpn_index(UINT64_C(0x80000000), 2U)] =
+        pte_from_pa((uintptr_t)level1_table, SV39_PTE_VALID | SV39_PTE_USER);
+    if (!monitor_execute_line(&runtime, "pagewalk 0x80000000")) {
+        return fail("pagewalk on reserved non-leaf entry should continue running");
+    }
+    if (strstr(g_output, "pagewalk miss va=0x80000000") == NULL) {
+        return fail("pagewalk should reject reserved non-leaf entries");
+    }
+
+    reset_output();
+    memset(root_table, 0, sizeof(root_table));
+    root_table[vpn_index(UINT64_C(0x80000000), 2U)] =
+        pte_from_pa(UINT64_C(0x80001000),
+                    SV39_PTE_VALID | VM_PAGE_READ | VM_PAGE_EXEC);
+    if (!monitor_execute_line(&runtime, "pte dump 0x80000000")) {
+        return fail("pte dump on misaligned superpage should continue running");
+    }
+    if (strstr(g_output, "pte miss va=0x80000000") == NULL) {
+        return fail("pte dump should reject misaligned superpages");
+    }
+
+    return 0;
+}
+
 static int test_monitor_usage_and_miss_paths(void) {
     kernel_runtime_t runtime;
     vm_address_space_t address_space;
@@ -486,6 +525,7 @@ int main(void) {
         test_disk_commands() != 0 ||
         test_regs_and_peek() != 0 ||
         test_pagewalk_and_pte_dump() != 0 ||
+        test_pagewalk_rejects_invalid_sv39_entries() != 0 ||
         test_monitor_usage_and_miss_paths() != 0) {
         return 1;
     }

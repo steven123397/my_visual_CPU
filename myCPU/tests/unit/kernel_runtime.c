@@ -491,6 +491,8 @@ static int test_runtime_init_and_bind_self_handlers(void) {
 
 static int test_runtime_entry_bringup_helper(void) {
     kernel_runtime_t runtime;
+    vm_address_space_t* owned_address_space =
+        (vm_address_space_t*)(uintptr_t)0x2468U;
 
     reset_stub_state();
     kernel_runtime_init(&runtime);
@@ -519,6 +521,31 @@ static int test_runtime_entry_bringup_helper(void) {
     g_trap_context_is_active_result = false;
     if (kernel_runtime_run_entry_bringup(&runtime)) {
         return fail("expected runtime entry bring-up helper to reject inactive trap context");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    kernel_runtime_set_address_space(&runtime, owned_address_space);
+    g_trap_active_context = kernel_runtime_trap_context(&runtime);
+    if (!kernel_runtime_run_entry_bringup(&runtime)) {
+        return fail("expected runtime entry bring-up helper to teardown owned address space before reuse");
+    }
+    if (g_vm_destroy_calls != 1 || g_vm_destroy_arg != owned_address_space ||
+        kernel_runtime_address_space(&runtime) != NULL) {
+        return fail("expected runtime entry bring-up helper to clear owned address space before reset");
+    }
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    kernel_runtime_set_address_space(&runtime, owned_address_space);
+    g_vm_destroy_result = false;
+    if (kernel_runtime_run_entry_bringup(&runtime)) {
+        return fail("expected runtime entry bring-up helper to fail closed when owned address-space teardown fails");
+    }
+    if (g_vm_destroy_calls != 1 || g_vm_destroy_arg != owned_address_space ||
+        g_memory_init_calls != 0 || g_runtime_context_reset_calls != 0 ||
+        kernel_runtime_address_space(&runtime) != owned_address_space) {
+        return fail("expected entry bring-up teardown failure to stop before resetting runtime state");
     }
 
     if (kernel_runtime_run_entry_bringup(NULL)) {

@@ -541,11 +541,22 @@ static int test_user_runtime_activate_enter_and_deactivate(void) {
         return fail("expected runtime enter to call arch enter with process context");
     }
 
+    if (!trap_user_runtime_arm_timer_signal(&user_runtime, (uint32_t*)MEM_BASE, 0, 0x11U) ||
+        !trap_user_runtime_arm_external_signal(&user_runtime,
+                                               (uint32_t*)MEM_BASE,
+                                               1U,
+                                               0x22U)) {
+        return fail("expected signal arms before deactivate to succeed");
+    }
+
     if (!trap_user_runtime_deactivate(&user_runtime) ||
         g_last_cleared_sstatus_bits != RISCV_SSTATUS_SUM ||
         g_vm_address_space_disable_calls != 1 ||
         g_last_disabled_address_space != &address_space ||
-        trap_active_user_runtime() != NULL) {
+        trap_active_user_runtime() != NULL ||
+        user_runtime.timer_signal.armed || user_runtime.timer_signal.delivered ||
+        user_runtime.external_signal.armed ||
+        user_runtime.external_signal.delivered) {
         return fail("expected runtime deactivate to clear SUM and disable address space");
     }
 

@@ -6,6 +6,30 @@ static bool vm_debug_read_width_valid(size_t width) {
     return width == 1U || width == 2U || width == 4U || width == 8U;
 }
 
+static bool vm_debug_walk_entry_valid(unsigned level, uint64_t entry) {
+    if ((entry & SV39_PTE_VALID) == 0) {
+        return false;
+    }
+
+    if ((entry & SV39_PTE_LEAF_MASK) == 0 &&
+        (entry & SV39_PTE_NON_LEAF_RESERVED_MASK) != 0) {
+        return false;
+    }
+
+    if ((entry & SV39_PTE_LEAF_MASK) != 0) {
+        const uint64_t pte_ppn = (entry >> 10) & SV39_PPN_MASK;
+
+        if (level == 1U) {
+            return (pte_ppn & ((1ULL << 9) - 1ULL)) == 0;
+        }
+        if (level == 2U) {
+            return (pte_ppn & ((1ULL << 18) - 1ULL)) == 0;
+        }
+    }
+
+    return true;
+}
+
 bool vm_debug_walk(const vm_address_space_t* address_space,
                    uintptr_t vaddr,
                    vm_debug_walk_result_t* out_result) {
@@ -25,7 +49,7 @@ bool vm_debug_walk(const vm_address_space_t* address_space,
 
         result.entries[level] = entry;
         result.entry_valid[level] = (entry & SV39_PTE_VALID) != 0;
-        if (!result.entry_valid[level]) {
+        if (!vm_debug_walk_entry_valid(level, entry)) {
             *out_result = result;
             return false;
         }

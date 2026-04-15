@@ -704,6 +704,8 @@ bool trap_user_runtime_deactivate(trap_user_runtime_t* user_runtime) {
         return false;
     }
 
+    clear_user_signal(&user_runtime->timer_signal);
+    clear_user_signal(&user_runtime->external_signal);
     riscv_clear_sstatus_bits(RISCV_SSTATUS_SUM);
     active_user_runtime = NULL;
     return vm_address_space_disable(user_runtime->process->address_space);

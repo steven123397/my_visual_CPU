@@ -287,37 +287,85 @@ export function createDebugServerRuntime({
     return enqueueSessionAction(action);
   }
 
+  async function initializeSessionState(session, entry, backend) {
+    const terminalPrompt = entry.terminalPrompt ?? null;
+    await normalizeCliResponse(await session.load(entry, backend), 'session load');
+    const snapshot = entry.bootUntilUartText
+      ? normalizeCliResponse(
+          await session.runUntilUartContains(
+            entry.bootUntilUartText,
+            entry.bootMaxSteps ?? 0,
+          ),
+          'session runUntilUartContains',
+        )
+      : normalizeCliResponse(await session.snapshot(), 'session snapshot');
+    const terminalChunk = normalizeCliResponse(
+      await session.uartOutput(0),
+      'session uartOutput',
+    );
+    const terminalProjection = createTerminalProjectionState({
+      maxLength: DEFAULT_TERMINAL_MAX_LENGTH,
+    });
+    const terminal = {
+      type: 'terminal',
+      text: terminalChunk.text ?? '',
+      nextOffset: terminalChunk.nextOffset ?? terminalChunk.next_offset ?? 0,
+      reset: true,
+    };
+
+    resetTerminalProjectionState(terminalProjection);
+    applyTerminalChunk(terminalProjection, terminal.text);
+
+    return {
+      session,
+      snapshot,
+      terminalPrompt,
+      terminalProjection,
+      terminalOffset: terminal.nextOffset,
+      terminal,
+    };
+  }
+
   return {
     async load(entry, backend = 'pipeline') {
       const generation = beginSessionGeneration();
       stopRunLoop();
       return runQueued(async () => {
+        let nextState = null;
+        let nextSession = null;
+        const previousSession = currentSession;
+
         assertGeneration(generation);
-        if (currentSession) {
-          await currentSession.close();
+        try {
+          nextSession = await createSession();
+          nextState = await initializeSessionState(nextSession, entry, backend);
+          assertGeneration(generation);
+        } catch (error) {
+          if (nextSession) {
+            try {
+              await nextSession.close();
+            } catch {}
+          }
+          throw error;
+        }
+
+        currentSession = nextState.session;
+        currentSnapshot = nextState.snapshot;
+        currentTerminalPrompt = nextState.terminalPrompt;
+        currentTerminalProjection = nextState.terminalProjection;
+        currentTerminalOffset = nextState.terminalOffset;
+
+        wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+        wsHub.broadcast(nextState.terminal);
+
+        if (previousSession) {
+          try {
+            await previousSession.close();
+          } catch {}
           assertGeneration(generation);
         }
-        currentSession = await createSession();
-        currentTerminalPrompt = entry.terminalPrompt ?? null;
-        await callSession('load', entry, backend);
-        assertGeneration(generation);
-        currentSnapshot = entry.bootUntilUartText
-          ? await callSession(
-              'runUntilUartContains',
-              entry.bootUntilUartText,
-              entry.bootMaxSteps ?? 0,
-            )
-          : await callSession('snapshot');
-        assertGeneration(generation);
-        resetTerminalTracking();
-        wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
-        const terminal = await syncTerminalDelta({
-          offset: 0,
-          reset: true,
-          broadcast: true,
-          generation,
-        });
-        return { ok: true, snapshot: currentSnapshot, terminal };
+
+        return { ok: true, snapshot: currentSnapshot, terminal: nextState.terminal };
       });
     },
 

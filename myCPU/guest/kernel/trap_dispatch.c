@@ -38,6 +38,29 @@ static bool user_runtime_external_signal_valid(
                (MEMORY_PAGE_SIZE / sizeof(uint32_t));
 }
 
+static bool user_runtime_signal_delivery_ready(
+    const trap_context_t* trap_context,
+    const trap_user_runtime_t* user_runtime) {
+    const vm_process_t* process = NULL;
+    const vm_address_space_t* address_space = NULL;
+
+    if (trap_context == NULL || !user_runtime_valid(user_runtime) ||
+        trap_active_user_runtime() != user_runtime ||
+        user_runtime->trap_context != trap_context ||
+        !trap_context_is_active(trap_context) ||
+        !vm_process_is_active(user_runtime->process)) {
+        return false;
+    }
+
+    process = user_runtime->process;
+    address_space = process->address_space;
+    return address_space != NULL &&
+           runtime_context_active_process() == process &&
+           runtime_context_active_address_space() == address_space &&
+           vm_address_space_is_active(address_space) &&
+           vm_address_space_is_enabled(address_space);
+}
+
 static bool handle_user_timer_signal(trap_context_t* trap_context) {
     trap_user_runtime_t* user_runtime = NULL;
 
@@ -50,7 +73,8 @@ static bool handle_user_timer_signal(trap_context_t* trap_context) {
         return true;
     }
 
-    if (!user_runtime_timer_signal_valid(user_runtime)) {
+    if (!user_runtime_signal_delivery_ready(trap_context, user_runtime) ||
+        !user_runtime_timer_signal_valid(user_runtime)) {
         return false;
     }
 
@@ -73,7 +97,8 @@ static bool handle_user_external_signal(trap_context_t* trap_context) {
         return true;
     }
 
-    if (!user_runtime_external_signal_valid(user_runtime)) {
+    if (!user_runtime_signal_delivery_ready(trap_context, user_runtime) ||
+        !user_runtime_external_signal_valid(user_runtime)) {
         return false;
     }
 

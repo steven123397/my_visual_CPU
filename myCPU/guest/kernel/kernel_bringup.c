@@ -89,6 +89,15 @@ static bool kernel_bringup_activate_trap_context(trap_context_t* trap_context) {
            trap_active_context() == trap_context;
 }
 
+static void kernel_bringup_reset_trap_context(trap_context_t* trap_context) {
+    if (trap_context == NULL) {
+        return;
+    }
+
+    runtime_context_clear_trap_context(trap_context);
+    trap_context_init(trap_context);
+}
+
 static bool kernel_bringup_map_fixed_kernel_ranges(
     vm_address_space_t* address_space,
     bool map_managed_memory) {
@@ -156,6 +165,7 @@ static bool kernel_bringup_validate_active_address_space(
 
 static bool kernel_bringup_probe_pmm_page(uint64_t marker) {
     uint64_t* page = (uint64_t*)pmm_alloc_page();
+    bool freed = false;
 
     if (page == NULL) {
         return false;
@@ -163,10 +173,12 @@ static bool kernel_bringup_probe_pmm_page(uint64_t marker) {
 
     page[0] = marker;
     if (page[0] != marker) {
+        (void)pmm_free_page(page);
         return false;
     }
 
-    return pmm_free_page(page);
+    freed = pmm_free_page(page);
+    return freed;
 }
 
 static bool kernel_bringup_setup_vm(vm_address_space_t** out_space,
@@ -201,6 +213,8 @@ bool kernel_bringup_run_common(
     trap_context_t* trap_context,
     vm_address_space_t** out_space,
     const kernel_bringup_options_t* options) {
+    vm_address_space_t* address_space = NULL;
+
     if (trap_context == NULL || out_space == NULL || options == NULL) {
         return false;
     }
@@ -210,9 +224,6 @@ bool kernel_bringup_run_common(
     memory_init();
     runtime_context_reset();
     trap_context_init(trap_context);
-    if (!kernel_bringup_activate_trap_context(trap_context)) {
-        return false;
-    }
     console_putc('K');
 
     pmm_init();
@@ -223,22 +234,42 @@ bool kernel_bringup_run_common(
 
     if (options->pre_vm_setup != NULL &&
         !options->pre_vm_setup(trap_context, options->pre_vm_context)) {
+        kernel_bringup_reset_trap_context(trap_context);
         return false;
     }
 
-    if (!kernel_bringup_setup_vm(out_space, options)) {
+    if (!kernel_bringup_setup_vm(&address_space, options)) {
+        if (address_space != NULL) {
+            *out_space = address_space;
+        }
+        kernel_bringup_reset_trap_context(trap_context);
         return false;
     }
 
     if (options->pmm_probe_marker != 0 &&
         !kernel_bringup_probe_pmm_page(options->pmm_probe_marker)) {
-        if (!vm_address_space_destroy(*out_space)) {
+        if (!vm_address_space_destroy(address_space)) {
+            *out_space = address_space;
+            kernel_bringup_reset_trap_context(trap_context);
             return false;
         }
-        *out_space = NULL;
+
+        kernel_bringup_reset_trap_context(trap_context);
         return false;
     }
 
+    if (!kernel_bringup_activate_trap_context(trap_context)) {
+        if (!vm_address_space_destroy(address_space)) {
+            *out_space = address_space;
+            kernel_bringup_reset_trap_context(trap_context);
+            return false;
+        }
+
+        kernel_bringup_reset_trap_context(trap_context);
+        return false;
+    }
+
+    *out_space = address_space;
     console_putc('V');
     return true;
 }

@@ -18,6 +18,39 @@
 
 ## 当前状态
 
+- `2026-04-15` 当前这轮全量对抗性审查新增的 3 条活跃问题已关闭：
+  - [../../frontend/server/debug_server_runtime.mjs](../../frontend/server/debug_server_runtime.mjs)
+    `load()` 现在改成 staged swap：新会话先在局部完成 `load + snapshot/boot + terminal` 初始化，只有完全 ready 后才替换 `currentSession`；初始化失败会显式 close 新会话，旧会话继续保持可用。对应 [../../frontend/tests/debug_server_runtime.test.mjs](../../frontend/tests/debug_server_runtime.test.mjs) 已补 replacement `load` / `snapshot` 失败回滚回归。
+  - [../../myCPU/guest/kernel/user_program.c](../../myCPU/guest/kernel/user_program.c)
+    `user_program_rebind_region_fault_object()` 现在会在新 fault object 绑定失败时恢复旧 region binding，不再把 helper 留在“旧绑定已拆、新绑定未成”的半状态；对应 [../../myCPU/tests/unit/user_program.c](../../myCPU/tests/unit/user_program.c) 已补 rollback 回归。
+  - [../../myCPU/guest/kernel/vm_debug.c](../../myCPU/guest/kernel/vm_debug.c) 和 [../../myCPU/guest/kernel/monitor_commands.c](../../myCPU/guest/kernel/monitor_commands.c)
+    `vm_debug_walk()` 现在会拒绝 non-leaf PTE 上保留的 `U/A/D` 位以及 misaligned superpage，`pagewalk` / `pte dump` 不再把 host 会 page fault 的页表状态误讲成合法映射；对应 [../../myCPU/tests/unit/monitor_commands.c](../../myCPU/tests/unit/monitor_commands.c) 已补 monitor 回归。
+- `2026-04-15` 当前这轮审查记录的 2 条结构性维护问题已完成本轮收口：
+  - [../../frontend/app/components/panels.js](../../frontend/app/components/panels.js)
+    前端面板现已按 `workload / vector / predictor-ooo / platform-arch` 拆到 [../../frontend/app/components/panels/](../../frontend/app/components/panels/) 子模块，`panels.js` 只保留聚合导出；对应 [../../frontend/tests/panels.test.mjs](../../frontend/tests/panels.test.mjs) 与 [../../frontend/tests/render.test.mjs](../../frontend/tests/render.test.mjs) 继续守住现有展示合同。
+  - [../../myCPU/guest/kernel/user_program_smoke.c](../../myCPU/guest/kernel/user_program_smoke.c)
+    `user_program_smoke` 已按 `prepare`、`active-memory`、`lifecycle`、`prepare-runtime`、`round/interrupt` 五组 helper include 收口到更窄模块，主文件不再继续承载整段长链路细节；对应 [../../myCPU/tests/unit/user_program_smoke.c](../../myCPU/tests/unit/user_program_smoke.c) 与 [../../myCPU/tests/unit/supervisor_demo_smoke.c](../../myCPU/tests/unit/supervisor_demo_smoke.c) 已继续通过。
+- `2026-04-15` 第二轮 guest/runtime 与 VM 边界深挖新增 3 条活跃问题已关闭：
+  - [../../myCPU/guest/kernel/vm_process.c](../../myCPU/guest/kernel/vm_process.c)
+    `vm_process_remove_user_region()` 现在会在 unregister 失败时恢复旧 object binding，避免 region 仍挂在 process 上却已经把 object detach 掉的 split-brain；对应 [../../myCPU/tests/unit/vm_process.c](../../myCPU/tests/unit/vm_process.c) 已补 rollback 回归。
+  - [../../myCPU/guest/kernel/vm_address_space.c](../../myCPU/guest/kernel/vm_address_space.c)
+    kernel fault range 注册继续显式拒绝重叠，同时单测现在锁住“fault range 对 fault range overlap 直接失败”的合同，避免未来静默回退到注册顺序决定命中的语义；对应 [../../myCPU/tests/unit/vm_address_space.c](../../myCPU/tests/unit/vm_address_space.c) 已补重叠回归。
+  - [../../myCPU/guest/kernel/vm_address_space.c](../../myCPU/guest/kernel/vm_address_space.c)
+    `vm_address_space_destroy()` 在递归释放失败时现在会 fail-closed 地把 address space 重新置回 clean state，不再把半 torn-down 对象暴露给上层继续使用；对应 [../../myCPU/tests/unit/vm_address_space.c](../../myCPU/tests/unit/vm_address_space.c) 已补失败路径回归。
+- `2026-04-15` 继续向 guest/runtime 与 VM 边界深挖，再新增 3 条活跃问题已关闭：
+  - [../../myCPU/guest/kernel/trap.c](../../myCPU/guest/kernel/trap.c) 和 [../../myCPU/guest/kernel/trap_dispatch.c](../../myCPU/guest/kernel/trap_dispatch.c)
+    `trap_user_runtime_deactivate()` 现在会显式 disarm timer / external signal，dispatch 侧也要求 active runtime、process、address space 与 trap context 全部一致后才允许投递，避免迟到中断写回旧 page 指针；对应 [../../myCPU/tests/unit/trap_runtime.c](../../myCPU/tests/unit/trap_runtime.c) 与 [../../myCPU/tests/unit/trap_dispatch.c](../../myCPU/tests/unit/trap_dispatch.c) 已补回归。
+  - [../../myCPU/guest/kernel/vm_address_space.c](../../myCPU/guest/kernel/vm_address_space.c)
+    `vm_address_space_register_fault_range()` 现在会拒绝普通 user VA，但继续允许 kernel window 与已知 platform MMIO 范围，不再把 alias 之类 user 区误注册成 kernel fault range，同时也不误伤 `kernel_alpha` 这类低地址 MMIO bring-up；对应 [../../myCPU/tests/unit/vm_address_space.c](../../myCPU/tests/unit/vm_address_space.c) 已补 user-window reject 与 MMIO allow 回归。
+  - [../../myCPU/guest/kernel/vm_process.c](../../myCPU/guest/kernel/vm_process.c)
+    `vm_process_reset()` 现在会显式拒绝 active process，避免制造“process 已 reset、旧页表仍 active”的 split-brain；对应 [../../myCPU/tests/unit/vm_process.c](../../myCPU/tests/unit/vm_process.c) 已补 active-reset reject 回归。
+- `2026-04-15` 继续做 `storage / kernel_alpha contract / bring-up` 路径审查，再新增 3 条活跃问题已关闭：
+  - [../../myCPU/guest/kernel/kernel_runtime.c](../../myCPU/guest/kernel/kernel_runtime.c)
+    `kernel_runtime_run_entry_bringup()` 现在会先 teardown runtime 持有的旧 address space，再做 `memory / runtime_context / trap_context` reset，不再把“旧页表仍被 runtime 持有或 satp 仍在用”的脏状态带进 reused runtime；对应 [../../myCPU/tests/unit/kernel_runtime.c](../../myCPU/tests/unit/kernel_runtime.c) 已补 reused-runtime teardown 回归。
+  - [../../myCPU/guest/kernel/kernel_bringup.c](../../myCPU/guest/kernel/kernel_bringup.c)
+    `kernel_bringup_run_common()` 现在把 trap-context activation 后移到 VM ready 之后，并在失败路径统一清掉 mutated trap context，不再把半初始化 bring-up 留成 live trap state；对应 [../../myCPU/tests/unit/kernel_bringup.c](../../myCPU/tests/unit/kernel_bringup.c) 已补 pre-VM mutation cleanup 回归。
+  - [../../myCPU/guest/kernel/kernel_bringup.c](../../myCPU/guest/kernel/kernel_bringup.c)
+    `kernel_bringup_probe_pmm_page()` 现在无论 marker mismatch 还是 free 失败都会走 staged cleanup，不再在 bring-up 自检失败时额外泄漏 probe page。
 - `2026-04-15` 对 `1bbce86..HEAD` 那 3 条前端 / 调试活跃问题已关闭：
   - [../../frontend/app/state.js](../../frontend/app/state.js) 、 [../../frontend/app/render.js](../../frontend/app/render.js) 、 [../../frontend/app/components/terminal.js](../../frontend/app/components/terminal.js) 和 [../../frontend/app/components/panels.js](../../frontend/app/components/panels.js)
     前端现在新增独立 `loadedSession`，`terminal` 标题、`workload` 面板与 vector backend 展示都优先绑定已加载 session，不再把 pending selector 伪装成当前会话；对应 [../../frontend/tests/render.test.mjs](../../frontend/tests/render.test.mjs) 与 [../../frontend/tests/terminal_render.test.mjs](../../frontend/tests/terminal_render.test.mjs) 已补回归。

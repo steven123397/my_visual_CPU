@@ -374,6 +374,41 @@ bool vm_user_region_set_fault_object(vm_user_region_t* region, vm_object_t* obje
     return true;
 }
 
+bool vm_user_region_map_object_at(vm_user_region_t* region,
+                                  vm_object_t* object,
+                                  size_t object_offset) {
+    (void)object_offset;
+    g_map_region_calls += 1;
+    g_last_map_region = region;
+    g_last_map_object = object;
+    g_last_map_object_offset = object_offset;
+    if (!g_map_region_result || region == NULL || object == NULL) {
+        return false;
+    }
+
+    region->object = object;
+    region->object_offset = object_offset;
+    region->object_mode = VM_REGION_OBJECT_MAPPED;
+    return true;
+}
+
+bool vm_user_region_set_fault_object_at(vm_user_region_t* region,
+                                        vm_object_t* object,
+                                        size_t object_offset) {
+    (void)object_offset;
+    g_region_set_fault_calls += 1;
+    g_last_set_fault_region = region;
+    g_last_set_fault_object = object;
+    if (!g_region_set_fault_result || region == NULL || object == NULL) {
+        return false;
+    }
+
+    region->object = object;
+    region->object_offset = object_offset;
+    region->object_mode = VM_REGION_OBJECT_FAULT;
+    return true;
+}
+
 bool vm_user_region_clear_object(vm_user_region_t* region) {
     g_region_clear_object_calls += 1;
     g_last_clear_object_region = region;
@@ -680,10 +715,40 @@ static int test_user_program_create_failure_still_fails_when_cleanup_breaks(void
     return 0;
 }
 
+static int test_user_program_rebind_rolls_back_on_failure(void) {
+    user_program_t program;
+    vm_object_t replacement = {.initialized = true};
+
+    reset_stub_state();
+    memset(&program, 0, sizeof(program));
+    user_program_init(&program);
+    if (!user_program_plan_standard(&program, 0x3000U + 0x88U, 0x3000U + 0xA8U) ||
+        !user_program_create(&program, 0x9000U, 0xA000U)) {
+        return fail("expected created program before rebind rollback test");
+    }
+
+    g_region_set_fault_result = false;
+    if (user_program_rebind_region_fault_object(&program,
+                                                USER_PROGRAM_REGION_ALIAS,
+                                                &replacement)) {
+        return fail("expected rebind to fail when new fault object bind fails");
+    }
+
+    if (g_region_clear_object_calls != 1 || g_region_set_fault_calls != 1 ||
+        g_map_region_calls != 1 ||
+        program.bootstrap.alias_region.object != &program.bootstrap.alias_object ||
+        program.bootstrap.alias_region.object_mode != VM_REGION_OBJECT_MAPPED) {
+        return fail("expected rebind failure to restore the previous region binding");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_user_program_lifecycle_and_helpers() != 0 ||
         test_user_program_create_failure_replans_bootstrap() != 0 ||
-        test_user_program_create_failure_still_fails_when_cleanup_breaks() != 0) {
+        test_user_program_create_failure_still_fails_when_cleanup_breaks() != 0 ||
+        test_user_program_rebind_rolls_back_on_failure() != 0) {
         return 1;
     }
 

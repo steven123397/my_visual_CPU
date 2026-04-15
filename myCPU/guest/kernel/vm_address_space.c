@@ -331,9 +331,20 @@ static bool kernel_fault_range_args_valid(const vm_address_space_t* address_spac
                                           uintptr_t paddr,
                                           size_t size,
                                           uint64_t flags) {
+    const bool in_kernel_window = vm_range_is_kernel(vaddr, size);
+    const bool in_platform_mmio =
+        range_within_window(vaddr, size, UART_BASE, UART_BASE + MEMORY_PAGE_SIZE) ||
+        range_within_window(vaddr, size, CLINT_BASE, CLINT_BASE + CLINT_SIZE) ||
+        range_within_window(vaddr, size, PLIC_BASE, PLIC_BASE + PLIC_SIZE) ||
+        range_within_window(vaddr,
+                            size,
+                            STORAGE_BASE,
+                            STORAGE_BASE + MEMORY_PAGE_SIZE);
+
     return address_space_storage_ready(address_space) &&
            mapped_range_args_valid(vaddr, paddr, size) &&
            kernel_flags_valid(flags) &&
+           (in_kernel_window || in_platform_mmio) &&
            !range_overlaps_kernel_globals(address_space, vaddr, size) &&
            !range_overlaps_user_regions(address_space, vaddr, size);
 }
@@ -448,6 +459,8 @@ bool vm_address_space_disable(vm_address_space_t* address_space) {
 
 bool vm_address_space_destroy(vm_address_space_t* address_space) {
     size_t i = 0;
+    bool disabled = false;
+    bool freed = false;
 
     if (!address_space_storage_ready(address_space)) {
         return false;
@@ -459,8 +472,11 @@ bool vm_address_space_destroy(vm_address_space_t* address_space) {
         }
     }
 
-    if (!vm_address_space_disable(address_space) ||
-        !free_table_pages_recursive(address_space->root_table, 2U)) {
+    disabled = vm_address_space_disable(address_space);
+    freed = disabled &&
+            free_table_pages_recursive(address_space->root_table, 2U);
+    if (!disabled || !freed) {
+        reset_address_space(address_space);
         return false;
     }
 
@@ -553,10 +569,6 @@ bool vm_address_space_register_fault_range(vm_address_space_t* address_space,
                                            uintptr_t paddr,
                                            size_t size,
                                            uint64_t flags) {
-    if ((flags & VM_PAGE_USER) != 0) {
-        return false;
-    }
-
     return register_kernel_fault_range(address_space, vaddr, paddr, size, flags);
 }
 

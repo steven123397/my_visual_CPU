@@ -18,6 +18,7 @@ static size_t g_next_table_page = 0;
 static int g_alloc_zeroed_page_calls = 0;
 static int g_pmm_free_page_calls = 0;
 static void* g_last_freed_page = NULL;
+static bool g_pmm_free_result = true;
 static vm_address_space_t* g_active_address_space = NULL;
 static int g_can_map_page_calls = 0;
 static uintptr_t g_can_map_page_vaddrs[8];
@@ -37,6 +38,7 @@ static int fail(const char* message);
 static int test_lifecycle_enable_disable_and_destroy(void);
 static int test_map_kernel_range_records_mapping_contract(void);
 static int test_fault_range_registration_blocks_overlap_and_user_flags(void);
+static int test_destroy_fail_closed_on_free_failure(void);
 
 void* alloc_zeroed_page(void) {
     uint64_t* page = NULL;
@@ -54,7 +56,7 @@ void* alloc_zeroed_page(void) {
 bool pmm_free_page(void* page) {
     g_pmm_free_page_calls += 1;
     g_last_freed_page = page;
-    return true;
+    return g_pmm_free_result;
 }
 
 bool map_page_internal(vm_address_space_t* address_space,
@@ -150,6 +152,7 @@ static void reset_stub_state(void) {
     g_alloc_zeroed_page_calls = 0;
     g_pmm_free_page_calls = 0;
     g_last_freed_page = NULL;
+    g_pmm_free_result = true;
     g_active_address_space = NULL;
     g_can_map_page_calls = 0;
     memset(g_can_map_page_vaddrs, 0, sizeof(g_can_map_page_vaddrs));
@@ -308,11 +311,43 @@ static int test_fault_range_registration_blocks_overlap_and_user_flags(void) {
     }
 
     if (vm_address_space_register_fault_range(address_space,
+                                              vaddr + MEMORY_PAGE_SIZE / 2U,
+                                              paddr + MEMORY_PAGE_SIZE / 2U,
+                                              size,
+                                              flags)) {
+        return fail("expected overlapping fault-range registration to fail");
+    }
+
+    if (vm_address_space_register_fault_range(address_space,
                                               vaddr + MEMORY_PAGE_SIZE,
                                               paddr + MEMORY_PAGE_SIZE,
                                               size,
                                               flags | VM_PAGE_USER)) {
         return fail("expected user fault-range registration to be rejected");
+    }
+
+    if (vm_address_space_register_fault_range(address_space,
+                                              MEMORY_PAGE_SIZE,
+                                              MEMORY_PAGE_SIZE,
+                                              size,
+                                              flags)) {
+        return fail("expected user-window fault-range registration to be rejected");
+    }
+
+    if (!vm_address_space_register_fault_range(address_space,
+                                               UART_BASE,
+                                               UART_BASE,
+                                               MEMORY_PAGE_SIZE,
+                                               flags)) {
+        return fail("expected platform mmio fault-range registration to stay allowed");
+    }
+
+    if (!address_space->kernel_fault_ranges[1].valid ||
+        address_space->kernel_fault_ranges[1].vaddr != UART_BASE ||
+        address_space->kernel_fault_ranges[1].paddr != UART_BASE ||
+        address_space->kernel_fault_ranges[1].size != MEMORY_PAGE_SIZE ||
+        address_space->kernel_fault_ranges[1].flags != flags) {
+        return fail("expected mmio fault-range registration to record metadata");
     }
 
     if (vm_address_space_map_kernel_range(address_space, vaddr, paddr, size, flags)) {
@@ -326,10 +361,36 @@ static int test_fault_range_registration_blocks_overlap_and_user_flags(void) {
     return 0;
 }
 
+static int test_destroy_fail_closed_on_free_failure(void) {
+    vm_address_space_t* address_space = NULL;
+
+    reset_stub_state();
+    if (!vm_address_space_create(&address_space)) {
+        return fail("expected create before destroy failure to succeed");
+    }
+
+    g_pmm_free_result = false;
+    if (vm_address_space_destroy(address_space)) {
+        return fail("expected destroy to report free failure");
+    }
+
+    if (address_space->allocated || address_space->root_table != NULL ||
+        address_space->root_table_pa != 0 || address_space->satp_value != 0 ||
+        address_space->enabled || address_space->kernel_mappings[0].valid ||
+        address_space->kernel_fault_ranges[0].valid ||
+        address_space->fault_actions[0].valid ||
+        address_space->user_regions[0] != NULL) {
+        return fail("expected destroy free failure to fail closed and reset metadata");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_lifecycle_enable_disable_and_destroy() != 0 ||
         test_map_kernel_range_records_mapping_contract() != 0 ||
-        test_fault_range_registration_blocks_overlap_and_user_flags() != 0) {
+        test_fault_range_registration_blocks_overlap_and_user_flags() != 0 ||
+        test_destroy_fail_closed_on_free_failure() != 0) {
         return 1;
     }
 

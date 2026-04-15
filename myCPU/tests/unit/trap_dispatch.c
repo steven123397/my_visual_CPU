@@ -83,12 +83,28 @@ trap_context_t* runtime_context_active_trap_context(void) {
     return g_active_trap_context;
 }
 
+bool trap_context_is_active(const trap_context_t* trap_context) {
+    return trap_context != NULL && trap_context == g_active_trap_context;
+}
+
 vm_process_t* runtime_context_active_process(void) {
     return g_active_process;
 }
 
+bool vm_process_is_active(const vm_process_t* process) {
+    return process != NULL && process == g_active_process;
+}
+
 vm_address_space_t* runtime_context_active_address_space(void) {
     return g_active_address_space;
+}
+
+bool vm_address_space_is_active(const vm_address_space_t* address_space) {
+    return address_space != NULL && address_space == g_active_address_space;
+}
+
+bool vm_address_space_is_enabled(const vm_address_space_t* address_space) {
+    return address_space != NULL && address_space == g_active_address_space;
 }
 
 bool vm_handle_page_fault(vm_process_t* process,
@@ -428,6 +444,9 @@ static int test_default_timer_and_external_handlers(void) {
     }
 
     g_active_trap_context = &trap_context;
+    g_active_user_runtime = &user_runtime;
+    g_active_process = &process;
+    g_active_address_space = &address_space;
     g_scause = RISCV_INTERRUPT_BIT | RISCV_SUPERVISOR_TIMER_INTERRUPT;
     if (setjmp(g_panic_env) != 0) {
         return fail("did not expect panic during default timer dispatch");
@@ -444,6 +463,9 @@ static int test_default_timer_and_external_handlers(void) {
 
     g_claim_source_id = 5;
     g_active_trap_context = &trap_context;
+    g_active_user_runtime = &user_runtime;
+    g_active_process = &process;
+    g_active_address_space = &address_space;
     g_scause = RISCV_INTERRUPT_BIT | RISCV_SUPERVISOR_EXTERNAL_INTERRUPT;
     if (setjmp(g_panic_env) != 0) {
         return fail("did not expect panic during default external dispatch");
@@ -463,11 +485,59 @@ static int test_default_timer_and_external_handlers(void) {
     return 0;
 }
 
+static int test_signal_delivery_rejects_inactive_runtime(void) {
+    trap_context_t trap_context = {0};
+    vm_address_space_t address_space = {
+        .allocated = true,
+        .root_table = (uint64_t*)MEM_BASE,
+    };
+    vm_process_t process = {
+        .address_space = &address_space,
+    };
+    trap_user_runtime_t user_runtime = {
+        .trap_context = &trap_context,
+        .process = &process,
+        .expected_ecall_pc = 0x4000,
+        .resume_pc = 0x5000,
+    };
+    uint32_t timer_page[MEMORY_PAGE_SIZE / sizeof(uint32_t)] = {0};
+
+    reset_stub_state();
+    if (!trap_context_install_standard_user_runtime_policies(&trap_context,
+                                                             &user_runtime,
+                                                             NULL,
+                                                             NULL,
+                                                             NULL,
+                                                             NULL)) {
+        return fail("expected standard runtime policy install before inactive delivery guard");
+    }
+    user_runtime.timer_signal.page = timer_page;
+    user_runtime.timer_signal.word_index = 0;
+    user_runtime.timer_signal.value = 0x55U;
+    user_runtime.timer_signal.armed = true;
+    g_active_trap_context = &trap_context;
+    g_scause = RISCV_INTERRUPT_BIT | RISCV_SUPERVISOR_TIMER_INTERRUPT;
+    if (setjmp(g_panic_env) == 0) {
+        g_panic_armed = true;
+        supervisor_trap_dispatch();
+        g_panic_armed = false;
+        return fail("expected inactive runtime signal delivery to panic");
+    }
+    g_panic_armed = false;
+
+    if (timer_page[0] != 0U) {
+        return fail("expected inactive runtime signal delivery to avoid touching stale page");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_install_standard_user_runtime_policies() != 0 ||
         test_dispatch_page_fault_and_custom_handlers() != 0 ||
         test_dispatch_user_ecall_resume_policy() != 0 ||
-        test_default_timer_and_external_handlers() != 0) {
+        test_default_timer_and_external_handlers() != 0 ||
+        test_signal_delivery_rejects_inactive_runtime() != 0) {
         return 1;
     }
 

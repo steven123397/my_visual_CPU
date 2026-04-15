@@ -472,7 +472,7 @@ test('POST /api/session/step-cycle returns updated snapshot', async () => {
 });
 
 test('session endpoints propagate CLI {type:error} responses instead of returning fake success', async () => {
-  const server = await startServer({
+  const loadFailureServer = await startServer({
     port: 0,
     createSession: async () => ({
       async load() {
@@ -501,12 +501,73 @@ test('session endpoints propagate CLI {type:error} responses instead of returnin
   });
 
   try {
-    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+    const loadResponse = await postJson(loadFailureServer.baseUrl, '/api/session/load', {
       test: 'hello',
       backend: 'pipeline',
     });
     assert.equal(loadResponse.status, 500);
     assert.equal(loadResponse.body.error, 'snapshot failed');
+    const snapshotAfterFailedLoad = await postJson(loadFailureServer.baseUrl, '/api/session/snapshot', {});
+    assert.equal(snapshotAfterFailedLoad.status, 400);
+    assert.equal(snapshotAfterFailedLoad.body.error, 'session not loaded');
+  } finally {
+    await loadFailureServer.close();
+  }
+
+  const server = await startServer({
+    port: 0,
+    createSession: async () => {
+      let snapshotCalls = 0;
+      let uartOutputCalls = 0;
+
+      return {
+      async load() {
+        return { ok: true };
+      },
+      async snapshot() {
+        snapshotCalls += 1;
+        if (snapshotCalls > 1) {
+          return { type: 'error', message: 'snapshot failed' };
+        }
+        return {
+          type: 'snapshot',
+          snapshot: {
+            summary: {
+              cycle: 0,
+            },
+          },
+        };
+      },
+      async stepCycle() {
+        return { type: 'error', message: 'step-cycle failed' };
+      },
+      async stepCommit() {
+        return { type: 'error', message: 'step-commit failed' };
+      },
+      async reset() {
+        return { type: 'error', message: 'reset failed' };
+      },
+      async uartInput() {
+        return { type: 'error', message: 'uart-input failed' };
+      },
+      async uartOutput() {
+        uartOutputCalls += 1;
+        if (uartOutputCalls > 1) {
+          return { type: 'error', message: 'uart-output failed' };
+        }
+        return { type: 'terminal', text: '', nextOffset: 0 };
+      },
+      async close() {},
+    };
+    },
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
 
     const endpoints = [
       ['/api/session/snapshot', {}, 'snapshot failed'],

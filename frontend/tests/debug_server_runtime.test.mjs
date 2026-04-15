@@ -39,6 +39,8 @@ function createFakeSession({
   stepCycleTerminalPrefix = '',
   blockFirstStepCycle = null,
   echoInputChunkSize = null,
+  loadError = null,
+  snapshotError = null,
 } = {}) {
   let cycle = 0;
   let terminal = `boot:${label}\r\n> `;
@@ -47,12 +49,18 @@ function createFakeSession({
   let stepCycleCount = 0;
   return {
     async load() {
+      if (loadError) {
+        throw loadError;
+      }
       cycle = 0;
       stepCycleCount = 0;
       terminal = `boot:${label}\r\n> `;
       return { ok: true };
     },
     async snapshot() {
+      if (snapshotError) {
+        throw snapshotError;
+      }
       return makeSnapshot(cycle, label);
     },
     async stepCycle() {
@@ -318,4 +326,80 @@ test('createDebugServerRuntime terminalInput coalesces a larger echoed batch int
   assert.equal(terminalMessages[0].text, burst);
 
   await runtime.close();
+});
+
+test('createDebugServerRuntime load keeps the previous session live when replacement init fails', async () => {
+  const stableSession = createFakeSession({ label: 'stable-session' });
+  const brokenSession = createFakeSession({
+    label: 'broken-session',
+    loadError: new Error('replacement load failed'),
+  });
+  const sessions = [stableSession, brokenSession];
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => sessions.shift(),
+    wsHub,
+  });
+
+  await runtime.load({
+    name: 'hello',
+    image: 'tests/asm/hello.elf',
+    terminalPrompt: '> ',
+  }, 'pipeline');
+  wsHub.messages.length = 0;
+
+  await assert.rejects(
+    runtime.load({
+      name: 'replacement',
+      image: 'tests/asm/hello.elf',
+      terminalPrompt: '> ',
+    }, 'pipeline'),
+    /replacement load failed/,
+  );
+
+  const snapshot = await runtime.snapshot();
+  assert.equal(snapshot.snapshot.devices.uart.recent_output, 'stable-session');
+  assert.equal(brokenSession.closed, true, 'failed replacement session should be closed');
+  assert.equal(wsHub.messages.length, 0, 'failed replacement load should not broadcast partial state');
+
+  await runtime.close();
+  assert.equal(stableSession.closed, true);
+});
+
+test('createDebugServerRuntime load keeps the previous session live when replacement snapshot fails', async () => {
+  const stableSession = createFakeSession({ label: 'stable-session' });
+  const brokenSession = createFakeSession({
+    label: 'snapshot-broken',
+    snapshotError: new Error('replacement snapshot failed'),
+  });
+  const sessions = [stableSession, brokenSession];
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => sessions.shift(),
+    wsHub,
+  });
+
+  await runtime.load({
+    name: 'hello',
+    image: 'tests/asm/hello.elf',
+    terminalPrompt: '> ',
+  }, 'pipeline');
+  wsHub.messages.length = 0;
+
+  await assert.rejects(
+    runtime.load({
+      name: 'replacement',
+      image: 'tests/asm/hello.elf',
+      terminalPrompt: '> ',
+    }, 'pipeline'),
+    /replacement snapshot failed/,
+  );
+
+  const snapshot = await runtime.snapshot();
+  assert.equal(snapshot.snapshot.devices.uart.recent_output, 'stable-session');
+  assert.equal(brokenSession.closed, true, 'failed snapshot replacement session should be closed');
+  assert.equal(wsHub.messages.length, 0, 'failed replacement snapshot should not broadcast partial state');
+
+  await runtime.close();
+  assert.equal(stableSession.closed, true);
 });

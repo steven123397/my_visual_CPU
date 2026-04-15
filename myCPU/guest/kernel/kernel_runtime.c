@@ -16,6 +16,8 @@
 uint64_t riscv_read_satp(void);
 #endif
 
+static bool kernel_runtime_destroy_owned_address_space(kernel_runtime_t* runtime);
+
 void kernel_runtime_init(kernel_runtime_t* runtime) {
     if (runtime == NULL) {
         return;
@@ -56,6 +58,10 @@ bool kernel_runtime_run_entry_bringup(kernel_runtime_t* runtime) {
     trap_context_t* trap_context = kernel_runtime_trap_context(runtime);
 
     if (trap_context == NULL) {
+        return false;
+    }
+
+    if (!kernel_runtime_destroy_owned_address_space(runtime)) {
         return false;
     }
 

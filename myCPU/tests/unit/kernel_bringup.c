@@ -7,6 +7,7 @@
 #include "../../guest/include/kernel_bringup.h"
 #include "../../guest/include/memory.h"
 #include "../../guest/include/platform.h"
+#include "include/riscv.h"
 
 struct VmAddressSpace {
     bool enabled;
@@ -62,6 +63,7 @@ static bool g_pmm_free_result = true;
 static trap_context_t* g_pre_vm_trap_context = NULL;
 static void* g_pre_vm_context = NULL;
 static bool g_pre_vm_result = true;
+static bool g_pre_vm_mutates_context = false;
 
 static void reset_stub_state(void);
 static int fail(const char* message);
@@ -114,6 +116,12 @@ uintptr_t memory_heap_start(void) {
 
 void runtime_context_reset(void) {
     g_runtime_context_reset_calls += 1;
+}
+
+void runtime_context_clear_trap_context(const trap_context_t* trap_context) {
+    if (trap_context == g_active_trap_context) {
+        g_active_trap_context = NULL;
+    }
 }
 
 void trap_context_init(trap_context_t* trap_context) {
@@ -308,6 +316,7 @@ static void reset_stub_state(void) {
     g_pre_vm_trap_context = NULL;
     g_pre_vm_context = NULL;
     g_pre_vm_result = true;
+    g_pre_vm_mutates_context = false;
 }
 
 static int fail(const char* message) {
@@ -339,6 +348,12 @@ static bool stub_pre_vm_setup(trap_context_t* trap_context, void* context) {
     g_pre_vm_calls += 1;
     g_pre_vm_trap_context = trap_context;
     g_pre_vm_context = context;
+    if (g_pre_vm_mutates_context && trap_context != NULL) {
+        trap_context->supervisor_timer_policy.user_runtime =
+            (trap_user_runtime_t*)(uintptr_t)0x1;
+        trap_context->interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT].handler =
+            (trap_interrupt_handler_t)(uintptr_t)0x1;
+    }
     return g_pre_vm_result;
 }
 
@@ -473,6 +488,7 @@ static int test_common_bringup_propagates_pre_vm_failure(void) {
 
     reset_stub_state();
     g_pre_vm_result = false;
+    g_pre_vm_mutates_context = true;
     if (kernel_bringup_run_common(&trap_context, &address_space, &options)) {
         return fail("expected pre-vm setup failure to propagate");
     }
@@ -484,6 +500,12 @@ static int test_common_bringup_propagates_pre_vm_failure(void) {
     if (address_space != NULL || g_pre_vm_calls != 1 || g_map_call_count != 0 ||
         g_fault_call_count != 0 || g_vm_enable_calls != 0 || g_pmm_alloc_calls != 0) {
         return fail("expected pre-vm failure to stop before VM setup");
+    }
+
+    if (g_active_trap_context != NULL ||
+        trap_context.supervisor_timer_policy.user_runtime != NULL ||
+        trap_context.interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT].handler != NULL) {
+        return fail("expected pre-vm failure to clear mutated trap context state");
     }
 
     return 0;

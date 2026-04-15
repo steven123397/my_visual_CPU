@@ -146,6 +146,26 @@ static void clear_process_context_if_region_contains(vm_process_t* process,
     }
 }
 
+static bool restore_region_object_binding(vm_user_region_t* region,
+                                          vm_object_t* object,
+                                          size_t object_offset,
+                                          vm_region_object_mode_t object_mode) {
+    if (region == NULL || object == NULL) {
+        return true;
+    }
+
+    switch (object_mode) {
+    case VM_REGION_OBJECT_MAPPED:
+        return vm_user_region_map_object_at(region, object, object_offset);
+    case VM_REGION_OBJECT_FAULT:
+        return vm_user_region_set_fault_object_at(region, object, object_offset);
+    case VM_REGION_OBJECT_NONE:
+        return true;
+    }
+
+    return false;
+}
+
 static bool process_bind_object_region(vm_process_t* process,
                                        vm_user_region_t* region,
                                        uintptr_t vaddr,
@@ -271,6 +291,9 @@ bool vm_process_is_active(const vm_process_t* process) {
 bool vm_process_remove_user_region(vm_process_t* process,
                                    vm_user_region_t* region) {
     vm_user_region_t** process_slot = NULL;
+    vm_object_t* object = NULL;
+    size_t object_offset = 0;
+    vm_region_object_mode_t object_mode = VM_REGION_OBJECT_NONE;
 
     if (process == NULL || process->address_space == NULL || region == NULL ||
         region->address_space != process->address_space ||
@@ -279,9 +302,20 @@ bool vm_process_remove_user_region(vm_process_t* process,
     }
 
     process_slot = find_process_region_slot(process, region);
-    if (process_slot == NULL || !vm_user_region_clear_object(region) ||
-        !vm_address_space_unregister_user_region_internal(process->address_space,
+    if (process_slot == NULL) {
+        return false;
+    }
+
+    object = region->object;
+    object_offset = region->object_offset;
+    object_mode = region->object_mode;
+    if (!vm_user_region_clear_object(region)) {
+        return false;
+    }
+
+    if (!vm_address_space_unregister_user_region_internal(process->address_space,
                                                           region)) {
+        (void)restore_region_object_binding(region, object, object_offset, object_mode);
         return false;
     }
 
@@ -294,7 +328,7 @@ bool vm_process_remove_user_region(vm_process_t* process,
 bool vm_process_reset(vm_process_t* process) {
     size_t i = 0;
 
-    if (process == NULL) {
+    if (process == NULL || vm_process_is_active(process)) {
         return false;
     }
 

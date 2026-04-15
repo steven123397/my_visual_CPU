@@ -32,6 +32,8 @@ static int fail(const char* message);
 static int test_process_create_context_activate_and_reset(void);
 static int test_process_map_and_fault_object_wrappers(void);
 static int test_bind_user_regions_rolls_back_on_failure(void);
+static int test_remove_region_restores_binding_when_unregister_fails(void);
+static int test_process_reset_rejects_active_process(void);
 
 uintptr_t vm_address_space_root_table(const vm_address_space_t* address_space) {
     if (address_space == NULL || !address_space->allocated) {
@@ -236,6 +238,7 @@ static int test_process_create_context_activate_and_reset(void) {
         return fail("expected process activate to enable address space and mark active");
     }
 
+    runtime_context_clear_process(&process);
     if (!vm_process_reset(&process) || g_active_process != NULL ||
         process.address_space != NULL || process.entry_pc != 0 || process.user_sp != 0 ||
         process.user_regions[0] != NULL || process.user_regions[1] != NULL ||
@@ -355,10 +358,87 @@ static int test_bind_user_regions_rolls_back_on_failure(void) {
     return 0;
 }
 
+static int test_remove_region_restores_binding_when_unregister_fails(void) {
+    vm_address_space_t address_space = {
+        .allocated = true,
+        .root_table_pa = MEM_BASE,
+    };
+    vm_process_t process = {0};
+    vm_user_region_t region = {
+        .vaddr = 0,
+        .size = MEMORY_PAGE_SIZE,
+        .flags = VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_USER,
+        .registered = true,
+    };
+    vm_object_t object = {.initialized = true};
+
+    reset_stub_state();
+    if (!vm_process_create(&process, &address_space)) {
+        return fail("expected process create before remove rollback to succeed");
+    }
+
+    region.address_space = &address_space;
+    region.object = &object;
+    region.object_mode = VM_REGION_OBJECT_FAULT;
+    process.user_regions[0] = &region;
+
+    g_unregister_user_region_result = false;
+    if (vm_process_remove_user_region(&process, &region)) {
+        return fail("expected remove to fail when unregister fails");
+    }
+
+    if (process.user_regions[0] != &region || region.address_space != &address_space ||
+        region.object != &object || region.object_mode != VM_REGION_OBJECT_FAULT ||
+        g_clear_object_calls != 1 || g_fault_object_calls != 1) {
+        return fail("expected remove rollback to preserve region binding after unregister failure");
+    }
+
+    return 0;
+}
+
+static int test_process_reset_rejects_active_process(void) {
+    vm_address_space_t address_space = {
+        .allocated = true,
+        .root_table_pa = MEM_BASE,
+    };
+    vm_process_t process = {0};
+    vm_user_region_t exec_region = {0};
+    vm_user_region_t stack_region = {0};
+
+    reset_stub_state();
+    if (!vm_process_create(&process, &address_space) ||
+        !vm_process_user_region_init(&process,
+                                     &exec_region,
+                                     0,
+                                     MEMORY_PAGE_SIZE,
+                                     VM_PAGE_READ | VM_PAGE_EXEC | VM_PAGE_USER) ||
+        !vm_process_user_region_init(&process,
+                                     &stack_region,
+                                     MEMORY_PAGE_SIZE,
+                                     MEMORY_PAGE_SIZE,
+                                     VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_USER) ||
+        !vm_process_set_user_context(&process, MEMORY_PAGE_SIZE / 2U, 2U * MEMORY_PAGE_SIZE) ||
+        !vm_process_activate(&process)) {
+        return fail("expected process create and activate before reset rejection");
+    }
+
+    if (vm_process_reset(&process)) {
+        return fail("expected reset to reject active process");
+    }
+
+    if (g_active_process != &process || process.address_space != &address_space) {
+        return fail("expected reset rejection to preserve active process state");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_process_create_context_activate_and_reset() != 0 ||
         test_process_map_and_fault_object_wrappers() != 0 ||
-        test_bind_user_regions_rolls_back_on_failure() != 0) {
+        test_bind_user_regions_rolls_back_on_failure() != 0 ||
+        test_remove_region_restores_binding_when_unregister_fails() != 0 ||
+        test_process_reset_rejects_active_process() != 0) {
         return 1;
     }
 
