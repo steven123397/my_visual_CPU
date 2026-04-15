@@ -28,6 +28,7 @@ export function createAppState() {
     tests: [],
     selectedTest: 'hello',
     backend: 'pipeline',
+    loadedSession: null,
     runState: 'idle',
     currentSnapshot: null,
     history: [],
@@ -46,6 +47,21 @@ export function setTests(state, tests) {
   if (!tests.some((item) => item.name === state.selectedTest) && tests[0]) {
     state.selectedTest = tests[0].name;
   }
+}
+
+export function setLoadedSession(state, session) {
+  if (!session || typeof session.test !== 'string' || session.test.length === 0) {
+    state.loadedSession = null;
+    return;
+  }
+
+  state.loadedSession = {
+    test: session.test,
+    backend:
+      typeof session.backend === 'string' && session.backend.length > 0
+        ? session.backend
+        : null,
+  };
 }
 
 export function pushSnapshot(state, snapshot) {

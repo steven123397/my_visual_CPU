@@ -21,6 +21,13 @@ std::string recent_tail(const std::string& value, size_t max_len) {
     return value.substr(value.size() - max_len);
 }
 
+std::string stall_event_detail(const std::string& stall_reason) {
+    if (stall_reason.empty() || stall_reason == "none") {
+        return "pipeline stalled";
+    }
+    return "pipeline stalled: " + stall_reason;
+}
+
 }  // namespace
 
 void DebugSession::load_elf(const std::string& path,
@@ -250,7 +257,7 @@ void DebugSession::append_event(const char* kind, const std::string& detail) {
 
 void DebugSession::record_step_events(const DebugSnapshot& before, const DebugSnapshot& after) {
     if (after.pipeline.stalled) {
-        append_event("stall", "decode stalled on a load-use hazard");
+        append_event("stall", stall_event_detail(after.pipeline.stall_reason));
     }
     if (after.pipeline.redirected) {
         append_event("redirect", "redirect to " + hex_u64(after.pipeline.redirect_target));

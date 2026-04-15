@@ -48,7 +48,7 @@ function decodeSignedLanes(value, sewBytes = 1, vl = 0) {
     if ((laneValue & signBit) !== 0n) {
       laneValue -= fullRange;
     }
-    lanes.push(Number(laneValue));
+    lanes.push(laneValue.toString());
   }
   return lanes;
 }
@@ -432,7 +432,7 @@ export function renderVectorPanel(snapshot, previousSnapshot, testEntry, backend
           <div class="metric-pill-row">
             ${renderMetricPill('SEW', sewBytes > 0 ? `${sewBytes}B` : '-')}
             ${renderMetricPill('VL', vl)}
-            ${renderMetricPill('backend', backend ?? snapshot?.summary?.backend ?? '-')}
+            ${renderMetricPill('backend', snapshot?.summary?.backend ?? backend ?? '-')}
           </div>
         </div>
 

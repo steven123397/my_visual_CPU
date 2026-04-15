@@ -20,6 +20,7 @@ import {
   setTerminalCollapsed,
   setTerminalFocus,
   setInspectorGroupOpen,
+  setLoadedSession,
   setTerminalPendingInput,
   setTests,
 } from './state.js';
@@ -75,11 +76,18 @@ async function syncTerminal(offset = state.terminal.nextOffset, reset = false) {
 }
 
 async function handleLoad() {
+  const requestedTest = state.selectedTest;
+  const requestedBackend = state.backend;
   state.runState = 'loading';
+  setLoadedSession(state, null);
+  resetHistory(state);
   resetTerminalState(state);
   paint();
-  const response = await loadSession(state.selectedTest, state.backend);
-  resetHistory(state);
+  const response = await loadSession(requestedTest, requestedBackend);
+  setLoadedSession(state, {
+    test: requestedTest,
+    backend: response?.snapshot?.summary?.backend ?? requestedBackend,
+  });
   pushSnapshot(state, response.snapshot);
   mergeTerminal(response.terminal, true);
   if (!response.terminal) {
@@ -87,7 +95,7 @@ async function handleLoad() {
   }
   state.runState = 'paused';
   paint();
-  showNotice(`已加载 ${state.selectedTest}`, 'success');
+  showNotice(`已加载 ${requestedTest}`, 'success');
 }
 
 async function handleAction(action, label) {

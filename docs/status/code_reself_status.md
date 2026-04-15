@@ -18,6 +18,13 @@
 
 ## 当前状态
 
+- `2026-04-15` 对 `1bbce86..HEAD` 那 3 条前端 / 调试活跃问题已关闭：
+  - [../../frontend/app/state.js](../../frontend/app/state.js) 、 [../../frontend/app/render.js](../../frontend/app/render.js) 、 [../../frontend/app/components/terminal.js](../../frontend/app/components/terminal.js) 和 [../../frontend/app/components/panels.js](../../frontend/app/components/panels.js)
+    前端现在新增独立 `loadedSession`，`terminal` 标题、`workload` 面板与 vector backend 展示都优先绑定已加载 session，不再把 pending selector 伪装成当前会话；对应 [../../frontend/tests/render.test.mjs](../../frontend/tests/render.test.mjs) 与 [../../frontend/tests/terminal_render.test.mjs](../../frontend/tests/terminal_render.test.mjs) 已补回归。
+  - [../../frontend/app/components/panels.js](../../frontend/app/components/panels.js)
+    `decodeSignedLanes()` 现在保留字符串级整数表示，不再把 64-bit lane 无条件降到 `Number`；对应 [../../frontend/tests/render.test.mjs](../../frontend/tests/render.test.mjs) 已补 `SEW=8B` 精度回归。
+  - [../../myCPU/src/debug/debug_session.cpp](../../myCPU/src/debug/debug_session.cpp) 和 [../../myCPU/tests/host/debug_cli_smoke.cpp](../../myCPU/tests/host/debug_cli_smoke.cpp)
+    `record_step_events()` 现在直接复用 `stall_reason` 生成 `pipeline stalled: <reason>` 事件文案，避免和快照 / 前端形成双轨解释；对应 `debug_cli_smoke` 已补事件流回归。
 - `2026-04-11` 对最新提交 `1bbce86`（`feat(向量流水线): 收窄 V4 依赖链阻塞边界`）完成一轮 adversarial review；当日新增的 2 条向量访存活跃问题现已关闭：
   - [../../myCPU/src/exec/vector_ops.cpp](../../myCPU/src/exec/vector_ops.cpp)
     `VectorRequest::Load` 现在会先对整段 span 做无副作用预校验；如果映射落到 live `MMIO` 或非 RAM 区间，会直接以 `access fault` fail-closed，不再先消费 `UART_REG_RBR` 之类读即取走状态。对应 [../../myCPU/tests/host/vector_vlite_smoke.cpp](../../myCPU/tests/host/vector_vlite_smoke.cpp) 已补上 UART 输入不被提前消费的 host 回归。

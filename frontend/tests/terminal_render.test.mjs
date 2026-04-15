@@ -121,3 +121,35 @@ test('renderTerminal keeps the pending-input hint visible while collapsed', () =
   assert.match(html, /正在把按键送入 guest monitor/);
   assert.doesNotMatch(html, /展开后继续交互/);
 });
+
+test('renderTerminal keeps the active session identity separate from pending selector changes', () => {
+  const html = renderTerminal({
+    selectedTest: 'hello',
+    backend: 'functional',
+    loadedSession: {
+      test: 'guest_vector_cnn_demo',
+      backend: 'pipeline',
+    },
+    runState: 'paused',
+    currentSnapshot: {
+      summary: {
+        pc: '0x80000000',
+        privilege: 'S',
+        cycle: 42,
+        backend: 'pipeline',
+      },
+    },
+    layout: {
+      terminalCollapsed: false,
+    },
+    terminal: {
+      connected: true,
+      pendingInput: false,
+      focused: false,
+      buffer: 'monitor> ',
+    },
+  });
+
+  assert.match(html, /guest_vector_cnn_demo · pipeline/);
+  assert.doesNotMatch(html, /hello · functional/);
+});

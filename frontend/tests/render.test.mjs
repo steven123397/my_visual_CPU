@@ -648,6 +648,10 @@ test('renderApp shows vector workload guide, CNN panel, and live vector register
   const state = createAppState();
   state.runState = 'paused';
   state.backend = 'pipeline';
+  state.loadedSession = {
+    test: 'guest_vector_cnn_demo',
+    backend: 'pipeline',
+  };
   state.tests = [
     {
       name: 'guest_vector_cnn_demo',
@@ -862,4 +866,277 @@ test('renderApp shows vector workload guide, CNN panel, and live vector register
   assert.match(elements.vector.innerHTML, /live v5 \/ relu/);
   assert.match(elements.vector.innerHTML, /7 · -9 · 7/);
   assert.match(elements.vector.innerHTML, /7 · 0 · 7/);
+});
+
+test('renderApp binds workload and vector panels to the loaded session instead of pending selector state', () => {
+  const state = createAppState();
+  state.runState = 'paused';
+  state.selectedTest = 'hello';
+  state.backend = 'functional';
+  state.loadedSession = {
+    test: 'guest_vector_cnn_demo',
+    backend: 'pipeline',
+  };
+  state.tests = [
+    {
+      name: 'hello',
+      menuLabel: 'hello',
+      kind: 'asm',
+      title: 'Hello',
+      summary: 'plain asm smoke',
+    },
+    {
+      name: 'guest_vector_cnn_demo',
+      menuLabel: 'guest_vector_cnn_demo · conv->relu',
+      kind: 'guest',
+      title: 'Minimal CNN Demo',
+      badge: 'Vector + NN',
+      summary: '固定输入与固定卷积核的 conv -> relu 样本。',
+      workload: {
+        stage: 'P0-P3',
+        expectedMarker: 'V3OK',
+        ops: ['vsetcfg', 'vle.v', 'vdot.vv', 'vmax.vv', 'vse.v'],
+        pipelineNote: 'non-memory vector ALU 可进入最小 vector-aware path；config / memory 仍 serializing。',
+        registerFocus: [4, 5],
+        cnn: {
+          input: [2, -1, 3, 4, -2, 1],
+          kernel: [1, 0, -1, 2],
+          conv: [7, -9, 7],
+          relu: [7, 0, 7],
+          liveConvReg: 4,
+          liveReluReg: 5,
+        },
+      },
+    },
+  ];
+  state.terminal.connected = true;
+  state.layout.debugPanelOpen = true;
+
+  const registers = Array.from({ length: 32 }, () => '0x00000000000000000000000000000000');
+  registers[4] = '0x07000000f7ffffff0700000000000000';
+  registers[5] = '0x07000000000000000700000000000000';
+
+  pushSnapshot(state, {
+    summary: {
+      cycle: 18,
+      instret: 12,
+      pc: '0x800000a8',
+      halted: false,
+      privilege: 'M',
+      backend: 'pipeline',
+    },
+    pipeline: {
+      if: { valid: true, pc: '0x800000a8', raw: '0x0', text: 'vmax.vv v5, v4, v0' },
+      id: { valid: true, pc: '0x800000a4', raw: '0x0', text: 'vse.v v5, (s0)' },
+      ex: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      mem: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      wb: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      flags: {
+        stalled: true,
+        stall_reason: 'vector_state_busy',
+        redirected: false,
+        trap_flush: false,
+        replay_flush: false,
+        committed: false,
+      },
+      ooo: {
+        rob_depth: 2,
+        rob_head_sequence_id: 12,
+        lsq_depth: 0,
+        lsq_head_sequence_id: 0,
+        lsq_load_state: 'none',
+        lsq_load_sequence_id: 0,
+        lsq_store_sequence_id: 0,
+      },
+      predictor: {
+        mode: 'bimodal-2bit',
+        total_predictions: 0,
+        correct_predictions: 0,
+        mispredictions: 0,
+      },
+    },
+    gpr: Array.from({ length: 32 }, () => '0x0'),
+    vector: {
+      sew_bytes: 4,
+      vl: 3,
+      registers,
+    },
+    csrs: {
+      mstatus: '0x0',
+      sstatus: '0x0',
+      mepc: '0x0',
+      sepc: '0x0',
+      mcause: '0x0',
+      scause: '0x0',
+      mie: '0x0',
+      mip: '0x0',
+      satp: '0x0',
+    },
+    devices: {
+      uart: { ier: 0, output_size: 0 },
+      clint: { mtime: 18, mtimecmp: 0, timer_interrupt_pending: false },
+      plic: { pending: false, level: false },
+      storage: { attached: false, lba: 0 },
+    },
+    bus: {
+      valid: false,
+      success: true,
+      write: false,
+      mmio: false,
+      device: '',
+      addr: '0x0',
+      value: '0x0',
+      size: 0,
+      detail: '',
+    },
+    events: [],
+  });
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.workload.innerHTML, /Minimal CNN Demo/);
+  assert.match(elements.vector.innerHTML, /backend<\/span>\s*<strong>pipeline<\/strong>/);
+  assert.doesNotMatch(elements.workload.innerHTML, /plain asm smoke/);
+  assert.doesNotMatch(elements.vector.innerHTML, /backend<\/span>\s*<strong>functional<\/strong>/);
+});
+
+test('renderApp preserves 64-bit vector lane precision in the register summary', () => {
+  const state = createAppState();
+  state.runState = 'paused';
+  state.selectedTest = 'guest_vector_demo';
+  state.loadedSession = {
+    test: 'guest_vector_demo',
+    backend: 'pipeline',
+  };
+  state.tests = [
+    {
+      name: 'guest_vector_demo',
+      menuLabel: 'guest_vector_demo · V-lite ops',
+      kind: 'guest',
+      title: 'V-lite Operator Demo',
+      summary: 'vector precision smoke',
+      workload: {
+        stage: 'P0-P3',
+        registerFocus: [3],
+      },
+    },
+  ];
+  state.terminal.connected = true;
+  state.layout.debugPanelOpen = true;
+
+  const registers = Array.from({ length: 32 }, () => '0x00000000000000000000000000000000');
+  registers[3] = '0x01000000000000200000000000000000';
+
+  pushSnapshot(state, {
+    summary: {
+      cycle: 5,
+      instret: 1,
+      pc: '0x80000080',
+      halted: false,
+      privilege: 'M',
+      backend: 'pipeline',
+    },
+    pipeline: {
+      if: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      id: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      ex: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      mem: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      wb: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      flags: {
+        stalled: false,
+        stall_reason: 'none',
+        redirected: false,
+        trap_flush: false,
+        replay_flush: false,
+        committed: true,
+      },
+      ooo: {
+        rob_depth: 0,
+        rob_head_sequence_id: 0,
+        lsq_depth: 0,
+        lsq_head_sequence_id: 0,
+        lsq_load_state: 'none',
+        lsq_load_sequence_id: 0,
+        lsq_store_sequence_id: 0,
+      },
+      predictor: {
+        mode: 'bimodal-2bit',
+        total_predictions: 0,
+        correct_predictions: 0,
+        mispredictions: 0,
+      },
+    },
+    gpr: Array.from({ length: 32 }, () => '0x0'),
+    vector: {
+      sew_bytes: 8,
+      vl: 1,
+      registers,
+    },
+    csrs: {
+      mstatus: '0x0',
+      sstatus: '0x0',
+      mepc: '0x0',
+      sepc: '0x0',
+      mcause: '0x0',
+      scause: '0x0',
+      mie: '0x0',
+      mip: '0x0',
+      satp: '0x0',
+    },
+    devices: {
+      uart: { ier: 0, output_size: 0 },
+      clint: { mtime: 5, mtimecmp: 0, timer_interrupt_pending: false },
+      plic: { pending: false, level: false },
+      storage: { attached: false, lba: 0 },
+    },
+    bus: {
+      valid: false,
+      success: true,
+      write: false,
+      mmio: false,
+      device: '',
+      addr: '0x0',
+      value: '0x0',
+      size: 0,
+      detail: '',
+    },
+    events: [],
+  });
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.vector.innerHTML, /2305843009213693953/);
+  assert.doesNotMatch(elements.vector.innerHTML, /2305843009213694000/);
 });

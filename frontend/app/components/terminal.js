@@ -17,6 +17,15 @@ export function renderTerminal(state) {
   const terminal = state.terminal;
   const summary = state.currentSnapshot?.summary ?? {};
   const collapsed = state.layout?.terminalCollapsed === true;
+  const loadedSession = state.loadedSession ?? null;
+  const activeTest = typeof loadedSession?.test === 'string' && loadedSession.test.length > 0
+    ? loadedSession.test
+    : null;
+  const activeBackend =
+    typeof summary.backend === 'string' && summary.backend.length > 0
+      ? summary.backend
+      : (typeof loadedSession?.backend === 'string' && loadedSession.backend.length > 0 ? loadedSession.backend : '-');
+  const sessionLabel = activeTest ? `${activeTest} · ${activeBackend}` : `未加载会话 · ${activeBackend}`;
   let hint = '点击终端开始输入。';
   if (!terminal.connected) {
     hint = collapsed
@@ -49,7 +58,7 @@ export function renderTerminal(state) {
         </div>
         <div class="terminal-window__title">
           <strong>interactive_os terminal</strong>
-          <span>${state.selectedTest} · ${state.backend}</span>
+          <span>${sessionLabel}</span>
         </div>
         <div class="terminal-window__actions">
           <div class="terminal-window__status">

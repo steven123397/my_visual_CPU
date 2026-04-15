@@ -10,8 +10,11 @@
 #include <unistd.h>
 
 #include "../../src/cpu.h"
-#include "../../src/exec/pipeline_backend.h"
+#define private public
+#include "../../src/debug/debug_session.h"
+#undef private
 #include "../../src/debug/debug_protocol.h"
+#include "../../src/exec/pipeline_backend.h"
 #include "../../src/mem/bus.h"
 #include "../../src/mem/ram.h"
 
@@ -549,6 +552,29 @@ int main() {
         if (!expect_contains(stalled_output,
                              "\"stall_reason\":\"blocked_by_overlapping_store\"",
                              "debug snapshot JSON should serialize the decode overlapping-store stall attribution")) {
+            return 1;
+        }
+    }
+
+    {
+        DebugSession session;
+        session.load_binary(predictor_binary.path, kDebugProgramAddr, BackendKind::Pipeline, nullptr);
+        const DebugSnapshot before = session.snapshot();
+        DebugSnapshot after = before;
+        after.pipeline.stalled = true;
+        after.pipeline.stall_reason = "blocked_by_overlapping_store";
+        session.record_step_events(before, after);
+        const DebugSnapshot snapshot = session.snapshot();
+        if (!expect_contains(
+                debug_snapshot_json(snapshot),
+                "\"events\":[",
+                "debug session snapshot should serialize recorded events")) {
+            return 1;
+        }
+        if (!expect_contains(
+                debug_snapshot_json(snapshot),
+                "\"detail\":\"pipeline stalled: blocked_by_overlapping_store\"",
+                "debug session stall event should explain the concrete stall_reason instead of a generic load-use hazard")) {
             return 1;
         }
     }
