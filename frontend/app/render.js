@@ -47,7 +47,9 @@ export function renderApp(elements, state) {
     elements.workload.innerHTML = renderWorkloadPanel(currentTest, snapshot);
   }
   elements.predictor.innerHTML = renderPredictor(snapshot);
-  elements.pipeline.innerHTML = `${renderPipelineBoard(snapshot)}${renderTimeline(timelineRows)}`;
+  elements.pipeline.innerHTML = snapshot
+    ? `${renderPipelineBoard(snapshot)}${renderTimeline(timelineRows)}`
+    : `${renderPipelineBoard(snapshot)}${renderTimeline(timelineRows)}<div class="empty-state empty-state-hint">选择测试用例并点击 <strong>Load</strong> 开始调试会话</div>`;
   elements.events.innerHTML = renderOooPanel(snapshot);
   if (elements.vector) {
     elements.vector.innerHTML = renderVectorPanel(snapshot, previous, currentTest, currentBackend);
