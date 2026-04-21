@@ -232,10 +232,12 @@ SPIKE_PATH=/path/to/spike make test-host-spike_differential
 
 设计文档：
 
-- [docs/design/cpp_refactor_design.md](docs/design/cpp_refactor_design.md)
 - [docs/design/debug_frontend_integration.md](docs/design/debug_frontend_integration.md)
 - [docs/design/minimal_interactive_os_design.md](docs/design/minimal_interactive_os_design.md)
+- [docs/design/phase3_ooo_execution_model_design.md](docs/design/phase3_ooo_execution_model_design.md)
+- [docs/design/pipeline_speculation_contracts.md](docs/design/pipeline_speculation_contracts.md)
 - [docs/design/vector_ml_workload_direction_design.md](docs/design/vector_ml_workload_direction_design.md)
 - [docs/design/phase4_preparation_design.md](docs/design/phase4_preparation_design.md)
+- [docs/design/future_expansion_roadmap_design.md](docs/design/future_expansion_roadmap_design.md)
 
 完整展示材料见 [docs/showcase.md](docs/showcase.md)。

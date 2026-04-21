@@ -90,7 +90,7 @@
 - 原文件：`phase3_blocked_by_unresolved_store_boundary_plan.md`
 - 完成内容：把 decode 级 `BlockedByUnresolvedStore` 收窄到“仅 older store 地址未知才阻塞”，并补齐 `LSQ` / `pipeline` host smoke，守住 overlap block、automatic replay、forwarding 和 commit-boundary 既有合同。
 - 实现过程摘要：本轮只调整 `classify_load()` 判定顺序，不扩状态枚举，也不把问题直接放大为更激进的 memory speculation。
-- 结果参考：[blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 
 ### 2026-03-25
@@ -100,14 +100,14 @@
 - 原文件：`pipeline_core_integration_plan.md`
 - 完成内容：完成 `pipeline core` 第一轮主线接入，正式引入 `ExecutionBackend`、`FunctionalBackend`、`PipelineBackend`、共享 `InstructionSemantics`、CLI `--backend pipeline` 与 `make test-pipeline` 主入口。
 - 实现过程摘要：先把 backend 抽象和 fault-result 访存接口接回主线，再补 host-side smoke / differential；`debug/frontend` 留到后续第二轮单独接入。
-- 结果参考：[pipeline_core_integration.md](../design/pipeline_core_integration.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### kernel-alpha-storage-error-contract-plan
 
 - 原文件：`kernel_alpha_storage_error_contract_plan.md`
 - 完成内容：补齐独立 `kernel_alpha` 对 storage 错误合同的最小消费能力，新增 `BAD_BLOCK_COUNT` 负向路径，并把后续 storage 错误扩展纳入稳定 bring-up 基线。
 - 实现过程摘要：保持 `SimpleStorage` 设备语义不变，主要在 guest platform / storage helper 和独立 demo 入口上扩最小合同。
-- 结果参考：[kernel_alpha_storage_error_contract.md](../design/kernel_alpha_storage_error_contract.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+- 结果参考：[platform_mmio_contract.md](../design/platform_mmio_contract.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
 ### 2026-03-26
 
@@ -139,7 +139,7 @@
 - 原文件：`phase3_branch_prediction_plan.md`
 - 完成内容：完成 `Phase 3-A` 第一轮分支预测增强，给 `pipeline` 接上最小 predictor 子模块、预测相关快照字段以及对应的 host-side / frontend 验证闭环。
 - 实现过程摘要：保持 `pipeline` 仍为 in-order 后端，只让预测影响取指方向和 mispredict 恢复，不改变 architected 语义来源与提交模型。
-- 结果参考：[phase3_branch_prediction_design.md](../design/phase3_branch_prediction_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 ### 2026-04-02
 

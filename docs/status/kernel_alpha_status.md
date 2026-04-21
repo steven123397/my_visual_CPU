@@ -4,17 +4,17 @@
 
 本文档只记录独立 `kernel_alpha` bring-up 路线的当前基线、少量关键历史节点、当前仍有效的限制和下一步。
 
-它不再维护逐条执行流水账；更细的实现过程统一回写到 [plan/history_plan.md](../plan/history_plan.md)。
+它不再维护逐条执行流水账；更细的实现过程统一回写到 [../plan/history_plan.md](../plan/history_plan.md)。
 
 ## 关联文档
 
 - 相关设计：
-  - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
-  - [design/kernel_alpha_storage_error_contract.md](../design/kernel_alpha_storage_error_contract.md)
+  - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+  - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
-  - [plan/history_plan.md#kernel-alpha-storage-error-contract-plan](../plan/history_plan.md#kernel-alpha-storage-error-contract-plan)
+  - [../plan/history_plan.md#kernel-alpha-storage-error-contract-plan](../plan/history_plan.md#kernel-alpha-storage-error-contract-plan)
 
 ## 当前状态
 
@@ -43,10 +43,10 @@
 
 当前这 1 条正向 + 9 条负向回归与 `guest_supervisor_demo` 一起，构成当前 Phase 1 核心 guest 门禁的一部分。
 
-## 关键历史节点（按时间倒序）
+## 关键历史节点
 
 - `2026-03-31`
-  - alpha 共享 bring-up phase helper 继续下沉到 `kernel_runtime`、`kernel_bringup`、`storage_contract` 和 `interrupt_contract`，`kernel_alpha` 入口进一步退回到场景组合层。
+  - alpha 共享 bring-up helper 继续下沉到 `kernel_runtime`、`kernel_bringup`、`storage_contract` 和 `interrupt_contract`，`kernel_alpha` 入口进一步退回到场景组合层。
 - `2026-03-25` 到 `2026-03-30`
   - 从首个独立 `kernel_alpha_demo` alpha bring-up 开始，逐步扩展到当前 10 条核心 guest 基线，并把 storage / interrupt / common bring-up 合同从入口收口到共享 guest 基础设施层。
 

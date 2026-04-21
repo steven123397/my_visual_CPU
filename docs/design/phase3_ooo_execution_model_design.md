@@ -1,135 +1,167 @@
-# Phase 3-B/C OoO 执行模型设计
+# Pipeline / Phase 3 执行模型统一设计
 
 ## 文档定位
 
-本文档用于说明在当前 `Phase 3-A` 分支预测增强已经落地之后，后续真正进入 `rename / ROB / LSQ / OoO execute` 之前，首轮 `Phase 3-B/C` 应采用什么执行模型边界。
+本文档作为当前 `pipeline` 微架构的统一设计来源，集中描述当前已经落地的执行模型、关键边界和后续仍然成立的取舍判断。
 
-它重点回答：
+它吸收并取代此前分散维护的几类专项文档：
 
-- 首个“大块 OoO”到底接到什么程度
-- 哪些能力属于本轮目标，哪些明确不做
-- 当前 in-order `pipeline` 还存在哪些结构障碍
-- `rename / ROB / LSQ` 应按什么顺序接线
+- `pipeline core` 正式接入主线时的结构边界
+- `Phase 3-A` 分支预测增强的当前结果
+- `Phase 3-B/C` `rename + ROB + LSQ +` 最小 `OoO execute` 主路径
+- decode 级 `BlockedByUnresolvedStore` 串行化边界收窄
+- 是否继续扩大更激进 `issue / replay / speculation` 的主线判断
 
-本文档不承担实时进度更新。当前推进情况请以 [status/mainline_status.md](../status/mainline_status.md) 与对应计划文档为准。
+本文档不承担实时进度更新。当前状态、当前优先级和后续是否重开更激进专项，以 `docs/status/` 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](../status/mainline_status.md)
-  - [status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
-- 相关计划：
-  - [plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
-  - [plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan)
+  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 相关设计：
+  - [pipeline_speculation_contracts.md](pipeline_speculation_contracts.md)
+- 已完成计划归档：
+  - [../plan/history_plan.md#pipeline-core-integration-plan](../plan/history_plan.md#pipeline-core-integration-plan)
+  - [../plan/history_plan.md#phase3-branch-prediction-plan](../plan/history_plan.md#phase3-branch-prediction-plan)
+  - [../plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan)
+  - [../plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
+  - [../plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan](../plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan)
 
 ## 背景与问题
 
-当前仓库已经是一个已可运行的模拟器原型。`functional` reference path、`pipeline` backend、`debug/frontend` 教学演示链路，以及 `Phase 3-A` 的最小分支预测增强都已经落地。现在真正的问题不再是“能不能继续往高级微架构方向走”，而是“下一步应该以什么最小切片进入 `rename / ROB / LSQ / OoO`，同时不破坏现有 correctness 和可观察性基线”。
+当前仓库已经是一个已可运行的模拟器原型。`functional` reference path、`pipeline` backend、`debug/frontend` 教学演示链路，以及 guest / `kernel_alpha` 基线都已经稳定接入主线。
 
-如果直接在当前 `PipelineBackend` 上混合引入 `rename`、`ROB`、`LSQ`、更复杂的 speculate / flush / replay 规则，很容易把现有 `pipeline` 主路径、debug 快照、差分门禁和 trap / interrupt 精确边界一起卷进一次高风险大改。这样会让 `Phase 3` 从“可测试地推进高级微架构”退化成“边界未定义的后端重写”。
+因此，`pipeline` 相关设计文档不再适合继续按“某一次集成”“某一轮专项收窄”“某一个阶段判断”分散维护。对当前仓库而言，更有价值的是保留一份可以直接回答下面问题的统一参考资料：
 
-因此，`Phase 3-B/C` 的首要目标不是尽快把所有 OoO 部件都接上，而是先明确第一轮执行模型的完成态：继续保持单发射、统一 ISA 真值来源和 in-order retire，只把执行与结果缓存逐步从当前 in-order 5-stage 后端推进到“可以安全承载 `rename / ROB / LSQ`”的形态。
+- 当前 `pipeline` 到底已经做到什么程度。
+- 当前分支预测、`rename / ROB / LSQ`、最小 `OoO execute` 的正式边界是什么。
+- 当前 load / store 分类、replay 和 stall 观测如何解释。
+- 当前为什么不主动继续扩大更激进的 `issue / replay / speculation`。
 
 ## 目标
 
-- 在不改变 `functional + shared InstructionSemantics` 为唯一 ISA 真值来源的前提下，为首轮 `Phase 3-B/C` 定义清晰、可测试、可演进的执行模型。
-- 明确首轮 `OoO` 仍保持单发射 fetch / decode 与 in-order retire，不把 superscalar、cache、复杂 memory speculation 一起混入。
-- 明确 `rename`、`ROB`、`LSQ` 的接线顺序与相互依赖，避免实现阶段边做边改模型。
-- 为 precise exception、interrupt、MMIO、CSR、`mret/sret`、`sfence.vma` 等高风险边界预留统一 contract，而不是让这些语义散落在 backend 分支里。
-- 让后续“真正的大块 OoO 接线”成为一轮结构清晰的实现任务，而不是再反过来补定义和补边界。
+- 给出当前 `pipeline` 微架构的单一设计来源。
+- 明确已经落地的结构成果、当前仍然成立的约束，以及后续判断口径。
+- 让 `status`、`history_plan`、`AGENTS.md` 和读者都能围绕同一份当前设计理解 `pipeline`。
 
 ## 非目标
 
-- 不在首轮 `Phase 3-B/C` 中引入 superscalar fetch / decode / issue。
-- 不在首轮中引入 cache hierarchy、DMA、multicore 或一致性模型。
-- 不在首轮中引入激进的 memory disambiguation、load speculation replay storm 或复杂 predictor 组合。
-- 不让 `functional` 变成新的微架构实验场；它继续只负责 reference 真值。
-- 不把 `debug/frontend` 扩成断点、条件暂停或任意镜像加载的通用调试器。
+- 不把当前文档写成新的实现计划。
+- 不重复维护逐次提交历史；已完成过程统一放在 `history_plan`。
+- 不把尚未启动的更重 `Phase 4`、cache、DMA、multicore 混入当前 `pipeline` 模型描述。
 
-## 约束与边界
+## 当前统一设计边界
 
-- `functional` 与共享 `InstructionSemantics` 继续定义 architected 语义；`Phase 3-B/C` 只改变 `pipeline` 的调度、暂存和提交模型。
-- 首轮 `Phase 3-B/C` 仍应保持单条指令按程序序进入 rename / ROB / LSQ，architected state 按程序序退休。
-- 所有 trap、interrupt、CSR、MMIO、TLB / `sfence.vma` 可见性，都必须继续沿“architectural commit boundary”解释，不得在 speculate 阶段偷偷生效。
-- 当前 `pipeline` 的 debug snapshot、host smoke、differential 和前端协议已是正式门禁；首轮设计必须允许这些门禁继续维护，而不是先拆掉再重建。
+### 1. 统一 ISA 真值与 backend 边界
 
-## 方案
+当前 `pipeline` 继续严格依赖共享 `InstructionSemantics`，不拥有第二套 ISA 语义解释器：
 
-### 当前 in-order backend 的结构障碍
+- `functional` 继续是 architected 真值来源。
+- `pipeline` 只负责调度、暂存、提交、flush、rollback 与可观察性。
+- 任何 ISA / privilege / MMIO / trap 语义修复，优先落在共享语义层与公共 simulator 边界，而不是分别修多条 backend 路径。
 
-当前 `PipelineBackend` 已能正确处理 5-stage in-order、forwarding、load-use hazard、flush / redirect、trap / interrupt 和最小分支预测，但它仍保留几类会阻碍 OoO 接线的结构问题：
+### 2. 当前前端与分支预测边界
 
-- 年龄顺序和退休记录主要隐含在 backend 内部流程里，而不是稳定、显式的数据面。
-- architected side effect 与局部阶段行为仍有耦合，commit boundary 还没有被抽成独立 contract。
-- stage state、redirect、pending fault、hazard / forwarding helper 仍然高度集中在单体 backend 实现文件里。
-- `rename`、`ROB`、`LSQ` 所需的数据结构和接口目前不存在；如果在正式接线时才一起发明，会把结构设计和行为实现混在一次改动里。
+当前 `pipeline` 仍是单发射模型，但已经接入第一轮最小分支预测增强：
 
-因此，首轮 `Phase 3-B/C` 的合理入口不是直接“把当前五级后端改成 OoO”，而是先把这些结构障碍拆掉，再进入真正的接线阶段。
+- `jal` 走静态 predict-taken。
+- 条件分支使用最小 `2-bit` bimodal counter + target 记忆。
+- `jalr` 仍不预测。
+- mispredict 继续复用现有 flush / redirect 恢复路径。
+- predictor 当前属于 `pipeline` 内部可观察状态，不构成新的 architected 语义面。
 
-### Phase 3-B：rename + ROB 最小接线
+这意味着：当前前端不再是“永远顺序取指 + redirect”，但也没有进入更复杂的 BTB / RAS / TAGE 组合模型。
 
-`Phase 3-B` 的目标，是在保持单发射和 in-order retire 的前提下，把“执行结果先进入 ROB、architected state 在 head commit 时生效”这一层结构搭起来。
+### 3. 当前 `rename + ROB + LSQ +` 最小 `OoO execute` 边界
 
-这一阶段建议明确采用：
+当前 `Phase 3-B/C` 已经落地的正式边界如下：
 
-- 单发射 fetch / decode / rename
-- 物理寄存器重命名
-- in-order ROB retire
-- 分支 checkpoint / rollback
-- 仍不引入真正的 load/store 乱序完成
+- decode 侧会完成 `rename` 与 `ROB` 分配。
+- backend 仍保持单发射、顺序退休。
+- non-memory 指令可以先完成 execute，再等待 `ROB head` 退休。
+- RAM load / store 进入最小 `LSQ` 管理。
+- store 只在 commit boundary 真正落到 RAM / MMIO。
+- MMIO load 继续维持 non-speculative；MMIO store 也不允许在投机阶段泄漏副作用。
+- 当前 automatic replay 仍是保守的 coarse rollback + flush，而不是 selective replay。
 
-首轮 `Phase 3-B` 里，分支 checkpoint 是值得保留的最小能力，因为没有 checkpoint，分支错误恢复会继续和现有 in-order backend 的 flush 状态强耦合，不利于后续扩展；但这组 checkpoint 只需要满足“单发射、单分支恢复、最小 rollback”，不需要上复杂的多级恢复策略。
+因此，当前 `pipeline` 已经具备“最小真实 `OoO execute`”而不再是纯 in-order 五级流水；但它仍是克制形态，不追求 superscalar、深 issue queue 或激进 memory speculation。
 
-这一步完成后，backend 的主语义应变成：
+### 4. 当前 load / store 分类与 `LSQ` 状态语义
 
-- decode/rename 分配 sequence / ROB slot / destination phys reg
-- execute 产出 speculative result
-- result 标记 ROB ready
-- 只有 ROB head 在满足 commit 条件后，architected state 才真正变化
+当前 `LSQ` 最关键的对外解释边界如下：
 
-### Phase 3-C：LSQ + OoO execute 最小接线
+- `BlockedByUnresolvedStore`
+  - 只表示更老 store 地址未知，当前无法判断是否冲突。
+- `BlockedByOverlappingStore`
+  - 表示更老 store 地址已知，且与年轻 load 明确重叠，因此当前仍不能放行。
+- `ReplayRequired`
+  - 表示年轻 load 已经放行，但后续被确认需要按当前保守 replay 路径重放。
 
-`Phase 3-C` 再在 `Phase 3-B` 的基础上接入 `LSQ` 和最小 `OoO execute`，但仍然保持首轮工程边界克制：
+当前 decode 级串行化边界已经明确收窄到“仅 unknown-address older store 才阻塞”。地址已知但 data 未 ready 的 older store，不再全局阻塞非重叠 younger load。
 
-- ALU 指令可在不破坏顺序退休的前提下提前完成
-- load / store 进入 LSQ 管理
-- store 只在 commit 时真正落到 RAM / MMIO
-- MMIO load / store 维持非投机规则
-- 第一轮不追求 aggressive memory speculation
+### 5. 当前可观察性边界
 
-也就是说，`Phase 3-C` 的首个完成态不是“功能尽量多”，而是“执行可以乱序，退休仍然精确，memory 语义和设备 side effect 仍然守得住”。
+当前 `pipeline` 的观测面已经不是附属信息，而是正式设计的一部分。当前主线至少稳定暴露：
 
-### 建议接线顺序
+- `sequence_id` / retire trace
+- `stall_reason`
+- 最小 `ROB / LSQ` 摘要
+- predictor 最小状态与命中信息
+- commit-boundary 下的 trap / interrupt / rollback 结果
 
-后续真正进入实现时，建议顺序如下：
+这组观测面当前服务 3 件事：
 
-1. 先补 sequence / retire trace 与 commit boundary contract。
-2. 再把 `PipelineBackend` 的状态和 helper 拆成可替换组件。
-3. 再引入未接线的 `rename_map / ROB / LSQ` helper，并用单元 / smoke 守住接口。
-4. 开始 `Phase 3-B`：接 `rename + ROB`，仍维持顺序 execute 或近似顺序 execute。
-5. 最后做 `Phase 3-C`：接 `LSQ + OoO execute`，继续保持 in-order retire 和 precise exception。
+- host smoke / differential 门禁
+- `debug_cli` 与浏览器前端的只读观察
+- 后续是否值得继续重开更激进微架构专项的证据收集
 
-这个顺序的核心是：先让结构与契约可测试，再让执行模型变复杂。
+### 6. 当前明确不主动继续扩的方向
 
-### 完成定义
+当前这份统一设计保留如下主线判断：
 
-当首轮 `Phase 3-B/C` 进入正式实现时，“可以开始”的前提应是：
+- 不主动继续扩大更激进的 `issue / replay / speculation`。
+- 不直接放宽 unknown-address load speculation。
+- 不把当前 `pipeline` 顺势扩成 superscalar、复杂 memory disambiguation 或更重的 replay 框架。
 
-- 已有明确的 sequence / retire trace 观测面。
-- 已有显式的 architectural commit boundary helper。
-- `PipelineBackend` 已不再是难以替换的单体。
-- `rename_map / ROB / LSQ` 已存在稳定接口与独立门禁。
-- 投机执行下的 precise exception / interrupt / MMIO / CSR / TLB 合同已经写成正式设计。
+原因并不是这些方向永远不做，而是当前已知 stall 热点仍主要落在 `memory_path_busy` 与 `source_operands_not_ready`，而不是 decode 级 load/store 串行化本身。
 
-达到这几个条件之后，下一份实现计划才应真正去接“大块 `OoO / rename / ROB / LSQ`”。
+如果未来真实 workload 再次证明值得重开，这一轮最小切片应优先评估 `issue decoupling`，而不是直接放大 unknown-address speculation。
+
+## 演进摘要
+
+当前统一文档只保留仍然有效的台阶结论：
+
+- `pipeline core` 已正式接入主线，并与 `functional` 共享同一套 ISA 语义层。
+- `Phase 3-A` 已为当前 `pipeline` 接上最小 predictor 与对应观测面。
+- `Phase 3-B/C` 已完成 `rename + ROB + LSQ +` 最小真实 `OoO execute` 主路径。
+- decode 级 `BlockedByUnresolvedStore` 已收窄到“仅 older store 地址未知才阻塞”。
+- decode 边界收窄之后，当前主线已完成后续取舍判断：不主动继续扩大更激进的 `issue / replay / speculation`。
+
+这些结果已经从“阶段性设计提案”转成当前实现边界，因此统一收口到本文档维护。
+
+## 验证思路
+
+当前与本设计直接相关的正式基线至少包括：
+
+- `cd myCPU && make test-pipeline`
+- `cd myCPU && make test-host-predictor_smoke`
+- `cd myCPU && make test-host-pipeline_backend_smoke`
+- `cd myCPU && make test-host-pipeline_commit_trace_smoke`
+- `cd myCPU && make test-host-pipeline_rename_commit_smoke`
+- `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
+- `cd myCPU && make test-host-backend_differential_smoke`
+- `cd myCPU && make test-host-debug_cli_smoke`
+
+如果未来继续调整 `LSQ` 边界、replay 行为或 predictor 观测，应优先补最窄 host-side 回归，而不是新增更宽的大一统 smoke。
 
 ## 风险与取舍
 
-- 明确要求单发射和 in-order retire，会让首轮 `Phase 3-B/C` 的性能野心受到约束，但这是有意取舍，用来换取更低的验证风险和更清晰的架构边界。
-- 先补结构与 contract，再做真正 OoO 接线，会延后“看到更多微架构行为”的时间点，但能显著降低大分支返工概率。
-- 引入 branch checkpoint 但不同时引入复杂 speculation，会留下一个过渡形态；但这个过渡形态对当前仓库是合理的，因为它能保持与现有 debug / differential 基线兼容。
+- 当前把多份阶段性 pipeline 文档收口成一份统一设计，会减少专题细节的分散叙事，但能显著降低旧阶段文档过期后的误导风险。
+- 当前继续维持“最小真实 `OoO execute` + 保守 replay”的克制形态，会牺牲一部分可见并行度；但这符合当前 reference-first、可调试、可回归的主线方法。
+- 当前把“是否继续推进更激进 speculation”的判断保留在本文档和 `status`，意味着后续若要重开专项，必须基于新的 workload 证据，而不能只沿旧文档机械推进。
 
 ## 当前有效性说明
 
-- 当前有效 / 历史语境：当前有效，作为 `Phase 3-A` 之后首轮 `Phase 3-B/C` 的执行模型设计边界。
-- 当前实时进展、已完成的首轮收口结果以及下一步是否继续扩更激进的 issue / replay / memory speculation，以 [status/mainline_status.md](../status/mainline_status.md)、[status/project_priority_roadmap.md](../status/project_priority_roadmap.md)、[plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan) 与 [plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan) 为准。
+- 当前有效：本文档作为当前 `pipeline / Phase 3` 微架构边界的统一设计来源。
+- 当前实时状态、近期风险和下一步，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。

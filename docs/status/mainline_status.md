@@ -2,148 +2,82 @@
 
 ## 文档定位
 
-本文档只记录当前 `main` 分支的稳定快照、少量关键时间节点、当前仍有效的风险和下一步。
+本文档只记录当前 `main` 分支的稳定快照、少量关键历史节点、当前仍有效的风险和下一步。
 
-执行过程与已完成 checklist 统一归档到 [plan/history_plan.md](../plan/history_plan.md)；具体优先级判断见 [project_priority_roadmap.md](project_priority_roadmap.md)。
+执行过程、阶段性 checklist 和专项落地细节统一归档到 [../plan/history_plan.md](../plan/history_plan.md)；更细的优先级判断见 [project_priority_roadmap.md](project_priority_roadmap.md)。
 
 ## 关联文档
 
 - 相关设计：
-  - [design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
-  - [design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
-  - [design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
-  - [design/blocked_by_unresolved_store_boundary.md](../design/blocked_by_unresolved_store_boundary.md)
-  - [design/phase3_issue_replay_speculation_assessment.md](../design/phase3_issue_replay_speculation_assessment.md)
-  - [design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
-  - [design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)
-  - [design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
+  - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
+  - [../design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
+  - [../design/minimal_interactive_os_design.md](../design/minimal_interactive_os_design.md)
+  - [../design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
+  - [../design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
+  - [../design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)
+  - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
+  - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
+  - [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)
 - 相关状态：
   - [project_priority_roadmap.md](project_priority_roadmap.md)
   - [kernel_alpha_status.md](kernel_alpha_status.md)
+  - [xv6_linux_jit_status.md](xv6_linux_jit_status.md)
+- 当前计划：
+  - [../plan/xv6_linux_jit_wave1_plan.md](../plan/xv6_linux_jit_wave1_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md#phase4-prep1-bus-memory-region-plan](../plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
-    `P4-prep-1` 的完成归档。
-  - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
   - [../plan/history_plan.md#vector-v4-plan](../plan/history_plan.md#vector-v4-plan)
-  - [../plan/history_plan.md#vector-v3-hardening-v4-design-plan](../plan/history_plan.md#vector-v3-hardening-v4-design-plan)
-  - [../plan/history_plan.md#vector-v3-plan](../plan/history_plan.md#vector-v3-plan)
-  - [../plan/history_plan.md#vector-v0-v1-plan](../plan/history_plan.md#vector-v0-v1-plan)
-  - [../plan/history_plan.md#vector-v2-plan](../plan/history_plan.md#vector-v2-plan)
+  - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
   - [../plan/history_plan.md#spike-external-differential-validation-plan](../plan/history_plan.md#spike-external-differential-validation-plan)
-  - [../plan/history_plan.md#p2-validation-gap-backfill-round-1](../plan/history_plan.md#p2-validation-gap-backfill-round-1)
   - [../plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
-  - [../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
-  - [../plan/history_plan.md#p1-reference-platform-contract-refinement-plan](../plan/history_plan.md#p1-reference-platform-contract-refinement-plan)
-  - [../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan](../plan/history_plan.md#p1-pipeline-backend-boundary-refinement-plan)
-  - [../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan](../plan/history_plan.md#p1-guest-public-header-boundary-refinement-plan)
-  - [../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan](../plan/history_plan.md#p1-guest-smoke-orchestration-refinement-plan)
 
 ## 当前快照
 
 - 当前仓库已经是一个已可运行的模拟器原型，不是纯设计稿。
-- `phase1-stable`（`283aee6`）对应的 Phase 1 核心 bring-up 冻结基线已经形成。
-- 默认 `functional` reference path、`make test` 主门禁，以及 `kernel_alpha` 正向与九条负向回归都已稳定接通。
-- `pipeline core`、`make test-pipeline`、`debug_session/protocol`、本地 Node 调试服务和浏览器前端都已经正式接入主线，不再是待合入功能。
-- `P1` 结构收口已经全部完成；`P2` 首轮验证补洞也已完成两轮收口，新增 loader 单测、guest smoke 窄单测、真实 debug e2e smoke、预算常量收口和 pipeline smoke 拆分都已进入现有门禁。
-- `2026-04-10` 已完成一份设计级方向收口：`向量扩展 + ML workload` 被确认为长期候选主线之一，定位为 workload-guided、ISA-first 的后续路线；当前明确先从最小整数 `V-lite`、算子级验证与最小 CNN 闭环起步，而不是直接抢跑更重的 `Phase 4` cache / DMA / multicore / coherence。
-- `2026-04-10` 同日也已完成 `V-lite` `V0 / V1` 首轮落地：当前已经接上 `VectorState`、共享 `VectorRequest`、`vsetcfg / vle.v / vse.v / vadd.vv / vmul.vv / vmax.vv / vdot.vv`、最小 host smoke，以及 `pipeline` 的正确 serializing fallback，并已守住 `make test` 与 `make test-pipeline`。
-- `2026-04-10` 同日也已完成 `V2` 首刀落地：新增 `vector_operator_smoke`、独立 `guest_vector_demo`、functional / pipeline 两侧 guest 门禁，以及对 `dot / GEMM / Conv / ReLU` 的最小 workload 验证；这一轮继续保持现有 `V-lite` 语义面和 `pipeline` serializing fallback 不变。
-- `2026-04-10` 同日也已完成 `V3`：当前新增独立 `guest/vector_cnn_demo`，以固定 `conv -> relu` 链路输出 `V3OK`，并把 functional / pipeline 两侧 guest 门禁正式接入；这一轮也顺手补上 `test-host-vector_vlite_smoke` 与 `test-host-vector_backend_smoke` 的显式 `make` alias，且 `make test` 与 `make test-pipeline` 继续通过。
-- `2026-04-10` 同日也已完成一轮更窄的 `V3 hardening`：新增 `vector_cnn_smoke` host 回归，直接守住 `vdot -> sew=4/vl=1 store -> sew=4/vl=3 relu` 的 mixed `SEW/VL` 链路，以及“全负卷积输出经过 `relu` 后必须全零”的零钳位合同；`make test` 与 `make test-pipeline` 已一并守住。
-- `2026-04-10` 同日也已完成 `V4` 首刀设计收口：当前正式把下一步定义为“先让 non-memory vector ALU 指令脱离统一 serializing fallback，形成最小 vector-aware pipeline”，并明确 `vsetcfg / vle.v / vse.v` 继续保守处理，不抢跑向量访存、lane 模型或更重 `Phase 4`。
-- `2026-04-10` 同日也已完成 `V4` 首刀实现：当前 `pipeline` 已让 non-memory vector ALU 脱离统一 serializing fallback，改为“execute 先 materialize 结果、commit 再落地 architected vector state”；同时以保守 `vector_state_busy` stall 守住 older vector state 未提交时的年轻向量 ALU 读取边界，并新增 `vector_pipeline_smoke` 接入 `make test` 与 `make test-pipeline`。
-- `2026-04-11` 已在 `V4` 首刀之上补上一轮更窄的 hardening：当前 `vector_state_busy` 已从“任何 older vector pending 都阻塞”收窄到“pending serializing vector 或 direct older source dependency 未 materialize 才阻塞”；若 older non-memory vector ALU 结果已经 materialize、只是被更老 scalar ROB head 挡住 commit，则 direct dependent younger vector ALU 现在可以先完成 execute。对应 `vector_pipeline_smoke` 也已补上更像真实依赖链的 host 回归。
-- `2026-04-12` 已把 `vector / NN` 这条线正式接进 `debug/frontend`：当前浏览器端可直接选择 `guest_vector_demo` 与 `guest_vector_cnn_demo`，并展示 workload 说明卡、向量指令 `config / memory / ALU` 高亮、`SEW / VL + v0..v31` 最小寄存器快照、固定 `conv -> relu` 专题卡，以及当前 `vector_state_busy` / serializing guard 的最小执行边界提示；这一轮继续保持“教学演示可用”定位，不把前端扩成通用调试器。
-- `2026-04-12` 同日也已完成一轮不扩功能面的 `debug/frontend` UI refresh 收口：浏览器壳层的 Hero / 控制带 / `terminal` / `inspector` 布局与 `terminal collapsed` 交互语义已经稳定接入当前前端设计边界。
-- `2026-04-12` 同日也已完成 `Phase 4` 准备性方向设计收口：当前把 `Phase 4` 第一刀正式收窄为 `P4-prep-1`，即 `bus / memory region` 合同收口；它当前只服务后续 `cache / DMA` 准备，不改变 guest 可见语义。
-- `2026-04-12` 同日也已完成 `P4-prep-1` 实现收口：当前 `Bus` 已统一暴露 `RAM / MMIO / unmapped` 与 `cacheable / dma_visible / has_side_effect / supports_burst / label`，`vector` span 预校验、`pipeline` RAM/MMIO 判断和 `LSQ` forwarding 也都已改为复用这一路径；`make test` 与 `make test-pipeline` 已继续守住现有 guest 可见行为不变。
-- `2026-04-06` 已完成 Spike 外部差分验证 V1 第一轮落地：`make test-host-spike_differential` 作为显式离线入口已经可用，当前真实接通的正向场景包括 `alu_mem_csr`、`control_flow`、`predictable_branch_loop`、`trap_return`、`illegal_trap` 与 `delegated_user_ecall_to_supervisor`；`make test` 与 `make test-pipeline` 继续不依赖 Spike。
-- `2026-04-07` 已把 Spike 外部差分继续外推到第一批 device-free `Sv39/page fault` final-state subset：`make test-host-spike_differential` 当前已额外接通 `sv39_instruction_page_fault`、`sv39_load_page_fault`、`sv39_store_page_fault` 与 `sv39_reserved_non_leaf_fault`；对应场景不再依赖 `configure hook`，而是统一改写成显式 `initial_gprs / initial_csrs / initial_memory`。
-- `2026-04-07` 同日也已把 Spike 外部差分的 returning trap handler checkpoint 正式接通：当前对带 `mret / sret` 的场景会在单次 Spike 运行里额外抓 first-trap checkpoint，并比较 `first_trap_summary`；`trap_return`、`delegated_user_ecall_to_supervisor` 以及新增的 returning `Sv39/page fault` 场景都已进入真实差分门禁。
-- `2026-04-05` 又补上一条更窄的 platform hardening：`Machine::load_elf()/load_binary()` 在保留“非完整平台 reset”语义的前提下，image reload 不再把上一轮 guest 留下的 `SimpleStorage` sticky error 带进新镜像；对应 `machine_loader_reset` 已补上 binary/ELF 两侧回归。
-- `2026-04-05` 又补上一条更窄的 guest runtime hardening：`kernel_runtime_complete_storage_signature_check()` 现在即使在 storage read 失败或签名不匹配时也会释放临时 PMM 页，避免把页泄漏藏在 `kernel_alpha` storage probe/signature 的失败路径里；对应 `kernel_runtime` 单测已补上坏签名与读失败两侧回归。
-- `2026-04-05` 又补上一条更窄的 guest runtime rollback hardening：`kernel_runtime_run_identity_superpage_bringup()` 现在在复用同一个 `kernel_runtime_t` 时会先清空旧 `address_space`，因此即使随后在 PMM 早期检查、mapping failure 或 satp mismatch 上失败，也不会把上一轮 stale VM 指针泄露给后续路径；对应 `kernel_runtime` 单测已补上 runtime reuse + early failure 回归。
-- `2026-04-05` 又继续补上一条更深一层的 guest runtime reuse teardown hardening：`kernel_runtime_run_identity_superpage_bringup()` 与 `kernel_runtime_run_common_bringup()` 在复用同一个 `kernel_runtime_t` 时，现在都会先走 `vm_address_space_destroy()` 正式 teardown 已拥有的旧 VM；若 teardown 失败则直接 fail-closed，不再只是把旧 `address_space` 指针藏起来。对应 `kernel_runtime` / `kernel_bringup` 窄门禁，以及 `make test`、`make test-pipeline` 已全部守住。
-- `2026-04-05` 已为 `debug/frontend` 新增一组更窄的 Node/runtime 压力验证：持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` 请求超时后的 fail-closed 边界，避免迟到 CLI 响应错配后续请求。
-- `2026-04-05` 也已继续把 `debug/frontend` 压力验证外推到更长会话和更像浏览器的操作节奏：新增 repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
-- `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界按专项设计落地为“仅 unknown-address 阻塞”：地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续返回 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已守住。
-- `2026-04-05` 已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：考虑到当前 backend 仍是 decode 级 load 前置分类、单 memory execute 通道与 coarse replay flush，继续主动扩大更激进的 `issue / replay / speculation` 当前收益不足；后续仅在出现真实 workload 证据或明确研究目标时重开。
-- `2026-04-05` 也已补上一层更窄的 `pipeline stall attribution` 观测：当前 debug snapshot / CLI 已能直接暴露 `stall_reason`，区分 `blocked_by_unresolved_store`、`blocked_by_overlapping_store`、`memory_path_busy`、`non_ram_load_waiting_for_rob_head`、`serializing_system_wait_for_rob_head`、`source_operands_not_ready` 和 `decode_backpressure`，供后续是否重开 issue decoupling 判断使用。
-- `2026-04-05` 同日也已把浏览器前端调试面板按工程调试视角重排为分层布局：常显区保留 `运行摘要 / 五级流水线 / OoO / 微架构 / 分支预测器 / 最近周期`，`架构状态` 与 `平台与 I/O` 改为折叠分组，并把 `stall_reason`、`lsq_load_state` 与最小 `ROB / LSQ` 观测轻量接入 UI。
-- `2026-04-05` 随后又用真实 `debug server + pipeline` 对 `hello`、`guest_interactive_os_demo` 和 `guest_kernel_alpha_demo` 做了一轮短 smoke：`hello` 主要观察到 `source_operands_not_ready`，`interactive_os` 与 `kernel_alpha_demo` 则主要是 `memory_path_busy`；全程没有形成稳定的 `decode_backpressure`、`BlockedByUnresolvedStore`、`BlockedByOverlappingStore` 或 replay hotspot，且 `ROB / LSQ` 深度仍然很浅，因此当前仍不值得为 issue decoupling 或更激进 speculation 重开专项。
+- `phase1-stable`（`283aee6`）对应的 Phase 1 核心 bring-up 冻结基线已经形成，`functional` reference path、`kernel_alpha` 正向与 9 条负向回归都已稳定接通。
+- `pipeline`、`make test-pipeline`、`debug_session / protocol`、本地 Node 调试服务和浏览器前端都已经正式接入主线，不再是待合入功能。
+- `P1` 结构收口与 `P2` 首轮验证补洞已经完成；当前不再只是继续做“默认延续线收口”，而是自 `2026-04-21` 起正式把标准 OS bring-up 切换线提升为当前 active program。
+- 当前近端主线已经明确切到 `RV64A + virtio 平台 + CSR / privilege 补全 + xv6-riscv bring-up`，对应的当前设计、状态和计划分别见 [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)、[xv6_linux_jit_status.md](xv6_linux_jit_status.md) 和 [../plan/xv6_linux_jit_wave1_plan.md](../plan/xv6_linux_jit_wave1_plan.md)。
+- 此次切主线并不放弃默认延续线：`V4`、`P4-prep-1`、`kernel_alpha`、`debug/frontend`、Spike 外部差分和现有回归矩阵继续作为新主线的 correctness / observation guardrail。
+- `向量扩展 + ML workload` 仍保留为默认延续线和代表性 workload corpus，不再是当前唯一主线，但仍继续为 profile / observation 和更后续 `Phase 4` 判断提供信号。
+- `Phase 4` 当前只正式打开准备性入口：`P4-prep-1` 已完成，`bus / memory region` 已成为统一事实来源；后续是否继续 `P4-prep-2`，仍取决于更稳定的 workload 信号。
+- Spike 外部差分验证已经形成一条独立离线 oracle，当前处于维护态，主要服务 reference correctness 疑点排查，而不是新的默认主门禁。
 
-## 近期时间线（按时间倒序）
+## 关键历史节点
 
-- `2026-04-10`
-  - 完成 `向量扩展 + ML workload` 长期方向设计收口：当前正式把这条线定义为后续长期候选主线之一，默认推进顺序是 `functional` reference path、算子级验证、最小 CNN 闭环、vector-aware `pipeline`，最后才是由 workload 驱动的 `Phase 4`。
-  - 同日也完成 `V-lite` `V0 / V1` 首轮落地：新增 `VectorState`、向量 `InsnEffects` 请求、`vsetcfg / vle.v / vse.v / vadd.vv / vmul.vv / vmax.vv / vdot.vv`、两条 host smoke，以及 `pipeline` 的正确 serializing fallback，并通过 `cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
-  - 同日也完成 `V-lite` `V2` 首刀落地：新增 `vector_operator_smoke`、独立 `guest_vector_demo`、functional / pipeline 两侧 guest 门禁，以及对 `dot / GEMM / Conv / ReLU` 的最小 workload 验证；这一轮继续保持现有 `V-lite` 语义面和 `pipeline` serializing fallback 不变。
-  - 同日也完成 `V-lite` `V3`：新增独立 `guest_vector_cnn_demo`，以固定输入、固定卷积核和固定期望输出形成最小 `conv -> relu` guest 闭环，并把 `test-guest-vector_cnn_demo`、`test-pipeline-guest-vector_cnn_demo`、`make test` 与 `make test-pipeline` 一起守住。
-  - 同日也完成一轮更窄的 `V3 hardening`：新增 `vector_cnn_smoke` host 回归，守住 mixed `SEW/VL` 的 `conv -> relu` 数据链、全负卷积输出的 `relu` 全零钳位，以及两种 backend 的最终向量状态 / watched memory 一致性。
-  - 同日也完成 `V4` 首刀设计冻结：下一步默认只收窄 non-memory vector ALU 的 `pipeline` 边界，`vsetcfg / vle.v / vse.v` 继续保守 serializing，不提前扩到向量访存、lane / latency 或更重 memory speculation。
-  - 同日也完成 `V4` 首刀实现：`pipeline` 当前已允许 non-memory vector ALU 在 older scalar ROB head 未退休时先完成 execute，并把向量结果以最小 materialized payload 带入 commit；older vector state 未提交时则继续以保守 `vector_state_busy` stall 阻塞 younger vector ALU，不引入 vector rename、vector phys file 或向量 memory path 扩面。
+- `2026-04-21`
+  - 正式把 `future_expansion_roadmap_design.md` 中的标准 OS bring-up 切换线提升为当前 active program。
+  - 新增 `xv6 / Linux / JIT` 主线 design / status / wave 1 plan，并按 4 个独立 worktree 启动并行工作流。
 - `2026-04-12`
-  - `debug/frontend` 已补上 `vector / NN` 教学可视化：可直接选择 `guest_vector_demo` / `guest_vector_cnn_demo`，并在浏览器端观察 workload 导览、向量指令高亮、`SEW / VL + v0..v31` 最小寄存器 dump，以及固定 `conv -> relu` 的 live / expected 对照。
-  - 同日也补上 `DebugSnapshot` 的最小向量状态：CLI / JSON 当前会暴露 `sew_bytes`、`vl` 与 32 个 16-byte 向量寄存器原始 dump，为后续继续围绕已落地的 `V4` 边界做 workload 观察提供最小只读观测面。
-  - 同日也完成一轮不扩功能面的 `debug/frontend` UI refresh 收口：Hero / 控制带 / `terminal` / `inspector` 的页面骨架和 `terminal collapsed` 语义已经并入当前正式前端设计边界。
-  - 同日也完成 `Phase 4` 准备性方向设计收口：第一刀正式定义为 `P4-prep-1`，即 `bus / memory region` 合同收口；它当前只服务后续 `cache / DMA` 准备，不改变 guest 可见语义。
-  - 同日也完成 `P4-prep-1` 落地：新增统一 `memory_region` 类型与 `Bus::describe_region()/describe_span()`，把 `vector` 访存预校验、`pipeline` memory issue 判断与 `LSQ` RAM-only forwarding 收口到同一份物理 region 事实来源，并新增 `bus_region_contract` unit test 守住 `RAM / MMIO / unmapped` 与 span 边界合同。
+  - 完成 `P4-prep-1`，`Bus` 已统一暴露 `RAM / MMIO / unmapped` 与保守 region 属性。
+  - 向量 / CNN 可视化正式接入 `debug/frontend`。
+- `2026-04-10` 到 `2026-04-11`
+  - `V-lite` `V0 ~ V4` 及第一轮更窄 hardening 落地，形成固定 `conv -> relu` 的最小 CNN-style guest 闭环与最小 vector-aware pipeline 边界。
 - `2026-04-07`
-  - Spike 外部差分验证继续补上第一批 device-free `Sv39/page fault` final-state subset：`sv39_instruction_page_fault`、`sv39_load_page_fault`、`sv39_store_page_fault` 和 `sv39_reserved_non_leaf_fault` 已接入 `make test-host-spike_differential`。
-  - 同时也把这组 `Sv39` 场景从 backend differential 里的 `configure hook` 形态收口为显式 `initial_gprs / initial_csrs / initial_memory`，避免为了 Spike adapter 去扩大通用 `configure hook` 支持面。
-  - Spike 外部差分同日也已补上 returning trap handler 的 first-trap checkpoint：当前通过单个 Spike 进程的多阶段 snapshot 抓取首个 trap 入口与最终态，并用“有效初始 CSR 值”过滤 non-`M-mode` bootstrap 预写 `mepc` 带来的 machine-trap 伪阳性。
+  - Spike 外部差分扩到第一批 device-free `Sv39 / page fault` final-state subset，并补上 returning trap handler 的 first-trap checkpoint。
 - `2026-04-05`
-  - `kernel_runtime_run_identity_superpage_bringup()` 补上一条更窄的 runtime reuse rollback 合同：函数入口先清空旧 `address_space`，避免复用同一个 `kernel_runtime_t` 时在 PMM 早退、mapping failure 或 satp mismatch 后仍暴露 stale VM 指针；对应 `kernel_runtime` 单测已补上 runtime reuse + early failure 回归。
-  - `kernel_runtime_run_identity_superpage_bringup()` 与 `kernel_runtime_run_common_bringup()` 随后又继续补上一层更深的 runtime reuse teardown 合同：复用同一个 `kernel_runtime_t` 时，现在都会先走 `vm_address_space_destroy()` 正式 teardown 已拥有的旧 VM；若 teardown 失败则直接 fail-closed，不再只是把旧 `address_space` 指针藏起来。对应 `kernel_runtime` / `kernel_bringup` 窄门禁，以及 `make test`、`make test-pipeline` 已全部通过。
-  - `debug/frontend` 新增一组更窄的 runtime 级压力验证：持续 `run/pause` 广播、运行中 session replacement generation guard，以及更高吞吐 terminal 输入聚合。
-  - `debug/frontend` 同日也继续外推到更长会话和更像浏览器的节奏：repeated `run/pause` 长会话恢复、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
-  - `DebugCliSession` 补上 timeout fail-closed 行为：一旦 CLI 请求超时，当前 session 直接失效并 teardown，避免没有 request id 的 JSON line 响应在迟到时错配后续请求。
-  - decode 级 `BlockedByUnresolvedStore` 边界已按专项设计收窄为“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续暴露 `BlockedByOverlappingStore`，相关 `LSQ` / `pipeline` smoke 与 `make test-pipeline` 已通过。
-  - 同日也已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：在 decode 级 load 前置分类、单 memory execute 通道和 coarse replay flush 仍然成立的前提下，当前不主动继续扩大更激进的 `issue / replay / speculation`。
-  - 同日也已补上更窄的 `pipeline stall attribution`：debug snapshot / CLI 新增 `stall_reason`，可直接区分 decode 级 `LSQ block`、`memory_path_busy`、`non_ram_load_waiting_for_rob_head`、`serializing_system_wait_for_rob_head`、`source_operands_not_ready` 与 `decode_backpressure`。
-  - 浏览器前端调试面板也同日按工程调试视角重排为分层布局：`OoO / 微架构` 面板进入常显区，`架构状态` 与 `平台与 I/O` 改为折叠分组，timeline 和五级流水线头部可直接显示 `stall_reason` / `lsq_load_state`。
-  - 用真实 `debug server + pipeline` 对 `hello`、`guest_interactive_os_demo` 和 `guest_kernel_alpha_demo` 做短 smoke 后，也没有观察到值得为 issue decoupling 单开专项的热点；当前主导 stall 仍主要是 `memory_path_busy` 和 `source_operands_not_ready`，而不是 decode 级 load/store 串行化或 replay。
+  - decode 级 `BlockedByUnresolvedStore` 边界收窄完成，且主线已明确：当前不主动继续扩大更激进的 `issue / replay / speculation`。
+  - `debug/frontend` 补上更窄的长会话、session replacement 与 terminal 输入压力验证。
 - `2026-04-04`
-  - 完成 `P2` 首轮验证补洞两轮收口：`BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` 与 `user_program_smoke` 更窄直测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node/C++ 两侧调试预算常量收口，以及 `pipeline` mega-smoke 拆分。
-  - 同日也完成最后一批 `P1` 结构收口：`pipeline_backend` 拆分、`debug/frontend` 协议与运行时边界收口、guest public header 与 smoke orchestration 收口，以及 reference / platform 合同补洞。
-- `2026-04-03`
-  - `interactive_os / monitor / vm_debug`、browser terminal 壳和 Node debug server 的最小交互闭环已经稳定，相关 smoke 和 Node 测试都已接入主门禁。
-  - 文档体系完成一轮归并，已完成计划统一回写到 `history_plan`，不再长期保留活跃 checklist。
-- `2026-04-02`
-  - `Phase 3-B/C` 首轮最小真实 `OoO execute` 基线形成：`rename + ROB + LSQ`、统一 rollback、coarse replay 和 `RAM-only` forwarding 已进入当前实现。
-- `2026-03-27`
-  - `Phase 3-A` 第一轮分支预测增强落地，`pipeline` 获得最小 predictor 与相应 smoke / differential 门禁。
-- `2026-03-26`
-  - Phase 1 hardening 第一轮矩阵化回归落地：illegal encoding、MMIO、ELF、CSR / privilege、Sv39 / `MPRV` 等关键合同已进入 asm / host / guest 门禁。
-- `2026-03-25`
-  - 完成一批 simulator-side correctness 修复，包括非法整数编码、`DIV/REM` 边界、ELF pure-BSS `PT_LOAD`，以及 bus / device 第一轮边界防御。
+  - `P1` 结构收口与 `P2` 首轮验证补洞完成两轮收口，新增 loader 单测、guest smoke 窄单测、真实 debug e2e smoke 与 pipeline smoke 拆分。
 
 ## 当前仍然有效的风险 / 限制
 
-- `debug/frontend` 当前已经可用，并且 Node/runtime 级持续 `run`、session replacement、高吞吐 terminal 输入聚合、repeated `run/pause` 长会话、`reset` 后 terminal reset / offset 重启，以及真实 `interactive_os` `run/pause + terminal-input` e2e 都已接入；对当前单用户、本地教学/调试使用，这组门禁已经足够。
-- 当前已落地的 `debug/frontend` UI refresh 仍只覆盖浏览器壳层收口，不扩成新的协议或压力专项；其中 `terminal collapsed` 视图必须继续如实反映连接、待输入和不可交互状态，不能把“尚未加载会话”或“仍在发送输入”伪装成“可直接继续交互”。
-- 当前新增的向量 / CNN 可视化继续保持克制：浏览器端只消费 `SEW / VL + raw register dump` 与固定 demo 元信息，不提供通用模型可视化、任意 memory watch、lane 级性能图或更重 trace 下载。
-- Spike 外部差分验证当前仍是独立离线能力，不进入默认主门禁；当前仍以 final state 为主体，并对 `instret` 与 non-`M-mode` bootstrap 带来的少量 `mstatus/mepc` 噪音做了受控收窄。对执行 `mret / sret` 的 returning trap handler，当前已额外比较 first-trap checkpoint summary，但还不扩成更大的中间态 trace。
-- Spike 外部差分当前已经覆盖第一批 device-free `Sv39/page fault` final-state subset 和 returning trap handler 的首个 checkpoint summary，但仍不覆盖 `configure hook`、`PlatformFixture::UartPlic`、设备 side effect、更广 `Sv39` 语义面、更复杂的多 checkpoint / nested trap 变体和逐提交 trace；如果未来要把它升级成更强 oracle，下一刀应优先看更广 `Sv39` / device-free privilege 或确有收益的多 checkpoint 变体，而不是直接做更大的统一框架。
-- Node 侧 `debug_budget.mjs` 与 C++ 侧 `debug_budget.h` 已分别收口，但它们仍是分语言维护，不是跨语言单一事实来源。
-- guest runtime 的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime` 等边界已经比早期清晰得多，但后续仍要防止重新膨胀回大文件或重新暴露临时内部布局。
-- `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
-- `Phase 3-B/C` 当前仍是单发射、顺序退休、最小完成窗口的克制形态；decode 级 `BlockedByUnresolvedStore` 的第一轮边界收窄之后，主线也已完成后续判断：当前不主动继续扩更激进的 `issue / replay / memory disambiguation`。
-- 当前这条 decode 级边界已经明确：`BlockedByUnresolvedStore` 只保留给 older store 地址未知场景；对地址已知但 data 未 ready 的 older store，仅在与年轻 load 明确重叠时继续阻塞。
-- 当前如果未来重开 `Phase 3` 这条线，首个最小切片应优先评估 issue decoupling，而不是直接放宽 unknown-address speculation 或扩大 replay 触发面。
-- `向量扩展 + ML workload` 当前已经完成 `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`，以及 `V4` 首刀实现 + 第一轮 `V4` hardening：shared semantics、`functional` reference path、host 回归、最小 guest/workload 闭环、non-memory vector ALU 的最小 vector-aware execute/commit 边界，以及更像真实依赖链的 `vector_pipeline_smoke` 都已接通；但当前仍是克制形态，`vsetcfg / vle.v / vse.v` 继续 serializing，也还没有扩到向量 load/store path、lane 模型、vector rename 或更重 memory speculation。
-- 当前 `V4` 虽已落地，但仍刻意不扩到向量 load/store path、lane 模型、vector LSQ、vector rename 或更重 memory speculation；在这条边界先经过一轮 bug-driven hardening 和 workload 观察之前，直接抢跑更重的 `Phase 4` cache / DMA / multicore / coherence 仍然属于低信号、高复杂度扩面。
-- 当前 `P4-prep-1` 虽已落地，但它仍只是准备性收口：当前 region 查询只描述物理 window 级 `RAM / MMIO / unmapped` 与保守属性，不替代各设备自己的 offset / width 合法性合同，也还没有展开 `memory observation / shadow cache`、DMA initiator 或 multicore / coherence。
-- 前端当前虽然已经能可视化 `guest_vector_demo` 与固定 `conv -> relu`，但它展示的仍是“当前已知 workload 的教学视角”，不是完整向量调试器；如果未来要继续扩面，优先级仍然应先看真实 bug 或 workload 观察，而不是先发明更大 UI / 协议面。
+- `debug/frontend` 当前已经够用，但它的正式定位仍然是“教学演示可用 + 最小工程调试”，不应顺势扩成通用调试器。
+- 当前 `pipeline` 已具备最小真实 `OoO execute`，但仍是单发射、顺序退休、保守 replay 的克制形态；当前没有足够证据支持继续主动扩大更激进的 `issue / replay / speculation`。
+- 当前 aggressive mainline switch 会同时打开 ISA、platform、guest workload 三类缺口；如果 4 条 workstream 的 ownership 失控，cross-branch 冲突和回归波动会很快放大。
+- 当前 `xv6-riscv` 仍处在 foundation / harness / gap audit 阶段，尚不能把 `Linux` 或 `JIT / DBT` 直接当成本轮实现交付。
+- 当前 `V4` 虽已落地，但仍刻意不扩到向量 load/store path、lane 模型、vector rename 或更重 memory speculation；在继续 hardening 与 workload 观察之前，直接抢跑更重 `Phase 4` 的性价比仍然偏低。
+- 当前 `P4-prep-1` 只是准备性收口，不代表 cache / DMA / multicore 已进入正式实施阶段。
+- guest runtime 的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime` 等边界已经比早期清晰得多，但后续仍要防止真实 bug 修复把职责重新揉回大文件。
 
 ## 下一步
 
-1. 当前如果继续推进 `向量扩展 + ML workload` 这条线，更健康的下一步仍是围绕已落地的 [../design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md) 与 [../design/debug_frontend_integration.md](../design/debug_frontend_integration.md) 做 bug-driven hardening 与观测补洞；后续应优先继续围绕 direct dependency、mixed config / serializing guard 和 workload 观察补最小回归，而不是立刻跳到向量 load/store path、`Pool / FC` 或更重的 `Phase 4`。
-2. 当前 `P4-prep-1` 已经落地；如果后续继续评估 `Phase 4`，更健康的下一步也应先围绕 [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md) 里的 `P4-prep-2` 做最小 `memory observation / shadow cache` 取舍，而不是直接把 `cache / DMA / multicore` 混入同一轮。
-3. 当前不主动重开更激进的 `Phase 3` issue / replay / speculation 扩展；后续仅在出现真实 stall hotspot 证据或明确研究目标时再单开专项。
-4. Spike 外部差分验证当前转入 bug-driven 扩展阶段：保留离线 oracle 入口，后续只在出现真实 correctness 缺口时，按最小切片继续补更广 `Sv39 / page fault`、设备无关 privilege / CSR，或必要时的更复杂多 checkpoint 变体。
-5. 继续以 bug-driven hardening 的方式维护 guest runtime、`kernel_alpha` 十条基线和 reference correctness 矩阵，不做无关大重构。
-6. 继续把 `pipeline` 与 `debug/frontend` 限定在当前已接入、可验证的范围内；已落地的 `debug/frontend` UI refresh 也继续只收口浏览器壳层布局和真实状态表达，不扩大协议或浏览器端压力面，后续仍按真实 bug 或明确新需求补最小回归。
+1. 先推进 `RV64A + CSR / privilege foundation`，把 `xv6` 和未来 `Linux` 必需的 ISA / architected contract 站稳。
+2. 并行推进 `virtio-mmio + virtqueue + virtio-blk` 平台基础，避免把标准 OS bring-up 写成一次性设备特判。
+3. 在 A / B 第一轮 contract 站稳后，继续推进 `xv6-riscv` external workload harness、boot gap audit 和真实 smoke。
+4. 全程并行保留默认延续线 guardrail，并补 execution profile / observation foundation，为后续 `Linux` 与 `JIT / DBT` 保留调试与热路径证据。
+5. 继续把 `pipeline`、guest runtime、`kernel_alpha` 十条基线、`debug/frontend` 和 Spike 外部差分限定在当前已接入、可验证的范围内维护，不让新主线反向污染 reference path。
 
 ## 验证基线
 
@@ -151,7 +85,7 @@
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`
 
-如果改动集中在本轮已补洞的入口，至少额外关注：
+如果改动集中在 loader、guest smoke orchestration 或调试链路，至少额外关注：
 
 - `cd myCPU && make test-unit-binary_loader`
 - `cd myCPU && make test-unit-machine_loader_reset`
