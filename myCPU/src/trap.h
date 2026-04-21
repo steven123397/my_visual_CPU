@@ -19,6 +19,10 @@ public:
     void raise_timer_interrupt();
     bool has_serviceable_interrupt() const;
     bool service_pending_interrupts();
+    void clear_reservation();
+    void set_reservation(uint64_t paddr, int size);
+    bool reservation_matches(uint64_t paddr, int size) const;
+    void invalidate_reservation(uint64_t paddr, int size);
 
 private:
     void enter_trap(uint64_t cause, uint64_t tval);
@@ -27,4 +31,7 @@ private:
     CoreState& core_;
     CsrFile& csr_;
     uint64_t timer_pending_mask_{0};
+    bool reservation_valid_{false};
+    uint64_t reservation_paddr_{0};
+    int reservation_size_{0};
 };

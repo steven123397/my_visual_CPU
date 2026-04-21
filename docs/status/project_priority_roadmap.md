@@ -36,6 +36,7 @@
 - 当前主线的优先级判断已经改为：先落 `RV64A + virtio + CSR / privilege 补全 + xv6-riscv workload harness / bring-up`，并让这轮结构决策直接服务后续 `Linux` 与 `JIT / DBT`。
 - 默认延续线没有被丢弃：`V4`、`P4-prep-1`、`kernel_alpha`、`debug/frontend` 与既有回归矩阵继续作为当前主线的 guardrail、观测基础与回归支架。
 - `future_expansion_roadmap_design.md` 仍然是路线菜单；当前真正已经激活的执行方案，以 [xv6_linux_jit_status.md](xv6_linux_jit_status.md)、[mainline_status.md](mainline_status.md) 和 [../plan/xv6_linux_jit_wave1_plan.md](../plan/xv6_linux_jit_wave1_plan.md) 为准。
+- `2026-04-22` 第一轮 A / B / C / D foundation 已按 ownership 整合进主工作树，且首轮 post-integration correctness findings 已关闭；因此“下一轮最值得做什么”的答案继续稳定在先做 B 类平台 follow-up，再推进 C 类 `xv6` board profile / bring-up。
 
 ## 当前优先级
 
@@ -45,29 +46,33 @@
 - 继续守住 `kernel_alpha` 十条 guest 基线、`guest_supervisor_demo` 与当前 debug / frontend 链路。
 - 继续把新增 bug 的最小持久回归补到已有门禁中，而不是重新打开低收益的大规模回归扩面。
 
-### 2. `RV64A + CSR / privilege foundation` 是当前第一优先
+### 2. `virtio / platform` follow-up 是当前第一优先
 
-- `xv6-riscv`、更后续 `Linux`，以及未来 `JIT / DBT` 都需要更稳的 architected contract。
-- 当前第一刀不应再是“一次性最小跑通 `xv6`”，而是先把可复用的 atomic / reservation / privilege foundation 立住。
-- 即便 `pipeline` 先采用保守消费方式，也必须复用同一份共享 contract，而不是另起一套最小特判语义。
+- 第一轮 `virtio-mmio + virtqueue + virtio_device + virtio-blk` foundation 已经进入主线，当前最窄、最值钱的缺口不再是 transport / queue / backend 本身。
+- 真实 `xv6` board profile 之前，必须先把 UART 与 `virtio` 的 IRQ source 拆开，并把 `Machine` / board profile 接到实际 `virtio` 路径。
+- 这是当前从“foundation 已集成”走向“真实 `xv6` 消费这套平台合同”的直接前置条件。
+- 没做完这一步之前，不值得急着补更多 `virtio` 设备或额外 platform 特性。
 
-### 3. `virtio / platform foundation` 是当前第二优先
+### 3. `xv6-riscv` board profile / bring-up 是当前第二优先
 
-- 当前这轮不应只把 `virtio-blk` 写成一个设备特例，而是直接建立 `virtio-mmio + virtqueue + virtio_device` 分层。
-- `xv6` 只是第一个消费者；这层结构后续还要服务 `Linux` 和更多 `virtio` 设备。
-- 这条线与 Workstream A 可并行推进，但 ownership 必须保持独立。
+- `xv6-riscv` 当前已经通过 external workload harness 接进主线，并且 `xv6_boot_smoke` 已从旧的 `mhartid` illegal trap 刷新到 post-A 的 early-boot checkpoint。
+- 但这条线还没有真正消费 `virtio` contract：当前 board profile 仍记录 `simple_storage`，所以 bring-up 侧的下一跳是切 profile、刷新 smoke，并继续向更后面的稳定 checkpoint 推进。
+- 这条线仍然应该优先保持“可复用的 external workload 入口 + 稳定 smoke”，而不是为了快跑演示去写一次性特判。
+- `Linux` 后续会直接复用这层 harness / profile 结构，因此当前这里的抽象边界仍要保持克制和通用。
 
-### 4. `xv6-riscv` workload harness / bring-up 是当前第三优先
+### 4. A 类 `CSR / privilege / timer` hardening 是当前第三优先
 
-- `xv6-riscv` 当前已经不是“未来可以考虑”，而是当前主线的近端牵引目标。
-- 但这条线更适合先做外部 workload harness、boot path 盘点和 gap audit，再在 A/B 第一轮 contract 站稳后推进真实 smoke。
-- 不要把它写成一次性 `xv6_demo`；优先建立后续可容纳 `Linux` 的 external guest workload 入口。
+- A 线的第一轮 `RV64A + CSR / privilege` foundation 已经进入主线，因此它不再是“先要不要合”的问题，而是进入 bug-driven hardening 阶段。
+- 当前最值得补的 A 类工作，不是再主动扩大 ISA 面，而是随着 `xv6` 暴露新的真实缺口，最小化地补上 `pmp*`、`menvcfg`、`stimecmp` 等后续 contract。
+- 这条线要继续保证 `InstructionSemantics` 是单一语义来源，避免为了 bring-up 临时再造一套短寿命语义分支。
+- 一旦新缺口能被更窄的 asm / host smoke 固化，就应继续沿当前 hardening 路线补最小回归。
 
-### 5. observation / profile foundation + 默认延续线 guardrail 是并行必须项
+### 5. observation / profile foundation + 默认延续线 guardrail 仍是并行必须项
 
 - 当前主线虽然切到标准 OS bring-up，但 `V4`、`P4-prep-1`、`kernel_alpha`、`interactive_os` 和 debug / pipeline workload 仍然要继续守住。
 - 当前更值得并行保留的，不只是单纯的 `V4` hardening，还包括面向 `Linux / JIT / DBT` 的 execution profile / observation foundation。
 - 这条线的目标是为后续 hot-path 定位、memory behavior 观察、cache 评估和 JIT 候选路径选择提供证据，而不是现在就抢跑真实 JIT。
+- 当前 D 线已经整合进主线，并把 `execution_profile_smoke` 接进默认 `make test` / `make test-pipeline`；下一步更应该用它锁住新出现的 `xv6 / virtio` 路径，而不是反向抢占 A/B/C 的 contract ownership。
 
 ### 6. Spike 外部差分与更激进 `Phase 3` 继续维持条件触发
 
@@ -82,6 +87,7 @@
 4. 不在当前单发射 + coarse replay 基线上，继续主动扩大更激进的 `Phase 3` issue / replay / memory disambiguation。
 5. 不在 `xv6` foundation 与 workload 观测都还不稳定之前，直接抢跑更重的 `Phase 4` cache / DMA / multicore / coherence。
 6. 不把 `debug/frontend` 顺势扩成更大的产品功能面或通用调试器。
+7. 不把“foundation 已集成”误判成“`xv6` 已经跑在真实 `virtio` board profile 上”；当前尤其不能跳过 B 类 IRQ source follow-up 和 C 类 board profile 切换。
 
 ## 如需新开计划
 

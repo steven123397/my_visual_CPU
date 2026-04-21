@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <cstddef>
 #include <vector>
 
 #include "../debug/debug_snapshot.h"
@@ -20,6 +21,8 @@ public:
     PhysicalSpanInfo describe_span(uint64_t addr, uint64_t bytes) const;
     bool try_load(uint64_t addr, int size, uint64_t& value);
     bool try_store(uint64_t addr, uint64_t value, int size);
+    bool dma_load_bytes(uint64_t addr, void* data, size_t size);
+    bool dma_store_bytes(uint64_t addr, const void* data, size_t size);
     PlatformEvents peek_events() const;
     PlatformEvents tick();
     const DebugBusAccess& last_access() const;

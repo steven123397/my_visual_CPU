@@ -186,6 +186,7 @@ DebugSnapshot DebugSession::collect_snapshot() const {
     snapshot.summary.privilege = core.privilege_mode();
     snapshot.summary.backend = backend_snapshot.backend_name.empty() ? machine().backend().name() : backend_snapshot.backend_name;
     snapshot.pipeline = backend_snapshot.pipeline;
+    snapshot.profile = backend_snapshot.profile;
     for (size_t i = 0; i < snapshot.gpr.size(); ++i) {
         snapshot.gpr[i] = core.read_gpr(static_cast<uint32_t>(i));
     }

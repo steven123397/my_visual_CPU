@@ -116,6 +116,94 @@ void append_retire_trace(std::ostringstream& out, const std::vector<RetireTraceE
     out << "]";
 }
 
+void append_execution_profile(std::ostringstream& out, const ExecutionProfileSnapshot& profile) {
+    out << "{"
+        << "\"total_retirements\":" << profile.total_retirements
+        << ",\"total_traps\":" << profile.total_traps
+        << ",\"total_memory_observations\":" << profile.total_memory_observations
+        << ",\"hot_paths\":[";
+    for (size_t i = 0; i < profile.hot_paths.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "{"
+            << "\"start_pc\":";
+        append_json_string(out, hex_u64(profile.hot_paths[i].start_pc));
+        out << ",\"end_pc\":";
+        append_json_string(out, hex_u64(profile.hot_paths[i].end_pc));
+        out << ",\"executions\":" << profile.hot_paths[i].executions
+            << ",\"retired_instructions\":" << profile.hot_paths[i].retired_instructions
+            << "}";
+    }
+    out << "],\"branches\":[";
+    for (size_t i = 0; i < profile.branches.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "{"
+            << "\"pc\":";
+        append_json_string(out, hex_u64(profile.branches[i].pc));
+        out << ",\"raw\":";
+        append_json_string(out, hex_u64(profile.branches[i].raw));
+        out << ",\"executions\":" << profile.branches[i].executions
+            << ",\"redirects\":" << profile.branches[i].redirects
+            << "}";
+    }
+    out << "],\"syscalls\":[";
+    for (size_t i = 0; i < profile.syscalls.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "{"
+            << "\"pc\":";
+        append_json_string(out, hex_u64(profile.syscalls[i].pc));
+        out << ",\"raw\":";
+        append_json_string(out, hex_u64(profile.syscalls[i].raw));
+        out << ",\"count\":" << profile.syscalls[i].count
+            << "}";
+    }
+    out << "],\"traps\":[";
+    for (size_t i = 0; i < profile.traps.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "{"
+            << "\"pc\":";
+        append_json_string(out, hex_u64(profile.traps[i].pc));
+        out << ",\"raw\":";
+        append_json_string(out, hex_u64(profile.traps[i].raw));
+        out << ",\"cause\":";
+        append_json_string(out, hex_u64(profile.traps[i].cause));
+        out << ",\"privilege\":";
+        append_json_string(out, privilege_name(profile.traps[i].privilege));
+        out << ",\"interrupt\":" << (profile.traps[i].interrupt ? "true" : "false")
+            << ",\"count\":" << profile.traps[i].count
+            << "}";
+    }
+    out << "],\"memory_regions\":[";
+    for (size_t i = 0; i < profile.memory_regions.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "{"
+            << "\"label\":";
+        append_json_string(out, profile.memory_regions[i].label);
+        out << ",\"kind\":";
+        append_json_string(out, profile.memory_regions[i].kind);
+        out << ",\"cacheable\":" << (profile.memory_regions[i].cacheable ? "true" : "false")
+            << ",\"dma_visible\":" << (profile.memory_regions[i].dma_visible ? "true" : "false")
+            << ",\"has_side_effect\":" << (profile.memory_regions[i].has_side_effect ? "true" : "false")
+            << ",\"supports_burst\":" << (profile.memory_regions[i].supports_burst ? "true" : "false")
+            << ",\"accesses\":" << profile.memory_regions[i].accesses
+            << ",\"reads\":" << profile.memory_regions[i].reads
+            << ",\"writes\":" << profile.memory_regions[i].writes
+            << ",\"faults\":" << profile.memory_regions[i].faults
+            << ",\"bytes\":" << profile.memory_regions[i].bytes
+            << "}";
+    }
+    out << "]}";
+}
+
 std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
     std::ostringstream out;
     out << "{"
@@ -186,7 +274,9 @@ std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
         << ",\"correct_predictions\":" << snapshot.pipeline.predictor.correct_predictions
         << ",\"mispredictions\":" << snapshot.pipeline.predictor.mispredictions
         << "}";
-    out << "},\"gpr\":[";
+    out << "},\"profile\":";
+    append_execution_profile(out, snapshot.profile);
+    out << ",\"gpr\":[";
     for (size_t i = 0; i < snapshot.gpr.size(); ++i) {
         if (i != 0) {
             out << ',';

@@ -172,6 +172,7 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     snapshot.pipeline.predictor.total_predictions = predictor_stats.total_predictions;
     snapshot.pipeline.predictor.correct_predictions = predictor_stats.correct_predictions;
     snapshot.pipeline.predictor.mispredictions = predictor_stats.mispredictions;
+    snapshot.profile = state_.execution_profile();
     return snapshot;
 }
 

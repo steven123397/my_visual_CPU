@@ -95,6 +95,14 @@ void PipelineCoreState::record_retire(const RetireTraceEntry& entry) {
     }
 }
 
+void PipelineCoreState::record_memory(const ExecutionMemoryObservation& observation) {
+    sequence_state_.record_memory(observation);
+}
+
+void PipelineCoreState::record_trap(const ExecutionTrapObservation& observation) {
+    sequence_state_.record_trap(observation);
+}
+
 uint64_t PipelineCoreState::last_sequence_id() const {
     return sequence_state_.last_sequence_id();
 }
@@ -105,6 +113,10 @@ uint64_t PipelineCoreState::last_retired_sequence() const {
 
 const std::vector<RetireTraceEntry>& PipelineCoreState::retire_trace() const {
     return sequence_state_.retire_trace();
+}
+
+ExecutionProfileSnapshot PipelineCoreState::execution_profile() const {
+    return sequence_state_.profile_snapshot();
 }
 
 RenameMap& PipelineCoreState::rename_map() {

@@ -205,6 +205,11 @@ int main() {
         if (!expect((cpu.csr().read(CSR_SIP, cpu.core()) & MIE_STIE) == 0, "supervisor timer interrupt handler should clear delegated pending state")) {
             return 1;
         }
+        const BackendDebugSnapshot snapshot = backend.debug_snapshot();
+        if (!expect(!snapshot.profile.traps.empty(),
+                    "supervisor timer interrupt path should expose trap profile entries")) {
+            return 1;
+        }
     }
 
     {
@@ -419,6 +424,18 @@ int main() {
         }
         if (!expect(!trace_contains_raw(snapshot.pipeline.retire_trace, kAddiX1WrongPath),
                     "retire trace should not contain jal wrong-path instructions")) {
+            return 1;
+        }
+        if (!expect(!snapshot.profile.hot_paths.empty(),
+                    "jal predict-hit smoke should expose hot-path profile entries")) {
+            return 1;
+        }
+        if (!expect(!snapshot.profile.branches.empty(),
+                    "jal predict-hit smoke should expose branch profile entries")) {
+            return 1;
+        }
+        if (!expect(!snapshot.profile.syscalls.empty(),
+                    "jal predict-hit smoke should expose syscall profile entries")) {
             return 1;
         }
     }

@@ -1,5 +1,6 @@
 #include "instruction_semantics.h"
 
+#include "atomic_contract.h"
 #include "execution_context.h"
 
 #include "../arch/core_state.h"
@@ -38,6 +39,7 @@ bool InstructionSemantics::supports(const Insn& insn) {
     case 0x63:
     case 0x03:
     case 0x23:
+    case 0x2F:
     case 0x73:
     case 0x07:
     case 0x27:
@@ -73,6 +75,8 @@ InsnEffects InstructionSemantics::execute(const Insn& insn, ExecutionContext& ct
     case 0x03:
     case 0x23:
         return build_memory_effects(insn, inputs.rs1v, inputs.rs2v, insn.imm);
+    case 0x2F:
+        return build_atomic_effects(insn, inputs.rs1v, inputs.rs2v);
     case 0x07:
     case 0x27:
     case 0x57:

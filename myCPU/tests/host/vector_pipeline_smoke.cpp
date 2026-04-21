@@ -283,6 +283,15 @@ bool test_ready_vector_dependency_executes_across_scalar_rob_head() {
                 "dependent vector ALU should eventually commit the forwarded-chain result")) {
         return false;
     }
+    const auto snapshot = backend.debug_snapshot();
+    if (!expect(!snapshot.profile.hot_paths.empty(),
+                "vector dependency chain should expose hot-path profile entries once it commits")) {
+        return false;
+    }
+    if (!expect(snapshot.profile.total_retirements >= 3,
+                "vector dependency chain should contribute committed retirements to the execution profile")) {
+        return false;
+    }
     return true;
 }
 

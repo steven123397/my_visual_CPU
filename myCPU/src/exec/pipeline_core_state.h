@@ -34,9 +34,12 @@ public:
 
     uint64_t allocate_sequence();
     void record_retire(const RetireTraceEntry& entry);
+    void record_memory(const ExecutionMemoryObservation& observation);
+    void record_trap(const ExecutionTrapObservation& observation);
     uint64_t last_sequence_id() const;
     uint64_t last_retired_sequence() const;
     const std::vector<RetireTraceEntry>& retire_trace() const;
+    ExecutionProfileSnapshot execution_profile() const;
     RenameMap& rename_map();
     const RenameMap& rename_map() const;
     ReorderBuffer& rob();

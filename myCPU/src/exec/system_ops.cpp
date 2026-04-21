@@ -35,6 +35,10 @@ bool is_sfence_vma(const Insn& insn) {
     return (insn.raw & 0xFE007FFFU) == 0x12000073U;
 }
 
+bool is_wfi(const Insn& insn) {
+    return insn.raw == 0x10500073U;
+}
+
 bool csr_instruction_writes(const Insn& insn) {
     switch (insn.funct3) {
     case 1:
@@ -172,6 +176,14 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
                 return effects;
             }
             effects.control.flush_tlb = true;
+            return effects;
+        }
+        if (is_wfi(insn)) {
+            if (core.privilege_mode() == PrivilegeMode::User) {
+                effects.trap = illegal_instruction_trap(insn.raw);
+                effects.retired = false;
+                return effects;
+            }
             return effects;
         }
         effects.trap = illegal_instruction_trap(insn.raw);

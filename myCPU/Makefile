@@ -3,16 +3,18 @@ CXX      = g++
 CFLAGS   = -O2 -Wall -Wextra -g -std=c11
 CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
 C_SRCS   = src/memory.c src/decode.c
-CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/arch/vector_state.cpp src/debug/debug_session.cpp src/debug/debug_protocol.cpp src/debug/debug_protocol_command.cpp src/debug/debug_protocol_response.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/vector_ops.cpp src/exec/branch_predictor.cpp src/exec/pipeline_sequence.cpp src/exec/pipeline_commit_boundary.cpp src/exec/pipeline_core_state.cpp src/exec/pipeline_hazards.cpp src/exec/physical_register_file.cpp src/exec/rename_map.cpp src/exec/reorder_buffer.cpp src/exec/load_store_queue.cpp src/exec/functional_backend.cpp src/exec/pipeline_backend.cpp src/exec/pipeline_backend_cycle.cpp src/exec/pipeline_backend_execute.cpp src/exec/pipeline_backend_frontend.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
+CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/arch/vector_state.cpp src/debug/debug_session.cpp src/debug/debug_protocol.cpp src/debug/debug_protocol_command.cpp src/debug/debug_protocol_response.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/vector_ops.cpp src/exec/branch_predictor.cpp src/exec/execution_profile.cpp src/exec/pipeline_sequence.cpp src/exec/pipeline_commit_boundary.cpp src/exec/pipeline_core_state.cpp src/exec/pipeline_hazards.cpp src/exec/physical_register_file.cpp src/exec/rename_map.cpp src/exec/reorder_buffer.cpp src/exec/load_store_queue.cpp src/exec/functional_backend.cpp src/exec/pipeline_backend.cpp src/exec/pipeline_backend_cycle.cpp src/exec/pipeline_backend_execute.cpp src/exec/pipeline_backend_frontend.cpp src/isa/atomic_contract.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/address_space.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/devices/virtqueue.cpp src/devices/virtio_device.cpp src/devices/virtio_blk.cpp src/devices/virtio_mmio.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 CORE_OBJS = $(filter-out src/main.o,$(OBJS))
 TARGET   = mycpu
-HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/address_space_faults_smoke tests/host/predictor_smoke tests/host/pipeline_backend_smoke tests/host/pipeline_core_state_smoke tests/host/pipeline_forwarding_smoke tests/host/pipeline_commit_trace_smoke tests/host/pipeline_rename_commit_smoke tests/host/pipeline_speculation_contracts_smoke tests/host/backend_differential_smoke tests/host/debug_cli_smoke tests/host/debug_protocol_command_smoke tests/host/interactive_terminal_smoke tests/host/physical_register_file_smoke tests/host/rename_map_smoke tests/host/reorder_buffer_smoke tests/host/load_store_queue_smoke tests/host/vector_vlite_smoke tests/host/vector_backend_smoke tests/host/vector_operator_smoke tests/host/vector_cnn_smoke tests/host/vector_pipeline_smoke
+HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/atomic_semantics_smoke tests/host/address_space_faults_smoke tests/host/predictor_smoke tests/host/pipeline_backend_smoke tests/host/pipeline_core_state_smoke tests/host/pipeline_forwarding_smoke tests/host/pipeline_commit_trace_smoke tests/host/pipeline_rename_commit_smoke tests/host/pipeline_speculation_contracts_smoke tests/host/backend_differential_smoke tests/host/debug_cli_smoke tests/host/debug_protocol_command_smoke tests/host/execution_profile_smoke tests/host/interactive_terminal_smoke tests/host/physical_register_file_smoke tests/host/rename_map_smoke tests/host/reorder_buffer_smoke tests/host/load_store_queue_smoke tests/host/vector_vlite_smoke tests/host/vector_backend_smoke tests/host/vector_operator_smoke tests/host/vector_cnn_smoke tests/host/vector_pipeline_smoke tests/host/virtio_blk_smoke tests/host/xv6_boot_smoke
 INDEPENDENT_HOST_TEST_BINS = tests/host/spike_differential_smoke
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults mmio_access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control csr_illegal_matrix counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_mprv sv39_pagewalk_contracts sv39_exec_privilege sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
+ATOMIC_ASM_TESTS = atomic_basic atomic_ordering_smoke
+ATOMIC_ASM_ELFS = $(ATOMIC_ASM_TESTS:%=tests/asm/%.elf)
 FLAT_BIN_TESTS = hello
-UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract mmio_contract_matrix uart_rx_contract storage_readiness supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
+UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
 SUPERVISOR_RUNTIME_UNIT_OBJS = tests/unit/supervisor_runtime_test.o tests/unit/supervisor_runtime_guest.o
 SUPERVISOR_RUNTIME_UNIT_DEPS = $(SUPERVISOR_RUNTIME_UNIT_OBJS:.o=.d)
@@ -154,7 +156,9 @@ GUEST_RV_CFLAGS = $(RV_FLAGS) -mcmodel=medany -mno-relax -msmall-data-limit=0 -f
 GUEST_RV_LDFLAGS = -nostdlib -nostartfiles -static -no-pie -Wl,-T,guest/supervisor_demo/link.ld
 RV_REQUIRED_TOOLS = $(RV_CC) $(RV_OBJCOPY)
 
-.PHONY: all clean test test-pipeline check-riscv-toolchain FORCE
+include workloads/common.mk
+
+.PHONY: all clean test test-pipeline check-riscv-toolchain FORCE build-workload build-workload-xv6 run-workload run-workload-xv6 smoke-workload smoke-workload-xv6
 
 all: $(TARGET)
 
@@ -223,7 +227,7 @@ $(GUEST_VECTOR_CNN_DEMO): $(GUEST_VECTOR_CNN_DEMO_OBJS)
 tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 	$(RV_OBJCOPY) -O binary $< $@
 
-test: $(TARGET) $(ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(ASM_TESTS:%=test-%) $(UNIT_TEST_NAMES:%=test-unit-%) test-host-instruction_semantics_smoke test-host-debug_cli_smoke test-host-debug_protocol_command_smoke test-host-interactive_terminal_smoke test-host-vector_vlite_smoke test-host-vector_backend_smoke test-host-vector_operator_smoke test-host-vector_cnn_smoke test-host-vector_pipeline_smoke test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo test-guest-interactive_os_demo test-guest-vector_demo test-guest-vector_cnn_demo $(FLAT_BIN_TESTS:%=test-flat-%)
+test: $(TARGET) $(ASM_ELFS) $(ATOMIC_ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(ASM_TESTS:%=test-%) $(ATOMIC_ASM_TESTS:%=test-%) $(UNIT_TEST_NAMES:%=test-unit-%) test-host-instruction_semantics_smoke test-host-atomic_semantics_smoke test-host-debug_cli_smoke test-host-debug_protocol_command_smoke test-host-execution_profile_smoke test-host-interactive_terminal_smoke test-host-vector_vlite_smoke test-host-vector_backend_smoke test-host-vector_operator_smoke test-host-vector_cnn_smoke test-host-vector_pipeline_smoke test-host-virtio_blk_smoke test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo test-guest-interactive_os_demo test-guest-vector_demo test-guest-vector_cnn_demo $(FLAT_BIN_TESTS:%=test-flat-%)
 
 FORCE:
 
@@ -273,6 +277,8 @@ define RUN_ASM_TEST
 		sv39_tlb_ad_bits) expected='TAD' ;; \
 		csr_semantic_consistency) expected='CSC' ;; \
 		clint_split_access) expected='CLT' ;; \
+		atomic_basic) expected='ATM' ;; \
+		atomic_ordering_smoke) expected='AOR' ;; \
 		*) echo "Unknown asm test: $(1)" >&2; exit 1 ;; \
 	esac; \
 	echo "=== $(1)$(4) ==="; \
@@ -382,6 +388,38 @@ test-host-interactive_terminal_smoke: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEM
 	fi; \
 	printf '%s\n' "$$output"
 
+test-host-xv6_boot_smoke: FORCE $(TARGET) build-workload-xv6 tests/host/xv6_boot_smoke
+	@echo "=== host:xv6_boot_smoke ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/xv6_boot_smoke 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Host test timed out: xv6_boot_smoke" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+build-workload: FORCE check-riscv-toolchain
+	$(WORKLOAD_BUILD_COMMAND)
+
+build-workload-xv6: FORCE
+	$(MAKE) WORKLOAD_NAME=xv6 WORKLOAD_BOARD=$(WORKLOAD_BOARD) build-workload
+
+run-workload: FORCE $(TARGET) build-workload
+	python3 $(WORKLOAD_PROBE_SCRIPT) --target ./$(TARGET) --image $(WORKLOAD_IMAGE) --disk $(WORKLOAD_DISK) --step-cycles $(WORKLOAD_PROBE_CYCLES)
+
+run-workload-xv6: FORCE
+	$(MAKE) WORKLOAD_NAME=xv6 WORKLOAD_BOARD=$(WORKLOAD_BOARD) run-workload
+
+smoke-workload: FORCE
+	$(MAKE) WORKLOAD_NAME=$(WORKLOAD_NAME) WORKLOAD_BOARD=$(WORKLOAD_BOARD) $(WORKLOAD_SMOKE_TARGET)
+
+smoke-workload-xv6: FORCE
+	$(MAKE) WORKLOAD_NAME=xv6 WORKLOAD_BOARD=$(WORKLOAD_BOARD) smoke-workload
+
 define RUN_INTERACTIVE_GUEST_DEMO_TEST
 	@echo "=== guest_interactive_os_demo$(3) ==="; \
 	output="$$(timeout $(1) ./tests/host/interactive_terminal_smoke $(2) 2>&1)"; \
@@ -422,7 +460,7 @@ test-backend-cli: FORCE $(TARGET) tests/asm/hello.elf
 test-pipeline-%: FORCE $(TARGET) tests/asm/%.elf
 	$(call RUN_ASM_TEST,$*,$(TEST_TIMEOUT),--backend pipeline, (pipeline))
 
-test-pipeline: $(ASM_TESTS:%=test-pipeline-%) test-host-instruction_semantics_smoke test-host-predictor_smoke test-host-pipeline_backend_smoke test-host-pipeline_core_state_smoke test-host-pipeline_forwarding_smoke test-host-pipeline_commit_trace_smoke test-host-pipeline_rename_commit_smoke test-host-pipeline_speculation_contracts_smoke test-host-backend_differential_smoke test-host-debug_cli_smoke test-host-debug_protocol_command_smoke test-host-interactive_terminal_smoke test-host-vector_vlite_smoke test-host-vector_backend_smoke test-host-vector_operator_smoke test-host-vector_cnn_smoke test-host-vector_pipeline_smoke test-backend-cli test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo test-pipeline-guest-interactive_os_demo test-pipeline-guest-vector_demo test-pipeline-guest-vector_cnn_demo
+test-pipeline: $(ASM_TESTS:%=test-pipeline-%) test-host-instruction_semantics_smoke test-host-atomic_semantics_smoke test-host-predictor_smoke test-host-pipeline_backend_smoke test-host-pipeline_core_state_smoke test-host-pipeline_forwarding_smoke test-host-pipeline_commit_trace_smoke test-host-pipeline_rename_commit_smoke test-host-pipeline_speculation_contracts_smoke test-host-backend_differential_smoke test-host-debug_cli_smoke test-host-debug_protocol_command_smoke test-host-execution_profile_smoke test-host-interactive_terminal_smoke test-host-vector_vlite_smoke test-host-vector_backend_smoke test-host-vector_operator_smoke test-host-vector_cnn_smoke test-host-vector_pipeline_smoke test-backend-cli test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo test-pipeline-guest-interactive_os_demo test-pipeline-guest-vector_demo test-pipeline-guest-vector_cnn_demo
 
 test-flat-%: FORCE $(TARGET) tests/asm/%.bin
 	@case "$*" in \
@@ -550,6 +588,7 @@ check-riscv-toolchain:
 	fi
 
 clean:
+	@if [ -d $(XV6_EXTERNAL_DIR) ]; then $(WORKLOAD_CLEAN_COMMAND) >/dev/null; fi
 	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(INDEPENDENT_HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_BRINGUP_UNIT_OBJS) $(KERNEL_BRINGUP_UNIT_DEPS) $(VM_ADDRESS_SPACE_UNIT_OBJS) $(VM_ADDRESS_SPACE_UNIT_DEPS) $(VM_PROCESS_UNIT_OBJS) $(VM_PROCESS_UNIT_DEPS) $(VM_OBJECT_UNIT_OBJS) $(VM_OBJECT_UNIT_DEPS) $(VM_FAULT_UNIT_OBJS) $(VM_FAULT_UNIT_DEPS) $(TRAP_RUNTIME_UNIT_OBJS) $(TRAP_RUNTIME_UNIT_DEPS) $(TRAP_DISPATCH_UNIT_OBJS) $(TRAP_DISPATCH_UNIT_DEPS) $(USER_TASK_UNIT_OBJS) $(USER_TASK_UNIT_DEPS) $(USER_TASK_BOOTSTRAP_UNIT_OBJS) $(USER_TASK_BOOTSTRAP_UNIT_DEPS) $(USER_PROGRAM_UNIT_OBJS) $(USER_PROGRAM_UNIT_DEPS) $(USER_PROGRAM_SMOKE_UNIT_OBJS) $(USER_PROGRAM_SMOKE_UNIT_DEPS) $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS) $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS) $(MONITOR_COMMANDS_UNIT_OBJS) $(MONITOR_COMMANDS_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO)
 	find src guest -type f \( -name '*.o' -o -name '*.d' \) -delete
 

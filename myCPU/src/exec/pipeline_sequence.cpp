@@ -10,6 +10,7 @@ uint64_t PipelineSequenceState::allocate() {
 void PipelineSequenceState::clear() {
     last_sequence_id_ = 0;
     retire_trace_.clear();
+    profile_.clear();
 }
 
 void PipelineSequenceState::record(const RetireTraceEntry& entry) {
@@ -23,6 +24,21 @@ void PipelineSequenceState::record(const RetireTraceEntry& entry) {
             retire_trace_.begin(),
             retire_trace_.begin() + static_cast<std::ptrdiff_t>(retire_trace_.size() - kRetireTraceCapacity));
     }
+
+    profile_.record_retire(ExecutionRetireObservation{
+        .pc = entry.pc,
+        .raw = entry.raw,
+        .trap = entry.trap,
+        .redirect = entry.redirect,
+    });
+}
+
+void PipelineSequenceState::record_memory(const ExecutionMemoryObservation& observation) {
+    profile_.record_memory(observation);
+}
+
+void PipelineSequenceState::record_trap(const ExecutionTrapObservation& observation) {
+    profile_.record_trap(observation);
 }
 
 uint64_t PipelineSequenceState::last_sequence_id() const {
@@ -31,4 +47,8 @@ uint64_t PipelineSequenceState::last_sequence_id() const {
 
 const std::vector<RetireTraceEntry>& PipelineSequenceState::retire_trace() const {
     return retire_trace_;
+}
+
+ExecutionProfileSnapshot PipelineSequenceState::profile_snapshot() const {
+    return profile_.snapshot();
 }

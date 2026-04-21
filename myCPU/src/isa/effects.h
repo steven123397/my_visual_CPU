@@ -38,6 +38,33 @@ struct MemoryRequest {
     bool non_speculative{false};
 };
 
+struct AtomicRequest {
+    enum class Kind : uint8_t {
+        None,
+        LoadReserved,
+        StoreConditional,
+        Swap,
+        Add,
+        Xor,
+        And,
+        Or,
+        Min,
+        Max,
+        MinUnsigned,
+        MaxUnsigned,
+    };
+
+    Kind kind{Kind::None};
+    uint64_t addr{0};
+    uint64_t store_value{0};
+    uint8_t rd{0};
+    int size{0};
+    bool aq{false};
+    bool rl{false};
+    bool commit_at_boundary{true};
+    bool non_speculative{true};
+};
+
 struct VectorRequest {
     enum class Kind : uint8_t {
         None,
@@ -79,6 +106,7 @@ struct InsnEffects {
     RegWrite rd_write{};
     CsrWrite csr_write{};
     MemoryRequest mem{};
+    AtomicRequest atomic{};
     VectorRequest vector{};
     TrapRequest trap{};
     ControlEffect control{};

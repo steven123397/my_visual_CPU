@@ -66,6 +66,7 @@ struct PipelineDebugSnapshot {
 struct BackendDebugSnapshot {
     std::string backend_name{};
     PipelineDebugSnapshot pipeline{};
+    ExecutionProfileSnapshot profile{};
 };
 
 struct DebugBusAccess {
@@ -164,6 +165,7 @@ struct DebugSummarySnapshot {
 struct DebugSnapshot {
     DebugSummarySnapshot summary{};
     PipelineDebugSnapshot pipeline{};
+    ExecutionProfileSnapshot profile{};
     std::array<uint64_t, 32> gpr{};
     DebugVectorSnapshot vector{};
     DebugCsrSnapshot csrs{};

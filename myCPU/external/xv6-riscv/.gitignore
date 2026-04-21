@@ -1,0 +1,17 @@
+*.tex
+*.dvi
+*.idx
+*.aux
+*.log
+*.ind
+*.ilg
+*/*.o
+*/*.d
+*/*.asm
+*/*.sym
+kernel/kernel
+fs.img
+mkfs/mkfs
+.gdbinit
+user/usys.S
+user/_*

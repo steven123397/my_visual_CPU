@@ -1,5 +1,6 @@
 #include "bus.h"
 
+#include <cstring>
 #include <exception>
 #include <stdexcept>
 
@@ -121,6 +122,59 @@ bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
     record_unmapped_access(last_access_, true, addr, value, size);
     return false;
 }
+
+bool Bus::dma_load_bytes(uint64_t addr, void* data, size_t size) {
+    if (size == 0) {
+        return true;
+    }
+
+    const PhysicalSpanInfo span = describe_span(addr, size);
+    if (!span.ok || !span.region.dma_visible || span.region.has_side_effect) {
+        return false;
+    }
+
+    Device* device = find_device(addr, 1);
+    if (device == nullptr) {
+        return false;
+    }
+
+    auto* bytes = static_cast<unsigned char*>(data);
+    for (size_t i = 0; i < size; ++i) {
+        try {
+            bytes[i] = static_cast<unsigned char>(device->load(addr + i, 1) & 0xFFU);
+        } catch (const std::exception&) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Bus::dma_store_bytes(uint64_t addr, const void* data, size_t size) {
+    if (size == 0) {
+        return true;
+    }
+
+    const PhysicalSpanInfo span = describe_span(addr, size);
+    if (!span.ok || !span.region.dma_visible || span.region.has_side_effect) {
+        return false;
+    }
+
+    Device* device = find_device(addr, 1);
+    if (device == nullptr) {
+        return false;
+    }
+
+    const auto* bytes = static_cast<const unsigned char*>(data);
+    for (size_t i = 0; i < size; ++i) {
+        try {
+            device->store(addr + i, bytes[i], 1);
+        } catch (const std::exception&) {
+            return false;
+        }
+    }
+    return true;
+}
+
 
 PlatformEvents Bus::tick() {
     PlatformEvents events;

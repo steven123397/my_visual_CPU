@@ -57,6 +57,7 @@ struct FinalState {
     uint8_t vl{0};
     std::array<std::array<uint8_t, kRegisterBytes>, 32> vector_regs{};
     std::array<uint8_t, kWatchBytes> watched{};
+    ExecutionProfileSnapshot profile{};
 };
 
 template <typename>
@@ -96,6 +97,15 @@ bool expect(bool condition, const char* message) {
         return false;
     }
     return true;
+}
+
+bool profile_has_region_kind(const ExecutionProfileSnapshot& profile, const char* kind) {
+    for (const ExecutionMemoryRegionEntry& entry : profile.memory_regions) {
+        if (entry.kind == kind && entry.accesses != 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 uint32_t encode_rtype(uint8_t opcode,
@@ -357,6 +367,7 @@ FinalState run_case(const Sample& sample, BackendKind kind) {
     out.vl = read_vector_vl(vector_state);
     out.vector_regs = capture_vector_regs(vector_state);
     out.watched = read_buffer<kWatchBytes>(ram, kWatchBase);
+    out.profile = backend->debug_snapshot().profile;
     return out;
 }
 
@@ -389,6 +400,14 @@ bool test_vector_cnn_sample(const Sample& sample) {
     }
     if (!expect(functional.watched == pipeline.watched,
                 "functional/pipeline watched memory should match for vector CNN smoke")) {
+        return false;
+    }
+    if (!expect(!pipeline.profile.hot_paths.empty(),
+                "pipeline vector CNN smoke should expose hot-path profile entries")) {
+        return false;
+    }
+    if (!expect(profile_has_region_kind(pipeline.profile, "ram"),
+                "pipeline vector CNN smoke should expose RAM memory-region profile entries")) {
         return false;
     }
     if (!expect(functional.watched == expected,

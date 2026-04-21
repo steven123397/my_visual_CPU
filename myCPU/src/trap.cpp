@@ -22,6 +22,11 @@ bool is_interrupt_cause(uint64_t cause) {
     return (cause & CAUSE_INT_BIT) != 0;
 }
 
+bool ranges_overlap(uint64_t lhs_addr, int lhs_size, uint64_t rhs_addr, int rhs_size) {
+    return lhs_addr < rhs_addr + static_cast<uint64_t>(rhs_size) &&
+           rhs_addr < lhs_addr + static_cast<uint64_t>(lhs_size);
+}
+
 uint64_t encode_privilege_mode(PrivilegeMode mode) {
     return static_cast<uint64_t>(mode);
 }
@@ -201,7 +206,36 @@ bool TrapController::service_pending_interrupts() {
     return true;
 }
 
+void TrapController::clear_reservation() {
+    reservation_valid_ = false;
+    reservation_paddr_ = 0;
+    reservation_size_ = 0;
+}
+
+void TrapController::set_reservation(uint64_t paddr, int size) {
+    reservation_valid_ = true;
+    reservation_paddr_ = paddr;
+    reservation_size_ = size;
+}
+
+bool TrapController::reservation_matches(uint64_t paddr, int size) const {
+    return reservation_valid_ &&
+           reservation_paddr_ == paddr &&
+           reservation_size_ == size;
+}
+
+void TrapController::invalidate_reservation(uint64_t paddr, int size) {
+    if (!reservation_valid_) {
+        return;
+    }
+    if (!ranges_overlap(reservation_paddr_, reservation_size_, paddr, size)) {
+        return;
+    }
+    clear_reservation();
+}
+
 void TrapController::enter_trap(uint64_t cause, uint64_t tval) {
+    clear_reservation();
     const bool delegated_to_supervisor =
         core_.privilege_mode() != PrivilegeMode::Machine &&
         ((is_interrupt_cause(cause) &&

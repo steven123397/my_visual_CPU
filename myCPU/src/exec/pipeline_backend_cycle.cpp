@@ -2,9 +2,121 @@
 
 #include <optional>
 
+#include "../arch/csr_file.h"
 #include "../cpu.h"
 #include "../mem/bus.h"
 #include "pipeline_commit_boundary.h"
+
+namespace {
+
+uint64_t active_trap_cause(const CPU& cpu) {
+    switch (cpu.core().privilege_mode()) {
+    case PrivilegeMode::Supervisor:
+        return cpu.csr().read(CSR_SCAUSE, cpu.core());
+    case PrivilegeMode::Machine:
+        return cpu.csr().read(CSR_MCAUSE, cpu.core());
+    case PrivilegeMode::User:
+    default:
+        return 0;
+    }
+}
+
+PhysicalRegionInfo observed_region(const Bus& bus, uint64_t paddr, uint64_t bytes) {
+    const PhysicalSpanInfo span = bus.describe_span(paddr, bytes);
+    if (span.ok) {
+        return span.region;
+    }
+    return bus.describe_region(paddr, 1);
+}
+
+ExecutionMemoryObservation fault_memory_observation(bool write, uint64_t bytes) {
+    return ExecutionMemoryObservation{
+        .valid = true,
+        .region = make_unmapped_region_info(),
+        .write = write,
+        .fault = true,
+        .bytes = bytes,
+    };
+}
+
+std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cpu,
+                                                                         Bus& bus,
+                                                                         const LsqEntry& entry,
+                                                                         bool fault) {
+    const AddressSpace::TranslateResult translated =
+        cpu.address_space().translate_result(bus,
+                                             entry.address,
+                                             entry.kind == LsqEntryKind::Load ? AccessType::Load
+                                                                              : AccessType::Store,
+                                             false);
+    if (!translated.ok) {
+        if (fault) {
+            return fault_memory_observation(entry.kind == LsqEntryKind::Store,
+                                            static_cast<uint64_t>(entry.size));
+        }
+        return std::nullopt;
+    }
+
+    return ExecutionMemoryObservation{
+        .valid = true,
+        .region = observed_region(bus, translated.paddr, static_cast<uint64_t>(entry.size)),
+        .write = entry.kind == LsqEntryKind::Store,
+        .fault = fault,
+        .bytes = static_cast<uint64_t>(entry.size),
+    };
+}
+
+std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cpu,
+                                                                         Bus& bus,
+                                                                         const VectorRequest& request,
+                                                                         bool fault) {
+    if (request.kind != VectorRequest::Kind::Load && request.kind != VectorRequest::Kind::Store) {
+        return std::nullopt;
+    }
+    const uint8_t sew_bytes = request.sew_bytes != 0 ? request.sew_bytes : cpu.core().vector().sew_bytes();
+    const uint8_t vl = request.vl != 0 ? request.vl : cpu.core().vector().vl();
+    const uint64_t bytes = static_cast<uint64_t>(sew_bytes) * static_cast<uint64_t>(vl);
+    if (bytes == 0) {
+        return std::nullopt;
+    }
+
+    const AddressSpace::TranslateResult translated =
+        cpu.address_space().translate_result(bus,
+                                             request.addr,
+                                             request.kind == VectorRequest::Kind::Load ? AccessType::Load
+                                                                                       : AccessType::Store,
+                                             false);
+    if (!translated.ok) {
+        if (fault) {
+            return fault_memory_observation(request.kind == VectorRequest::Kind::Store,
+                                            bytes);
+        }
+        return std::nullopt;
+    }
+
+    return ExecutionMemoryObservation{
+        .valid = true,
+        .region = observed_region(bus, translated.paddr, bytes),
+        .write = request.kind == VectorRequest::Kind::Store,
+        .fault = fault,
+        .bytes = bytes,
+    };
+}
+
+ExecutionTrapObservation make_trap_observation(const CPU& cpu,
+                                               uint64_t pc,
+                                               uint32_t raw) {
+    const uint64_t cause = active_trap_cause(cpu);
+    return ExecutionTrapObservation{
+        .pc = pc,
+        .raw = raw,
+        .cause = cause,
+        .privilege = cpu.core().privilege_mode(),
+        .interrupt = (cause >> 63) != 0,
+    };
+}
+
+}  // namespace
 
 void PipelineBackend::step() {
     cpu_.trap().sync_platform_events(bus_.tick());
@@ -74,6 +186,9 @@ bool PipelineBackend::step_wb() {
     if (!rob_head.has_value() || !rob_head->ready) {
         return false;
     }
+    const std::optional<LsqEntry> lsq_entry =
+        rob_head->lsq_index.value != 0 ? state_.lsq().peek(rob_head->lsq_index)
+                                       : std::optional<LsqEntry>{};
 
     CommitBoundaryInput commit_input{
         .pc = rob_head->pc,
@@ -86,6 +201,23 @@ bool PipelineBackend::step_wb() {
     commit_input.effects.rd_write = {};
     const CommitBoundaryResult result =
         apply_commit_boundary(cpu_, bus_, commit_input);
+    if (lsq_entry.has_value()) {
+        const std::optional<ExecutionMemoryObservation> observation =
+            make_scalar_memory_observation(cpu_, bus_, *lsq_entry, result.trap_taken);
+        if (observation.has_value()) {
+            state_.record_memory(*observation);
+        }
+    } else if (const std::optional<ExecutionMemoryObservation> observation =
+                   make_vector_memory_observation(cpu_,
+                                                  bus_,
+                                                  rob_head->effects.vector,
+                                                  result.trap_taken);
+               observation.has_value()) {
+        state_.record_memory(*observation);
+    }
+    if (result.trap_taken) {
+        state_.record_trap(make_trap_observation(cpu_, rob_head->pc, rob_head->raw));
+    }
     if (result.platform_state_changed) {
         cpu_.trap().sync_platform_events(bus_.peek_events());
     }
@@ -131,6 +263,7 @@ bool PipelineBackend::try_commit_fetch_fault() {
 
     cpu_.core().set_pc(state_.pending_fetch_fault_pc);
     cpu_.trap().enter_exception(state_.pending_fetch_fault.cause, state_.pending_fetch_fault.tval);
+    state_.record_trap(make_trap_observation(cpu_, state_.pending_fetch_fault_pc, 0));
     state_.flush(cpu_.core().pc());
     return true;
 }
@@ -149,10 +282,12 @@ bool PipelineBackend::try_service_interrupt_at_commit_boundary() {
         // state must wait until the next architectural step.
         return false;
     }
+    const uint64_t interrupted_pc = cpu_.core().pc();
     if (!cpu_.trap().service_pending_interrupts()) {
         return false;
     }
 
+    state_.record_trap(make_trap_observation(cpu_, interrupted_pc, 0));
     state_.rollback_to_committed_state(cpu_.core());
     state_.flush(cpu_.core().pc());
     return true;

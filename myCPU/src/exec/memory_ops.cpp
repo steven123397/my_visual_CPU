@@ -7,6 +7,7 @@
 namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
+constexpr uint64_t kPageSize = 4096;
 
 TrapRequest illegal_instruction_trap(uint32_t raw) {
     TrapRequest trap;
@@ -21,6 +22,11 @@ InsnEffects illegal_memory_effect(uint32_t raw) {
     effects.trap = illegal_instruction_trap(raw);
     effects.retired = false;
     return effects;
+}
+
+bool access_crosses_page(uint64_t addr, int size) {
+    const uint64_t page_offset = addr & (kPageSize - 1);
+    return page_offset + static_cast<uint64_t>(size) > kPageSize;
 }
 
 }  // namespace
@@ -128,11 +134,22 @@ bool apply_memory_effects(CPU& cpu, Bus& bus, const InsnEffects& effects) {
         cpu.core().write_gpr(effects.mem.rd, extend_loaded_value(value, effects.mem.size, effects.mem.sign_extend));
         return effects.retired;
     }
-    case MemoryRequest::Kind::Store:
+    case MemoryRequest::Kind::Store: {
+        AddressSpace::TranslateResult translated{};
+        if (!access_crosses_page(effects.mem.addr, effects.mem.size)) {
+            translated =
+                cpu.address_space().translate_result(bus, effects.mem.addr, AccessType::Store, false);
+        }
         if (!cpu.address_space().store(bus, effects.mem.addr, effects.mem.store_value, effects.mem.size)) {
             return false;
         }
+        if (translated.ok) {
+            cpu.trap().invalidate_reservation(translated.paddr, effects.mem.size);
+        } else {
+            cpu.trap().clear_reservation();
+        }
         return effects.retired;
+    }
     case MemoryRequest::Kind::None:
         return effects.retired;
     }

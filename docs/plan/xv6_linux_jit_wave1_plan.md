@@ -1,6 +1,6 @@
 # xv6 / Linux / JIT Wave 1 实现计划
 
-> **文档状态：** 执行中（`2026-04-21` 已完成主线切换设计、状态文档和 4 个 worktree 的编排）
+> **文档状态：** 执行中（`2026-04-21` 已完成主线切换设计、状态文档、4 个 worktree 编排与第一轮 handoff 收集；`2026-04-22` 已按 `A -> B -> C -> D` 完成第一轮主工作树整合，当前进入 post-integration follow-up 阶段）
 
 ## 文档定位
 
@@ -52,6 +52,16 @@
 - B 负责 `virtio / platform`；C 如果发现设备 / MMIO / 中断路由 blocker，只记录并回报，不在 bring-up 分支里顺手修。
 - D 负责读侧 observation / profile 和 guardrail，不拥有 A/B/C 的 architected 语义修改权。
 - 任何 workstream 如果发现自己需要大幅修改别人的 ownership 文件，必须停下来先向协调者汇报。
+
+## 当前执行进展
+
+- `2026-04-21` 已收齐 4 份 `workstream_handoff.md`。
+- `2026-04-22` 已按默认顺序把 A / B / C / D 第一轮 foundation 整合进主工作树。
+- A：共享 `AtomicRequest` contract、`RV64A`、`misa.A`、`mhartid`、`wfi` 与对应 asm / host smoke 已进入主线，并通过 `make test-host-atomic_semantics_smoke test-atomic_basic test-atomic_ordering_smoke` 验证。
+- B：`virtio-mmio + virtqueue + virtio_device + virtio-blk` foundation 与 DMA helper 已进入主线，并通过 `make test-unit-virtio_mmio_contract test-unit-virtqueue_smoke test-host-virtio_blk_smoke` 验证；当前主要剩余 blocker 已收敛到 UART / `virtio` IRQ source 冲突与 `Machine` 级接线。
+- C：external workload harness、vendored `xv6-riscv`、board profile、`build/run/smoke-workload-xv6` 与 `xv6_boot_smoke` 已进入主线；其中 smoke 已从旧的 `mhartid` illegal trap 刷新到新的 4-cycle early-boot checkpoint，但 board profile 仍记录 `simple_storage`。
+- D：`execution_profile`、debug CLI profile 导出与代表性 workload smoke 已进入主线，`test-host-execution_profile_smoke` 也已补进默认 `make test` / `make test-pipeline`。
+- 本轮整合后，主工作树已通过 `make smoke-workload-xv6`、`make test` 与 `make test-pipeline`；源 worktree / branch 仍按“开发者自己决定是否清理”的规则保留。
 
 ## 任务
 
@@ -170,13 +180,17 @@
 
 ## 推荐合并顺序
 
-1. **先收 A / B 的第一轮 contract。**
-   - 只要 `RV64A` / CSR / privilege contract 和 `virtio` transport / block contract 还没站稳，C 线就只能做 harness 与 gap audit。
-2. **再收 C 的 bring-up glue。**
-   - 此时 `xv6` 才能把缺口往更真实的 boot / shell 方向推进。
-3. **D 全程并行，但最后整合。**
-   - D 会给主线提供 profile、观测和 guardrail，不应反向抢占 A/B/C 的 contract ownership。
-4. **每合一轮，都由协调者统一回写 status/docs。**
+1. **第一轮整合顺序已经执行完毕：A -> B -> C -> D。**
+   - A / B 已先把 architected contract 与 `virtio` foundation 立成主线事实来源。
+   - C 随后已基于 A/B 新主线刷新 `xv6_boot_smoke` 到新的 early-boot checkpoint。
+   - D 最后整合，并把 `execution_profile` guardrail 补进默认主门禁。
+2. **当前 follow-up 顺序改为：先 B 类平台接线，再 C 类 board profile 推进。**
+   - 先补 UART / `virtio` 独立 IRQ source 与 `Machine` 级接线。
+   - 再把 `xv6` board profile 从 `simple_storage` 切到真实 `virtio` contract，并继续向更后的 bring-up checkpoint 推进。
+3. **A / D 后续都保持 bug-driven。**
+   - A 只随着新暴露的 CSR / privilege / timer 缺口补最窄 contract。
+   - D 继续用 profile / observation / guardrail 锁住新增行为变化，不反向抢占 A/B/C ownership。
+4. **每一轮 follow-up 仍由协调者统一回写 status/docs。**
 
 ## Agent 启动 prompt
 

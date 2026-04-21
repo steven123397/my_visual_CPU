@@ -17,18 +17,21 @@
 ## 当前状态
 
 - 当前无活跃问题。
-- 最近一轮集中复查的主要收口方向已经完成，包括：
-  - `debug/frontend` 的 session staged swap、`loadedSession` 口径、`terminal collapsed` 状态表达、向量展示精度与事件文案统一。
-  - guest runtime / VM 边界的 rollback、teardown、fail-closed 和 fault-range 合同补洞。
-  - `kernel_runtime / kernel_bringup / storage / interrupt` 失败路径与 bring-up 清理合同补洞。
-  - 向量访存对 live `MMIO`、非 RAM span 和 partial-write 的 fail-closed 边界。
-- 当前正式设计口径已经同步收口：`Phase 3` 执行模型、decode 边界收窄与后续取舍判断已统一吸收到 [../design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)，不再分散维护专项设计碎片。
+- `2026-04-22` 已关闭 `xv6 / Linux / JIT` 第一轮整合后的 2 条集中复查 findings：
+  - 普通 `store` 现在会在 functional / commit-boundary 路径上正确打破 `LR/SC` reservation，`lr -> overlapping sw -> sc` 已补 host 回归。
+  - `execution_profile` 现在会把 translation-fault memory access 记成 `unmapped` fault observation，并由 `execution_profile_smoke` 守住 `total_memory_observations` / `memory_regions[].faults`。
+- 本轮关闭验证已覆盖：
+  - `cd myCPU && make test-host-atomic_semantics_smoke`
+  - `cd myCPU && make test-host-execution_profile_smoke`
+  - `cd myCPU && make test-host-debug_cli_smoke`
+  - `cd myCPU && make test`
+  - `cd myCPU && make test-pipeline`
 
 ## 下一步
 
-1. 如果后续再做代码审查或对抗性复查，新的活跃 findings 继续集中记录到本文档。
-2. 如果当前仍无活跃问题，应继续明确保持“当前无活跃问题”，而不是在本文件持续堆积已关闭的详细流水账。
-3. 若后续某轮复查形成可执行任务清单，再单独补对应 `plan` 文档，并在关闭后把结果摘要回写到这里。
+1. 当前 review 线回到维护态；后续只在新问题出现时再补最窄 findings。
+2. 主线优先级回到 B 类平台 follow-up，再到 C 类 `xv6` board profile / boot checkpoint 推进。
+3. A / D 继续保持 bug-driven hardening，不主动扩大无关实现面。
 
 ## 记录规则
 

@@ -1,5 +1,6 @@
 #include "pipeline_commit_boundary.h"
 
+#include "../isa/atomic_contract.h"
 #include "memory_ops.h"
 #include "vector_ops.h"
 
@@ -7,6 +8,8 @@
 #include "../mem/bus.h"
 
 namespace {
+
+constexpr uint64_t kPageSize = 4096;
 
 CommitBoundaryResult trap_result(const CPU& cpu) {
     return CommitBoundaryResult{
@@ -16,6 +19,11 @@ CommitBoundaryResult trap_result(const CPU& cpu) {
         .redirect = true,
         .next_pc = cpu.core().pc(),
     };
+}
+
+bool access_crosses_page(uint64_t addr, int size) {
+    const uint64_t page_offset = addr & (kPageSize - 1);
+    return page_offset + static_cast<uint64_t>(size) > kPageSize;
 }
 
 }  // namespace
@@ -49,6 +57,11 @@ CommitBoundaryResult apply_commit_boundary(CPU& cpu,
                                                      effects.mem.size,
                                                      effects.mem.sign_extend);
     } else if (effects.mem.kind == MemoryRequest::Kind::Store) {
+        AddressSpace::TranslateResult translated{};
+        if (!access_crosses_page(effects.mem.addr, effects.mem.size)) {
+            translated =
+                cpu.address_space().translate_result(bus, effects.mem.addr, AccessType::Store, false);
+        }
         const AddressSpace::AccessResult access =
             cpu.address_space().store_result(bus,
                                              effects.mem.addr,
@@ -57,7 +70,22 @@ CommitBoundaryResult apply_commit_boundary(CPU& cpu,
         if (!access.ok) {
             return enter_precise_trap(access.fault);
         }
+        if (translated.ok) {
+            cpu.trap().invalidate_reservation(translated.paddr, effects.mem.size);
+        } else {
+            cpu.trap().clear_reservation();
+        }
         result.platform_state_changed = bus.last_access().valid && bus.last_access().mmio;
+    }
+
+    if (effects.atomic.kind != AtomicRequest::Kind::None) {
+        const AtomicApplyResult atomic_result =
+            apply_atomic_request(cpu, bus, effects.atomic);
+        if (!atomic_result.ok) {
+            return enter_precise_trap(atomic_result.trap);
+        }
+        effects.rd_write = atomic_result.rd_write;
+        result.platform_state_changed |= atomic_result.platform_state_changed;
     }
 
     if (effects.vector.kind != VectorRequest::Kind::None) {

@@ -42,12 +42,21 @@
 - `向量扩展 + ML workload` 仍保留为默认延续线和代表性 workload corpus，不再是当前唯一主线，但仍继续为 profile / observation 和更后续 `Phase 4` 判断提供信号。
 - `Phase 4` 当前只正式打开准备性入口：`P4-prep-1` 已完成，`bus / memory region` 已成为统一事实来源；后续是否继续 `P4-prep-2`，仍取决于更稳定的 workload 信号。
 - Spike 外部差分验证已经形成一条独立离线 oracle，当前处于维护态，主要服务 reference correctness 疑点排查，而不是新的默认主门禁。
+- `2026-04-22` 当前主线切换的第一轮 A / B / C / D foundation 已按默认顺序整合到主工作树：A 已把 `RV64A + CSR / privilege` contract 变成主线事实来源，B 已接入 `virtio-mmio + virtqueue + virtio-blk` foundation，C 已把 external `xv6-riscv` workload harness 与刷新后的 `xv6_boot_smoke` 接进主线，D 已把 `execution_profile` 与 profile guardrail 接进默认回归。
+- 同日第一轮 post-integration correctness findings 也已关闭：普通 `store` 现在会正确打破 `LR/SC` reservation，translation-fault memory access 也会进入 `execution_profile` 的 fault 统计；主线优先级因此继续收敛回 B 类平台 follow-up 与 C 类 `xv6` board profile 推进。
 
 ## 关键历史节点
 
+- `2026-04-22`
+  - 完成第一轮 `A -> B -> C -> D` 主线整合。
+  - `xv6_boot_smoke` 已从旧的 `mhartid` illegal trap 口径刷新到 post-A 的 early-boot checkpoint。
+  - `execution_profile_smoke` 已接入默认 `make test` / `make test-pipeline`。
+  - 第一轮 post-integration correctness findings 已关闭：普通 `store` 会正确失效 `LR/SC` reservation，translation-fault memory observation 已计入 `execution_profile`。
+  - 本轮整合验证已覆盖 `make smoke-workload-xv6`、`make test` 与 `make test-pipeline`。
 - `2026-04-21`
   - 正式把 `future_expansion_roadmap_design.md` 中的标准 OS bring-up 切换线提升为当前 active program。
   - 新增 `xv6 / Linux / JIT` 主线 design / status / wave 1 plan，并按 4 个独立 worktree 启动并行工作流。
+  - 当天晚些时候 4 个 worktree 的第一轮 handoff 全部收齐，当前主线进入“按 ownership 整合已完成 foundation / harness”的阶段。
 - `2026-04-12`
   - 完成 `P4-prep-1`，`Bus` 已统一暴露 `RAM / MMIO / unmapped` 与保守 region 属性。
   - 向量 / CNN 可视化正式接入 `debug/frontend`。
@@ -70,13 +79,16 @@
 - 当前 `V4` 虽已落地，但仍刻意不扩到向量 load/store path、lane 模型、vector rename 或更重 memory speculation；在继续 hardening 与 workload 观察之前，直接抢跑更重 `Phase 4` 的性价比仍然偏低。
 - 当前 `P4-prep-1` 只是准备性收口，不代表 cache / DMA / multicore 已进入正式实施阶段。
 - guest runtime 的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime` 等边界已经比早期清晰得多，但后续仍要防止真实 bug 修复把职责重新揉回大文件。
+- 当前 `xv6_boot_smoke` 虽然已经刷新到 post-A 的 early-boot checkpoint，但 board profile 仍记录 `simple_storage`，还不能把它当成真实 `virtio` bring-up 成果。
+- 当前 B 线的 `virtio` foundation 已经足以作为平台层第一轮 contract，但真实 `xv6` board profile 前还需要一轮更窄的 `PLIC / UART / virtio` IRQ source 参数化与 `Machine` 级接线；否则 UART 与 `virtio-blk` 不能在同一个 profile 里共存。
+- A 已经补齐第一轮 `RV64A + CSR / privilege` foundation，但这不代表 `xv6` 后续会用到的全部 timer / privilege contract 都已落齐；`pmp*`、`menvcfg`、`stimecmp` 等缺口仍可能继续暴露。
 
 ## 下一步
 
-1. 先推进 `RV64A + CSR / privilege foundation`，把 `xv6` 和未来 `Linux` 必需的 ISA / architected contract 站稳。
-2. 并行推进 `virtio-mmio + virtqueue + virtio-blk` 平台基础，避免把标准 OS bring-up 写成一次性设备特判。
-3. 在 A / B 第一轮 contract 站稳后，继续推进 `xv6-riscv` external workload harness、boot gap audit 和真实 smoke。
-4. 全程并行保留默认延续线 guardrail，并补 execution profile / observation foundation，为后续 `Linux` 与 `JIT / DBT` 保留调试与热路径证据。
+1. 先补更窄的 B 类 follow-up：给 UART 与 `virtio` 拆开独立的 PLIC source wiring，并把 `Machine` / board profile 真正接到 `virtio-mmio + virtio-blk` 路径。
+2. 再推进 C 线：把 `xv6` board profile 从 `simple_storage` 切到 `virtio` contract，并把 `xv6_boot_smoke` 从当前 4-cycle checkpoint 推到下一个稳定 early-boot 里程碑。
+3. A 线后续保持 bug-driven：随着 `xv6` 暴露新的 CSR / privilege / timer 缺口，再补最窄 architected contract，不主动扩大无关 ISA 面。
+4. D 线继续作为主线 guardrail：优先用 `execution_profile`、debug CLI 与既有 workload smoke 锁住 `xv6 / virtio` 路径的行为变化。
 5. 继续把 `pipeline`、guest runtime、`kernel_alpha` 十条基线、`debug/frontend` 和 Spike 外部差分限定在当前已接入、可验证的范围内维护，不让新主线反向污染 reference path。
 
 ## 验证基线

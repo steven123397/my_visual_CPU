@@ -15,7 +15,7 @@ constexpr uint64_t SATP_MODE_BARE = 0ULL;
 constexpr uint64_t SATP_MODE_SV39 = 8ULL;
 constexpr uint64_t SATP_PPN_MASK = (1ULL << 44) - 1ULL;
 constexpr uint64_t MISA_IMPLEMENTED_VALUE =
-    (2ULL << 62) | (1ULL << 20) | (1ULL << 18) | (1ULL << 12) | (1ULL << 8);
+    (2ULL << 62) | (1ULL << 20) | (1ULL << 18) | (1ULL << 12) | (1ULL << 8) | (1ULL << 0);
 constexpr uint64_t MEDELEG_MASK =
     (1ULL << 1) |   // instruction access fault
     (1ULL << 2) |   // illegal instruction
@@ -55,6 +55,7 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_MCAUSE:
     case CSR_MTVAL:
     case CSR_MIP:
+    case CSR_MHARTID:
     case CSR_CYCLE:
     case CSR_TIME:
     case CSR_INSTRET:
@@ -106,6 +107,9 @@ uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
     if (addr == CSR_SSTATUS) {
         return regs_[CSR_MSTATUS] & SSTATUS_MASK;
     }
+    if (addr == CSR_MHARTID) {
+        return 0;
+    }
     if (addr == CSR_MEDELEG) {
         return regs_[CSR_MEDELEG] & MEDELEG_MASK;
     }
@@ -132,7 +136,7 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
     if (addr == CSR_CYCLE || addr == CSR_TIME || addr == CSR_INSTRET || addr == CSR_MCYCLE || addr == CSR_MINSTRET) {
         return;
     }
-    if (addr == CSR_MISA) {
+    if (addr == CSR_MISA || addr == CSR_MHARTID) {
         return;
     }
     if (addr == CSR_SSTATUS) {

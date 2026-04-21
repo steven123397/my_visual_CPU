@@ -207,6 +207,9 @@ int main() {
     if (!expect_contains(external_pending_output, "\"gpr\"", "snapshot should include register state")) {
         return 1;
     }
+    if (!expect_contains(external_pending_output, "\"profile\":{", "snapshot should include execution profile state")) {
+        return 1;
+    }
     if (!expect_line_with_fields(
             external_pending_lines,
             external_pending_output,
@@ -244,6 +247,24 @@ int main() {
                 "\"kind\":\"halt\"",
             },
             "external interrupt final snapshot should expose handler completion and pipeline events")) {
+        return 1;
+    }
+    if (!expect_contains(
+            external_final_output,
+            "\"total_traps\":1",
+            "external interrupt final snapshot should lock total trap count in the execution profile")) {
+        return 1;
+    }
+    if (!expect_contains(
+            external_final_output,
+            "\"traps\":[{\"pc\":\"0x800000e4\",\"raw\":\"0x0\",\"cause\":\"0x8000000000000009\",\"privilege\":\"S\",\"interrupt\":true,\"count\":1}]",
+            "external interrupt final snapshot should lock the delegated supervisor external trap profile")) {
+        return 1;
+    }
+    if (!expect_contains(
+            external_final_output,
+            "\"memory_regions\":[{\"label\":\"plic\",\"kind\":\"mmio\",\"cacheable\":false,\"dma_visible\":false,\"has_side_effect\":true,\"supports_burst\":false,\"accesses\":5,\"reads\":1,\"writes\":4,\"faults\":0,\"bytes\":20},{\"label\":\"uart\",\"kind\":\"mmio\",\"cacheable\":false,\"dma_visible\":false,\"has_side_effect\":true,\"supports_burst\":false,\"accesses\":4,\"reads\":0,\"writes\":4,\"faults\":0,\"bytes\":4}]",
+            "external interrupt final snapshot should lock representative MMIO memory-region profile counts")) {
         return 1;
     }
 
@@ -410,6 +431,36 @@ int main() {
     if (!expect_contains(predictor_output, "\"sequence_id\":1", "predictor retire trace should include sequence ids")) {
         return 1;
     }
+    if (!expect_contains(predictor_output, "\"hot_paths\":[", "predictor snapshot should expose hot-path profile state")) {
+        return 1;
+    }
+    if (!expect_contains(predictor_output, "\"branches\":[", "predictor snapshot should expose branch profile state")) {
+        return 1;
+    }
+    if (!expect_contains(
+            predictor_output,
+            "\"total_retirements\":3",
+            "predictor snapshot should lock total retirements in the execution profile")) {
+        return 1;
+    }
+    if (!expect_contains(
+            predictor_output,
+            "\"hot_paths\":[{\"start_pc\":\"0x80000080\",\"end_pc\":\"0x80000084\",\"executions\":1,\"retired_instructions\":2},{\"start_pc\":\"0x80000078\",\"end_pc\":\"0x80000078\",\"executions\":1,\"retired_instructions\":1}]",
+            "predictor snapshot should lock representative hot-path profile counts")) {
+        return 1;
+    }
+    if (!expect_contains(
+            predictor_output,
+            "\"branches\":[{\"pc\":\"0x80000078\",\"raw\":\"0x80006f\",\"executions\":1,\"redirects\":1}]",
+            "predictor snapshot should lock representative branch profile counts")) {
+        return 1;
+    }
+    if (!expect_contains(
+            predictor_output,
+            "\"syscalls\":[{\"pc\":\"0x80000084\",\"raw\":\"0x73\",\"count\":1}]",
+            "predictor snapshot should lock representative syscall profile counts")) {
+        return 1;
+    }
 
     const std::string store_queue_output =
         run_cli_script(build_flat_load_command(store_queue_binary.path) +
@@ -427,6 +478,16 @@ int main() {
                 "\"lsq_head_sequence_id\":3",
             },
             "pipeline snapshot should expose ROB/LSQ queue depth and head sequence")) {
+        return 1;
+    }
+    if (!expect_contains(store_queue_output, "\"memory_regions\":[",
+                         "pipeline snapshot should expose memory-region profile state")) {
+        return 1;
+    }
+    if (!expect_contains(
+            store_queue_output,
+            "\"profile\":{\"total_retirements\":2,\"total_traps\":0,\"total_memory_observations\":0,\"hot_paths\":[{\"start_pc\":\"0x80000078\",\"end_pc\":\"0x8000007c\",\"executions\":1,\"retired_instructions\":2}],\"branches\":[],\"syscalls\":[],\"traps\":[],\"memory_regions\":[]}",
+            "pre-commit store queue snapshot should lock the zero-memory-observation profile shape")) {
         return 1;
     }
 

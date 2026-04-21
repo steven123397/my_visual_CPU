@@ -8,6 +8,9 @@ void decode(uint32_t raw, Insn *insn) {
     insn->rs1    = (raw >> 15) & 0x1F;
     insn->rs2    = (raw >> 20) & 0x1F;
     insn->funct7 = (raw >> 25) & 0x7F;
+    insn->funct5 = (raw >> 27) & 0x1F;
+    insn->aq     = (raw >> 26) & 0x01;
+    insn->rl     = (raw >> 25) & 0x01;
 
     // Immediate decoding by format
     switch (insn->opcode) {

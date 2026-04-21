@@ -31,6 +31,7 @@ constexpr uint32_t CSR_MEPC = 0x341;
 constexpr uint32_t CSR_MCAUSE = 0x342;
 constexpr uint32_t CSR_MTVAL = 0x343;
 constexpr uint32_t CSR_MIP = 0x344;
+constexpr uint32_t CSR_MHARTID = 0xF14;
 constexpr uint32_t CSR_CYCLE = 0xC00;
 constexpr uint32_t CSR_TIME = 0xC01;
 constexpr uint32_t CSR_INSTRET = 0xC02;
