@@ -68,6 +68,9 @@ GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO = guest/kernel_alpha_timer_not_ready_dem
 GUEST_INTERACTIVE_OS_DEMO = guest/interactive_os.elf
 GUEST_VECTOR_DEMO = guest/vector_demo.elf
 GUEST_VECTOR_CNN_DEMO = guest/vector_cnn_demo.elf
+LINUX_PROTO_SBI_SHIM_ELF = workloads/linux_proto/linux_sbi_shim.elf
+LINUX_PROTO_SBI_SHIM_BIN = workloads/linux_proto/linux_sbi_shim.bin
+LINUX_PROTO_SBI_SHIM_DEP = workloads/linux_proto/linux_sbi_shim.d
 GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/console.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
@@ -141,8 +144,9 @@ DEPS     += $(KERNEL_ALPHA_STORAGE_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS)
 DEPS     += $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS)
 DEPS     += $(ASM_DEPS) $(ATOMIC_ASM_DEPS)
+DEPS     += $(LINUX_PROTO_SBI_SHIM_DEP)
 TEST_TIMEOUT ?= 2s
-XV6_SHELL_SMOKE_TIMEOUT ?= 180s
+XV6_SHELL_SMOKE_TIMEOUT ?= 300s
 SUPERVISOR_GUEST_TEST_TIMEOUT ?= 4s
 # Pipeline guest demos execute the full guest runtime under the pipeline
 # backend and need a wider budget than the functional path on debug builds.
@@ -154,6 +158,7 @@ PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 12s
 # RISC-V toolchain (adjust prefix if needed)
 RV_CC   = riscv64-unknown-elf-gcc
 RV_OBJCOPY = riscv64-unknown-elf-objcopy
+DTC = dtc
 RV_FLAGS = -march=rv64im -mabi=lp64
 RV_ELF_LDFLAGS = -nostdlib -Wl,-Ttext-segment=0x80000000
 GUEST_RV_CFLAGS = $(RV_FLAGS) -mcmodel=medany -mno-relax -msmall-data-limit=0 -ffreestanding -fno-builtin -fno-stack-protector -fno-pie -MMD -MP -g -O2 -Wall -Wextra
@@ -180,7 +185,7 @@ else ifneq ($(WORKLOAD_IMAGE_FORMAT),elf)
 $(error unsupported WORKLOAD_IMAGE_FORMAT: $(WORKLOAD_IMAGE_FORMAT))
 endif
 
-.PHONY: all clean test test-pipeline check-riscv-toolchain FORCE build-workload build-workload-xv6 run-workload run-workload-xv6 smoke-workload smoke-workload-xv6
+.PHONY: all clean test test-pipeline check-riscv-toolchain check-dtc-tool FORCE build-workload build-workload-xv6 run-workload run-workload-xv6 smoke-workload smoke-workload-xv6
 
 all: $(TARGET)
 
@@ -248,6 +253,31 @@ $(GUEST_VECTOR_CNN_DEMO): $(GUEST_VECTOR_CNN_DEMO_OBJS)
 # Build flat binary from ELF
 tests/asm/%.bin: tests/asm/%.elf | check-riscv-toolchain
 	$(RV_OBJCOPY) -O binary $< $@
+
+$(LINUX_PROTO_SBI_SHIM_ELF): workloads/linux_proto/linux_sbi_shim.S workloads/linux_proto/linux_sbi_shim.ld | check-riscv-toolchain
+	$(RV_CC) $(GUEST_RV_CFLAGS) -Iinclude -nostdlib -nostartfiles -static -no-pie -MMD -MP -MF $(LINUX_PROTO_SBI_SHIM_DEP) -Wl,-T,workloads/linux_proto/linux_sbi_shim.ld -o $@ workloads/linux_proto/linux_sbi_shim.S
+
+$(LINUX_PROTO_SBI_SHIM_BIN): $(LINUX_PROTO_SBI_SHIM_ELF) | check-riscv-toolchain
+	$(RV_OBJCOPY) -O binary $< $@
+
+$(LINUX_PROTO_GENERATED_DTS): workloads/linux_proto/mycpu_virt.dts.in $(LINUX_PROTO_INITRD)
+	@initrd_size=$$(stat -c%s "$(LINUX_PROTO_INITRD)"); \
+	initrd_end=$$(printf '0x%x' $$(( $(BOARD_LINUX_INITRD_ADDR) + $$initrd_size ))); \
+	sed \
+		-e 's|@BOARD_LINUX_BOOTARGS@|$(BOARD_LINUX_BOOTARGS)|g' \
+		-e 's|@BOARD_LINUX_INITRD_ADDR@|$(BOARD_LINUX_INITRD_ADDR)|g' \
+		-e "s|@BOARD_LINUX_INITRD_END@|$$initrd_end|g" \
+		-e 's|@BOARD_LINUX_TIMEBASE_FREQUENCY@|$(BOARD_LINUX_TIMEBASE_FREQUENCY)|g' \
+		-e 's|@BOARD_RAM_BASE@|$(BOARD_RAM_BASE)|g' \
+		-e 's|@BOARD_RAM_SIZE@|$(BOARD_RAM_SIZE)|g' \
+		-e 's|@BOARD_UART_BASE@|$(BOARD_UART_BASE)|g' \
+		-e 's|@BOARD_CLINT_BASE@|$(BOARD_CLINT_BASE)|g' \
+		-e 's|@BOARD_PLIC_BASE@|$(BOARD_PLIC_BASE)|g' \
+		-e 's|@BOARD_BLOCK_BASE@|$(BOARD_BLOCK_BASE)|g' \
+		$< > $@
+
+$(LINUX_PROTO_GENERATED_DTB): $(LINUX_PROTO_GENERATED_DTS) | check-dtc-tool
+	$(DTC) -I dts -O dtb -o $@ $<
 
 test: $(TARGET) $(ASM_ELFS) $(ATOMIC_ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(ASM_TESTS:%=test-%) $(ATOMIC_ASM_TESTS:%=test-%) $(UNIT_TEST_NAMES:%=test-unit-%) test-host-instruction_semantics_smoke test-host-atomic_semantics_smoke test-host-debug_cli_smoke test-host-debug_protocol_command_smoke test-host-execution_profile_smoke test-host-interactive_terminal_smoke test-host-vector_vlite_smoke test-host-vector_backend_smoke test-host-vector_operator_smoke test-host-vector_cnn_smoke test-host-vector_pipeline_smoke test-host-virtio_blk_smoke test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo test-guest-interactive_os_demo test-guest-vector_demo test-guest-vector_cnn_demo $(FLAT_BIN_TESTS:%=test-flat-%)
 
@@ -633,9 +663,16 @@ check-riscv-toolchain:
 		exit 1; \
 	fi
 
+check-dtc-tool:
+	@command -v $(DTC) >/dev/null 2>&1 || { \
+		echo "Missing device-tree compiler: $(DTC)" >&2; \
+		echo "Install on Ubuntu: sudo apt install device-tree-compiler" >&2; \
+		exit 1; \
+	}
+
 clean:
 	@if [ -d $(XV6_EXTERNAL_DIR) ]; then $(WORKLOAD_CLEAN_COMMAND) >/dev/null; fi
-	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin tests/asm/*.d $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(INDEPENDENT_HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_BRINGUP_UNIT_OBJS) $(KERNEL_BRINGUP_UNIT_DEPS) $(VM_ADDRESS_SPACE_UNIT_OBJS) $(VM_ADDRESS_SPACE_UNIT_DEPS) $(VM_PROCESS_UNIT_OBJS) $(VM_PROCESS_UNIT_DEPS) $(VM_OBJECT_UNIT_OBJS) $(VM_OBJECT_UNIT_DEPS) $(VM_FAULT_UNIT_OBJS) $(VM_FAULT_UNIT_DEPS) $(TRAP_RUNTIME_UNIT_OBJS) $(TRAP_RUNTIME_UNIT_DEPS) $(TRAP_DISPATCH_UNIT_OBJS) $(TRAP_DISPATCH_UNIT_DEPS) $(USER_TASK_UNIT_OBJS) $(USER_TASK_UNIT_DEPS) $(USER_TASK_BOOTSTRAP_UNIT_OBJS) $(USER_TASK_BOOTSTRAP_UNIT_DEPS) $(USER_PROGRAM_UNIT_OBJS) $(USER_PROGRAM_UNIT_DEPS) $(USER_PROGRAM_SMOKE_UNIT_OBJS) $(USER_PROGRAM_SMOKE_UNIT_DEPS) $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS) $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS) $(MONITOR_COMMANDS_UNIT_OBJS) $(MONITOR_COMMANDS_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO)
+	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin tests/asm/*.d $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(INDEPENDENT_HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_BRINGUP_UNIT_OBJS) $(KERNEL_BRINGUP_UNIT_DEPS) $(VM_ADDRESS_SPACE_UNIT_OBJS) $(VM_ADDRESS_SPACE_UNIT_DEPS) $(VM_PROCESS_UNIT_OBJS) $(VM_PROCESS_UNIT_DEPS) $(VM_OBJECT_UNIT_OBJS) $(VM_OBJECT_UNIT_DEPS) $(VM_FAULT_UNIT_OBJS) $(VM_FAULT_UNIT_DEPS) $(TRAP_RUNTIME_UNIT_OBJS) $(TRAP_RUNTIME_UNIT_DEPS) $(TRAP_DISPATCH_UNIT_OBJS) $(TRAP_DISPATCH_UNIT_DEPS) $(USER_TASK_UNIT_OBJS) $(USER_TASK_UNIT_DEPS) $(USER_TASK_BOOTSTRAP_UNIT_OBJS) $(USER_TASK_BOOTSTRAP_UNIT_DEPS) $(USER_PROGRAM_UNIT_OBJS) $(USER_PROGRAM_UNIT_DEPS) $(USER_PROGRAM_SMOKE_UNIT_OBJS) $(USER_PROGRAM_SMOKE_UNIT_DEPS) $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS) $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS) $(MONITOR_COMMANDS_UNIT_OBJS) $(MONITOR_COMMANDS_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(LINUX_PROTO_SBI_SHIM_ELF) $(LINUX_PROTO_SBI_SHIM_BIN) $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_GENERATED_DTS) $(LINUX_PROTO_GENERATED_DTB)
 	find src guest -type f \( -name '*.o' -o -name '*.d' \) -delete
 
 -include $(DEPS)

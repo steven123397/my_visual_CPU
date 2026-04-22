@@ -162,7 +162,7 @@ bool Plic::supervisor_has_pending() const {
 }
 
 bool Plic::source_supported(uint32_t source_id) const {
-    return source_id == VIRTIO_SOURCE_ID || source_id == UART_SOURCE_ID;
+    return source_id >= 1 && source_id <= kNumSources;
 }
 
 uint32_t Plic::pending_bits() const {

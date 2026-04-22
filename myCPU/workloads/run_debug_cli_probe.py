@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import pathlib
 import subprocess
 import sys
 
@@ -158,6 +159,24 @@ def load_mode_summary(args) -> list[str]:
     return fields
 
 
+def referenced_input_paths(args) -> list[tuple[str, str]]:
+    paths = [("image", args.image)]
+    if args.disk:
+        paths.append(("disk", args.disk))
+    for action in args.boot_actions:
+        if action["cmd"] == "load_payload":
+            paths.append(("payload", action["image"]))
+    return paths
+
+
+def missing_input_paths(args) -> list[tuple[str, str]]:
+    missing = []
+    for kind, path in referenced_input_paths(args):
+        if not pathlib.Path(path).exists():
+            missing.append((kind, path))
+    return missing
+
+
 def emit_top_profile_entries(profile) -> None:
     print(
         "profile:",
@@ -267,6 +286,12 @@ def emit_probe_summary(args, lines) -> int:
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    missing = missing_input_paths(args)
+    if missing:
+        sys.stderr.write("missing input files:\n")
+        for kind, path in missing:
+            sys.stderr.write(f"  {kind}: {path}\n")
+        return 1
     proc = run_probe(args.target, build_commands(args))
     if proc.returncode != 0:
         sys.stdout.write(proc.stdout.decode())

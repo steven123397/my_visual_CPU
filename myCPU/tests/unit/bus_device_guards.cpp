@@ -12,6 +12,9 @@
 
 namespace {
 
+constexpr uint32_t kIntermediatePlicSource = PLIC_SOURCE_VIRTIO_MMIO + 1;
+constexpr uint32_t kOutOfRangePlicSource = PLIC_SOURCE_UART_THRE + 1;
+
 class DummyDevice : public Device {
 public:
     DummyDevice(uint64_t base, uint64_t size)
@@ -120,8 +123,14 @@ int main() {
             if (bus.try_load(CLINT_BASE + CLINT_REG_MTIME + 7, 2, value)) {
                 return fail("expected CLINT access crossing register boundary to fail");
             }
-            if (bus.try_store(PLIC_BASE + 0x8, 1, 4)) {
-                return fail("expected invalid PLIC offset to fail");
+            if (!bus.try_store(PLIC_BASE + PLIC_PRIORITY_OFFSET(kIntermediatePlicSource), 1, 4)) {
+                return fail("expected intermediate PLIC priority write to succeed");
+            }
+            if (!bus.try_load(PLIC_BASE + PLIC_PRIORITY_OFFSET(kIntermediatePlicSource), 4, value) || value != 1) {
+                return fail("expected intermediate PLIC priority readback to succeed");
+            }
+            if (bus.try_store(PLIC_BASE + PLIC_PRIORITY_OFFSET(kOutOfRangePlicSource), 1, 4)) {
+                return fail("expected out-of-range PLIC priority write to fail");
             }
             if (bus.try_load(PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE), 8, value)) {
                 return fail("expected invalid PLIC width to fail");

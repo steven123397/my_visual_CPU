@@ -122,18 +122,25 @@ void DebugSession::run_until_uart_contains(std::string_view text,
     ensure_loaded();
 
     const std::string needle(text);
-    if (machine().uart().output().find(needle) != std::string::npos) {
+    const std::string& output = machine().uart().output();
+    if (output.find(needle) != std::string::npos) {
         return;
     }
 
+    const size_t overlap = needle.empty() ? 0 : needle.size() - 1;
+    // Preserve just enough suffix to catch a match that straddles old/new UART bytes.
+    size_t search_from = output.size() > overlap ? output.size() - overlap : 0;
+
     for (uint64_t i = 0; i < max_steps; ++i) {
         machine().step();
-        if (machine().uart().output().find(needle) != std::string::npos) {
+        const std::string& updated_output = machine().uart().output();
+        if (updated_output.find(needle, search_from) != std::string::npos) {
             return;
         }
         if (machine().cpu().core().halted()) {
             throw std::runtime_error("guest halted before requested UART text appeared");
         }
+        search_from = updated_output.size() > overlap ? updated_output.size() - overlap : 0;
     }
 
     throw std::runtime_error("run_until_uart_contains exceeded step budget");

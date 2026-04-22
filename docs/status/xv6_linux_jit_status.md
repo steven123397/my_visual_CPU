@@ -45,7 +45,11 @@
 - D 线的 `execution_profile`、debug CLI profile 导出，以及面向 `memory_region` 的读侧观测合同也已进入主线；`test-host-execution_profile_smoke` 已补进默认 `make test` / `make test-pipeline` guardrail。
 - A / D 的第一轮 post-integration hardening 也已补齐：普通 `store` 现在会正确失效 `LR/SC` reservation，delegated page/access fault 也会进入 `execution_profile` 的 `unmapped` fault observation；当前新增 gap 也因此不再是已知 architected correctness 缺口，而是 `xv6` 在真实 `virtio` board path 上继续前进时会暴露出的下一处 bring-up blocker。
 - 同日进一步的 bug-driven A / B follow-up 也已把 `xv6` 推过旧的 early-boot trap：A 已补齐 `pmpcfg0/pmpaddr0/menvcfg/stimecmp` 的最小合法 contract，B 已把 UART 扩到 `xv6 uartinit()` 需要的 `LCR/FCR/DLAB` 与 RX/TX interrupt identity；`run-workload-xv6` 现在也会直接打印 machine/supervisor trap 视图。
-- 当前 Linux-facing 的最小 boot foundation 也已进入主线：`run_debug_cli_probe.py`、普通 CLI、debug CLI、`Machine` 和 `DebugSession` 现在都支持通用的 `flat image + payload + set_gpr` 合同；probe summary 会直接打印 `payloads:` 与 `gpr-seeds:`；`linux_proto` workload profile 已能用 board/profile 级事实来源稳定导出 `Image@0x80200000`、`dtb@0x88000000`、`initrd@0x84000000`、`a0=hartid` 与 `a1=dtb`。因此当前这条主线的活跃 blocker 已不再是“能否把 xv6 推到 shell”，而是：如何把真实 Linux 资产、板级 `DTB/chosen/cmdline` 与第一处 Linux boot checkpoint 接到这层 durable foundation 上。
+- 当前 Linux-facing 的最小 boot foundation 也已进入主线：`run_debug_cli_probe.py`、普通 CLI、debug CLI、`Machine` 和 `DebugSession` 现在都支持通用的 `flat image + payload + set_gpr` 合同；probe summary 会直接打印 `payloads:` 与 `gpr-seeds:`；`linux_proto` workload profile 当前会以 `linux_sbi_shim.bin@0x80000000` 作为主镜像，并稳定导出 `Image@0x80200000`、`dtb@0x87f00000`、`initrd@0x84000000`、`a0=hartid`、`a1=dtb` 与 `a2=kernel entry`。同日也已把板级 `DTB/chosen/cmdline` 合同收口进仓库：`mycpu_virt.dts.in` 会生成默认 `mycpu_virt.dtb`，显式携带 `chosen.bootargs`、`linux,initrd-start/end` 与 `timebase-frequency=100MHz`。因此当前这条主线的活跃 blocker 已不再是“能否把 xv6 推到 shell”，而是：如何沿真实 Linux boot path 继续把 checkpoint 从 initramfs unpack 推向 rootfs / init。
+- 同日也已把这条 Linux-facing blocker 再收窄一层：当前主工作区里仍不存在 `external/linux-riscv/arch/riscv/boot/Image` 与 `external/linux-riscv/rootfs.cpio` 这 2 个真实 Linux 资产；但板级 `DTB/chosen/cmdline` 已不再依赖外部 `mycpu_virt.dtb`，而是由仓库内模板和 `dtc` 规则默认生成。`run_debug_cli_probe.py` / `make run-workload WORKLOAD_NAME=linux_proto` 现在会在缺 `Image`、`initrd` 或显式 payload 输入时 fail-closed，直接打印缺失文件列表，而不是继续把问题伪装成 probe / simulator 行为异常。
+- 同日也已把这条 Linux-facing bring-up 再往前推进三刀：先补上一层最小 `linux_sbi_shim`，把 Linux 从旧的 `ecall from M-mode -> mtvec=0` blocker 推进到真实 `S-mode` early boot；随后又把 PLIC contract 从“只认 `virtio=1` / `UART=10`”收口成“`1..10` contiguous source window 合法、仅 `1/10` 会被真实设备拉高”，因此 `__plic_init()` 不再因写 `priority[2]` 触发 `store access fault`；最后再把 board DTB 固定到仓库生成的 `100MHz` timebase 合同。当前在真实外部 `Image + initrd` 与仓库生成 `dtb` 资产下，Linux 已能稳定打印到 `Unpacking initramfs...`，随后继续推进到 `devtmpfs: initialized`、`workingset`、`jitterentropy` 与 `xor: measuring software checksum speed` checkpoint。
+- 同日也补了一层更窄的 probe harness follow-up：`DebugSession::run_until_uart_contains()` 现在会按 UART 尾部增量搜索，而不是在每个 cycle 对整段 UART 缓冲做全文扫描；当前 `linux_proto` 的 `100M` `uart-wait` 已能在约 `1m30s` wall-clock 内稳定等到 `xor: measuring software checksum speed`，避免把长 Linux UART 日志误诊成 debug harness 自身的观测瓶颈。
+- 同日继续把 probe 推到 `cycle=100000000` 与更长 wall-clock 预算后，当前 `100MHz` board DTB 路径下已不再像旧 `1MHz` external DTB 那样很快落入 `soft lockup` / `workqueue lockup`；Linux 会继续前进到 `devtmpfs: initialized` 之后的更后面阶段，但在 `devtmpfs: mounted` / `VFS: Mounted root` 之前仍未拿到更稳定 checkpoint。当前冻结下来的更近判断是：活跃 blocker 更像 `devtmpfs: initialized` 之后到 rootfs / init 之间的“纯慢 / 时间基准-吞吐耦合”或后续 boot contract 缺口，而不是新的 page/access fault。
 
 ## 关键历史节点
 
@@ -56,7 +60,7 @@
   - 第一轮 post-integration correctness findings 已关闭：普通 `store` 会正确打破 `LR/SC` reservation，faulting memory access 也会被 profile 统计。
   - 已完成 B / C follow-up：PLIC source wiring 拆分、`Machine` block transport 选择、`mycpu_virt` board profile 切到 `virtio-blk`，`xv6_boot_smoke` / `run-workload-xv6` 开始消费真实 `virtio` board path。
   - 同日进一步的 A / B bug-driven follow-up 也已完成：`xv6` 已越过旧的 early-boot trap，先稳定到 5000-cycle `S` mode boot-banner / allocator-warmup checkpoint，随后又在真实 `virtio-blk` board path 上推进到 shell，并把 shell smoke 扩到常用用户态 + 文件系统路径。
-  - 同日也已落下 Linux-facing boot foundation：generic `flat/payload/set_gpr` 合同、probe summary 的 `payloads/gpr-seeds` 输出、`DebugSession reset` 对 post-load payload/GPR seed 的 replay，以及 `linux_proto` board/profile 级 boot contract dry-run。
+  - 同日也已落下 Linux-facing boot foundation：generic `flat/payload/set_gpr` 合同、probe summary 的 `payloads/gpr-seeds` 输出、`DebugSession reset` 对 post-load payload/GPR seed 的 replay、`linux_sbi_shim`、repo-owned `mycpu_virt.dts.in -> mycpu_virt.dtb` board contract，以及把 Linux 推到 `Unpacking initramfs...` / `xor: measuring software checksum speed` 的第一处更后 boot checkpoint。
   - 这一轮验证已覆盖 `python3 tests/host/run_debug_cli_probe_test.py`、`make test-host-run_debug_cli_probe`、`make test-host-debug_protocol_command_smoke`、`make test-unit-machine_loader_reset`、`make test-host-debug_cli_smoke`、`make test-host-xv6_boot_smoke`、`make test-host-xv6_shell_smoke`、`make run-workload-xv6`、`make test`、`make test-pipeline` 与 `cd frontend && node --test`。
 - `2026-04-21`
   - 正式决定从“默认延续线优先”切到“标准 OS bring-up 线为当前主线”。
@@ -71,15 +75,16 @@
 - 当前 `Machine` 默认 block transport 仍保持 `simple_storage` 以守住既有 guest / debug 路径；真实 `virtio-blk` 路径现在需要由 workload profile、CLI 或 debug CLI 显式选择，这条兼容性策略当前是有意保留的。
 - “不做短寿命最小实现”会显著提高本轮对抽象边界的要求；如果控制不好，容易出现过度设计。当前必须持续用 `xv6`、未来 `Linux` 和未来 `JIT / DBT` 三个真实复用目标来约束抽象范围。
 - 当前 `pipeline`、`V4` 和 `P4-prep-1` 已经具备可用结构边界，但这并不意味着可以直接跳到更重的 cache / DMA / multicore 或更激进 speculation；这些仍应在本轮主线站稳之后再决定。
-- 当前最大的活跃 blocker 已不再是 `virtio` 接线或 `xv6` 自身 shell 路径，而是还没有把真实 Linux 资产、板级 `DTB/chosen/cmdline`、以及第一处 Linux boot checkpoint 接到现有 harness / profile foundation 上。
-- 当前 `linux_proto` 仍只是 boot contract dry-run profile，不代表 Linux guest 已经真正接入，也不代表当前已经验证过真实 `Image + dtb + initrd` 在模拟器里可以开始执行。
+- 当前最大的活跃 blocker 已不再是 `S-mode entry / SBI`、PLIC priority window，或“板级 `DTB/chosen/cmdline` 是否足够”这一级问题；这些最小 contract 已能把 Linux 稳定送进 `devtmpfs: initialized` 与 initramfs unpack 之后的更后阶段。当前更近、也更活跃的 blocker 已收敛成：在继续推进到 `devtmpfs: mounted` / `VFS: Mounted root` 之前，functional 路径上的 `mtime/timebase-frequency` 与 retired work 之间是否仍存在吞吐耦合，或者 `devtmpfs: initialized` 之后还缺一层更具体的 board/platform boot contract。
+- 当前 `linux_proto` 已经不再只是 boot contract dry-run profile；在显式提供一组外部 `Image + initrd` 资产时，它已经能默认生成 board DTB，并把真实 Linux 带到 `Unpacking initramfs...`、`devtmpfs: initialized`、`workingset`、`jitterentropy` 与 `xor` checkpoint。不过仓库默认路径下仍然缺 `Image` 和 `initrd` 这 2 个输入资产本体，因此主工作区默认仍依赖 `LINUX_PROTO_EXTERNAL_DIR` / `WORKLOAD_*` 覆写来消费它们。
+- 当前 Linux board contract 已推进到 `linux_sbi_shim + kernel/dtb/initrd payload + a0/a1/a2 seed + repo-generated chosen/initrd/timebase DTB`；后续如果 Linux 在 initramfs 之后继续暴露 gap，优先先判断是否需要再补更窄的 board `chosen` 字段或 platform contract，而不是回退到外部 DTB 手工维护。
 - A 已经补上第一轮 `mhartid / misa.A / wfi / RV64A` foundation，但这不代表 `xv6` 后续会用到的全部 CSR / timer contract 都已齐备；更后面的 `pmp*`、`menvcfg`、`stimecmp` 等缺口仍可能继续暴露。
 
 ## 下一步
 
 1. 把真实 `virtio-blk` board path 下的 `xv6` shell 里程碑继续守成稳定 guardrail，后续只按真实 bug 或明确收益补更窄 shell/userland/filesystem smoke，不再把“能否到 shell”当本轮主阻塞点。
-2. 在现有 `flat/payload/set_gpr` 与 `linux_proto` foundation 之上，接入真实 Linux 资产与板级 `DTB/chosen/cmdline`，并冻结第一处 Linux boot checkpoint。
-3. A / B 后续都改成围绕 Linux bring-up 的 bug-driven hardening：随着真实 Linux 暴露新的 CSR / privilege / timer / platform 缺口，再补最窄 contract，不主动扩大无关 ISA / device 面。
+2. 继续把真实 Linux `Image / initrd` 资产放到现有 harness 可消费的位置，或通过 `LINUX_PROTO_EXTERNAL_DIR` / `WORKLOAD_*` 覆写显式指向它们；当前 repo-generated `dtb/chosen/cmdline` 已足以把 Linux 推到 `devtmpfs: initialized` 与 `Unpacking initramfs...` 之后，后续优先先把 `devtmpfs: mounted` / `VFS: Mounted root` 之前的下一处稳定 checkpoint 或 blocker 冻结下来。
+3. A / B 后续都改成围绕 Linux bring-up 的 bug-driven hardening：`linux_sbi_shim`、PLIC contiguous source window 与 `100MHz` board DTB contract 这三层最小 contract 已经补上；同日 debug probe 侧也已把长 UART wait 收口成增量搜索。接下来优先先判断 `devtmpfs: initialized` 之后的停滞究竟是纯慢、timer/timebase 吞吐耦合，还是还缺一层更明确的 board/platform contract，再随着真实 Linux 暴露新的 CSR / privilege / timer / platform / virtio 缺口继续补最窄 contract，不主动扩大无关 ISA / device 面。
 4. D 线继续作为读侧 guardrail：优先用 `execution_profile`、debug CLI、`run_debug_cli_probe` 和既有 workload smoke 锁住新引入的 `xv6 / virtio / Linux profile` 行为变化，而不是新增一次性日志。
 
 ## 验证基线

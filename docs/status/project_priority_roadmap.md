@@ -36,7 +36,7 @@
 - 当前主线的优先级判断已经改为：先落 `RV64A + virtio + CSR / privilege 补全 + xv6-riscv workload harness / bring-up`，并让这轮结构决策直接服务后续 `Linux` 与 `JIT / DBT`。
 - 默认延续线没有被丢弃：`V4`、`P4-prep-1`、`kernel_alpha`、`debug/frontend` 与既有回归矩阵继续作为当前主线的 guardrail、观测基础与回归支架。
 - `future_expansion_roadmap_design.md` 仍然是路线菜单；当前真正已经激活的执行方案，以 [xv6_linux_jit_status.md](xv6_linux_jit_status.md)、[mainline_status.md](mainline_status.md) 和 [../plan/xv6_linux_jit_wave1_plan.md](../plan/xv6_linux_jit_wave1_plan.md) 为准。
-- `2026-04-22` 第一轮 A / B / C / D foundation 与首轮 B / C post-integration follow-up 都已进入主工作树；同日进一步的 A / B bug-driven follow-up 先把 `xv6` 推过旧的 early-boot trap，随后又在真实 `virtio-blk` board path 上稳定到 shell，并落下了 Linux-facing `flat/payload/set_gpr + linux_proto profile` foundation。因此“下一轮最值得做什么”的答案已收敛到：把 `xv6` shell 当成稳定 guardrail，开始接真实 Linux 资产与板级 `DTB/chosen/cmdline`。
+- `2026-04-22` 第一轮 A / B / C / D foundation 与首轮 B / C post-integration follow-up 都已进入主工作树；同日进一步的 A / B bug-driven follow-up 先把 `xv6` 推过旧的 early-boot trap，随后又在真实 `virtio-blk` board path 上稳定到 shell，并落下了 Linux-facing `flat/payload/set_gpr + linux_proto profile` foundation；后续同日的 Linux bring-up follow-up 又补上最小 `linux_sbi_shim`、PLIC contiguous source window contract，以及 repo-generated `mycpu_virt.dtb` `chosen/cmdline/timebase` 合同，把真实 Linux 推到 `Unpacking initramfs...`、`devtmpfs: initialized` 与 `xor: measuring software checksum speed` checkpoint。因此“下一轮最值得做什么”的答案已进一步收敛到：继续用 `xv6` shell 当 guardrail，沿真实 Linux boot path 做 bug-driven hardening。
 
 ## 当前优先级
 
@@ -51,7 +51,7 @@
 - PLIC source wiring、`Machine` block transport 选择与 `mycpu_virt` board profile 切换都已完成，`xv6` 已开始真实消费 `virtio-mmio + virtio-blk` contract。
 - 当前最窄、最值钱的下一步不再是继续证明 `xv6` 能不能到 shell，而是把已经稳定的 shell/userland/filesystem 路径作为 guardrail，用它约束后续 Linux-facing 变更。
 - 这条线仍然应该优先保持“可复用的 external workload 入口 + 稳定 smoke”，而不是为了快跑演示去写一次性特判。
-- `Linux` 后续会直接复用这层 harness / profile 结构；当前已经落下 generic `flat/payload/set_gpr` 与 `linux_proto` profile，下一步更该把真实 Linux 资产、`DTB/chosen/cmdline` 和首个 boot checkpoint 接上去，而不是继续在 `xv6` 自身 shell 用例上横向扩面。
+- `Linux` 后续会直接复用这层 harness / profile 结构；当前已经落下 generic `flat/payload/set_gpr`、`linux_proto`、最小 `linux_sbi_shim` 与 repo-generated `dtb/chosen/cmdline/timebase` contract，并且真实 `Image + initrd` 已能推进到 `Unpacking initramfs...`、`devtmpfs: initialized`、`workingset`、`jitterentropy` 与 `xor` checkpoint；同日 probe harness 侧的长 UART wait 也已收口成增量搜索，下一步更该沿这条真实 boot path 继续补后续 blocker，而不是继续在 `xv6` 自身 shell 用例上横向扩面。
 
 ### 3. A / B 两条 contract 线都进入 bug-driven 支撑位
 
@@ -80,12 +80,12 @@
 4. 不在当前单发射 + coarse replay 基线上，继续主动扩大更激进的 `Phase 3` issue / replay / memory disambiguation。
 5. 不在 `xv6` foundation 与 workload 观测都还不稳定之前，直接抢跑更重的 `Phase 4` cache / DMA / multicore / coherence。
 6. 不把 `debug/frontend` 顺势扩成更大的产品功能面或通用调试器。
-7. 不把“真实 `virtio` board path 已到 shell”误判成“Linux bring-up 已接近完成”；当前真正缺的是 Linux 资产、`DTB/chosen/cmdline` 与第一处 boot checkpoint，而不是 `xv6` shell 自身。
+7. 不把“真实 `virtio` board path 已到 shell”或“Linux 已推进到 `devtmpfs: initialized` / initramfs unpack / xor checkpoint”误判成“Linux bring-up 已接近完成”；当前离 `devtmpfs: mounted`、rootfs 和 `init` 仍有明显距离，而不是 `xv6` shell 自身继续扩面就能自然解决。
 
 ## 如需新开计划
 
 1. 当前主线的总计划以 [../plan/xv6_linux_jit_wave1_plan.md](../plan/xv6_linux_jit_wave1_plan.md) 为准。
 2. 如果 Workstream A / B / C / D 任一条线后续需要再细分成第二层专项，新增计划也应继续挂到 [xv6_linux_jit_status.md](xv6_linux_jit_status.md)，不要重新分裂事实来源。
-3. 当前已经可以开始把 Linux 资产接到现有 harness / profile foundation 上；但只有在真实 `Image + dtb + initrd + chosen/cmdline` 路径与第一处 boot checkpoint 稳定之后，才考虑新开更完整的 `Linux` bring-up 专项计划。
+3. 当前已经验证真实 `Image + initrd + repo-generated dtb/chosen/cmdline + linux_sbi_shim` 路径能稳定进入 Linux `devtmpfs: initialized` 与 initramfs unpack 之后的更后 boot 阶段；但只有在进一步稳定到 rootfs / init 前后，才考虑新开更完整的 `Linux` bring-up 专项计划。
 4. 只有在 profile / hot-path / workload 证据足够明确之后，才考虑新开 `JIT / DBT` 专项计划。
 5. 如果未来出现真实 `Phase 3` stall hotspot、`debug/frontend` bug 或 Spike correctness 缺口，再围绕具体问题单开最小专项计划。

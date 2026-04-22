@@ -1,0 +1,87 @@
+/dts-v1/;
+
+/ {
+    #address-cells = <2>;
+    #size-cells = <2>;
+    compatible = "mycpu,mycpu-virt", "simple-bus";
+    model = "myCPU virt";
+
+    aliases {
+        serial0 = &uart0;
+    };
+
+    chosen {
+        stdout-path = "serial0:115200n8";
+        bootargs = "@BOARD_LINUX_BOOTARGS@";
+        linux,initrd-start = <0x0 @BOARD_LINUX_INITRD_ADDR@>;
+        linux,initrd-end = <0x0 @BOARD_LINUX_INITRD_END@>;
+    };
+
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        timebase-frequency = <@BOARD_LINUX_TIMEBASE_FREQUENCY@>;
+
+        cpu0: cpu@0 {
+            compatible = "riscv";
+            device_type = "cpu";
+            reg = <0>;
+            status = "okay";
+            riscv,isa = "rv64ima_zicsr_zifencei";
+            mmu-type = "riscv,sv39";
+
+            cpu0_intc: interrupt-controller {
+                #address-cells = <0>;
+                #interrupt-cells = <1>;
+                compatible = "riscv,cpu-intc";
+                interrupt-controller;
+            };
+        };
+    };
+
+    memory@80000000 {
+        device_type = "memory";
+        reg = <0x0 @BOARD_RAM_BASE@ 0x0 @BOARD_RAM_SIZE@>;
+    };
+
+    soc {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        compatible = "simple-bus";
+        ranges;
+
+        clint: clint@2000000 {
+            compatible = "sifive,fu540-c000-clint", "sifive,clint0";
+            reg = <0x0 @BOARD_CLINT_BASE@ 0x0 0x00010000>;
+            interrupts-extended = <&cpu0_intc 3>, <&cpu0_intc 7>;
+        };
+
+        plic: interrupt-controller@c000000 {
+            compatible = "sifive,fu540-c000-plic", "sifive,plic-1.0.0";
+            reg = <0x0 @BOARD_PLIC_BASE@ 0x0 0x00300000>;
+            #address-cells = <0>;
+            #interrupt-cells = <1>;
+            interrupt-controller;
+            interrupts-extended = <&cpu0_intc 11>, <&cpu0_intc 9>;
+            riscv,ndev = <10>;
+        };
+
+        uart0: serial@10000000 {
+            compatible = "ns16550a";
+            reg = <0x0 @BOARD_UART_BASE@ 0x0 0x00000008>;
+            interrupt-parent = <&plic>;
+            interrupts = <10>;
+            clock-frequency = <3686400>;
+            current-speed = <115200>;
+            reg-shift = <0>;
+            reg-io-width = <1>;
+        };
+
+        virtio_blk: virtio_mmio@10001000 {
+            compatible = "virtio,mmio";
+            reg = <0x0 @BOARD_BLOCK_BASE@ 0x0 0x00001000>;
+            interrupt-parent = <&plic>;
+            interrupts = <1>;
+        };
+    };
+};

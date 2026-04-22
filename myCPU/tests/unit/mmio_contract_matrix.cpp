@@ -11,6 +11,9 @@
 
 namespace {
 
+constexpr uint32_t kIntermediatePlicSource = PLIC_SOURCE_VIRTIO_MMIO + 1;
+constexpr uint32_t kOutOfRangePlicSource = PLIC_SOURCE_UART_THRE + 1;
+
 bool expect_load(Bus& bus,
                  uint64_t addr,
                  int size,
@@ -178,6 +181,11 @@ int main() {
                          4,
                          0,
                          "expected virtio PLIC priority load") ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_PRIORITY_OFFSET(kIntermediatePlicSource),
+                         4,
+                         0,
+                         "expected intermediate PLIC priority load") ||
             !expect_store_ok(bus,
                              PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE),
                              7,
@@ -188,6 +196,11 @@ int main() {
                              3,
                              4,
                              "expected virtio PLIC priority write") ||
+            !expect_store_ok(bus,
+                             PLIC_BASE + PLIC_PRIORITY_OFFSET(kIntermediatePlicSource),
+                             5,
+                             4,
+                             "expected intermediate PLIC priority write") ||
             !expect_load(bus,
                          PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE),
                          4,
@@ -198,6 +211,11 @@ int main() {
                          4,
                          3,
                          "expected virtio PLIC priority readback") ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_PRIORITY_OFFSET(kIntermediatePlicSource),
+                         4,
+                         5,
+                         "expected intermediate PLIC priority readback") ||
             !expect_store_ok(bus,
                              PLIC_BASE + PLIC_ENABLE_OFFSET(PLIC_CONTEXT_MACHINE),
                              (1U << PLIC_SOURCE_UART_THRE),
@@ -217,7 +235,10 @@ int main() {
                                0,
                                4,
                                "expected PLIC pending write to fail") ||
-            !expect_load_fail(bus, PLIC_BASE + 0x8, 4, "expected invalid PLIC offset load to fail")) {
+            !expect_load_fail(bus,
+                              PLIC_BASE + PLIC_PRIORITY_OFFSET(kOutOfRangePlicSource),
+                              4,
+                              "expected out-of-range PLIC priority load to fail")) {
             return 1;
         }
 

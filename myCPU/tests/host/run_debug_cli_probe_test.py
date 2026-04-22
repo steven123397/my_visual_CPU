@@ -4,6 +4,7 @@ import importlib.util
 import io
 import pathlib
 import subprocess
+import tempfile
 import unittest
 
 
@@ -17,6 +18,81 @@ MODULE_SPEC.loader.exec_module(PROBE)
 
 
 class RunDebugCliProbeTest(unittest.TestCase):
+    def test_missing_input_paths_reports_primary_image_and_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            initrd = temp_path / "rootfs.cpio"
+            initrd.write_bytes(b"initrd")
+            args = PROBE.parse_args(
+                [
+                    "--target",
+                    "./mycpu",
+                    "--image",
+                    str(temp_path / "Image"),
+                    "--flat",
+                    "--addr",
+                    "0x80200000",
+                    "--payload",
+                    str(temp_path / "board.dtb"),
+                    "0x88000000",
+                    "--payload",
+                    str(initrd),
+                    "0x84000000",
+                ]
+            )
+
+            missing = PROBE.missing_input_paths(args)
+
+        self.assertEqual(
+            missing,
+            [
+                ("image", str(temp_path / "Image")),
+                ("payload", str(temp_path / "board.dtb")),
+            ],
+        )
+
+    def test_main_fails_closed_before_probe_when_inputs_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            missing_image = temp_path / "Image"
+            missing_dtb = temp_path / "board.dtb"
+            called = False
+
+            def fake_run_probe(*_args, **_kwargs):
+                nonlocal called
+                called = True
+                raise AssertionError("main should not invoke run_probe when input files are missing")
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            original_run_probe = PROBE.run_probe
+            PROBE.run_probe = fake_run_probe
+            try:
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    rc = PROBE.main(
+                        [
+                            "--target",
+                            "./mycpu",
+                            "--image",
+                            str(missing_image),
+                            "--flat",
+                            "--addr",
+                            "0x80200000",
+                            "--payload",
+                            str(missing_dtb),
+                            "0x88000000",
+                        ]
+                    )
+            finally:
+                PROBE.run_probe = original_run_probe
+
+        self.assertEqual(rc, 1)
+        self.assertFalse(called)
+        self.assertIn("missing input files:", stderr.getvalue())
+        self.assertIn(str(missing_image), stderr.getvalue())
+        self.assertIn(str(missing_dtb), stderr.getvalue())
+        self.assertEqual(stdout.getvalue(), "")
+
     def test_flat_probe_load_contract_preserves_addr_without_disk(self) -> None:
         args = PROBE.parse_args(
             [
@@ -434,13 +510,19 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
 
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
-        self.assertIn("--image external/linux-riscv/arch/riscv/boot/Image", proc.stdout)
+        self.assertIn(
+            "make workloads/linux_proto/linux_sbi_shim.bin workloads/linux_proto/mycpu_virt.dtb",
+            proc.stdout,
+        )
+        self.assertIn("--image workloads/linux_proto/linux_sbi_shim.bin", proc.stdout)
         self.assertIn("--flat", proc.stdout)
-        self.assertIn("--addr 0x80200000", proc.stdout)
-        self.assertIn("--payload external/linux-riscv/mycpu_virt.dtb 0x88000000", proc.stdout)
+        self.assertIn("--addr 0x80000000", proc.stdout)
+        self.assertIn("--payload external/linux-riscv/arch/riscv/boot/Image 0x80200000", proc.stdout)
+        self.assertIn("--payload workloads/linux_proto/mycpu_virt.dtb 0x87f00000", proc.stdout)
         self.assertIn("--payload external/linux-riscv/rootfs.cpio 0x84000000", proc.stdout)
         self.assertIn("--set-reg a0 0x0", proc.stdout)
-        self.assertIn("--set-reg a1 0x88000000", proc.stdout)
+        self.assertIn("--set-reg a1 0x87f00000", proc.stdout)
+        self.assertIn("--set-reg a2 0x80200000", proc.stdout)
 
 
 if __name__ == "__main__":
