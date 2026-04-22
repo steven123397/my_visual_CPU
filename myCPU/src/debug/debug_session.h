@@ -21,13 +21,15 @@ public:
 
     void load_elf(const std::string& path,
                   BackendKind backend_kind,
-                  const char* disk_image,
+                  BlockTransport block_transport = BlockTransport::SimpleStorage,
+                  const char* disk_image = nullptr,
                   bool disk_ready = true,
                   bool disk_magic_valid = true);
     void load_binary(const std::string& path,
                      uint64_t addr,
                      BackendKind backend_kind,
-                     const char* disk_image,
+                     BlockTransport block_transport = BlockTransport::SimpleStorage,
+                     const char* disk_image = nullptr,
                      bool disk_ready = true,
                      bool disk_magic_valid = true);
     void reset();
@@ -51,6 +53,7 @@ private:
         std::string image_path{};
         uint64_t binary_addr{MEM_BASE};
         BackendKind backend_kind{BackendKind::Pipeline};
+        BlockTransport block_transport{BlockTransport::SimpleStorage};
         std::string disk_image{};
         bool disk_attached{false};
         bool disk_ready{true};

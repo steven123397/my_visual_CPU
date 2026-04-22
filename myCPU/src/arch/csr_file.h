@@ -24,6 +24,9 @@ constexpr uint32_t CSR_MIDELEG = 0x303;
 constexpr uint32_t CSR_MIE = 0x304;
 constexpr uint32_t CSR_MTVEC = 0x305;
 constexpr uint32_t CSR_MCOUNTEREN = 0x306;
+constexpr uint32_t CSR_MENVCFG = 0x30A;
+constexpr uint32_t CSR_PMPCFG0 = 0x3A0;
+constexpr uint32_t CSR_PMPADDR0 = 0x3B0;
 constexpr uint32_t CSR_MCYCLE = 0xB00;
 constexpr uint32_t CSR_MINSTRET = 0xB02;
 constexpr uint32_t CSR_MSCRATCH = 0x340;
@@ -35,6 +38,7 @@ constexpr uint32_t CSR_MHARTID = 0xF14;
 constexpr uint32_t CSR_CYCLE = 0xC00;
 constexpr uint32_t CSR_TIME = 0xC01;
 constexpr uint32_t CSR_INSTRET = 0xC02;
+constexpr uint32_t CSR_STIMECMP = 0x14D;
 
 constexpr uint64_t MSTATUS_SIE = 1ULL << 1;
 constexpr uint64_t MSTATUS_MIE = 1ULL << 3;

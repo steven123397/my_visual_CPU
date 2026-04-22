@@ -23,6 +23,7 @@ struct DebugCliCommand {
     DebugCliCommandKind kind{DebugCliCommandKind::Snapshot};
     std::string image{};
     std::string backend{};
+    std::string block_transport{};
     std::string disk{};
     std::string text{};
     bool disk_ready{true};

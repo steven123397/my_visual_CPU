@@ -294,6 +294,7 @@ DebugCliCommand parse_debug_cli_command(const std::string& line) {
         parsed.kind = DebugCliCommandKind::Load;
         parsed.image = extract_string(object, "image");
         parsed.backend = try_extract_string(object, "backend");
+        parsed.block_transport = try_extract_string(object, "block_transport");
         parsed.disk = try_extract_string(object, "disk");
         parsed.disk_ready = try_extract_bool(object, "disk_ready", true);
         parsed.disk_magic_valid = try_extract_bool(object, "disk_magic_valid", true);

@@ -10,6 +10,7 @@ def main() -> int:
     parser.add_argument("--target", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--disk", default="")
+    parser.add_argument("--block-transport", default="")
     parser.add_argument("--backend", default="functional")
     parser.add_argument("--step-cycles", type=int, default=4)
     args = parser.parse_args()
@@ -21,6 +22,8 @@ def main() -> int:
     }
     if args.disk:
         load["disk"] = args.disk
+    if args.block_transport:
+        load["block_transport"] = args.block_transport
 
     script = "\n".join([
         json.dumps(load),
@@ -60,10 +63,18 @@ def main() -> int:
         f"backend={summary['backend']}",
     )
     print(
-        "trap:",
+        "trap-m:",
         f"mcause={csrs['mcause']}",
         f"mepc={csrs['mepc']}",
         f"mtval={csrs['mtval']}",
+    )
+    print(
+        "trap-s:",
+        f"scause={csrs['scause']}",
+        f"sepc={csrs['sepc']}",
+        f"stval={csrs['stval']}",
+        f"stvec={csrs['stvec']}",
+        f"satp={csrs['satp']}",
     )
     if uart is not None:
         print("uart:", uart.get("text", ""))

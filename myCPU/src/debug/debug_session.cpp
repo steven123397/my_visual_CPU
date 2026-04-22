@@ -32,6 +32,7 @@ std::string stall_event_detail(const std::string& stall_reason) {
 
 void DebugSession::load_elf(const std::string& path,
                             BackendKind backend_kind,
+                            BlockTransport block_transport,
                             const char* disk_image,
                             bool disk_ready,
                             bool disk_magic_valid) {
@@ -39,6 +40,7 @@ void DebugSession::load_elf(const std::string& path,
     config_.image_path = path;
     config_.binary_addr = MEM_BASE;
     config_.backend_kind = backend_kind;
+    config_.block_transport = block_transport;
     config_.disk_attached = disk_image != nullptr && *disk_image != '\0';
     config_.disk_image = config_.disk_attached ? disk_image : "";
     config_.disk_ready = disk_ready;
@@ -50,6 +52,7 @@ void DebugSession::load_elf(const std::string& path,
 void DebugSession::load_binary(const std::string& path,
                                uint64_t addr,
                                BackendKind backend_kind,
+                               BlockTransport block_transport,
                                const char* disk_image,
                                bool disk_ready,
                                bool disk_magic_valid) {
@@ -57,6 +60,7 @@ void DebugSession::load_binary(const std::string& path,
     config_.image_path = path;
     config_.binary_addr = addr;
     config_.backend_kind = backend_kind;
+    config_.block_transport = block_transport;
     config_.disk_attached = disk_image != nullptr && *disk_image != '\0';
     config_.disk_image = config_.disk_attached ? disk_image : "";
     config_.disk_ready = disk_ready;
@@ -156,6 +160,7 @@ DebugSnapshot DebugSession::snapshot() const {
 void DebugSession::recreate_machine() {
     machine_ = std::make_unique<Machine>();
     machine_->set_backend_kind(config_.backend_kind);
+    machine_->set_block_transport(config_.block_transport);
     if (config_.disk_attached) {
         machine_->attach_storage_image(config_.disk_image, config_.disk_ready, config_.disk_magic_valid);
     }

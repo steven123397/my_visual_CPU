@@ -64,8 +64,11 @@ int main() {
                          "BOARD_XV6_ARCH_MARCH := -march=rv64ima",
                          "board profile should pin xv6 to rv64ima for current myCPU bring-up") ||
         !expect_contains(board_text,
-                         "BOARD_BLOCK_TRANSPORT := simple_storage",
-                         "board profile should record the current simple_storage block transport") ||
+                         "BOARD_BLOCK_TRANSPORT := virtio-blk",
+                         "board profile should record the current virtio-blk block transport") ||
+        !expect_contains(board_text,
+                         "BOARD_BLOCK_IRQ := 1",
+                         "board profile should align xv6 with the virtio IRQ contract") ||
         !expect_contains(workload_text,
                          "XV6_UPSTREAM_COMMIT := 5474d4bf72fd95a6e5c735c2d7f208f58990ceab",
                          "workload profile should pin the audited xv6 upstream commit")) {
@@ -73,38 +76,46 @@ int main() {
     }
 
     Machine machine;
+    machine.set_block_transport(BlockTransport::VirtioBlk);
     machine.attach_storage_image(fs_image.string());
     machine.load_elf(kernel_image.string());
 
-    if (!expect(machine.storage().attached(), "xv6 smoke should attach the filesystem image") ||
-        !expect((machine.storage().status() & STORAGE_STATUS_READY) != 0,
-                "xv6 smoke should leave the storage image ready before boot") ||
-        !expect(machine.storage().capacity_blocks() > 0,
-                "xv6 smoke should expose a non-empty filesystem image to the board")) {
+    if (!expect(machine.block_transport() == BlockTransport::VirtioBlk,
+                "xv6 smoke should boot the virtio board profile with the virtio-blk transport") ||
+        !expect(machine.virtio_blk().attached(), "xv6 smoke should attach the filesystem image") ||
+        !expect(machine.virtio_blk().capacity_sectors() > 0,
+                "xv6 smoke should expose a non-empty virtio disk image to the board")) {
         return 1;
     }
 
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 5000; ++i) {
         machine.step();
     }
 
     const CPU& cpu = machine.cpu();
     const CoreState& core = cpu.core();
-    if (!expect(core.cycle() == 4, "xv6 smoke should stop after the planned early-boot probe window") ||
-        !expect(core.instret() == 4,
-                "xv6 smoke should retire four rv64ima boot instructions inside the current probe window") ||
-        !expect(core.pc() == 0x80000010ULL,
-                "xv6 smoke should currently advance past the initial CSR bring-up path without redirecting to mtvec") ||
-        !expect(core.privilege_mode() == PrivilegeMode::Machine,
-                "xv6 smoke should still be in machine mode at the current early-boot checkpoint") ||
+    if (!expect(core.cycle() == 5000, "xv6 smoke should stop after the planned bring-up probe window") ||
+        !expect(core.instret() == 5000,
+                "xv6 smoke should retire through the current post-banner bring-up checkpoint") ||
+        !expect(core.pc() == 0x800010dcULL,
+                "xv6 smoke should currently be in the kernel allocator warm-up memset loop") ||
+        !expect(core.privilege_mode() == PrivilegeMode::Supervisor,
+                "xv6 smoke should already be running in supervisor mode at the current checkpoint") ||
         !expect(cpu.csr().read(CSR_MCAUSE, core) == 0,
-                "xv6 smoke should currently avoid trapping inside the first four boot cycles") ||
-        !expect(cpu.csr().read(CSR_MEPC, core) == 0,
-                "xv6 smoke should leave mepc clear before the next xv6 bring-up blocker") ||
+                "xv6 smoke should currently avoid machine-mode traps through the boot banner checkpoint") ||
+        !expect(cpu.csr().read(CSR_MEPC, core) == 0x80001348ULL,
+                "xv6 smoke should retain the machine-mode handoff checkpoint in mepc") ||
         !expect(cpu.csr().read(CSR_MTVAL, core) == 0,
-                "xv6 smoke should leave mtval clear before the next xv6 bring-up blocker") ||
-        !expect(machine.uart().output().empty(),
-                "xv6 smoke should not reach console output before the first blocker")) {
+                "xv6 smoke should keep mtval clear through the boot banner checkpoint") ||
+        !expect(cpu.csr().read(CSR_SCAUSE, core) == 0,
+                "xv6 smoke should currently avoid supervisor traps through the boot banner checkpoint") ||
+        !expect(cpu.csr().read(CSR_SEPC, core) == 0,
+                "xv6 smoke should keep sepc clear through the boot banner checkpoint") ||
+        !expect(cpu.csr().read(CSR_STVAL, core) == 0,
+                "xv6 smoke should keep stval clear through the boot banner checkpoint") ||
+        !expect_contains(machine.uart().output(),
+                         "xv6 kernel is booting",
+                         "xv6 smoke should print the boot banner before the allocator warm-up loop")) {
         return 1;
     }
 

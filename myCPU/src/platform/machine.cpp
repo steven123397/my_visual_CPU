@@ -6,10 +6,29 @@
 #include "../exec/functional_backend.h"
 #include "../exec/pipeline_backend.h"
 
-Machine::Machine() : uart_(plic_), bus_(ram_) {
+const char* block_transport_name(BlockTransport transport) {
+    switch (transport) {
+    case BlockTransport::SimpleStorage:
+        return "simple_storage";
+    case BlockTransport::VirtioBlk:
+        return "virtio-blk";
+    }
+    return "unknown";
+}
+
+BlockTransport parse_block_transport(const std::string& name) {
+    if (name == "simple_storage") {
+        return BlockTransport::SimpleStorage;
+    }
+    if (name == "virtio-blk" || name == "virtio_blk") {
+        return BlockTransport::VirtioBlk;
+    }
+    throw std::runtime_error("unknown block transport: " + name);
+}
+
+Machine::Machine() : uart_(plic_), virtio_mmio_(plic_, VIRTIO_MMIO_PLIC_SOURCE, virtio_blk_), bus_(ram_) {
     cpu_.csr().bind_clint(&clint_);
     bus_.attach(uart_);
-    bus_.attach(storage_);
     bus_.attach(clint_);
     bus_.attach(plic_);
     rebuild_backend();
@@ -18,6 +37,31 @@ Machine::Machine() : uart_(plic_), bus_(ram_) {
 void Machine::set_backend_kind(BackendKind kind) {
     backend_kind_ = kind;
     rebuild_backend();
+}
+
+void Machine::set_block_transport(BlockTransport transport) {
+    if (block_transport_bound_ && block_transport_ != transport) {
+        throw std::runtime_error("block transport already bound");
+    }
+    block_transport_ = transport;
+}
+
+void Machine::bind_block_transport() {
+    if (block_transport_bound_) {
+        return;
+    }
+
+    switch (block_transport_) {
+    case BlockTransport::SimpleStorage:
+        bus_.attach(storage_);
+        break;
+    case BlockTransport::VirtioBlk:
+        virtio_mmio_.bind_bus(bus_);
+        bus_.attach(virtio_mmio_);
+        break;
+    }
+
+    block_transport_bound_ = true;
 }
 
 void Machine::rebuild_backend() {
@@ -36,19 +80,23 @@ void Machine::finish_image_load(uint64_t entry, Ram& staged_ram) {
     // intentionally preserved, but reload should not carry over stale storage
     // command errors into the next guest image.
     ram_.swap(staged_ram);
-    bus_.try_store(STORAGE_BASE + STORAGE_REG_COMMAND, STORAGE_CMD_NONE, 8);
+    if (block_transport_ == BlockTransport::SimpleStorage) {
+        bus_.try_store(STORAGE_BASE + STORAGE_REG_COMMAND, STORAGE_CMD_NONE, 8);
+    }
     cpu_init(cpu_, entry);
     rebuild_backend();
     loaded_ = true;
 }
 
 void Machine::load_elf(const std::string& path) {
+    bind_block_transport();
     Ram staged_ram;
     const uint64_t entry = elf_loader_.load(staged_ram, path.c_str());
     finish_image_load(entry, staged_ram);
 }
 
 void Machine::load_binary(const std::string& path, uint64_t addr) {
+    bind_block_transport();
     Ram staged_ram;
     binary_loader_.load(staged_ram, path.c_str(), addr);
     finish_image_load(addr, staged_ram);
@@ -57,9 +105,20 @@ void Machine::load_binary(const std::string& path, uint64_t addr) {
 void Machine::attach_storage_image(const std::string& path,
                                    bool ready,
                                    bool valid_magic) {
-    storage_.load_image(path.c_str());
-    storage_.set_ready(ready);
-    storage_.set_magic_valid(valid_magic);
+    bind_block_transport();
+    switch (block_transport_) {
+    case BlockTransport::SimpleStorage:
+        storage_.load_image(path.c_str());
+        storage_.set_ready(ready);
+        storage_.set_magic_valid(valid_magic);
+        break;
+    case BlockTransport::VirtioBlk:
+        if (!ready || !valid_magic) {
+            throw std::runtime_error("virtio-blk transport does not support simple_storage readiness or magic overrides");
+        }
+        virtio_blk_.load_image(path.c_str());
+        break;
+    }
 }
 
 void Machine::step() {
@@ -127,12 +186,24 @@ const Plic& Machine::plic() const {
     return plic_;
 }
 
+BlockTransport Machine::block_transport() const {
+    return block_transport_;
+}
+
 SimpleStorage& Machine::storage() {
     return storage_;
 }
 
 const SimpleStorage& Machine::storage() const {
     return storage_;
+}
+
+VirtioBlk& Machine::virtio_blk() {
+    return virtio_blk_;
+}
+
+const VirtioBlk& Machine::virtio_blk() const {
+    return virtio_blk_;
 }
 
 ExecutionBackend& Machine::backend() {

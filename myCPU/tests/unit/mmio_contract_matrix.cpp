@@ -90,12 +90,50 @@ int main() {
         bus.attach(plic);
         bus.attach(storage);
 
-        if (!expect_load(bus, UART_BASE + UART_REG_IIR, 1, 0x01, "expected UART IIR load") ||
+        if (!expect_load(bus, UART_BASE + UART_REG_IIR, 1, UART_IIR_NO_INT, "expected UART IIR load") ||
             !expect_store_ok(bus, UART_BASE + UART_REG_IER, 0xFF, 1, "expected UART IER write") ||
-            !expect_load(bus, UART_BASE + UART_REG_IER, 1, UART_IER_THRI, "expected UART IER mask") ||
+            !expect_load(bus,
+                         UART_BASE + UART_REG_IER,
+                         1,
+                         UART_IER_RDI | UART_IER_THRI,
+                         "expected UART IER mask") ||
+            !expect_load(bus,
+                         UART_BASE + UART_REG_IIR,
+                         1,
+                         UART_IIR_THRI,
+                         "expected UART THRE interrupt after enabling TX interrupt") ||
+            !expect_load(bus,
+                         UART_BASE + UART_REG_IIR,
+                         1,
+                         UART_IIR_NO_INT,
+                         "expected UART IIR THRE interrupt to acknowledge on read") ||
             !expect_load(bus, UART_BASE + UART_REG_RBR, 1, 0, "expected empty UART RBR read") ||
             !expect_store_ok(bus, UART_BASE + UART_REG_THR, 'Z', 1, "expected UART THR write") ||
             uart.output_size() != 1 ||
+            uart.output() != "Z" ||
+            !expect_store_ok(bus,
+                             UART_BASE + UART_REG_LCR,
+                             UART_LCR_DLAB,
+                             1,
+                             "expected UART LCR write for divisor latch access") ||
+            !expect_load(bus,
+                         UART_BASE + UART_REG_LCR,
+                         1,
+                         UART_LCR_DLAB,
+                         "expected UART LCR readback") ||
+            !expect_store_ok(bus, UART_BASE + UART_REG_DLL, 0x03, 1, "expected UART DLL write") ||
+            !expect_store_ok(bus, UART_BASE + UART_REG_DLM, 0x00, 1, "expected UART DLM write") ||
+            !expect_load(bus, UART_BASE + UART_REG_DLL, 1, 0x03, "expected UART DLL readback") ||
+            !expect_load(bus, UART_BASE + UART_REG_DLM, 1, 0x00, "expected UART DLM readback") ||
+            uart.output_size() != 1 ||
+            uart.output() != "Z" ||
+            !expect_store_ok(bus,
+                             UART_BASE + UART_REG_LCR,
+                             0x03,
+                             1,
+                             "expected UART LCR write to leave divisor latch mode") ||
+            !expect_load(bus, UART_BASE + UART_REG_LCR, 1, 0x03, "expected UART word length readback") ||
+            !expect_store_ok(bus, UART_BASE + UART_REG_FCR, 0x07, 1, "expected UART FCR write") ||
             !expect_store_fail(bus, UART_BASE + UART_REG_LSR, 0, 1, "expected UART LSR write to fail") ||
             !expect_load_fail(bus, UART_BASE + UART_REG_IER, 2, "expected UART wide load to fail") ||
             !expect_store_fail(bus, UART_BASE + UART_SIZE - 1, 0, 2, "expected UART boundary crossing write to fail")) {
@@ -135,16 +173,31 @@ int main() {
                          4,
                          0,
                          "expected PLIC priority load") ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_VIRTIO_MMIO),
+                         4,
+                         0,
+                         "expected virtio PLIC priority load") ||
             !expect_store_ok(bus,
                              PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE),
                              7,
                              4,
                              "expected PLIC priority write") ||
+            !expect_store_ok(bus,
+                             PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_VIRTIO_MMIO),
+                             3,
+                             4,
+                             "expected virtio PLIC priority write") ||
             !expect_load(bus,
                          PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE),
                          4,
                          7,
                          "expected PLIC priority readback") ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_VIRTIO_MMIO),
+                         4,
+                         3,
+                         "expected virtio PLIC priority readback") ||
             !expect_store_ok(bus,
                              PLIC_BASE + PLIC_ENABLE_OFFSET(PLIC_CONTEXT_MACHINE),
                              (1U << PLIC_SOURCE_UART_THRE),
@@ -170,7 +223,7 @@ int main() {
 
         if (!expect_store_ok(bus,
                              PLIC_BASE + PLIC_ENABLE_OFFSET(PLIC_CONTEXT_SUPERVISOR),
-                             (1U << PLIC_SOURCE_UART_THRE),
+                             (1U << PLIC_SOURCE_UART_THRE) | (1U << PLIC_SOURCE_VIRTIO_MMIO),
                              4,
                              "expected PLIC supervisor enable write") ||
             !expect_store_ok(bus,
@@ -233,6 +286,56 @@ int main() {
             std::fprintf(stderr, "owner complete should release and re-pend asserted source\n");
             return 1;
         }
+        if (!expect_store_ok(bus,
+                             PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                             PLIC_SOURCE_UART_THRE,
+                             4,
+                             "expected final owner complete write")) {
+            return 1;
+        }
+
+        plic.set_source_level(PLIC_SOURCE_UART_THRE, false);
+        plic.set_source_level(PLIC_SOURCE_VIRTIO_MMIO, true);
+        plic.set_source_level(PLIC_SOURCE_UART_THRE, true);
+        if (!expect_load(bus,
+                         PLIC_BASE + PLIC_PENDING_OFFSET,
+                         4,
+                         (1U << PLIC_SOURCE_UART_THRE) | (1U << PLIC_SOURCE_VIRTIO_MMIO),
+                         "expected PLIC pending bits for uart and virtio") ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                         4,
+                         PLIC_SOURCE_UART_THRE,
+                         "expected higher-priority UART source to claim first") ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_PENDING_OFFSET,
+                         4,
+                         (1U << PLIC_SOURCE_VIRTIO_MMIO),
+                         "expected only virtio to remain pending after UART claim")) {
+            return 1;
+        }
+        plic.set_source_level(PLIC_SOURCE_UART_THRE, false);
+        if (!expect_store_ok(bus,
+                             PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                             PLIC_SOURCE_UART_THRE,
+                             4,
+                             "expected UART complete write") ||
+            !expect_load(bus,
+                         PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                         4,
+                         PLIC_SOURCE_VIRTIO_MMIO,
+                         "expected virtio source to remain claimable after UART completes")) {
+            return 1;
+        }
+        if (!expect_store_ok(bus,
+                             PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR),
+                             PLIC_SOURCE_VIRTIO_MMIO,
+                             4,
+                             "expected virtio complete write")) {
+            return 1;
+        }
+        plic.set_source_level(PLIC_SOURCE_VIRTIO_MMIO, false);
+        plic.set_source_level(PLIC_SOURCE_UART_THRE, false);
 
         if (!expect_load(bus, STORAGE_BASE + STORAGE_REG_MAGIC, 8, STORAGE_MMIO_MAGIC, "expected storage magic load") ||
             !expect_store_ok(bus, STORAGE_BASE + STORAGE_REG_LBA, 3, 8, "expected storage LBA write") ||

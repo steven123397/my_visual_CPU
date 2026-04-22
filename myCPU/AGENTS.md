@@ -31,6 +31,8 @@
 - `Clint`
 - `Plic`
 - `SimpleStorage`
+- `VirtioMmio`
+- `VirtioBlk`
 
 当前 reference 真值来源仍然是共享 `InstructionSemantics` 和默认 `functional` backend，不要把指令语义复制到多个 backend 里；`pipeline` 只能复用共享语义层，不得另起一套 ISA 解释。
 
@@ -91,11 +93,13 @@
 - `mstatus.MPRV` 数据访存语义，按 `MPP` 走 Sv39 翻译与 `SUM/MXR` 权限检查。
 - Sv39 page-walk 的 misaligned superpage 与 non-leaf reserved-bit fault 合同。
 - Sv39 特权边界：`S-mode` 对 `U=1` 可执行页的取指，以及 `U-mode` 对 supervisor-only 可执行页 / data page 的取指、load、store都会稳定触发 page fault；当前该合同已进入 asm / pipeline 主门禁，host-side `AddressSpace` result API 也已补 smoke。
-- UART / CLINT / PLIC / `SimpleStorage`。
+- UART / CLINT / PLIC / `SimpleStorage` / `VirtioMmio` / `VirtioBlk`。
+- `UART16550` 当前已补齐一组更贴近 `xv6` 的最小 16550 contract：`LCR/FCR/DLAB`、`DLL/DLM` divisor latch 访问、RX-ready / TX-THRE `IIR` 身份，以及 RX/TX pending 驱动的 PLIC source 断言。
 - bus / device 第一轮区间与访问宽度防御。
 - CPU 侧 MMIO 非法 offset / width 稳定触发 access-fault trap。
 - host-side MMIO guard 与 contract matrix。
 - `Machine` 侧 backend 抽象、共享 ISA 语义层，以及 `pipeline` 的 asm / host / guest 门禁。
+- `Machine` 当前已支持可选 block transport：默认继续保留 `simple_storage` 以守住既有 guest / debug 路径，`xv6` board / CLI / debug CLI / workload probe 已可显式切到真实 `virtio-blk`。
 - `pipeline` host-side differential 当前已覆盖基础 ALU / 控制流 / trap-return / illegal trap、machine timer interrupt cycle-start baseline、delegated user-ecall / `sret` privilege transition、`Sv39 + MPRV`、delegated instruction/load/store-page-fault、delegated supervisor MMIO instruction/load/store access-fault、reserved page-walk fault，以及由 `sip/sie/sstatus/mret/sret` 驱动的 supervisor timer/external interrupt 在 S-mode / U-mode 下的 cycle-start / commit-boundary 场景；用户态 delegated supervisor timer / external interrupt 已都纳入差分门禁。
 - 独立 `Spike` 外部差分当前已覆盖基础 ALU / control-flow / trap / delegated privilege、第一批 device-free `Sv39/page fault` final-state 子集，以及带 `mret / sret` 的 returning trap handler first-trap checkpoint summary；这条线保持独立离线入口，不进入默认 `make test` / `make test-pipeline` 依赖。
 - `Phase 3-A` 首轮分支预测增强：最小 `branch_predictor` 子模块、`jal` static predict-taken、条件分支 `2-bit` bimodal counter + target 记忆，以及继续复用现有 flush / redirect 的 mispredict 恢复路径。
@@ -107,13 +111,14 @@
 - 这轮 phys free-list / recycle 收口还补出并修正了一条实际回归：如果 recycled phys 在后续再次成为 committed live phys，free-list 必须在 commit 时把它移除；否则 trap-return / interrupt flush 之后会把 live phys 再次发出。当前 `rename_map_smoke` 与 `timer_interrupt (pipeline)` 已共同守住这条边界。
 - `pipeline_rename_commit_smoke`、`pipeline_speculation_contracts_smoke` 与 `load_store_queue_smoke` 当前分别守住 `rename + ROB commit +` 最小真实 OoO execute、中间态 rollback / non-speculative store / coarse automatic replay / RAM-only forwarding 合同，以及 `LSQ` ready / retire / flush / replay-needed / forwarding 接口。
 - `BinaryLoader` 直接单测与 `Machine::load_elf()/load_binary()` reload/reset 回归已经接入现有门禁，当前明确语义是“替换 RAM 并 reset CPU/backend”。
-- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照、predictor mode / counters / 最近一次预测字段，以及最小 `ROB / LSQ` 队列深度、head-sequence、`lsq_load_state / lsq_load_sequence_id / lsq_store_sequence_id`、`replay_flush` 和 `stall_reason` 观测面，守住 `CLINT` / `PLIC` / `UART`、predictor 和 OoO readiness 可观察性输出。
+- `DebugSnapshot`、`DebugSession`、`--debug-cli` 与本地 `frontend` 教学演示链路；当前 `debug_cli_smoke` 已用自包含 flat-binary 覆盖 delegated supervisor timer / external interrupt 的中间态与完成态快照、predictor mode / counters / 最近一次预测字段，以及最小 `ROB / LSQ` 队列深度、head-sequence、`lsq_load_state / lsq_load_sequence_id / lsq_store_sequence_id`、`replay_flush` 和 `stall_reason` 观测面，守住 `CLINT` / `PLIC` / `UART`、predictor 和 OoO readiness 可观察性输出；debug CLI `load` 现在也已支持显式选择 block transport。
 - 真实 `debug server + mycpu --debug-cli` 端到端 smoke 与 Node/C++ 两侧预算常量收口已经落地，当前最小调试链路已进入现有门禁。
 - `2026-04-05` 又补上一组更窄的 `debug/frontend` 压力验证：Node/runtime 级持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` timeout fail-closed，避免迟到 CLI 响应错配后续请求。
 - `2026-04-05` 也已把 decode 级 `BlockedByUnresolvedStore` 收窄到“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 已不再全局阻塞非重叠 younger load，重叠场景继续走 `BlockedByOverlappingStore`，相关 `load_store_queue_smoke`、`pipeline_speculation_contracts_smoke` 与 `make test-pipeline` 已守住。
 - `2026-04-11` 已在 `V4` 首刀之上补上一轮更窄的 direct dependency hardening：pending serializing vector 仍会阻塞 younger vector ALU，但 ready older non-memory vector ALU 如果只是被更老 scalar ROB head 挡住 commit，direct dependent younger vector ALU 现在可以以前驱 materialized result 完成 execute；对应 `vector_pipeline_smoke` 也已补上更像真实依赖链的 host 回归。
 - `2026-04-11` 同日也补上一轮更窄的 vector memory hardening：`vle.v / vse.v` 在 commit boundary 现在会先对整段 span 做预校验；live `MMIO` 与非 RAM span 会直接 `access-fault` fail-closed，不再留下 UART 输入消费、UART 输出 / `IER` 改写或 RAM 部分写入副作用；对应 `vector_vlite_smoke` 已补齐 UART / RAM fault 回归。
 - `2026-04-12` 已完成 `P4-prep-1`：新增统一 `memory_region` 类型与 `Bus::describe_region()/describe_span()`，把 `RAM / MMIO / unmapped` 与最小 region 属性收口成单一事实来源；`vector_ops.cpp`、`pipeline_backend_execute.cpp` 与 `load_store_queue.cpp` 也都已迁到这一路径，`bus_region_contract`、`vector_vlite_smoke`、`vector_pipeline_smoke`、`make test` 与 `make test-pipeline` 已共同守住现有行为不变。
+- 外部 `xv6-riscv` workload harness 当前已能在真实 `virtio-blk` board profile 上跑通 `xv6_boot_smoke` / `run-workload-xv6` 的现有 5000-cycle boot-banner checkpoint：`xv6` 已进入 `S` mode、打印 `xv6 kernel is booting`，当前稳定停在 `kinit/freerange` 的 allocator warm-up `memset` 循环。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](Makefile) 为准。
@@ -141,11 +146,13 @@
 - [tests/asm](tests/asm) 和 [tests/unit](tests/unit)
   非法编码、MMIO 非法偏移 / 宽度、ELF 段布局和 CSR / 特权非法访问回归已经完成第一轮系统扩充；`pipeline differential` 的高风险主干场景也已基本闭环，后续主要按新增 bug 或明确新合同做最小补洞。
 - [src/devices/simple_storage.cpp](src/devices/simple_storage.cpp)
-  当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件。
+  当前已支持 attached-but-not-ready readiness 注入、bad-magic probe 注入与 `STORAGE_ERR_NOT_READY`，但仍是最小同步块设备：`BLOCK_COUNT = 1`、无 completion interrupt、写入不回写宿主文件；它现在主要作为 legacy block transport / guardrail 保留。
 - [src/debug](src/debug) 和 [../frontend](../frontend)
   当前最小调试链路已经正式接入并可用，Node/runtime 级持续 `run`、session replacement、高吞吐 terminal 输入聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e 回归也已补上；对当前单用户、本地教学/调试使用，这组门禁已经足够。
 - [src/platform/machine.cpp](src/platform/machine.cpp)
-  `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。
+  `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。当前 `Machine` 也已支持 `simple_storage / virtio-blk` 可选 block transport；`xv6` 已切到真实 `virtio` 路径，但默认 transport 仍保留为 `simple_storage`。
+- [tests/host/xv6_boot_smoke.cpp](tests/host/xv6_boot_smoke.cpp) 和 [workloads/boards/mycpu_virt.mk](workloads/boards/mycpu_virt.mk)
+  `xv6` 当前已经切到真实 `virtio-blk` board profile，并已稳定到 5000-cycle boot-banner / allocator-warmup checkpoint；下一步更值钱的是把它从 `kinit/freerange` 的长清零路径再往后推进，并把 post-banner 新暴露的 blocker 按 A / B / D ownership 回派，而不是再回头扩大一次性 board 特判。
 - [src/exec/load_store_queue.cpp](src/exec/load_store_queue.cpp) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
   decode 级 `BlockedByUnresolvedStore` 当前最小收窄已经落地：它只保留给 older store 地址未知场景；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load。后续这条线的取舍判断也已经完成：在当前 decode 级 load 前置分类、单 `ex_mem` memory 通道与 coarse replay flush 基线上，不主动继续扩大更激进的 `issue / replay / speculation`；只有在出现真实 workload 证据或明确研究目标时，才值得重开，且应先看 issue decoupling。
 - [src/exec/reorder_buffer.cpp](src/exec/reorder_buffer.cpp)、[src/exec/pipeline_backend_execute.cpp](src/exec/pipeline_backend_execute.cpp) 和 [tests/host/vector_pipeline_smoke.cpp](tests/host/vector_pipeline_smoke.cpp)
@@ -173,11 +180,12 @@
 
 1. 继续稳住 simulator reference path 的 correctness 与可观察性。
 2. 在已接通的 correctness hardening、loader、guest smoke、debug smoke 和 `pipeline` 门禁基础上，继续按新增 bug 或新合同补最小回归，不重复堆叠低收益变体。
-3. `debug/frontend` 当前不再主动扩大浏览器端压力验证；后续按真实 bug 或明确新需求补最小回归，不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
-4. `Phase 3` 当前不主动继续扩大更激进的 `issue / replay / speculation`；后续若出现真实 stall hotspot，再优先评估 issue decoupling 这类更有结构收益的最小切片，而不是回头重复讨论已完成的 decode 边界。
-5. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
-6. 当前 `V-lite` `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`、`V4` 首刀与第一轮更窄的 `V4` hardening 都已落地：shared semantics、`functional` reference path、最小 host 回归、non-memory vector ALU 的最小 vector-aware execute/commit 边界、独立最小 guest 向量 demo、固定 `conv -> relu` 的最小 CNN-style guest demo，以及守住 mixed `SEW/VL` `conv -> relu` 链路、全负 `relu` 零钳位、ready older vector producer -> direct dependent consumer 依赖链，以及 pending serializing vector guard 的 host smoke 都已接通。当前更健康的下一步不是顺势扩到 `Pool / FC`、向量 load/store path 或更重 `Phase 4`，而是继续围绕已落地的 `V4` 边界做 bug-driven hardening，再决定下一刀。
-7. `P4-prep-1` 当前已经完成；如果后续继续评估 `Phase 4`，应先围绕现有 `memory_region` 边界判断 `P4-prep-2`（例如更克制的 `memory observation / shadow cache`）是否有独立结构收益，不直接跳到 `cache / DMA / multicore`。
+3. 在真实 `virtio-blk` board path 上继续推进 `xv6` 早期启动，把当前 5000-cycle boot-banner / allocator-warmup checkpoint 再向后推进；遇到缺口时，优先按 A / B / D ownership 分类补最小 contract。
+4. `debug/frontend` 当前不再主动扩大浏览器端压力验证；后续按真实 bug 或明确新需求补最小回归，不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
+5. `Phase 3` 当前不主动继续扩大更激进的 `issue / replay / speculation`；后续若出现真实 stall hotspot，再优先评估 issue decoupling 这类更有结构收益的最小切片，而不是回头重复讨论已完成的 decode 边界。
+6. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke`、`virtio_blk_smoke`、`xv6_boot_smoke`、`run-workload-xv6` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
+7. 当前 `V-lite` `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`、`V4` 首刀与第一轮更窄的 `V4` hardening 都已落地：shared semantics、`functional` reference path、最小 host 回归、non-memory vector ALU 的最小 vector-aware execute/commit 边界、独立最小 guest 向量 demo、固定 `conv -> relu` 的最小 CNN-style guest demo，以及守住 mixed `SEW/VL` `conv -> relu` 链路、全负 `relu` 零钳位、ready older vector producer -> direct dependent consumer 依赖链，以及 pending serializing vector guard 的 host smoke 都已接通。当前更健康的下一步不是顺势扩到 `Pool / FC`、向量 load/store path 或更重 `Phase 4`，而是继续围绕已落地的 `V4` 边界做 bug-driven hardening，再决定下一刀。
+8. `P4-prep-1` 当前已经完成；如果后续继续评估 `Phase 4`，应先围绕现有 `memory_region` 边界判断 `P4-prep-2`（例如更克制的 `memory observation / shadow cache`）是否有独立结构收益，不直接跳到 `cache / DMA / multicore`。
 
 ## 验证要求
 
@@ -236,6 +244,9 @@
 - `cd myCPU && make test-host-pipeline_speculation_contracts_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
 - `cd myCPU && make test-host-interactive_terminal_smoke`
+- `cd myCPU && make test-host-virtio_blk_smoke`
+- `cd myCPU && make test-host-xv6_boot_smoke`
+- `cd myCPU && make run-workload-xv6`
 - `cd myCPU && make test-host-vector_pipeline_smoke`
 - `cd myCPU && make test-host-vector_cnn_smoke`
 

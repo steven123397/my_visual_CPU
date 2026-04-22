@@ -9,14 +9,14 @@ _start:
     la   t0, machine_trap
     csrw mtvec, t0
 
-    # Source 1 priority = 1
+    # Configure the UART PLIC source priority.
     li   t0, 1
     li   t1, PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE)
     add  t1, s1, t1
     sw   t0, 0(t1)
 
-    # Enable source 1 for machine context.
-    li   t0, 2
+    # Enable the UART source for machine context.
+    li   t0, (1 << PLIC_SOURCE_UART_THRE)
     li   t1, PLIC_ENABLE_OFFSET(PLIC_CONTEXT_MACHINE)
     add  t1, s1, t1
     sw   t0, 0(t1)
@@ -32,7 +32,7 @@ _start:
     li   t0, 8
     csrrs x0, mstatus, t0
 
-    # Enable UART THRE interrupt to raise PLIC source 1.
+    # Enable UART THRE interrupt to raise the UART PLIC source.
     li   t0, UART_IER_THRI
     sb   t0, UART_REG_IER(s0)
 

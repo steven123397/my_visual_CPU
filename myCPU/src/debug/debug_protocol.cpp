@@ -31,6 +31,10 @@ BackendKind parse_backend_kind(const std::string& name) {
     throw std::runtime_error("unknown backend: " + name);
 }
 
+BlockTransport parse_debug_block_transport(const std::string& name) {
+    return name.empty() ? BlockTransport::SimpleStorage : parse_block_transport(name);
+}
+
 }  // namespace
 
 int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
@@ -48,11 +52,13 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
             if (command.kind == DebugCliCommandKind::Load) {
                 const BackendKind backend_kind =
                     parse_backend_kind(command.backend.empty() ? std::string("pipeline") : command.backend);
+                const BlockTransport block_transport = parse_debug_block_transport(command.block_transport);
                 if (command.flat) {
                     session.load_binary(
                         command.image,
                         command.addr,
                         backend_kind,
+                        block_transport,
                         command.disk.empty() ? nullptr : command.disk.c_str(),
                         command.disk_ready,
                         command.disk_magic_valid);
@@ -60,6 +66,7 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                     session.load_elf(
                         command.image,
                         backend_kind,
+                        block_transport,
                         command.disk.empty() ? nullptr : command.disk.c_str(),
                         command.disk_ready,
                         command.disk_magic_valid);

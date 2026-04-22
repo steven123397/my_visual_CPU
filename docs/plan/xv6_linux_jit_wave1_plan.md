@@ -1,6 +1,6 @@
 # xv6 / Linux / JIT Wave 1 实现计划
 
-> **文档状态：** 执行中（`2026-04-21` 已完成主线切换设计、状态文档、4 个 worktree 编排与第一轮 handoff 收集；`2026-04-22` 已按 `A -> B -> C -> D` 完成第一轮主工作树整合，当前进入 post-integration follow-up 阶段）
+> **文档状态：** 执行中（`2026-04-21` 已完成主线切换设计、状态文档、4 个 worktree 编排与第一轮 handoff 收集；`2026-04-22` 已按 `A -> B -> C -> D` 完成第一轮主工作树整合，并完成首轮 B / C post-integration follow-up：PLIC source split、`Machine` / CLI / debug CLI block transport 选择、`mycpu_virt` board 切到 `virtio-blk`；同日进一步的 A / B bug-driven follow-up 也已把 `xv6` 推到 5000-cycle boot-banner / allocator-warmup checkpoint；原 4 个专项 worktree / branch 已清理，当前剩余任务收敛到真实 `virtio` board path 上的 post-kinit 下一处真实 blocker）
 
 ## 文档定位
 
@@ -24,7 +24,7 @@
 
 - 把当前主线正式切到 `RV64A + virtio + CSR / privilege 补全 + xv6-riscv`。
 - 在不放弃默认延续线 guardrail 的前提下，为未来 `Linux` 和 `JIT / DBT` 铺 durable foundation。
-- 用 4 个独立对话、4 个独立 branch / worktree 并行推进，并尽量避免共享文件冲突。
+- 首轮通过 4 个独立对话、4 个独立 branch / worktree 并行推进，并尽量避免共享文件冲突；当前并行阶段已经完成，剩余 follow-up 直接在 `main` 工作区收口。
 
 ## 完成定义
 
@@ -33,9 +33,11 @@
 - 每条 workstream 都有明确的 ownership、验证基线和不可越界修改范围。
 - 每条 workstream 都有可直接复制的新对话 prompt。
 - `docs/status/mainline_status.md`、`docs/status/project_priority_roadmap.md` 和 `docs/index.md` 已与当前主线切换口径对齐。
-- 各 agent 后续产出能够按 `A/B -> C -> D` 的顺序被协调者整合。
+- 各 agent 产出已经按 `A/B -> C -> D` 的顺序被协调者整合，且首轮 B / C follow-up 也已回收到 `main`。
+- `xv6` board profile 已切到真实 `virtio-blk`，并能通过 `xv6_boot_smoke` / `run-workload-xv6` 验证。
+- 当前剩余完成定义收敛为：在真实 `virtio` board path 上，把 `xv6` 从当前 5000-cycle boot-banner / allocator-warmup checkpoint 推到下一个稳定里程碑，并冻结新的 blocker 归属。
 
-## Worktree / Branch 矩阵
+## 首轮 Worktree / Branch 矩阵（已执行，当前仅保留留档）
 
 | Agent | Branch | Worktree | 核心职责 |
 |------|------|------|------|
@@ -43,6 +45,8 @@
 | B | `feat/xv6-foundation-virtio-platform` | `.worktrees/xv6-foundation-virtio-platform` | `virtio-mmio`、`virtqueue`、`virtio-blk`、平台接线 |
 | C | `feat/xv6-bringup-workload-harness` | `.worktrees/xv6-bringup-workload-harness` | 外部 workload harness、`xv6-riscv` boot / smoke / gap audit |
 | D | `feat/linux-jit-observation-foundation` | `.worktrees/linux-jit-observation-foundation` | execution profile / observation、默认延续线 guardrail |
+
+> 并行整合阶段已完成；上述 worktree / branch 已按清理请求收口，本表只保留首轮 ownership 历史。后续 blocker 仍按同一 ownership 分类，但直接在 `main` 工作区推进。
 
 ## 协作硬规则
 
@@ -58,10 +62,10 @@
 - `2026-04-21` 已收齐 4 份 `workstream_handoff.md`。
 - `2026-04-22` 已按默认顺序把 A / B / C / D 第一轮 foundation 整合进主工作树。
 - A：共享 `AtomicRequest` contract、`RV64A`、`misa.A`、`mhartid`、`wfi` 与对应 asm / host smoke 已进入主线，并通过 `make test-host-atomic_semantics_smoke test-atomic_basic test-atomic_ordering_smoke` 验证。
-- B：`virtio-mmio + virtqueue + virtio_device + virtio-blk` foundation 与 DMA helper 已进入主线，并通过 `make test-unit-virtio_mmio_contract test-unit-virtqueue_smoke test-host-virtio_blk_smoke` 验证；当前主要剩余 blocker 已收敛到 UART / `virtio` IRQ source 冲突与 `Machine` 级接线。
-- C：external workload harness、vendored `xv6-riscv`、board profile、`build/run/smoke-workload-xv6` 与 `xv6_boot_smoke` 已进入主线；其中 smoke 已从旧的 `mhartid` illegal trap 刷新到新的 4-cycle early-boot checkpoint，但 board profile 仍记录 `simple_storage`。
+- B：`virtio-mmio + virtqueue + virtio_device + virtio-blk` foundation 与 DMA helper 已进入主线；随后也已完成首轮平台 follow-up：PLIC 现在按 `xv6` 约定把 `virtio=1`、`UART=10` 分开接线，`Machine` / CLI / debug CLI 已支持 block transport 选择。
+- C：external workload harness、vendored `xv6-riscv`、board profile、`build/run/smoke-workload-xv6` 与 `xv6_boot_smoke` 已进入主线；当前 `mycpu_virt` board profile 已切到 `virtio-blk`，`xv6_boot_smoke` 与 `run-workload-xv6` 都已走真实 `virtio` board path，当前 smoke 已稳定到 5000-cycle `S` mode boot-banner / allocator-warmup checkpoint。
 - D：`execution_profile`、debug CLI profile 导出与代表性 workload smoke 已进入主线，`test-host-execution_profile_smoke` 也已补进默认 `make test` / `make test-pipeline`。
-- 本轮整合后，主工作树已通过 `make smoke-workload-xv6`、`make test` 与 `make test-pipeline`；源 worktree / branch 仍按“开发者自己决定是否清理”的规则保留。
+- 这一轮回归已覆盖 `make test-unit-mmio_contract_matrix`、`make test-host-debug_protocol_command_smoke`、`make test-host-virtio_blk_smoke`、`make test-host-xv6_boot_smoke`、`make run-workload-xv6`、`make test`、`make test-pipeline` 与 `cd frontend && node --test`；原 4 个专项 worktree / branch 也已完成清理。
 
 ## 任务
 
@@ -104,11 +108,11 @@
   - `myCPU/src/trap.cpp`
   - `myCPU/Makefile`
 
-- [ ] **步骤 1：** 先做 `xv6 / Linux` 相关 ISA、CSR、privilege gap audit，列出必须补的 architected contract，不要一上来就铺实现。
-- [ ] **步骤 2：** 设计并落地共享的 atomic / reservation contract，确保 `InstructionSemantics` 仍是单一语义来源。
-- [ ] **步骤 3：** 在 `functional` backend 跑通 `RV64A` 完整 architected 语义，并补 asm / host smoke。
-- [ ] **步骤 4：** 为 `pipeline` 预留保守但 durable 的消费方式；如果需要先走串行化路径，也必须复用同一份 contract，而不是另写一套最小特判。
-- [ ] **步骤 5：** 跑窄验证，再守住 `cd myCPU && make test` 与相关 `CSR / trap / privilege` 门禁。
+- [x] **步骤 1：** 先做 `xv6 / Linux` 相关 ISA、CSR、privilege gap audit，列出必须补的 architected contract，不要一上来就铺实现。
+- [x] **步骤 2：** 设计并落地共享的 atomic / reservation contract，确保 `InstructionSemantics` 仍是单一语义来源。
+- [x] **步骤 3：** 在 `functional` backend 跑通 `RV64A` 完整 architected 语义，并补 asm / host smoke。
+- [x] **步骤 4：** 为 `pipeline` 预留保守但 durable 的消费方式；如果需要先走串行化路径，也必须复用同一份 contract，而不是另写一套最小特判。
+- [x] **步骤 5：** 跑窄验证，再守住 `cd myCPU && make test` 与相关 `CSR / trap / privilege` 门禁。
 
 ### 任务 3：Workstream B — virtio / platform foundation
 
@@ -128,11 +132,11 @@
   - `myCPU/src/mem/bus.*`
   - `myCPU/Makefile`
 
-- [ ] **步骤 1：** 先定义通用 `virtio-mmio + virtqueue + virtio_device` 分层，不要把 `virtio-blk` 直接写成 `Machine` 里的设备特判。
-- [ ] **步骤 2：** 实现 `virtio-blk` 第一刀，并把中断路由、MMIO window、queue state 接到现有平台。
-- [ ] **步骤 3：** 为后续 `virtio-console` / `virtio-net` 留统一 backend 扩展点，避免 `virtio-blk` 占用 transport 层细节。
-- [ ] **步骤 4：** 补 unit / host smoke，并守住现有 `bus / device / platform` 回归。
-- [ ] **步骤 5：** 与 C 线对齐 xv6 预期的块设备接口、地址布局和启动参数。
+- [x] **步骤 1：** 先定义通用 `virtio-mmio + virtqueue + virtio_device` 分层，不要把 `virtio-blk` 直接写成 `Machine` 里的设备特判。
+- [x] **步骤 2：** 实现 `virtio-blk` 第一刀，并把中断路由、MMIO window、queue state 接到现有平台。
+- [x] **步骤 3：** 为后续 `virtio-console` / `virtio-net` 留统一 backend 扩展点，避免 `virtio-blk` 占用 transport 层细节。
+- [x] **步骤 4：** 补 unit / host smoke，并守住现有 `bus / device / platform` 回归。
+- [x] **步骤 5：** 与 C 线对齐 xv6 预期的块设备接口、地址布局和启动参数。
 
 ### 任务 4：Workstream C — external guest workload harness + xv6 bring-up
 
@@ -148,11 +152,11 @@
   - `myCPU/src/platform/machine.cpp`
   - 与 workload 启动直接相关的最少 loader / CLI glue
 
-- [ ] **步骤 1：** 先完成外部 guest workload harness 设计，避免把 `xv6` 写成一条一次性 demo target。
-- [ ] **步骤 2：** 盘清 `xv6-riscv` 的 boot、trap、timer、interrupt、block device、memory map 和 boot arg 依赖，形成 gap list。
-- [ ] **步骤 3：** 在不越权修改 A/B ownership 的前提下，把 build / image / run / smoke harness 先搭起来。
-- [ ] **步骤 4：** 等 A/B 第一轮 contract 站稳后，逐步推进真实 boot smoke，目标是先稳定到“可重复复现的 early boot / console / storage 初始化阶段”。
-- [ ] **步骤 5：** 把 `xv6` 入口设计成未来可并列接入 `Linux` workload 的外部 guest profile，而不是只保留 `xv6` 特例。
+- [x] **步骤 1：** 先完成外部 guest workload harness 设计，避免把 `xv6` 写成一条一次性 demo target。
+- [x] **步骤 2：** 盘清 `xv6-riscv` 的 boot、trap、timer、interrupt、block device、memory map 和 boot arg 依赖，形成 gap list。
+- [x] **步骤 3：** 在不越权修改 A/B ownership 的前提下，把 build / image / run / smoke harness 先搭起来。
+- [ ] **步骤 4：** 等 A/B 第一轮 contract 站稳后，逐步推进真实 boot smoke；当前已切到真实 `virtio` board path，并已推进到 5000-cycle boot-banner / allocator-warmup checkpoint，但还需要继续把 `xv6` 推到下一个稳定 post-kinit 里程碑。
+- [x] **步骤 5：** 把 `xv6` 入口设计成未来可并列接入 `Linux` workload 的外部 guest profile，而不是只保留 `xv6` 特例。
 
 ### 任务 5：Workstream D — observation / profile foundation + default-line guardrail
 
@@ -172,11 +176,11 @@
   - `myCPU/tests/host/vector_pipeline_smoke.cpp`
   - `myCPU/Makefile`
 
-- [ ] **步骤 1：** 定义面向 `Linux / JIT / DBT` 的稳定 execution profile / observation 读侧合同，而不是新增一次性 log。
-- [ ] **步骤 2：** 补代表性 workload 的 hot-path / trap / memory-region 观测信号，并让 debug / CLI 可读取这些信号。
-- [ ] **步骤 3：** 继续把 `V4`、`kernel_alpha`、`interactive_os`、`pipeline` 作为本轮 guardrail workload，而不是因为主线切换就停止维护。
-- [ ] **步骤 4：** 如果 profile 需要新统计维度，优先复用既有 `pipeline_sequence`、`debug snapshot`、`memory_region` 等现成边界，不另起并行事实来源。
-- [ ] **步骤 5：** 跑 `debug_cli_smoke`、代表性 workload smoke 和主门禁，确保观测面不反向污染执行语义。
+- [x] **步骤 1：** 定义面向 `Linux / JIT / DBT` 的稳定 execution profile / observation 读侧合同，而不是新增一次性 log。
+- [x] **步骤 2：** 补代表性 workload 的 hot-path / trap / memory-region 观测信号，并让 debug / CLI 可读取这些信号。
+- [x] **步骤 3：** 继续把 `V4`、`kernel_alpha`、`interactive_os`、`pipeline` 作为本轮 guardrail workload，而不是因为主线切换就停止维护。
+- [x] **步骤 4：** 如果 profile 需要新统计维度，优先复用既有 `pipeline_sequence`、`debug snapshot`、`memory_region` 等现成边界，不另起并行事实来源。
+- [x] **步骤 5：** 跑 `debug_cli_smoke`、代表性 workload smoke 和主门禁，确保观测面不反向污染执行语义。
 
 ## 推荐合并顺序
 
@@ -184,15 +188,17 @@
    - A / B 已先把 architected contract 与 `virtio` foundation 立成主线事实来源。
    - C 随后已基于 A/B 新主线刷新 `xv6_boot_smoke` 到新的 early-boot checkpoint。
    - D 最后整合，并把 `execution_profile` guardrail 补进默认主门禁。
-2. **当前 follow-up 顺序改为：先 B 类平台接线，再 C 类 board profile 推进。**
-   - 先补 UART / `virtio` 独立 IRQ source 与 `Machine` 级接线。
-   - 再把 `xv6` board profile 从 `simple_storage` 切到真实 `virtio` contract，并继续向更后的 bring-up checkpoint 推进。
-3. **A / D 后续都保持 bug-driven。**
-   - A 只随着新暴露的 CSR / privilege / timer 缺口补最窄 contract。
-   - D 继续用 profile / observation / guardrail 锁住新增行为变化，不反向抢占 A/B/C ownership。
+2. **首轮 B / C follow-up 也已经执行完毕。**
+   - PLIC 已按 `xv6` 约定拆开 `virtio` / UART source，`Machine` / CLI / debug CLI 已支持 block transport 选择。
+   - `xv6` board profile 已从 `simple_storage` 切到真实 `virtio-blk` contract，`xv6_boot_smoke` / `run-workload-xv6` 已开始消费这条路径。
+3. **当前剩余顺序改为：先推进 C 类真实 bring-up，再按暴露缺口回派 A / B / D。**
+   - C 先把 `xv6` 从当前 5000-cycle boot-banner / allocator-warmup checkpoint 推到下一个稳定 post-kinit 里程碑。
+   - A / B / D 只随着新 blocker 进入 bug-driven 支撑，不反向抢占 C 的 bring-up ownership。
 4. **每一轮 follow-up 仍由协调者统一回写 status/docs。**
 
 ## Agent 启动 prompt
+
+> 以下 prompt 保留为首轮并行阶段的留档样例。若后续再次拆分专项，需要先按最新 branch / worktree 名称和当前 blocker 改写后再复用。
 
 ### Agent A prompt
 

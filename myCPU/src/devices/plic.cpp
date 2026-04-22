@@ -11,11 +11,14 @@ uint64_t Plic::load(uint64_t addr, int size) {
 
     const uint32_t offset = static_cast<uint32_t>(addr - PLIC_BASE);
 
-    if (offset == PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE)) {
-        return priorities_[1];
+    if ((offset % 4U) == 0) {
+        const uint32_t source_id = offset / 4U;
+        if (source_supported(source_id)) {
+            return priorities_[source_id];
+        }
     }
     if (offset == kPendingOffset) {
-        return pending_[1] ? (1U << 1) : 0;
+        return pending_bits();
     }
     if (offset == kMachineEnableOffset) {
         return machine_context_.enables;
@@ -47,8 +50,15 @@ void Plic::store(uint64_t addr, uint64_t value, int size) {
     const uint32_t offset = static_cast<uint32_t>(addr - PLIC_BASE);
     const uint32_t value32 = static_cast<uint32_t>(value);
 
-    if (offset == PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE)) {
-        priorities_[1] = value32 & 0x7;
+    if ((offset % 4U) == 0) {
+        const uint32_t source_id = offset / 4U;
+        if (source_supported(source_id)) {
+            priorities_[source_id] = value32 & 0x7;
+            return;
+        }
+    }
+    if (offset == kPendingOffset) {
+        invalid_access(addr, size);
         return;
     }
     if (offset == kMachineEnableOffset) {
@@ -89,7 +99,7 @@ PlatformEvents Plic::tick() {
 }
 
 void Plic::set_source_level(uint32_t source_id, bool asserted) {
-    if (source_id == 0 || source_id > kNumSources) {
+    if (!source_supported(source_id)) {
         return;
     }
 
@@ -100,28 +110,28 @@ void Plic::set_source_level(uint32_t source_id, bool asserted) {
 }
 
 uint32_t Plic::priority(uint32_t source_id) const {
-    if (source_id == 0 || source_id > kNumSources) {
+    if (!source_supported(source_id)) {
         return 0;
     }
     return priorities_[source_id];
 }
 
 bool Plic::source_level(uint32_t source_id) const {
-    if (source_id == 0 || source_id > kNumSources) {
+    if (!source_supported(source_id)) {
         return false;
     }
     return levels_[source_id];
 }
 
 bool Plic::source_pending(uint32_t source_id) const {
-    if (source_id == 0 || source_id > kNumSources) {
+    if (!source_supported(source_id)) {
         return false;
     }
     return pending_[source_id];
 }
 
 bool Plic::source_claimed(uint32_t source_id) const {
-    if (source_id == 0 || source_id > kNumSources) {
+    if (!source_supported(source_id)) {
         return false;
     }
     return claimed_by_[source_id] != kUnclaimedContext;
@@ -151,11 +161,28 @@ bool Plic::supervisor_has_pending() const {
     return context_has_pending(supervisor_context_);
 }
 
+bool Plic::source_supported(uint32_t source_id) const {
+    return source_id == VIRTIO_SOURCE_ID || source_id == UART_SOURCE_ID;
+}
+
+uint32_t Plic::pending_bits() const {
+    uint32_t bits = 0;
+    for (uint32_t source_id = 1; source_id <= kNumSources; ++source_id) {
+        if (source_supported(source_id) && pending_[source_id]) {
+            bits |= (1U << source_id);
+        }
+    }
+    return bits;
+}
+
 uint32_t Plic::best_pending_source(const ContextState& context) const {
     uint32_t best_source = 0;
     uint32_t best_priority = 0;
 
     for (uint32_t source_id = 1; source_id <= kNumSources; ++source_id) {
+        if (!source_supported(source_id)) {
+            continue;
+        }
         const uint32_t source_bit = 1U << source_id;
         const uint32_t priority = priorities_[source_id];
         if (!pending_[source_id] || claimed_by_[source_id] != kUnclaimedContext || (context.enables & source_bit) == 0) {
@@ -189,7 +216,7 @@ uint32_t Plic::claim(uint32_t context_id, ContextState& context) {
 }
 
 void Plic::complete(uint32_t context_id, uint32_t source_id) {
-    if (source_id == 0 || source_id > kNumSources) {
+    if (!source_supported(source_id)) {
         return;
     }
 

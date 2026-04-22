@@ -8,11 +8,22 @@
 #define UART_SIZE 0x8
 #define UART_REG_RBR 0x0
 #define UART_REG_THR 0x0
+#define UART_REG_DLL 0x0
 #define UART_REG_IER 0x1
+#define UART_REG_DLM 0x1
 #define UART_REG_IIR 0x2
+#define UART_REG_FCR 0x2
+#define UART_REG_LCR 0x3
 #define UART_REG_LSR 0x5
+#define UART_IER_RDI 0x1
 #define UART_IER_THRI 0x2
+#define UART_IIR_NO_INT 0x01
+#define UART_IIR_THRI 0x02
+#define UART_IIR_RDI 0x04
+#define UART_LCR_DLAB 0x80
 #define UART_LSR_DR 0x01
+#define UART_LSR_THRE 0x20
+#define UART_LSR_TEMT 0x40
 
 #define STORAGE_BASE 0x10001000
 #define STORAGE_SIZE 0x400
@@ -53,7 +64,8 @@
 #define PLIC_SIZE 0x300000
 #define PLIC_CONTEXT_MACHINE 0
 #define PLIC_CONTEXT_SUPERVISOR 1
-#define PLIC_SOURCE_UART_THRE 1
+#define PLIC_SOURCE_VIRTIO_MMIO 1
+#define PLIC_SOURCE_UART_THRE 10
 #define PLIC_PRIORITY_OFFSET(source_id) ((source_id) * 4)
 #define PLIC_PENDING_OFFSET 0x1000
 #define PLIC_ENABLE_OFFSET(context) (0x2000 + ((context) * 0x80))

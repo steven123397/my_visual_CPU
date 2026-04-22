@@ -69,11 +69,27 @@ int main() {
             return 1;
         }
 
+        if (!expect_store_ok(bus,
+                             UART_BASE + UART_REG_IER,
+                             UART_IER_RDI,
+                             1,
+                             "expected UART RX interrupt enable write") ||
+            !plic.source_level(Plic::UART_SOURCE_ID) ||
+            !expect_load(bus,
+                         UART_BASE + UART_REG_IIR,
+                         1,
+                         UART_IIR_RDI,
+                         "expected UART IIR RX interrupt identity")) {
+            std::fprintf(stderr, "expected UART RX interrupt source to assert when data arrives\n");
+            return 1;
+        }
+
         if (!expect_load(bus,
                          UART_BASE + UART_REG_RBR,
                          1,
                          'A',
                          "expected first UART RX byte") ||
+            !plic.source_level(Plic::UART_SOURCE_ID) ||
             !expect_load(bus,
                          UART_BASE + UART_REG_RBR,
                          1,
@@ -83,7 +99,8 @@ int main() {
         }
 
         if (!bus.try_load(UART_BASE + UART_REG_LSR, 1, lsr) ||
-            (lsr & UART_LSR_DR) != 0) {
+            (lsr & UART_LSR_DR) != 0 ||
+            plic.source_level(Plic::UART_SOURCE_ID)) {
             std::fprintf(stderr, "expected UART RX ready flag to clear after draining input\n");
             return 1;
         }

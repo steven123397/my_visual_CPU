@@ -8,6 +8,7 @@
 
 class Plic : public Device {
 public:
+    static constexpr uint32_t VIRTIO_SOURCE_ID = PLIC_SOURCE_VIRTIO_MMIO;
     static constexpr uint32_t UART_SOURCE_ID = PLIC_SOURCE_UART_THRE;
 
     Plic();
@@ -38,7 +39,7 @@ private:
         uint32_t threshold{0};
     };
 
-    static constexpr uint32_t kNumSources = 1;
+    static constexpr uint32_t kNumSources = UART_SOURCE_ID;
     static constexpr uint32_t kPendingOffset = PLIC_PENDING_OFFSET;
     static constexpr uint32_t kMachineEnableOffset = PLIC_ENABLE_OFFSET(PLIC_CONTEXT_MACHINE);
     static constexpr uint32_t kSupervisorEnableOffset = PLIC_ENABLE_OFFSET(PLIC_CONTEXT_SUPERVISOR);
@@ -46,6 +47,8 @@ private:
     static constexpr uint32_t kSupervisorContextOffset = PLIC_CONTEXT_OFFSET(PLIC_CONTEXT_SUPERVISOR);
     static constexpr uint8_t kUnclaimedContext = 0xff;
 
+    bool source_supported(uint32_t source_id) const;
+    uint32_t pending_bits() const;
     uint32_t best_pending_source(const ContextState& context) const;
     bool context_has_pending(const ContextState& context) const;
     uint32_t claim(uint32_t context_id, ContextState& context);

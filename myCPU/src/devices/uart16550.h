@@ -28,10 +28,19 @@ public:
     void set_mirror_stdout(bool enabled);
 
 private:
+    bool divisor_latch_enabled() const;
+    bool tx_interrupt_enabled() const;
+    bool rx_interrupt_enabled() const;
+    bool rx_interrupt_pending() const;
     void update_interrupt_line();
 
     Plic& plic_;
     uint8_t ier_{0};
+    uint8_t lcr_{0};
+    uint8_t dll_{0};
+    uint8_t dlm_{0};
+    uint8_t fcr_{0};
+    bool tx_interrupt_pending_{false};
     std::deque<uint8_t> input_{};
     std::string output_{};
     bool mirror_stdout_{true};

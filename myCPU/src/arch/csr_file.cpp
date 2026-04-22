@@ -9,6 +9,7 @@ namespace {
 constexpr uint64_t SSTATUS_MASK = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_SPP | MSTATUS_SUM | MSTATUS_MXR;
 constexpr uint64_t SIE_MASK = MIE_SSIE | MIE_STIE | MIE_SEIE;
 constexpr uint64_t MIP_MIE_MASK = MIE_SSIE | MIE_MSIE | MIE_STIE | MIE_MTIE | MIE_SEIE | MIE_MEIE;
+constexpr uint64_t MENVCFG_STCE = 1ULL << 63;
 constexpr uint64_t SATP_MODE_SHIFT = 60;
 constexpr uint64_t SATP_MODE_MASK = 0xFULL << SATP_MODE_SHIFT;
 constexpr uint64_t SATP_MODE_BARE = 0ULL;
@@ -48,6 +49,9 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_MIE:
     case CSR_MTVEC:
     case CSR_MCOUNTEREN:
+    case CSR_MENVCFG:
+    case CSR_PMPCFG0:
+    case CSR_PMPADDR0:
     case CSR_MCYCLE:
     case CSR_MINSTRET:
     case CSR_MSCRATCH:
@@ -59,10 +63,25 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_CYCLE:
     case CSR_TIME:
     case CSR_INSTRET:
+    case CSR_STIMECMP:
         return true;
     default:
         return false;
     }
+}
+
+uint64_t current_time(const Clint* clint, const CoreState& core) {
+    return clint ? clint->mtime() : core.cycle();
+}
+
+bool sstc_enabled(const std::array<uint64_t, 4096>& regs) {
+    return (regs[CSR_MENVCFG] & MENVCFG_STCE) != 0;
+}
+
+bool stimecmp_pending(const std::array<uint64_t, 4096>& regs,
+                      const Clint* clint,
+                      const CoreState& core) {
+    return sstc_enabled(regs) && current_time(clint, core) >= regs[CSR_STIMECMP];
 }
 
 }
@@ -83,6 +102,7 @@ CsrFile& CsrFile::operator=(const CsrFile& other) {
 void CsrFile::reset() {
     regs_.fill(0);
     regs_[CSR_MISA] = MISA_IMPLEMENTED_VALUE;
+    regs_[CSR_STIMECMP] = UINT64_MAX;
 }
 
 void CsrFile::bind_clint(const Clint* clint) {
@@ -120,13 +140,24 @@ uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
         return regs_[CSR_MIE] & MIP_MIE_MASK;
     }
     if (addr == CSR_MIP) {
-        return regs_[CSR_MIP] & MIP_MIE_MASK;
+        uint64_t value = regs_[CSR_MIP] & MIP_MIE_MASK;
+        if (stimecmp_pending(regs_, clint_, core)) {
+            value |= MIE_STIE;
+        }
+        return value;
     }
     if (addr == CSR_SIE) {
         return regs_[CSR_MIE] & regs_[CSR_MIDELEG] & SIE_MASK;
     }
     if (addr == CSR_SIP) {
-        return regs_[CSR_MIP] & regs_[CSR_MIDELEG] & SIE_MASK;
+        uint64_t value = regs_[CSR_MIP] & regs_[CSR_MIDELEG] & SIE_MASK;
+        if (stimecmp_pending(regs_, clint_, core) && (regs_[CSR_MIDELEG] & MIE_STIE) != 0) {
+            value |= MIE_STIE;
+        }
+        return value;
+    }
+    if (addr == CSR_MENVCFG) {
+        return regs_[CSR_MENVCFG] & MENVCFG_STCE;
     }
     return regs_[addr];
 }
@@ -169,6 +200,10 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
     }
     if (addr == CSR_MIP) {
         regs_[CSR_MIP] = value & MIP_MIE_MASK;
+        return;
+    }
+    if (addr == CSR_MENVCFG) {
+        regs_[CSR_MENVCFG] = value & MENVCFG_STCE;
         return;
     }
     if (addr == CSR_SIE) {

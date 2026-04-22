@@ -20,16 +20,19 @@ static BackendKind parse_backend_kind(const char* value) {
 
 static void usage(const char* prog) {
     std::fprintf(stderr,
-                 "Usage: %s [--debug-cli] [--backend kind] [-b addr] [-d image|--disk image] [--disk-not-ready image] [--disk-bad-magic image] <image>\n",
+                 "Usage: %s [--debug-cli] [--backend kind] [--block-transport kind] [-b addr] [-d image|--disk image] [--disk-not-ready image] [--disk-bad-magic image] <image>\n",
                  prog);
     std::fprintf(stderr, "  --debug-cli     run JSON line debug protocol on stdin/stdout\n");
     std::fprintf(stderr, "  --backend kind  select execution backend: functional or pipeline\n");
+    std::fprintf(stderr,
+                 "  --block-transport kind  select block transport: simple_storage or virtio-blk\n");
     std::fprintf(stderr, "  -b addr   load flat binary at hex address (default: 0x80000000)\n");
-    std::fprintf(stderr, "  -d, --disk image  attach host-backed storage image to the simple MMIO storage device\n");
     std::fprintf(stderr,
-                 "  --disk-not-ready image  attach storage image but leave READY deasserted\n");
+                 "  -d, --disk image  attach host-backed storage image to the selected block transport\n");
     std::fprintf(stderr,
-                 "  --disk-bad-magic image  attach storage image but corrupt the probe MAGIC register\n");
+                 "  --disk-not-ready image  attach storage image but leave READY deasserted (simple_storage only)\n");
+    std::fprintf(stderr,
+                 "  --disk-bad-magic image  attach storage image but corrupt the probe MAGIC register (simple_storage only)\n");
     std::fprintf(stderr, "  image     ELF or flat binary\n");
     std::exit(1);
 }
@@ -51,6 +54,7 @@ int main(int argc, char* argv[]) {
     bool disk_ready = true;
     bool disk_magic_valid = true;
     BackendKind backend_kind = BackendKind::Functional;
+    BlockTransport block_transport = BlockTransport::SimpleStorage;
     const char* image = nullptr;
 
     for (int i = 1; i < argc; i++) {
@@ -59,6 +63,11 @@ int main(int argc, char* argv[]) {
                 usage(argv[0]);
             }
             backend_kind = parse_backend_kind(argv[i]);
+        } else if (std::strcmp(argv[i], "--block-transport") == 0) {
+            if (++i >= argc) {
+                usage(argv[0]);
+            }
+            block_transport = parse_block_transport(argv[i]);
         } else if (std::strcmp(argv[i], "-b") == 0) {
             flat = true;
             if (++i >= argc) {
@@ -98,6 +107,7 @@ int main(int argc, char* argv[]) {
     try {
         Machine machine;
         machine.set_backend_kind(backend_kind);
+        machine.set_block_transport(block_transport);
         if (disk_image) {
             machine.attach_storage_image(disk_image, disk_ready, disk_magic_valid);
         }

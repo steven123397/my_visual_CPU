@@ -28,6 +28,7 @@ bool expect_parse_error(const char* line) {
 int main() {
     const DebugCliCommand load = parse_debug_cli_command(
         "{\"cmd\":\"load\",\"image\":\"guest\\/interactive_os.elf\",\"backend\":\"pipeline\","
+        "\"block_transport\":\"virtio-blk\","
         "\"disk\":\"tests\\/data\\/storage_basic.txt\",\"disk_ready\":false,"
         "\"disk_magic_valid\":true,\"flat\":true,\"addr\":\"0x80000078\"}");
     if (!expect(load.kind == DebugCliCommandKind::Load, "load command kind mismatch")) {
@@ -37,6 +38,9 @@ int main() {
         return 1;
     }
     if (!expect(load.backend == "pipeline", "load backend mismatch")) {
+        return 1;
+    }
+    if (!expect(load.block_transport == "virtio-blk", "load block_transport mismatch")) {
         return 1;
     }
     if (!expect(load.disk == "tests/data/storage_basic.txt", "load disk should decode escaped slash")) {

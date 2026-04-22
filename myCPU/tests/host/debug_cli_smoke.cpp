@@ -23,8 +23,8 @@ namespace {
 constexpr uint64_t kDebugProgramAddr = 0x80000078ULL;
 
 constexpr std::array<uint32_t, 45> kSupervisorExternalProgram = {
-    0x10000437U, 0x0c0004b7U, 0x00000297U, 0x08428293U, 0x10529073U, 0x00100293U, 0x0054a223U,
-    0x00200293U, 0x00002337U, 0x0803031bU, 0x00648333U, 0x00532023U, 0x00201337U, 0x00648333U,
+    0x10000437U, 0x0c0004b7U, 0x00000297U, 0x08428293U, 0x10529073U, 0x00100293U, 0x0254a423U,
+    0x40000293U, 0x00002337U, 0x0803031bU, 0x00648333U, 0x00532023U, 0x00201337U, 0x00648333U,
     0x00032023U, 0x20000293U, 0x30329073U, 0x10429073U, 0x000012b7U, 0x8022829bU, 0x30029073U,
     0x00200293U, 0x005400a3U, 0x00000297U, 0x01028293U, 0x34129073U, 0x30200073U, 0x0000006fU,
     0x05000293U, 0x00540023U, 0x04500293U, 0x00540023U, 0x05d00893U, 0x00000513U, 0x00000073U,
@@ -619,7 +619,11 @@ int main() {
 
     {
         DebugSession session;
-        session.load_binary(predictor_binary.path, kDebugProgramAddr, BackendKind::Pipeline, nullptr);
+        session.load_binary(predictor_binary.path,
+                            kDebugProgramAddr,
+                            BackendKind::Pipeline,
+                            BlockTransport::SimpleStorage,
+                            nullptr);
         const DebugSnapshot before = session.snapshot();
         DebugSnapshot after = before;
         after.pipeline.stalled = true;

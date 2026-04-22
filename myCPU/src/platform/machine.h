@@ -10,6 +10,8 @@
 #include "../devices/plic.h"
 #include "../devices/simple_storage.h"
 #include "../devices/uart16550.h"
+#include "../devices/virtio_blk.h"
+#include "../devices/virtio_mmio.h"
 #include "../exec/backend.h"
 #include "../loader/binary_loader.h"
 #include "../loader/elf_loader.h"
@@ -21,11 +23,20 @@ enum class BackendKind : uint8_t {
     Pipeline,
 };
 
+enum class BlockTransport : uint8_t {
+    SimpleStorage,
+    VirtioBlk,
+};
+
+const char* block_transport_name(BlockTransport transport);
+BlockTransport parse_block_transport(const std::string& name);
+
 class Machine {
 public:
     Machine();
 
     void set_backend_kind(BackendKind kind);
+    void set_block_transport(BlockTransport transport);
     void load_elf(const std::string& path);
     void load_binary(const std::string& path, uint64_t addr);
     void attach_storage_image(const std::string& path,
@@ -43,13 +54,17 @@ public:
     const Clint& clint() const;
     Plic& plic();
     const Plic& plic() const;
+    BlockTransport block_transport() const;
     SimpleStorage& storage();
     const SimpleStorage& storage() const;
+    VirtioBlk& virtio_blk();
+    const VirtioBlk& virtio_blk() const;
     ExecutionBackend& backend();
     const ExecutionBackend& backend() const;
     bool loaded() const;
 
 private:
+    void bind_block_transport();
     void rebuild_backend();
     void finish_image_load(uint64_t entry, Ram& staged_ram);
 
@@ -58,11 +73,15 @@ private:
     Plic plic_;
     Uart16550 uart_;
     SimpleStorage storage_;
+    VirtioBlk virtio_blk_;
+    VirtioMmio virtio_mmio_;
     Clint clint_;
     ElfLoader elf_loader_;
     BinaryLoader binary_loader_;
     Bus bus_;
     BackendKind backend_kind_{BackendKind::Functional};
+    BlockTransport block_transport_{BlockTransport::SimpleStorage};
+    bool block_transport_bound_{false};
     std::unique_ptr<ExecutionBackend> backend_;
     bool loaded_{false};
 };
