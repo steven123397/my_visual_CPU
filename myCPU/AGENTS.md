@@ -118,7 +118,8 @@
 - `2026-04-11` 已在 `V4` 首刀之上补上一轮更窄的 direct dependency hardening：pending serializing vector 仍会阻塞 younger vector ALU，但 ready older non-memory vector ALU 如果只是被更老 scalar ROB head 挡住 commit，direct dependent younger vector ALU 现在可以以前驱 materialized result 完成 execute；对应 `vector_pipeline_smoke` 也已补上更像真实依赖链的 host 回归。
 - `2026-04-11` 同日也补上一轮更窄的 vector memory hardening：`vle.v / vse.v` 在 commit boundary 现在会先对整段 span 做预校验；live `MMIO` 与非 RAM span 会直接 `access-fault` fail-closed，不再留下 UART 输入消费、UART 输出 / `IER` 改写或 RAM 部分写入副作用；对应 `vector_vlite_smoke` 已补齐 UART / RAM fault 回归。
 - `2026-04-12` 已完成 `P4-prep-1`：新增统一 `memory_region` 类型与 `Bus::describe_region()/describe_span()`，把 `RAM / MMIO / unmapped` 与最小 region 属性收口成单一事实来源；`vector_ops.cpp`、`pipeline_backend_execute.cpp` 与 `load_store_queue.cpp` 也都已迁到这一路径，`bus_region_contract`、`vector_vlite_smoke`、`vector_pipeline_smoke`、`make test` 与 `make test-pipeline` 已共同守住现有行为不变。
-- 外部 `xv6-riscv` workload harness 当前已能在真实 `virtio-blk` board profile 上跑通 `xv6_boot_smoke` / `run-workload-xv6` 的现有 5000-cycle boot-banner checkpoint：`xv6` 已进入 `S` mode、打印 `xv6 kernel is booting`，当前稳定停在 `kinit/freerange` 的 allocator warm-up `memset` 循环。
+- 外部 `xv6-riscv` workload harness 当前已能在真实 `virtio-blk` board profile 上稳定跑到 shell；`xv6_shell_smoke` 已锁住 shell prompt、`ls`、`cat README`、`wc README`、`grep qemu README | wc`、root/nested 路径文件创建/读回/删除、`forktest` 与 `stressfs`。
+- Linux-facing workload foundation 当前也已具备最小 durable contract：普通 CLI、debug CLI、`run_debug_cli_probe.py`、`Machine` 与 `DebugSession` 现在都支持 generic `flat image + payload + set_gpr`，并且 `DebugSession reset` 会 replay 已配置的 payload/GPR seed；`linux_proto` workload profile 也已能用 board/profile 级事实来源稳定导出 `Image@0x80200000`、`dtb@0x88000000`、`initrd@0x84000000`、`a0=hartid` 与 `a1=dtb`。
 - 独立 `kernel_alpha` 正向与九条负向 guest 回归。
 
 具体测试列表以 [Makefile](Makefile) 为准。
@@ -150,9 +151,9 @@
 - [src/debug](src/debug) 和 [../frontend](../frontend)
   当前最小调试链路已经正式接入并可用，Node/runtime 级持续 `run`、session replacement、高吞吐 terminal 输入聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e 回归也已补上；对当前单用户、本地教学/调试使用，这组门禁已经足够。
 - [src/platform/machine.cpp](src/platform/machine.cpp)
-  `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。当前 `Machine` 也已支持 `simple_storage / virtio-blk` 可选 block transport；`xv6` 已切到真实 `virtio` 路径，但默认 transport 仍保留为 `simple_storage`。
-- [tests/host/xv6_boot_smoke.cpp](tests/host/xv6_boot_smoke.cpp) 和 [workloads/boards/mycpu_virt.mk](workloads/boards/mycpu_virt.mk)
-  `xv6` 当前已经切到真实 `virtio-blk` board profile，并已稳定到 5000-cycle boot-banner / allocator-warmup checkpoint；下一步更值钱的是把它从 `kinit/freerange` 的长清零路径再往后推进，并把 post-banner 新暴露的 blocker 按 A / B / D ownership 回派，而不是再回头扩大一次性 board 特判。
+  `Machine::load_elf()/load_binary()` 当前语义已经明确为“替换 RAM 并 reset CPU/backend”，但这还不是完整平台 reset；设备状态是否也要复位，仍是后续独立设计问题。当前 `Machine` 也已支持 `simple_storage / virtio-blk` 可选 block transport，以及保持当前 CPU/backend 状态的 `load_binary_payload()/set_gpr()` post-load contract；`xv6` 已切到真实 `virtio` 路径，但默认 transport 仍保留为 `simple_storage`。
+- [tests/host/xv6_boot_smoke.cpp](tests/host/xv6_boot_smoke.cpp)、[tests/host/xv6_shell_smoke.cpp](tests/host/xv6_shell_smoke.cpp) 和 [workloads/boards/mycpu_virt.mk](workloads/boards/mycpu_virt.mk)
+  `xv6` 当前已经切到真实 `virtio-blk` board profile，并已稳定到 shell；当前更值钱的下一步不再是继续证明 `xv6` 自身能否到 shell，而是把这条真实 board path 守成稳定 guardrail，并在此基础上推进真实 Linux 资产、`DTB/chosen/cmdline` 与首个 boot checkpoint。
 - [src/exec/load_store_queue.cpp](src/exec/load_store_queue.cpp) 和 [src/exec/pipeline_backend.cpp](src/exec/pipeline_backend.cpp)
   decode 级 `BlockedByUnresolvedStore` 当前最小收窄已经落地：它只保留给 older store 地址未知场景；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load。后续这条线的取舍判断也已经完成：在当前 decode 级 load 前置分类、单 `ex_mem` memory 通道与 coarse replay flush 基线上，不主动继续扩大更激进的 `issue / replay / speculation`；只有在出现真实 workload 证据或明确研究目标时，才值得重开，且应先看 issue decoupling。
 - [src/exec/reorder_buffer.cpp](src/exec/reorder_buffer.cpp)、[src/exec/pipeline_backend_execute.cpp](src/exec/pipeline_backend_execute.cpp) 和 [tests/host/vector_pipeline_smoke.cpp](tests/host/vector_pipeline_smoke.cpp)
@@ -180,10 +181,10 @@
 
 1. 继续稳住 simulator reference path 的 correctness 与可观察性。
 2. 在已接通的 correctness hardening、loader、guest smoke、debug smoke 和 `pipeline` 门禁基础上，继续按新增 bug 或新合同补最小回归，不重复堆叠低收益变体。
-3. 在真实 `virtio-blk` board path 上继续推进 `xv6` 早期启动，把当前 5000-cycle boot-banner / allocator-warmup checkpoint 再向后推进；遇到缺口时，优先按 A / B / D ownership 分类补最小 contract。
+3. 把真实 `virtio-blk` board path 下的 `xv6` shell 里程碑守成稳定 guardrail，并在现有 `flat/payload/set_gpr` 与 `linux_proto` foundation 之上推进真实 Linux 资产、`DTB/chosen/cmdline` 与首个 boot checkpoint；遇到缺口时，优先按 A / B / D ownership 分类补最小 contract。
 4. `debug/frontend` 当前不再主动扩大浏览器端压力验证；后续按真实 bug 或明确新需求补最小回归，不要在这一层抢跑断点、条件暂停或更大 UI / 协议面。
 5. `Phase 3` 当前不主动继续扩大更激进的 `issue / replay / speculation`；后续若出现真实 stall hotspot，再优先评估 issue decoupling 这类更有结构收益的最小切片，而不是回头重复讨论已完成的 decode 边界。
-6. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke`、`virtio_blk_smoke`、`xv6_boot_smoke`、`run-workload-xv6` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
+6. 继续用 `make test`、`make test-pipeline`、loader 单测、`debug_cli_smoke`、`interactive_terminal_smoke`、`virtio_blk_smoke`、`run_debug_cli_probe`、`xv6_boot_smoke`、`xv6_shell_smoke`、`run-workload-xv6` 和 guest 正负回归守住当前稳定基线，不让 `pipeline` 与调试链路反向污染 reference path。
 7. 当前 `V-lite` `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`、`V4` 首刀与第一轮更窄的 `V4` hardening 都已落地：shared semantics、`functional` reference path、最小 host 回归、non-memory vector ALU 的最小 vector-aware execute/commit 边界、独立最小 guest 向量 demo、固定 `conv -> relu` 的最小 CNN-style guest demo，以及守住 mixed `SEW/VL` `conv -> relu` 链路、全负 `relu` 零钳位、ready older vector producer -> direct dependent consumer 依赖链，以及 pending serializing vector guard 的 host smoke 都已接通。当前更健康的下一步不是顺势扩到 `Pool / FC`、向量 load/store path 或更重 `Phase 4`，而是继续围绕已落地的 `V4` 边界做 bug-driven hardening，再决定下一刀。
 8. `P4-prep-1` 当前已经完成；如果后续继续评估 `Phase 4`，应先围绕现有 `memory_region` 边界判断 `P4-prep-2`（例如更克制的 `memory observation / shadow cache`）是否有独立结构收益，不直接跳到 `cache / DMA / multicore`。
 
@@ -245,7 +246,9 @@
 - `cd myCPU && make test-host-debug_cli_smoke`
 - `cd myCPU && make test-host-interactive_terminal_smoke`
 - `cd myCPU && make test-host-virtio_blk_smoke`
+- `cd myCPU && make test-host-run_debug_cli_probe`
 - `cd myCPU && make test-host-xv6_boot_smoke`
+- `cd myCPU && make test-host-xv6_shell_smoke`
 - `cd myCPU && make run-workload-xv6`
 - `cd myCPU && make test-host-vector_pipeline_smoke`
 - `cd myCPU && make test-host-vector_cnn_smoke`

@@ -62,6 +62,7 @@
 - 一套最小 guest supervisor runtime。
 - 一条独立的 `kernel_alpha` bring-up 路径及其正负回归。
 - 一条本地 `debug_session/protocol + frontend` 教学演示链路。
+- 一条面向外部 workload 的 `xv6 / Linux` bring-up foundation：`xv6-riscv` 当前已能在真实 `virtio-blk` board path 上稳定到 shell，Linux-facing boot path 也已具备 generic `flat image + payload + set_gpr` 合同。
 
 当前 guest 侧已经打通：
 
@@ -77,6 +78,7 @@
 
 最近一轮关键历史节点只保留以下几项：
 
+- `2026-04-22` 已把 `xv6 / Linux / JIT` 主线继续推进到新的稳定里程碑：真实 `virtio-blk` board path 下的 `xv6-riscv` 当前已稳定到 shell，`xv6_shell_smoke` 已锁住 `ls`、`cat README`、`wc README`、`grep qemu README | wc`、root/nested 路径文件创建/读回/删除、`forktest` 与 `stressfs`；同日也已落下 Linux-facing `flat/payload/set_gpr + linux_proto profile` foundation，当前 blocker 已收窄到真实 Linux 资产、板级 `DTB/chosen/cmdline` 与第一处 boot checkpoint。
 - `2026-04-12` 已完成 `P4-prep-1`：`Bus` 当前已统一暴露 `RAM / MMIO / unmapped` 与 `cacheable / dma_visible / has_side_effect / supports_burst / label`，`vector` span 预校验、`pipeline` memory 判断与 `LSQ` forwarding 也已改为复用这一路径；这一轮继续不改变 guest 可见语义，也不顺势扩大到 `cache / DMA / multicore`。
 - `2026-04-05` 已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：在当前单发射、decode 级 load 前置分类、单 memory execute 通道与 coarse replay flush 基线上，不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 是否值得做。
 - `2026-04-05` 同日也已补上一层更窄的 `pipeline stall attribution` 观测：当前 debug snapshot / CLI 已能直接暴露 `stall_reason`，为后续是否值得重开 issue decoupling 提供更直接的证据。
@@ -116,6 +118,7 @@
 - 继续稳住 simulator reference path 的 correctness 与可观察性。
 - 继续沿已落地的 hardening 矩阵，维护非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 合同闭环，并按新增 bug 补最小回归。
 - 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做 bug-driven hardening。
+- 把真实 `virtio-blk` board path 下的 `xv6` shell 守成稳定 guardrail，并在现有 `flat/payload/set_gpr` 与 `linux_proto` foundation 之上推进真实 Linux 资产、板级 `DTB/chosen/cmdline` 与首个 boot checkpoint。
 - `P1` 结构收口和 `P2` 首轮验证补洞已经全部完成；当前不再把重点放在继续扩功能面。
 - `debug/frontend` 的 Node/runtime 级持续 `run/pause`、session replacement、高吞吐 terminal 聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e 门禁已经够用；当前这轮不扩功能面的 UI refresh 也已完成，范围继续收窄在浏览器壳层布局、视觉层级和 `terminal` 收起交互语义，后续仍按真实 bug 或明确 UI 需求补最小回归，不主动扩大协议或压力面。
 - `Phase 3` 的 decode 级 `BlockedByUnresolvedStore` 最小收窄之后，主线判断已经完成：当前不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 这类有明确结构收益的最小切片，而不是直接放大 memory speculation / replay。

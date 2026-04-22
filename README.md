@@ -12,6 +12,7 @@
 - **Sv39 虚拟内存**：三级页表、TLB、`sfence.vma`，支持完整的 page fault 语义
 - **最小硬件平台**：UART 串口、CLINT 定时器、PLIC 中断控制器、MMIO 块设备
 - **自制 OS 内核**：从 boot 到 PMM、页表建立、中断处理、用户态进程、存储读取的完整 bring-up
+- **外部 workload bring-up**：`xv6-riscv` 已能在真实 `virtio-blk` board path 上稳定到 shell，Linux-facing boot path 已具备 generic `flat image + payload + set_gpr` foundation
 - **向量扩展与 ML**：V-lite 指令子集，支持 dot / GEMM / Conv / ReLU，可运行固定 conv→relu CNN demo
 - **浏览器可视化前端**：Pipeline 时序图、寄存器/CSR 实时观察、交互式终端、向量寄存器面板
 - **工业级验证体系**：259 个测试文件、39 个 make test 目标、Spike 外部差分验证
@@ -152,12 +153,23 @@ node frontend/server/debug_server.mjs
 
 `help` · `echo` · `time` · `uptime` · `disk info` · `disk read <lba>` · `regs` · `peek <addr>` · `pagewalk <addr>` · `pte dump <addr>` · `halt`
 
+## 外部 workload
+
+当前主工作区还维护了一条面向真实 guest 的外部 workload bring-up 路径：
+
+- `run-workload-xv6` 会在 `mycpu_virt + virtio-blk` board profile 上启动 `xv6-riscv`；当前已稳定到 shell，并有 host smoke 锁住 shell prompt、基础文件系统操作、`forktest` 和 `stressfs`。
+- Linux-facing boot foundation 已支持 generic `flat image + payload + set_gpr`；`linux_proto` profile 可以稳定导出 `Image`、`dtb`、`initrd` 与启动寄存器布局，作为下一步真实 Linux 接入的最小板级合同。
+
 ## 测试
 
 ```bash
 cd myCPU
 make test              # functional reference path 全量回归
 make test-pipeline     # pipeline backend 全量回归
+make test-host-run_debug_cli_probe
+make test-host-xv6_boot_smoke
+make test-host-xv6_shell_smoke
+make run-workload-xv6
 
 cd ../frontend
 node --test            # 前端 Node 测试

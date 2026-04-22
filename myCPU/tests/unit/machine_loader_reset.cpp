@@ -184,6 +184,42 @@ bool expect_storage_error_cleared(const Machine& machine) {
                   "image reload should clear sticky storage error code");
 }
 
+bool expect_payload_load_preserves_state(Machine& machine,
+                                         uint64_t expected_pc,
+                                         uint64_t expected_cycle,
+                                         uint64_t expected_instret,
+                                         uint64_t payload_addr,
+                                         uint8_t first,
+                                         uint8_t second) {
+    uint64_t value = 0;
+    return expect(machine.cpu().core().pc() == expected_pc,
+                  "payload load should not reset the current pc") &&
+           expect(machine.cpu().core().cycle() == expected_cycle,
+                  "payload load should preserve cycle count") &&
+           expect(machine.cpu().core().instret() == expected_instret,
+                  "payload load should preserve instret") &&
+           expect(machine.bus().try_load(payload_addr, 1, value) && value == first,
+                  "payload load should expose the first byte at the requested address") &&
+           expect(machine.bus().try_load(payload_addr + 1, 1, value) && value == second,
+                  "payload load should expose the second byte at the requested address");
+}
+
+bool expect_gpr_seed_preserves_state(Machine& machine,
+                                     uint64_t expected_pc,
+                                     uint64_t expected_cycle,
+                                     uint64_t expected_instret,
+                                     uint32_t reg,
+                                     uint64_t expected_value) {
+    return expect(machine.cpu().core().pc() == expected_pc,
+                  "set_gpr should not reset the current pc") &&
+           expect(machine.cpu().core().cycle() == expected_cycle,
+                  "set_gpr should preserve cycle count") &&
+           expect(machine.cpu().core().instret() == expected_instret,
+                  "set_gpr should preserve instret") &&
+           expect(machine.cpu().core().read_gpr(reg) == expected_value,
+                  "set_gpr should update the requested architectural register");
+}
+
 bool trigger_no_media_storage_error(Machine& machine) {
     machine.storage().clear_image();
     return expect(machine.bus().try_store(STORAGE_BASE + STORAGE_REG_COMMAND,
@@ -262,6 +298,62 @@ int main() {
             if (!expect_core_reset(machine, kElfAddr) ||
                 !expect_loaded_bytes(machine, kElfAddr, second_bytes[0], second_bytes[1]) ||
                 !expect_storage_error_cleared(machine)) {
+                std::remove(first_binary.c_str());
+                std::remove(second_binary.c_str());
+                std::remove(first_elf.c_str());
+                std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
+                return 1;
+            }
+        }
+
+        {
+            Machine machine;
+            machine.load_elf(first_elf);
+            machine.cpu().core().set_cycle(33);
+            machine.cpu().core().set_instret(7);
+            machine.load_binary_payload(second_binary, kBinaryAddr);
+            if (!expect_payload_load_preserves_state(machine,
+                                                     kElfAddr,
+                                                     33,
+                                                     7,
+                                                     kBinaryAddr,
+                                                     second_bytes[0],
+                                                     second_bytes[1])) {
+                std::remove(first_binary.c_str());
+                std::remove(second_binary.c_str());
+                std::remove(first_elf.c_str());
+                std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
+                return 1;
+            }
+        }
+
+        {
+            Machine machine;
+            machine.load_elf(first_elf);
+            machine.cpu().core().set_cycle(41);
+            machine.cpu().core().set_instret(11);
+            machine.set_gpr("a1", 0x88000000ULL);
+            if (!expect_gpr_seed_preserves_state(machine,
+                                                 kElfAddr,
+                                                 41,
+                                                 11,
+                                                 11,
+                                                 0x88000000ULL) ||
+                !expect(machine.cpu().core().read_gpr(0) == 0,
+                        "set_gpr should not clobber x0")) {
+                std::remove(first_binary.c_str());
+                std::remove(second_binary.c_str());
+                std::remove(first_elf.c_str());
+                std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
+                return 1;
+            }
+
+            machine.set_gpr("x0", 0xDEADBEEFULL);
+            if (!expect(machine.cpu().core().read_gpr(0) == 0,
+                        "set_gpr should keep x0 hard-wired to zero")) {
                 std::remove(first_binary.c_str());
                 std::remove(second_binary.c_str());
                 std::remove(first_elf.c_str());

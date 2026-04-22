@@ -29,6 +29,7 @@ Thumbs.db
 /myCPU/tests/host/*
 !/myCPU/tests/host/*.cpp
 !/myCPU/tests/host/*.h
+!/myCPU/tests/host/*.py
 !/myCPU/tests/host/*.sh
 !/myCPU/tests/host/spike_differential/
 !/myCPU/tests/host/spike_differential/*.h
@@ -40,6 +41,8 @@ coverage/
 *.gcno
 *.profraw
 *.profdata
+__pycache__/
+*.py[cod]
 
 # Future OS / image artifacts
 *.img

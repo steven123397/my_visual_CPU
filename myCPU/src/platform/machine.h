@@ -39,6 +39,8 @@ public:
     void set_block_transport(BlockTransport transport);
     void load_elf(const std::string& path);
     void load_binary(const std::string& path, uint64_t addr);
+    void load_binary_payload(const std::string& path, uint64_t addr);
+    void set_gpr(const std::string& reg_name, uint64_t value);
     void attach_storage_image(const std::string& path,
                               bool ready = true,
                               bool valid_magic = true);

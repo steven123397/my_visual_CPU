@@ -645,6 +645,29 @@ int main() {
     }
 
     {
+        DebugSession session;
+        session.load_binary(predictor_binary.path,
+                            kDebugProgramAddr,
+                            BackendKind::Functional,
+                            BlockTransport::SimpleStorage,
+                            nullptr);
+        session.load_binary_payload(store_queue_binary.path, kDebugProgramAddr + 0x100);
+        session.set_gpr("a1", 0x88000000ULL);
+        session.reset();
+
+        const DebugSnapshot snapshot = session.snapshot();
+        if (snapshot.gpr[11] != 0x88000000ULL) {
+            std::fprintf(stderr, "debug session reset should replay configured set_gpr actions\n");
+            return 1;
+        }
+        uint64_t value = 0;
+        if (!(session.machine().bus().try_load(kDebugProgramAddr + 0x100, 1, value) && value == 0x93)) {
+            std::fprintf(stderr, "debug session reset should replay configured payload loads\n");
+            return 1;
+        }
+    }
+
+    {
         CPU cpu;
         cpu_init(cpu, kDebugProgramAddr);
         if (!cpu.core().vector().set_config(4, 3)) {

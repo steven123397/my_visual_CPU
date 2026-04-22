@@ -59,6 +59,33 @@ int main() {
         return 1;
     }
 
+    const DebugCliCommand load_payload = parse_debug_cli_command(
+        "{\"cmd\":\"load_payload\",\"image\":\"tests\\/data\\/board.dtb\",\"addr\":\"0x88000000\"}");
+    if (!expect(load_payload.kind == DebugCliCommandKind::LoadPayload,
+                "load_payload command kind mismatch")) {
+        return 1;
+    }
+    if (!expect(load_payload.image == "tests/data/board.dtb",
+                "load_payload image should decode escaped slash")) {
+        return 1;
+    }
+    if (!expect(load_payload.addr == 0x88000000ULL, "load_payload addr mismatch")) {
+        return 1;
+    }
+
+    const DebugCliCommand set_gpr = parse_debug_cli_command(
+        "{\"cmd\":\"set_gpr\",\"reg\":\"a1\",\"value\":\"0x88000000\"}");
+    if (!expect(set_gpr.kind == DebugCliCommandKind::SetGpr,
+                "set_gpr command kind mismatch")) {
+        return 1;
+    }
+    if (!expect(set_gpr.reg_name == "a1", "set_gpr reg name mismatch")) {
+        return 1;
+    }
+    if (!expect(set_gpr.value == 0x88000000ULL, "set_gpr value mismatch")) {
+        return 1;
+    }
+
     const DebugCliCommand step_commit =
         parse_debug_cli_command("{\"cmd\":\"step_commit\",\"count\":\"7\"}");
     if (!expect(step_commit.kind == DebugCliCommandKind::StepCommit, "step_commit kind mismatch")) {

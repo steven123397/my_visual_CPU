@@ -3,6 +3,7 @@
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <vector>
 
 #include "debug/debug_protocol.h"
 #include "platform/address_map.h"
@@ -20,13 +21,15 @@ static BackendKind parse_backend_kind(const char* value) {
 
 static void usage(const char* prog) {
     std::fprintf(stderr,
-                 "Usage: %s [--debug-cli] [--backend kind] [--block-transport kind] [-b addr] [-d image|--disk image] [--disk-not-ready image] [--disk-bad-magic image] <image>\n",
+                 "Usage: %s [--debug-cli] [--backend kind] [--block-transport kind] [-b addr] [--payload image addr] [--set-reg reg value] [-d image|--disk image] [--disk-not-ready image] [--disk-bad-magic image] <image>\n",
                  prog);
     std::fprintf(stderr, "  --debug-cli     run JSON line debug protocol on stdin/stdout\n");
     std::fprintf(stderr, "  --backend kind  select execution backend: functional or pipeline\n");
     std::fprintf(stderr,
                  "  --block-transport kind  select block transport: simple_storage or virtio-blk\n");
     std::fprintf(stderr, "  -b addr   load flat binary at hex address (default: 0x80000000)\n");
+    std::fprintf(stderr, "  --payload image addr  load an extra flat payload into RAM after the main image\n");
+    std::fprintf(stderr, "  --set-reg reg value  seed a general-purpose register after image load\n");
     std::fprintf(stderr,
                  "  -d, --disk image  attach host-backed storage image to the selected block transport\n");
     std::fprintf(stderr,
@@ -56,6 +59,16 @@ int main(int argc, char* argv[]) {
     BackendKind backend_kind = BackendKind::Functional;
     BlockTransport block_transport = BlockTransport::SimpleStorage;
     const char* image = nullptr;
+    struct PayloadArg {
+        const char* image;
+        uint64_t addr;
+    };
+    struct GprSeedArg {
+        const char* reg_name;
+        uint64_t value;
+    };
+    std::vector<PayloadArg> payloads;
+    std::vector<GprSeedArg> gpr_seeds;
 
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--backend") == 0) {
@@ -74,6 +87,20 @@ int main(int argc, char* argv[]) {
                 usage(argv[0]);
             }
             load_addr = std::strtoull(argv[i], nullptr, 16);
+        } else if (std::strcmp(argv[i], "--payload") == 0) {
+            if (i + 2 >= argc) {
+                usage(argv[0]);
+            }
+            const char* payload_image = argv[++i];
+            const uint64_t payload_addr = std::strtoull(argv[++i], nullptr, 16);
+            payloads.push_back(PayloadArg{payload_image, payload_addr});
+        } else if (std::strcmp(argv[i], "--set-reg") == 0) {
+            if (i + 2 >= argc) {
+                usage(argv[0]);
+            }
+            const char* reg_name = argv[++i];
+            const uint64_t reg_value = std::strtoull(argv[++i], nullptr, 0);
+            gpr_seeds.push_back(GprSeedArg{reg_name, reg_value});
         } else if (std::strcmp(argv[i], "-d") == 0 || std::strcmp(argv[i], "--disk") == 0) {
             if (++i >= argc) {
                 usage(argv[0]);
@@ -115,6 +142,12 @@ int main(int argc, char* argv[]) {
             machine.load_binary(image, load_addr);
         } else {
             machine.load_elf(image);
+        }
+        for (const PayloadArg& payload : payloads) {
+            machine.load_binary_payload(payload.image, payload.addr);
+        }
+        for (const GprSeedArg& seed : gpr_seeds) {
+            machine.set_gpr(seed.reg_name, seed.value);
         }
         machine.run();
     } catch (const std::exception& ex) {

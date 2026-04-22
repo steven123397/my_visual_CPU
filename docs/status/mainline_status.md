@@ -44,7 +44,7 @@
 - Spike 外部差分验证已经形成一条独立离线 oracle，当前处于维护态，主要服务 reference correctness 疑点排查，而不是新的默认主门禁。
 - `2026-04-22` 当前主线切换的第一轮 A / B / C / D foundation 已按默认顺序整合到主工作树：A 已把 `RV64A + CSR / privilege` contract 变成主线事实来源，B 已接入 `virtio-mmio + virtqueue + virtio-blk` foundation，C 已把 external `xv6-riscv` workload harness 与刷新后的 `xv6_boot_smoke` 接进主线，D 已把 `execution_profile` 与 profile guardrail 接进默认回归。
 - 同日也已完成第一轮 B / C post-integration follow-up：PLIC 现按 `xv6` 约定把 `virtio=1`、`UART=10` 分开接线，`Machine` / CLI / debug CLI / workload probe 已支持 block transport 选择，`mycpu_virt` board 已切到 `virtio-blk`，`xv6_boot_smoke` / `run-workload-xv6` 现已走真实 `virtio` board path。
-- 同日第一轮 post-integration correctness findings 也已关闭：普通 `store` 现在会正确打破 `LR/SC` reservation，translation-fault memory access 也会进入 `execution_profile` 的 fault 统计；随后同日的 bug-driven A / B follow-up 也已把 `xv6` 推过旧的 early-boot trap，当前 smoke/probe 稳定到 5000-cycle `S` mode boot-banner / allocator-warmup checkpoint，主线优先级因此继续收敛到：把这个 post-banner checkpoint 再向后推进，并按暴露缺口回派 A / B / D 补最小 contract。
+- 同日第一轮 post-integration correctness findings 也已关闭：普通 `store` 现在会正确打破 `LR/SC` reservation，translation-fault memory access 也会进入 `execution_profile` 的 fault 统计；随后同日的 bug-driven A / B follow-up 先把 `xv6` 推过旧的 early-boot trap，再把真实 `virtio-blk` board path 推到 shell，并落下了 Linux-facing `flat/payload/set_gpr + linux_proto profile` foundation。主线优先级也因此继续收敛到：把 `xv6` shell 守成稳定 guardrail，并把真实 Linux 资产与 `DTB/chosen/cmdline` 接到现有 foundation 上。
 
 ## 关键历史节点
 
@@ -54,8 +54,9 @@
   - `execution_profile_smoke` 已接入默认 `make test` / `make test-pipeline`。
   - 第一轮 post-integration correctness findings 已关闭：普通 `store` 会正确失效 `LR/SC` reservation，translation-fault memory observation 已计入 `execution_profile`。
   - 已完成 B / C follow-up：PLIC source wiring 拆分、`Machine` block transport 选择、`mycpu_virt` board profile 切到 `virtio-blk`，`xv6_boot_smoke` / `run-workload-xv6` 开始消费真实 `virtio` board path。
-  - 同日进一步的 A / B bug-driven follow-up 也已完成：A 已补齐 `pmpcfg0/pmpaddr0/menvcfg/stimecmp` 最小 contract，B 已补齐 `xv6 uartinit()` 所需的 UART 16550 bring-up contract，`xv6` 当前稳定到 5000-cycle boot-banner / allocator-warmup checkpoint。
-  - 这一轮验证已覆盖 `make test-unit-mmio_contract_matrix`、`make test-host-debug_protocol_command_smoke`、`make test-host-virtio_blk_smoke`、`make test-host-xv6_boot_smoke`、`make run-workload-xv6`、`make test`、`make test-pipeline` 与 `cd frontend && node --test`。
+  - 同日进一步的 A / B bug-driven follow-up 也已完成：A 已补齐 `pmpcfg0/pmpaddr0/menvcfg/stimecmp` 最小 contract，B 已补齐 `xv6 uartinit()` 所需的 UART 16550 bring-up contract；`xv6` 先稳定到 5000-cycle boot-banner / allocator-warmup checkpoint，随后又推进到真实 `virtio-blk` board path 下的 shell。
+  - 同日也已把 Linux-facing boot contract foundation 接进主线：generic `flat/payload/set_gpr`、probe summary 的 `payloads/gpr-seeds` 输出、`DebugSession reset` replay，以及 `linux_proto` board/profile 级 boot layout dry-run。
+  - 这一轮验证已覆盖 `python3 tests/host/run_debug_cli_probe_test.py`、`make test-host-run_debug_cli_probe`、`make test-host-debug_protocol_command_smoke`、`make test-unit-machine_loader_reset`、`make test-host-debug_cli_smoke`、`make test-host-virtio_blk_smoke`、`make test-host-xv6_boot_smoke`、`make test-host-xv6_shell_smoke`、`make run-workload-xv6`、`make test`、`make test-pipeline` 与 `cd frontend && node --test`。
 - `2026-04-21`
   - 正式把 `future_expansion_roadmap_design.md` 中的标准 OS bring-up 切换线提升为当前 active program。
   - 新增 `xv6 / Linux / JIT` 主线 design / status / wave 1 plan，并按 4 个独立 worktree 启动并行工作流。
@@ -78,20 +79,21 @@
 - `debug/frontend` 当前已经够用，但它的正式定位仍然是“教学演示可用 + 最小工程调试”，不应顺势扩成通用调试器。
 - 当前 `pipeline` 已具备最小真实 `OoO execute`，但仍是单发射、顺序退休、保守 replay 的克制形态；当前没有足够证据支持继续主动扩大更激进的 `issue / replay / speculation`。
 - 当前并行整合阶段虽已结束，但后续 `xv6` 暴露的 blocker 仍会跨 ISA、platform、guest workload 三类边界；必须继续按 A / B / C / D ownership 分类，避免回到 `main` 工作区后重新变成“谁顺手谁修”。
-- 当前 `xv6-riscv` 仍处在 foundation / harness / gap audit 阶段，尚不能把 `Linux` 或 `JIT / DBT` 直接当成本轮实现交付。
+- 当前 `xv6-riscv` 虽已在真实 `virtio-blk` board path 上推进到 shell，但这条线更多已经变成稳定 workload guardrail；当前仍不能把这件事误读成 Linux 或 `JIT / DBT` 已接近本轮交付。
 - 当前 `V4` 虽已落地，但仍刻意不扩到向量 load/store path、lane 模型、vector rename 或更重 memory speculation；在继续 hardening 与 workload 观察之前，直接抢跑更重 `Phase 4` 的性价比仍然偏低。
 - 当前 `P4-prep-1` 只是准备性收口，不代表 cache / DMA / multicore 已进入正式实施阶段。
 - guest runtime 的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime` 等边界已经比早期清晰得多，但后续仍要防止真实 bug 修复把职责重新揉回大文件。
-- 当前 `xv6_boot_smoke` 虽然已经切到真实 `virtio-blk` board profile，并且已越过最早的 trap blocker，但 bring-up 仍只稳定到 5000-cycle boot-banner / allocator-warmup checkpoint。
+- 当前 `linux_proto` 只是 board/profile 级 boot contract dry-run；真实 Linux 资产、板级 `DTB/chosen/cmdline` 与第一处 boot checkpoint 还没有正式接入。
 - 当前 `Machine` 默认 block transport 仍保持 `simple_storage` 以守住既有 guest / debug 路径；真实 `virtio` path 需要 workload / CLI 显式选择，这条兼容性策略当前是有意保留的。
 - A 已经补齐第一轮 `RV64A + CSR / privilege` foundation，但这不代表 `xv6` 后续会用到的全部 timer / privilege contract 都已落齐；`pmp*`、`menvcfg`、`stimecmp` 等缺口仍可能继续暴露。
 
 ## 下一步
 
-1. 在真实 `virtio` board path 上把 `xv6` 从当前 5000-cycle boot-banner / allocator-warmup checkpoint 推到下一个稳定 post-kinit 里程碑，并冻结新的 blocker 归属。
-2. A / B 后续都保持 bug-driven：随着 `xv6` 暴露新的 CSR / privilege / timer / platform 缺口，再补最窄 contract，不主动扩大无关 ISA / device 面。
-3. D 线继续作为主线 guardrail：优先用 `execution_profile`、debug CLI 与既有 workload smoke 锁住 `xv6 / virtio` 路径的行为变化。
-4. 继续把 `pipeline`、guest runtime、`kernel_alpha` 十条基线、`debug/frontend` 和 Spike 外部差分限定在当前已接入、可验证的范围内维护，不让新主线反向污染 reference path。
+1. 把 `xv6` shell 继续守成真实 `virtio-blk` board path 的稳定 guardrail，并只按真实 bug 或明确收益补更窄 smoke。
+2. 在现有 `flat/payload/set_gpr` 与 `linux_proto` foundation 之上，接入真实 Linux 资产、板级 `DTB/chosen/cmdline` 与第一处 Linux boot checkpoint。
+3. A / B 后续都保持围绕 Linux bring-up 的 bug-driven hardening：随着真实 Linux 暴露新的 CSR / privilege / timer / platform 缺口，再补最窄 contract，不主动扩大无关 ISA / device 面。
+4. D 线继续作为主线 guardrail：优先用 `execution_profile`、debug CLI、`run_debug_cli_probe` 与既有 workload smoke 锁住 `xv6 / virtio / Linux profile` 路径的行为变化。
+5. 继续把 `pipeline`、guest runtime、`kernel_alpha` 十条基线、`debug/frontend` 和 Spike 外部差分限定在当前已接入、可验证的范围内维护，不让新主线反向污染 reference path。
 
 ## 验证基线
 
@@ -105,8 +107,10 @@
 - `cd myCPU && make test-unit-machine_loader_reset`
 - `cd myCPU && make test-unit-supervisor_demo_smoke`
 - `cd myCPU && make test-unit-user_program_smoke`
+- `cd myCPU && make test-host-run_debug_cli_probe`
 - `cd myCPU && make test-host-debug_cli_smoke`
 - `cd myCPU && make test-host-interactive_terminal_smoke`
 - `cd myCPU && make test-host-virtio_blk_smoke`
 - `cd myCPU && make test-host-xv6_boot_smoke`
+- `cd myCPU && make test-host-xv6_shell_smoke`
 - `cd myCPU && make run-workload-xv6`

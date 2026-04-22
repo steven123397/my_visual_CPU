@@ -283,6 +283,17 @@ uint64_t try_extract_u64(const JsonObject& object, const char* key, uint64_t def
     throw std::runtime_error(std::string("expected number for key: ") + key);
 }
 
+uint64_t extract_u64(const JsonObject& object, const char* key) {
+    const JsonValue& value = require_value(object, key);
+    if (value.type == JsonValue::Type::Number) {
+        return value.number_value;
+    }
+    if (value.type == JsonValue::Type::String) {
+        return std::strtoull(value.string_value.c_str(), nullptr, 0);
+    }
+    throw std::runtime_error(std::string("expected number for key: ") + key);
+}
+
 }  // namespace
 
 DebugCliCommand parse_debug_cli_command(const std::string& line) {
@@ -300,6 +311,18 @@ DebugCliCommand parse_debug_cli_command(const std::string& line) {
         parsed.disk_magic_valid = try_extract_bool(object, "disk_magic_valid", true);
         parsed.flat = try_extract_bool(object, "flat", false);
         parsed.addr = try_extract_u64(object, "addr", MEM_BASE);
+        return parsed;
+    }
+    if (command == "load_payload") {
+        parsed.kind = DebugCliCommandKind::LoadPayload;
+        parsed.image = extract_string(object, "image");
+        parsed.addr = try_extract_u64(object, "addr", MEM_BASE);
+        return parsed;
+    }
+    if (command == "set_gpr") {
+        parsed.kind = DebugCliCommandKind::SetGpr;
+        parsed.reg_name = extract_string(object, "reg");
+        parsed.value = extract_u64(object, "value");
         return parsed;
     }
     if (command == "snapshot") {

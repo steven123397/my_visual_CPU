@@ -45,6 +45,7 @@ void DebugSession::load_elf(const std::string& path,
     config_.disk_image = config_.disk_attached ? disk_image : "";
     config_.disk_ready = disk_ready;
     config_.disk_magic_valid = disk_magic_valid;
+    config_.post_load_actions.clear();
     recreate_machine();
     events_.clear();
 }
@@ -65,8 +66,29 @@ void DebugSession::load_binary(const std::string& path,
     config_.disk_image = config_.disk_attached ? disk_image : "";
     config_.disk_ready = disk_ready;
     config_.disk_magic_valid = disk_magic_valid;
+    config_.post_load_actions.clear();
     recreate_machine();
     events_.clear();
+}
+
+void DebugSession::load_binary_payload(const std::string& path, uint64_t addr) {
+    ensure_loaded();
+    machine().load_binary_payload(path, addr);
+    config_.post_load_actions.push_back(PostLoadAction{
+        .kind = PostLoadAction::Kind::Payload,
+        .text = path,
+        .value = addr,
+    });
+}
+
+void DebugSession::set_gpr(std::string_view reg_name, uint64_t value) {
+    ensure_loaded();
+    machine().set_gpr(std::string(reg_name), value);
+    config_.post_load_actions.push_back(PostLoadAction{
+        .kind = PostLoadAction::Kind::SetGpr,
+        .text = std::string(reg_name),
+        .value = value,
+    });
 }
 
 void DebugSession::reset() {
@@ -115,6 +137,41 @@ void DebugSession::run_until_uart_contains(std::string_view text,
     }
 
     throw std::runtime_error("run_until_uart_contains exceeded step budget");
+}
+
+DebugSession::UartOutputChunk DebugSession::run_until_new_uart_contains(size_t offset,
+                                                                        std::string_view text,
+                                                                        uint64_t max_steps) {
+    ensure_loaded();
+
+    const std::string needle(text);
+    auto make_chunk = [this, offset]() {
+        const std::string& output = machine().uart().output();
+        const size_t start = offset < output.size() ? offset : output.size();
+        return UartOutputChunk{
+            .offset = start,
+            .next_offset = output.size(),
+            .text = output.substr(start),
+        };
+    };
+
+    UartOutputChunk chunk = make_chunk();
+    if (chunk.text.find(needle) != std::string::npos) {
+        return chunk;
+    }
+
+    for (uint64_t i = 0; i < max_steps; ++i) {
+        machine().step();
+        chunk = make_chunk();
+        if (chunk.text.find(needle) != std::string::npos) {
+            return chunk;
+        }
+        if (machine().cpu().core().halted()) {
+            throw std::runtime_error("guest halted before requested UART text appeared");
+        }
+    }
+
+    throw std::runtime_error("run_until_new_uart_contains exceeded step budget");
 }
 
 void DebugSession::run_until_halt(uint64_t max_steps) {
@@ -175,6 +232,17 @@ void DebugSession::recreate_machine() {
         break;
     case ImageKind::None:
         throw std::runtime_error("debug session image not configured");
+    }
+
+    for (const PostLoadAction& action : config_.post_load_actions) {
+        switch (action.kind) {
+        case PostLoadAction::Kind::Payload:
+            machine_->load_binary_payload(action.text, action.value);
+            break;
+        case PostLoadAction::Kind::SetGpr:
+            machine_->set_gpr(action.text, action.value);
+            break;
+        }
     }
 }
 

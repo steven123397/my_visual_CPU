@@ -1,10 +1,57 @@
 #include "machine.h"
 
+#include <array>
+#include <cctype>
+#include <cstdlib>
 #include <memory>
 #include <stdexcept>
 
 #include "../exec/functional_backend.h"
 #include "../exec/pipeline_backend.h"
+
+namespace {
+
+struct GprAlias {
+    const char* name;
+    uint32_t index;
+};
+
+constexpr std::array<GprAlias, 33> kGprAliases = {{
+    {"zero", 0}, {"ra", 1},  {"sp", 2},  {"gp", 3},  {"tp", 4},  {"t0", 5},  {"t1", 6},
+    {"t2", 7},   {"s0", 8},  {"fp", 8},  {"s1", 9},  {"a0", 10}, {"a1", 11}, {"a2", 12},
+    {"a3", 13},  {"a4", 14}, {"a5", 15}, {"a6", 16}, {"a7", 17}, {"s2", 18}, {"s3", 19},
+    {"s4", 20},  {"s5", 21}, {"s6", 22}, {"s7", 23}, {"s8", 24}, {"s9", 25}, {"s10", 26},
+    {"s11", 27}, {"t3", 28}, {"t4", 29}, {"t5", 30}, {"t6", 31},
+}};
+
+std::string normalize_gpr_name(const std::string& name) {
+    std::string normalized = name;
+    for (char& ch : normalized) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return normalized;
+}
+
+uint32_t parse_gpr_index(const std::string& reg_name) {
+    const std::string normalized = normalize_gpr_name(reg_name);
+    if (normalized.size() >= 2 && normalized[0] == 'x') {
+        char* end = nullptr;
+        const unsigned long index = std::strtoul(normalized.c_str() + 1, &end, 10);
+        if (end != nullptr && *end == '\0' && index < 32UL) {
+            return static_cast<uint32_t>(index);
+        }
+    }
+
+    for (const GprAlias& alias : kGprAliases) {
+        if (normalized == alias.name) {
+            return alias.index;
+        }
+    }
+
+    throw std::runtime_error("unknown GPR name: " + reg_name);
+}
+
+}  // namespace
 
 const char* block_transport_name(BlockTransport transport) {
     switch (transport) {
@@ -100,6 +147,20 @@ void Machine::load_binary(const std::string& path, uint64_t addr) {
     Ram staged_ram;
     binary_loader_.load(staged_ram, path.c_str(), addr);
     finish_image_load(addr, staged_ram);
+}
+
+void Machine::load_binary_payload(const std::string& path, uint64_t addr) {
+    if (!loaded_) {
+        throw std::runtime_error("machine image not loaded");
+    }
+    binary_loader_.load(ram_, path.c_str(), addr);
+}
+
+void Machine::set_gpr(const std::string& reg_name, uint64_t value) {
+    if (!loaded_) {
+        throw std::runtime_error("machine image not loaded");
+    }
+    cpu_.core().write_gpr(parse_gpr_index(reg_name), value);
 }
 
 void Machine::attach_storage_image(const std::string& path,

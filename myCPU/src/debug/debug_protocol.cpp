@@ -74,6 +74,16 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                 out << debug_protocol_ok_json("load") << '\n';
                 continue;
             }
+            if (command.kind == DebugCliCommandKind::LoadPayload) {
+                session.load_binary_payload(command.image, command.addr);
+                out << debug_protocol_ok_json("load_payload") << '\n';
+                continue;
+            }
+            if (command.kind == DebugCliCommandKind::SetGpr) {
+                session.set_gpr(command.reg_name, command.value);
+                out << debug_protocol_ok_json("set_gpr") << '\n';
+                continue;
+            }
             if (command.kind == DebugCliCommandKind::Snapshot) {
                 out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;

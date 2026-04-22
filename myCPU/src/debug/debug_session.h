@@ -32,10 +32,15 @@ public:
                      const char* disk_image = nullptr,
                      bool disk_ready = true,
                      bool disk_magic_valid = true);
+    void load_binary_payload(const std::string& path, uint64_t addr);
+    void set_gpr(std::string_view reg_name, uint64_t value);
     void reset();
     void step_cycle();
     void step_commit();
     void run_until_uart_contains(std::string_view text, uint64_t max_steps);
+    UartOutputChunk run_until_new_uart_contains(size_t offset,
+                                                std::string_view text,
+                                                uint64_t max_steps);
     void run_until_halt(uint64_t max_steps);
     void uart_input(std::string_view text);
     UartOutputChunk uart_output(size_t offset) const;
@@ -48,6 +53,17 @@ private:
         Binary,
     };
 
+    struct PostLoadAction {
+        enum class Kind : uint8_t {
+            Payload,
+            SetGpr,
+        };
+
+        Kind kind{Kind::Payload};
+        std::string text{};
+        uint64_t value{0};
+    };
+
     struct LoadConfig {
         ImageKind image_kind{ImageKind::None};
         std::string image_path{};
@@ -58,6 +74,7 @@ private:
         bool disk_attached{false};
         bool disk_ready{true};
         bool disk_magic_valid{true};
+        std::vector<PostLoadAction> post_load_actions{};
     };
 
     void recreate_machine();

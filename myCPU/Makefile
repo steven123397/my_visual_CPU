@@ -7,7 +7,7 @@ CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arc
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 CORE_OBJS = $(filter-out src/main.o,$(OBJS))
 TARGET   = mycpu
-HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/atomic_semantics_smoke tests/host/address_space_faults_smoke tests/host/predictor_smoke tests/host/pipeline_backend_smoke tests/host/pipeline_core_state_smoke tests/host/pipeline_forwarding_smoke tests/host/pipeline_commit_trace_smoke tests/host/pipeline_rename_commit_smoke tests/host/pipeline_speculation_contracts_smoke tests/host/backend_differential_smoke tests/host/debug_cli_smoke tests/host/debug_protocol_command_smoke tests/host/execution_profile_smoke tests/host/interactive_terminal_smoke tests/host/physical_register_file_smoke tests/host/rename_map_smoke tests/host/reorder_buffer_smoke tests/host/load_store_queue_smoke tests/host/vector_vlite_smoke tests/host/vector_backend_smoke tests/host/vector_operator_smoke tests/host/vector_cnn_smoke tests/host/vector_pipeline_smoke tests/host/virtio_blk_smoke tests/host/xv6_boot_smoke
+HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/atomic_semantics_smoke tests/host/address_space_faults_smoke tests/host/predictor_smoke tests/host/pipeline_backend_smoke tests/host/pipeline_core_state_smoke tests/host/pipeline_forwarding_smoke tests/host/pipeline_commit_trace_smoke tests/host/pipeline_rename_commit_smoke tests/host/pipeline_speculation_contracts_smoke tests/host/backend_differential_smoke tests/host/debug_cli_smoke tests/host/debug_protocol_command_smoke tests/host/execution_profile_smoke tests/host/interactive_terminal_smoke tests/host/physical_register_file_smoke tests/host/rename_map_smoke tests/host/reorder_buffer_smoke tests/host/load_store_queue_smoke tests/host/vector_vlite_smoke tests/host/vector_backend_smoke tests/host/vector_operator_smoke tests/host/vector_cnn_smoke tests/host/vector_pipeline_smoke tests/host/virtio_blk_smoke tests/host/xv6_boot_smoke tests/host/xv6_shell_smoke
 INDEPENDENT_HOST_TEST_BINS = tests/host/spike_differential_smoke
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults mmio_access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control csr_illegal_matrix counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_mprv sv39_pagewalk_contracts sv39_exec_privilege sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
@@ -142,6 +142,7 @@ DEPS     += $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS)
 DEPS     += $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS)
 DEPS     += $(ASM_DEPS) $(ATOMIC_ASM_DEPS)
 TEST_TIMEOUT ?= 2s
+XV6_SHELL_SMOKE_TIMEOUT ?= 180s
 SUPERVISOR_GUEST_TEST_TIMEOUT ?= 4s
 # Pipeline guest demos execute the full guest runtime under the pipeline
 # backend and need a wider budget than the functional path on debug builds.
@@ -160,6 +161,24 @@ GUEST_RV_LDFLAGS = -nostdlib -nostartfiles -static -no-pie -Wl,-T,guest/supervis
 RV_REQUIRED_TOOLS = $(RV_CC) $(RV_OBJCOPY)
 
 include workloads/common.mk
+
+WORKLOAD_PROBE_LOAD_ARGS :=
+ifneq ($(strip $(WORKLOAD_DISK)),)
+WORKLOAD_PROBE_LOAD_ARGS += --disk $(WORKLOAD_DISK)
+endif
+ifneq ($(strip $(BOARD_BLOCK_TRANSPORT)),)
+WORKLOAD_PROBE_LOAD_ARGS += --block-transport $(BOARD_BLOCK_TRANSPORT)
+endif
+ifeq ($(WORKLOAD_IMAGE_FORMAT),flat)
+WORKLOAD_PROBE_LOAD_ARGS += --flat
+ifneq ($(strip $(WORKLOAD_LOAD_ADDR)),)
+WORKLOAD_PROBE_LOAD_ARGS += --addr $(WORKLOAD_LOAD_ADDR)
+else
+$(error WORKLOAD_IMAGE_FORMAT=flat requires WORKLOAD_LOAD_ADDR)
+endif
+else ifneq ($(WORKLOAD_IMAGE_FORMAT),elf)
+$(error unsupported WORKLOAD_IMAGE_FORMAT: $(WORKLOAD_IMAGE_FORMAT))
+endif
 
 .PHONY: all clean test test-pipeline check-riscv-toolchain FORCE build-workload build-workload-xv6 run-workload run-workload-xv6 smoke-workload smoke-workload-xv6
 
@@ -405,6 +424,30 @@ test-host-xv6_boot_smoke: FORCE $(TARGET) build-workload-xv6 tests/host/xv6_boot
 	fi; \
 	printf '%s\n' "$$output"
 
+test-host-xv6_shell_smoke: FORCE $(TARGET) build-workload-xv6 tests/host/xv6_shell_smoke
+	@echo "=== host:xv6_shell_smoke ==="; \
+	output="$$(timeout $(XV6_SHELL_SMOKE_TIMEOUT) ./tests/host/xv6_shell_smoke 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Host test timed out: xv6_shell_smoke" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe: FORCE
+	@echo "=== host:run_debug_cli_probe ==="; \
+	output="$$(python3 tests/host/run_debug_cli_probe_test.py 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
 build-workload: FORCE check-riscv-toolchain
 	$(WORKLOAD_BUILD_COMMAND)
 
@@ -412,7 +455,7 @@ build-workload-xv6: FORCE
 	$(MAKE) WORKLOAD_NAME=xv6 WORKLOAD_BOARD=$(WORKLOAD_BOARD) build-workload
 
 run-workload: FORCE $(TARGET) build-workload
-	python3 $(WORKLOAD_PROBE_SCRIPT) --target ./$(TARGET) --image $(WORKLOAD_IMAGE) --disk $(WORKLOAD_DISK) --block-transport $(BOARD_BLOCK_TRANSPORT) --step-cycles $(WORKLOAD_PROBE_CYCLES)
+	python3 $(WORKLOAD_PROBE_SCRIPT) --target ./$(TARGET) --image $(WORKLOAD_IMAGE) $(WORKLOAD_PROBE_LOAD_ARGS) $(WORKLOAD_AUTO_PAYLOAD_ARGS) $(WORKLOAD_PAYLOAD_ARGS) $(WORKLOAD_AUTO_GPR_SEED_ARGS) $(WORKLOAD_GPR_SEED_ARGS) --step-cycles $(WORKLOAD_PROBE_CYCLES)
 
 run-workload-xv6: FORCE
 	$(MAKE) WORKLOAD_NAME=xv6 WORKLOAD_BOARD=$(WORKLOAD_BOARD) run-workload
