@@ -28,6 +28,7 @@ constexpr uint64_t kGemmCol1 = kEntry + 0x270;
 constexpr uint64_t kConvInput = kEntry + 0x2a0;
 constexpr uint64_t kConvKernel = kEntry + 0x2b0;
 constexpr uint64_t kReluInput = kEntry + 0x2c0;
+constexpr uint64_t kReluZero = kEntry + 0x2d0;
 
 constexpr uint64_t kOutputBase = kEntry + 0x380;
 constexpr size_t kGuardBytes = 16;
@@ -422,10 +423,12 @@ void load_program(Ram& ram) {
     program.push_back(encode_vsetcfg(8, 1));
     program.push_back(encode_vse(9, 12, kConvOutOffset + 16));
 
-    // int16 ReLU via vmax(x, 0)
+    // ReLU should use an explicit zero vector instead of relying on reset-zero v0.
     program.push_back(encode_vsetcfg(2, 8));
     program.push_back(encode_vle(15, 20));
-    program.push_back(encode_vv(0x21, 16, 15, 0));
+    program.push_back(encode_vle(0, 20));
+    program.push_back(encode_vle(31, 21));
+    program.push_back(encode_vv(0x21, 16, 15, 31));
     program.push_back(encode_vse(16, 12, kReluOutOffset));
 
     program.push_back(kEcall);
@@ -459,6 +462,7 @@ void seed_memory(Ram& ram) {
     write_buffer(ram, kConvInput, pack_i8x6(conv_input));
     write_buffer(ram, kConvKernel, pack_i8x4(conv_kernel));
     write_buffer(ram, kReluInput, pack_i16x8(relu_input));
+    write_buffer(ram, kReluZero, std::array<uint8_t, kRegisterBytes>{});
     write_buffer(ram, kOutputBase, watch_init);
 }
 
@@ -482,6 +486,7 @@ FinalState run_case(BackendKind kind) {
     cpu.core().write_gpr(18, kConvInput);
     cpu.core().write_gpr(19, kConvKernel);
     cpu.core().write_gpr(20, kReluInput);
+    cpu.core().write_gpr(21, kReluZero);
 
     std::unique_ptr<ExecutionBackend> backend = make_backend(kind, cpu, bus);
     for (int step = 0; step < 512 && !cpu.core().halted(); ++step) {

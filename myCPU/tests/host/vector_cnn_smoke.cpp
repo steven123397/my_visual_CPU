@@ -21,6 +21,7 @@ constexpr uint32_t kEcall = 0x00000073U;
 
 constexpr uint64_t kInputBase = kEntry + 0x200;
 constexpr uint64_t kKernelBase = kEntry + 0x210;
+constexpr uint64_t kZeroBase = kEntry + 0x220;
 constexpr uint64_t kWatchBase = kEntry + 0x240;
 
 constexpr uint8_t kRegisterBytes = 16;
@@ -318,7 +319,9 @@ void load_program(Ram& ram) {
 
     program.push_back(encode_vsetcfg(4, 3));
     program.push_back(encode_vle(4, 12));
-    program.push_back(encode_vv(0x21, 5, 4, 0));
+    program.push_back(encode_vle(0, 12));
+    program.push_back(encode_vle(31, 14));
+    program.push_back(encode_vv(0x21, 5, 4, 31));
     program.push_back(encode_vse(5, 13));
 
     program.push_back(kEcall);
@@ -335,6 +338,7 @@ void seed_memory(Ram& ram, const Sample& sample) {
     watch_init.fill(kGuardPattern);
     write_buffer(ram, kInputBase, pack_i8x6(sample.input));
     write_buffer(ram, kKernelBase, pack_i8x4(sample.kernel));
+    write_buffer(ram, kZeroBase, std::array<uint8_t, kRegisterBytes>{});
     write_buffer(ram, kWatchBase, watch_init);
 }
 
@@ -351,6 +355,7 @@ FinalState run_case(const Sample& sample, BackendKind kind) {
     cpu.core().write_gpr(11, kKernelBase);
     cpu.core().write_gpr(12, kWatchBase + kGuardBytes);
     cpu.core().write_gpr(13, kWatchBase + kGuardBytes + kConvBytes);
+    cpu.core().write_gpr(14, kZeroBase);
     cpu.core().write_gpr(17, 93);
 
     std::unique_ptr<ExecutionBackend> backend = make_backend(kind, cpu, bus);

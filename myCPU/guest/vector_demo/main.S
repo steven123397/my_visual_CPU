@@ -34,6 +34,7 @@ vector_demo_main:
     la   a5, conv_input
     la   a6, conv_kernel
     la   a7, relu_input
+    la   s3, relu_zero
 
     # int8 dot-product
     VSETCFG 0, 8
@@ -94,10 +95,12 @@ vector_demo_main:
     VSETCFG 7, 1
     VSE 9, 8, 56
 
-    # int16 ReLU via vmax(x, 0)
+    # ReLU should use an explicit zero vector instead of relying on reset-zero v0.
     VSETCFG 1, 8
     VLE 15, 17, 0
-    VMAX 16, 15, 0
+    VLE 0, 17, 0
+    VLE 31, 19, 0
+    VMAX 16, 15, 31
     VSE 16, 8, 64
 
     la   t0, output_buffer
@@ -172,6 +175,10 @@ conv_kernel:
 .balign 16
 relu_input:
     .half -5, 0, 7, -2, 123, -327, 42, -1
+
+.balign 16
+relu_zero:
+    .zero 16
 
 .balign 16
 expected_output:

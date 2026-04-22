@@ -27,6 +27,7 @@ vector_cnn_demo_main:
     la   s0, output_buffer
     la   s1, conv_input
     la   s2, conv_kernel
+    la   s3, relu_zero
 
     # Fixed int8 1D conv, store each result as int32.
     VSETCFG 0, 4
@@ -53,7 +54,9 @@ vector_cnn_demo_main:
     # ReLU over the 3 int32 conv outputs.
     VSETCFG 3, 3
     VLE 4, 8, 0
-    VMAX 5, 4, 0
+    VLE 0, 8, 0
+    VLE 31, 19, 0
+    VMAX 5, 4, 31
     VSE 5, 8, 0
 
     la   t0, output_buffer
@@ -108,6 +111,10 @@ conv_input:
     .byte 2, -1, 3, 4, -2, 1
 conv_kernel:
     .byte 1, 0, -1, 2
+
+.balign 16
+relu_zero:
+    .zero 16
 
 .balign 16
 expected_output:
