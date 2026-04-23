@@ -321,6 +321,8 @@ DebugSnapshot DebugSession::collect_snapshot() const {
     snapshot.devices.storage.block_count = machine().storage().block_count();
     snapshot.devices.storage.error_code = machine().storage().error_code();
 
+    snapshot.devices.ai_accelerator = machine().ai_accelerator().debug_snapshot();
+
     return snapshot;
 }
 

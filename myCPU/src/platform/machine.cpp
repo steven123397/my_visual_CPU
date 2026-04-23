@@ -73,11 +73,17 @@ BlockTransport parse_block_transport(const std::string& name) {
     throw std::runtime_error("unknown block transport: " + name);
 }
 
-Machine::Machine() : uart_(plic_), virtio_mmio_(plic_, VIRTIO_MMIO_PLIC_SOURCE, virtio_blk_), bus_(ram_) {
+Machine::Machine()
+    : uart_(plic_),
+      virtio_mmio_(plic_, VIRTIO_MMIO_PLIC_SOURCE, virtio_blk_),
+      ai_accelerator_(plic_, AI_ACCEL_PLIC_SOURCE),
+      bus_(ram_) {
     cpu_.csr().bind_clint(&clint_);
+    ai_accelerator_.bind_bus(bus_);
     bus_.attach(uart_);
     bus_.attach(clint_);
     bus_.attach(plic_);
+    bus_.attach(ai_accelerator_);
     rebuild_backend();
 }
 
@@ -265,6 +271,14 @@ VirtioBlk& Machine::virtio_blk() {
 
 const VirtioBlk& Machine::virtio_blk() const {
     return virtio_blk_;
+}
+
+AiAccelerator& Machine::ai_accelerator() {
+    return ai_accelerator_;
+}
+
+const AiAccelerator& Machine::ai_accelerator() const {
+    return ai_accelerator_;
 }
 
 ExecutionBackend& Machine::backend() {

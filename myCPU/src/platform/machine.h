@@ -7,6 +7,7 @@
 #include "../cpu.h"
 
 #include "../devices/clint.h"
+#include "../devices/ai_accelerator.h"
 #include "../devices/plic.h"
 #include "../devices/simple_storage.h"
 #include "../devices/uart16550.h"
@@ -61,6 +62,8 @@ public:
     const SimpleStorage& storage() const;
     VirtioBlk& virtio_blk();
     const VirtioBlk& virtio_blk() const;
+    AiAccelerator& ai_accelerator();
+    const AiAccelerator& ai_accelerator() const;
     ExecutionBackend& backend();
     const ExecutionBackend& backend() const;
     bool loaded() const;
@@ -77,6 +80,7 @@ private:
     SimpleStorage storage_;
     VirtioBlk virtio_blk_;
     VirtioMmio virtio_mmio_;
+    AiAccelerator ai_accelerator_;
     Clint clint_;
     ElfLoader elf_loader_;
     BinaryLoader binary_loader_;

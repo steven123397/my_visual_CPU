@@ -140,11 +140,20 @@ struct DebugStorageSnapshot {
     uint64_t error_code{0};
 };
 
+struct DebugAiAcceleratorSnapshot {
+    bool present{false};
+    uint32_t queue_depth{0};
+    uint64_t doorbell_count{0};
+    uint32_t last_fault{0};
+    uint64_t completion_count{0};
+};
+
 struct DebugDeviceSnapshot {
     DebugUartSnapshot uart{};
     DebugClintSnapshot clint{};
     DebugPlicSnapshot plic{};
     DebugStorageSnapshot storage{};
+    DebugAiAcceleratorSnapshot ai_accelerator{};
 };
 
 struct DebugVectorSnapshot {

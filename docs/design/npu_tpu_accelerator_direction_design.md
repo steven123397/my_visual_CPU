@@ -58,6 +58,7 @@
 - `v1` 采用显式 `scratchpad / tile buffer + DMA/load-store engine`，而不是把所有 tensor 访问退化成普通 RAM 连续 load/store。
 - `v1` 默认不假设 CPU 与设备之间存在透明 cache coherence；host / guest 通过 buffer 生命周期、queue 提交点和 completion 点建立可见性合同。
 - 本方向与当前 `Phase 4` 的关系应理解为“消费并推动更克制的 `DMA-ready` 准备项”，而不是直接宣布 cache / DMA / multicore 已进入正式实施阶段。
+- 本方向的性能口径固定以模拟器内部的 `simulated cycles` 为准；宿主机 wall-clock 只用于开发调试，不作为“AI 是否被加速”的正式判断依据。
 
 ## 方案
 
@@ -172,6 +173,42 @@ AI Accelerator Device
 - 哪些输出必须回写系统 RAM
 - 哪些 op 之间允许 `DMA + compute` 重叠
 
+#### 5. 时序与性能建模
+
+这条线如果未来要被表述为“AI accelerator”，就不能只停留在功能正确。当前仓库是模拟器，宿主机 wall-clock 受到编译选项、机器负载和实现细节影响，本身没有稳定性能含义；因此 `v1` 必须补一层设备内部的模拟时序模型，并把性能判断统一收口到 `simulated cycles`。
+
+`v1` 不追求 `RTL` 级精确时序，更合适的目标是一个可解释、可回归、可调参的 `timed-simple` 模型。它至少应把一次提交的端到端开销拆成：
+
+- queue / control 开销
+- `DMA load` 开销
+- compute 开销
+- `DMA store` 开销
+- completion / interrupt 开销
+
+代表性的参数化模型建议如下：
+
+- `DMA cycles = setup_cycles + ceil(bytes / dma_bytes_per_cycle)`
+- `compute cycles = ceil(retired_ops / effective_ops_per_cycle)`，其中 `retired_ops` 对 `GEMM / conv` 可进一步落成 `MAC` 或 tile 粒度公式
+- 如果设计允许 `DMA + compute` 重叠，应明确 overlap 规则；不能重叠的部分统一计入 `stall / wait`
+
+`v1` 需要从第一天起暴露一组和时序绑定的 profile 计数器，至少包括：
+
+- `device_cycles`
+- `busy_cycles`
+- `dma_cycles`
+- `compute_cycles`
+- `stall_cycles`
+- `bytes_moved`
+- `retired_ops`
+- `effective_ops_per_cycle`
+- `utilization`
+
+这组计数器的目的不是伪装成真实芯片频率，而是让仓库能够在统一模拟时钟下比较不同路径的结构收益。后续若要声明“AI 工作被加速”，正式比较应是：
+
+- `cpu_or_vector_baseline_sim_cycles / ai_accelerator_end_to_end_sim_cycles`
+
+也就是说，这条线的性能结论依赖模拟周期模型，而不是宿主机运行秒数。
+
 ### 接口 / 数据 / 契约
 
 #### 1. MMIO 设备合同
@@ -212,7 +249,7 @@ completion entry 至少包含：
 - success / fault code
 - retired op count
 - bytes moved
-- cycles busy / idle
+- simulated cycles busy / idle
 - optional profile summary pointer
 
 推荐的 fault code 至少覆盖：
@@ -256,7 +293,9 @@ graph package 是 `v1` 的统一软件入口，不管来自 host harness 还是 
    仓库需要一层最小离线工具，把固定 `CNN` 或 `Transformer-like` 推理 block lower 成设备可消费的静态 graph package；这不等于完整编译器，但它是 `v1` 的必要载体。
 6. **独立 debug / profile 观测面**
    仅靠现有 CPU / vector snapshot 不足以观察 AI 设备。后续至少需要 queue depth、DMA bytes、scratchpad occupancy、engine utilization、stall reason 和 retired op 计数。
-7. **guest 侧最小 driver / runtime 边界**
+7. **模拟时钟 / timing model 合同**
+   如果没有独立的设备时序模型，这条线只能证明“功能上完成 offload”，不能证明“性能上像 `NPU / TPU`”。后续至少需要统一设备时钟源、`timed-simple` latency / throughput 参数、`DMA / compute / stall` 分项计数，以及和 CPU / vector baseline 可对比的 `simulated cycles` 口径。
+8. **guest 侧最小 driver / runtime 边界**
    如果未来希望这条线不只停留在 host harness，就需要最小 guest driver ABI：buffer、queue、doorbell、interrupt、fault 上报与 profile 读取。
 
 ### 验证思路
@@ -290,6 +329,7 @@ graph package 是 `v1` 的统一软件入口，不管来自 host harness 还是 
 - host harness 与 guest driver 双入口能提升系统价值，但也容易造成两套事实来源；这就是为什么本文档强制要求两者共用同一套 graph package 与 queue ABI。
 - 同时覆盖 quantized 与 semi-precision family，会显著扩大验证矩阵；因此 `v1` 必须按“统一 ABI + 代表性闭环”收口，而不是追求所有组合一步到位。
 - 引入 `scratchpad + DMA` 会把项目推向更重的 memory contract；这条线必须以更克制的 `DMA-ready` 准备项落地，而不是顺势打开完整 cache / coherence。
+- 如果没有独立的模拟时钟与性能模型，这条线最多只能证明设备功能正确，不能回答 tile reuse、DMA overlap、queue 开销和 compute 吞吐是否真的形成结构收益。
 - 当前仓库的主线已经切到 `xv6 / Linux` foundation；如果在没有明确优先级切换的情况下把本方向直接拉成当前主线，很容易重新打散当前的验证闭环。
 
 ## 当前有效性说明
