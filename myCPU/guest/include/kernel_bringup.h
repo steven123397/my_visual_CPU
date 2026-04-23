@@ -11,6 +11,7 @@ enum {
     KERNEL_BRINGUP_MMIO_CLINT = 1U << 1,
     KERNEL_BRINGUP_MMIO_PLIC = 1U << 2,
     KERNEL_BRINGUP_MMIO_STORAGE = 1U << 3,
+    KERNEL_BRINGUP_MMIO_AI_ACCEL = 1U << 4,
 };
 
 typedef bool (*kernel_bringup_pre_vm_setup_t)(trap_context_t* trap_context,

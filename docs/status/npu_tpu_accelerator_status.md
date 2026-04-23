@@ -53,6 +53,16 @@
   - `AiAccelerator` 当前已从 `DMA load -> placeholder compute barrier -> DMA store` 收口成 `DMA load -> static graph compute -> DMA store`，completion 也已带回真实 `retired_ops`。
   - 第一版 `timed-simple` compute timing 已接线：当前 `device_cycles` 已不再等同于 `dma_cycles`，并新增 `compute_cycles / stall_cycles` MMIO 只读计数器；其保守语义已固定为 `DMA + compute` **不重叠**，因此当前代表性 workload 下 `stall_cycles` 仍为 `0`。
   - 已新增 `myCPU/tests/host/ai_accelerator_cnn_smoke.cpp` 与 `myCPU/tests/host/ai_accelerator_gemm_smoke.cpp`，分别锁住 quantized `CNN` 与 semi-precision `GEMM / matmul-family` 的输出、fault 行为，以及基础 timing counter 语义。
+- `2026-04-23` 同日已完成 wave 1 的任务 6：host graph packaging 与 workload/profile 入口。
+  - 已新增 `myCPU/workloads/ai_proto/profile.mk`、`myCPU/workloads/ai_proto/pack_graph.py` 与 `myCPU/workloads/ai_proto/README.md`，把固定 `CNN` 与 `GEMM / matmul-family` workload 收口成可重复生成的 `graph.bin + tensor inputs + expected output + manifest` 打包入口。
+  - `myCPU/workloads/common.mk` 与 `myCPU/Makefile` 当前已支持 `debug-cli` 与 `ai-profile` 两类 workload run mode；`ai_proto` 复用现有 `workloads/` 体系，不另起并行脚本目录，也不再依赖 guest image / debug probe 路径。
+  - `myCPU/src/platform/machine.{h,cpp}` 当前已新增 `run_ai_profile_manifest()`，并通过 `myCPU/src/main.cpp` 暴露 `--ai-profile-manifest` CLI 入口；host summary 统一输出 `baseline=none` 和 `timed-simple` 原始计数器，包括 `device_cycles / dma_cycles / compute_cycles / stall_cycles / bytes_moved / retired_ops`，不回退到宿主机 wall-clock。
+  - 已新增 `myCPU/tests/host/ai_accelerator_profile_smoke.cpp`，锁住 packaging 产物格式、`run-workload WORKLOAD_NAME=ai_proto` 干跑命令，以及 `cnn / gemm` 两条代表性 workload 的 profile summary 与输出结果。
+- `2026-04-23` 同日已完成 wave 1 的任务 7：guest driver、guest demo 与 debug/profile 收尾。
+  - 已新增 `myCPU/guest/include/ai_accel.h` 与 `myCPU/guest/kernel/ai_accel.c`，把 guest 与 host 共用的 `descriptor / queue / doorbell / completion / counter` ABI 收口为独立最小 driver。
+  - 已新增 `myCPU/guest/ai_accel_demo/start.S` 与 `myCPU/guest/ai_accel_demo/main.c`，固定一条最小推理闭环：guest 会提交固定 graph package、等待 AI completion interrupt、读回结果与计数器，并以 `KMVAI` 作为成功输出。
+  - `myCPU/src/debug/debug_snapshot.h` 与 `myCPU/src/debug/debug_protocol_response.cpp` 当前已补齐 AI accelerator 只读观测：`engine_busy`、`scratchpad_occupancy_bytes`、`dma_load_bytes`、`dma_store_bytes`、`device_cycles`、`dma_cycles`、`compute_cycles` 与 `stall_cycles`；`myCPU/tests/host/debug_cli_smoke.cpp` 也已锁住 `debug-cli` 下的最终可见性。
+  - `myCPU/tests/host/ai_accel_guest_smoke.cpp`、`make test-guest-ai_accel_demo` 与 `make test-pipeline-guest-ai_accel_demo` 当前已一起守住 guest 侧 submit / completion / counter ABI 闭环。
 - 当前对 AI accelerator 的性能口径已经进一步收口为：后续统一采用 `timed-simple` 的 `simulated cycles` 模型评估结构收益，不用宿主机 wall-clock 表述“是否加速”。
 - 当前控制面里的 `perf counter window` 已经覆盖 `device_cycles / dma_cycles / compute_cycles / stall_cycles / dma_load_bytes / dma_store_bytes`，completion 也已带回 `retired_ops`；但 `completion overhead`、更细的 compute / stall attribution 和 `DMA + compute overlap` 仍未展开。
 - `v1` 的正式设计边界已经冻结为：
@@ -67,8 +77,7 @@
 - `v1` 的 dtype family 也已在设计层锁定为两组统一合同：
   - `INT8 / INT16 -> INT32 accumulate`
   - `FP16 / BF16 -> FP32 accumulate`
-- 当前这条线已经有五块已落地代码与测试门禁：`DMA-ready` memory contract、静态 graph package / tensor golden model、独立 AI accelerator 控制面 / MMIO 设备骨架、独立 `scratchpad + DMA/load-store engine + timed-simple DMA timing`，以及静态调度器 + 代表性 compute path + 第一版 `timed-simple` compute timing。
-- 当前任务 6 到任务 7 仍未开始；host graph packaging tooling、guest driver ABI 与 host profile 入口都还没有落地。
+- 当前这条线的 wave 1 七个任务都已落地：`DMA-ready` memory contract、静态 graph package / tensor golden model、独立 AI accelerator 控制面 / MMIO 设备骨架、独立 `scratchpad + DMA/load-store engine + timed-simple DMA timing`、静态调度器 + 代表性 compute path + 第一版 `timed-simple` compute timing、host packaging/profile 入口，以及 guest driver / guest demo / debug-profile 收尾。
 - 当前已形成的 wave 1 落地顺序是：
   - 先补 `DMA-ready` initiator / transaction contract
   - 再定义 graph package 与 tensor golden model
@@ -110,20 +119,31 @@
     - `cd myCPU && make test-host-ai_accelerator_gemm_smoke`
     - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
     - `cd myCPU && make test`
+  - 同日完成 wave 1 任务 6，并通过：
+    - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
+    - `cd myCPU && make test`
+    - `cd myCPU && make test-pipeline`
+  - 同日完成 wave 1 任务 7，并通过：
+    - `cd myCPU && make test-guest-ai_accel_demo`
+    - `cd myCPU && make test-pipeline-guest-ai_accel_demo`
+    - `cd myCPU && make test-host-ai_accel_guest_smoke`
+    - `cd myCPU && make test-host-debug_cli_smoke`
+    - `cd myCPU && make test`
+    - `cd myCPU && make test-pipeline`
 
 ## 当前仍然有效的风险 / 限制
 
 - 当前主线已经切到 `xv6 / Linux` foundation；这条 AI accelerator 线虽然已经建模，但不是当前已激活主线。
-- `DMA-ready` contract、graph package、tensor golden model、独立 AI accelerator 控制面、`scratchpad/DMA engine` 与第一版 compute engine 当前都已有实现；但 host graph packaging tooling、guest driver ABI 与更完整的 profile / debug 观测仍未接上。
+- `DMA-ready` contract、graph package、tensor golden model、独立 AI accelerator 控制面、`scratchpad/DMA engine`、第一版 compute engine、host graph packaging / profile 入口，以及 guest driver / guest demo / debug profile 可观察性当前都已有实现；这条线的剩余限制已经不再是“入口没接上”，而是更细的 timing / overlap / performance 模型还没展开。
 - 当前已经有独立设备时序模型的第二刀，但仍只停在 `timed-simple`：`DMA + compute` 当前固定为 no-overlap，`stall_cycles` 也还没有展开成更细 attribution，因此这条线仍不能拿来讨论更激进的 tile overlap、queue 开销隐藏或更细颗粒度吞吐模型。
 - 同时覆盖 quantized 与 semi-precision family 会明显放大验证矩阵；后续实施时必须坚持“统一 ABI + 代表性闭环”，不能一开始就追求全矩阵算子铺满。
 - 如果把这条线和当前 `xv6 / Linux` 主线混在同一轮里推进，很容易打散已有回归与 ownership 边界。
 
 ## 下一步
 
-1. 继续执行 wave 1 的任务 6：补 host graph packaging 与 workload/profile 入口，把固定 `CNN` 与 `GEMM / matmul-family` workload 从 ad-hoc host test 收口成独立 packaging/summary 入口。
-2. 继续按“控制面 -> 数据面 + 基础 timing -> 代表性 compute path + compute timing -> host/guest 接入 -> profile/debug”顺序推进 wave 1，不颠倒实施顺序。
-3. 下一轮仍保持边界收窄：先围绕已落地的静态 scheduler + compute path 收口 host/profile 入口与最小 debug 观测，不把这条线反向混入 CPU ISA reference path，也不顺手扩到训练、动态图或更重的 overlap / performance 模型。
+1. wave 1 当前已经完成；下一轮如果继续推进，应先围绕已落地的 host/guest/profile/debug 闭环做 bug-driven hardening，而不是重新扩更大的功能面。
+2. 如果要继续往下走，优先评估更窄的 wave 2 / hardening 切片：例如更细 `timed-simple` attribution、代表性 queue/completion overhead，或更保守的 overlap 建模；继续避免把这条线反向混入 CPU ISA reference path。
+3. 在形成下一份计划之前，继续把边界收窄在静态推理、静态 shape、离线 memory plan 与 `simulated cycles` 口径，不顺手扩到训练、动态图或更重的 performance 模型。
 
 ## 验证基线
 
@@ -150,3 +170,5 @@
   - `cd myCPU && make test-host-ai_accelerator_cnn_smoke`
   - `cd myCPU && make test-host-ai_accelerator_gemm_smoke`
   - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
+  - `cd myCPU && make test-host-ai_accel_guest_smoke`
+  - `cd myCPU && make test-host-debug_cli_smoke`

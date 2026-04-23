@@ -145,6 +145,16 @@ bool kernel_runtime_wait_for_first_external_delivery(kernel_runtime_t* runtime,
         timeout_delta);
 }
 
+bool kernel_runtime_wait_for_next_external_delivery(kernel_runtime_t* runtime,
+                                                    uint64_t timeout_delta) {
+    supervisor_runtime_interrupt_state_t* interrupts =
+        kernel_runtime_interrupt_state(runtime);
+
+    return interrupts != NULL &&
+           supervisor_runtime_wait_for_next_counter(&interrupts->external_interrupts,
+                                                   timeout_delta);
+}
+
 bool kernel_runtime_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
                                                   uint64_t timer_delta,
                                                   uint64_t timeout_delta) {

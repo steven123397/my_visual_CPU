@@ -154,6 +154,12 @@ std::string repeat_command(const char* command, int count) {
     return script.str();
 }
 
+std::string run_until_halt_command(std::uint64_t max_steps) {
+    std::ostringstream script;
+    script << "{\"cmd\":\"run_until_halt\",\"max_steps\":" << max_steps << "}\n";
+    return script.str();
+}
+
 std::string run_cli_script(const std::string& script) {
     std::istringstream in(script);
     std::ostringstream out;
@@ -699,6 +705,48 @@ int main() {
         if (!expect_contains(vector_output,
                              "\"0x07000000000000000700000000000000\"",
                              "debug snapshot JSON should serialize vector register dumps")) {
+            return 1;
+        }
+    }
+
+    {
+        const std::string ai_accel_output =
+            run_cli_script("{\"cmd\":\"load\",\"image\":\"guest/ai_accel_demo.elf\",\"backend\":\"pipeline\"}\n" +
+                           run_until_halt_command(12000000) + "{\"cmd\":\"snapshot\"}\n" +
+                           "{\"cmd\":\"uart_output\",\"offset\":0}\n{\"cmd\":\"quit\"}\n");
+        const std::vector<std::string> ai_accel_lines = split_lines(ai_accel_output);
+        if (!expect_contains(ai_accel_output,
+                             "\"text\":\"KMVAI\"",
+                             "AI guest demo should surface KMVAI on success")) {
+            return 1;
+        }
+        if (!expect_line_with_fields(
+                ai_accel_lines,
+                ai_accel_output,
+                {
+                    "\"type\":\"snapshot\"",
+                    "\"halted\":true",
+                    "\"recent_output\":\"KMVAI\"",
+                    "\"ai_accelerator\":{\"present\":true",
+                    "\"queue_depth\":0",
+                    "\"doorbell_count\":1",
+                    "\"last_fault\":0",
+                    "\"completion_count\":1",
+                    "\"engine_busy\":false",
+                    "\"scratchpad_occupancy_bytes\":0",
+                    "\"dma_load_bytes\":12",
+                    "\"dma_store_bytes\":4",
+                    "\"device_cycles\":8",
+                    "\"dma_cycles\":6",
+                    "\"compute_cycles\":2",
+                    "\"stall_cycles\":0",
+                },
+                "AI guest demo snapshot should expose final AI accelerator debug counters")) {
+            return 1;
+        }
+        if (!expect_contains(ai_accel_output,
+                             "\"cmd\":\"quit\"",
+                             "quit response should be emitted for AI guest demo")) {
             return 1;
         }
     }

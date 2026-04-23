@@ -8,6 +8,7 @@
 .global platform_uart_enable_thre_irq
 .global platform_uart_disable_irq
 .global platform_plic_supervisor_init
+.global platform_plic_supervisor_enable_source
 .global platform_plic_supervisor_claim
 .global platform_plic_supervisor_complete
 .global platform_clint_read_mtime

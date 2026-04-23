@@ -373,6 +373,15 @@ std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
         << ",\"doorbell_count\":" << snapshot.devices.ai_accelerator.doorbell_count
         << ",\"last_fault\":" << snapshot.devices.ai_accelerator.last_fault
         << ",\"completion_count\":" << snapshot.devices.ai_accelerator.completion_count
+        << ",\"engine_busy\":" << (snapshot.devices.ai_accelerator.engine_busy ? "true" : "false")
+        << ",\"scratchpad_occupancy_bytes\":"
+        << snapshot.devices.ai_accelerator.scratchpad_occupancy_bytes
+        << ",\"dma_load_bytes\":" << snapshot.devices.ai_accelerator.dma_load_bytes
+        << ",\"dma_store_bytes\":" << snapshot.devices.ai_accelerator.dma_store_bytes
+        << ",\"device_cycles\":" << snapshot.devices.ai_accelerator.device_cycles
+        << ",\"dma_cycles\":" << snapshot.devices.ai_accelerator.dma_cycles
+        << ",\"compute_cycles\":" << snapshot.devices.ai_accelerator.compute_cycles
+        << ",\"stall_cycles\":" << snapshot.devices.ai_accelerator.stall_cycles
         << "}},\"events\":[";
     for (size_t i = 0; i < snapshot.events.size(); ++i) {
         if (i != 0) {

@@ -146,6 +146,14 @@ struct DebugAiAcceleratorSnapshot {
     uint64_t doorbell_count{0};
     uint32_t last_fault{0};
     uint64_t completion_count{0};
+    bool engine_busy{false};
+    uint32_t scratchpad_occupancy_bytes{0};
+    uint64_t dma_load_bytes{0};
+    uint64_t dma_store_bytes{0};
+    uint64_t device_cycles{0};
+    uint64_t dma_cycles{0};
+    uint64_t compute_cycles{0};
+    uint64_t stall_cycles{0};
 };
 
 struct DebugDeviceSnapshot {

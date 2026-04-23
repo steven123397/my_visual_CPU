@@ -34,6 +34,24 @@ BlockTransport parse_block_transport(const std::string& name);
 
 class Machine {
 public:
+    struct AiProfileRunResult {
+        std::string workload_name{};
+        std::string manifest_path{};
+        std::string graph_package_path{};
+        uint32_t graph_package_bytes{0};
+        uint64_t ticks{0};
+        uint32_t completion_status{AI_ACCEL_COMPLETION_STATUS_SUCCESS};
+        uint32_t fault_code{AI_ACCEL_FAULT_NONE};
+        uint32_t source_tag{0};
+        uint64_t bytes_moved{0};
+        uint64_t retired_ops{0};
+        uint64_t device_cycles{0};
+        uint64_t dma_cycles{0};
+        uint64_t compute_cycles{0};
+        uint64_t stall_cycles{0};
+        bool completed{false};
+    };
+
     Machine();
 
     void set_backend_kind(BackendKind kind);
@@ -45,6 +63,7 @@ public:
     void attach_storage_image(const std::string& path,
                               bool ready = true,
                               bool valid_magic = true);
+    AiProfileRunResult run_ai_profile_manifest(const std::string& manifest_path);
     void step();
     void run();
     CPU& cpu();

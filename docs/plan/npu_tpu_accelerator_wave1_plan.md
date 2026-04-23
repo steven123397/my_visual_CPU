@@ -1,6 +1,6 @@
 # `NPU / TPU-like` AI accelerator Wave 1 实现计划
 
-> **文档状态：** 执行中，任务 1-5 已完成（`2026-04-23` 已完成方向 design / status / wave 1 plan；同日已完成任务 1：`DMA-ready` memory contract，任务 2：静态 graph package 与 tensor golden model，任务 3：AI accelerator 控制面与 MMIO 设备骨架，任务 4：scratchpad + DMA/load-store engine 与第一版 `timed-simple` DMA timing，以及任务 5：静态子图调度器、代表性 compute path 与第一版 `timed-simple` compute timing）
+> **文档状态：** 已完成，任务 1-7 已完成（`2026-04-23` 已完成方向 design / status / wave 1 plan；同日已完成任务 1：`DMA-ready` memory contract，任务 2：静态 graph package 与 tensor golden model，任务 3：AI accelerator 控制面与 MMIO 设备骨架，任务 4：scratchpad + DMA/load-store engine 与第一版 `timed-simple` DMA timing，任务 5：静态子图调度器、代表性 compute path 与第一版 `timed-simple` compute timing，任务 6：host graph packaging 与 workload/profile 入口，以及任务 7：guest driver、guest demo 与 debug/profile 收尾）
 >
 > **面向 AI 代理的工作者：** 推荐使用 `superpowers:subagent-driven-development` 或 `superpowers:executing-plans` 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法跟踪进度。
 
@@ -252,16 +252,18 @@
   - `myCPU/workloads/common.mk`
   - `myCPU/Makefile`
   - `myCPU/src/main.cpp`
+  - `myCPU/src/platform/machine.h`
   - `myCPU/src/platform/machine.cpp`
 
-- [ ] **步骤 1：** 把固定 `CNN` 与 `GEMM / matmul-family` workload lower 成 graph package，而不是让 host test 手写 ad-hoc descriptor。
-- [ ] **步骤 2：** 复用现有 `workloads/` 体系接入独立 `ai_proto` profile，不另起并行脚本目录。
-- [ ] **步骤 3：** 给 host 侧入口补最小 profile / summary 输出，至少能看到 package、`device_cycles`、`dma_cycles`、`compute_cycles`、`bytes_moved`、`retired_ops` 和基本 fault / progress。
-- [ ] **步骤 4：** 如果已有 CPU / vector baseline，就在同一模拟周期口径下输出最小 speedup summary；没有 baseline 时至少输出可对比的 raw counters，不回退到 wall-clock。
-- [ ] **步骤 5：** 补 host smoke，锁住 packaging 输出与 profile 行为的兼容性。
-- [ ] **步骤 6：** 运行：
+- [x] **步骤 1：** 把固定 `CNN` 与 `GEMM / matmul-family` workload lower 成 graph package，而不是让 host test 手写 ad-hoc descriptor。
+- [x] **步骤 2：** 复用现有 `workloads/` 体系接入独立 `ai_proto` profile，不另起并行脚本目录。
+- [x] **步骤 3：** 给 host 侧入口补最小 profile / summary 输出，至少能看到 package、`device_cycles`、`dma_cycles`、`compute_cycles`、`bytes_moved`、`retired_ops` 和基本 fault / progress。
+- [x] **步骤 4：** 如果已有 CPU / vector baseline，就在同一模拟周期口径下输出最小 speedup summary；没有 baseline 时至少输出可对比的 raw counters，不回退到 wall-clock。
+- [x] **步骤 5：** 补 host smoke，锁住 packaging 输出与 profile 行为的兼容性。
+- [x] **步骤 6：** 运行：
   - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
   - `cd myCPU && make test`
+  - `cd myCPU && make test-pipeline`
 
 ### 任务 7：guest driver、demo 与 debug/profile 收尾
 
@@ -281,11 +283,13 @@
   - `myCPU/tests/host/debug_cli_smoke.cpp`
   - `myCPU/Makefile`
 
-- [ ] **步骤 1：** 为 guest 侧定义最小 driver ABI：buffer、queue、doorbell、interrupt、fault 读取与 profile 读取。
-- [ ] **步骤 2：** 新增一个固定输入、固定 graph package 的 `guest/ai_accel_demo`，只证明 guest 能提交、等待并读回结果。
-- [ ] **步骤 3：** 在 debug snapshot / CLI 中补 AI accelerator 只读观测：queue depth、DMA bytes、scratchpad occupancy、engine busy、last fault，以及 `device_cycles / dma_cycles / compute_cycles / stall_cycles`。
-- [ ] **步骤 4：** 通过 host smoke 与 debug CLI smoke 锁住 guest 提交和 profile 可见性，不扩大 frontend UI 范围。
-- [ ] **步骤 5：** 运行：
+- [x] **步骤 1：** 为 guest 侧定义最小 driver ABI：buffer、queue、doorbell、interrupt、fault 读取与 profile 读取。
+- [x] **步骤 2：** 新增一个固定输入、固定 graph package 的 `guest/ai_accel_demo`，只证明 guest 能提交、等待并读回结果。
+- [x] **步骤 3：** 在 debug snapshot / CLI 中补 AI accelerator 只读观测：queue depth、DMA bytes、scratchpad occupancy、engine busy、last fault，以及 `device_cycles / dma_cycles / compute_cycles / stall_cycles`。
+- [x] **步骤 4：** 通过 host smoke 与 debug CLI smoke 锁住 guest 提交和 profile 可见性，不扩大 frontend UI 范围。
+- [x] **步骤 5：** 运行：
+  - `cd myCPU && make test-guest-ai_accel_demo`
+  - `cd myCPU && make test-pipeline-guest-ai_accel_demo`
   - `cd myCPU && make test-host-ai_accel_guest_smoke`
   - `cd myCPU && make test-host-debug_cli_smoke`
   - `cd myCPU && make test`

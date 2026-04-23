@@ -11,6 +11,7 @@ void platform_uart_enable_thre_irq(void);
 void platform_uart_disable_irq(void);
 
 void platform_plic_supervisor_init(void);
+void platform_plic_supervisor_enable_source(uint32_t source_id);
 uint32_t platform_plic_supervisor_claim(void);
 void platform_plic_supervisor_complete(uint32_t source_id);
 

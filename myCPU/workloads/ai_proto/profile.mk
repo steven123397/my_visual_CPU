@@ -1,0 +1,11 @@
+AI_PROTO_WORKLOAD ?= cnn
+AI_PROTO_OUT_DIR := workloads/ai_proto/generated
+AI_PROTO_MANIFEST := $(AI_PROTO_OUT_DIR)/$(AI_PROTO_WORKLOAD).manifest
+
+WORKLOAD_RUN_MODE := ai-profile
+WORKLOAD_BUILD_NEEDS_RISCV := 0
+WORKLOAD_AI_MANIFEST := $(AI_PROTO_MANIFEST)
+WORKLOAD_PROBE_CYCLES := 0
+WORKLOAD_SMOKE_TARGET := test-host-ai_accelerator_profile_smoke
+WORKLOAD_BUILD_COMMAND = python3 workloads/ai_proto/pack_graph.py --workload $(AI_PROTO_WORKLOAD) --out-dir $(AI_PROTO_OUT_DIR)
+WORKLOAD_CLEAN_COMMAND = rm -rf $(AI_PROTO_OUT_DIR)

@@ -339,7 +339,11 @@ static bool kernel_fault_range_args_valid(const vm_address_space_t* address_spac
         range_within_window(vaddr,
                             size,
                             STORAGE_BASE,
-                            STORAGE_BASE + MEMORY_PAGE_SIZE);
+                            STORAGE_BASE + MEMORY_PAGE_SIZE) ||
+        range_within_window(vaddr,
+                            size,
+                            AI_ACCEL_BASE,
+                            AI_ACCEL_BASE + MEMORY_PAGE_SIZE);
 
     return address_space_storage_ready(address_space) &&
            mapped_range_args_valid(vaddr, paddr, size) &&

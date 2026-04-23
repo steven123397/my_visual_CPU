@@ -58,6 +58,9 @@ static supervisor_runtime_external_post_handler_t
 static supervisor_runtime_interrupt_state_t* g_external_wait_state = NULL;
 static uint64_t g_external_wait_timeout = 0;
 static bool g_external_wait_result = true;
+static volatile uint32_t* g_next_counter_wait_counter = NULL;
+static uint64_t g_next_counter_wait_timeout = 0;
+static bool g_next_counter_wait_result = true;
 static supervisor_runtime_interrupt_state_t* g_timer_wait_state = NULL;
 static uint64_t g_timer_wait_delta = 0;
 static uint64_t g_timer_wait_timeout = 0;
@@ -91,6 +94,7 @@ static int test_runtime_bringup_helper(void);
 static int test_common_bringup_wrapper(void);
 static int test_plic_phase_helper(void);
 static int test_external_wait_helper(void);
+static int test_next_external_wait_helper(void);
 static int test_timer_wait_helper(void);
 static int test_storage_probe_helper(void);
 static int test_storage_signature_helper(void);
@@ -325,6 +329,13 @@ bool supervisor_runtime_wait_for_first_external_delivery(
     return g_external_wait_result;
 }
 
+bool supervisor_runtime_wait_for_next_counter(volatile uint32_t* counter,
+                                              uint64_t timeout_delta) {
+    g_next_counter_wait_counter = counter;
+    g_next_counter_wait_timeout = timeout_delta;
+    return g_next_counter_wait_result;
+}
+
 bool supervisor_runtime_wait_for_first_timer_delivery(
     supervisor_runtime_interrupt_state_t* state,
     uint64_t timer_delta,
@@ -421,6 +432,9 @@ static void reset_stub_state(void) {
     g_external_wait_state = NULL;
     g_external_wait_timeout = 0;
     g_external_wait_result = true;
+    g_next_counter_wait_counter = NULL;
+    g_next_counter_wait_timeout = 0;
+    g_next_counter_wait_result = true;
     g_timer_wait_state = NULL;
     g_timer_wait_delta = 0;
     g_timer_wait_timeout = 0;
@@ -975,6 +989,38 @@ static int test_external_wait_helper(void) {
     return 0;
 }
 
+static int test_next_external_wait_helper(void) {
+    kernel_runtime_t runtime;
+
+    reset_stub_state();
+    kernel_runtime_init(&runtime);
+    supervisor_runtime_interrupt_state_set_counters(
+        kernel_runtime_interrupt_state(&runtime),
+        0U,
+        3U);
+    if (!kernel_runtime_wait_for_next_external_delivery(&runtime, 40U)) {
+        return fail("expected runtime next external wait helper to propagate success");
+    }
+
+    if (g_next_counter_wait_counter !=
+            &kernel_runtime_interrupt_state(&runtime)->external_interrupts ||
+        g_next_counter_wait_timeout != 40U) {
+        return fail("expected runtime next external wait helper to forward external counter");
+    }
+
+    reset_stub_state();
+    g_next_counter_wait_result = false;
+    if (kernel_runtime_wait_for_next_external_delivery(&runtime, 24U)) {
+        return fail("expected runtime next external wait helper to propagate failure");
+    }
+
+    if (kernel_runtime_wait_for_next_external_delivery(NULL, 24U)) {
+        return fail("expected runtime next external wait helper to reject null runtime");
+    }
+
+    return 0;
+}
+
 static int test_timer_wait_helper(void) {
     kernel_runtime_t runtime;
 
@@ -1147,6 +1193,7 @@ int main(void) {
         test_common_bringup_wrapper() != 0 ||
         test_plic_phase_helper() != 0 ||
         test_external_wait_helper() != 0 ||
+        test_next_external_wait_helper() != 0 ||
         test_timer_wait_helper() != 0 ||
         test_storage_probe_helper() != 0 ||
         test_storage_signature_helper() != 0 ||

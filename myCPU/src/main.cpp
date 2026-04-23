@@ -23,7 +23,9 @@ static void usage(const char* prog) {
     std::fprintf(stderr,
                  "Usage: %s [--debug-cli] [--backend kind] [--block-transport kind] [-b addr] [--payload image addr] [--set-reg reg value] [-d image|--disk image] [--disk-not-ready image] [--disk-bad-magic image] <image>\n",
                  prog);
+    std::fprintf(stderr, "       %s --ai-profile-manifest manifest\n", prog);
     std::fprintf(stderr, "  --debug-cli     run JSON line debug protocol on stdin/stdout\n");
+    std::fprintf(stderr, "  --ai-profile-manifest manifest  run a packaged AI accelerator profile workload\n");
     std::fprintf(stderr, "  --backend kind  select execution backend: functional or pipeline\n");
     std::fprintf(stderr,
                  "  --block-transport kind  select block transport: simple_storage or virtio-blk\n");
@@ -58,6 +60,7 @@ int main(int argc, char* argv[]) {
     bool disk_magic_valid = true;
     BackendKind backend_kind = BackendKind::Functional;
     BlockTransport block_transport = BlockTransport::SimpleStorage;
+    const char* ai_profile_manifest = nullptr;
     const char* image = nullptr;
     struct PayloadArg {
         const char* image;
@@ -101,6 +104,11 @@ int main(int argc, char* argv[]) {
             const char* reg_name = argv[++i];
             const uint64_t reg_value = std::strtoull(argv[++i], nullptr, 0);
             gpr_seeds.push_back(GprSeedArg{reg_name, reg_value});
+        } else if (std::strcmp(argv[i], "--ai-profile-manifest") == 0) {
+            if (++i >= argc) {
+                usage(argv[0]);
+            }
+            ai_profile_manifest = argv[i];
         } else if (std::strcmp(argv[i], "-d") == 0 || std::strcmp(argv[i], "--disk") == 0) {
             if (++i >= argc) {
                 usage(argv[0]);
@@ -124,6 +132,50 @@ int main(int argc, char* argv[]) {
             disk_magic_valid = false;
         } else {
             image = argv[i];
+        }
+    }
+
+    if (ai_profile_manifest != nullptr) {
+        if (image != nullptr || flat || disk_image != nullptr || !payloads.empty() || !gpr_seeds.empty()) {
+            std::fprintf(stderr, "--ai-profile-manifest cannot be combined with guest image loading options\n");
+            return 1;
+        }
+
+        try {
+            Machine machine;
+            machine.set_backend_kind(backend_kind);
+            const Machine::AiProfileRunResult result =
+                machine.run_ai_profile_manifest(ai_profile_manifest);
+            const char* progress = "timeout";
+            if (result.completed) {
+                progress = result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS ? "completed"
+                                                                                        : "fault";
+            }
+            std::cout << "ai_profile"
+                      << " name=" << result.workload_name
+                      << " progress=" << progress
+                      << " baseline=none"
+                      << " manifest=" << result.manifest_path
+                      << " graph_package=" << result.graph_package_path
+                      << " graph_package_bytes=" << result.graph_package_bytes
+                      << " ticks=" << result.ticks
+                      << " completion_status=" << result.completion_status
+                      << " fault_code=" << result.fault_code
+                      << " source_tag=" << result.source_tag
+                      << " bytes_moved=" << result.bytes_moved
+                      << " retired_ops=" << result.retired_ops
+                      << " device_cycles=" << result.device_cycles
+                      << " dma_cycles=" << result.dma_cycles
+                      << " compute_cycles=" << result.compute_cycles
+                      << " stall_cycles=" << result.stall_cycles
+                      << '\n';
+            return result.completed &&
+                           result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS
+                       ? 0
+                       : 1;
+        } catch (const std::exception& ex) {
+            std::fprintf(stderr, "%s\n", ex.what());
+            return 1;
         }
     }
 

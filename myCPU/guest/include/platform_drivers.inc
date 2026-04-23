@@ -45,6 +45,22 @@ platform_plic_supervisor_init:
     sw   zero, 0(t2)
     ret
 
+platform_plic_supervisor_enable_source:
+    li   t0, PLIC_BASE
+    li   t1, 1
+    sll  t1, t1, a0
+    li   t2, PLIC_ENABLE_OFFSET(PLIC_CONTEXT_SUPERVISOR)
+    add  t2, t0, t2
+    lw   t3, 0(t2)
+    or   t3, t3, t1
+    sw   t3, 0(t2)
+
+    li   t1, 1
+    slli t2, a0, 2
+    add  t2, t0, t2
+    sw   t1, 0(t2)
+    ret
+
 platform_plic_supervisor_claim:
     li   t0, PLIC_BASE
     li   t1, PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR)

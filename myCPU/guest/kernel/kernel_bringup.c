@@ -37,6 +37,11 @@ static const kernel_bringup_mmio_range_t k_kernel_bringup_mmio_ranges[] = {
         .start = STORAGE_BASE,
         .end = STORAGE_BASE + MEMORY_PAGE_SIZE,
     },
+    {
+        .flag = KERNEL_BRINGUP_MMIO_AI_ACCEL,
+        .start = AI_ACCEL_BASE,
+        .end = AI_ACCEL_BASE + MEMORY_PAGE_SIZE,
+    },
 };
 
 static bool kernel_bringup_map_identity_if_present(vm_address_space_t* address_space,

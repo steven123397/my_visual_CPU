@@ -243,6 +243,15 @@ DebugAiAcceleratorSnapshot AiAccelerator::debug_snapshot() const {
         .doorbell_count = doorbell_count_,
         .last_fault = last_fault_,
         .completion_count = completion_count_,
+        .engine_busy = is_busy(),
+        .scratchpad_occupancy_bytes =
+            active_submission_valid_ ? active_submission_.package.scratchpad_budget_bytes : 0,
+        .dma_load_bytes = dma_engine_.counters().load_bytes,
+        .dma_store_bytes = dma_engine_.counters().store_bytes,
+        .device_cycles = device_cycles_,
+        .dma_cycles = dma_engine_.counters().total_cycles,
+        .compute_cycles = compute_cycles_,
+        .stall_cycles = stall_cycles_,
     };
 }
 

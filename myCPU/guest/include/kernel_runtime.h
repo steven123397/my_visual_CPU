@@ -28,6 +28,8 @@ bool kernel_runtime_run_identity_superpage_bringup(kernel_runtime_t* runtime);
 void kernel_runtime_begin_plic_supervisor_phase(char marker);
 bool kernel_runtime_wait_for_first_external_delivery(kernel_runtime_t* runtime,
                                                      uint64_t timeout_delta);
+bool kernel_runtime_wait_for_next_external_delivery(kernel_runtime_t* runtime,
+                                                    uint64_t timeout_delta);
 bool kernel_runtime_wait_for_first_timer_delivery(kernel_runtime_t* runtime,
                                                   uint64_t timer_delta,
                                                   uint64_t timeout_delta);
