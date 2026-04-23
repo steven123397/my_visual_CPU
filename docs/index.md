@@ -30,17 +30,23 @@
     `pipeline` 的投机执行、commit boundary 与 side effect 可见性合同。
 13. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     `V-lite` 当前统一设计边界：最小 ISA、workload、vector-aware `pipeline` 与 `Phase 4` 衔接口径。
-14. [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
+14. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+    独立 `MMIO NPU / TPU-like` AI 加速器方向：静态子图、`scratchpad + DMA`、host / guest 共用设备 ABI 的未来设计边界。
+15. [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
     `Phase 4` 当前准备性入口设计，以及 `P4-prep-1` 的正式边界。
-15. [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
+16. [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
     未来扩展路线图：ISA 补全、workload 升级、微架构深化、系统级跃迁的统一规划与依赖图。
-16. [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
+17. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
+    独立 `MMIO NPU / TPU-like` AI accelerator 的专项状态：当前冻结边界、风险和下一步。
+18. [plan/npu_tpu_accelerator_wave1_plan.md](plan/npu_tpu_accelerator_wave1_plan.md)
+    `NPU / TPU-like` AI accelerator 的 Wave 1 计划：`DMA-ready` 基座、图包、控制面、数据面和 host/guest 接入顺序。
+19. [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
     当前已激活的 `xv6 / Linux / JIT` 主线切换设计。
-17. [plan/xv6_linux_jit_wave1_plan.md](plan/xv6_linux_jit_wave1_plan.md)
+20. [plan/xv6_linux_jit_wave1_plan.md](plan/xv6_linux_jit_wave1_plan.md)
     当前 `xv6 / Linux / JIT` 主线切换的 Wave 1 执行计划、worktree 布局和 agent prompt。
-18. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
+21. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
     `P4-prep-1` 的完成归档与结果摘要。
-19. [plan/history_plan.md](plan/history_plan.md)
+22. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -55,6 +61,12 @@
   - [plan/history_plan.md#vector-v3-plan](plan/history_plan.md#vector-v3-plan)
   - [plan/history_plan.md#vector-v3-hardening-v4-design-plan](plan/history_plan.md#vector-v3-hardening-v4-design-plan)
   - [plan/history_plan.md#vector-v4-plan](plan/history_plan.md#vector-v4-plan)
+- `AI accelerator / NPU`
+  - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
+  - [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+  - [plan/npu_tpu_accelerator_wave1_plan.md](plan/npu_tpu_accelerator_wave1_plan.md)
+  - [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
+  - [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
 - `debug / frontend`
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
   - [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)

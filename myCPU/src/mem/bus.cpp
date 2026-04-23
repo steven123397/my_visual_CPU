@@ -24,6 +24,43 @@ void record_unmapped_access(DebugBusAccess& access, bool write, uint64_t addr, u
     access.detail = "no device mapped for access";
 }
 
+DmaTransferResult make_dma_result(const DmaTransaction& transaction) {
+    DmaTransferResult result;
+    result.initiator = transaction.initiator != nullptr ? transaction.initiator : "<unknown>";
+    result.addr = transaction.addr;
+    result.requested_bytes = transaction.size;
+    result.direction = transaction.direction;
+    return result;
+}
+
+void fail_dma_result(
+    DmaTransferResult& result,
+    DmaFault fault,
+    const PhysicalRegionInfo& region,
+    const char* detail) {
+    result.ok = false;
+    result.fault = fault;
+    result.region = region;
+    result.detail = detail != nullptr ? detail : "";
+}
+
+bool validate_dma_request(const DmaTransaction& transaction, void* data, DmaTransferResult& result) {
+    if (transaction.initiator == nullptr || transaction.initiator[0] == '\0') {
+        fail_dma_result(result, DmaFault::InvalidArguments, {}, "missing DMA initiator");
+        return false;
+    }
+    if (transaction.size == 0) {
+        result.ok = true;
+        result.fault = DmaFault::None;
+        return false;
+    }
+    if (data == nullptr) {
+        fail_dma_result(result, DmaFault::InvalidArguments, {}, "null DMA buffer");
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 Bus::Bus(Ram& ram) {
@@ -123,56 +160,134 @@ bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
     return false;
 }
 
-bool Bus::dma_load_bytes(uint64_t addr, void* data, size_t size) {
-    if (size == 0) {
-        return true;
+DmaTransferResult Bus::dma_read(const DmaTransaction& transaction, void* data) {
+    DmaTransferResult result = make_dma_result(transaction);
+    result.direction = DmaDirection::Read;
+    if (!validate_dma_request(transaction, data, result)) {
+        return result;
     }
 
-    const PhysicalSpanInfo span = describe_span(addr, size);
-    if (!span.ok || !span.region.dma_visible || span.region.has_side_effect) {
-        return false;
+    const PhysicalSpanInfo span = describe_span(transaction.addr, transaction.size);
+    if (!span.ok) {
+        const DmaFault fault = span.region.kind == PhysicalRegionKind::Unmapped
+                                   ? DmaFault::Unmapped
+                                   : DmaFault::SpanCrossesRegionBoundary;
+        fail_dma_result(result, fault, span.region, "DMA span is not fully mapped");
+        return result;
+    }
+    if (span.region.has_side_effect) {
+        fail_dma_result(result, DmaFault::SideEffectRegion, span.region, "DMA rejects side-effect region");
+        return result;
+    }
+    if (!span.region.dma_visible) {
+        fail_dma_result(result, DmaFault::RegionNotDmaVisible, span.region, "region is not DMA visible");
+        return result;
+    }
+    if (transaction.burst && !span.region.supports_burst) {
+        fail_dma_result(result, DmaFault::BurstNotSupported, span.region, "region does not support DMA burst");
+        return result;
     }
 
-    Device* device = find_device(addr, 1);
+    Device* device = find_device(transaction.addr, 1);
     if (device == nullptr) {
-        return false;
+        fail_dma_result(result, DmaFault::Unmapped, span.region, "DMA start address is unmapped");
+        return result;
     }
 
     auto* bytes = static_cast<unsigned char*>(data);
-    for (size_t i = 0; i < size; ++i) {
+    for (size_t i = 0; i < transaction.size; ++i) {
         try {
-            bytes[i] = static_cast<unsigned char>(device->load(addr + i, 1) & 0xFFU);
-        } catch (const std::exception&) {
-            return false;
+            bytes[i] = static_cast<unsigned char>(device->load(transaction.addr + i, 1) & 0xFFU);
+            ++result.transferred_bytes;
+        } catch (const std::exception& ex) {
+            fail_dma_result(result, DmaFault::DeviceFault, span.region, ex.what());
+            return result;
         }
     }
-    return true;
+
+    result.ok = true;
+    result.fault = DmaFault::None;
+    result.region = span.region;
+    result.detail.clear();
+    return result;
 }
 
-bool Bus::dma_store_bytes(uint64_t addr, const void* data, size_t size) {
-    if (size == 0) {
-        return true;
+DmaTransferResult Bus::dma_write(const DmaTransaction& transaction, const void* data) {
+    DmaTransferResult result = make_dma_result(transaction);
+    result.direction = DmaDirection::Write;
+    if (!validate_dma_request(transaction, const_cast<void*>(data), result)) {
+        return result;
     }
 
-    const PhysicalSpanInfo span = describe_span(addr, size);
-    if (!span.ok || !span.region.dma_visible || span.region.has_side_effect) {
-        return false;
+    const PhysicalSpanInfo span = describe_span(transaction.addr, transaction.size);
+    if (!span.ok) {
+        const DmaFault fault = span.region.kind == PhysicalRegionKind::Unmapped
+                                   ? DmaFault::Unmapped
+                                   : DmaFault::SpanCrossesRegionBoundary;
+        fail_dma_result(result, fault, span.region, "DMA span is not fully mapped");
+        return result;
+    }
+    if (span.region.has_side_effect) {
+        fail_dma_result(result, DmaFault::SideEffectRegion, span.region, "DMA rejects side-effect region");
+        return result;
+    }
+    if (!span.region.dma_visible) {
+        fail_dma_result(result, DmaFault::RegionNotDmaVisible, span.region, "region is not DMA visible");
+        return result;
+    }
+    if (transaction.burst && !span.region.supports_burst) {
+        fail_dma_result(result, DmaFault::BurstNotSupported, span.region, "region does not support DMA burst");
+        return result;
     }
 
-    Device* device = find_device(addr, 1);
+    Device* device = find_device(transaction.addr, 1);
     if (device == nullptr) {
-        return false;
+        fail_dma_result(result, DmaFault::Unmapped, span.region, "DMA start address is unmapped");
+        return result;
     }
 
     const auto* bytes = static_cast<const unsigned char*>(data);
-    for (size_t i = 0; i < size; ++i) {
+    for (size_t i = 0; i < transaction.size; ++i) {
         try {
-            device->store(addr + i, bytes[i], 1);
-        } catch (const std::exception&) {
-            return false;
+            device->store(transaction.addr + i, bytes[i], 1);
+            ++result.transferred_bytes;
+        } catch (const std::exception& ex) {
+            fail_dma_result(result, DmaFault::DeviceFault, span.region, ex.what());
+            return result;
         }
     }
-    return true;
+
+    result.ok = true;
+    result.fault = DmaFault::None;
+    result.region = span.region;
+    result.detail.clear();
+    return result;
+}
+
+bool Bus::dma_load_bytes(uint64_t addr, void* data, size_t size, const char* initiator) {
+    return dma_read(
+               DmaTransaction{
+                   .initiator = initiator,
+                   .addr = addr,
+                   .size = size,
+                   .burst = size > 1,
+                   .direction = DmaDirection::Read,
+               },
+               data)
+        .ok;
+}
+
+bool Bus::dma_store_bytes(uint64_t addr, const void* data, size_t size, const char* initiator) {
+    return dma_write(
+               DmaTransaction{
+                   .initiator = initiator,
+                   .addr = addr,
+                   .size = size,
+                   .burst = size > 1,
+                   .direction = DmaDirection::Write,
+               },
+               data)
+        .ok;
 }
 
 

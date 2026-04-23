@@ -7,6 +7,7 @@
 #include "../debug/debug_snapshot.h"
 #include "../devices/device.h"
 #include "../platform/platform_events.h"
+#include "dma_transaction.h"
 #include "memory_region.h"
 
 class Ram;
@@ -21,8 +22,14 @@ public:
     PhysicalSpanInfo describe_span(uint64_t addr, uint64_t bytes) const;
     bool try_load(uint64_t addr, int size, uint64_t& value);
     bool try_store(uint64_t addr, uint64_t value, int size);
-    bool dma_load_bytes(uint64_t addr, void* data, size_t size);
-    bool dma_store_bytes(uint64_t addr, const void* data, size_t size);
+    DmaTransferResult dma_read(const DmaTransaction& transaction, void* data);
+    DmaTransferResult dma_write(const DmaTransaction& transaction, const void* data);
+    bool dma_load_bytes(uint64_t addr, void* data, size_t size, const char* initiator = "legacy-dma");
+    bool dma_store_bytes(
+        uint64_t addr,
+        const void* data,
+        size_t size,
+        const char* initiator = "legacy-dma");
     PlatformEvents peek_events() const;
     PlatformEvents tick();
     const DebugBusAccess& last_access() const;

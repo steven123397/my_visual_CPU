@@ -28,6 +28,7 @@
   - [phase3_ooo_execution_model_design.md](phase3_ooo_execution_model_design.md)
   - [pipeline_speculation_contracts.md](pipeline_speculation_contracts.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
+  - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
   - [phase4_preparation_design.md](phase4_preparation_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
@@ -81,6 +82,7 @@
 当前基线
   ├─ 默认延续线
   │    ├─ 向量 / ML workload 继续深化
+  │    ├─ 独立 `NPU / TPU-like` tensor accelerator 建模
   │    └─ P4-prep-2 / memory observation
   ├─ 候选切换线
   │    └─ 标准 OS bring-up（xv6-riscv）
@@ -165,9 +167,10 @@
 
 ## Phase B：Workload 升级
 
-定位：在现有基线之上，引入更高信号的 workload。当前仓库主要有两条候选方向：
+定位：在现有基线之上，引入更高信号的 workload。当前仓库主要有三条候选方向：
 
 - 继续沿向量 / ML workload 线深化
+- 继续把 AI workload 向独立 `NPU / TPU-like` 设备方向推进
 - 切到标准 OS bring-up 线
 
 ### B1：更完整的向量扩展
@@ -206,6 +209,20 @@
 | 候选增量 | Pooling、FC、多层网络串联、量化推理 |
 | 收益 | 为向量 pipeline、后续 memory observation 和教学演示提供更真实 workload 信号 |
 | 风险 | 若底层向量边界还不稳，workload 一扩就会把问题一起放大 |
+
+### B4：独立 `NPU / TPU-like` tensor accelerator
+
+**优先级**：中。它直接面向更专用的 AI 加速能力，但不应误读成“当前下一步立刻实现”。
+
+| 维度 | 说明 |
+|------|------|
+| 当前基线 | 当前已有 `V-lite`、固定 `CNN` demo、`Bus / Device / MMIO` 边界，以及 `P4-prep-1` 的 `memory_region` 合同 |
+| 目标 | 形成独立 `MMIO` AI 加速器：静态子图执行器、`scratchpad + DMA`、host / guest 共用 `descriptor / queue / completion` ABI |
+| 主要收益 | 更贴近真实 `NPU / TPU` 的结构价值，能同时承接 `CNN` 与 `GEMM / Transformer-like` 推理 workload |
+| 主要风险 | 需要更明确的 `DMA-ready` memory contract、图包格式、数值 golden model 与最小 driver / runtime 边界 |
+| 当前定位 | 未来候选方向；已经有正式设计边界，但不是当前已激活主线 |
+
+建议理解为：这条线不是替代 `V-lite`，而是把现有 `vector / ML` 语料继续向独立 AI 设备方向推进；如果未来真的启动，应按单独 design / plan / status 执行，而不是混在当前主线里顺手扩大。
 
 ---
 
@@ -300,7 +317,7 @@
 1. 常态维护 + bug-driven hardening
 2. 继续围绕 `V4` 现有边界做 observation / 补洞
 3. 在有更稳定 workload 之后，再评估 `C1` / `P4-prep-2`
-4. 由 workload 证据决定是否值得继续推进更完整的向量语义面或更后的 cache 路线
+4. 由 workload 证据决定是否值得继续推进更完整的向量语义面、独立 `NPU / TPU-like` tensor accelerator，或更后的 cache 路线
 
 这条线的优点是：与当前 design / status 文档的默认判断最一致，风险也最低。
 
@@ -339,6 +356,7 @@
 | ISA 补全面过大，分散精力 | reference path 质量下降 | 严格保持先 `functional` 后 `pipeline`；每个扩展独立门控 |
 | `xv6-riscv` 适配暴露大量 CSR / 平台缺口 | 工作量不可预测 | 作为候选切换主线单独启动，不混入当前默认延续线 |
 | 完整向量语义面扩得过快 | 验证与实现复杂度失控 | 继续先围绕已落地 `V4` 边界做更窄推进 |
+| 独立 `NPU / TPU-like` 方向过早实现 | 会把 DMA、graph package、driver ABI 和 profile 一次性放大 | 先把它收口成正式设计，只在优先级真正切换后单开专项 |
 | 各方向同时推进导致 reference path 不稳定 | 回归爆炸 | 每轮最多并行 2 ~ 3 个低交叉依赖方向 |
 
 ## 约束与边界
