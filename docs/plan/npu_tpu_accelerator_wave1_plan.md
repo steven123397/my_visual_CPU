@@ -1,6 +1,6 @@
 # `NPU / TPU-like` AI accelerator Wave 1 实现计划
 
-> **文档状态：** 执行中，任务 1-3 已完成（`2026-04-23` 已完成方向 design / status / wave 1 plan；同日已完成任务 1：`DMA-ready` memory contract，任务 2：静态 graph package 与 tensor golden model，以及任务 3：AI accelerator 控制面与 MMIO 设备骨架）
+> **文档状态：** 执行中，任务 1-5 已完成（`2026-04-23` 已完成方向 design / status / wave 1 plan；同日已完成任务 1：`DMA-ready` memory contract，任务 2：静态 graph package 与 tensor golden model，任务 3：AI accelerator 控制面与 MMIO 设备骨架，任务 4：scratchpad + DMA/load-store engine 与第一版 `timed-simple` DMA timing，以及任务 5：静态子图调度器、代表性 compute path 与第一版 `timed-simple` compute timing）
 >
 > **面向 AI 代理的工作者：** 推荐使用 `superpowers:subagent-driven-development` 或 `superpowers:executing-plans` 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法跟踪进度。
 
@@ -184,20 +184,24 @@
   - `myCPU/tests/host/ai_accelerator_dma_smoke.cpp`
 - 修改：
   - `myCPU/src/devices/ai_accelerator.cpp`
-  - `myCPU/src/devices/ai_submission_queue.cpp`
-  - `myCPU/src/mem/bus.h`
-  - `myCPU/src/mem/bus.cpp`
+  - `myCPU/tests/unit/ai_accelerator_mmio_contract.cpp`
+  - `myCPU/tests/host/ai_accelerator_submit_smoke.cpp`
   - `myCPU/Makefile`
 
-- [ ] **步骤 1：** 固定 scratchpad / accumulator / temporary buffer 的地址空间与生命周期，避免把局部状态散落到顶层设备。
-- [ ] **步骤 2：** 实现 `system RAM <-> scratchpad` 的 tiled DMA / load-store engine，并复用任务 1 的 `dma_transaction` contract。
-- [ ] **步骤 3：** 给 DMA path 接入第一版 `timed-simple` 周期开销：至少固定 `setup_cycles`、`dma_bytes_per_cycle` 与 `DMA load/store` 分项计数，不把数据搬运继续建模成“立即完成”。
-- [ ] **步骤 4：** 明确并测试 `scratchpad_overflow`、DMA fault、非法 tile shape 与 partial transfer fail-closed 语义。
-- [ ] **步骤 5：** 在 host smoke 中锁住“先搬运、后计算、再回写”的最小数据面闭环，并验证 DMA 相关计数器单调增长。
-- [ ] **步骤 6：** 运行：
+- 说明：
+  - 本轮 task 4 实际无需改 `ai_submission_queue` 或 `Bus`；现有 `dma_transaction + Bus::dma_read()/dma_write()` 合同已足够承接设备内 `scratchpad` 与 `DMA/load-store` engine。
+
+- [x] **步骤 1：** 固定 scratchpad / accumulator / temporary buffer 的地址空间与生命周期，避免把局部状态散落到顶层设备。
+- [x] **步骤 2：** 实现 `system RAM <-> scratchpad` 的 tiled DMA / load-store engine，并复用任务 1 的 `dma_transaction` contract。
+- [x] **步骤 3：** 给 DMA path 接入第一版 `timed-simple` 周期开销：至少固定 `setup_cycles`、`dma_bytes_per_cycle` 与 `DMA load/store` 分项计数，不把数据搬运继续建模成“立即完成”。
+- [x] **步骤 4：** 明确并测试 `scratchpad_overflow`、DMA fault、非法 tile shape 与 partial transfer fail-closed 语义。
+- [x] **步骤 5：** 在 host smoke 中锁住“先搬运、后计算、再回写”的最小数据面闭环，并验证 DMA 相关计数器单调增长。
+- [x] **步骤 6：** 运行：
   - `cd myCPU && make test-unit-ai_dma_engine`
   - `cd myCPU && make test-unit-ai_scratchpad`
   - `cd myCPU && make test-host-ai_accelerator_dma_smoke`
+  - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
+  - `cd myCPU && make test-host-ai_accelerator_submit_smoke`
   - `cd myCPU && make test`
 
 ### 任务 5：静态子图调度器与代表性 compute path
@@ -220,14 +224,18 @@
   - `myCPU/src/devices/ai_dma_engine.cpp`
   - `myCPU/Makefile`
 
-- [ ] **步骤 1：** 在调度器中只支持静态 shape、静态 dependency、离线 memory plan，不提前引入动态 shape。
-- [ ] **步骤 2：** 先接一组最小 compute primitive：`gemm`、`conv2d`、`eltwise(relu)`、`pool / reduce`、`layout transform`。
-- [ ] **步骤 3：** 给 compute path 接入 `timed-simple` compute 周期模型，至少明确 `retired_ops / MACs / tile` 到 `compute_cycles` 的映射，以及 `DMA + compute` 是否允许重叠。
-- [ ] **步骤 4：** `v1` 只要求代表性闭环，而不是所有 op × 所有 dtype 铺满；先锁住：
+- 说明：
+  - 本轮 task 5 实际无需改 `ai_graph_package.cpp` 或 `ai_dma_engine.cpp`；现有 graph package / DMA 合同已足够承接第一版静态调度器与 compute path。
+  - 第一版 `timed-simple` compute timing 当前明确采用 `DMA + compute` **不重叠** 的保守语义；`stall_cycles` 已作为只读计数器接线，但本轮代表性 workload 下仍保持为 `0`。
+
+- [x] **步骤 1：** 在调度器中只支持静态 shape、静态 dependency、离线 memory plan，不提前引入动态 shape。
+- [x] **步骤 2：** 先接一组最小 compute primitive：`gemm`、`conv2d`、`eltwise(relu)`、`pool / reduce`、`layout transform`。
+- [x] **步骤 3：** 给 compute path 接入 `timed-simple` compute 周期模型，至少明确 `retired_ops / MACs / tile` 到 `compute_cycles` 的映射，以及 `DMA + compute` 是否允许重叠。
+- [x] **步骤 4：** `v1` 只要求代表性闭环，而不是所有 op × 所有 dtype 铺满；先锁住：
   - 一条 quantized `CNN`
   - 一条 semi-precision `GEMM / matmul-family`
-- [ ] **步骤 5：** 在 host smoke 中固化 `CNN` 和 `GEMM / Transformer-like` 两类固定 workload 的输出、fault 行为和基础 timing counter 语义。
-- [ ] **步骤 6：** 运行：
+- [x] **步骤 5：** 在 host smoke 中固化 `CNN` 和 `GEMM / Transformer-like` 两类固定 workload 的输出、fault 行为和基础 timing counter 语义。
+- [x] **步骤 6：** 运行：
   - `cd myCPU && make test-host-ai_accelerator_cnn_smoke`
   - `cd myCPU && make test-host-ai_accelerator_gemm_smoke`
   - `cd myCPU && make test`

@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-#include "../../src/debug/debug_protocol.h"
 #include "../../src/devices/ai_accelerator.h"
 #include "../../src/devices/ai_graph_package.h"
 #include "../../src/devices/ai_submission_queue.h"
@@ -18,19 +17,11 @@ constexpr uint64_t kCompleteQueueAddr = MEM_BASE + 0x14000;
 constexpr uint64_t kGraphPackageAddr = MEM_BASE + 0x16000;
 constexpr uint64_t kInputTableAddr = MEM_BASE + 0x18000;
 constexpr uint64_t kOutputTableAddr = MEM_BASE + 0x18100;
-constexpr uint64_t kInputTensorAddr = MEM_BASE + 0x1A000;
-constexpr uint64_t kOutputTensorAddr = MEM_BASE + 0x1B000;
+constexpr uint64_t kInputTensorAddr = MEM_BASE + 0x1a000;
+constexpr uint64_t kOutputTensorAddr = MEM_BASE + 0x1b000;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
-        std::fprintf(stderr, "%s\n", message);
-        return false;
-    }
-    return true;
-}
-
-bool expect_contains(const std::string& text, const char* needle, const char* message) {
-    if (text.find(needle) == std::string::npos) {
         std::fprintf(stderr, "%s\n", message);
         return false;
     }
@@ -52,6 +43,13 @@ bool load_u32(Bus& bus, uint64_t addr, uint32_t expected, const char* message) {
         return false;
     }
     return true;
+}
+
+bool load_counter(Bus& bus, uint64_t low_reg, uint64_t high_reg, uint64_t& value) {
+    uint64_t low = 0;
+    uint64_t high = 0;
+    return bus.try_load(low_reg, 4, low) && bus.try_load(high_reg, 4, high) &&
+           ((value = (high << 32) | static_cast<uint32_t>(low)), true);
 }
 
 bool store_bytes(Bus& bus, uint64_t addr, const void* data, size_t size) {
@@ -180,16 +178,17 @@ int main() {
         const std::array<uint8_t, 8> input_tensor{{1, 2, 3, 4, 5, 6, 7, 8}};
         const std::array<uint8_t, 8> zero_tensor{{0, 0, 0, 0, 0, 0, 0, 0}};
         const AiSubmissionDescriptor descriptor{
-            .token = 0x7777ULL,
+            .token = 0x12345678ULL,
             .graph_package_addr = kGraphPackageAddr,
             .graph_package_bytes = graph_package_size,
             .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
             .input_table_addr = kInputTableAddr,
             .output_table_addr = kOutputTableAddr,
-            .source_tag = 11,
+            .source_tag = 19,
         };
         std::array<uint8_t, kAiSubmissionDescriptorBytes> descriptor_bytes{};
         encode_ai_submission_descriptor(descriptor, descriptor_bytes);
+
         if (!store_bytes(bus, kSubmitQueueAddr, descriptor_bytes.data(), descriptor_bytes.size()) ||
             !store_bytes(bus, kGraphPackageAddr, graph_package_bytes.data(), graph_package_bytes.size()) ||
             !store_bytes(bus, kInputTableAddr, input_table.data(), sizeof(input_table)) ||
@@ -205,17 +204,73 @@ int main() {
                       AI_ACCEL_BASE + AI_ACCEL_REG_STATUS,
                       AI_ACCEL_STATUS_READY | AI_ACCEL_STATUS_BUSY,
                       "expected AI accelerator busy after doorbell") ||
+            !load_u32(bus, AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_HEAD, 0, "expected async submit head") ||
             !load_u32(bus, AI_ACCEL_BASE + AI_ACCEL_REG_COMPLETE_QUEUE_TAIL, 0, "expected async completion tail")) {
             return 1;
         }
+
+        uint64_t prev_device_cycles = 0;
+        uint64_t prev_dma_cycles = 0;
+        uint64_t prev_dma_load_cycles = 0;
+        uint64_t prev_dma_store_cycles = 0;
+        uint64_t prev_dma_load_bytes = 0;
+        uint64_t prev_dma_store_bytes = 0;
         bool completed = false;
         for (int i = 0; i < 64; ++i) {
             bus.tick();
-            uint64_t tail = 0;
-            if (!bus.try_load(AI_ACCEL_BASE + AI_ACCEL_REG_COMPLETE_QUEUE_TAIL, 4, tail)) {
+
+            uint64_t device_cycles = 0;
+            uint64_t dma_cycles = 0;
+            uint64_t dma_load_cycles = 0;
+            uint64_t dma_store_cycles = 0;
+            uint64_t dma_load_bytes = 0;
+            uint64_t dma_store_bytes = 0;
+            if (!load_counter(bus,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DEVICE_CYCLES_LOW,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DEVICE_CYCLES_HIGH,
+                              device_cycles) ||
+                !load_counter(bus,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_CYCLES_LOW,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_CYCLES_HIGH,
+                              dma_cycles) ||
+                !load_counter(bus,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_LOAD_CYCLES_LOW,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_LOAD_CYCLES_HIGH,
+                              dma_load_cycles) ||
+                !load_counter(bus,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_STORE_CYCLES_LOW,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_STORE_CYCLES_HIGH,
+                              dma_store_cycles) ||
+                !load_counter(bus,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_LOAD_BYTES_LOW,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_LOAD_BYTES_HIGH,
+                              dma_load_bytes) ||
+                !load_counter(bus,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_STORE_BYTES_LOW,
+                              AI_ACCEL_BASE + AI_ACCEL_REG_DMA_STORE_BYTES_HIGH,
+                              dma_store_bytes)) {
                 return 1;
             }
-            if (tail == 1) {
+            if (!expect(device_cycles >= prev_device_cycles, "expected monotonic device cycles") ||
+                !expect(dma_cycles >= prev_dma_cycles, "expected monotonic DMA cycles") ||
+                !expect(dma_load_cycles >= prev_dma_load_cycles, "expected monotonic DMA load cycles") ||
+                !expect(dma_store_cycles >= prev_dma_store_cycles, "expected monotonic DMA store cycles") ||
+                !expect(dma_load_bytes >= prev_dma_load_bytes, "expected monotonic DMA load bytes") ||
+                !expect(dma_store_bytes >= prev_dma_store_bytes, "expected monotonic DMA store bytes")) {
+                return 1;
+            }
+            prev_device_cycles = device_cycles;
+            prev_dma_cycles = dma_cycles;
+            prev_dma_load_cycles = dma_load_cycles;
+            prev_dma_store_cycles = dma_store_cycles;
+            prev_dma_load_bytes = dma_load_bytes;
+            prev_dma_store_bytes = dma_store_bytes;
+
+            uint64_t completion_tail = 0;
+            if (!bus.try_load(AI_ACCEL_BASE + AI_ACCEL_REG_COMPLETE_QUEUE_TAIL, 4, completion_tail)) {
+                return 1;
+            }
+            if (completion_tail == 1) {
                 completed = true;
                 break;
             }
@@ -223,35 +278,23 @@ int main() {
 
         std::array<uint8_t, kAiCompletionEntryBytes> completion_bytes{};
         AiCompletionEntry completion{};
-        uint64_t claimed = 0;
-        if (!expect(completed, "expected async AI accelerator completion") ||
-            !load_bytes(bus, kCompleteQueueAddr, completion_bytes.data(), completion_bytes.size())) {
+        std::array<uint8_t, 8> output_tensor{};
+        if (!expect(completed, "expected AI accelerator DMA smoke to complete") ||
+            !load_bytes(bus, kCompleteQueueAddr, completion_bytes.data(), completion_bytes.size()) ||
+            !load_bytes(bus, kOutputTensorAddr, output_tensor.data(), output_tensor.size())) {
             return 1;
         }
         decode_ai_completion_entry(completion_bytes, completion);
-        if (!expect(completion.token == descriptor.token, "expected host completion token") ||
-            !expect(completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, "expected host completion success") ||
-            !expect(completion.bytes_moved == 16, "expected DMA byte accounting in completion") ||
-            !expect(machine.ai_accelerator().completion_count() == 1, "expected machine AI completion count") ||
-            !expect(machine.ai_accelerator().doorbell_count() == 1, "expected machine AI doorbell count") ||
-            !expect(machine.plic().supervisor_has_pending(), "expected AI accelerator supervisor IRQ") ||
-            !expect(bus.try_load(PLIC_BASE + PLIC_CLAIM_OFFSET(PLIC_CONTEXT_SUPERVISOR), 4, claimed) &&
-                        claimed == AI_ACCEL_PLIC_SOURCE,
-                    "expected AI accelerator PLIC claim")) {
+        if (!expect(completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, "expected successful DMA completion") ||
+            !expect(completion.bytes_moved == 16, "expected DMA completion byte accounting") ||
+            !expect(output_tensor == input_tensor, "expected DMA roundtrip output bytes") ||
+            !expect(machine.ai_accelerator().completion_count() == 1, "expected completion count") ||
+            !expect(machine.ai_accelerator().doorbell_count() == 1, "expected doorbell count") ||
+            !expect(machine.plic().supervisor_has_pending(), "expected DMA completion IRQ")) {
             return 1;
         }
 
-        DebugSnapshot snapshot{};
-        snapshot.devices.ai_accelerator = machine.ai_accelerator().debug_snapshot();
-        const std::string json = debug_snapshot_json(snapshot);
-        if (!expect_contains(json, "\"ai_accelerator\":{", "expected AI debug snapshot object") ||
-            !expect_contains(json, "\"queue_depth\":0", "expected AI queue depth in debug JSON") ||
-            !expect_contains(json, "\"doorbell_count\":1", "expected AI doorbell count in debug JSON") ||
-            !expect_contains(json, "\"completion_count\":1", "expected AI completion count in debug JSON")) {
-            return 1;
-        }
-
-        std::puts("ai_accelerator_submit_smoke: PASS");
+        std::puts("ai_accelerator_dma_smoke: PASS");
         return 0;
     } catch (const std::exception& ex) {
         std::fprintf(stderr, "%s\n", ex.what());

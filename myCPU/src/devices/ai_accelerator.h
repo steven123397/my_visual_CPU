@@ -1,7 +1,12 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
+#include "ai_dma_engine.h"
+#include "ai_graph_package.h"
+#include "ai_graph_scheduler.h"
 #include "ai_submission_queue.h"
 #include "device.h"
 #include "../debug/debug_snapshot.h"
@@ -40,6 +45,24 @@ inline constexpr uint32_t AI_ACCEL_REG_SUBMISSION_COUNT_LOW = 0x068;
 inline constexpr uint32_t AI_ACCEL_REG_SUBMISSION_COUNT_HIGH = 0x06c;
 inline constexpr uint32_t AI_ACCEL_REG_FAULT_COUNT_LOW = 0x070;
 inline constexpr uint32_t AI_ACCEL_REG_FAULT_COUNT_HIGH = 0x074;
+inline constexpr uint32_t AI_ACCEL_REG_DEVICE_CYCLES_LOW = 0x078;
+inline constexpr uint32_t AI_ACCEL_REG_DEVICE_CYCLES_HIGH = 0x07c;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_CYCLES_LOW = 0x080;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_CYCLES_HIGH = 0x084;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_LOAD_CYCLES_LOW = 0x088;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_LOAD_CYCLES_HIGH = 0x08c;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_STORE_CYCLES_LOW = 0x090;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_STORE_CYCLES_HIGH = 0x094;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_LOAD_BYTES_LOW = 0x098;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_LOAD_BYTES_HIGH = 0x09c;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_STORE_BYTES_LOW = 0x0a0;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_STORE_BYTES_HIGH = 0x0a4;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_SETUP_CYCLES = 0x0a8;
+inline constexpr uint32_t AI_ACCEL_REG_DMA_BYTES_PER_CYCLE = 0x0ac;
+inline constexpr uint32_t AI_ACCEL_REG_COMPUTE_CYCLES_LOW = 0x0b0;
+inline constexpr uint32_t AI_ACCEL_REG_COMPUTE_CYCLES_HIGH = 0x0b4;
+inline constexpr uint32_t AI_ACCEL_REG_STALL_CYCLES_LOW = 0x0b8;
+inline constexpr uint32_t AI_ACCEL_REG_STALL_CYCLES_HIGH = 0x0bc;
 
 inline constexpr uint32_t AI_ACCEL_CONTROL_RESET = 0x1;
 
@@ -63,6 +86,22 @@ inline constexpr uint32_t AI_ACCEL_CAPABILITIES =
 
 inline constexpr uint32_t AI_ACCEL_MAX_GRAPH_PACKAGE_BYTES = 1024 * 1024;
 
+struct AiActiveSubmissionState {
+    AiSubmissionDescriptor descriptor{};
+    AiGraphPackage package{};
+    std::vector<uint64_t> tensor_system_bases{};
+    std::vector<AiMemoryPlanEntry> load_entries{};
+    std::vector<AiMemoryPlanEntry> store_entries{};
+    size_t next_load_index{0};
+    size_t next_store_index{0};
+    bool compute_started{false};
+    bool compute_complete{false};
+    uint64_t bytes_moved{0};
+    uint64_t retired_ops{0};
+    uint64_t compute_cycles_remaining{0};
+    uint64_t stall_cycles_remaining{0};
+};
+
 class AiAccelerator : public Device {
 public:
     AiAccelerator(Plic& plic,
@@ -74,6 +113,7 @@ public:
 
     uint64_t load(uint64_t addr, int size) override;
     void store(uint64_t addr, uint64_t value, int size) override;
+    PlatformEvents tick() override;
     const char* debug_name() const override {
         return "ai_accelerator";
     }
@@ -84,15 +124,43 @@ public:
     DebugAiAcceleratorSnapshot debug_snapshot() const;
 
 private:
+    bool is_busy() const;
     uint32_t status() const;
     uint32_t counter_low(uint64_t value) const;
     uint32_t counter_high(uint64_t value) const;
     void write_queue_base_low(bool submission, uint32_t value);
     void write_queue_base_high(bool submission, uint32_t value);
     void ring_doorbell(uint32_t budget);
-    void process_one_submission();
+    void pump_queue();
+    bool begin_submission();
+    bool prepare_active_submission(const AiSubmissionDescriptor& descriptor,
+                                   uint32_t& fault,
+                                   uint32_t& detail);
+    bool read_graph_package_bytes(uint64_t addr,
+                                  uint32_t size,
+                                  std::vector<uint8_t>& bytes,
+                                  std::string& error) const;
+    bool read_u64_dma(uint64_t addr, uint64_t& value, std::string& error) const;
+    bool resolve_tensor_base(const AiSubmissionDescriptor& descriptor,
+                             const AiTensorMetadata& tensor,
+                             uint16_t tensor_index,
+                             uint64_t& system_addr,
+                             uint32_t& fault,
+                             uint32_t& detail) const;
+    bool start_compute(uint32_t& fault, uint32_t& detail);
+    bool start_next_transfer(uint32_t& fault, uint32_t& detail);
+    bool complete_descriptor(const AiSubmissionDescriptor& descriptor,
+                             uint32_t fault,
+                             uint32_t detail,
+                             uint64_t bytes_moved,
+                             uint64_t retired_ops);
     uint32_t validate_descriptor(const AiSubmissionDescriptor& descriptor) const;
-    bool write_completion(const AiSubmissionDescriptor& descriptor, uint32_t fault);
+    uint32_t graph_package_fault(const std::string& error) const;
+    bool write_completion(const AiSubmissionDescriptor& descriptor,
+                          uint32_t fault,
+                          uint64_t bytes_moved,
+                          uint64_t retired_ops);
+    void clear_active_submission();
     void set_fault(uint32_t fault, uint32_t detail);
     void clear_fault();
     void reset_device();
@@ -102,13 +170,21 @@ private:
     uint32_t irq_source_{0};
     Bus* bus_{nullptr};
     AiSubmissionQueue queue_{};
+    AiScratchpad scratchpad_{};
+    AiDmaEngine dma_engine_;
+    AiGraphScheduler scheduler_{scratchpad_};
     uint32_t irq_status_{0};
     uint32_t irq_mask_{AI_ACCEL_IRQ_ALL};
     uint32_t last_fault_{AI_ACCEL_FAULT_NONE};
     uint32_t fault_detail_{0};
-    bool busy_{false};
+    uint32_t pending_submission_budget_{0};
+    AiActiveSubmissionState active_submission_{};
+    bool active_submission_valid_{false};
     uint64_t doorbell_count_{0};
     uint64_t submission_count_{0};
     uint64_t completion_count_{0};
     uint64_t fault_count_{0};
+    uint64_t device_cycles_{0};
+    uint64_t compute_cycles_{0};
+    uint64_t stall_cycles_{0};
 };

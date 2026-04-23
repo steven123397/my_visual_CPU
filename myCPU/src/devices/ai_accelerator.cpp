@@ -1,6 +1,8 @@
 #include "ai_accelerator.h"
 
 #include <algorithm>
+#include <array>
+#include <limits>
 #include <stdexcept>
 
 #include "plic.h"
@@ -19,13 +21,34 @@ uint64_t combine_u32(uint64_t current, uint32_t value, bool high) {
     return (current & (UINT64_C(0xffffffff) << 32)) | value;
 }
 
+bool add_u64_u32(uint64_t base, uint32_t offset, uint64_t& result) {
+    result = base + static_cast<uint64_t>(offset);
+    return result >= base;
+}
+
+uint64_t read_le_u64(const uint8_t* bytes) {
+    uint64_t value = 0;
+    for (size_t i = 0; i < 8; ++i) {
+        value |= static_cast<uint64_t>(bytes[i]) << (8 * i);
+    }
+    return value;
+}
+
+uint32_t saturating_u32(size_t value) {
+    const size_t max = static_cast<size_t>(std::numeric_limits<uint32_t>::max());
+    return static_cast<uint32_t>(std::min(value, max));
+}
+
 }  // namespace
 
 AiAccelerator::AiAccelerator(Plic& plic,
                              uint32_t irq_source,
                              uint64_t base,
                              uint64_t size)
-    : Device(base, size), plic_(plic), irq_source_(irq_source) {}
+    : Device(base, size),
+      plic_(plic),
+      irq_source_(irq_source),
+      dma_engine_(scratchpad_) {}
 
 void AiAccelerator::bind_bus(Bus& bus) {
     bus_ = &bus;
@@ -36,6 +59,7 @@ uint64_t AiAccelerator::load(uint64_t addr, int size) {
         invalid_access(addr, size);
     }
 
+    const AiDmaCounters& dma = dma_engine_.counters();
     const uint32_t offset = static_cast<uint32_t>(addr - base());
     switch (offset) {
     case AI_ACCEL_REG_MAGIC:
@@ -94,6 +118,42 @@ uint64_t AiAccelerator::load(uint64_t addr, int size) {
         return counter_low(fault_count_);
     case AI_ACCEL_REG_FAULT_COUNT_HIGH:
         return counter_high(fault_count_);
+    case AI_ACCEL_REG_DEVICE_CYCLES_LOW:
+        return counter_low(device_cycles_);
+    case AI_ACCEL_REG_DEVICE_CYCLES_HIGH:
+        return counter_high(device_cycles_);
+    case AI_ACCEL_REG_DMA_CYCLES_LOW:
+        return counter_low(dma.total_cycles);
+    case AI_ACCEL_REG_DMA_CYCLES_HIGH:
+        return counter_high(dma.total_cycles);
+    case AI_ACCEL_REG_COMPUTE_CYCLES_LOW:
+        return counter_low(compute_cycles_);
+    case AI_ACCEL_REG_COMPUTE_CYCLES_HIGH:
+        return counter_high(compute_cycles_);
+    case AI_ACCEL_REG_STALL_CYCLES_LOW:
+        return counter_low(stall_cycles_);
+    case AI_ACCEL_REG_STALL_CYCLES_HIGH:
+        return counter_high(stall_cycles_);
+    case AI_ACCEL_REG_DMA_LOAD_CYCLES_LOW:
+        return counter_low(dma.load_cycles);
+    case AI_ACCEL_REG_DMA_LOAD_CYCLES_HIGH:
+        return counter_high(dma.load_cycles);
+    case AI_ACCEL_REG_DMA_STORE_CYCLES_LOW:
+        return counter_low(dma.store_cycles);
+    case AI_ACCEL_REG_DMA_STORE_CYCLES_HIGH:
+        return counter_high(dma.store_cycles);
+    case AI_ACCEL_REG_DMA_LOAD_BYTES_LOW:
+        return counter_low(dma.load_bytes);
+    case AI_ACCEL_REG_DMA_LOAD_BYTES_HIGH:
+        return counter_high(dma.load_bytes);
+    case AI_ACCEL_REG_DMA_STORE_BYTES_LOW:
+        return counter_low(dma.store_bytes);
+    case AI_ACCEL_REG_DMA_STORE_BYTES_HIGH:
+        return counter_high(dma.store_bytes);
+    case AI_ACCEL_REG_DMA_SETUP_CYCLES:
+        return dma_engine_.timing().setup_cycles;
+    case AI_ACCEL_REG_DMA_BYTES_PER_CYCLE:
+        return dma_engine_.timing().bytes_per_cycle;
     default:
         invalid_access(addr, size);
     }
@@ -120,6 +180,9 @@ void AiAccelerator::store(uint64_t addr, uint64_t value, int size) {
         return;
     case AI_ACCEL_REG_SUBMIT_QUEUE_SIZE:
         queue_.set_submission_size(value32);
+        pending_submission_budget_ = 0;
+        clear_active_submission();
+        dma_engine_.reset();
         return;
     case AI_ACCEL_REG_SUBMIT_QUEUE_TAIL:
         queue_.set_submission_tail(value32);
@@ -132,6 +195,9 @@ void AiAccelerator::store(uint64_t addr, uint64_t value, int size) {
         return;
     case AI_ACCEL_REG_COMPLETE_QUEUE_SIZE:
         queue_.set_completion_size(value32);
+        pending_submission_budget_ = 0;
+        clear_active_submission();
+        dma_engine_.reset();
         return;
     case AI_ACCEL_REG_COMPLETE_QUEUE_HEAD:
         queue_.set_completion_head(value32);
@@ -150,6 +216,12 @@ void AiAccelerator::store(uint64_t addr, uint64_t value, int size) {
     default:
         invalid_access(addr, size);
     }
+}
+
+PlatformEvents AiAccelerator::tick() {
+    pump_queue();
+    update_interrupt_line();
+    return {};
 }
 
 uint64_t AiAccelerator::doorbell_count() const {
@@ -174,9 +246,13 @@ DebugAiAcceleratorSnapshot AiAccelerator::debug_snapshot() const {
     };
 }
 
+bool AiAccelerator::is_busy() const {
+    return dma_engine_.busy() || active_submission_valid_ || pending_submission_budget_ != 0;
+}
+
 uint32_t AiAccelerator::status() const {
     uint32_t value = AI_ACCEL_STATUS_READY;
-    if (busy_) {
+    if (is_busy()) {
         value |= AI_ACCEL_STATUS_BUSY;
     }
     if (last_fault_ != AI_ACCEL_FAULT_NONE) {
@@ -229,33 +305,404 @@ void AiAccelerator::ring_doorbell(uint32_t budget) {
 
     const uint32_t requested = budget == 0 ? queue_.pending_depth() : budget;
     const uint32_t count = std::min<uint32_t>(requested, queue_.pending_depth());
-    busy_ = true;
-    for (uint32_t i = 0; i < count; ++i) {
-        process_one_submission();
+    if (count == 0) {
+        update_interrupt_line();
+        return;
     }
-    busy_ = false;
+    pending_submission_budget_ = std::min<uint32_t>(kAiQueueMaxEntries, pending_submission_budget_ + count);
+    pump_queue();
     update_interrupt_line();
 }
 
-void AiAccelerator::process_one_submission() {
-    AiSubmissionDescriptor descriptor{};
-    std::string error;
-    uint32_t fault = AI_ACCEL_FAULT_NONE;
+void AiAccelerator::pump_queue() {
+    if (bus_ == nullptr) {
+        return;
+    }
 
+    while (true) {
+        if (dma_engine_.busy()) {
+            const AiDmaTickResult step = dma_engine_.tick(*bus_);
+            ++device_cycles_;
+            if (!step.completed) {
+                return;
+            }
+            if (step.faulted) {
+                const uint32_t detail = saturating_u32(step.dma_result.transferred_bytes);
+                const bool completion_ok = complete_descriptor(
+                    active_submission_.descriptor,
+                    step.fault_code,
+                    detail,
+                    active_submission_.bytes_moved,
+                    active_submission_.retired_ops);
+                clear_active_submission();
+                if (!completion_ok) {
+                    return;
+                }
+                continue;
+            }
+            active_submission_.bytes_moved += step.bytes_moved;
+            if (step.kind == AiDmaTransferKind::Load) {
+                ++active_submission_.next_load_index;
+            } else {
+                ++active_submission_.next_store_index;
+            }
+        }
+
+        if (!active_submission_valid_) {
+            if (pending_submission_budget_ == 0) {
+                return;
+            }
+            if (queue_.pending_depth() == 0) {
+                pending_submission_budget_ = 0;
+                return;
+            }
+            if (!begin_submission()) {
+                if (pending_submission_budget_ == 0) {
+                    return;
+                }
+                continue;
+            }
+        }
+
+        uint32_t fault = AI_ACCEL_FAULT_NONE;
+        uint32_t detail = 0;
+        if (active_submission_valid_ && active_submission_.compute_started &&
+            !active_submission_.compute_complete) {
+            if (active_submission_.stall_cycles_remaining != 0) {
+                --active_submission_.stall_cycles_remaining;
+                ++stall_cycles_;
+                ++device_cycles_;
+                if (active_submission_.stall_cycles_remaining != 0) {
+                    return;
+                }
+            }
+            if (active_submission_.compute_cycles_remaining != 0) {
+                --active_submission_.compute_cycles_remaining;
+                ++compute_cycles_;
+                ++device_cycles_;
+                if (active_submission_.compute_cycles_remaining != 0) {
+                    return;
+                }
+            }
+            if (active_submission_.stall_cycles_remaining == 0 &&
+                active_submission_.compute_cycles_remaining == 0) {
+                active_submission_.compute_complete = true;
+            }
+        }
+        if (start_next_transfer(fault, detail)) {
+            return;
+        }
+        const bool completion_ok = complete_descriptor(
+            active_submission_.descriptor,
+            fault,
+            detail,
+            active_submission_.bytes_moved,
+            active_submission_.retired_ops);
+        clear_active_submission();
+        if (!completion_ok) {
+            return;
+        }
+    }
+}
+
+bool AiAccelerator::begin_submission() {
+    if (pending_submission_budget_ == 0 || bus_ == nullptr) {
+        return false;
+    }
     if (!queue_.completion_has_space()) {
         set_fault(AI_ACCEL_FAULT_COMPLETION_QUEUE_FULL, 0);
         irq_status_ |= AI_ACCEL_IRQ_FAULT;
-        return;
-    }
-    if (!queue_.read_next_submission(*bus_, descriptor, error)) {
-        fault = AI_ACCEL_FAULT_DMA;
-        descriptor = AiSubmissionDescriptor{};
-    } else {
-        fault = validate_descriptor(descriptor);
+        pending_submission_budget_ = 0;
+        return false;
     }
 
-    if (!write_completion(descriptor, fault)) {
-        return;
+    --pending_submission_budget_;
+
+    AiSubmissionDescriptor descriptor{};
+    std::string error;
+    if (!queue_.read_next_submission(*bus_, descriptor, error)) {
+        complete_descriptor(AiSubmissionDescriptor{}, AI_ACCEL_FAULT_DMA, 0, 0, 0);
+        return false;
+    }
+
+    const uint32_t fault = validate_descriptor(descriptor);
+    if (fault != AI_ACCEL_FAULT_NONE) {
+        complete_descriptor(descriptor, fault, descriptor.graph_package_bytes, 0, 0);
+        return false;
+    }
+
+    uint32_t prepare_fault = AI_ACCEL_FAULT_NONE;
+    uint32_t detail = 0;
+    if (!prepare_active_submission(descriptor, prepare_fault, detail)) {
+        complete_descriptor(descriptor, prepare_fault, detail, 0, 0);
+        return false;
+    }
+    return true;
+}
+
+bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& descriptor,
+                                              uint32_t& fault,
+                                              uint32_t& detail) {
+    fault = AI_ACCEL_FAULT_NONE;
+    detail = 0;
+
+    std::vector<uint8_t> bytes;
+    std::string error;
+    if (!read_graph_package_bytes(descriptor.graph_package_addr,
+                                  descriptor.graph_package_bytes,
+                                  bytes,
+                                  error)) {
+        fault = AI_ACCEL_FAULT_DMA;
+        return false;
+    }
+
+    AiGraphPackage package{};
+    if (!parse_ai_graph_package(bytes, package, error)) {
+        fault = graph_package_fault(error);
+        detail = descriptor.graph_package_bytes;
+        return false;
+    }
+
+    scratchpad_.configure(package.scratchpad_budget_bytes);
+
+    AiActiveSubmissionState next{};
+    next.descriptor = descriptor;
+    next.package = std::move(package);
+    next.tensor_system_bases.assign(next.package.tensors.size(), 0);
+
+    for (const AiMemoryPlanEntry& entry : next.package.memory_plan) {
+        const AiTensorMetadata& tensor = next.package.tensors[entry.tensor_index];
+        if (tensor.role == AiTensorRole::Intermediate) {
+            continue;
+        }
+
+        uint64_t system_addr = 0;
+        if (!resolve_tensor_base(descriptor, tensor, entry.tensor_index, system_addr, fault, detail)) {
+            return false;
+        }
+        next.tensor_system_bases[entry.tensor_index] = system_addr;
+        if (tensor.role == AiTensorRole::Output) {
+            next.store_entries.push_back(entry);
+        } else {
+            next.load_entries.push_back(entry);
+        }
+    }
+
+    active_submission_ = std::move(next);
+    active_submission_valid_ = true;
+    return true;
+}
+
+bool AiAccelerator::read_graph_package_bytes(uint64_t addr,
+                                             uint32_t size,
+                                             std::vector<uint8_t>& bytes,
+                                             std::string& error) const {
+    bytes.assign(size, 0);
+    DmaTransferResult result = bus_->dma_read(
+        DmaTransaction{
+            .initiator = "ai-accelerator-graph",
+            .addr = addr,
+            .size = size,
+            .burst = size > 1,
+            .direction = DmaDirection::Read,
+        },
+        bytes.data());
+    if (!result.ok) {
+        error = result.detail.empty() ? "AI graph package DMA read failed" : result.detail;
+        return false;
+    }
+    return true;
+}
+
+bool AiAccelerator::read_u64_dma(uint64_t addr, uint64_t& value, std::string& error) const {
+    std::array<uint8_t, 8> bytes{};
+    DmaTransferResult result = bus_->dma_read(
+        DmaTransaction{
+            .initiator = "ai-accelerator-table",
+            .addr = addr,
+            .size = bytes.size(),
+            .burst = true,
+            .direction = DmaDirection::Read,
+        },
+        bytes.data());
+    if (!result.ok) {
+        error = result.detail.empty() ? "AI address table DMA read failed" : result.detail;
+        return false;
+    }
+    value = read_le_u64(bytes.data());
+    return true;
+}
+
+bool AiAccelerator::resolve_tensor_base(const AiSubmissionDescriptor& descriptor,
+                                        const AiTensorMetadata& tensor,
+                                        uint16_t tensor_index,
+                                        uint64_t& system_addr,
+                                        uint32_t& fault,
+                                        uint32_t& detail) const {
+    uint64_t table_base = 0;
+    switch (tensor.role) {
+    case AiTensorRole::Input:
+    case AiTensorRole::Weight:
+    case AiTensorRole::Constant:
+        table_base = descriptor.input_table_addr;
+        break;
+    case AiTensorRole::Output:
+        table_base = descriptor.output_table_addr;
+        break;
+    case AiTensorRole::Intermediate:
+    case AiTensorRole::Invalid:
+        system_addr = 0;
+        return true;
+    }
+
+    if (table_base == 0) {
+        fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+        detail = tensor_index;
+        return false;
+    }
+
+    uint64_t table_entry_addr = 0;
+    if (!add_u64_u32(table_base, static_cast<uint32_t>(tensor_index) * 8U, table_entry_addr)) {
+        fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+        detail = tensor_index;
+        return false;
+    }
+
+    std::string error;
+    if (!read_u64_dma(table_entry_addr, system_addr, error)) {
+        fault = AI_ACCEL_FAULT_DMA;
+        detail = tensor_index;
+        return false;
+    }
+    if (system_addr == 0) {
+        fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+        detail = tensor_index;
+        return false;
+    }
+    return true;
+}
+
+bool AiAccelerator::start_next_transfer(uint32_t& fault, uint32_t& detail) {
+    fault = AI_ACCEL_FAULT_NONE;
+    detail = 0;
+
+    if (!active_submission_valid_) {
+        fault = AI_ACCEL_FAULT_EXECUTION;
+        return false;
+    }
+    if (dma_engine_.busy()) {
+        return true;
+    }
+
+    if (active_submission_.next_load_index < active_submission_.load_entries.size()) {
+        const AiMemoryPlanEntry& entry =
+            active_submission_.load_entries[active_submission_.next_load_index];
+        uint64_t system_addr = 0;
+        if (!add_u64_u32(active_submission_.tensor_system_bases[entry.tensor_index],
+                         entry.system_offset,
+                         system_addr)) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = entry.tensor_index;
+            return false;
+        }
+
+        std::string error;
+        if (!dma_engine_.start(
+                AiDmaRequest{
+                    .kind = AiDmaTransferKind::Load,
+                    .system_addr = system_addr,
+                    .space = AiScratchpadSpace::Scratchpad,
+                    .scratchpad_offset = entry.scratchpad_offset,
+                    .size = entry.scratchpad_bytes,
+                    .initiator = "ai-accelerator",
+                },
+                fault,
+                error)) {
+            detail = entry.tensor_index;
+            return false;
+        }
+        return true;
+    }
+
+    if (!active_submission_.compute_started) {
+        return start_compute(fault, detail);
+    }
+
+    if (!active_submission_.compute_complete) {
+        return true;
+    }
+
+    if (active_submission_.next_store_index < active_submission_.store_entries.size()) {
+        const AiMemoryPlanEntry& entry =
+            active_submission_.store_entries[active_submission_.next_store_index];
+        uint64_t system_addr = 0;
+        if (!add_u64_u32(active_submission_.tensor_system_bases[entry.tensor_index],
+                         entry.system_offset,
+                         system_addr)) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = entry.tensor_index;
+            return false;
+        }
+
+        std::string error;
+        if (!dma_engine_.start(
+                AiDmaRequest{
+                    .kind = AiDmaTransferKind::Store,
+                    .system_addr = system_addr,
+                    .space = AiScratchpadSpace::Scratchpad,
+                    .scratchpad_offset = entry.scratchpad_offset,
+                    .size = entry.scratchpad_bytes,
+                    .initiator = "ai-accelerator",
+                },
+                fault,
+                error)) {
+            detail = entry.tensor_index;
+            return false;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+bool AiAccelerator::start_compute(uint32_t& fault, uint32_t& detail) {
+    fault = AI_ACCEL_FAULT_NONE;
+    detail = 0;
+
+    AiGraphExecutionResult result{};
+    std::string error;
+    if (!scheduler_.execute(active_submission_.package, result, error)) {
+        fault = result.fault == AI_ACCEL_FAULT_NONE ? AI_ACCEL_FAULT_EXECUTION : result.fault;
+        detail = result.fault_detail;
+        return false;
+    }
+
+    active_submission_.compute_started = true;
+    active_submission_.compute_complete = false;
+    active_submission_.retired_ops = result.retired_ops;
+    active_submission_.compute_cycles_remaining = result.compute_cycles;
+    active_submission_.stall_cycles_remaining = result.stall_cycles;
+    if (active_submission_.compute_cycles_remaining == 0 &&
+        active_submission_.stall_cycles_remaining == 0) {
+        active_submission_.compute_complete = true;
+    }
+    return active_submission_.compute_complete ? false : true;
+}
+
+bool AiAccelerator::complete_descriptor(const AiSubmissionDescriptor& descriptor,
+                                        uint32_t fault,
+                                        uint32_t detail,
+                                        uint64_t bytes_moved,
+                                        uint64_t retired_ops) {
+    if (!queue_.completion_has_space()) {
+        set_fault(AI_ACCEL_FAULT_COMPLETION_QUEUE_FULL, 0);
+        irq_status_ |= AI_ACCEL_IRQ_FAULT;
+        pending_submission_budget_ = 0;
+        return false;
+    }
+    if (!write_completion(descriptor, fault, bytes_moved, retired_ops)) {
+        pending_submission_budget_ = 0;
+        return false;
     }
 
     queue_.advance_submission();
@@ -264,9 +711,10 @@ void AiAccelerator::process_one_submission() {
     ++completion_count_;
     irq_status_ |= AI_ACCEL_IRQ_COMPLETION;
     if (fault != AI_ACCEL_FAULT_NONE) {
-        set_fault(fault, descriptor.graph_package_bytes);
+        set_fault(fault, detail);
         irq_status_ |= AI_ACCEL_IRQ_FAULT;
     }
+    return true;
 }
 
 uint32_t AiAccelerator::validate_descriptor(const AiSubmissionDescriptor& descriptor) const {
@@ -281,24 +729,27 @@ uint32_t AiAccelerator::validate_descriptor(const AiSubmissionDescriptor& descri
     if (bus_ == nullptr) {
         return AI_ACCEL_FAULT_EXECUTION;
     }
-
-    const PhysicalSpanInfo span = bus_->describe_span(
-        descriptor.graph_package_addr,
-        descriptor.graph_package_bytes);
-    if (!span.ok || !span.region.dma_visible || span.region.has_side_effect) {
-        return AI_ACCEL_FAULT_DMA;
-    }
     return AI_ACCEL_FAULT_NONE;
 }
 
-bool AiAccelerator::write_completion(const AiSubmissionDescriptor& descriptor, uint32_t fault) {
+uint32_t AiAccelerator::graph_package_fault(const std::string& error) const {
+    if (error.find("scratchpad") != std::string::npos) {
+        return AI_ACCEL_FAULT_SCRATCHPAD_OVERFLOW;
+    }
+    return AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+}
+
+bool AiAccelerator::write_completion(const AiSubmissionDescriptor& descriptor,
+                                     uint32_t fault,
+                                     uint64_t bytes_moved,
+                                     uint64_t retired_ops) {
     AiCompletionEntry completion{
         .token = descriptor.token,
         .status = fault == AI_ACCEL_FAULT_NONE ? AI_ACCEL_COMPLETION_STATUS_SUCCESS
                                                : AI_ACCEL_COMPLETION_STATUS_FAULT,
         .fault_code = fault,
-        .retired_ops = 0,
-        .bytes_moved = 0,
+        .retired_ops = retired_ops,
+        .bytes_moved = bytes_moved,
         .source_tag = descriptor.source_tag,
     };
 
@@ -309,6 +760,11 @@ bool AiAccelerator::write_completion(const AiSubmissionDescriptor& descriptor, u
         return false;
     }
     return true;
+}
+
+void AiAccelerator::clear_active_submission() {
+    active_submission_ = {};
+    active_submission_valid_ = false;
 }
 
 void AiAccelerator::set_fault(uint32_t fault, uint32_t detail) {
@@ -324,14 +780,21 @@ void AiAccelerator::clear_fault() {
 
 void AiAccelerator::reset_device() {
     queue_.reset();
+    scratchpad_.configure(0, 0, 0);
+    scratchpad_.reset();
+    dma_engine_.reset();
+    clear_active_submission();
+    pending_submission_budget_ = 0;
     irq_status_ = 0;
     irq_mask_ = AI_ACCEL_IRQ_ALL;
     clear_fault();
-    busy_ = false;
     doorbell_count_ = 0;
     submission_count_ = 0;
     completion_count_ = 0;
     fault_count_ = 0;
+    device_cycles_ = 0;
+    compute_cycles_ = 0;
+    stall_cycles_ = 0;
     update_interrupt_line();
 }
 

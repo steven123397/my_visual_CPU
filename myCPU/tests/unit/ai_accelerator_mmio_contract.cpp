@@ -3,8 +3,10 @@
 #include <cstdio>
 #include <exception>
 #include <string>
+#include <vector>
 
 #include "../../src/devices/ai_accelerator.h"
+#include "../../src/devices/ai_graph_package.h"
 #include "../../src/devices/ai_submission_queue.h"
 #include "../../src/devices/plic.h"
 #include "../../src/mem/bus.h"
@@ -16,6 +18,10 @@ namespace {
 constexpr uint64_t kSubmitQueueAddr = MEM_BASE + 0x1000;
 constexpr uint64_t kCompleteQueueAddr = MEM_BASE + 0x4000;
 constexpr uint64_t kGraphPackageAddr = MEM_BASE + 0x8000;
+constexpr uint64_t kInputTableAddr = MEM_BASE + 0x9000;
+constexpr uint64_t kOutputTableAddr = MEM_BASE + 0x9100;
+constexpr uint64_t kInputTensorAddr = MEM_BASE + 0xA000;
+constexpr uint64_t kOutputTensorAddr = MEM_BASE + 0xA100;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -36,6 +42,14 @@ bool load_reg(Bus& bus, uint32_t reg, uint64_t expected, const char* message) {
         return false;
     }
     return true;
+}
+
+bool load_counter(Bus& bus, uint32_t low_reg, uint32_t high_reg, uint64_t& value) {
+    uint64_t low = 0;
+    uint64_t high = 0;
+    return bus.try_load(AI_ACCEL_BASE + low_reg, 4, low) &&
+           bus.try_load(AI_ACCEL_BASE + high_reg, 4, high) &&
+           ((value = (high << 32) | static_cast<uint32_t>(low)), true);
 }
 
 bool store_reg(Bus& bus, uint32_t reg, uint64_t value, const char* message) {
@@ -60,6 +74,67 @@ AiCompletionEntry read_completion(Ram& ram, uint64_t addr) {
     AiCompletionEntry completion{};
     decode_ai_completion_entry(bytes, completion);
     return completion;
+}
+
+bool build_identity_graph_package(std::vector<uint8_t>& bytes, uint32_t& package_bytes, std::string& error) {
+    AiGraphPackage package{};
+    package.scratchpad_budget_bytes = 8;
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int8,
+        .role = AiTensorRole::Input,
+        .rank = 1,
+        .dims = {8, 0, 0, 0},
+        .tile_dims = {8, 0, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int8,
+        .role = AiTensorRole::Output,
+        .rank = 1,
+        .dims = {8, 0, 0, 0},
+        .tile_dims = {8, 0, 0, 0},
+    });
+    package.ops.push_back(AiOpDescriptor{
+        .opcode = AiOpCode::EltwiseRelu,
+        .input_dtype = AiDataType::Int8,
+        .accum_dtype = AiDataType::Int32,
+        .input0 = 0,
+        .input1 = kAiInvalidTensorIndex,
+        .input2 = kAiInvalidTensorIndex,
+        .output = 1,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 0,
+        .system_offset = 0,
+        .scratchpad_offset = 0,
+        .byte_size = 8,
+        .scratchpad_bytes = 8,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 1,
+        .system_offset = 0,
+        .scratchpad_offset = 0,
+        .byte_size = 8,
+        .scratchpad_bytes = 8,
+    });
+    if (!serialize_ai_graph_package(package, bytes, error)) {
+        return false;
+    }
+    package_bytes = static_cast<uint32_t>(bytes.size());
+    return true;
+}
+
+bool tick_until_completion(Bus& bus, uint32_t max_ticks) {
+    for (uint32_t i = 0; i < max_ticks; ++i) {
+        bus.tick();
+        uint64_t completion_tail = 0;
+        if (!bus.try_load(AI_ACCEL_BASE + AI_ACCEL_REG_COMPLETE_QUEUE_TAIL, 4, completion_tail)) {
+            return false;
+        }
+        if (completion_tail == 1) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool program_queues(Bus& bus) {
@@ -96,20 +171,38 @@ int main() {
             return 1;
         }
 
+        std::vector<uint8_t> graph_package_bytes{};
+        uint32_t graph_package_size = 0;
+        std::string error;
+        if (!build_identity_graph_package(graph_package_bytes, graph_package_size, error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            return 1;
+        }
+        const std::array<uint64_t, 2> input_table{{kInputTensorAddr, 0}};
+        const std::array<uint64_t, 2> output_table{{0, kOutputTensorAddr}};
+        const std::array<uint8_t, 8> input_tensor{{1, 2, 3, 4, 5, 6, 7, 8}};
         const AiSubmissionDescriptor descriptor{
             .token = 0xabcdeULL,
             .graph_package_addr = kGraphPackageAddr,
-            .graph_package_bytes = 64,
+            .graph_package_bytes = graph_package_size,
             .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
-            .input_table_addr = MEM_BASE + 0x9000,
-            .output_table_addr = MEM_BASE + 0xa000,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
             .source_tag = 7,
         };
         write_descriptor(ram, kSubmitQueueAddr, descriptor);
-        ram.fill(kGraphPackageAddr, 0, descriptor.graph_package_bytes);
+        ram.write_bytes(kGraphPackageAddr, graph_package_bytes.data(), graph_package_bytes.size());
+        ram.write_bytes(kInputTableAddr, input_table.data(), sizeof(input_table));
+        ram.write_bytes(kOutputTableAddr, output_table.data(), sizeof(output_table));
+        ram.write_bytes(kInputTensorAddr, input_tensor.data(), input_tensor.size());
+        ram.fill(kOutputTensorAddr, 0, input_tensor.size());
 
         if (!store_reg(bus, AI_ACCEL_REG_SUBMIT_QUEUE_TAIL, 1, "sq tail") ||
             !store_reg(bus, AI_ACCEL_REG_DOORBELL, 1, "doorbell") ||
+            !load_reg(bus, AI_ACCEL_REG_STATUS, AI_ACCEL_STATUS_READY | AI_ACCEL_STATUS_BUSY, "expected async busy status") ||
+            !load_reg(bus, AI_ACCEL_REG_SUBMIT_QUEUE_HEAD, 0, "expected async submit head before ticks") ||
+            !load_reg(bus, AI_ACCEL_REG_COMPLETE_QUEUE_TAIL, 0, "expected async completion tail before ticks") ||
+            !tick_until_completion(bus, 64) ||
             !load_reg(bus, AI_ACCEL_REG_SUBMIT_QUEUE_HEAD, 1, "expected submission head advance") ||
             !load_reg(bus, AI_ACCEL_REG_COMPLETE_QUEUE_TAIL, 1, "expected completion tail advance") ||
             !load_reg(bus, AI_ACCEL_REG_QUEUE_DEPTH, 0, "expected empty queue after completion") ||
@@ -118,10 +211,24 @@ int main() {
         }
 
         const AiCompletionEntry completion = read_completion(ram, kCompleteQueueAddr);
+        uint64_t device_cycles = 0;
+        uint64_t dma_cycles = 0;
+        uint64_t compute_cycles = 0;
+        uint64_t stall_cycles = 0;
         if (!expect(completion.token == descriptor.token, "expected completion token") ||
             !expect(completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, "expected success completion") ||
             !expect(completion.fault_code == AI_ACCEL_FAULT_NONE, "expected no completion fault") ||
+            !expect(completion.retired_ops == 8, "expected relu retired ops") ||
+            !expect(completion.bytes_moved == 16, "expected DMA byte accounting") ||
             !expect(completion.source_tag == descriptor.source_tag, "expected source tag roundtrip") ||
+            !load_counter(bus, AI_ACCEL_REG_DEVICE_CYCLES_LOW, AI_ACCEL_REG_DEVICE_CYCLES_HIGH, device_cycles) ||
+            !load_counter(bus, AI_ACCEL_REG_DMA_CYCLES_LOW, AI_ACCEL_REG_DMA_CYCLES_HIGH, dma_cycles) ||
+            !load_counter(bus, AI_ACCEL_REG_COMPUTE_CYCLES_LOW, AI_ACCEL_REG_COMPUTE_CYCLES_HIGH, compute_cycles) ||
+            !load_counter(bus, AI_ACCEL_REG_STALL_CYCLES_LOW, AI_ACCEL_REG_STALL_CYCLES_HIGH, stall_cycles) ||
+            !expect(device_cycles == 8, "expected total device cycles") ||
+            !expect(dma_cycles == 6, "expected total DMA cycles") ||
+            !expect(compute_cycles == 2, "expected total compute cycles") ||
+            !expect(stall_cycles == 0, "expected zero stall cycles") ||
             !expect(plic.source_level(AI_ACCEL_PLIC_SOURCE), "expected AI accelerator IRQ line asserted")) {
             return 1;
         }
