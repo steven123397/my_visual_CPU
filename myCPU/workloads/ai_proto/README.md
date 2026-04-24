@@ -65,4 +65,11 @@ make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_gemm
 - `shape_mode`
 - `runtime_shapes`
 
+Wave 3 当前还新增了稳定的 itemized 文本出口：
+
+- `ai_profile_aggregate`
+  暴露 `tile_count / scratchpad_peak_bytes / op_count`
+- `ai_profile_op`
+  按 op 顺序暴露 `op_index / opcode / retired_ops / compute_cycles / stall_cycles / tile_count`
+
 当前这版 `timed-simple` 仍明确采用 `DMA + compute` 不重叠的保守语义，`baseline` 也只输出 `none`，不回退到宿主机 wall-clock。

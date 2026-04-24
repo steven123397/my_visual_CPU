@@ -176,6 +176,21 @@ int main(int argc, char* argv[]) {
                       << " effective_ops_per_cycle=" << result.effective_ops_per_cycle
                       << " utilization=" << result.utilization
                       << '\n';
+            std::cout << "ai_profile_aggregate"
+                      << " tile_count=" << result.tile_count
+                      << " scratchpad_peak_bytes=" << result.scratchpad_peak_bytes
+                      << " op_count=" << result.op_summaries.size()
+                      << '\n';
+            for (const AiAcceleratorOpProfileSummary& summary : result.op_summaries) {
+                std::cout << "ai_profile_op"
+                          << " op_index=" << summary.op_index
+                          << " opcode=" << ai_opcode_name(summary.opcode)
+                          << " retired_ops=" << summary.retired_ops
+                          << " compute_cycles=" << summary.compute_cycles
+                          << " stall_cycles=" << summary.stall_cycles
+                          << " tile_count=" << summary.tile_count
+                          << '\n';
+            }
             return result.completed &&
                            result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS
                        ? 0

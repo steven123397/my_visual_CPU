@@ -22,8 +22,13 @@ constexpr uint64_t kOutputTableAddr = MEM_BASE + 0x38100;
 constexpr uint64_t kLhsTensorAddr = MEM_BASE + 0x3a000;
 constexpr uint64_t kRhsTensorAddr = MEM_BASE + 0x3a100;
 constexpr uint64_t kOutputTensorAddr = MEM_BASE + 0x3b000;
+constexpr uint32_t kDynamicRuntimeShapeOverlapOffset = 0x4;
 constexpr uint32_t kDynamicRuntimeShapeSmallOffset = 0x200;
 constexpr uint32_t kDynamicRuntimeShapeLargeOffset = 0x240;
+constexpr uint32_t kDynamicRuntimeShapeUnalignedOffset = kDynamicRuntimeShapeLargeOffset + 0x41;
+constexpr uint32_t kDynamicRuntimeShapeBytes = 2 * static_cast<uint32_t>(kAiRuntimeShapeEntryBytes);
+constexpr uint32_t kDynamicRuntimeShapeOutOfWindowOffset =
+    AI_ACCEL_MAX_GRAPH_PACKAGE_BYTES - kDynamicRuntimeShapeBytes + 4;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -638,12 +643,51 @@ int main() {
             .output_table_addr = kOutputTableAddr,
             .source_tag = 47,
         };
+        const AiSubmissionDescriptor dynamic_unaligned_shape_descriptor{
+            .token = 0x44594E55ULL,
+            .graph_package_addr = kGraphPackageAddr,
+            .graph_package_bytes = dynamic_graph_package_size,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
+            .source_tag = 49,
+            .runtime_shape_table_offset = kDynamicRuntimeShapeUnalignedOffset,
+        };
+        const AiSubmissionDescriptor dynamic_overlap_shape_descriptor{
+            .token = 0x44594E4FULL,
+            .graph_package_addr = kGraphPackageAddr,
+            .graph_package_bytes = dynamic_graph_package_size,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
+            .source_tag = 51,
+            .runtime_shape_table_offset = kDynamicRuntimeShapeOverlapOffset,
+        };
+        const AiSubmissionDescriptor dynamic_out_of_window_shape_descriptor{
+            .token = 0x44594E57ULL,
+            .graph_package_addr = kGraphPackageAddr,
+            .graph_package_bytes = dynamic_graph_package_size,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
+            .source_tag = 53,
+            .runtime_shape_table_offset = kDynamicRuntimeShapeOutOfWindowOffset,
+        };
         std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_small_descriptor_bytes{};
         std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_large_descriptor_bytes{};
         std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_missing_shape_descriptor_bytes{};
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_unaligned_shape_descriptor_bytes{};
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_overlap_shape_descriptor_bytes{};
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_out_of_window_shape_descriptor_bytes{};
         encode_ai_submission_descriptor(dynamic_small_descriptor, dynamic_small_descriptor_bytes);
         encode_ai_submission_descriptor(dynamic_large_descriptor, dynamic_large_descriptor_bytes);
         encode_ai_submission_descriptor(dynamic_missing_shape_descriptor, dynamic_missing_shape_descriptor_bytes);
+        encode_ai_submission_descriptor(dynamic_unaligned_shape_descriptor,
+                                        dynamic_unaligned_shape_descriptor_bytes);
+        encode_ai_submission_descriptor(dynamic_overlap_shape_descriptor,
+                                        dynamic_overlap_shape_descriptor_bytes);
+        encode_ai_submission_descriptor(dynamic_out_of_window_shape_descriptor,
+                                        dynamic_out_of_window_shape_descriptor_bytes);
 
         if (!store_bytes(dynamic_bus,
                          kGraphPackageAddr,
@@ -655,6 +699,10 @@ int main() {
                          small_runtime_shape_bytes.size()) ||
             !store_bytes(dynamic_bus,
                          kGraphPackageAddr + kDynamicRuntimeShapeLargeOffset,
+                         large_runtime_shape_bytes.data(),
+                         large_runtime_shape_bytes.size()) ||
+            !store_bytes(dynamic_bus,
+                         kGraphPackageAddr + kDynamicRuntimeShapeUnalignedOffset,
                          large_runtime_shape_bytes.data(),
                          large_runtime_shape_bytes.size()) ||
             !store_bytes(dynamic_bus, kInputTableAddr, dynamic_input_table.data(), sizeof(dynamic_input_table)) ||
@@ -779,8 +827,8 @@ int main() {
 
         if (!store_bytes(dynamic_bus,
                          kSubmitQueueAddr + (2 * kAiSubmissionDescriptorBytes),
-                         dynamic_missing_shape_descriptor_bytes.data(),
-                         dynamic_missing_shape_descriptor_bytes.size()) ||
+                         dynamic_unaligned_shape_descriptor_bytes.data(),
+                         dynamic_unaligned_shape_descriptor_bytes.size()) ||
             !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL, 3, "dynamic submit tail 3") ||
             !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "dynamic doorbell 3") ||
             !tick_until_tail(dynamic_bus,
@@ -792,12 +840,69 @@ int main() {
             return 1;
         }
 
-        std::array<uint8_t, kAiCompletionEntryBytes> dynamic_fault_completion_bytes{};
-        AiCompletionEntry dynamic_fault_completion{};
+        std::array<uint8_t, kAiCompletionEntryBytes> dynamic_unaligned_completion_bytes{};
+        AiCompletionEntry dynamic_unaligned_completion{};
+        std::array<int32_t, 8> dynamic_unaligned_output{};
         if (!load_bytes(dynamic_bus,
                         kCompleteQueueAddr + (2 * kAiCompletionEntryBytes),
+                        dynamic_unaligned_completion_bytes.data(),
+                        dynamic_unaligned_completion_bytes.size()) ||
+            !load_bytes(dynamic_bus,
+                        kOutputTensorAddr,
+                        dynamic_unaligned_output.data(),
+                        sizeof(dynamic_unaligned_output))) {
+            return 1;
+        }
+        decode_ai_completion_entry(dynamic_unaligned_completion_bytes, dynamic_unaligned_completion);
+        const AiAcceleratorProfileSummary& dynamic_unaligned_profile =
+            dynamic_machine.ai_accelerator().profile_summary();
+        if (!expect(dynamic_unaligned_completion.status == AI_ACCEL_COMPLETION_STATUS_FAULT,
+                    "expected dynamic GEMM unaligned-shape completion fault") ||
+            !expect(dynamic_unaligned_completion.fault_code == AI_ACCEL_FAULT_INVALID_DESCRIPTOR,
+                    "expected dynamic GEMM unaligned-shape fault code") ||
+            !expect(dynamic_unaligned_completion.retired_ops == 0,
+                    "expected zero dynamic GEMM retired ops on unaligned-shape fault") ||
+            !expect(dynamic_unaligned_completion.bytes_moved == 0,
+                    "expected zero dynamic GEMM bytes moved on unaligned-shape fault") ||
+            !expect(dynamic_unaligned_output == expected_large_output,
+                    "expected dynamic GEMM output tensor stability after unaligned fault") ||
+            !expect(dynamic_unaligned_profile.tile_count == 2,
+                    "expected dynamic GEMM profile stability after unaligned-shape fault") ||
+            !expect(dynamic_unaligned_profile.scratchpad_peak_bytes == 80,
+                    "expected dynamic GEMM scratchpad peak stability after unaligned fault") ||
+            !expect(dynamic_unaligned_profile.op_summaries.size() == 1,
+                    "expected dynamic GEMM op summary stability after unaligned fault") ||
+            !expect_op_summary(dynamic_unaligned_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
+                               "expected dynamic GEMM op profile stability after unaligned fault")) {
+            return 1;
+        }
+
+        if (!store_bytes(dynamic_bus,
+                         kSubmitQueueAddr + (3 * kAiSubmissionDescriptorBytes),
+                         dynamic_missing_shape_descriptor_bytes.data(),
+                         dynamic_missing_shape_descriptor_bytes.size()) ||
+            !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL, 4, "dynamic submit tail 4") ||
+            !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "dynamic doorbell 4") ||
+            !tick_until_tail(dynamic_bus,
+                             4,
+                             dynamic_prev_device_cycles,
+                             dynamic_prev_dma_cycles,
+                             dynamic_prev_compute_cycles,
+                             dynamic_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<uint8_t, kAiCompletionEntryBytes> dynamic_fault_completion_bytes{};
+        AiCompletionEntry dynamic_fault_completion{};
+        std::array<int32_t, 8> dynamic_fault_output{};
+        if (!load_bytes(dynamic_bus,
+                        kCompleteQueueAddr + (3 * kAiCompletionEntryBytes),
                         dynamic_fault_completion_bytes.data(),
-                        dynamic_fault_completion_bytes.size())) {
+                        dynamic_fault_completion_bytes.size()) ||
+            !load_bytes(dynamic_bus,
+                        kOutputTensorAddr,
+                        dynamic_fault_output.data(),
+                        sizeof(dynamic_fault_output))) {
             return 1;
         }
         decode_ai_completion_entry(dynamic_fault_completion_bytes, dynamic_fault_completion);
@@ -811,6 +916,8 @@ int main() {
                     "expected zero dynamic GEMM retired ops on missing-shape fault") ||
             !expect(dynamic_fault_completion.bytes_moved == 0,
                     "expected zero dynamic GEMM bytes moved on missing-shape fault") ||
+            !expect(dynamic_fault_output == expected_large_output,
+                    "expected dynamic GEMM output tensor stability after missing-shape fault") ||
             !expect(dynamic_fault_profile.tile_count == 2,
                     "expected dynamic GEMM profile stability after missing-shape fault") ||
             !expect(dynamic_fault_profile.scratchpad_peak_bytes == 80,
@@ -819,10 +926,319 @@ int main() {
                     "expected dynamic GEMM op summary stability after fault") ||
             !expect_op_summary(dynamic_fault_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
                                "expected dynamic GEMM op profile stability after fault") ||
-            !expect(dynamic_machine.ai_accelerator().completion_count() == 3,
+            !expect(dynamic_machine.ai_accelerator().completion_count() == 4,
                     "expected dynamic GEMM completion count") ||
             !expect(dynamic_machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_INVALID_DESCRIPTOR,
                     "expected dynamic GEMM last fault")) {
+            return 1;
+        }
+
+        Machine runtime_fault_machine;
+        Bus& runtime_fault_bus = runtime_fault_machine.bus();
+        if (!load_u32(runtime_fault_bus,
+                      AI_ACCEL_BASE + AI_ACCEL_REG_MAGIC,
+                      AI_ACCEL_MMIO_MAGIC,
+                      "expected mapped runtime-fault AI accelerator") ||
+            !configure_queue(runtime_fault_bus)) {
+            return 1;
+        }
+
+        if (!store_bytes(runtime_fault_bus,
+                         kGraphPackageAddr,
+                         dynamic_graph_package_bytes.data(),
+                         dynamic_graph_package_bytes.size()) ||
+            !store_bytes(runtime_fault_bus,
+                         kGraphPackageAddr + kDynamicRuntimeShapeLargeOffset,
+                         large_runtime_shape_bytes.data(),
+                         large_runtime_shape_bytes.size()) ||
+            !store_bytes(runtime_fault_bus,
+                         kInputTableAddr,
+                         dynamic_input_table.data(),
+                         sizeof(dynamic_input_table)) ||
+            !store_bytes(runtime_fault_bus,
+                         kOutputTableAddr,
+                         dynamic_output_table.data(),
+                         sizeof(dynamic_output_table)) ||
+            !store_bytes(runtime_fault_bus,
+                         kLhsTensorAddr,
+                         dynamic_lhs_tensor.data(),
+                         sizeof(dynamic_lhs_tensor)) ||
+            !store_bytes(runtime_fault_bus,
+                         kRhsTensorAddr,
+                         dynamic_rhs_tensor.data(),
+                         sizeof(dynamic_rhs_tensor)) ||
+            !store_bytes(runtime_fault_bus,
+                         kOutputTensorAddr,
+                         zero_dynamic_output.data(),
+                         sizeof(zero_dynamic_output))) {
+            return 1;
+        }
+
+        uint64_t runtime_fault_prev_device_cycles = 0;
+        uint64_t runtime_fault_prev_dma_cycles = 0;
+        uint64_t runtime_fault_prev_compute_cycles = 0;
+        uint64_t runtime_fault_prev_stall_cycles = 0;
+
+        if (!store_bytes(runtime_fault_bus,
+                         kSubmitQueueAddr,
+                         dynamic_large_descriptor_bytes.data(),
+                         dynamic_large_descriptor_bytes.size()) ||
+            !store_u32(runtime_fault_bus,
+                       AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL,
+                       1,
+                       "runtime-fault submit tail 1") ||
+            !store_u32(runtime_fault_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "runtime-fault doorbell 1") ||
+            !tick_until_tail(runtime_fault_bus,
+                             1,
+                             runtime_fault_prev_device_cycles,
+                             runtime_fault_prev_dma_cycles,
+                             runtime_fault_prev_compute_cycles,
+                             runtime_fault_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<int32_t, 8> runtime_fault_success_output{};
+        if (!load_bytes(runtime_fault_bus,
+                        kOutputTensorAddr,
+                        runtime_fault_success_output.data(),
+                        sizeof(runtime_fault_success_output)) ||
+            !expect(runtime_fault_success_output == expected_large_output,
+                    "expected runtime-fault setup dynamic GEMM output tensor")) {
+            return 1;
+        }
+
+        if (!store_u32(runtime_fault_bus, AI_ACCEL_BASE + AI_ACCEL_REG_COMPLETE_QUEUE_HEAD, 1, "runtime-fault completion head 1")) {
+            return 1;
+        }
+
+        if (!store_bytes(runtime_fault_bus,
+                         kSubmitQueueAddr + kAiSubmissionDescriptorBytes,
+                         dynamic_overlap_shape_descriptor_bytes.data(),
+                         dynamic_overlap_shape_descriptor_bytes.size()) ||
+            !store_u32(runtime_fault_bus,
+                       AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL,
+                       2,
+                       "runtime-fault submit tail 2") ||
+            !store_u32(runtime_fault_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "runtime-fault doorbell 2") ||
+            !tick_until_tail(runtime_fault_bus,
+                             2,
+                             runtime_fault_prev_device_cycles,
+                             runtime_fault_prev_dma_cycles,
+                             runtime_fault_prev_compute_cycles,
+                             runtime_fault_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<uint8_t, kAiCompletionEntryBytes> runtime_fault_overlap_completion_bytes{};
+        AiCompletionEntry runtime_fault_overlap_completion{};
+        std::array<int32_t, 8> runtime_fault_overlap_output{};
+        if (!load_bytes(runtime_fault_bus,
+                        kCompleteQueueAddr + kAiCompletionEntryBytes,
+                        runtime_fault_overlap_completion_bytes.data(),
+                        runtime_fault_overlap_completion_bytes.size()) ||
+            !load_bytes(runtime_fault_bus,
+                        kOutputTensorAddr,
+                        runtime_fault_overlap_output.data(),
+                        sizeof(runtime_fault_overlap_output))) {
+            return 1;
+        }
+        decode_ai_completion_entry(runtime_fault_overlap_completion_bytes, runtime_fault_overlap_completion);
+        const AiAcceleratorProfileSummary& runtime_fault_overlap_profile =
+            runtime_fault_machine.ai_accelerator().profile_summary();
+        if (!expect(runtime_fault_overlap_completion.status == AI_ACCEL_COMPLETION_STATUS_FAULT,
+                    "expected dynamic GEMM overlap completion fault") ||
+            !expect(runtime_fault_overlap_completion.fault_code == AI_ACCEL_FAULT_INVALID_DESCRIPTOR,
+                    "expected dynamic GEMM overlap fault code") ||
+            !expect(runtime_fault_overlap_completion.bytes_moved == 0,
+                    "expected zero dynamic GEMM bytes moved on overlap fault") ||
+            !expect(runtime_fault_overlap_output == expected_large_output,
+                    "expected dynamic GEMM output tensor stability after overlap fault") ||
+            !expect(runtime_fault_overlap_profile.tile_count == 2,
+                    "expected dynamic GEMM profile stability after overlap fault") ||
+            !expect(runtime_fault_overlap_profile.scratchpad_peak_bytes == 80,
+                    "expected dynamic GEMM scratchpad stability after overlap fault") ||
+            !expect(runtime_fault_overlap_profile.op_summaries.size() == 1,
+                    "expected dynamic GEMM op summary stability after overlap fault") ||
+            !expect_op_summary(runtime_fault_overlap_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
+                               "expected dynamic GEMM op profile stability after overlap fault")) {
+            return 1;
+        }
+
+        if (!store_u32(runtime_fault_bus, AI_ACCEL_BASE + AI_ACCEL_REG_COMPLETE_QUEUE_HEAD, 2, "runtime-fault completion head 2")) {
+            return 1;
+        }
+
+        if (!store_bytes(runtime_fault_bus,
+                         kSubmitQueueAddr + (2 * kAiSubmissionDescriptorBytes),
+                         dynamic_out_of_window_shape_descriptor_bytes.data(),
+                         dynamic_out_of_window_shape_descriptor_bytes.size()) ||
+            !store_u32(runtime_fault_bus,
+                       AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL,
+                       3,
+                       "runtime-fault submit tail 3") ||
+            !store_u32(runtime_fault_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "runtime-fault doorbell 3") ||
+            !tick_until_tail(runtime_fault_bus,
+                             3,
+                             runtime_fault_prev_device_cycles,
+                             runtime_fault_prev_dma_cycles,
+                             runtime_fault_prev_compute_cycles,
+                             runtime_fault_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<uint8_t, kAiCompletionEntryBytes> runtime_fault_out_of_window_completion_bytes{};
+        AiCompletionEntry runtime_fault_out_of_window_completion{};
+        std::array<int32_t, 8> runtime_fault_out_of_window_output{};
+        if (!load_bytes(runtime_fault_bus,
+                        kCompleteQueueAddr + (2 * kAiCompletionEntryBytes),
+                        runtime_fault_out_of_window_completion_bytes.data(),
+                        runtime_fault_out_of_window_completion_bytes.size()) ||
+            !load_bytes(runtime_fault_bus,
+                        kOutputTensorAddr,
+                        runtime_fault_out_of_window_output.data(),
+                        sizeof(runtime_fault_out_of_window_output))) {
+            return 1;
+        }
+        decode_ai_completion_entry(runtime_fault_out_of_window_completion_bytes,
+                                   runtime_fault_out_of_window_completion);
+        const AiAcceleratorProfileSummary& runtime_fault_out_of_window_profile =
+            runtime_fault_machine.ai_accelerator().profile_summary();
+        if (!expect(runtime_fault_out_of_window_completion.status == AI_ACCEL_COMPLETION_STATUS_FAULT,
+                    "expected dynamic GEMM out-of-window completion fault") ||
+            !expect(runtime_fault_out_of_window_completion.fault_code == AI_ACCEL_FAULT_INVALID_DESCRIPTOR,
+                    "expected dynamic GEMM out-of-window fault code") ||
+            !expect(runtime_fault_out_of_window_completion.bytes_moved == 0,
+                    "expected zero dynamic GEMM bytes moved on out-of-window fault") ||
+            !expect(runtime_fault_out_of_window_output == expected_large_output,
+                    "expected dynamic GEMM output tensor stability after out-of-window fault") ||
+            !expect(runtime_fault_out_of_window_profile.tile_count == 2,
+                    "expected dynamic GEMM profile stability after out-of-window fault") ||
+            !expect(runtime_fault_out_of_window_profile.scratchpad_peak_bytes == 80,
+                    "expected dynamic GEMM scratchpad stability after out-of-window fault") ||
+            !expect(runtime_fault_out_of_window_profile.op_summaries.size() == 1,
+                    "expected dynamic GEMM op summary stability after out-of-window fault") ||
+            !expect_op_summary(runtime_fault_out_of_window_profile.op_summaries[0],
+                               0,
+                               AiOpCode::Gemm,
+                               64,
+                               4,
+                               2,
+                               "expected dynamic GEMM op profile stability after out-of-window fault")) {
+            return 1;
+        }
+
+        Machine runtime_dma_fault_machine;
+        Bus& runtime_dma_fault_bus = runtime_dma_fault_machine.bus();
+        if (!load_u32(runtime_dma_fault_bus,
+                      AI_ACCEL_BASE + AI_ACCEL_REG_MAGIC,
+                      AI_ACCEL_MMIO_MAGIC,
+                      "expected mapped runtime-DMA-fault AI accelerator") ||
+            !configure_queue(runtime_dma_fault_bus)) {
+            return 1;
+        }
+
+        const uint32_t dynamic_dma_fault_runtime_shape_offset =
+            (dynamic_graph_package_size + 3U) & ~3U;
+        const uint64_t dynamic_dma_fault_graph_package_addr =
+            MEM_BASE + MEM_SIZE - dynamic_graph_package_size - (large_runtime_shape_bytes.size() / 2U);
+        const AiSubmissionDescriptor dynamic_dma_fault_shape_descriptor{
+            .token = 0x44594E44ULL,
+            .graph_package_addr = dynamic_dma_fault_graph_package_addr,
+            .graph_package_bytes = dynamic_graph_package_size,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
+            .source_tag = 55,
+            .runtime_shape_table_offset = dynamic_dma_fault_runtime_shape_offset,
+        };
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_dma_fault_shape_descriptor_bytes{};
+        encode_ai_submission_descriptor(dynamic_dma_fault_shape_descriptor,
+                                        dynamic_dma_fault_shape_descriptor_bytes);
+
+        if (!store_bytes(runtime_dma_fault_bus,
+                         dynamic_dma_fault_graph_package_addr,
+                         dynamic_graph_package_bytes.data(),
+                         dynamic_graph_package_bytes.size()) ||
+            !store_bytes(runtime_dma_fault_bus,
+                         kInputTableAddr,
+                         dynamic_input_table.data(),
+                         sizeof(dynamic_input_table)) ||
+            !store_bytes(runtime_dma_fault_bus,
+                         kOutputTableAddr,
+                         dynamic_output_table.data(),
+                         sizeof(dynamic_output_table)) ||
+            !store_bytes(runtime_dma_fault_bus,
+                         kLhsTensorAddr,
+                         dynamic_lhs_tensor.data(),
+                         sizeof(dynamic_lhs_tensor)) ||
+            !store_bytes(runtime_dma_fault_bus,
+                         kRhsTensorAddr,
+                         dynamic_rhs_tensor.data(),
+                         sizeof(dynamic_rhs_tensor)) ||
+            !store_bytes(runtime_dma_fault_bus,
+                         kOutputTensorAddr,
+                         expected_large_output.data(),
+                         sizeof(expected_large_output)) ||
+            !store_bytes(runtime_dma_fault_bus,
+                         kSubmitQueueAddr,
+                         dynamic_dma_fault_shape_descriptor_bytes.data(),
+                         dynamic_dma_fault_shape_descriptor_bytes.size()) ||
+            !store_u32(runtime_dma_fault_bus,
+                       AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL,
+                       1,
+                       "runtime-DMA-fault submit tail 1") ||
+            !store_u32(runtime_dma_fault_bus,
+                       AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL,
+                       1,
+                       "runtime-DMA-fault doorbell 1")) {
+            return 1;
+        }
+
+        uint64_t runtime_dma_fault_prev_device_cycles = 0;
+        uint64_t runtime_dma_fault_prev_dma_cycles = 0;
+        uint64_t runtime_dma_fault_prev_compute_cycles = 0;
+        uint64_t runtime_dma_fault_prev_stall_cycles = 0;
+        if (!tick_until_tail(runtime_dma_fault_bus,
+                             1,
+                             runtime_dma_fault_prev_device_cycles,
+                             runtime_dma_fault_prev_dma_cycles,
+                             runtime_dma_fault_prev_compute_cycles,
+                             runtime_dma_fault_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<uint8_t, kAiCompletionEntryBytes> runtime_dma_fault_completion_bytes{};
+        AiCompletionEntry runtime_dma_fault_completion{};
+        std::array<int32_t, 8> runtime_dma_fault_output{};
+        if (!load_bytes(runtime_dma_fault_bus,
+                        kCompleteQueueAddr,
+                        runtime_dma_fault_completion_bytes.data(),
+                        runtime_dma_fault_completion_bytes.size()) ||
+            !load_bytes(runtime_dma_fault_bus,
+                        kOutputTensorAddr,
+                        runtime_dma_fault_output.data(),
+                        sizeof(runtime_dma_fault_output))) {
+            return 1;
+        }
+        decode_ai_completion_entry(runtime_dma_fault_completion_bytes, runtime_dma_fault_completion);
+        const AiAcceleratorProfileSummary& runtime_dma_fault_profile =
+            runtime_dma_fault_machine.ai_accelerator().profile_summary();
+        if (!expect(runtime_dma_fault_completion.status == AI_ACCEL_COMPLETION_STATUS_FAULT,
+                    "expected dynamic GEMM DMA-fault completion fault") ||
+            !expect(runtime_dma_fault_completion.fault_code == AI_ACCEL_FAULT_DMA,
+                    "expected dynamic GEMM DMA-fault code") ||
+            !expect(runtime_dma_fault_completion.bytes_moved == 0,
+                    "expected zero dynamic GEMM bytes moved on DMA fault") ||
+            !expect(runtime_dma_fault_output == expected_large_output,
+                    "expected dynamic GEMM output tensor stability after DMA fault") ||
+            !expect(runtime_dma_fault_profile.tile_count == 0,
+                    "expected empty dynamic GEMM profile after DMA fault without prior success") ||
+            !expect(runtime_dma_fault_profile.scratchpad_peak_bytes == 0,
+                    "expected zero dynamic GEMM scratchpad peak after DMA fault without prior success") ||
+            !expect(runtime_dma_fault_profile.op_summaries.empty(),
+                    "expected empty dynamic GEMM op summaries after DMA fault without prior success") ||
+            !expect(runtime_dma_fault_machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_DMA,
+                    "expected dynamic GEMM DMA last fault")) {
             return 1;
         }
 

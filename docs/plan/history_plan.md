@@ -23,6 +23,13 @@
 
 ### 2026-04-24
 
+#### npu-tpu-accelerator-wave3-plan
+
+- 原文件：`npu_tpu_accelerator_wave3_plan.md`
+- 完成内容：完成独立 `MMIO NPU / TPU-like` AI accelerator Wave 3，把 runtime-shape fail-closed matrix、host profile manifest 负向矩阵、`--ai-profile-manifest` 的 itemized profile 文本出口，以及 profile summary 的 success / fault / reset lifecycle 一起收口到主工作树；同时继续保持 AI accelerator 为独立 `MMIO` 设备路线，不把语义混入 CPU `InstructionSemantics` reference path。
+- 实现过程摘要：整体继续采用“先补红灯 smoke / malformed-input regression、再补最小 host-side 文本出口与设备侧显式 reject、最后统一回写 status 与归档”的克制路径；这一轮把 `runtime_shape_table_offset` 的 overlap / out-of-window 从“碰巧解析失败”收窄为显式 fail-closed 合同，同时只把 itemized profile 外推到 host text manifest，不顺势扩大 MMIO 或 debug snapshot ABI。
+- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
+
 #### npu-tpu-accelerator-wave2-plan
 
 - 原文件：`npu_tpu_accelerator_wave2_plan.md`

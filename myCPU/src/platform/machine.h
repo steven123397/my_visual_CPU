@@ -41,6 +41,9 @@ public:
         std::string shape_mode{"static"};
         std::string runtime_shapes{"none"};
         uint32_t graph_package_bytes{0};
+        uint64_t tile_count{0};
+        uint32_t scratchpad_peak_bytes{0};
+        std::vector<AiAcceleratorOpProfileSummary> op_summaries{};
         uint64_t ticks{0};
         uint32_t completion_status{AI_ACCEL_COMPLETION_STATUS_SUCCESS};
         uint32_t fault_code{AI_ACCEL_FAULT_NONE};

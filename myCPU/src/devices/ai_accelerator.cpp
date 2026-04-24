@@ -39,6 +39,8 @@ uint32_t saturating_u32(size_t value) {
     return static_cast<uint32_t>(std::min(value, max));
 }
 
+constexpr uint32_t kRuntimeShapeTableAlignment = 4;
+
 }  // namespace
 
 AiAccelerator::AiAccelerator(Plic& plic,
@@ -529,6 +531,25 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
             detail = 0;
             return false;
         }
+        if ((descriptor.runtime_shape_table_offset % kRuntimeShapeTableAlignment) != 0) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = descriptor.runtime_shape_table_offset;
+            return false;
+        }
+        const uint32_t runtime_shape_table_bytes = static_cast<uint32_t>(
+            package.dynamic_tensors.size() * kAiRuntimeShapeEntryBytes);
+        if (descriptor.runtime_shape_table_offset < descriptor.graph_package_bytes) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = descriptor.runtime_shape_table_offset;
+            return false;
+        }
+        if (runtime_shape_table_bytes > AI_ACCEL_MAX_GRAPH_PACKAGE_BYTES ||
+            descriptor.runtime_shape_table_offset >
+                AI_ACCEL_MAX_GRAPH_PACKAGE_BYTES - runtime_shape_table_bytes) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = descriptor.runtime_shape_table_offset;
+            return false;
+        }
 
         uint64_t runtime_shape_table_addr = 0;
         if (!add_u64_u32(descriptor.graph_package_addr,
@@ -540,8 +561,6 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
         }
 
         std::vector<uint8_t> runtime_shape_bytes{};
-        const uint32_t runtime_shape_table_bytes = static_cast<uint32_t>(
-            package.dynamic_tensors.size() * kAiRuntimeShapeEntryBytes);
         if (!read_graph_package_bytes(runtime_shape_table_addr,
                                       runtime_shape_table_bytes,
                                       runtime_shape_bytes,

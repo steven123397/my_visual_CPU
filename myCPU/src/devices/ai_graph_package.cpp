@@ -143,6 +143,10 @@ bool read_header(const std::vector<uint8_t>& bytes, ParsedHeader& header, std::s
         }
         header.shape_mode = static_cast<AiShapeMode>(shape_mode);
         header.training_mode = static_cast<AiTrainingMode>(training_mode);
+        if (reserved0 != 0 || reserved1 != 0) {
+            error = "graph package extended header reserved fields must be zero";
+            return false;
+        }
     }
     return true;
 }
@@ -628,6 +632,10 @@ bool parse_ai_runtime_shape_table(
             !read_u8(bytes, pos, runtime_shape.rank) ||
             !read_u8(bytes, pos, reserved)) {
             error = "runtime shape table truncated";
+            return false;
+        }
+        if (reserved != 0) {
+            error = "runtime shape table reserved byte must be zero";
             return false;
         }
         for (uint32_t& dim : runtime_shape.dims) {

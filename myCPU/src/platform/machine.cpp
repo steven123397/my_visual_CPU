@@ -626,6 +626,10 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
                                                "effective ops per cycle"));
     result.utilization =
         static_cast<uint32_t>(load_u32_checked(bus_, AI_ACCEL_REG_UTILIZATION, "utilization"));
+    const AiAcceleratorProfileSummary& profile_summary = ai_accelerator_.profile_summary();
+    result.tile_count = profile_summary.tile_count;
+    result.scratchpad_peak_bytes = profile_summary.scratchpad_peak_bytes;
+    result.op_summaries = profile_summary.op_summaries;
 
     if (result.completed && result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS) {
         for (const OutputBinding& output : outputs) {

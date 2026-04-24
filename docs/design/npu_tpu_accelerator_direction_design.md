@@ -22,6 +22,7 @@
   - [phase4_preparation_design.md](phase4_preparation_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
 - 已完成计划：
+  - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave2-plan](../plan/history_plan.md#npu-tpu-accelerator-wave2-plan)
 

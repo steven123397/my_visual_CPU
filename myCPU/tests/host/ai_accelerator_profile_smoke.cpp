@@ -41,6 +41,11 @@ void write_text_file(const std::filesystem::path& path, const std::string& text)
     out << text;
 }
 
+void write_binary_file(const std::filesystem::path& path, const std::vector<uint8_t>& bytes) {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+}
+
 std::vector<uint8_t> read_binary_file(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
     return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
@@ -92,6 +97,23 @@ std::filesystem::path manifest_without_format(const std::filesystem::path& sourc
     return destination;
 }
 
+std::filesystem::path manifest_without_scalar_key(const std::filesystem::path& source,
+                                                  const std::filesystem::path& destination,
+                                                  const char* key) {
+    const std::string key_prefix = std::string(key) + "=";
+    std::istringstream input(read_text_file(source));
+    std::ostringstream output;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.rfind(key_prefix, 0) == 0) {
+            continue;
+        }
+        output << line << '\n';
+    }
+    write_text_file(destination, output.str());
+    return destination;
+}
+
 std::filesystem::path manifest_with_duplicate_scalar_key(const std::filesystem::path& source,
                                                          const std::filesystem::path& destination,
                                                          const char* key,
@@ -107,6 +129,55 @@ std::filesystem::path manifest_with_duplicate_scalar_key(const std::filesystem::
             output << key_prefix << duplicate_value << '\n';
             inserted_duplicate = true;
         }
+    }
+    write_text_file(destination, output.str());
+    return destination;
+}
+
+std::filesystem::path manifest_with_inserted_scalar_key(const std::filesystem::path& source,
+                                                        const std::filesystem::path& destination,
+                                                        const char* after_key,
+                                                        const char* new_key,
+                                                        const char* new_value) {
+    const std::string after_prefix = std::string(after_key) + "=";
+    const std::string inserted_line = std::string(new_key) + "=" + new_value;
+    std::istringstream input(read_text_file(source));
+    std::ostringstream output;
+    std::string line;
+    bool inserted = false;
+    while (std::getline(input, line)) {
+        output << line << '\n';
+        if (!inserted && line.rfind(after_prefix, 0) == 0) {
+            output << inserted_line << '\n';
+            inserted = true;
+        }
+    }
+    if (!inserted) {
+        output << inserted_line << '\n';
+    }
+    write_text_file(destination, output.str());
+    return destination;
+}
+
+std::filesystem::path manifest_with_replaced_scalar_key(const std::filesystem::path& source,
+                                                        const std::filesystem::path& destination,
+                                                        const char* key,
+                                                        const char* new_value) {
+    const std::string key_prefix = std::string(key) + "=";
+    std::istringstream input(read_text_file(source));
+    std::ostringstream output;
+    std::string line;
+    bool replaced = false;
+    while (std::getline(input, line)) {
+        if (line.rfind(key_prefix, 0) == 0) {
+            output << key_prefix << new_value << '\n';
+            replaced = true;
+        } else {
+            output << line << '\n';
+        }
+    }
+    if (!replaced) {
+        output << key_prefix << new_value << '\n';
     }
     write_text_file(destination, output.str());
     return destination;
@@ -136,7 +207,8 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
                              uint64_t expected_effective_ops_per_cycle,
                              uint64_t expected_utilization,
                              uint64_t expected_bytes_moved,
-                             uint64_t expected_retired_ops) {
+                             uint64_t expected_retired_ops,
+                             const std::vector<std::string>& extra_needles = {}) {
     const std::string pack_command =
         "python3 workloads/ai_proto/pack_graph.py --workload " + std::string(workload) +
         " --out-dir " + temp_dir.string();
@@ -212,6 +284,12 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
         return false;
     }
 
+    for (const std::string& needle : extra_needles) {
+        if (!expect_contains(profile.output, needle.c_str(), "expected itemized ai profile output")) {
+            return false;
+        }
+    }
+
     return expect(read_binary_file(actual) == read_binary_file(expected),
                   "expected ai profile output to match packaged expectation");
 }
@@ -271,6 +349,12 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
         !expect_contains(profile.output, "utilization=23", "expected dynamic_gemm utilization summary") ||
         !expect_contains(profile.output, "bytes_moved=80", "expected dynamic_gemm bytes moved summary") ||
         !expect_contains(profile.output, "retired_ops=64", "expected dynamic_gemm retired op summary") ||
+        !expect_contains(profile.output,
+                         "ai_profile_aggregate tile_count=2 scratchpad_peak_bytes=80 op_count=1",
+                         "expected dynamic_gemm aggregate itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=0 opcode=gemm retired_ops=64 compute_cycles=4 stall_cycles=0 tile_count=2",
+                         "expected dynamic_gemm op itemized profile output") ||
         !expect_file_exists(actual, "expected dynamic_gemm actual output")) {
         return false;
     }
@@ -336,6 +420,17 @@ int main() {
             return 1;
         }
 
+        const std::filesystem::path dynamic_malformed_dir = temp_dir / "dynamic_malformed";
+        const CommandResult dynamic_malformed_pack = run_command(
+            "python3 workloads/ai_proto/pack_graph.py --workload dynamic_gemm --out-dir " +
+            dynamic_malformed_dir.string());
+        if (!expect(dynamic_malformed_pack.exit_code == 0,
+                    "expected dynamic malformed-input pack command to succeed")) {
+            std::fprintf(stderr, "%s\n", dynamic_malformed_pack.output.c_str());
+            std::filesystem::remove_all(temp_dir);
+            return 1;
+        }
+
         const std::filesystem::path manifest = malformed_dir / "cnn.manifest";
         const std::filesystem::path no_format_manifest =
             manifest_without_format(manifest, malformed_dir / "cnn.no_format.manifest");
@@ -344,6 +439,67 @@ int main() {
                                                malformed_dir / "cnn.dup_name.manifest",
                                                "name",
                                                "cnn-duplicate");
+        const std::filesystem::path dynamic_manifest = dynamic_malformed_dir / "dynamic_gemm.manifest";
+        const std::filesystem::path dynamic_runtime_shape =
+            dynamic_malformed_dir / "dynamic_gemm.runtime_shape.bin";
+        const std::filesystem::path missing_runtime_shape_manifest =
+            manifest_without_scalar_key(dynamic_manifest,
+                                        dynamic_malformed_dir / "dynamic_gemm.no_runtime_shape.manifest",
+                                        "runtime_shape_table");
+        const std::filesystem::path duplicate_runtime_shape_manifest =
+            manifest_with_duplicate_scalar_key(dynamic_manifest,
+                                               dynamic_malformed_dir / "dynamic_gemm.dup_runtime_shape.manifest",
+                                               "runtime_shape_table",
+                                               "dynamic_gemm.runtime_shape.bin");
+        write_binary_file(malformed_dir / "cnn.runtime_shape.bin", read_binary_file(dynamic_runtime_shape));
+        const std::filesystem::path static_with_runtime_shape_manifest =
+            manifest_with_inserted_scalar_key(manifest,
+                                              malformed_dir / "cnn.with_runtime_shape.manifest",
+                                              "graph_package",
+                                              "runtime_shape_table",
+                                              "cnn.runtime_shape.bin");
+
+        const std::vector<uint8_t> dynamic_runtime_shape_bytes = read_binary_file(dynamic_runtime_shape);
+        std::vector<uint8_t> truncated_runtime_shape_bytes = dynamic_runtime_shape_bytes;
+        truncated_runtime_shape_bytes.pop_back();
+        write_binary_file(dynamic_malformed_dir / "dynamic_gemm.runtime_shape.truncated.bin",
+                          truncated_runtime_shape_bytes);
+        std::vector<uint8_t> reserved_runtime_shape_bytes = dynamic_runtime_shape_bytes;
+        reserved_runtime_shape_bytes[3] = 0x80;
+        write_binary_file(dynamic_malformed_dir / "dynamic_gemm.runtime_shape.reserved.bin",
+                          reserved_runtime_shape_bytes);
+        std::vector<uint8_t> bad_rank_runtime_shape_bytes = dynamic_runtime_shape_bytes;
+        bad_rank_runtime_shape_bytes[2] = 0;
+        write_binary_file(dynamic_malformed_dir / "dynamic_gemm.runtime_shape.bad_rank.bin",
+                          bad_rank_runtime_shape_bytes);
+        std::vector<uint8_t> bad_dims_runtime_shape_bytes = dynamic_runtime_shape_bytes;
+        bad_dims_runtime_shape_bytes[4] = 3;
+        write_binary_file(dynamic_malformed_dir / "dynamic_gemm.runtime_shape.bad_dims.bin",
+                          bad_dims_runtime_shape_bytes);
+        const std::filesystem::path truncated_runtime_shape_manifest =
+            manifest_with_replaced_scalar_key(dynamic_manifest,
+                                             dynamic_malformed_dir /
+                                                 "dynamic_gemm.truncated_runtime_shape.manifest",
+                                             "runtime_shape_table",
+                                             "dynamic_gemm.runtime_shape.truncated.bin");
+        const std::filesystem::path reserved_runtime_shape_manifest =
+            manifest_with_replaced_scalar_key(dynamic_manifest,
+                                             dynamic_malformed_dir /
+                                                 "dynamic_gemm.reserved_runtime_shape.manifest",
+                                             "runtime_shape_table",
+                                             "dynamic_gemm.runtime_shape.reserved.bin");
+        const std::filesystem::path bad_rank_runtime_shape_manifest =
+            manifest_with_replaced_scalar_key(dynamic_manifest,
+                                             dynamic_malformed_dir /
+                                                 "dynamic_gemm.bad_rank_runtime_shape.manifest",
+                                             "runtime_shape_table",
+                                             "dynamic_gemm.runtime_shape.bad_rank.bin");
+        const std::filesystem::path bad_dims_runtime_shape_manifest =
+            manifest_with_replaced_scalar_key(dynamic_manifest,
+                                             dynamic_malformed_dir /
+                                                 "dynamic_gemm.bad_dims_runtime_shape.manifest",
+                                             "runtime_shape_table",
+                                             "dynamic_gemm.runtime_shape.bad_dims.bin");
 
         const bool ok =
             expect_profile_failure(no_format_manifest,
@@ -352,8 +508,65 @@ int main() {
             expect_profile_failure(duplicate_name_manifest,
                                    "duplicate AI profile manifest key: name",
                                    "expected ai profile manifest with duplicate name to fail") &&
-            expect_pack_and_profile(temp_dir, "cnn", "name=cnn", 18, 9, 9, 20, 1, 1, 7, 45, 32, 63) &&
-            expect_pack_and_profile(temp_dir, "gemm", "name=gemm", 13, 9, 4, 15, 1, 1, 3, 26, 20, 12) &&
+            expect_profile_failure(missing_runtime_shape_manifest,
+                                   "AI profile manifest is missing runtime shape table for dynamic graph",
+                                   "expected dynamic manifest without runtime shape table to fail") &&
+            expect_profile_failure(static_with_runtime_shape_manifest,
+                                   "AI profile runtime shape table requires a dynamic graph package",
+                                   "expected static manifest with runtime shape table to fail") &&
+            expect_profile_failure(duplicate_runtime_shape_manifest,
+                                   "duplicate AI profile manifest key: runtime_shape_table",
+                                   "expected duplicate runtime shape table key to fail") &&
+            expect_profile_failure(truncated_runtime_shape_manifest,
+                                   "failed to resolve AI profile runtime shapes: runtime shape table byte length mismatch",
+                                   "expected truncated runtime shape table to fail") &&
+            expect_profile_failure(reserved_runtime_shape_manifest,
+                                   "failed to resolve AI profile runtime shapes: runtime shape table reserved byte must be zero",
+                                   "expected reserved runtime shape byte to fail") &&
+            expect_profile_failure(bad_rank_runtime_shape_manifest,
+                                   "failed to resolve AI profile runtime shapes: runtime shape rank is out of range",
+                                   "expected bad runtime shape rank to fail") &&
+            expect_profile_failure(bad_dims_runtime_shape_manifest,
+                                   "failed to resolve AI profile runtime shapes: runtime shape dims exceed bounded tensor dims",
+                                   "expected bad runtime shape dims to fail") &&
+            expect_pack_and_profile(temp_dir,
+                                    "cnn",
+                                    "name=cnn",
+                                    18,
+                                    9,
+                                    9,
+                                    20,
+                                    1,
+                                    1,
+                                    7,
+                                    45,
+                                    32,
+                                    63,
+                                    {
+                                        "ai_profile_aggregate tile_count=4 scratchpad_peak_bytes=188 op_count=4",
+                                        "ai_profile_op op_index=0 opcode=conv2d retired_ops=36 compute_cycles=3 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=9 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=2 opcode=layout_transpose retired_ops=9 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=3 opcode=reduce_sum retired_ops=9 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                    }) &&
+            expect_pack_and_profile(temp_dir,
+                                    "gemm",
+                                    "name=gemm",
+                                    13,
+                                    9,
+                                    4,
+                                    15,
+                                    1,
+                                    1,
+                                    3,
+                                    26,
+                                    20,
+                                    12,
+                                    {
+                                        "ai_profile_aggregate tile_count=2 scratchpad_peak_bytes=36 op_count=2",
+                                        "ai_profile_op op_index=0 opcode=gemm retired_ops=8 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=1 opcode=pool_max retired_ops=4 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                    }) &&
             expect_pack_and_profile(temp_dir,
                                     "tiny_model",
                                     "name=tiny_model",
@@ -366,7 +579,13 @@ int main() {
                                     3,
                                     35,
                                     28,
-                                    20) &&
+                                    20,
+                                    {
+                                        "ai_profile_aggregate tile_count=3 scratchpad_peak_bytes=60 op_count=3",
+                                        "ai_profile_op op_index=0 opcode=gemm retired_ops=12 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=4 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=2 opcode=pool_max retired_ops=4 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                    }) &&
             expect_pack_and_profile_dynamic(temp_dir);
 
         std::filesystem::remove_all(temp_dir);

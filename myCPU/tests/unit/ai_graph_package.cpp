@@ -218,6 +218,15 @@ int main() {
             return 1;
         }
 
+        std::vector<uint8_t> reserved_header_bytes = bytes;
+        reserved_header_bytes[48] = 0x1;
+        AiGraphPackage reserved_header_parsed{};
+        if (!expect(!parse_ai_graph_package(reserved_header_bytes, reserved_header_parsed, error) &&
+                        error.find("reserved") != std::string::npos,
+                    "expected dynamic graph extended header reserved field rejection")) {
+            return 1;
+        }
+
         const std::vector<AiRuntimeShapeEntry> valid_runtime_shapes{
             AiRuntimeShapeEntry{
                 .tensor_index = 0,
@@ -232,6 +241,28 @@ int main() {
         };
         if (!expect(validate_ai_runtime_shape_table(parsed, valid_runtime_shapes, error),
                     "expected bounded runtime shapes to validate")) {
+            return 1;
+        }
+
+        std::vector<uint8_t> runtime_shape_bytes{};
+        std::vector<AiRuntimeShapeEntry> parsed_runtime_shapes{};
+        if (!expect(serialize_ai_runtime_shape_table(valid_runtime_shapes, runtime_shape_bytes, error),
+                    "expected runtime shape table to serialize") ||
+            !expect(parse_ai_runtime_shape_table(runtime_shape_bytes,
+                                                 valid_runtime_shapes.size(),
+                                                 parsed_runtime_shapes,
+                                                 error),
+                    "expected runtime shape table to parse")) {
+            return 1;
+        }
+        std::vector<uint8_t> reserved_runtime_shape_bytes = runtime_shape_bytes;
+        reserved_runtime_shape_bytes[3] = 0x80;
+        if (!expect(!parse_ai_runtime_shape_table(reserved_runtime_shape_bytes,
+                                                  valid_runtime_shapes.size(),
+                                                  parsed_runtime_shapes,
+                                                  error) &&
+                        error.find("reserved") != std::string::npos,
+                    "expected runtime shape table reserved byte rejection")) {
             return 1;
         }
 

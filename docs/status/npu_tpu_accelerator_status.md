@@ -17,6 +17,7 @@
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
 - 已完成计划：
+  - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave2-plan](../plan/history_plan.md#npu-tpu-accelerator-wave2-plan)
 
@@ -108,6 +109,11 @@
   - `AiAccelerator` 当前已能在 doorbell 路径读取 runtime shape table，并把 `dynamic_bounded` package resolve 成本次 submission 的 concrete static package；现阶段先把 runtime dims 接到 `GEMM` 路径，不改变静态 graph 的既有语义。
   - `workloads/ai_proto` 当前已新增 `dynamic_gemm`，manifest 也已支持可选 `runtime_shape_table=` 入口；`--ai-profile-manifest` summary 现在会额外输出 `shape_mode` 与 `runtime_shapes`。
   - `ai_accelerator_gemm_smoke` 当前已锁住同一 dynamic GEMM graph 在两组 runtime shape 下的不同输出、`retired_ops / bytes_moved / tile_count / scratchpad_peak_bytes`，以及缺 runtime shape 时的 fail-closed；`ai_accelerator_profile_smoke` 当前也已锁住 `dynamic_gemm` 的 pack / profile / expected-output 闭环。
+- `2026-04-24` 同日后续补上 runtime-shape fail-closed hardening：`parse_ai_runtime_shape_table()` 当前会拒绝非零 reserved byte，dynamic graph extended header reserved 字段也会 fail-closed，`AiAccelerator` 还会拒绝未对齐的 `runtime_shape_table_offset`，避免后续扩展位或错位 runtime shape table 被旧 parser / 设备路径静默吞掉；这些合同已由 `test-unit-ai_graph_package` 与 `test-host-ai_accelerator_gemm_smoke` 锁住。
+- `2026-04-24` 同日已完成 Wave 3，并归档到 [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)。
+  - runtime-shape fail-closed matrix 当前已经补齐到 parser / host manifest / device submission 三层：extended header reserved、runtime-shape reserved byte、manifest 缺失/重复 `runtime_shape_table`、runtime shape 文件尺寸错误、rank / dims 超界，以及 `runtime_shape_table_offset` 的 zero / unaligned / overlap / out-of-window / DMA-fault 都已形成最小回归。
+  - `Machine::AiProfileRunResult` 与 `--ai-profile-manifest` 当前已稳定暴露 `ai_profile_aggregate` 与 `ai_profile_op` 文本出口，固定输出 `tile_count / scratchpad_peak_bytes / op_count`，以及每个 op 的 `op_index / opcode / retired_ops / compute_cycles / stall_cycles / tile_count`。
+  - profile lifecycle 当前也已收口：success 会更新 summary，runtime-shape / execute fault 不会污染上一轮成功 summary，reset 会把 aggregate 与 op summary 清零；这些合同已由 `test-host-ai_accelerator_cnn_smoke`、`test-host-ai_accelerator_gemm_smoke` 与 `test-host-ai_accelerator_profile_smoke` 一起守住。
 
 ## 关键历史节点
 
@@ -176,13 +182,24 @@
   - 完成 Wave 2 任务 4：新增 bounded dynamic shape contract / reject matrix；`AiGraphPackage` 现在已支持 `shape_mode=dynamic_bounded`、training future 保留字段 fail-closed、dynamic tensor metadata 与 runtime shape table 校验，`AiSubmissionDescriptor` 也已在不改变 `48-byte` 宽度的前提下暴露 `runtime_shape_table_offset` roundtrip，并通过：
     - `cd myCPU && make test-unit-ai_graph_package`
     - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
+  - 完成 Wave 2 后续 runtime-shape fail-closed hardening：非零 runtime shape table reserved byte、dynamic graph extended header reserved 字段与未对齐 `runtime_shape_table_offset` 现在都会被拒绝，并通过：
+    - `cd myCPU && make test-unit-ai_graph_package`
+    - `cd myCPU && make test-host-ai_accelerator_gemm_smoke`
+  - 完成 Wave 3：runtime-shape fail-closed matrix、host profile manifest 负向矩阵、`--ai-profile-manifest` itemized 文本出口，以及 profile lifecycle 都已收口，并通过：
+    - `cd myCPU && make test-unit-ai_graph_package`
+    - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
+    - `cd myCPU && make test-host-ai_accelerator_cnn_smoke`
+    - `cd myCPU && make test-host-ai_accelerator_gemm_smoke`
+    - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
+    - `cd myCPU && make test`
+    - `cd myCPU && make test-pipeline`
 
 ## 当前仍然有效的风险 / 限制
 
 - 当前主线已经切到 `xv6 / Linux` foundation；这条 AI accelerator 线虽然已经建模，但不是当前已激活主线。
 - `DMA-ready` contract、graph package、tensor golden model、独立 AI accelerator 控制面、`scratchpad/DMA engine`、第一版 compute engine、host graph packaging / profile 入口，以及 guest driver / guest demo / debug profile 可观察性当前都已有实现；这条线的剩余限制已经不再是“入口没接上”，而是更细的 timing / overlap / performance 模型还没展开。
 - 当前已经有独立设备时序模型的第二刀，但仍只停在 `timed-simple`：`DMA + compute` 当前固定为 no-overlap，`stall_cycles` 也还没有展开成更细 attribution，因此这条线仍不能拿来讨论更激进的 tile overlap、queue 开销隐藏或更细颗粒度吞吐模型。
-- 当前 per-op / per-tile profile summary 仍只暴露在 host-side `AiAccelerator` profile 统计里，尚未扩到 `--ai-profile-manifest` 的分项文本 summary、MMIO 或 debug snapshot；Wave 2 只把 `shape_mode / runtime_shapes` 外推到 host profile 文本出口，不顺势扩大新的控制面 ABI。
+- 当前 per-op / per-tile profile summary 已经外推到 `--ai-profile-manifest` 的 `ai_profile_aggregate` / `ai_profile_op` 文本出口，但仍没有扩大到 MMIO 或 debug snapshot 的 itemized ABI；当前继续保持“host-side 文本出口 + 设备侧 ABI 不变”的边界。
 - 当前 `tiny_model` 已经补上，但它仍是受当前算子面约束的 `gemm -> relu -> pool` block，还不是更完整的 `conv -> relu -> pool -> fc`；如果后续要推进到后者，应先在独立设计里明确 dtype bridge 或更完整的 matmul-family 输入合同，而不是在 Wave 2 的 host workload 里偷开新语义。
 - 同时覆盖 quantized 与 semi-precision family 会明显放大验证矩阵；后续实施时必须坚持“统一 ABI + 代表性闭环”，不能一开始就追求全矩阵算子铺满。
 - bounded dynamic shape 当前只完成到 matmul-family 的第一刀：runtime dims 已接到 dynamic `GEMM / FC-like` 入口，但还没有扩到 `conv / pool / relu / reduce / layout_transpose` 的动态路径，也没有把 runtime-shape fault 细分成更细的 fault detail 矩阵。
@@ -191,9 +208,9 @@
 
 ## 下一步
 
-1. Wave 2 已完成；下一步优先按 bug-driven hardening 继续守住 `dynamic_gemm`、`runtime_shape_table_offset` 与新增 host profile summary 的 fail-closed 边界，而不是立刻重开更大功能面。
-2. 如果后续要继续扩大动态路径，优先先补 bounded dynamic 的 `conv / pool / relu` fault matrix 和更细的 memory-plan mismatch 归因，再决定是否值得新开下一轮 active plan。
-3. 继续把训练前向 + 反向、`Softmax / attention`、`INT4 / GELU / Sigmoid`、更完整的 `conv -> relu -> pool -> fc` 路径，以及 frontend 可视化放在后续专项，不混入已完成的 Wave 2。
+1. Wave 3 已完成；当前这条线先回到 bug-driven hardening 与维护态，不再保留活跃 checklist。
+2. 如果后续要继续扩大动态路径，优先先补 `conv / pool / relu / reduce / layout_transpose` 的 bounded dynamic fault matrix 和 memory-plan mismatch 归因，再决定是否值得新开下一轮计划。
+3. 继续把训练前向 + 反向、`Softmax / attention`、`INT4 / GELU / Sigmoid`、更完整的 `conv -> relu -> pool -> fc` 路径，以及 frontend 可视化放在后续专项，不混入已完成的 Wave 3。
 
 ## 验证基线
 

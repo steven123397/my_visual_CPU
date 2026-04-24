@@ -446,6 +446,21 @@ int main() {
             return 1;
         }
 
+        if (!store_u32(bus, AI_ACCEL_BASE + AI_ACCEL_REG_CONTROL, AI_ACCEL_CONTROL_RESET, "cnn reset")) {
+            return 1;
+        }
+        const AiAcceleratorProfileSummary& reset_profile_summary = machine.ai_accelerator().profile_summary();
+        if (!expect(reset_profile_summary.tile_count == 0, "expected CNN profile tile count reset") ||
+            !expect(reset_profile_summary.scratchpad_peak_bytes == 0,
+                    "expected CNN scratchpad peak bytes reset") ||
+            !expect(reset_profile_summary.op_summaries.empty(), "expected CNN op summaries reset") ||
+            !expect(machine.ai_accelerator().completion_count() == 0, "expected CNN completion count reset") ||
+            !expect(machine.ai_accelerator().doorbell_count() == 0, "expected CNN doorbell count reset") ||
+            !expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE,
+                    "expected CNN last fault cleared on reset")) {
+            return 1;
+        }
+
         std::puts("ai_accelerator_cnn_smoke: PASS");
         return 0;
     } catch (const std::exception& ex) {
