@@ -168,6 +168,11 @@ int main(int argc, char* argv[]) {
                       << " dma_cycles=" << result.dma_cycles
                       << " compute_cycles=" << result.compute_cycles
                       << " stall_cycles=" << result.stall_cycles
+                      << " busy_cycles=" << result.busy_cycles
+                      << " queue_cycles=" << result.queue_cycles
+                      << " completion_cycles=" << result.completion_cycles
+                      << " effective_ops_per_cycle=" << result.effective_ops_per_cycle
+                      << " utilization=" << result.utilization
                       << '\n';
             return result.completed &&
                            result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS

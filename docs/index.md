@@ -38,15 +38,17 @@
     未来扩展路线图：ISA 补全、workload 升级、微架构深化、系统级跃迁的统一规划与依赖图。
 17. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 的专项状态：当前冻结边界、风险和下一步。
-18. [plan/npu_tpu_accelerator_wave1_plan.md](plan/npu_tpu_accelerator_wave1_plan.md)
-    `NPU / TPU-like` AI accelerator 的 Wave 1 计划：`DMA-ready` 基座、图包、控制面、数据面和 host/guest 接入顺序。
-19. [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
+18. [plan/npu_tpu_accelerator_wave2_plan.md](plan/npu_tpu_accelerator_wave2_plan.md)
+    `NPU / TPU-like` AI accelerator 的 Wave 2 计划：profile attribution、tiny model、bounded dynamic shape 与训练远期边界。
+19. [plan/history_plan.md#npu-tpu-accelerator-wave1-plan](plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
+    `NPU / TPU-like` AI accelerator Wave 1 的完成归档：`DMA-ready` 基座、图包、控制面、数据面和 host/guest 接入结果。
+20. [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
     当前已激活的 `xv6 / Linux / JIT` 主线切换设计。
-20. [plan/xv6_linux_jit_wave1_plan.md](plan/xv6_linux_jit_wave1_plan.md)
+21. [plan/xv6_linux_jit_wave1_plan.md](plan/xv6_linux_jit_wave1_plan.md)
     当前 `xv6 / Linux / JIT` 主线切换的 Wave 1 执行计划、worktree 布局和 agent prompt。
-21. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
+22. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
     `P4-prep-1` 的完成归档与结果摘要。
-22. [plan/history_plan.md](plan/history_plan.md)
+23. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -64,7 +66,8 @@
 - `AI accelerator / NPU`
   - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
   - [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
-  - [plan/npu_tpu_accelerator_wave1_plan.md](plan/npu_tpu_accelerator_wave1_plan.md)
+  - [plan/npu_tpu_accelerator_wave2_plan.md](plan/npu_tpu_accelerator_wave2_plan.md)
+  - [plan/history_plan.md#npu-tpu-accelerator-wave1-plan](plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
   - [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
   - [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
 - `debug / frontend`

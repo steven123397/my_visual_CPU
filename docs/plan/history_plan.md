@@ -21,6 +21,15 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-04-23
+
+#### npu-tpu-accelerator-wave1-plan
+
+- 原文件：`npu_tpu_accelerator_wave1_plan.md`
+- 完成内容：完成独立 `MMIO NPU / TPU-like` AI accelerator Wave 1 foundation，把 `DMA-ready` memory contract、静态 graph package / tensor golden model、独立 AI accelerator 控制面、`scratchpad + DMA/load-store engine`、静态调度器与代表性 compute path、host `ai_proto` packaging/profile 入口，以及 guest driver / demo / debug profile 闭环一起落到主工作树。
+- 实现过程摘要：整体按 `DMA-ready -> graph/golden -> control plane -> data plane -> compute path -> host profile -> guest/debug` 的顺序小步推进，并把性能口径收口为 `timed-simple simulated cycles`，不使用宿主机 wall-clock 表述“加速”。同日后续 hardening 又补上 manifest `format=ai_proto_manifest_v1` / 重复单值 key reject，以及 guest `ai_accel` queue helper，避免 host profile 与 guest completion ring 继续依赖 fail-open 假设。
+- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
 ### 2026-04-12
 
 #### phase4-prep1-bus-memory-region-plan

@@ -63,6 +63,14 @@ inline constexpr uint32_t AI_ACCEL_REG_COMPUTE_CYCLES_LOW = 0x0b0;
 inline constexpr uint32_t AI_ACCEL_REG_COMPUTE_CYCLES_HIGH = 0x0b4;
 inline constexpr uint32_t AI_ACCEL_REG_STALL_CYCLES_LOW = 0x0b8;
 inline constexpr uint32_t AI_ACCEL_REG_STALL_CYCLES_HIGH = 0x0bc;
+inline constexpr uint32_t AI_ACCEL_REG_BUSY_CYCLES_LOW = 0x0c0;
+inline constexpr uint32_t AI_ACCEL_REG_BUSY_CYCLES_HIGH = 0x0c4;
+inline constexpr uint32_t AI_ACCEL_REG_QUEUE_CYCLES_LOW = 0x0c8;
+inline constexpr uint32_t AI_ACCEL_REG_QUEUE_CYCLES_HIGH = 0x0cc;
+inline constexpr uint32_t AI_ACCEL_REG_COMPLETION_CYCLES_LOW = 0x0d0;
+inline constexpr uint32_t AI_ACCEL_REG_COMPLETION_CYCLES_HIGH = 0x0d4;
+inline constexpr uint32_t AI_ACCEL_REG_EFFECTIVE_OPS_PER_CYCLE = 0x0d8;
+inline constexpr uint32_t AI_ACCEL_REG_UTILIZATION = 0x0dc;
 
 inline constexpr uint32_t AI_ACCEL_CONTROL_RESET = 0x1;
 
@@ -126,6 +134,9 @@ public:
 private:
     bool is_busy() const;
     uint32_t status() const;
+    uint64_t busy_cycles() const;
+    uint32_t effective_ops_per_cycle() const;
+    uint32_t utilization() const;
     uint32_t counter_low(uint64_t value) const;
     uint32_t counter_high(uint64_t value) const;
     void write_queue_base_low(bool submission, uint32_t value);
@@ -187,4 +198,7 @@ private:
     uint64_t device_cycles_{0};
     uint64_t compute_cycles_{0};
     uint64_t stall_cycles_{0};
+    uint64_t queue_cycles_{0};
+    uint64_t completion_cycles_{0};
+    uint64_t retired_ops_{0};
 };

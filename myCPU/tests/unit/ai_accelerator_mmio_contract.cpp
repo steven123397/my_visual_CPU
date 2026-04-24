@@ -215,6 +215,9 @@ int main() {
         uint64_t dma_cycles = 0;
         uint64_t compute_cycles = 0;
         uint64_t stall_cycles = 0;
+        uint64_t busy_cycles = 0;
+        uint64_t queue_cycles = 0;
+        uint64_t completion_cycles = 0;
         if (!expect(completion.token == descriptor.token, "expected completion token") ||
             !expect(completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, "expected success completion") ||
             !expect(completion.fault_code == AI_ACCEL_FAULT_NONE, "expected no completion fault") ||
@@ -225,10 +228,24 @@ int main() {
             !load_counter(bus, AI_ACCEL_REG_DMA_CYCLES_LOW, AI_ACCEL_REG_DMA_CYCLES_HIGH, dma_cycles) ||
             !load_counter(bus, AI_ACCEL_REG_COMPUTE_CYCLES_LOW, AI_ACCEL_REG_COMPUTE_CYCLES_HIGH, compute_cycles) ||
             !load_counter(bus, AI_ACCEL_REG_STALL_CYCLES_LOW, AI_ACCEL_REG_STALL_CYCLES_HIGH, stall_cycles) ||
+            !load_counter(bus, AI_ACCEL_REG_BUSY_CYCLES_LOW, AI_ACCEL_REG_BUSY_CYCLES_HIGH, busy_cycles) ||
+            !load_counter(bus, AI_ACCEL_REG_QUEUE_CYCLES_LOW, AI_ACCEL_REG_QUEUE_CYCLES_HIGH, queue_cycles) ||
+            !load_counter(bus,
+                          AI_ACCEL_REG_COMPLETION_CYCLES_LOW,
+                          AI_ACCEL_REG_COMPLETION_CYCLES_HIGH,
+                          completion_cycles) ||
             !expect(device_cycles == 8, "expected total device cycles") ||
             !expect(dma_cycles == 6, "expected total DMA cycles") ||
             !expect(compute_cycles == 2, "expected total compute cycles") ||
             !expect(stall_cycles == 0, "expected zero stall cycles") ||
+            !expect(busy_cycles == 10, "expected busy cycles to include queue and completion attribution") ||
+            !expect(queue_cycles == 1, "expected one queue/control cycle") ||
+            !expect(completion_cycles == 1, "expected one completion cycle") ||
+            !load_reg(bus,
+                      AI_ACCEL_REG_EFFECTIVE_OPS_PER_CYCLE,
+                      4,
+                      "expected effective ops per compute cycle") ||
+            !load_reg(bus, AI_ACCEL_REG_UTILIZATION, 20, "expected compute utilization percent") ||
             !expect(plic.source_level(AI_ACCEL_PLIC_SOURCE), "expected AI accelerator IRQ line asserted")) {
             return 1;
         }
@@ -242,6 +259,14 @@ int main() {
         if (!store_reg(bus, AI_ACCEL_REG_CONTROL, AI_ACCEL_CONTROL_RESET, "control reset") ||
             !load_reg(bus, AI_ACCEL_REG_DOORBELL_COUNT_LOW, 0, "expected reset doorbell count") ||
             !load_reg(bus, AI_ACCEL_REG_COMPLETION_COUNT_LOW, 0, "expected reset completion count") ||
+            !load_reg(bus, AI_ACCEL_REG_BUSY_CYCLES_LOW, 0, "expected reset busy cycles") ||
+            !load_reg(bus, AI_ACCEL_REG_QUEUE_CYCLES_LOW, 0, "expected reset queue cycles") ||
+            !load_reg(bus, AI_ACCEL_REG_COMPLETION_CYCLES_LOW, 0, "expected reset completion cycles") ||
+            !load_reg(bus,
+                      AI_ACCEL_REG_EFFECTIVE_OPS_PER_CYCLE,
+                      0,
+                      "expected reset effective ops per cycle") ||
+            !load_reg(bus, AI_ACCEL_REG_UTILIZATION, 0, "expected reset utilization") ||
             !load_reg(bus, AI_ACCEL_REG_LAST_FAULT, AI_ACCEL_FAULT_NONE, "expected reset fault")) {
             return 1;
         }
@@ -267,10 +292,28 @@ int main() {
         }
 
         const AiCompletionEntry fault_completion = read_completion(ram, kCompleteQueueAddr);
+        uint64_t fault_busy_cycles = 0;
+        uint64_t fault_queue_cycles = 0;
+        uint64_t fault_completion_cycles = 0;
         return expect(fault_completion.status == AI_ACCEL_COMPLETION_STATUS_FAULT,
                       "expected fault completion status") &&
                        expect(fault_completion.fault_code == AI_ACCEL_FAULT_INVALID_DESCRIPTOR,
-                              "expected fault completion code")
+                              "expected fault completion code") &&
+                       load_counter(bus,
+                                    AI_ACCEL_REG_BUSY_CYCLES_LOW,
+                                    AI_ACCEL_REG_BUSY_CYCLES_HIGH,
+                                    fault_busy_cycles) &&
+                       load_counter(bus,
+                                    AI_ACCEL_REG_QUEUE_CYCLES_LOW,
+                                    AI_ACCEL_REG_QUEUE_CYCLES_HIGH,
+                                    fault_queue_cycles) &&
+                       load_counter(bus,
+                                    AI_ACCEL_REG_COMPLETION_CYCLES_LOW,
+                                    AI_ACCEL_REG_COMPLETION_CYCLES_HIGH,
+                                    fault_completion_cycles) &&
+                       expect(fault_busy_cycles == 2, "expected fault completion busy attribution") &&
+                       expect(fault_queue_cycles == 1, "expected fault path queue attribution") &&
+                       expect(fault_completion_cycles == 1, "expected fault completion attribution")
                    ? 0
                    : 1;
     } catch (const std::exception& ex) {

@@ -134,6 +134,22 @@ uint64_t AiAccelerator::load(uint64_t addr, int size) {
         return counter_low(stall_cycles_);
     case AI_ACCEL_REG_STALL_CYCLES_HIGH:
         return counter_high(stall_cycles_);
+    case AI_ACCEL_REG_BUSY_CYCLES_LOW:
+        return counter_low(busy_cycles());
+    case AI_ACCEL_REG_BUSY_CYCLES_HIGH:
+        return counter_high(busy_cycles());
+    case AI_ACCEL_REG_QUEUE_CYCLES_LOW:
+        return counter_low(queue_cycles_);
+    case AI_ACCEL_REG_QUEUE_CYCLES_HIGH:
+        return counter_high(queue_cycles_);
+    case AI_ACCEL_REG_COMPLETION_CYCLES_LOW:
+        return counter_low(completion_cycles_);
+    case AI_ACCEL_REG_COMPLETION_CYCLES_HIGH:
+        return counter_high(completion_cycles_);
+    case AI_ACCEL_REG_EFFECTIVE_OPS_PER_CYCLE:
+        return effective_ops_per_cycle();
+    case AI_ACCEL_REG_UTILIZATION:
+        return utilization();
     case AI_ACCEL_REG_DMA_LOAD_CYCLES_LOW:
         return counter_low(dma.load_cycles);
     case AI_ACCEL_REG_DMA_LOAD_CYCLES_HIGH:
@@ -252,6 +268,11 @@ DebugAiAcceleratorSnapshot AiAccelerator::debug_snapshot() const {
         .dma_cycles = dma_engine_.counters().total_cycles,
         .compute_cycles = compute_cycles_,
         .stall_cycles = stall_cycles_,
+        .busy_cycles = busy_cycles(),
+        .queue_cycles = queue_cycles_,
+        .completion_cycles = completion_cycles_,
+        .effective_ops_per_cycle = effective_ops_per_cycle(),
+        .utilization = utilization(),
     };
 }
 
@@ -271,6 +292,25 @@ uint32_t AiAccelerator::status() const {
         value |= AI_ACCEL_STATUS_IRQ;
     }
     return value;
+}
+
+uint64_t AiAccelerator::busy_cycles() const {
+    return device_cycles_ + queue_cycles_ + completion_cycles_;
+}
+
+uint32_t AiAccelerator::effective_ops_per_cycle() const {
+    if (compute_cycles_ == 0) {
+        return 0;
+    }
+    return static_cast<uint32_t>(retired_ops_ / compute_cycles_);
+}
+
+uint32_t AiAccelerator::utilization() const {
+    const uint64_t busy = busy_cycles();
+    if (busy == 0) {
+        return 0;
+    }
+    return static_cast<uint32_t>((compute_cycles_ * 100U) / busy);
 }
 
 uint32_t AiAccelerator::counter_low(uint64_t value) const {
@@ -426,6 +466,7 @@ bool AiAccelerator::begin_submission() {
     }
 
     --pending_submission_budget_;
+    ++queue_cycles_;
 
     AiSubmissionDescriptor descriptor{};
     std::string error;
@@ -714,6 +755,8 @@ bool AiAccelerator::complete_descriptor(const AiSubmissionDescriptor& descriptor
         return false;
     }
 
+    ++completion_cycles_;
+    retired_ops_ += retired_ops;
     queue_.advance_submission();
     queue_.advance_completion();
     ++submission_count_;
@@ -804,6 +847,9 @@ void AiAccelerator::reset_device() {
     device_cycles_ = 0;
     compute_cycles_ = 0;
     stall_cycles_ = 0;
+    queue_cycles_ = 0;
+    completion_cycles_ = 0;
+    retired_ops_ = 0;
     update_interrupt_line();
 }
 

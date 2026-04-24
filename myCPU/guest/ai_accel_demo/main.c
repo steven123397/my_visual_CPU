@@ -41,6 +41,7 @@ static ai_accel_submission_descriptor_t g_submit_queue[AI_ACCEL_DEMO_QUEUE_ENTRI
     __attribute__((aligned(64)));
 static ai_accel_completion_entry_t g_complete_queue[AI_ACCEL_DEMO_QUEUE_ENTRIES]
     __attribute__((aligned(64)));
+static ai_accel_queue_state_t g_queue_state;
 static uint64_t g_input_table[2] __attribute__((aligned(16)));
 static uint64_t g_output_table[2] __attribute__((aligned(16)));
 static int32_t g_output_tensor[1] __attribute__((aligned(16)));
@@ -72,9 +73,13 @@ static void ai_accel_demo_zero_buffers(void) {
 
 static bool ai_accel_demo_submit(kernel_runtime_t* runtime) {
     ai_accel_profile_counters_t counters;
+    ai_accel_submission_descriptor_t descriptor;
+    ai_accel_completion_entry_t completion;
     const supervisor_runtime_interrupt_state_t* interrupts = NULL;
     const uint64_t token = UINT64_C(0x41494343454c0101);
     uint32_t irq_status = 0;
+    uint32_t queue_head = 0;
+    uint32_t queue_tail = 0;
 
     if (runtime == NULL) {
         return false;
@@ -92,17 +97,24 @@ static bool ai_accel_demo_submit(kernel_runtime_t* runtime) {
     }
 
     ai_accel_demo_zero_buffers();
+    if (!ai_accel_queue_state_init(&g_queue_state,
+                                   g_submit_queue,
+                                   AI_ACCEL_DEMO_QUEUE_ENTRIES,
+                                   g_complete_queue,
+                                   AI_ACCEL_DEMO_QUEUE_ENTRIES)) {
+        return false;
+    }
     supervisor_runtime_interrupt_state_reset_counters(
         kernel_runtime_interrupt_state(runtime));
-    g_submit_queue[0].token = token;
-    g_submit_queue[0].graph_package_addr =
+    descriptor.token = token;
+    descriptor.graph_package_addr =
         (uint64_t)(uintptr_t)k_ai_accel_demo_graph_package;
-    g_submit_queue[0].graph_package_bytes =
+    descriptor.graph_package_bytes =
         (uint32_t)sizeof(k_ai_accel_demo_graph_package);
-    g_submit_queue[0].flags = 0;
-    g_submit_queue[0].input_table_addr = (uint64_t)(uintptr_t)g_input_table;
-    g_submit_queue[0].output_table_addr = (uint64_t)(uintptr_t)g_output_table;
-    g_submit_queue[0].source_tag = AI_ACCEL_DEMO_SOURCE_TAG;
+    descriptor.flags = 0;
+    descriptor.input_table_addr = (uint64_t)(uintptr_t)g_input_table;
+    descriptor.output_table_addr = (uint64_t)(uintptr_t)g_output_table;
+    descriptor.source_tag = AI_ACCEL_DEMO_SOURCE_TAG;
 
     ai_accel_reset();
     ai_accel_enable_irqs(AI_ACCEL_IRQ_COMPLETION | AI_ACCEL_IRQ_FAULT);
@@ -110,7 +122,13 @@ static bool ai_accel_demo_submit(kernel_runtime_t* runtime) {
                               AI_ACCEL_DEMO_QUEUE_ENTRIES,
                               (uint64_t)(uintptr_t)g_complete_queue,
                               AI_ACCEL_DEMO_QUEUE_ENTRIES);
-    ai_accel_set_submit_tail(1);
+    if (!ai_accel_queue_enqueue_submission(&g_queue_state,
+                                           ai_accel_submit_head(),
+                                           &descriptor,
+                                           &queue_tail)) {
+        return false;
+    }
+    ai_accel_set_submit_tail(queue_tail);
     ai_accel_ring_doorbell(1);
     console_putc('A');
 
@@ -122,24 +140,28 @@ static bool ai_accel_demo_submit(kernel_runtime_t* runtime) {
 
     irq_status = ai_accel_irq_status();
     ai_accel_ack_irqs(irq_status);
-    if ((irq_status & AI_ACCEL_IRQ_COMPLETION) == 0 ||
+    if (!ai_accel_queue_sync_completion_tail(&g_queue_state,
+                                             ai_accel_completion_tail()) ||
+        !ai_accel_queue_dequeue_completion(&g_queue_state,
+                                           &completion,
+                                           &queue_head) ||
+        (irq_status & AI_ACCEL_IRQ_COMPLETION) == 0 ||
         (irq_status & AI_ACCEL_IRQ_FAULT) != 0 ||
-        ai_accel_last_fault() != AI_ACCEL_FAULT_NONE ||
-        ai_accel_completion_tail() != 1) {
+        ai_accel_last_fault() != AI_ACCEL_FAULT_NONE) {
         return false;
     }
 
-    if (g_complete_queue[0].token != token ||
-        g_complete_queue[0].status != AI_ACCEL_COMPLETION_STATUS_SUCCESS ||
-        g_complete_queue[0].fault_code != AI_ACCEL_FAULT_NONE ||
-        g_complete_queue[0].retired_ops != 3 ||
-        g_complete_queue[0].bytes_moved != 16 ||
-        g_complete_queue[0].source_tag != AI_ACCEL_DEMO_SOURCE_TAG ||
+    if (completion.token != token ||
+        completion.status != AI_ACCEL_COMPLETION_STATUS_SUCCESS ||
+        completion.fault_code != AI_ACCEL_FAULT_NONE ||
+        completion.retired_ops != 3 ||
+        completion.bytes_moved != 16 ||
+        completion.source_tag != AI_ACCEL_DEMO_SOURCE_TAG ||
         g_output_tensor[0] != 6) {
         return false;
     }
 
-    ai_accel_set_completion_head(1);
+    ai_accel_set_completion_head(queue_head);
     ai_accel_read_counters(&counters);
     if (counters.device_cycles != 8 ||
         counters.dma_cycles != 6 ||

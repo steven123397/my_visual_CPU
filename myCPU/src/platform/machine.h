@@ -49,6 +49,11 @@ public:
         uint64_t dma_cycles{0};
         uint64_t compute_cycles{0};
         uint64_t stall_cycles{0};
+        uint64_t busy_cycles{0};
+        uint64_t queue_cycles{0};
+        uint64_t completion_cycles{0};
+        uint32_t effective_ops_per_cycle{0};
+        uint32_t utilization{0};
         bool completed{false};
     };
 

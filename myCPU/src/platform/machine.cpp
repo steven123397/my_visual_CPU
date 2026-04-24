@@ -112,6 +112,11 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
     }
 
     const std::filesystem::path base_dir = manifest.manifest_path.parent_path();
+    bool seen_format = false;
+    bool seen_name = false;
+    bool seen_graph_package = false;
+    bool seen_max_ticks = false;
+    bool seen_source_tag = false;
     std::string line;
     while (std::getline(in, line)) {
         const std::string trimmed = trim(line);
@@ -125,12 +130,24 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
         const std::string key = trim(trimmed.substr(0, eq));
         const std::string value = trim(trimmed.substr(eq + 1));
         if (key == "format") {
+            if (seen_format) {
+                throw std::runtime_error("duplicate AI profile manifest key: format");
+            }
+            seen_format = true;
             if (value != "ai_proto_manifest_v1") {
                 throw std::runtime_error("unsupported AI profile manifest format: " + value);
             }
         } else if (key == "name") {
+            if (seen_name) {
+                throw std::runtime_error("duplicate AI profile manifest key: name");
+            }
+            seen_name = true;
             manifest.name = value;
         } else if (key == "graph_package") {
+            if (seen_graph_package) {
+                throw std::runtime_error("duplicate AI profile manifest key: graph_package");
+            }
+            seen_graph_package = true;
             manifest.graph_package_path = base_dir / value;
         } else if (key == "input") {
             manifest.input_paths.push_back(base_dir / value);
@@ -139,14 +156,25 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
         } else if (key == "expected_output") {
             continue;
         } else if (key == "max_ticks") {
+            if (seen_max_ticks) {
+                throw std::runtime_error("duplicate AI profile manifest key: max_ticks");
+            }
+            seen_max_ticks = true;
             manifest.max_ticks = static_cast<uint32_t>(std::stoul(value, nullptr, 0));
         } else if (key == "source_tag") {
+            if (seen_source_tag) {
+                throw std::runtime_error("duplicate AI profile manifest key: source_tag");
+            }
+            seen_source_tag = true;
             manifest.source_tag = static_cast<uint32_t>(std::stoul(value, nullptr, 0));
         } else {
             throw std::runtime_error("unknown AI profile manifest key: " + key);
         }
     }
 
+    if (!seen_format) {
+        throw std::runtime_error("AI profile manifest is missing format");
+    }
     if (manifest.name.empty()) {
         throw std::runtime_error("AI profile manifest is missing name");
     }
@@ -505,6 +533,23 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
     result.stall_cycles =
         load_counter_checked(bus_, AI_ACCEL_REG_STALL_CYCLES_LOW, AI_ACCEL_REG_STALL_CYCLES_HIGH,
                              "stall cycles");
+    result.busy_cycles =
+        load_counter_checked(bus_, AI_ACCEL_REG_BUSY_CYCLES_LOW, AI_ACCEL_REG_BUSY_CYCLES_HIGH,
+                             "busy cycles");
+    result.queue_cycles =
+        load_counter_checked(bus_, AI_ACCEL_REG_QUEUE_CYCLES_LOW, AI_ACCEL_REG_QUEUE_CYCLES_HIGH,
+                             "queue cycles");
+    result.completion_cycles =
+        load_counter_checked(bus_,
+                             AI_ACCEL_REG_COMPLETION_CYCLES_LOW,
+                             AI_ACCEL_REG_COMPLETION_CYCLES_HIGH,
+                             "completion cycles");
+    result.effective_ops_per_cycle =
+        static_cast<uint32_t>(load_u32_checked(bus_,
+                                               AI_ACCEL_REG_EFFECTIVE_OPS_PER_CYCLE,
+                                               "effective ops per cycle"));
+    result.utilization =
+        static_cast<uint32_t>(load_u32_checked(bus_, AI_ACCEL_REG_UTILIZATION, "utilization"));
 
     if (result.completed && result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS) {
         for (const OutputBinding& output : outputs) {

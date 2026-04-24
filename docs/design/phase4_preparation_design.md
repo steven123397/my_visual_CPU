@@ -59,7 +59,7 @@
 3. `P4-prep-3`
    - DMA-ready 的 initiator / transaction 合同
 
-其中当前已经落地的是 `P4-prep-1`；`P4-prep-2 / P4-prep-3` 仍然只是候选后继项。
+其中当前已经落地的是 `P4-prep-1`；`NPU / TPU-like` AI accelerator Wave 1 也已经消费并落地了一条更窄的 `DMA-ready` initiator / transaction 合同。`P4-prep-2`、更通用的 DMA 设备模型，以及完整 `cache / multicore / coherence` 仍然只是候选后继项。
 
 ### 2. `P4-prep-1` 已沉淀的正式 contract
 
@@ -106,7 +106,7 @@
 - `cache`
   - 需要更持续的 memory-level workload 证据，才能判断模型复杂度是否值得
 - `DMA`
-  - 需要更明确的 initiator / transaction contract，以及设备与内存交界面的统一解释
+  - 已有 AI accelerator 消费的窄 initiator / transaction contract，但更通用的设备 DMA、buffer ownership 与 cache 交界面仍未展开
 - `multicore / coherence`
   - 会显著放大同步、原子性、一致性和平台状态空间，不能在当前准备层不足时抢跑
 
@@ -114,16 +114,16 @@
 
 ### 5. `P4-prep-2 / P4-prep-3` 的正式定位
 
-当前这两个方向仍然只保留为候选后继项：
+当前这些方向仍然只保留为候选后继项：
 
 - `P4-prep-2`
   - 目标是增加更克制的 `memory observation / shadow cache`
   - 重点在于收集 workload 证据，而不是立刻引入真实 cache 行为
 - `P4-prep-3`
-  - 目标是为未来 DMA 路线准备 initiator / transaction 合同
-  - 重点在于定义边界，而不是先把异步设备模型全部做出来
+  - 首个窄切片已经由 `NPU / TPU-like` AI accelerator Wave 1 落地，形成 `dma_transaction`、`Bus::dma_read()/dma_write()` 与设备侧 fail-closed DMA 语义
+  - 后续重点仍是继续定义更通用的 DMA / buffer ownership 边界，而不是把异步设备模型、cache coherence 或多设备 DMA 一次性做完
 
-它们当前都不自动进入默认主线，是否值得继续，应以 `docs/status/` 中的即时判断和 workload 信号为准。
+后续这些方向仍不自动进入默认主线，是否值得继续，应以 `docs/status/` 中的即时判断和 workload 信号为准。
 
 ## 验证思路
 
@@ -154,4 +154,4 @@
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `Phase 4` 当前准备性入口的统一设计来源。
-- 当前已完成的正式结果是 `P4-prep-1`；后续是否继续 `P4-prep-2 / P4-prep-3`，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
+- 当前已完成的正式结果是 `P4-prep-1`，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract；后续是否继续 `P4-prep-2`、更通用的 `P4-prep-3` 或完整 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。

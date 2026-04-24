@@ -17,9 +17,9 @@
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
 - 当前计划：
-  - [../plan/npu_tpu_accelerator_wave1_plan.md](../plan/npu_tpu_accelerator_wave1_plan.md)
+  - [../plan/npu_tpu_accelerator_wave2_plan.md](../plan/npu_tpu_accelerator_wave2_plan.md)
 - 已完成计划：
-  - 当前暂无；完成后统一归档到 [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
 
 ## 目标 / 主题
 
@@ -63,8 +63,10 @@
   - 已新增 `myCPU/guest/ai_accel_demo/start.S` 与 `myCPU/guest/ai_accel_demo/main.c`，固定一条最小推理闭环：guest 会提交固定 graph package、等待 AI completion interrupt、读回结果与计数器，并以 `KMVAI` 作为成功输出。
   - `myCPU/src/debug/debug_snapshot.h` 与 `myCPU/src/debug/debug_protocol_response.cpp` 当前已补齐 AI accelerator 只读观测：`engine_busy`、`scratchpad_occupancy_bytes`、`dma_load_bytes`、`dma_store_bytes`、`device_cycles`、`dma_cycles`、`compute_cycles` 与 `stall_cycles`；`myCPU/tests/host/debug_cli_smoke.cpp` 也已锁住 `debug-cli` 下的最终可见性。
   - `myCPU/tests/host/ai_accel_guest_smoke.cpp`、`make test-guest-ai_accel_demo` 与 `make test-pipeline-guest-ai_accel_demo` 当前已一起守住 guest 侧 submit / completion / counter ABI 闭环。
+- `2026-04-23` 同日已开始 wave 1 完成态后的第一刀 hardening：`ai-profile manifest` 当前已显式要求 `format=ai_proto_manifest_v1`，并拒绝重复的单值 key（`format / name / graph_package / max_ticks / source_tag`），避免 host profile 入口对 malformed-input fail-open。
+- `2026-04-23` 同日继续完成 wave 1 hardening 第二刀：guest `ai_accel` driver 当前已新增最小 queue helper，显式拦住 `NULL / zero / >max` queue 参数，并把 submit / completion ring 的 head-tail 推进、completion tail 回退与 overflow 检查收口到统一 guest-side 合同；`ai_accel_demo` 也已改成复用这组 helper，不再假设 completion 永远固定落在槽位 `0`。
 - 当前对 AI accelerator 的性能口径已经进一步收口为：后续统一采用 `timed-simple` 的 `simulated cycles` 模型评估结构收益，不用宿主机 wall-clock 表述“是否加速”。
-- 当前控制面里的 `perf counter window` 已经覆盖 `device_cycles / dma_cycles / compute_cycles / stall_cycles / dma_load_bytes / dma_store_bytes`，completion 也已带回 `retired_ops`；但 `completion overhead`、更细的 compute / stall attribution 和 `DMA + compute overlap` 仍未展开。
+- 当前控制面里的 `perf counter window` 已经覆盖 `device_cycles / dma_cycles / compute_cycles / stall_cycles / busy_cycles / queue_cycles / completion_cycles / effective_ops_per_cycle / utilization / dma_load_bytes / dma_store_bytes`，completion 也已带回 `retired_ops`；但 per-op / per-tile compute attribution 和 `DMA + compute overlap` 仍未展开。
 - `v1` 的正式设计边界已经冻结为：
   - 推理优先，不把训练放进 `v1` 完成定义
   - 只支持静态 shape、离线准备好的静态子图
@@ -83,6 +85,14 @@
   - 再定义 graph package 与 tensor golden model
   - 然后接设备控制面、数据面和代表性 compute path
   - 最后再接 host / guest 入口与 debug/profile 观测
+- `2026-04-24` 已把动态 shape 和训练支持纳入正式后续设计边界，并新增 Wave 2 活跃计划 [../plan/npu_tpu_accelerator_wave2_plan.md](../plan/npu_tpu_accelerator_wave2_plan.md)。
+  - 动态 shape 当前被定义为 `v2+` 正式目标，但 Wave 2 只做 bounded dynamic shape 的最小合同与代表性 `GEMM / FC` 闭环，不做任意动态图。
+  - 训练前向 + 反向当前被定义为更远期正式目标，但 Wave 2 不实现反向传播、optimizer 或梯度同步，只在 ABI / graph package / profile 设计中保留演进位置。
+  - Claude Code 建议中的 `Softmax / attention / INT4 / GELU / Sigmoid / MobileNet` 已被重新排序：`Softmax / tiny attention` 属于后续 matmul-family 扩展，`INT4` 等待 INT8 与 tile profile 稳定，MobileNet 只考虑未来前几层或 depthwise / pointwise 子集。
+- `2026-04-24` 同日已完成 Wave 2 任务 1：profile attribution 与 MMIO / debug 观测第一刀。
+  - `AiAccelerator` 当前新增 `busy_cycles / queue_cycles / completion_cycles / effective_ops_per_cycle / utilization` 只读 MMIO 窗口，并在 reset 与 fault completion 路径上保持稳定归因。
+  - host `--ai-profile-manifest` summary 继续使用 `baseline=none` 与 simulated cycles，同时输出新增 attribution，不引入宿主机 wall-clock。
+  - debug snapshot / JSON response 已同步暴露新增字段，`debug_cli_smoke` 已锁住 guest `ai_accel_demo` 完成后的最终观测面。
 
 ## 关键历史节点
 
@@ -130,6 +140,18 @@
     - `cd myCPU && make test-host-debug_cli_smoke`
     - `cd myCPU && make test`
     - `cd myCPU && make test-pipeline`
+  - 同日启动 wave 1 hardening 第一刀，并通过：
+    - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
+  - 同日完成 wave 1 hardening 第二刀，并通过：
+    - `cd myCPU && make test-unit-ai_accel_queue`
+    - `cd myCPU && make test-guest-ai_accel_demo`
+    - `cd myCPU && make test-host-ai_accel_guest_smoke`
+- `2026-04-24`
+  - 完成 Wave 2 任务 1：新增 profile attribution 与 MMIO / debug 观测第一刀，`busy_cycles / queue_cycles / completion_cycles / effective_ops_per_cycle / utilization` 已进入设备只读窗口、host profile summary 与 debug snapshot。
+  - 本轮验证已覆盖：
+    - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
+    - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
+    - `cd myCPU && make test-host-debug_cli_smoke`
 
 ## 当前仍然有效的风险 / 限制
 
@@ -137,13 +159,14 @@
 - `DMA-ready` contract、graph package、tensor golden model、独立 AI accelerator 控制面、`scratchpad/DMA engine`、第一版 compute engine、host graph packaging / profile 入口，以及 guest driver / guest demo / debug profile 可观察性当前都已有实现；这条线的剩余限制已经不再是“入口没接上”，而是更细的 timing / overlap / performance 模型还没展开。
 - 当前已经有独立设备时序模型的第二刀，但仍只停在 `timed-simple`：`DMA + compute` 当前固定为 no-overlap，`stall_cycles` 也还没有展开成更细 attribution，因此这条线仍不能拿来讨论更激进的 tile overlap、queue 开销隐藏或更细颗粒度吞吐模型。
 - 同时覆盖 quantized 与 semi-precision family 会明显放大验证矩阵；后续实施时必须坚持“统一 ABI + 代表性闭环”，不能一开始就追求全矩阵算子铺满。
+- 动态 shape 和训练支持已经是正式远期目标，但仍不能抢跑完整动态图或训练栈；当前必须先守住 bounded dynamic shape、profile attribution 和小模型推理闭环。
 - 如果把这条线和当前 `xv6 / Linux` 主线混在同一轮里推进，很容易打散已有回归与 ownership 边界。
 
 ## 下一步
 
-1. wave 1 当前已经完成；下一轮如果继续推进，应先围绕已落地的 host/guest/profile/debug 闭环做 bug-driven hardening，而不是重新扩更大的功能面。
-2. 如果要继续往下走，优先评估更窄的 wave 2 / hardening 切片：例如更细 `timed-simple` attribution、代表性 queue/completion overhead，或更保守的 overlap 建模；继续避免把这条线反向混入 CPU ISA reference path。
-3. 在形成下一份计划之前，继续把边界收窄在静态推理、静态 shape、离线 memory plan 与 `simulated cycles` 口径，不顺手扩到训练、动态图或更重的 performance 模型。
+1. 按 [../plan/npu_tpu_accelerator_wave2_plan.md](../plan/npu_tpu_accelerator_wave2_plan.md) 继续推进任务 2：per-op / per-tile profile summary，先区分 `conv / relu / pool / gemm` 的 `retired_ops` 与 `compute_cycles`。
+2. 随后再推进 tiny model host workload，以及 bounded dynamic shape 第一刀；动态 `GEMM / FC` 必须保持超界 / 缺 shape / memory plan 不匹配 fail-closed。
+3. 继续把训练前向 + 反向、`Softmax / attention`、`INT4 / GELU / Sigmoid`、MobileNet 子集和 frontend 可视化放在后续专项，不混入 Wave 2 的第一批实现。
 
 ## 验证基线
 
@@ -154,21 +177,17 @@
   - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
   - `cd myCPU && make test-unit-ai_dma_engine`
   - `cd myCPU && make test-unit-ai_scratchpad`
+  - `cd myCPU && make test-unit-ai_accel_queue`
   - `cd myCPU && make test-host-ai_tensor_golden_ops_smoke`
   - `cd myCPU && make test-host-ai_accelerator_submit_smoke`
   - `cd myCPU && make test-host-ai_accelerator_dma_smoke`
   - `cd myCPU && make test-host-ai_accelerator_cnn_smoke`
   - `cd myCPU && make test-host-ai_accelerator_gemm_smoke`
-  - `cd myCPU && make test`
-  - `cd myCPU && make test-pipeline`
-- 后续继续扩到设备控制面、debug 或 guest/runtime 路径时，再额外守住：
-  - `cd myCPU && make test-pipeline`
-- wave 1 预期新增的代表性验证至少包括：
-  - `cd myCPU && make test-unit-dma_transaction_contract`
-  - `cd myCPU && make test-unit-ai_graph_package`
-  - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
-  - `cd myCPU && make test-host-ai_accelerator_cnn_smoke`
-  - `cd myCPU && make test-host-ai_accelerator_gemm_smoke`
   - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
   - `cd myCPU && make test-host-ai_accel_guest_smoke`
   - `cd myCPU && make test-host-debug_cli_smoke`
+  - `cd myCPU && make test-guest-ai_accel_demo`
+  - `cd myCPU && make test-pipeline-guest-ai_accel_demo`
+  - `cd myCPU && make test`
+  - `cd myCPU && make test-pipeline`
+- 后续继续扩到设备控制面、debug 或 guest/runtime 路径时，仍应按触达范围补跑 `make test` / `make test-pipeline` 与对应窄门禁。

@@ -382,6 +382,12 @@ std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
         << ",\"dma_cycles\":" << snapshot.devices.ai_accelerator.dma_cycles
         << ",\"compute_cycles\":" << snapshot.devices.ai_accelerator.compute_cycles
         << ",\"stall_cycles\":" << snapshot.devices.ai_accelerator.stall_cycles
+        << ",\"busy_cycles\":" << snapshot.devices.ai_accelerator.busy_cycles
+        << ",\"queue_cycles\":" << snapshot.devices.ai_accelerator.queue_cycles
+        << ",\"completion_cycles\":" << snapshot.devices.ai_accelerator.completion_cycles
+        << ",\"effective_ops_per_cycle\":"
+        << snapshot.devices.ai_accelerator.effective_ops_per_cycle
+        << ",\"utilization\":" << snapshot.devices.ai_accelerator.utilization
         << "}},\"events\":[";
     for (size_t i = 0; i < snapshot.events.size(); ++i) {
         if (i != 0) {

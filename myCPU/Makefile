@@ -16,8 +16,10 @@ ATOMIC_ASM_TESTS = atomic_basic atomic_ordering_smoke
 ATOMIC_ASM_ELFS = $(ATOMIC_ASM_TESTS:%=tests/asm/%.elf)
 ATOMIC_ASM_DEPS = $(ATOMIC_ASM_ELFS:.elf=.d)
 FLAT_BIN_TESTS = hello
-UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
+UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
+AI_ACCEL_QUEUE_UNIT_OBJS = tests/unit/ai_accel_queue_test.o tests/unit/ai_accel_queue_guest.o
+AI_ACCEL_QUEUE_UNIT_DEPS = $(AI_ACCEL_QUEUE_UNIT_OBJS:.o=.d)
 SUPERVISOR_RUNTIME_UNIT_OBJS = tests/unit/supervisor_runtime_test.o tests/unit/supervisor_runtime_guest.o
 SUPERVISOR_RUNTIME_UNIT_DEPS = $(SUPERVISOR_RUNTIME_UNIT_OBJS:.o=.d)
 KERNEL_RUNTIME_UNIT_OBJS = tests/unit/kernel_runtime_test.o tests/unit/kernel_runtime_guest.o
@@ -130,6 +132,7 @@ DEPS     += $(GUEST_INTERACTIVE_OS_OBJS:.o=.d)
 DEPS     += $(GUEST_AI_ACCEL_DEMO_OBJS:.o=.d)
 DEPS     += $(GUEST_VECTOR_DEMO_OBJS:.o=.d)
 DEPS     += $(GUEST_VECTOR_CNN_DEMO_OBJS:.o=.d)
+DEPS     += $(AI_ACCEL_QUEUE_UNIT_DEPS)
 DEPS     += $(SUPERVISOR_RUNTIME_UNIT_DEPS)
 DEPS     += $(KERNEL_RUNTIME_UNIT_DEPS)
 DEPS     += $(KERNEL_BRINGUP_UNIT_DEPS)
@@ -758,6 +761,15 @@ tests/unit/supervisor_runtime_guest.o: guest/kernel/supervisor_runtime.c
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
 
 tests/unit/supervisor_runtime: $(SUPERVISOR_RUNTIME_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/ai_accel_queue_test.o: tests/unit/ai_accel_queue.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/ai_accel_queue_guest.o: guest/kernel/ai_accel.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/ai_accel_queue: $(AI_ACCEL_QUEUE_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/unit/kernel_runtime_test.o: tests/unit/kernel_runtime.c

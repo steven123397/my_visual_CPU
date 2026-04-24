@@ -36,6 +36,11 @@ std::string read_text_file(const std::filesystem::path& path) {
     return buffer.str();
 }
 
+void write_text_file(const std::filesystem::path& path, const std::string& text) {
+    std::ofstream out(path, std::ios::trunc);
+    out << text;
+}
+
 std::vector<uint8_t> read_binary_file(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
     return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
@@ -72,12 +77,64 @@ CommandResult run_command(const std::string& command) {
     return result;
 }
 
+std::filesystem::path manifest_without_format(const std::filesystem::path& source,
+                                              const std::filesystem::path& destination) {
+    std::istringstream input(read_text_file(source));
+    std::ostringstream output;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.rfind("format=", 0) == 0) {
+            continue;
+        }
+        output << line << '\n';
+    }
+    write_text_file(destination, output.str());
+    return destination;
+}
+
+std::filesystem::path manifest_with_duplicate_scalar_key(const std::filesystem::path& source,
+                                                         const std::filesystem::path& destination,
+                                                         const char* key,
+                                                         const char* duplicate_value) {
+    const std::string key_prefix = std::string(key) + "=";
+    std::istringstream input(read_text_file(source));
+    std::ostringstream output;
+    std::string line;
+    bool inserted_duplicate = false;
+    while (std::getline(input, line)) {
+        output << line << '\n';
+        if (!inserted_duplicate && line.rfind(key_prefix, 0) == 0) {
+            output << key_prefix << duplicate_value << '\n';
+            inserted_duplicate = true;
+        }
+    }
+    write_text_file(destination, output.str());
+    return destination;
+}
+
+bool expect_profile_failure(const std::filesystem::path& manifest,
+                            const char* expected_error,
+                            const char* message) {
+    const CommandResult profile =
+        run_command("./mycpu --ai-profile-manifest " + manifest.string());
+    if (!expect(profile.exit_code != 0, message)) {
+        std::fprintf(stderr, "%s\n", profile.output.c_str());
+        return false;
+    }
+    return expect_contains(profile.output, expected_error, "expected specific ai profile failure reason");
+}
+
 bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
                              const char* workload,
                              const char* expected_name,
                              uint64_t expected_device_cycles,
                              uint64_t expected_dma_cycles,
                              uint64_t expected_compute_cycles,
+                             uint64_t expected_busy_cycles,
+                             uint64_t expected_queue_cycles,
+                             uint64_t expected_completion_cycles,
+                             uint64_t expected_effective_ops_per_cycle,
+                             uint64_t expected_utilization,
                              uint64_t expected_bytes_moved,
                              uint64_t expected_retired_ops) {
     const std::string pack_command =
@@ -130,6 +187,22 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
                          ("compute_cycles=" + std::to_string(expected_compute_cycles)).c_str(),
                          "expected compute cycle summary") ||
         !expect_contains(profile.output,
+                         ("busy_cycles=" + std::to_string(expected_busy_cycles)).c_str(),
+                         "expected busy cycle summary") ||
+        !expect_contains(profile.output,
+                         ("queue_cycles=" + std::to_string(expected_queue_cycles)).c_str(),
+                         "expected queue cycle summary") ||
+        !expect_contains(profile.output,
+                         ("completion_cycles=" + std::to_string(expected_completion_cycles)).c_str(),
+                         "expected completion cycle summary") ||
+        !expect_contains(profile.output,
+                         ("effective_ops_per_cycle=" +
+                          std::to_string(expected_effective_ops_per_cycle)).c_str(),
+                         "expected effective ops per cycle summary") ||
+        !expect_contains(profile.output,
+                         ("utilization=" + std::to_string(expected_utilization)).c_str(),
+                         "expected utilization summary") ||
+        !expect_contains(profile.output,
                          ("bytes_moved=" + std::to_string(expected_bytes_moved)).c_str(),
                          "expected bytes moved summary") ||
         !expect_contains(profile.output,
@@ -176,9 +249,34 @@ int main() {
         std::filesystem::remove_all(temp_dir);
         std::filesystem::create_directories(temp_dir);
 
+        const std::filesystem::path malformed_dir = temp_dir / "malformed";
+        const CommandResult malformed_pack = run_command(
+            "python3 workloads/ai_proto/pack_graph.py --workload cnn --out-dir " +
+            malformed_dir.string());
+        if (!expect(malformed_pack.exit_code == 0, "expected malformed-input pack command to succeed")) {
+            std::fprintf(stderr, "%s\n", malformed_pack.output.c_str());
+            std::filesystem::remove_all(temp_dir);
+            return 1;
+        }
+
+        const std::filesystem::path manifest = malformed_dir / "cnn.manifest";
+        const std::filesystem::path no_format_manifest =
+            manifest_without_format(manifest, malformed_dir / "cnn.no_format.manifest");
+        const std::filesystem::path duplicate_name_manifest =
+            manifest_with_duplicate_scalar_key(manifest,
+                                               malformed_dir / "cnn.dup_name.manifest",
+                                               "name",
+                                               "cnn-duplicate");
+
         const bool ok =
-            expect_pack_and_profile(temp_dir, "cnn", "name=cnn", 18, 9, 9, 32, 63) &&
-            expect_pack_and_profile(temp_dir, "gemm", "name=gemm", 13, 9, 4, 20, 12);
+            expect_profile_failure(no_format_manifest,
+                                   "AI profile manifest is missing format",
+                                   "expected ai profile manifest without format to fail") &&
+            expect_profile_failure(duplicate_name_manifest,
+                                   "duplicate AI profile manifest key: name",
+                                   "expected ai profile manifest with duplicate name to fail") &&
+            expect_pack_and_profile(temp_dir, "cnn", "name=cnn", 18, 9, 9, 20, 1, 1, 7, 45, 32, 63) &&
+            expect_pack_and_profile(temp_dir, "gemm", "name=gemm", 13, 9, 4, 15, 1, 1, 3, 26, 20, 12);
 
         std::filesystem::remove_all(temp_dir);
         if (!ok) {
