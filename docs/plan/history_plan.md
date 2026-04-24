@@ -21,6 +21,15 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-04-24
+
+#### npu-tpu-accelerator-wave2-plan
+
+- 原文件：`npu_tpu_accelerator_wave2_plan.md`
+- 完成内容：完成独立 `MMIO NPU / TPU-like` AI accelerator Wave 2，把 profile attribution、host-side per-op / per-tile summary、固定 `tiny_model` workload、bounded dynamic shape contract / reject matrix，以及 dynamic `GEMM / FC-like` 第一刀一起收口到主工作树；同时保持 completion entry ABI 不变，不把动态语义混进 CPU `InstructionSemantics` reference path。
+- 实现过程摘要：整体继续采用“先补红灯、再做最小 contract / workload / execute 落地、最后统一回写 status 与归档”的克制路径；其中 dynamic shape 先用 `runtime_shape_table_offset` + `dynamic_bounded` package 把 runtime dims resolve 成 concrete static package，只接到 matmul-family 第一刀，不顺势扩大到完整动态图、训练栈、`Softmax / attention`、`INT4` 或 frontend 可视化。
+- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
+
 ### 2026-04-23
 
 #### npu-tpu-accelerator-wave1-plan

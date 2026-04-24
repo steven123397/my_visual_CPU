@@ -158,6 +158,8 @@ int main(int argc, char* argv[]) {
                       << " manifest=" << result.manifest_path
                       << " graph_package=" << result.graph_package_path
                       << " graph_package_bytes=" << result.graph_package_bytes
+                      << " shape_mode=" << result.shape_mode
+                      << " runtime_shapes=" << result.runtime_shapes
                       << " ticks=" << result.ticks
                       << " completion_status=" << result.completion_status
                       << " fault_code=" << result.fault_code

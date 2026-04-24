@@ -22,6 +22,8 @@ constexpr uint64_t kOutputTableAddr = MEM_BASE + 0x38100;
 constexpr uint64_t kLhsTensorAddr = MEM_BASE + 0x3a000;
 constexpr uint64_t kRhsTensorAddr = MEM_BASE + 0x3a100;
 constexpr uint64_t kOutputTensorAddr = MEM_BASE + 0x3b000;
+constexpr uint32_t kDynamicRuntimeShapeSmallOffset = 0x200;
+constexpr uint32_t kDynamicRuntimeShapeLargeOffset = 0x240;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -79,6 +81,21 @@ bool load_bytes(Bus& bus, uint64_t addr, void* data, size_t size) {
         bytes[i] = static_cast<uint8_t>(value & 0xffU);
     }
     return true;
+}
+
+bool expect_op_summary(const AiAcceleratorOpProfileSummary& summary,
+                       uint16_t expected_index,
+                       AiOpCode expected_opcode,
+                       uint64_t expected_retired_ops,
+                       uint64_t expected_compute_cycles,
+                       uint64_t expected_tile_count,
+                       const char* context) {
+    return expect(summary.op_index == expected_index, context) &&
+           expect(summary.opcode == expected_opcode, context) &&
+           expect(summary.retired_ops == expected_retired_ops, context) &&
+           expect(summary.compute_cycles == expected_compute_cycles, context) &&
+           expect(summary.stall_cycles == 0, context) &&
+           expect(summary.tile_count == expected_tile_count, context);
 }
 
 bool configure_queue(Bus& bus) {
@@ -189,6 +206,96 @@ bool build_gemm_graph_package(bool fault_pool,
     }
     package_bytes = static_cast<uint32_t>(bytes.size());
     return true;
+}
+
+bool build_dynamic_gemm_graph_package(std::vector<uint8_t>& bytes,
+                                      uint32_t& package_bytes,
+                                      std::string& error) {
+    AiGraphPackage package{};
+    package.shape_mode = AiShapeMode::DynamicBounded;
+    package.scratchpad_budget_bytes = 96;
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int8,
+        .role = AiTensorRole::Input,
+        .rank = 2,
+        .dims = {2, 8, 0, 0},
+        .tile_dims = {1, 8, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int8,
+        .role = AiTensorRole::Weight,
+        .rank = 2,
+        .dims = {8, 4, 0, 0},
+        .tile_dims = {8, 4, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int32,
+        .role = AiTensorRole::Output,
+        .rank = 2,
+        .dims = {2, 4, 0, 0},
+        .tile_dims = {1, 4, 0, 0},
+    });
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{
+        .tensor_index = 0,
+        .max_tensor_bytes = 16,
+    });
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{
+        .tensor_index = 2,
+        .max_tensor_bytes = 32,
+    });
+    package.ops.push_back(AiOpDescriptor{
+        .opcode = AiOpCode::Gemm,
+        .input_dtype = AiDataType::Int8,
+        .accum_dtype = AiDataType::Int32,
+        .input0 = 0,
+        .input1 = 1,
+        .input2 = kAiInvalidTensorIndex,
+        .output = 2,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 0,
+        .system_offset = 0,
+        .scratchpad_offset = 0,
+        .byte_size = 16,
+        .scratchpad_bytes = 16,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 1,
+        .system_offset = 0,
+        .scratchpad_offset = 16,
+        .byte_size = 32,
+        .scratchpad_bytes = 32,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 2,
+        .system_offset = 0,
+        .scratchpad_offset = 48,
+        .byte_size = 32,
+        .scratchpad_bytes = 32,
+    });
+    if (!serialize_ai_graph_package(package, bytes, error)) {
+        return false;
+    }
+    package_bytes = static_cast<uint32_t>(bytes.size());
+    return true;
+}
+
+bool build_dynamic_runtime_shape_table(uint32_t rows,
+                                       std::vector<uint8_t>& bytes,
+                                       std::string& error) {
+    const std::vector<AiRuntimeShapeEntry> runtime_shapes{
+        AiRuntimeShapeEntry{
+            .tensor_index = 0,
+            .rank = 2,
+            .dims = {rows, 8, 0, 0},
+        },
+        AiRuntimeShapeEntry{
+            .tensor_index = 2,
+            .rank = 2,
+            .dims = {rows, 4, 0, 0},
+        },
+    };
+    return serialize_ai_runtime_shape_table(runtime_shapes, bytes, error);
 }
 
 bool tick_until_tail(Bus& bus,
@@ -366,6 +473,7 @@ int main() {
             return 1;
         }
         decode_ai_completion_entry(success_completion_bytes, success_completion);
+        const AiAcceleratorProfileSummary& success_profile = machine.ai_accelerator().profile_summary();
         if (!expect(success_completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, "expected GEMM completion success") ||
             !expect(success_completion.retired_ops == 12, "expected GEMM retired ops") ||
             !expect(success_completion.bytes_moved == 20, "expected GEMM DMA byte accounting") ||
@@ -373,7 +481,15 @@ int main() {
             !expect(device_cycles == 13, "expected GEMM device cycles") ||
             !expect(dma_cycles == 9, "expected GEMM DMA cycles") ||
             !expect(compute_cycles == 4, "expected GEMM compute cycles") ||
-            !expect(stall_cycles == 0, "expected zero GEMM stall cycles")) {
+            !expect(stall_cycles == 0, "expected zero GEMM stall cycles") ||
+            !expect(success_profile.tile_count == 2, "expected GEMM aggregate tile count") ||
+            !expect(success_profile.scratchpad_peak_bytes == 36,
+                    "expected GEMM aggregate scratchpad peak bytes") ||
+            !expect(success_profile.op_summaries.size() == 2, "expected two GEMM op summaries") ||
+            !expect_op_summary(success_profile.op_summaries[0], 0, AiOpCode::Gemm, 8, 2, 1,
+                               "expected GEMM op profile summary") ||
+            !expect_op_summary(success_profile.op_summaries[1], 1, AiOpCode::PoolMax, 4, 2, 1,
+                               "expected pool op profile summary")) {
             return 1;
         }
 
@@ -427,6 +543,7 @@ int main() {
             return 1;
         }
         decode_ai_completion_entry(fault_completion_bytes, fault_completion);
+        const AiAcceleratorProfileSummary& fault_profile = machine.ai_accelerator().profile_summary();
         if (!expect(fault_completion.status == AI_ACCEL_COMPLETION_STATUS_FAULT, "expected GEMM fault completion") ||
             !expect(fault_completion.fault_code == AI_ACCEL_FAULT_ILLEGAL_OP, "expected GEMM fault code") ||
             !expect(fault_completion.retired_ops == 0, "expected zero retired ops on fault") ||
@@ -437,9 +554,275 @@ int main() {
             !expect(stall_cycles == 0, "expected cumulative GEMM stall cycles") ||
             !expect(dma_load_bytes == 32, "expected cumulative GEMM DMA load bytes") ||
             !expect(dma_store_bytes == 4, "expected cumulative GEMM DMA store bytes") ||
+            !expect(fault_profile.tile_count == 2, "expected GEMM tile profile to remain stable on fault") ||
+            !expect(fault_profile.scratchpad_peak_bytes == 36,
+                    "expected GEMM scratchpad peak to remain stable on fault") ||
+            !expect(fault_profile.op_summaries.size() == 2,
+                    "expected GEMM op summaries to remain stable on fault") ||
+            !expect_op_summary(fault_profile.op_summaries[0], 0, AiOpCode::Gemm, 8, 2, 1,
+                               "expected stable GEMM op profile after fault") ||
+            !expect_op_summary(fault_profile.op_summaries[1], 1, AiOpCode::PoolMax, 4, 2, 1,
+                               "expected stable pool op profile after fault") ||
             !expect(machine.ai_accelerator().completion_count() == 2, "expected GEMM completion count") ||
             !expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_ILLEGAL_OP, "expected last GEMM fault") ||
             !expect(machine.plic().supervisor_has_pending(), "expected GEMM IRQ pending")) {
+            return 1;
+        }
+
+        Machine dynamic_machine;
+        Bus& dynamic_bus = dynamic_machine.bus();
+        if (!load_u32(dynamic_bus,
+                      AI_ACCEL_BASE + AI_ACCEL_REG_MAGIC,
+                      AI_ACCEL_MMIO_MAGIC,
+                      "expected mapped dynamic AI accelerator") ||
+            !configure_queue(dynamic_bus)) {
+            return 1;
+        }
+
+        std::vector<uint8_t> dynamic_graph_package_bytes{};
+        std::vector<uint8_t> small_runtime_shape_bytes{};
+        std::vector<uint8_t> large_runtime_shape_bytes{};
+        uint32_t dynamic_graph_package_size = 0;
+        if (!build_dynamic_gemm_graph_package(dynamic_graph_package_bytes,
+                                              dynamic_graph_package_size,
+                                              error) ||
+            !build_dynamic_runtime_shape_table(1, small_runtime_shape_bytes, error) ||
+            !build_dynamic_runtime_shape_table(2, large_runtime_shape_bytes, error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            return 1;
+        }
+
+        const std::array<uint64_t, 3> dynamic_input_table{{kLhsTensorAddr, kRhsTensorAddr, 0}};
+        const std::array<uint64_t, 3> dynamic_output_table{{0, 0, kOutputTensorAddr}};
+        const std::array<int8_t, 16> dynamic_lhs_tensor{{1, 2, 3, 4, 5, 6, 7, 8, -1, 0, 1, 2, 3, 4, 5, 6}};
+        const std::array<int8_t, 32> dynamic_rhs_tensor{{
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 1,
+        }};
+        const std::array<int32_t, 8> expected_small_output{{1, 2, 3, 8, 0, 0, 0, 0}};
+        const std::array<int32_t, 8> expected_large_output{{1, 2, 3, 8, -1, 0, 1, 6}};
+        const std::array<int32_t, 8> zero_dynamic_output{{0, 0, 0, 0, 0, 0, 0, 0}};
+
+        const AiSubmissionDescriptor dynamic_small_descriptor{
+            .token = 0x44594E31ULL,
+            .graph_package_addr = kGraphPackageAddr,
+            .graph_package_bytes = dynamic_graph_package_size,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
+            .source_tag = 41,
+            .runtime_shape_table_offset = kDynamicRuntimeShapeSmallOffset,
+        };
+        const AiSubmissionDescriptor dynamic_large_descriptor{
+            .token = 0x44594E32ULL,
+            .graph_package_addr = kGraphPackageAddr,
+            .graph_package_bytes = dynamic_graph_package_size,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
+            .source_tag = 43,
+            .runtime_shape_table_offset = kDynamicRuntimeShapeLargeOffset,
+        };
+        const AiSubmissionDescriptor dynamic_missing_shape_descriptor{
+            .token = 0x44594E46ULL,
+            .graph_package_addr = kGraphPackageAddr,
+            .graph_package_bytes = dynamic_graph_package_size,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
+            .source_tag = 47,
+        };
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_small_descriptor_bytes{};
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_large_descriptor_bytes{};
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> dynamic_missing_shape_descriptor_bytes{};
+        encode_ai_submission_descriptor(dynamic_small_descriptor, dynamic_small_descriptor_bytes);
+        encode_ai_submission_descriptor(dynamic_large_descriptor, dynamic_large_descriptor_bytes);
+        encode_ai_submission_descriptor(dynamic_missing_shape_descriptor, dynamic_missing_shape_descriptor_bytes);
+
+        if (!store_bytes(dynamic_bus,
+                         kGraphPackageAddr,
+                         dynamic_graph_package_bytes.data(),
+                         dynamic_graph_package_bytes.size()) ||
+            !store_bytes(dynamic_bus,
+                         kGraphPackageAddr + kDynamicRuntimeShapeSmallOffset,
+                         small_runtime_shape_bytes.data(),
+                         small_runtime_shape_bytes.size()) ||
+            !store_bytes(dynamic_bus,
+                         kGraphPackageAddr + kDynamicRuntimeShapeLargeOffset,
+                         large_runtime_shape_bytes.data(),
+                         large_runtime_shape_bytes.size()) ||
+            !store_bytes(dynamic_bus, kInputTableAddr, dynamic_input_table.data(), sizeof(dynamic_input_table)) ||
+            !store_bytes(dynamic_bus, kOutputTableAddr, dynamic_output_table.data(), sizeof(dynamic_output_table)) ||
+            !store_bytes(dynamic_bus, kLhsTensorAddr, dynamic_lhs_tensor.data(), sizeof(dynamic_lhs_tensor)) ||
+            !store_bytes(dynamic_bus, kRhsTensorAddr, dynamic_rhs_tensor.data(), sizeof(dynamic_rhs_tensor)) ||
+            !store_bytes(dynamic_bus,
+                         kOutputTensorAddr,
+                         zero_dynamic_output.data(),
+                         sizeof(zero_dynamic_output))) {
+            return 1;
+        }
+
+        uint64_t dynamic_prev_device_cycles = 0;
+        uint64_t dynamic_prev_dma_cycles = 0;
+        uint64_t dynamic_prev_compute_cycles = 0;
+        uint64_t dynamic_prev_stall_cycles = 0;
+
+        if (!store_bytes(dynamic_bus,
+                         kSubmitQueueAddr,
+                         dynamic_small_descriptor_bytes.data(),
+                         dynamic_small_descriptor_bytes.size()) ||
+            !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL, 1, "dynamic submit tail 1") ||
+            !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "dynamic doorbell 1") ||
+            !tick_until_tail(dynamic_bus,
+                             1,
+                             dynamic_prev_device_cycles,
+                             dynamic_prev_dma_cycles,
+                             dynamic_prev_compute_cycles,
+                             dynamic_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<uint8_t, kAiCompletionEntryBytes> dynamic_small_completion_bytes{};
+        AiCompletionEntry dynamic_small_completion{};
+        std::array<int32_t, 8> dynamic_small_output{};
+        if (!load_bytes(dynamic_bus,
+                        kCompleteQueueAddr,
+                        dynamic_small_completion_bytes.data(),
+                        dynamic_small_completion_bytes.size()) ||
+            !load_bytes(dynamic_bus,
+                        kOutputTensorAddr,
+                        dynamic_small_output.data(),
+                        sizeof(dynamic_small_output))) {
+            return 1;
+        }
+        decode_ai_completion_entry(dynamic_small_completion_bytes, dynamic_small_completion);
+        const AiAcceleratorProfileSummary& dynamic_small_profile =
+            dynamic_machine.ai_accelerator().profile_summary();
+        if (!expect(dynamic_small_completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS,
+                    "expected dynamic GEMM small completion success") ||
+            !expect(dynamic_small_completion.retired_ops == 32,
+                    "expected dynamic GEMM small retired ops") ||
+            !expect(dynamic_small_completion.bytes_moved == 56,
+                    "expected dynamic GEMM small DMA byte accounting") ||
+            !expect(dynamic_small_output == expected_small_output,
+                    "expected dynamic GEMM small output tensor") ||
+            !expect(dynamic_small_profile.tile_count == 1,
+                    "expected dynamic GEMM small aggregate tile count") ||
+            !expect(dynamic_small_profile.scratchpad_peak_bytes == 64,
+                    "expected dynamic GEMM small scratchpad peak bytes") ||
+            !expect(dynamic_small_profile.op_summaries.size() == 1,
+                    "expected one dynamic GEMM small op summary") ||
+            !expect_op_summary(dynamic_small_profile.op_summaries[0], 0, AiOpCode::Gemm, 32, 2, 1,
+                               "expected dynamic GEMM small op profile summary")) {
+            return 1;
+        }
+
+        if (!store_bytes(dynamic_bus,
+                         kSubmitQueueAddr + kAiSubmissionDescriptorBytes,
+                         dynamic_large_descriptor_bytes.data(),
+                         dynamic_large_descriptor_bytes.size()) ||
+            !store_bytes(dynamic_bus,
+                         kOutputTensorAddr,
+                         zero_dynamic_output.data(),
+                         sizeof(zero_dynamic_output)) ||
+            !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL, 2, "dynamic submit tail 2") ||
+            !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "dynamic doorbell 2") ||
+            !tick_until_tail(dynamic_bus,
+                             2,
+                             dynamic_prev_device_cycles,
+                             dynamic_prev_dma_cycles,
+                             dynamic_prev_compute_cycles,
+                             dynamic_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<uint8_t, kAiCompletionEntryBytes> dynamic_large_completion_bytes{};
+        AiCompletionEntry dynamic_large_completion{};
+        std::array<int32_t, 8> dynamic_large_output{};
+        if (!load_bytes(dynamic_bus,
+                        kCompleteQueueAddr + kAiCompletionEntryBytes,
+                        dynamic_large_completion_bytes.data(),
+                        dynamic_large_completion_bytes.size()) ||
+            !load_bytes(dynamic_bus,
+                        kOutputTensorAddr,
+                        dynamic_large_output.data(),
+                        sizeof(dynamic_large_output))) {
+            return 1;
+        }
+        decode_ai_completion_entry(dynamic_large_completion_bytes, dynamic_large_completion);
+        const AiAcceleratorProfileSummary& dynamic_large_profile =
+            dynamic_machine.ai_accelerator().profile_summary();
+        if (!expect(dynamic_large_completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS,
+                    "expected dynamic GEMM large completion success") ||
+            !expect(dynamic_large_completion.retired_ops == 64,
+                    "expected dynamic GEMM large retired ops") ||
+            !expect(dynamic_large_completion.bytes_moved == 80,
+                    "expected dynamic GEMM large DMA byte accounting") ||
+            !expect(dynamic_large_output == expected_large_output,
+                    "expected dynamic GEMM large output tensor") ||
+            !expect(dynamic_large_profile.tile_count == 2,
+                    "expected dynamic GEMM large aggregate tile count") ||
+            !expect(dynamic_large_profile.scratchpad_peak_bytes == 80,
+                    "expected dynamic GEMM large scratchpad peak bytes") ||
+            !expect(dynamic_large_profile.op_summaries.size() == 1,
+                    "expected one dynamic GEMM large op summary") ||
+            !expect_op_summary(dynamic_large_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
+                               "expected dynamic GEMM large op profile summary")) {
+            return 1;
+        }
+
+        if (!store_bytes(dynamic_bus,
+                         kSubmitQueueAddr + (2 * kAiSubmissionDescriptorBytes),
+                         dynamic_missing_shape_descriptor_bytes.data(),
+                         dynamic_missing_shape_descriptor_bytes.size()) ||
+            !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL, 3, "dynamic submit tail 3") ||
+            !store_u32(dynamic_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "dynamic doorbell 3") ||
+            !tick_until_tail(dynamic_bus,
+                             3,
+                             dynamic_prev_device_cycles,
+                             dynamic_prev_dma_cycles,
+                             dynamic_prev_compute_cycles,
+                             dynamic_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<uint8_t, kAiCompletionEntryBytes> dynamic_fault_completion_bytes{};
+        AiCompletionEntry dynamic_fault_completion{};
+        if (!load_bytes(dynamic_bus,
+                        kCompleteQueueAddr + (2 * kAiCompletionEntryBytes),
+                        dynamic_fault_completion_bytes.data(),
+                        dynamic_fault_completion_bytes.size())) {
+            return 1;
+        }
+        decode_ai_completion_entry(dynamic_fault_completion_bytes, dynamic_fault_completion);
+        const AiAcceleratorProfileSummary& dynamic_fault_profile =
+            dynamic_machine.ai_accelerator().profile_summary();
+        if (!expect(dynamic_fault_completion.status == AI_ACCEL_COMPLETION_STATUS_FAULT,
+                    "expected dynamic GEMM missing-shape completion fault") ||
+            !expect(dynamic_fault_completion.fault_code == AI_ACCEL_FAULT_INVALID_DESCRIPTOR,
+                    "expected dynamic GEMM missing-shape fault code") ||
+            !expect(dynamic_fault_completion.retired_ops == 0,
+                    "expected zero dynamic GEMM retired ops on missing-shape fault") ||
+            !expect(dynamic_fault_completion.bytes_moved == 0,
+                    "expected zero dynamic GEMM bytes moved on missing-shape fault") ||
+            !expect(dynamic_fault_profile.tile_count == 2,
+                    "expected dynamic GEMM profile stability after missing-shape fault") ||
+            !expect(dynamic_fault_profile.scratchpad_peak_bytes == 80,
+                    "expected dynamic GEMM scratchpad peak stability after fault") ||
+            !expect(dynamic_fault_profile.op_summaries.size() == 1,
+                    "expected dynamic GEMM op summary stability after fault") ||
+            !expect_op_summary(dynamic_fault_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
+                               "expected dynamic GEMM op profile stability after fault") ||
+            !expect(dynamic_machine.ai_accelerator().completion_count() == 3,
+                    "expected dynamic GEMM completion count") ||
+            !expect(dynamic_machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_INVALID_DESCRIPTOR,
+                    "expected dynamic GEMM last fault")) {
             return 1;
         }
 

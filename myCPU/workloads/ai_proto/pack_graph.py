@@ -7,11 +7,14 @@ from dataclasses import dataclass
 
 GRAPH_MAGIC = 0x31475041
 GRAPH_VERSION = 1
-GRAPH_HEADER_BYTES = 40
+GRAPH_BASE_HEADER_BYTES = 40
+GRAPH_EXTENDED_HEADER_BYTES = 56
 TENSOR_RECORD_BYTES = 36
 OP_RECORD_BYTES = 28
 DEPENDENCY_RECORD_BYTES = 4
 MEMORY_PLAN_RECORD_BYTES = 20
+DYNAMIC_TENSOR_RECORD_BYTES = 8
+RUNTIME_SHAPE_RECORD_BYTES = 20
 
 
 DTYPE = {
@@ -38,6 +41,16 @@ OPCODE = {
     "pool_max": 4,
     "reduce_sum": 5,
     "layout_transpose": 6,
+}
+
+SHAPE_MODE = {
+    "static": 0,
+    "dynamic_bounded": 1,
+}
+
+TRAINING_MODE = {
+    "inference": 0,
+    "training_reserved": 1,
 }
 
 
@@ -71,6 +84,19 @@ class MemoryPlan:
     scratchpad_bytes: int
 
 
+@dataclass
+class DynamicTensor:
+    tensor_index: int
+    max_tensor_bytes: int
+
+
+@dataclass
+class RuntimeShape:
+    tensor_index: int
+    rank: int
+    dims: tuple[int, int, int, int]
+
+
 def append_u8(out: bytearray, value: int) -> None:
     out += struct.pack("<B", value)
 
@@ -91,17 +117,27 @@ def serialize_graph_package(scratchpad_budget_bytes: int,
                             tensors: list[Tensor],
                             ops: list[Op],
                             dependencies: list[tuple[int, int]],
-                            memory_plan: list[MemoryPlan]) -> bytes:
-    tensors_offset = GRAPH_HEADER_BYTES
+                            memory_plan: list[MemoryPlan],
+                            shape_mode: str = "static",
+                            training_mode: str = "inference",
+                            dynamic_tensors: list[DynamicTensor] | None = None) -> bytes:
+    dynamic_tensors = dynamic_tensors or []
+    header_bytes = (
+        GRAPH_EXTENDED_HEADER_BYTES
+        if shape_mode != "static" or training_mode != "inference" or dynamic_tensors
+        else GRAPH_BASE_HEADER_BYTES
+    )
+    tensors_offset = header_bytes
     ops_offset = tensors_offset + len(tensors) * TENSOR_RECORD_BYTES
     dependencies_offset = ops_offset + len(ops) * OP_RECORD_BYTES
     memory_plan_offset = dependencies_offset + len(dependencies) * DEPENDENCY_RECORD_BYTES
-    package_bytes = memory_plan_offset + len(memory_plan) * MEMORY_PLAN_RECORD_BYTES
+    dynamic_tensors_offset = memory_plan_offset + len(memory_plan) * MEMORY_PLAN_RECORD_BYTES
+    package_bytes = dynamic_tensors_offset + len(dynamic_tensors) * DYNAMIC_TENSOR_RECORD_BYTES
 
     out = bytearray()
     append_u32(out, GRAPH_MAGIC)
     append_u16(out, GRAPH_VERSION)
-    append_u16(out, GRAPH_HEADER_BYTES)
+    append_u16(out, header_bytes)
     append_u32(out, scratchpad_budget_bytes)
     append_u16(out, len(tensors))
     append_u16(out, len(ops))
@@ -112,6 +148,13 @@ def serialize_graph_package(scratchpad_budget_bytes: int,
     append_u32(out, dependencies_offset)
     append_u32(out, memory_plan_offset)
     append_u32(out, package_bytes)
+    if header_bytes == GRAPH_EXTENDED_HEADER_BYTES:
+        append_u8(out, SHAPE_MODE[shape_mode])
+        append_u8(out, TRAINING_MODE[training_mode])
+        append_u16(out, len(dynamic_tensors))
+        append_u32(out, dynamic_tensors_offset)
+        append_u32(out, 0)
+        append_u32(out, 0)
 
     for tensor in tensors:
         append_u8(out, DTYPE[tensor.dtype])
@@ -147,6 +190,22 @@ def serialize_graph_package(scratchpad_budget_bytes: int,
         append_u32(out, entry.byte_size)
         append_u32(out, entry.scratchpad_bytes)
 
+    for metadata in dynamic_tensors:
+        append_u16(out, metadata.tensor_index)
+        append_u16(out, 0)
+        append_u32(out, metadata.max_tensor_bytes)
+
+    return bytes(out)
+
+
+def serialize_runtime_shape_table(runtime_shapes: list[RuntimeShape]) -> bytes:
+    out = bytearray()
+    for runtime_shape in runtime_shapes:
+        append_u16(out, runtime_shape.tensor_index)
+        append_u8(out, runtime_shape.rank)
+        append_u8(out, 0)
+        for dim in runtime_shape.dims:
+            append_u32(out, dim)
     return bytes(out)
 
 
@@ -157,12 +216,15 @@ def write_manifest(path: pathlib.Path,
                    outputs: list[str],
                    expected_outputs: list[str],
                    max_ticks: int,
-                   source_tag: int) -> None:
+                   source_tag: int,
+                   runtime_shape_table: str | None = None) -> None:
     lines = [
         "format=ai_proto_manifest_v1",
         f"name={name}",
         f"graph_package={graph_package}",
     ]
+    if runtime_shape_table is not None:
+        lines.append(f"runtime_shape_table={runtime_shape_table}")
     lines.extend(f"input={item}" for item in inputs)
     lines.extend(f"output={item}" for item in outputs)
     lines.extend(f"expected_output={item}" for item in expected_outputs)
@@ -251,9 +313,117 @@ def build_gemm(out_dir: pathlib.Path) -> None:
     )
 
 
+def build_tiny_model(out_dir: pathlib.Path) -> None:
+    name = "tiny_model"
+    tensors = [
+        Tensor("fp16", "input", 2, (2, 3, 0, 0), (2, 3, 0, 0)),
+        Tensor("fp16", "weight", 2, (3, 2, 0, 0), (3, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (2, 2, 0, 0), (2, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (2, 2, 0, 0), (2, 2, 0, 0)),
+        Tensor("fp32", "output", 2, (1, 1, 0, 0), (1, 1, 0, 0)),
+    ]
+    ops = [
+        Op("gemm", "fp16", "fp32", 0, 1, 0xFFFF, 2),
+        Op("eltwise_relu", "fp32", "fp32", 2, 0xFFFF, 0xFFFF, 3),
+        Op("pool_max", "fp32", "fp32", 3, 0xFFFF, 0xFFFF, 4, (2, 2, 2, 2)),
+    ]
+    dependencies = [(0, 1), (1, 2)]
+    memory_plan = [
+        MemoryPlan(0, 0, 0, 12, 12),
+        MemoryPlan(1, 0, 12, 12, 12),
+        MemoryPlan(2, 0, 24, 16, 16),
+        MemoryPlan(3, 0, 40, 16, 16),
+        MemoryPlan(4, 0, 56, 4, 4),
+    ]
+    graph = serialize_graph_package(64, tensors, ops, dependencies, memory_plan)
+    (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    (out_dir / f"{name}.input0.bin").write_bytes(
+        struct.pack("<6H", 0x3C00, 0xC000, 0x4200, 0x3800, 0x4000, 0xBC00)
+    )
+    (out_dir / f"{name}.input1.bin").write_bytes(
+        struct.pack("<6H", 0x3C00, 0xBC00, 0x4000, 0x3800, 0xBC00, 0x3E00)
+    )
+    (out_dir / f"{name}.output0.expected.bin").write_bytes(struct.pack("<f", 5.5))
+    write_manifest(
+        out_dir / f"{name}.manifest",
+        name=name,
+        graph_package=f"{name}.graph.bin",
+        inputs=[f"{name}.input0.bin", f"{name}.input1.bin"],
+        outputs=[f"{name}.output0.actual.bin"],
+        expected_outputs=[f"{name}.output0.expected.bin"],
+        max_ticks=128,
+        source_tag=37,
+    )
+
+
+def build_dynamic_gemm(out_dir: pathlib.Path) -> None:
+    name = "dynamic_gemm"
+    tensors = [
+        Tensor("int8", "input", 2, (2, 8, 0, 0), (1, 8, 0, 0)),
+        Tensor("int8", "weight", 2, (8, 4, 0, 0), (8, 4, 0, 0)),
+        Tensor("int32", "output", 2, (2, 4, 0, 0), (1, 4, 0, 0)),
+    ]
+    ops = [
+        Op("gemm", "int8", "int32", 0, 1, 0xFFFF, 2),
+    ]
+    memory_plan = [
+        MemoryPlan(0, 0, 0, 16, 16),
+        MemoryPlan(1, 0, 16, 32, 32),
+        MemoryPlan(2, 0, 48, 32, 32),
+    ]
+    graph = serialize_graph_package(
+        96,
+        tensors,
+        ops,
+        [],
+        memory_plan,
+        shape_mode="dynamic_bounded",
+        dynamic_tensors=[
+            DynamicTensor(0, 16),
+            DynamicTensor(2, 32),
+        ],
+    )
+    runtime_shape_table = serialize_runtime_shape_table([
+        RuntimeShape(0, 2, (2, 8, 0, 0)),
+        RuntimeShape(2, 2, (2, 4, 0, 0)),
+    ])
+    (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    (out_dir / f"{name}.runtime_shape.bin").write_bytes(runtime_shape_table)
+    (out_dir / f"{name}.input0.bin").write_bytes(
+        struct.pack("<16b", 1, 2, 3, 4, 5, 6, 7, 8, -1, 0, 1, 2, 3, 4, 5, 6)
+    )
+    (out_dir / f"{name}.input1.bin").write_bytes(
+        struct.pack(
+            "<32b",
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 1,
+        )
+    )
+    (out_dir / f"{name}.output0.expected.bin").write_bytes(
+        struct.pack("<8i", 1, 2, 3, 8, -1, 0, 1, 6)
+    )
+    write_manifest(
+        out_dir / f"{name}.manifest",
+        name=name,
+        graph_package=f"{name}.graph.bin",
+        runtime_shape_table=f"{name}.runtime_shape.bin",
+        inputs=[f"{name}.input0.bin", f"{name}.input1.bin"],
+        outputs=[f"{name}.output0.actual.bin"],
+        expected_outputs=[f"{name}.output0.expected.bin"],
+        max_ticks=128,
+        source_tag=41,
+    )
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Pack fixed AI accelerator graph workloads")
-    parser.add_argument("--workload", choices=["cnn", "gemm", "all"], default="all")
+    parser.add_argument("--workload", choices=["cnn", "gemm", "tiny_model", "dynamic_gemm", "all"], default="all")
     parser.add_argument("--out-dir", required=True)
     return parser
 
@@ -267,6 +437,10 @@ def main(argv: list[str] | None = None) -> int:
         build_cnn(out_dir)
     if args.workload in ("gemm", "all"):
         build_gemm(out_dir)
+    if args.workload in ("tiny_model", "all"):
+        build_tiny_model(out_dir)
+    if args.workload in ("dynamic_gemm", "all"):
+        build_dynamic_gemm(out_dir)
 
     print(f"packed workload={args.workload} out_dir={out_dir}")
     return 0

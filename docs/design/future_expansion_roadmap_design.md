@@ -220,7 +220,7 @@
 | 目标 | 形成独立 `MMIO` AI 加速器：静态子图执行器、`scratchpad + DMA`、host / guest 共用 `descriptor / queue / completion` ABI |
 | 主要收益 | 更贴近真实 `NPU / TPU` 的结构价值，能同时承接 `CNN` 与 `GEMM / Transformer-like` 推理 workload |
 | 主要风险 | Wave 1 foundation 已落地，但 timing / overlap / queue overhead、bounded dynamic shape、buffer ownership、训练前向/反向与更完整 driver/runtime 边界仍会放大验证矩阵 |
-| 当前定位 | 未来候选方向；已经有正式设计边界、Wave 1 foundation 和 Wave 2 活跃计划，但不是当前已激活主线 |
+| 当前定位 | 未来候选方向；已经有正式设计边界、Wave 1 foundation 和 Wave 2 完成归档，但不是当前已激活主线 |
 
 建议理解为：这条线不是替代 `V-lite`，而是把现有 `vector / ML` 语料继续向独立 AI 设备方向推进；如果未来继续扩大，应按单独 design / plan / status 执行，而不是混在当前主线里顺手扩大。动态 shape 和训练前向/反向可以作为正式远期目标保留，但必须先经由 bounded dynamic shape、profile attribution 和小模型推理闭环逐步推进。
 

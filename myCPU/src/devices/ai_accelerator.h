@@ -94,6 +94,14 @@ inline constexpr uint32_t AI_ACCEL_CAPABILITIES =
 
 inline constexpr uint32_t AI_ACCEL_MAX_GRAPH_PACKAGE_BYTES = 1024 * 1024;
 
+using AiAcceleratorOpProfileSummary = AiOpProfileSummary;
+
+struct AiAcceleratorProfileSummary {
+    uint64_t tile_count{0};
+    uint32_t scratchpad_peak_bytes{0};
+    std::vector<AiAcceleratorOpProfileSummary> op_summaries{};
+};
+
 struct AiActiveSubmissionState {
     AiSubmissionDescriptor descriptor{};
     AiGraphPackage package{};
@@ -130,6 +138,7 @@ public:
     uint64_t completion_count() const;
     uint32_t last_fault() const;
     DebugAiAcceleratorSnapshot debug_snapshot() const;
+    const AiAcceleratorProfileSummary& profile_summary() const;
 
 private:
     bool is_busy() const;
@@ -201,4 +210,5 @@ private:
     uint64_t queue_cycles_{0};
     uint64_t completion_cycles_{0};
     uint64_t retired_ops_{0};
+    AiAcceleratorProfileSummary profile_summary_{};
 };

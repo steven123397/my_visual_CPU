@@ -75,6 +75,21 @@ bool load_bytes(Bus& bus, uint64_t addr, void* data, size_t size) {
     return true;
 }
 
+bool expect_op_summary(const AiAcceleratorOpProfileSummary& summary,
+                       uint16_t expected_index,
+                       AiOpCode expected_opcode,
+                       uint64_t expected_retired_ops,
+                       uint64_t expected_compute_cycles,
+                       uint64_t expected_tile_count,
+                       const char* context) {
+    return expect(summary.op_index == expected_index, context) &&
+           expect(summary.opcode == expected_opcode, context) &&
+           expect(summary.retired_ops == expected_retired_ops, context) &&
+           expect(summary.compute_cycles == expected_compute_cycles, context) &&
+           expect(summary.stall_cycles == 0, context) &&
+           expect(summary.tile_count == expected_tile_count, context);
+}
+
 bool configure_queue(Bus& bus) {
     return store_u32(bus,
                      AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_BASE_LOW,
@@ -386,6 +401,7 @@ int main() {
         }
 
         decode_ai_completion_entry(completion_bytes, completion);
+        const AiAcceleratorProfileSummary& profile_summary = machine.ai_accelerator().profile_summary();
         if (!expect(completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, "expected successful CNN completion") ||
             !expect(completion.retired_ops == 63, "expected CNN retired ops") ||
             !expect(completion.bytes_moved == 32, "expected CNN DMA byte accounting") ||
@@ -396,6 +412,33 @@ int main() {
             !expect(stall_cycles == 0, "expected zero CNN stall cycles") ||
             !expect(dma_load_bytes == 20, "expected CNN DMA load bytes") ||
             !expect(dma_store_bytes == 12, "expected CNN DMA store bytes") ||
+            !expect(profile_summary.tile_count == 4, "expected CNN aggregate tile count") ||
+            !expect(profile_summary.scratchpad_peak_bytes == 188,
+                    "expected CNN aggregate scratchpad peak bytes") ||
+            !expect(profile_summary.op_summaries.size() == 4, "expected four CNN op summaries") ||
+            !expect_op_summary(profile_summary.op_summaries[0], 0, AiOpCode::Conv2d, 36, 3, 1,
+                               "expected CNN conv profile summary") ||
+            !expect_op_summary(profile_summary.op_summaries[1],
+                               1,
+                               AiOpCode::EltwiseRelu,
+                               9,
+                               2,
+                               1,
+                               "expected CNN relu profile summary") ||
+            !expect_op_summary(profile_summary.op_summaries[2],
+                               2,
+                               AiOpCode::LayoutTranspose,
+                               9,
+                               2,
+                               1,
+                               "expected CNN transpose profile summary") ||
+            !expect_op_summary(profile_summary.op_summaries[3],
+                               3,
+                               AiOpCode::ReduceSum,
+                               9,
+                               2,
+                               1,
+                               "expected CNN reduce profile summary") ||
             !expect(machine.ai_accelerator().completion_count() == 1, "expected CNN completion count") ||
             !expect(machine.ai_accelerator().doorbell_count() == 1, "expected CNN doorbell count") ||
             !expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, "expected no CNN fault") ||

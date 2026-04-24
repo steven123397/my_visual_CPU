@@ -23,8 +23,7 @@
   - [platform_mmio_contract.md](platform_mmio_contract.md)
 - 已完成计划：
   - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
-- 当前计划：
-  - [../plan/npu_tpu_accelerator_wave2_plan.md](../plan/npu_tpu_accelerator_wave2_plan.md)
+  - [../plan/history_plan.md#npu-tpu-accelerator-wave2-plan](../plan/history_plan.md#npu-tpu-accelerator-wave2-plan)
 
 ## 背景与问题
 

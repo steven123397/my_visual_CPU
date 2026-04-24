@@ -60,6 +60,7 @@ struct ParsedAiProfileManifest {
     std::string name{};
     std::filesystem::path manifest_path{};
     std::filesystem::path graph_package_path{};
+    std::filesystem::path runtime_shape_table_path{};
     std::vector<std::filesystem::path> input_paths{};
     std::vector<std::filesystem::path> output_paths{};
     uint32_t max_ticks{128};
@@ -115,6 +116,7 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
     bool seen_format = false;
     bool seen_name = false;
     bool seen_graph_package = false;
+    bool seen_runtime_shape_table = false;
     bool seen_max_ticks = false;
     bool seen_source_tag = false;
     std::string line;
@@ -149,6 +151,12 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
             }
             seen_graph_package = true;
             manifest.graph_package_path = base_dir / value;
+        } else if (key == "runtime_shape_table") {
+            if (seen_runtime_shape_table) {
+                throw std::runtime_error("duplicate AI profile manifest key: runtime_shape_table");
+            }
+            seen_runtime_shape_table = true;
+            manifest.runtime_shape_table_path = base_dir / value;
         } else if (key == "input") {
             manifest.input_paths.push_back(base_dir / value);
         } else if (key == "output") {
@@ -191,6 +199,37 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
         throw std::runtime_error("AI profile manifest max_ticks must be non-zero");
     }
     return manifest;
+}
+
+const char* ai_shape_mode_name(AiShapeMode shape_mode) {
+    switch (shape_mode) {
+    case AiShapeMode::Static:
+        return "static";
+    case AiShapeMode::DynamicBounded:
+        return "dynamic_bounded";
+    }
+    return "unknown";
+}
+
+std::string format_runtime_shape_summary(const std::vector<AiRuntimeShapeEntry>& runtime_shapes) {
+    if (runtime_shapes.empty()) {
+        return "none";
+    }
+
+    std::ostringstream out;
+    for (size_t i = 0; i < runtime_shapes.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "t" << runtime_shapes[i].tensor_index << ":";
+        for (uint8_t axis = 0; axis < runtime_shapes[i].rank; ++axis) {
+            if (axis != 0) {
+                out << "x";
+            }
+            out << runtime_shapes[i].dims[axis];
+        }
+    }
+    return out.str();
 }
 
 uint64_t tensor_byte_size(const AiTensorMetadata& tensor) {
@@ -400,10 +439,41 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
     if (!parse_ai_graph_package(graph_bytes, package, error)) {
         throw std::runtime_error("failed to parse AI profile graph package: " + error);
     }
+    result.shape_mode = ai_shape_mode_name(package.shape_mode);
+
+    AiGraphPackage resolved_package = package;
+    std::vector<uint8_t> runtime_shape_bytes{};
+    std::vector<AiRuntimeShapeEntry> runtime_shapes{};
+    uint32_t runtime_shape_table_offset = 0;
+    if (package.shape_mode == AiShapeMode::DynamicBounded) {
+        if (manifest.runtime_shape_table_path.empty()) {
+            throw std::runtime_error("AI profile manifest is missing runtime shape table for dynamic graph");
+        }
+        runtime_shape_bytes = read_binary_file(manifest.runtime_shape_table_path);
+        if (!parse_ai_runtime_shape_table(runtime_shape_bytes,
+                                          package.dynamic_tensors.size(),
+                                          runtime_shapes,
+                                          error) ||
+            !resolve_ai_runtime_shape_package(package, runtime_shapes, resolved_package, error)) {
+            throw std::runtime_error("failed to resolve AI profile runtime shapes: " + error);
+        }
+        runtime_shape_table_offset = static_cast<uint32_t>(align_up(graph_bytes.size(), 64));
+        const uint64_t runtime_shape_addr =
+            kAiProfileGraphPackageAddr + static_cast<uint64_t>(runtime_shape_table_offset);
+        if (runtime_shape_addr < kAiProfileGraphPackageAddr ||
+            runtime_shape_addr + runtime_shape_bytes.size() > kAiProfileInputTableAddr) {
+            throw std::runtime_error("AI profile runtime shape table exceeds reserved graph window");
+        }
+    } else if (!manifest.runtime_shape_table_path.empty()) {
+        throw std::runtime_error("AI profile runtime shape table requires a dynamic graph package");
+    }
+    result.runtime_shapes = format_runtime_shape_summary(runtime_shapes);
+    const AiGraphPackage& concrete_package =
+        package.shape_mode == AiShapeMode::DynamicBounded ? resolved_package : package;
 
     size_t expected_inputs = 0;
     size_t expected_outputs = 0;
-    for (const AiTensorMetadata& tensor : package.tensors) {
+    for (const AiTensorMetadata& tensor : concrete_package.tensors) {
         if (tensor.role == AiTensorRole::Input || tensor.role == AiTensorRole::Weight ||
             tensor.role == AiTensorRole::Constant) {
             ++expected_inputs;
@@ -418,8 +488,8 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
         throw std::runtime_error("AI profile manifest output count does not match graph package");
     }
 
-    std::vector<uint64_t> input_table(package.tensors.size(), 0);
-    std::vector<uint64_t> output_table(package.tensors.size(), 0);
+    std::vector<uint64_t> input_table(concrete_package.tensors.size(), 0);
+    std::vector<uint64_t> output_table(concrete_package.tensors.size(), 0);
     struct OutputBinding {
         std::filesystem::path path{};
         uint64_t addr{0};
@@ -430,8 +500,8 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
     size_t input_index = 0;
     size_t output_index = 0;
     uint64_t tensor_addr = kAiProfileTensorBaseAddr;
-    for (size_t tensor_index = 0; tensor_index < package.tensors.size(); ++tensor_index) {
-        const AiTensorMetadata& tensor = package.tensors[tensor_index];
+    for (size_t tensor_index = 0; tensor_index < concrete_package.tensors.size(); ++tensor_index) {
+        const AiTensorMetadata& tensor = concrete_package.tensors[tensor_index];
         const uint64_t bytes = tensor_byte_size(tensor);
         switch (tensor.role) {
         case AiTensorRole::Input:
@@ -461,6 +531,11 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
     }
 
     write_ram_bytes(ram_, kAiProfileGraphPackageAddr, graph_bytes);
+    if (!runtime_shape_bytes.empty()) {
+        write_ram_bytes(ram_,
+                        kAiProfileGraphPackageAddr + static_cast<uint64_t>(runtime_shape_table_offset),
+                        runtime_shape_bytes);
+    }
     write_u64_table(ram_, kAiProfileInputTableAddr, input_table);
     write_u64_table(ram_, kAiProfileOutputTableAddr, output_table);
 
@@ -472,6 +547,7 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
         .input_table_addr = kAiProfileInputTableAddr,
         .output_table_addr = kAiProfileOutputTableAddr,
         .source_tag = manifest.source_tag,
+        .runtime_shape_table_offset = runtime_shape_table_offset,
     };
     std::array<uint8_t, kAiSubmissionDescriptorBytes> descriptor_bytes{};
     encode_ai_submission_descriptor(descriptor, descriptor_bytes);

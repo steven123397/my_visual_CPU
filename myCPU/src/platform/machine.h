@@ -38,6 +38,8 @@ public:
         std::string workload_name{};
         std::string manifest_path{};
         std::string graph_package_path{};
+        std::string shape_mode{"static"};
+        std::string runtime_shapes{"none"};
         uint32_t graph_package_bytes{0};
         uint64_t ticks{0};
         uint32_t completion_status{AI_ACCEL_COMPLETION_STATUS_SUCCESS};

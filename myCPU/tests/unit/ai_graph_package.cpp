@@ -125,6 +125,20 @@ bool expect_parse_failure(const AiGraphPackage& package, const char* needle) {
     return true;
 }
 
+AiGraphPackage make_dynamic_bounded_package() {
+    AiGraphPackage package = make_valid_package();
+    package.shape_mode = AiShapeMode::DynamicBounded;
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{
+        .tensor_index = 0,
+        .max_tensor_bytes = 16,
+    });
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{
+        .tensor_index = 3,
+        .max_tensor_bytes = 32,
+    });
+    return package;
+}
+
 }  // namespace
 
 int main() {
@@ -185,6 +199,96 @@ int main() {
         AiGraphPackage invalid_opcode = package;
         invalid_opcode.ops[0].opcode = static_cast<AiOpCode>(0xFE);
         if (!expect(expect_parse_failure(invalid_opcode, "opcode"), "expected invalid opcode rejection")) {
+            return 1;
+        }
+
+        const AiGraphPackage dynamic_package = make_dynamic_bounded_package();
+        bytes.clear();
+        if (!expect(serialize_ai_graph_package(dynamic_package, bytes, error),
+                    "expected dynamic_bounded package to serialize")) {
+            return 1;
+        }
+        parsed = {};
+        if (!expect(parse_ai_graph_package(bytes, parsed, error),
+                    "expected dynamic_bounded package to parse") ||
+            !expect(parsed.shape_mode == AiShapeMode::DynamicBounded,
+                    "expected dynamic_bounded shape mode roundtrip") ||
+            !expect(parsed.dynamic_tensors.size() == 2,
+                    "expected dynamic tensor metadata roundtrip")) {
+            return 1;
+        }
+
+        const std::vector<AiRuntimeShapeEntry> valid_runtime_shapes{
+            AiRuntimeShapeEntry{
+                .tensor_index = 0,
+                .rank = 4,
+                .dims = {1, 4, 4, 1},
+            },
+            AiRuntimeShapeEntry{
+                .tensor_index = 3,
+                .rank = 4,
+                .dims = {1, 2, 2, 2},
+            },
+        };
+        if (!expect(validate_ai_runtime_shape_table(parsed, valid_runtime_shapes, error),
+                    "expected bounded runtime shapes to validate")) {
+            return 1;
+        }
+
+        AiGraphPackage missing_dynamic_metadata = dynamic_package;
+        missing_dynamic_metadata.dynamic_tensors.clear();
+        if (!expect(expect_parse_failure(missing_dynamic_metadata, "dynamic tensor"),
+                    "expected dynamic_bounded package without metadata to fail")) {
+            return 1;
+        }
+
+        AiGraphPackage invalid_max_tensor_bytes = dynamic_package;
+        invalid_max_tensor_bytes.dynamic_tensors[0].max_tensor_bytes = 0;
+        if (!expect(expect_parse_failure(invalid_max_tensor_bytes, "max tensor bytes"),
+                    "expected invalid max tensor bytes rejection")) {
+            return 1;
+        }
+
+        const std::vector<AiRuntimeShapeEntry> invalid_runtime_rank{
+            AiRuntimeShapeEntry{
+                .tensor_index = 0,
+                .rank = 5,
+                .dims = {1, 4, 4, 1},
+            },
+            AiRuntimeShapeEntry{
+                .tensor_index = 3,
+                .rank = 4,
+                .dims = {1, 2, 2, 2},
+            },
+        };
+        if (!expect(!validate_ai_runtime_shape_table(parsed, invalid_runtime_rank, error) &&
+                        error.find("runtime shape rank") != std::string::npos,
+                    "expected out-of-range runtime rank rejection")) {
+            return 1;
+        }
+
+        const std::vector<AiRuntimeShapeEntry> invalid_runtime_dims{
+            AiRuntimeShapeEntry{
+                .tensor_index = 0,
+                .rank = 4,
+                .dims = {1, 5, 4, 1},
+            },
+            AiRuntimeShapeEntry{
+                .tensor_index = 3,
+                .rank = 4,
+                .dims = {1, 2, 2, 2},
+            },
+        };
+        if (!expect(!validate_ai_runtime_shape_table(parsed, invalid_runtime_dims, error) &&
+                        error.find("runtime shape") != std::string::npos,
+                    "expected runtime dims over max rejection")) {
+            return 1;
+        }
+
+        AiGraphPackage training_reserved = dynamic_package;
+        training_reserved.training_mode = AiTrainingMode::TrainingReserved;
+        if (!expect(expect_parse_failure(training_reserved, "training mode"),
+                    "expected reserved training mode rejection")) {
             return 1;
         }
 

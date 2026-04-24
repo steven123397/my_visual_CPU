@@ -252,6 +252,10 @@ uint32_t AiAccelerator::last_fault() const {
     return last_fault_;
 }
 
+const AiAcceleratorProfileSummary& AiAccelerator::profile_summary() const {
+    return profile_summary_;
+}
+
 DebugAiAcceleratorSnapshot AiAccelerator::debug_snapshot() const {
     return DebugAiAcceleratorSnapshot{
         .present = true,
@@ -513,6 +517,56 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
         return false;
     }
 
+    if (package.shape_mode == AiShapeMode::Static) {
+        if (descriptor.runtime_shape_table_offset != 0) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = descriptor.runtime_shape_table_offset;
+            return false;
+        }
+    } else if (package.shape_mode == AiShapeMode::DynamicBounded) {
+        if (descriptor.runtime_shape_table_offset == 0) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = 0;
+            return false;
+        }
+
+        uint64_t runtime_shape_table_addr = 0;
+        if (!add_u64_u32(descriptor.graph_package_addr,
+                         descriptor.runtime_shape_table_offset,
+                         runtime_shape_table_addr)) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = descriptor.runtime_shape_table_offset;
+            return false;
+        }
+
+        std::vector<uint8_t> runtime_shape_bytes{};
+        const uint32_t runtime_shape_table_bytes = static_cast<uint32_t>(
+            package.dynamic_tensors.size() * kAiRuntimeShapeEntryBytes);
+        if (!read_graph_package_bytes(runtime_shape_table_addr,
+                                      runtime_shape_table_bytes,
+                                      runtime_shape_bytes,
+                                      error)) {
+            fault = AI_ACCEL_FAULT_DMA;
+            detail = descriptor.runtime_shape_table_offset;
+            return false;
+        }
+
+        std::vector<AiRuntimeShapeEntry> runtime_shapes{};
+        if (!parse_ai_runtime_shape_table(runtime_shape_bytes,
+                                          package.dynamic_tensors.size(),
+                                          runtime_shapes,
+                                          error) ||
+            !resolve_ai_runtime_shape_package(package, runtime_shapes, package, error)) {
+            fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = descriptor.runtime_shape_table_offset;
+            return false;
+        }
+    } else {
+        fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+        detail = descriptor.runtime_shape_table_offset;
+        return false;
+    }
+
     scratchpad_.configure(package.scratchpad_budget_bytes);
 
     AiActiveSubmissionState next{};
@@ -732,6 +786,9 @@ bool AiAccelerator::start_compute(uint32_t& fault, uint32_t& detail) {
     active_submission_.retired_ops = result.retired_ops;
     active_submission_.compute_cycles_remaining = result.compute_cycles;
     active_submission_.stall_cycles_remaining = result.stall_cycles;
+    profile_summary_.tile_count = result.tile_count;
+    profile_summary_.scratchpad_peak_bytes = result.scratchpad_peak_bytes;
+    profile_summary_.op_summaries = result.op_summaries;
     if (active_submission_.compute_cycles_remaining == 0 &&
         active_submission_.stall_cycles_remaining == 0) {
         active_submission_.compute_complete = true;
@@ -850,6 +907,7 @@ void AiAccelerator::reset_device() {
     queue_cycles_ = 0;
     completion_cycles_ = 0;
     retired_ops_ = 0;
+    profile_summary_ = {};
     update_interrupt_line();
 }
 

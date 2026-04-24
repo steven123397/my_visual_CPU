@@ -16,10 +16,9 @@
   - [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
-- 当前计划：
-  - [../plan/npu_tpu_accelerator_wave2_plan.md](../plan/npu_tpu_accelerator_wave2_plan.md)
 - 已完成计划：
   - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
+  - [../plan/history_plan.md#npu-tpu-accelerator-wave2-plan](../plan/history_plan.md#npu-tpu-accelerator-wave2-plan)
 
 ## 目标 / 主题
 
@@ -66,7 +65,7 @@
 - `2026-04-23` 同日已开始 wave 1 完成态后的第一刀 hardening：`ai-profile manifest` 当前已显式要求 `format=ai_proto_manifest_v1`，并拒绝重复的单值 key（`format / name / graph_package / max_ticks / source_tag`），避免 host profile 入口对 malformed-input fail-open。
 - `2026-04-23` 同日继续完成 wave 1 hardening 第二刀：guest `ai_accel` driver 当前已新增最小 queue helper，显式拦住 `NULL / zero / >max` queue 参数，并把 submit / completion ring 的 head-tail 推进、completion tail 回退与 overflow 检查收口到统一 guest-side 合同；`ai_accel_demo` 也已改成复用这组 helper，不再假设 completion 永远固定落在槽位 `0`。
 - 当前对 AI accelerator 的性能口径已经进一步收口为：后续统一采用 `timed-simple` 的 `simulated cycles` 模型评估结构收益，不用宿主机 wall-clock 表述“是否加速”。
-- 当前控制面里的 `perf counter window` 已经覆盖 `device_cycles / dma_cycles / compute_cycles / stall_cycles / busy_cycles / queue_cycles / completion_cycles / effective_ops_per_cycle / utilization / dma_load_bytes / dma_store_bytes`，completion 也已带回 `retired_ops`；但 per-op / per-tile compute attribution 和 `DMA + compute overlap` 仍未展开。
+- 当前控制面里的 `perf counter window` 已经覆盖 `device_cycles / dma_cycles / compute_cycles / stall_cycles / busy_cycles / queue_cycles / completion_cycles / effective_ops_per_cycle / utilization / dma_load_bytes / dma_store_bytes`，completion 也已带回 `retired_ops`；Wave 2 任务 2 的 host-side per-op / per-tile profile summary 也已经落地，但 `DMA + compute overlap` 与更细粒度的 tile 热力图仍未展开。
 - `v1` 的正式设计边界已经冻结为：
   - 推理优先，不把训练放进 `v1` 完成定义
   - 只支持静态 shape、离线准备好的静态子图
@@ -85,7 +84,7 @@
   - 再定义 graph package 与 tensor golden model
   - 然后接设备控制面、数据面和代表性 compute path
   - 最后再接 host / guest 入口与 debug/profile 观测
-- `2026-04-24` 已把动态 shape 和训练支持纳入正式后续设计边界，并新增 Wave 2 活跃计划 [../plan/npu_tpu_accelerator_wave2_plan.md](../plan/npu_tpu_accelerator_wave2_plan.md)。
+- `2026-04-24` 已把动态 shape 和训练支持纳入正式后续设计边界，并完成 Wave 2 全部任务，相关完成态已归档到 [../plan/history_plan.md#npu-tpu-accelerator-wave2-plan](../plan/history_plan.md#npu-tpu-accelerator-wave2-plan)。
   - 动态 shape 当前被定义为 `v2+` 正式目标，但 Wave 2 只做 bounded dynamic shape 的最小合同与代表性 `GEMM / FC` 闭环，不做任意动态图。
   - 训练前向 + 反向当前被定义为更远期正式目标，但 Wave 2 不实现反向传播、optimizer 或梯度同步，只在 ABI / graph package / profile 设计中保留演进位置。
   - Claude Code 建议中的 `Softmax / attention / INT4 / GELU / Sigmoid / MobileNet` 已被重新排序：`Softmax / tiny attention` 属于后续 matmul-family 扩展，`INT4` 等待 INT8 与 tile profile 稳定，MobileNet 只考虑未来前几层或 depthwise / pointwise 子集。
@@ -93,6 +92,22 @@
   - `AiAccelerator` 当前新增 `busy_cycles / queue_cycles / completion_cycles / effective_ops_per_cycle / utilization` 只读 MMIO 窗口，并在 reset 与 fault completion 路径上保持稳定归因。
   - host `--ai-profile-manifest` summary 继续使用 `baseline=none` 与 simulated cycles，同时输出新增 attribution，不引入宿主机 wall-clock。
   - debug snapshot / JSON response 已同步暴露新增字段，`debug_cli_smoke` 已锁住 guest `ai_accel_demo` 完成后的最终观测面。
+- `2026-04-24` 同日继续完成 Wave 2 任务 2：per-op / per-tile profile summary 第一刀。
+  - `AiGraphScheduler` 的 execution result 当前已新增 host-side per-op summary，按 op 顺序稳定暴露 `op_index / opcode / retired_ops / compute_cycles / stall_cycles / tile_count`。
+  - `AiAccelerator` 当前已把最近一次成功 compute 的 per-op summary 收口成独立 profile 统计，并新增第一版 tile 聚合字段 `tile_count / scratchpad_peak_bytes`；现有 completion entry ABI 继续保持不变。
+  - `ai_accelerator_cnn_smoke` 与 `ai_accelerator_gemm_smoke` 当前已分别锁住 `conv / relu / layout_transpose / reduce_sum`、`gemm / pool_max` 的分项归因，以及 fault completion 后 summary 稳定不漂移的合同。
+- `2026-04-24` 同日继续完成 Wave 2 任务 3：tiny model host workload。
+  - `workloads/ai_proto/pack_graph.py` 当前已新增 `tiny_model` packer，固定生成一条更像小模型 block 的 `fp16 gemm -> fp32 relu -> fp32 max-pool` workload。
+  - 这一刀没有强行扩到 `conv -> relu -> pool -> fc`：在当前算子面下，`conv / relu` 走 `int32`，`pool` 只接受 `fp32`，而 `gemm` 也还不接受 `fp32` 输入；为了不把任务 3 反向扩大到新的 dtype / op 合同，本轮保持 host workload 收敛。
+  - `ai_accelerator_profile_smoke` 与 `make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_model` 当前都已锁住这条 `tiny_model` 的 pack / profile / expected-output 闭环。
+- `2026-04-24` 同日继续完成 Wave 2 任务 4：bounded dynamic shape 合同与 reject matrix。
+  - `AiGraphPackage` 当前已新增 `shape_mode=dynamic_bounded`、dynamic tensor metadata、training future 保留字段 fail-closed，以及 runtime shape table 校验与 concrete package resolve helper。
+  - `AiSubmissionDescriptor` 当前已在不改变 `48-byte` 宽度的前提下新增 `runtime_shape_table_offset` roundtrip；静态 package 带 offset 会 reject，动态 package 缺 offset 也会 fail-closed。
+  - `test-unit-ai_graph_package` 与 `test-unit-ai_accelerator_mmio_contract` 当前已锁住动态 graph package parser / reject matrix、runtime shape bound 校验，以及 descriptor ABI roundtrip。
+- `2026-04-24` 同日继续完成 Wave 2 任务 5：bounded dynamic `GEMM / FC` 正向闭环第一刀。
+  - `AiAccelerator` 当前已能在 doorbell 路径读取 runtime shape table，并把 `dynamic_bounded` package resolve 成本次 submission 的 concrete static package；现阶段先把 runtime dims 接到 `GEMM` 路径，不改变静态 graph 的既有语义。
+  - `workloads/ai_proto` 当前已新增 `dynamic_gemm`，manifest 也已支持可选 `runtime_shape_table=` 入口；`--ai-profile-manifest` summary 现在会额外输出 `shape_mode` 与 `runtime_shapes`。
+  - `ai_accelerator_gemm_smoke` 当前已锁住同一 dynamic GEMM graph 在两组 runtime shape 下的不同输出、`retired_ops / bytes_moved / tile_count / scratchpad_peak_bytes`，以及缺 runtime shape 时的 fail-closed；`ai_accelerator_profile_smoke` 当前也已锁住 `dynamic_gemm` 的 pack / profile / expected-output 闭环。
 
 ## 关键历史节点
 
@@ -152,21 +167,33 @@
     - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
     - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
     - `cd myCPU && make test-host-debug_cli_smoke`
+  - 完成 Wave 2 任务 2：新增 host-side per-op / per-tile profile summary，并通过：
+    - `cd myCPU && make test-host-ai_accelerator_cnn_smoke`
+    - `cd myCPU && make test-host-ai_accelerator_gemm_smoke`
+  - 完成 Wave 2 任务 3：新增固定 `tiny_model` host workload，并通过：
+    - `cd myCPU && make test-host-ai_accelerator_profile_smoke`
+    - `cd myCPU && make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_model`
+  - 完成 Wave 2 任务 4：新增 bounded dynamic shape contract / reject matrix；`AiGraphPackage` 现在已支持 `shape_mode=dynamic_bounded`、training future 保留字段 fail-closed、dynamic tensor metadata 与 runtime shape table 校验，`AiSubmissionDescriptor` 也已在不改变 `48-byte` 宽度的前提下暴露 `runtime_shape_table_offset` roundtrip，并通过：
+    - `cd myCPU && make test-unit-ai_graph_package`
+    - `cd myCPU && make test-unit-ai_accelerator_mmio_contract`
 
 ## 当前仍然有效的风险 / 限制
 
 - 当前主线已经切到 `xv6 / Linux` foundation；这条 AI accelerator 线虽然已经建模，但不是当前已激活主线。
 - `DMA-ready` contract、graph package、tensor golden model、独立 AI accelerator 控制面、`scratchpad/DMA engine`、第一版 compute engine、host graph packaging / profile 入口，以及 guest driver / guest demo / debug profile 可观察性当前都已有实现；这条线的剩余限制已经不再是“入口没接上”，而是更细的 timing / overlap / performance 模型还没展开。
 - 当前已经有独立设备时序模型的第二刀，但仍只停在 `timed-simple`：`DMA + compute` 当前固定为 no-overlap，`stall_cycles` 也还没有展开成更细 attribution，因此这条线仍不能拿来讨论更激进的 tile overlap、queue 开销隐藏或更细颗粒度吞吐模型。
+- 当前 per-op / per-tile profile summary 仍只暴露在 host-side `AiAccelerator` profile 统计里，尚未扩到 `--ai-profile-manifest` 的分项文本 summary、MMIO 或 debug snapshot；Wave 2 只把 `shape_mode / runtime_shapes` 外推到 host profile 文本出口，不顺势扩大新的控制面 ABI。
+- 当前 `tiny_model` 已经补上，但它仍是受当前算子面约束的 `gemm -> relu -> pool` block，还不是更完整的 `conv -> relu -> pool -> fc`；如果后续要推进到后者，应先在独立设计里明确 dtype bridge 或更完整的 matmul-family 输入合同，而不是在 Wave 2 的 host workload 里偷开新语义。
 - 同时覆盖 quantized 与 semi-precision family 会明显放大验证矩阵；后续实施时必须坚持“统一 ABI + 代表性闭环”，不能一开始就追求全矩阵算子铺满。
+- bounded dynamic shape 当前只完成到 matmul-family 的第一刀：runtime dims 已接到 dynamic `GEMM / FC-like` 入口，但还没有扩到 `conv / pool / relu / reduce / layout_transpose` 的动态路径，也没有把 runtime-shape fault 细分成更细的 fault detail 矩阵。
 - 动态 shape 和训练支持已经是正式远期目标，但仍不能抢跑完整动态图或训练栈；当前必须先守住 bounded dynamic shape、profile attribution 和小模型推理闭环。
 - 如果把这条线和当前 `xv6 / Linux` 主线混在同一轮里推进，很容易打散已有回归与 ownership 边界。
 
 ## 下一步
 
-1. 按 [../plan/npu_tpu_accelerator_wave2_plan.md](../plan/npu_tpu_accelerator_wave2_plan.md) 继续推进任务 2：per-op / per-tile profile summary，先区分 `conv / relu / pool / gemm` 的 `retired_ops` 与 `compute_cycles`。
-2. 随后再推进 tiny model host workload，以及 bounded dynamic shape 第一刀；动态 `GEMM / FC` 必须保持超界 / 缺 shape / memory plan 不匹配 fail-closed。
-3. 继续把训练前向 + 反向、`Softmax / attention`、`INT4 / GELU / Sigmoid`、MobileNet 子集和 frontend 可视化放在后续专项，不混入 Wave 2 的第一批实现。
+1. Wave 2 已完成；下一步优先按 bug-driven hardening 继续守住 `dynamic_gemm`、`runtime_shape_table_offset` 与新增 host profile summary 的 fail-closed 边界，而不是立刻重开更大功能面。
+2. 如果后续要继续扩大动态路径，优先先补 bounded dynamic 的 `conv / pool / relu` fault matrix 和更细的 memory-plan mismatch 归因，再决定是否值得新开下一轮 active plan。
+3. 继续把训练前向 + 反向、`Softmax / attention`、`INT4 / GELU / Sigmoid`、更完整的 `conv -> relu -> pool -> fc` 路径，以及 frontend 可视化放在后续专项，不混入已完成的 Wave 2。
 
 ## 验证基线
 

@@ -32,6 +32,18 @@ uint64_t op_cycles(uint64_t retired_ops,
     return setup_cycles + throughput_cycles;
 }
 
+uint32_t scratchpad_peak_bytes(const AiGraphPackage& package) {
+    uint64_t peak = 0;
+    for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+        const uint64_t end = static_cast<uint64_t>(entry.scratchpad_offset) +
+                             static_cast<uint64_t>(entry.scratchpad_bytes);
+        if (end > peak) {
+            peak = end;
+        }
+    }
+    return static_cast<uint32_t>(peak);
+}
+
 }  // namespace
 
 AiGraphScheduler::AiGraphScheduler(AiScratchpad& scratchpad, AiGraphSchedulerTiming timing)
@@ -51,6 +63,7 @@ bool AiGraphScheduler::execute(const AiGraphPackage& package,
                                std::string& error) const {
     result = {};
     error.clear();
+    result.scratchpad_peak_bytes = scratchpad_peak_bytes(package);
 
     std::vector<const AiMemoryPlanEntry*> memory_plan_by_tensor(package.tensors.size(), nullptr);
     for (const AiMemoryPlanEntry& entry : package.memory_plan) {
@@ -135,10 +148,19 @@ bool AiGraphScheduler::execute(const AiGraphPackage& package,
             return false;
         }
 
+        const uint64_t output_tiles = tile_count(package.tensors[op.output]);
+        const uint64_t compute_cycles = op_cycles(retired_ops, output_tiles, timing_);
         result.retired_ops += retired_ops;
-        result.compute_cycles += op_cycles(retired_ops,
-                                           tile_count(package.tensors[op.output]),
-                                           timing_);
+        result.compute_cycles += compute_cycles;
+        result.tile_count += output_tiles;
+        result.op_summaries.push_back(AiOpProfileSummary{
+            .op_index = op_index,
+            .opcode = op.opcode,
+            .retired_ops = retired_ops,
+            .compute_cycles = compute_cycles,
+            .stall_cycles = 0,
+            .tile_count = output_tiles,
+        });
         ++executed_ops;
 
         for (uint16_t successor : successors[op_index]) {

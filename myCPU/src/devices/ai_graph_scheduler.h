@@ -13,12 +13,24 @@ struct AiGraphSchedulerTiming {
     bool allow_dma_compute_overlap{false};
 };
 
+struct AiOpProfileSummary {
+    uint16_t op_index{0};
+    AiOpCode opcode{AiOpCode::Invalid};
+    uint64_t retired_ops{0};
+    uint64_t compute_cycles{0};
+    uint64_t stall_cycles{0};
+    uint64_t tile_count{0};
+};
+
 struct AiGraphExecutionResult {
     uint32_t fault{AI_ACCEL_FAULT_NONE};
     uint32_t fault_detail{0};
     uint64_t retired_ops{0};
     uint64_t compute_cycles{0};
     uint64_t stall_cycles{0};
+    uint64_t tile_count{0};
+    uint32_t scratchpad_peak_bytes{0};
+    std::vector<AiOpProfileSummary> op_summaries{};
 };
 
 class AiGraphScheduler {

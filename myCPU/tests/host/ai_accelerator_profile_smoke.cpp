@@ -216,6 +216,69 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
                   "expected ai profile output to match packaged expectation");
 }
 
+bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
+    const std::string pack_command =
+        "python3 workloads/ai_proto/pack_graph.py --workload dynamic_gemm --out-dir " +
+        temp_dir.string();
+    const CommandResult pack = run_command(pack_command);
+    if (!expect(pack.exit_code == 0, "expected dynamic_gemm pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+
+    const std::filesystem::path manifest = temp_dir / "dynamic_gemm.manifest";
+    const std::filesystem::path graph = temp_dir / "dynamic_gemm.graph.bin";
+    const std::filesystem::path runtime_shape = temp_dir / "dynamic_gemm.runtime_shape.bin";
+    const std::filesystem::path actual = temp_dir / "dynamic_gemm.output0.actual.bin";
+    const std::filesystem::path expected = temp_dir / "dynamic_gemm.output0.expected.bin";
+    if (!expect_file_exists(manifest, "expected dynamic_gemm manifest") ||
+        !expect_file_exists(graph, "expected dynamic_gemm graph package") ||
+        !expect_file_exists(runtime_shape, "expected dynamic_gemm runtime shape table") ||
+        !expect_file_exists(expected, "expected dynamic_gemm expected output")) {
+        return false;
+    }
+
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph), package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    if (!expect(package.shape_mode == AiShapeMode::DynamicBounded,
+                "expected dynamic_gemm packaged graph shape mode") ||
+        !expect(package.dynamic_tensors.size() == 2,
+                "expected dynamic_gemm packaged graph dynamic tensors")) {
+        return false;
+    }
+
+    const CommandResult profile =
+        run_command("./mycpu --ai-profile-manifest " + manifest.string());
+    if (!expect(profile.exit_code == 0, "expected dynamic_gemm ai profile command to succeed")) {
+        std::fprintf(stderr, "%s\n", profile.output.c_str());
+        return false;
+    }
+
+    if (!expect_contains(profile.output, "name=dynamic_gemm", "expected dynamic_gemm workload name") ||
+        !expect_contains(profile.output, "shape_mode=dynamic_bounded", "expected dynamic shape mode summary") ||
+        !expect_contains(profile.output, "runtime_shapes=t0:2x8,t2:2x4", "expected runtime shape summary") ||
+        !expect_contains(profile.output, "device_cycles=15", "expected dynamic_gemm device cycle summary") ||
+        !expect_contains(profile.output, "dma_cycles=11", "expected dynamic_gemm DMA cycle summary") ||
+        !expect_contains(profile.output, "compute_cycles=4", "expected dynamic_gemm compute cycle summary") ||
+        !expect_contains(profile.output, "busy_cycles=17", "expected dynamic_gemm busy cycle summary") ||
+        !expect_contains(profile.output, "queue_cycles=1", "expected dynamic_gemm queue cycle summary") ||
+        !expect_contains(profile.output, "completion_cycles=1", "expected dynamic_gemm completion cycle summary") ||
+        !expect_contains(profile.output, "effective_ops_per_cycle=16", "expected dynamic_gemm op/cycle summary") ||
+        !expect_contains(profile.output, "utilization=23", "expected dynamic_gemm utilization summary") ||
+        !expect_contains(profile.output, "bytes_moved=80", "expected dynamic_gemm bytes moved summary") ||
+        !expect_contains(profile.output, "retired_ops=64", "expected dynamic_gemm retired op summary") ||
+        !expect_file_exists(actual, "expected dynamic_gemm actual output")) {
+        return false;
+    }
+
+    return expect(read_binary_file(actual) == read_binary_file(expected),
+                  "expected dynamic_gemm output to match packaged expectation");
+}
+
 }  // namespace
 
 int main() {
@@ -233,13 +296,27 @@ int main() {
         const std::string profile_text = read_text_file(profile_mk);
         const CommandResult make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=cnn");
+        const CommandResult tiny_model_make_run = run_command(
+            "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_model");
+        const CommandResult dynamic_gemm_make_run = run_command(
+            "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_gemm");
         if (!expect(make_run.exit_code == 0, "expected ai workload make dry-run to succeed") ||
+            !expect(tiny_model_make_run.exit_code == 0,
+                    "expected tiny model ai workload make dry-run to succeed") ||
+            !expect(dynamic_gemm_make_run.exit_code == 0,
+                    "expected dynamic_gemm ai workload make dry-run to succeed") ||
             !expect_contains(profile_text,
                              "WORKLOAD_RUN_MODE := ai-profile",
                              "expected ai_proto workload run mode") ||
             !expect_contains(make_run.output,
                              "--ai-profile-manifest workloads/ai_proto/generated/cnn.manifest",
-                             "expected ai workload dry-run manifest argument")) {
+                             "expected ai workload dry-run manifest argument") ||
+            !expect_contains(tiny_model_make_run.output,
+                             "--ai-profile-manifest workloads/ai_proto/generated/tiny_model.manifest",
+                             "expected tiny model dry-run manifest argument") ||
+            !expect_contains(dynamic_gemm_make_run.output,
+                             "--ai-profile-manifest workloads/ai_proto/generated/dynamic_gemm.manifest",
+                             "expected dynamic_gemm dry-run manifest argument")) {
             std::fprintf(stderr, "%s\n", make_run.output.c_str());
             return 1;
         }
@@ -276,7 +353,21 @@ int main() {
                                    "duplicate AI profile manifest key: name",
                                    "expected ai profile manifest with duplicate name to fail") &&
             expect_pack_and_profile(temp_dir, "cnn", "name=cnn", 18, 9, 9, 20, 1, 1, 7, 45, 32, 63) &&
-            expect_pack_and_profile(temp_dir, "gemm", "name=gemm", 13, 9, 4, 15, 1, 1, 3, 26, 20, 12);
+            expect_pack_and_profile(temp_dir, "gemm", "name=gemm", 13, 9, 4, 15, 1, 1, 3, 26, 20, 12) &&
+            expect_pack_and_profile(temp_dir,
+                                    "tiny_model",
+                                    "name=tiny_model",
+                                    15,
+                                    9,
+                                    6,
+                                    17,
+                                    1,
+                                    1,
+                                    3,
+                                    35,
+                                    28,
+                                    20) &&
+            expect_pack_and_profile_dynamic(temp_dir);
 
         std::filesystem::remove_all(temp_dir);
         if (!ok) {

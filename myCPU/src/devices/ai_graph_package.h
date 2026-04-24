@@ -9,6 +9,8 @@
 inline constexpr uint32_t kAiGraphPackageMagic = 0x31475041U;
 inline constexpr uint16_t kAiGraphPackageVersion = 1;
 inline constexpr uint16_t kAiInvalidTensorIndex = 0xFFFFU;
+inline constexpr uint8_t kAiMaxTensorRank = 4;
+inline constexpr size_t kAiRuntimeShapeEntryBytes = 20;
 
 enum class AiDataType : uint8_t {
     Invalid = 0,
@@ -39,12 +41,22 @@ enum class AiOpCode : uint8_t {
     LayoutTranspose = 6,
 };
 
+enum class AiShapeMode : uint8_t {
+    Static = 0,
+    DynamicBounded = 1,
+};
+
+enum class AiTrainingMode : uint8_t {
+    Inference = 0,
+    TrainingReserved = 1,
+};
+
 struct AiTensorMetadata {
     AiDataType dtype{AiDataType::Invalid};
     AiTensorRole role{AiTensorRole::Invalid};
     uint8_t rank{0};
-    std::array<uint32_t, 4> dims{};
-    std::array<uint32_t, 4> tile_dims{};
+    std::array<uint32_t, kAiMaxTensorRank> dims{};
+    std::array<uint32_t, kAiMaxTensorRank> tile_dims{};
 };
 
 struct AiOpDescriptor {
@@ -71,22 +83,55 @@ struct AiMemoryPlanEntry {
     uint32_t scratchpad_bytes{0};
 };
 
+struct AiDynamicTensorMetadata {
+    uint16_t tensor_index{kAiInvalidTensorIndex};
+    uint32_t max_tensor_bytes{0};
+};
+
+struct AiRuntimeShapeEntry {
+    uint16_t tensor_index{kAiInvalidTensorIndex};
+    uint8_t rank{0};
+    std::array<uint32_t, kAiMaxTensorRank> dims{};
+};
+
 struct AiGraphPackage {
+    AiShapeMode shape_mode{AiShapeMode::Static};
+    AiTrainingMode training_mode{AiTrainingMode::Inference};
     uint32_t scratchpad_budget_bytes{0};
     std::vector<AiTensorMetadata> tensors{};
     std::vector<AiOpDescriptor> ops{};
     std::vector<AiDependencyEdge> dependencies{};
     std::vector<AiMemoryPlanEntry> memory_plan{};
+    std::vector<AiDynamicTensorMetadata> dynamic_tensors{};
 };
 
 bool ai_dtype_supported(AiDataType dtype);
 bool ai_tensor_role_supported(AiTensorRole role);
 bool ai_opcode_supported(AiOpCode opcode);
+bool ai_shape_mode_supported(AiShapeMode shape_mode);
 size_t ai_dtype_size_bytes(AiDataType dtype);
 const char* ai_dtype_name(AiDataType dtype);
 const char* ai_opcode_name(AiOpCode opcode);
 
 bool validate_ai_graph_package(const AiGraphPackage& package, std::string& error);
+bool validate_ai_runtime_shape_table(
+    const AiGraphPackage& package,
+    const std::vector<AiRuntimeShapeEntry>& runtime_shapes,
+    std::string& error);
+bool serialize_ai_runtime_shape_table(
+    const std::vector<AiRuntimeShapeEntry>& runtime_shapes,
+    std::vector<uint8_t>& bytes,
+    std::string& error);
+bool parse_ai_runtime_shape_table(
+    const std::vector<uint8_t>& bytes,
+    size_t expected_entries,
+    std::vector<AiRuntimeShapeEntry>& runtime_shapes,
+    std::string& error);
+bool resolve_ai_runtime_shape_package(
+    const AiGraphPackage& package,
+    const std::vector<AiRuntimeShapeEntry>& runtime_shapes,
+    AiGraphPackage& resolved_package,
+    std::string& error);
 bool serialize_ai_graph_package(
     const AiGraphPackage& package,
     std::vector<uint8_t>& bytes,
@@ -95,4 +140,3 @@ bool parse_ai_graph_package(
     const std::vector<uint8_t>& bytes,
     AiGraphPackage& package,
     std::string& error);
-

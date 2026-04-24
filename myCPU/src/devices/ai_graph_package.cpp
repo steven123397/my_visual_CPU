@@ -4,31 +4,43 @@
 
 namespace {
 
-constexpr uint16_t kAiGraphPackageHeaderBytes = 40;
+constexpr uint16_t kAiGraphPackageBaseHeaderBytes = 40;
+constexpr uint16_t kAiGraphPackageExtendedHeaderBytes = 56;
 constexpr size_t kTensorRecordBytes = 36;
 constexpr size_t kOpRecordBytes = 28;
 constexpr size_t kDependencyRecordBytes = 4;
 constexpr size_t kMemoryPlanRecordBytes = 20;
+constexpr size_t kDynamicTensorRecordBytes = 8;
 
 struct ParsedHeader {
     uint32_t magic{0};
     uint16_t version{0};
     uint16_t header_bytes{0};
+    AiShapeMode shape_mode{AiShapeMode::Static};
+    AiTrainingMode training_mode{AiTrainingMode::Inference};
     uint32_t scratchpad_budget_bytes{0};
     uint16_t tensor_count{0};
     uint16_t op_count{0};
     uint16_t dependency_count{0};
     uint16_t memory_plan_count{0};
+    uint16_t dynamic_tensor_count{0};
     uint32_t tensors_offset{0};
     uint32_t ops_offset{0};
     uint32_t dependencies_offset{0};
     uint32_t memory_plan_offset{0};
+    uint32_t dynamic_tensors_offset{0};
     uint32_t package_bytes{0};
 };
 
 template <typename T>
 bool fits_u16_count(const std::vector<T>& values) {
     return values.size() <= std::numeric_limits<uint16_t>::max();
+}
+
+bool requires_extended_header(const AiGraphPackage& package) {
+    return package.shape_mode != AiShapeMode::Static ||
+           package.training_mode != AiTrainingMode::Inference ||
+           !package.dynamic_tensors.empty();
 }
 
 void append_u8(std::vector<uint8_t>& bytes, uint8_t value) {
@@ -91,7 +103,7 @@ bool read_i32(const std::vector<uint8_t>& bytes, size_t& pos, int32_t& value) {
 
 bool read_header(const std::vector<uint8_t>& bytes, ParsedHeader& header, std::string& error) {
     error.clear();
-    if (bytes.size() < kAiGraphPackageHeaderBytes) {
+    if (bytes.size() < kAiGraphPackageBaseHeaderBytes) {
         error = "graph package header truncated";
         return false;
     }
@@ -112,6 +124,25 @@ bool read_header(const std::vector<uint8_t>& bytes, ParsedHeader& header, std::s
         !read_u32(bytes, pos, header.package_bytes)) {
         error = "graph package header decode failed";
         return false;
+    }
+
+    if (header.header_bytes == kAiGraphPackageExtendedHeaderBytes) {
+        uint8_t shape_mode = 0;
+        uint8_t training_mode = 0;
+        uint32_t reserved0 = 0;
+        uint32_t reserved1 = 0;
+        if (bytes.size() < kAiGraphPackageExtendedHeaderBytes ||
+            !read_u8(bytes, pos, shape_mode) ||
+            !read_u8(bytes, pos, training_mode) ||
+            !read_u16(bytes, pos, header.dynamic_tensor_count) ||
+            !read_u32(bytes, pos, header.dynamic_tensors_offset) ||
+            !read_u32(bytes, pos, reserved0) ||
+            !read_u32(bytes, pos, reserved1)) {
+            error = "graph package extended header decode failed";
+            return false;
+        }
+        header.shape_mode = static_cast<AiShapeMode>(shape_mode);
+        header.training_mode = static_cast<AiTrainingMode>(training_mode);
     }
     return true;
 }
@@ -172,6 +203,55 @@ bool compatible_accumulator_dtype(AiDataType input_dtype, AiDataType accum_dtype
     return false;
 }
 
+uint64_t tensor_byte_size(const AiTensorMetadata& tensor) {
+    return tensor_element_count(tensor) * ai_dtype_size_bytes(tensor.dtype);
+}
+
+uint64_t runtime_shape_element_count(const AiRuntimeShapeEntry& runtime_shape) {
+    uint64_t count = 1;
+    for (uint8_t axis = 0; axis < runtime_shape.rank; ++axis) {
+        count *= runtime_shape.dims[axis];
+    }
+    return count;
+}
+
+const AiMemoryPlanEntry* find_memory_plan_entry(
+    const AiGraphPackage& package,
+    uint16_t tensor_index) {
+    for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+        if (entry.tensor_index == tensor_index) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+AiMemoryPlanEntry* find_memory_plan_entry(
+    AiGraphPackage& package,
+    uint16_t tensor_index) {
+    for (AiMemoryPlanEntry& entry : package.memory_plan) {
+        if (entry.tensor_index == tensor_index) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+const AiDynamicTensorMetadata* find_dynamic_tensor_metadata(
+    const AiGraphPackage& package,
+    uint16_t tensor_index) {
+    for (const AiDynamicTensorMetadata& metadata : package.dynamic_tensors) {
+        if (metadata.tensor_index == tensor_index) {
+            return &metadata;
+        }
+    }
+    return nullptr;
+}
+
+uint64_t runtime_tensor_byte_size(const AiRuntimeShapeEntry& runtime_shape, AiDataType dtype) {
+    return runtime_shape_element_count(runtime_shape) * ai_dtype_size_bytes(dtype);
+}
+
 }  // namespace
 
 bool ai_dtype_supported(AiDataType dtype) {
@@ -189,6 +269,10 @@ bool ai_opcode_supported(AiOpCode opcode) {
     return opcode == AiOpCode::Gemm || opcode == AiOpCode::Conv2d ||
            opcode == AiOpCode::EltwiseRelu || opcode == AiOpCode::PoolMax ||
            opcode == AiOpCode::ReduceSum || opcode == AiOpCode::LayoutTranspose;
+}
+
+bool ai_shape_mode_supported(AiShapeMode shape_mode) {
+    return shape_mode == AiShapeMode::Static || shape_mode == AiShapeMode::DynamicBounded;
 }
 
 size_t ai_dtype_size_bytes(AiDataType dtype) {
@@ -250,6 +334,14 @@ const char* ai_opcode_name(AiOpCode opcode) {
 
 bool validate_ai_graph_package(const AiGraphPackage& package, std::string& error) {
     error.clear();
+    if (!ai_shape_mode_supported(package.shape_mode)) {
+        error = "shape mode is unsupported";
+        return false;
+    }
+    if (package.training_mode != AiTrainingMode::Inference) {
+        error = "training mode is reserved";
+        return false;
+    }
     if (package.scratchpad_budget_bytes == 0) {
         error = "scratchpad budget must be non-zero";
         return false;
@@ -352,8 +444,7 @@ bool validate_ai_graph_package(const AiGraphPackage& package, std::string& error
             return false;
         }
         const AiTensorMetadata& tensor = package.tensors[entry.tensor_index];
-        const uint64_t expected_bytes =
-            tensor_element_count(tensor) * ai_dtype_size_bytes(tensor.dtype);
+        const uint64_t expected_bytes = tensor_byte_size(tensor);
         if (entry.byte_size != expected_bytes) {
             error = "memory plan byte size does not match tensor";
             return false;
@@ -368,7 +459,231 @@ bool validate_ai_graph_package(const AiGraphPackage& package, std::string& error
             return false;
         }
     }
+
+    if (package.shape_mode == AiShapeMode::Static) {
+        if (!package.dynamic_tensors.empty()) {
+            error = "dynamic tensor metadata requires dynamic_bounded shape mode";
+            return false;
+        }
+        return true;
+    }
+
+    if (package.dynamic_tensors.empty()) {
+        error = "dynamic tensor metadata is required";
+        return false;
+    }
+    for (size_t i = 0; i < package.dynamic_tensors.size(); ++i) {
+        const AiDynamicTensorMetadata& metadata = package.dynamic_tensors[i];
+        if (metadata.tensor_index >= package.tensors.size()) {
+            error = "dynamic tensor index is out of range";
+            return false;
+        }
+        if (metadata.max_tensor_bytes == 0) {
+            error = "dynamic tensor max tensor bytes must be non-zero";
+            return false;
+        }
+        for (size_t j = i + 1; j < package.dynamic_tensors.size(); ++j) {
+            if (package.dynamic_tensors[j].tensor_index == metadata.tensor_index) {
+                error = "dynamic tensor metadata is duplicated";
+                return false;
+            }
+        }
+        const AiTensorMetadata& tensor = package.tensors[metadata.tensor_index];
+        const uint64_t expected_max_tensor_bytes = tensor_byte_size(tensor);
+        if (expected_max_tensor_bytes == 0 ||
+            expected_max_tensor_bytes > std::numeric_limits<uint32_t>::max() ||
+            metadata.max_tensor_bytes != expected_max_tensor_bytes) {
+            error = "dynamic tensor max tensor bytes do not match tensor";
+            return false;
+        }
+        const AiMemoryPlanEntry* memory_plan = find_memory_plan_entry(package, metadata.tensor_index);
+        if (memory_plan == nullptr || memory_plan->byte_size != metadata.max_tensor_bytes) {
+            error = "dynamic tensor memory plan bytes do not match max tensor bytes";
+            return false;
+        }
+    }
     return true;
+}
+
+bool validate_ai_runtime_shape_table(
+    const AiGraphPackage& package,
+    const std::vector<AiRuntimeShapeEntry>& runtime_shapes,
+    std::string& error) {
+    error.clear();
+    if (package.shape_mode == AiShapeMode::Static) {
+        if (!runtime_shapes.empty()) {
+            error = "runtime shape table is not allowed for static packages";
+            return false;
+        }
+        return true;
+    }
+    if (package.shape_mode != AiShapeMode::DynamicBounded) {
+        error = "runtime shape table requires supported dynamic shape mode";
+        return false;
+    }
+    if (runtime_shapes.size() != package.dynamic_tensors.size()) {
+        error = "runtime shape table does not match dynamic tensor metadata";
+        return false;
+    }
+
+    for (size_t i = 0; i < runtime_shapes.size(); ++i) {
+        const AiRuntimeShapeEntry& runtime_shape = runtime_shapes[i];
+        if (runtime_shape.rank == 0 || runtime_shape.rank > kAiMaxTensorRank) {
+            error = "runtime shape rank is out of range";
+            return false;
+        }
+        for (size_t j = i + 1; j < runtime_shapes.size(); ++j) {
+            if (runtime_shapes[j].tensor_index == runtime_shape.tensor_index) {
+                error = "runtime shape tensor index is duplicated";
+                return false;
+            }
+        }
+        const AiDynamicTensorMetadata* metadata =
+            find_dynamic_tensor_metadata(package, runtime_shape.tensor_index);
+        if (metadata == nullptr) {
+            error = "runtime shape tensor index is not declared as dynamic";
+            return false;
+        }
+        const AiTensorMetadata& tensor = package.tensors[runtime_shape.tensor_index];
+        if (runtime_shape.rank != tensor.rank) {
+            error = "runtime shape rank does not match tensor rank";
+            return false;
+        }
+        for (size_t axis = 0; axis < runtime_shape.dims.size(); ++axis) {
+            if (axis < runtime_shape.rank) {
+                if (runtime_shape.dims[axis] == 0 || runtime_shape.dims[axis] > tensor.dims[axis]) {
+                    error = "runtime shape dims exceed bounded tensor dims";
+                    return false;
+                }
+            } else if (runtime_shape.dims[axis] != 0) {
+                error = "runtime shape trailing dims must be zero";
+                return false;
+            }
+        }
+        const uint64_t runtime_tensor_bytes =
+            runtime_shape_element_count(runtime_shape) * ai_dtype_size_bytes(tensor.dtype);
+        if (runtime_tensor_bytes == 0 ||
+            runtime_tensor_bytes > metadata->max_tensor_bytes ||
+            runtime_tensor_bytes > std::numeric_limits<uint32_t>::max()) {
+            error = "runtime shape bytes exceed max tensor bytes";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool serialize_ai_runtime_shape_table(
+    const std::vector<AiRuntimeShapeEntry>& runtime_shapes,
+    std::vector<uint8_t>& bytes,
+    std::string& error) {
+    error.clear();
+    bytes.clear();
+    bytes.reserve(runtime_shapes.size() * kAiRuntimeShapeEntryBytes);
+    for (const AiRuntimeShapeEntry& runtime_shape : runtime_shapes) {
+        if (runtime_shape.rank == 0 || runtime_shape.rank > kAiMaxTensorRank) {
+            error = "runtime shape rank is out of range";
+            return false;
+        }
+        for (size_t axis = 0; axis < runtime_shape.dims.size(); ++axis) {
+            if (axis < runtime_shape.rank) {
+                if (runtime_shape.dims[axis] == 0) {
+                    error = "runtime shape dims must be non-zero";
+                    return false;
+                }
+            } else if (runtime_shape.dims[axis] != 0) {
+                error = "runtime shape trailing dims must be zero";
+                return false;
+            }
+        }
+        append_u16(bytes, runtime_shape.tensor_index);
+        append_u8(bytes, runtime_shape.rank);
+        append_u8(bytes, 0);
+        for (uint32_t dim : runtime_shape.dims) {
+            append_u32(bytes, dim);
+        }
+    }
+    return true;
+}
+
+bool parse_ai_runtime_shape_table(
+    const std::vector<uint8_t>& bytes,
+    size_t expected_entries,
+    std::vector<AiRuntimeShapeEntry>& runtime_shapes,
+    std::string& error) {
+    error.clear();
+    runtime_shapes.clear();
+    const uint64_t expected_bytes =
+        static_cast<uint64_t>(expected_entries) * static_cast<uint64_t>(kAiRuntimeShapeEntryBytes);
+    if (expected_bytes > std::numeric_limits<size_t>::max() || bytes.size() != expected_bytes) {
+        error = "runtime shape table byte length mismatch";
+        return false;
+    }
+    runtime_shapes.reserve(expected_entries);
+    size_t pos = 0;
+    for (size_t i = 0; i < expected_entries; ++i) {
+        AiRuntimeShapeEntry runtime_shape{};
+        uint8_t reserved = 0;
+        if (!read_u16(bytes, pos, runtime_shape.tensor_index) ||
+            !read_u8(bytes, pos, runtime_shape.rank) ||
+            !read_u8(bytes, pos, reserved)) {
+            error = "runtime shape table truncated";
+            return false;
+        }
+        for (uint32_t& dim : runtime_shape.dims) {
+            if (!read_u32(bytes, pos, dim)) {
+                error = "runtime shape dims table truncated";
+                return false;
+            }
+        }
+        runtime_shapes.push_back(runtime_shape);
+    }
+    return true;
+}
+
+bool resolve_ai_runtime_shape_package(
+    const AiGraphPackage& package,
+    const std::vector<AiRuntimeShapeEntry>& runtime_shapes,
+    AiGraphPackage& resolved_package,
+    std::string& error) {
+    error.clear();
+    if (!validate_ai_runtime_shape_table(package, runtime_shapes, error)) {
+        return false;
+    }
+
+    resolved_package = package;
+    for (const AiRuntimeShapeEntry& runtime_shape : runtime_shapes) {
+        AiTensorMetadata& tensor = resolved_package.tensors[runtime_shape.tensor_index];
+        tensor.rank = runtime_shape.rank;
+        for (size_t axis = 0; axis < tensor.dims.size(); ++axis) {
+            if (axis < runtime_shape.rank) {
+                tensor.dims[axis] = runtime_shape.dims[axis];
+                if (tensor.tile_dims[axis] > tensor.dims[axis]) {
+                    tensor.tile_dims[axis] = tensor.dims[axis];
+                }
+            } else {
+                tensor.dims[axis] = 0;
+                tensor.tile_dims[axis] = 0;
+            }
+        }
+        AiMemoryPlanEntry* memory_plan = find_memory_plan_entry(resolved_package, runtime_shape.tensor_index);
+        if (memory_plan == nullptr) {
+            error = "runtime shape tensor memory plan is missing";
+            return false;
+        }
+        const uint64_t runtime_bytes = runtime_tensor_byte_size(runtime_shape, tensor.dtype);
+        if (runtime_bytes == 0 || runtime_bytes > std::numeric_limits<uint32_t>::max()) {
+            error = "runtime shape bytes are invalid";
+            return false;
+        }
+        memory_plan->byte_size = static_cast<uint32_t>(runtime_bytes);
+        memory_plan->scratchpad_bytes = static_cast<uint32_t>(runtime_bytes);
+    }
+
+    resolved_package.shape_mode = AiShapeMode::Static;
+    resolved_package.training_mode = AiTrainingMode::Inference;
+    resolved_package.dynamic_tensors.clear();
+    return validate_ai_graph_package(resolved_package, error);
 }
 
 bool serialize_ai_graph_package(
@@ -377,12 +692,16 @@ bool serialize_ai_graph_package(
     std::string& error) {
     error.clear();
     if (!fits_u16_count(package.tensors) || !fits_u16_count(package.ops) ||
-        !fits_u16_count(package.dependencies) || !fits_u16_count(package.memory_plan)) {
+        !fits_u16_count(package.dependencies) || !fits_u16_count(package.memory_plan) ||
+        !fits_u16_count(package.dynamic_tensors)) {
         error = "graph package table count exceeds 16-bit encoding";
         return false;
     }
 
-    const uint32_t tensors_offset = kAiGraphPackageHeaderBytes;
+    const uint16_t header_bytes =
+        requires_extended_header(package) ? kAiGraphPackageExtendedHeaderBytes
+                                          : kAiGraphPackageBaseHeaderBytes;
+    const uint32_t tensors_offset = header_bytes;
     const uint32_t ops_offset =
         tensors_offset + static_cast<uint32_t>(package.tensors.size() * kTensorRecordBytes);
     const uint32_t dependencies_offset =
@@ -390,15 +709,18 @@ bool serialize_ai_graph_package(
     const uint32_t memory_plan_offset =
         dependencies_offset +
         static_cast<uint32_t>(package.dependencies.size() * kDependencyRecordBytes);
-    const uint32_t package_bytes =
+    const uint32_t dynamic_tensors_offset =
         memory_plan_offset +
         static_cast<uint32_t>(package.memory_plan.size() * kMemoryPlanRecordBytes);
+    const uint32_t package_bytes =
+        dynamic_tensors_offset +
+        static_cast<uint32_t>(package.dynamic_tensors.size() * kDynamicTensorRecordBytes);
 
     bytes.clear();
     bytes.reserve(package_bytes);
     append_u32(bytes, kAiGraphPackageMagic);
     append_u16(bytes, kAiGraphPackageVersion);
-    append_u16(bytes, kAiGraphPackageHeaderBytes);
+    append_u16(bytes, header_bytes);
     append_u32(bytes, package.scratchpad_budget_bytes);
     append_u16(bytes, static_cast<uint16_t>(package.tensors.size()));
     append_u16(bytes, static_cast<uint16_t>(package.ops.size()));
@@ -409,6 +731,14 @@ bool serialize_ai_graph_package(
     append_u32(bytes, dependencies_offset);
     append_u32(bytes, memory_plan_offset);
     append_u32(bytes, package_bytes);
+    if (header_bytes == kAiGraphPackageExtendedHeaderBytes) {
+        append_u8(bytes, static_cast<uint8_t>(package.shape_mode));
+        append_u8(bytes, static_cast<uint8_t>(package.training_mode));
+        append_u16(bytes, static_cast<uint16_t>(package.dynamic_tensors.size()));
+        append_u32(bytes, dynamic_tensors_offset);
+        append_u32(bytes, 0);
+        append_u32(bytes, 0);
+    }
 
     for (const AiTensorMetadata& tensor : package.tensors) {
         append_u8(bytes, static_cast<uint8_t>(tensor.dtype));
@@ -450,6 +780,12 @@ bool serialize_ai_graph_package(
         append_u32(bytes, entry.byte_size);
         append_u32(bytes, entry.scratchpad_bytes);
     }
+
+    for (const AiDynamicTensorMetadata& metadata : package.dynamic_tensors) {
+        append_u16(bytes, metadata.tensor_index);
+        append_u16(bytes, 0);
+        append_u32(bytes, metadata.max_tensor_bytes);
+    }
     return true;
 }
 
@@ -470,7 +806,8 @@ bool parse_ai_graph_package(
         error = "graph package version is unsupported";
         return false;
     }
-    if (header.header_bytes != kAiGraphPackageHeaderBytes) {
+    if (header.header_bytes != kAiGraphPackageBaseHeaderBytes &&
+        header.header_bytes != kAiGraphPackageExtendedHeaderBytes) {
         error = "graph package header bytes are invalid";
         return false;
     }
@@ -488,10 +825,15 @@ bool parse_ai_graph_package(
             header.package_bytes, "dependency", error) ||
         !validate_table_range(
             header.memory_plan_offset, header.memory_plan_count, kMemoryPlanRecordBytes,
-            header.package_bytes, "memory plan", error)) {
+            header.package_bytes, "memory plan", error) ||
+        !validate_table_range(
+            header.dynamic_tensors_offset, header.dynamic_tensor_count, kDynamicTensorRecordBytes,
+            header.package_bytes, "dynamic tensor", error)) {
         return false;
     }
 
+    package.shape_mode = header.shape_mode;
+    package.training_mode = header.training_mode;
     package.scratchpad_budget_bytes = header.scratchpad_budget_bytes;
 
     size_t pos = header.tensors_offset;
@@ -575,6 +917,20 @@ bool parse_ai_graph_package(
             return false;
         }
         package.memory_plan.push_back(entry);
+    }
+
+    pos = header.dynamic_tensors_offset;
+    package.dynamic_tensors.reserve(header.dynamic_tensor_count);
+    for (uint16_t i = 0; i < header.dynamic_tensor_count; ++i) {
+        AiDynamicTensorMetadata metadata;
+        uint16_t reserved = 0;
+        if (!read_u16(bytes, pos, metadata.tensor_index) ||
+            !read_u16(bytes, pos, reserved) ||
+            !read_u32(bytes, pos, metadata.max_tensor_bytes)) {
+            error = "dynamic tensor table truncated";
+            return false;
+        }
+        package.dynamic_tensors.push_back(metadata);
     }
 
     return validate_ai_graph_package(package, error);

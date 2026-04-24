@@ -35,6 +35,7 @@ struct AiSubmissionDescriptor {
     uint64_t input_table_addr{0};
     uint64_t output_table_addr{0};
     uint32_t source_tag{0};
+    uint32_t runtime_shape_table_offset{0};
 };
 
 struct AiCompletionEntry {

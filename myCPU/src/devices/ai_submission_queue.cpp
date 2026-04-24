@@ -73,6 +73,7 @@ void encode_ai_submission_descriptor(
     put_u64(bytes, 24, descriptor.input_table_addr);
     put_u64(bytes, 32, descriptor.output_table_addr);
     put_u32(bytes, 40, descriptor.source_tag);
+    put_u32(bytes, 44, descriptor.runtime_shape_table_offset);
 }
 
 bool decode_ai_submission_descriptor(
@@ -85,6 +86,7 @@ bool decode_ai_submission_descriptor(
     descriptor.input_table_addr = get_u64(bytes.data(), 24);
     descriptor.output_table_addr = get_u64(bytes.data(), 32);
     descriptor.source_tag = get_u32(bytes.data(), 40);
+    descriptor.runtime_shape_table_offset = get_u32(bytes.data(), 44);
     return true;
 }
 

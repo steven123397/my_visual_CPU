@@ -150,6 +150,27 @@ bool program_queues(Bus& bus) {
 
 int main() {
     try {
+        const AiSubmissionDescriptor descriptor_roundtrip{
+            .token = 0x1234ULL,
+            .graph_package_addr = 0x2000ULL,
+            .graph_package_bytes = 256,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = 0x3000ULL,
+            .output_table_addr = 0x4000ULL,
+            .source_tag = 9,
+            .runtime_shape_table_offset = 0x120U,
+        };
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> descriptor_bytes{};
+        encode_ai_submission_descriptor(descriptor_roundtrip, descriptor_bytes);
+        AiSubmissionDescriptor decoded_descriptor{};
+        if (!expect(decode_ai_submission_descriptor(descriptor_bytes, decoded_descriptor),
+                    "expected submission descriptor decode") ||
+            !expect(decoded_descriptor.runtime_shape_table_offset ==
+                        descriptor_roundtrip.runtime_shape_table_offset,
+                    "expected runtime shape table offset roundtrip")) {
+            return 1;
+        }
+
         Ram ram;
         Bus bus(ram);
         Plic plic;
