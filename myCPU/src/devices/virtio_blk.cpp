@@ -69,7 +69,10 @@ uint16_t VirtioBlk::queue_size(uint32_t queue_index) const {
     return queue_index == 0 ? kQueueSize : 0;
 }
 
-uint32_t VirtioBlk::device_features(uint32_t) const {
+uint32_t VirtioBlk::device_features(uint32_t word) const {
+    if (word == VIRTIO_F_VERSION_1_WORD) {
+        return VIRTIO_F_VERSION_1_MASK;
+    }
     return 0;
 }
 

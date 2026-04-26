@@ -35,6 +35,22 @@ bool is_sfence_vma(const Insn& insn) {
     return (insn.raw & 0xFE007FFFU) == 0x12000073U;
 }
 
+bool is_ecall(const Insn& insn) {
+    return insn.opcode == 0x73 &&
+           insn.funct3 == 0 &&
+           insn.rd == 0 &&
+           insn.rs1 == 0 &&
+           insn.imm == 0;
+}
+
+bool is_ebreak(const Insn& insn) {
+    return insn.opcode == 0x73 &&
+           insn.funct3 == 0 &&
+           insn.rd == 0 &&
+           insn.rs1 == 0 &&
+           insn.imm == 1;
+}
+
 bool is_wfi(const Insn& insn) {
     return insn.raw == 0x10500073U;
 }
@@ -124,7 +140,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
 
     switch (insn.funct3) {
     case 0:
-        if (insn.raw == 0x00000073) {
+        if (is_ecall(insn)) {
             const uint64_t ecall_a7 = inputs.has_ecall_a7 ? inputs.ecall_a7 : core.read_gpr(17);
             if (ecall_a7 == 93) {
                 effects.control.halt = true;
@@ -146,7 +162,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
             effects.retired = false;
             return effects;
         }
-        if (insn.raw == 0x00100073) {
+        if (is_ebreak(insn)) {
             effects.trap = trap_request(CAUSE_BREAKPOINT, inputs.pc);
             effects.retired = false;
             return effects;

@@ -8,6 +8,10 @@ namespace {
 constexpr uint64_t CAUSE_INSN_ADDR_MISALIGNED = 0;
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
+uint8_t instruction_size(const Insn& insn) {
+    return insn.size != 0 ? insn.size : 4;
+}
+
 TrapRequest illegal_instruction_trap(uint32_t raw) {
     TrapRequest trap;
     trap.valid = true;
@@ -25,7 +29,7 @@ TrapRequest instruction_address_misaligned_trap(uint64_t target_pc) {
 }
 
 bool is_instruction_aligned(uint64_t pc) {
-    return (pc & 0x3ULL) == 0;
+    return (pc & 0x1ULL) == 0;
 }
 
 void set_rd(InsnEffects& effects, uint8_t rd, uint64_t value) {
@@ -52,7 +56,7 @@ bool apply_control_flow_effects(CPU& cpu, const InsnEffects& effects, uint64_t& 
 
 InsnEffects build_control_flow_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm, uint64_t pc) {
     InsnEffects effects;
-    const uint64_t next_pc = pc + 4;
+    const uint64_t next_pc = pc + instruction_size(insn);
 
     switch (insn.opcode) {
     case 0x6F: {

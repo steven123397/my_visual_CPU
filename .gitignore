@@ -49,6 +49,16 @@ __pycache__/
 *.iso
 *.fs
 *.kernel
+/myCPU/workloads/linux_proto/linux_sbi_shim.elf
+/myCPU/workloads/linux_proto/linux_sbi_shim.bin
+/myCPU/workloads/linux_proto/linux_mininit.elf
+/myCPU/workloads/linux_proto/linux_postinit_smoke.elf
+/myCPU/workloads/linux_proto/mycpu_virt.dts
+/myCPU/workloads/linux_proto/mycpu_virt.dtb
+/myCPU/workloads/linux_proto/rootfs.cpio
+/myCPU/workloads/linux_proto/rootfs.ext4
+/myCPU/workloads/linux_proto/rootfs_staging/
+/myCPU/workloads/linux_proto/rootfs_disk_staging/
 
 # IDE metadata
 .idea/

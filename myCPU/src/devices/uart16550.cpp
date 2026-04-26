@@ -44,8 +44,14 @@ uint64_t Uart16550::load(uint64_t addr, int size) {
     if (offset == UART_REG_LCR) {
         return lcr_;
     }
+    if (offset == UART_REG_MCR) {
+        return mcr_;
+    }
     if (offset == UART_REG_LSR) {
         return (input_.empty() ? 0U : UART_LSR_DR) | UART_LSR_THRE | UART_LSR_TEMT;
+    }
+    if (offset == UART_REG_MSR) {
+        return UART_MSR_CTS | UART_MSR_DSR | UART_MSR_DCD;
     }
 
     invalid_access(addr, size);
@@ -95,6 +101,10 @@ void Uart16550::store(uint64_t addr, uint64_t value, int size) {
         lcr_ = value8;
         return;
     }
+    if (offset == UART_REG_MCR) {
+        mcr_ = value8;
+        return;
+    }
 
     invalid_access(addr, size);
 }
@@ -133,6 +143,10 @@ size_t Uart16550::output_size() const {
 
 const std::string& Uart16550::output() const {
     return output_;
+}
+
+uint8_t Uart16550::mcr() const {
+    return mcr_;
 }
 
 void Uart16550::inject_input(std::string_view text) {

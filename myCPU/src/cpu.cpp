@@ -14,6 +14,10 @@ namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
+uint8_t instruction_size(const Insn& insn) {
+    return insn.size != 0 ? insn.size : 4;
+}
+
 bool apply_instruction_effects(CPU& cpu, Bus& bus, const InsnEffects& effects, uint64_t next_pc) {
     return apply_commit_boundary(cpu,
                                  bus,
@@ -26,7 +30,7 @@ bool apply_instruction_effects(CPU& cpu, Bus& bus, const InsnEffects& effects, u
 }
 
 bool execute(CPU& cpu, Bus& bus, Insn* in) {
-    const uint64_t next_pc = cpu.core().pc() + 4;
+    const uint64_t next_pc = cpu.core().pc() + instruction_size(*in);
 
     if (InstructionSemantics::supports(*in)) {
         ExecutionContext ctx(cpu, bus);
@@ -91,11 +95,18 @@ void csr_write(CPU& cpu, uint32_t addr, uint64_t val) {
 void cpu_step(CPU& cpu, Bus& bus) {
     cpu.trap().handle_platform_events(bus.tick());
 
-    uint32_t raw = 0;
-    if (!cpu.address_space().fetch32(bus, raw)) {
+    uint16_t first_half = 0;
+    if (!cpu.address_space().fetch16(bus, first_half)) {
         cpu.core().advance_cycle();
         return;
     }
+
+    uint32_t raw = first_half;
+    if ((first_half & 0x3U) == 0x3U && !cpu.address_space().fetch32(bus, raw)) {
+        cpu.core().advance_cycle();
+        return;
+    }
+
     Insn insn;
     decode(raw, &insn);
     execute(cpu, bus, &insn);

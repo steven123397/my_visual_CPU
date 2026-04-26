@@ -14,7 +14,9 @@
 #define UART_REG_IIR 0x2
 #define UART_REG_FCR 0x2
 #define UART_REG_LCR 0x3
+#define UART_REG_MCR 0x4
 #define UART_REG_LSR 0x5
+#define UART_REG_MSR 0x6
 #define UART_IER_RDI 0x1
 #define UART_IER_THRI 0x2
 #define UART_IIR_NO_INT 0x01
@@ -24,6 +26,10 @@
 #define UART_LSR_DR 0x01
 #define UART_LSR_THRE 0x20
 #define UART_LSR_TEMT 0x40
+#define UART_MSR_CTS 0x10
+#define UART_MSR_DSR 0x20
+#define UART_MSR_RI 0x40
+#define UART_MSR_DCD 0x80
 
 #define STORAGE_BASE 0x10001000
 #define STORAGE_SIZE 0x400

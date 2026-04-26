@@ -34,6 +34,8 @@ public:
 
     AddressSpace(CoreState& core, CsrFile& csr, TrapController& trap);
 
+    AccessResult fetch16_result(Bus& bus);
+    AccessResult fetch16_result(Bus& bus, uint64_t pc);
     AccessResult fetch32_result(Bus& bus);
     AccessResult fetch32_result(Bus& bus, uint64_t pc);
     AccessResult load_result(Bus& bus, uint64_t addr, int size);
@@ -42,6 +44,7 @@ public:
                                      uint64_t addr,
                                      AccessType type,
                                      bool update_access_bits = true);
+    bool fetch16(Bus& bus, uint16_t& raw);
     bool fetch32(Bus& bus, uint32_t& raw);
     bool load(Bus& bus, uint64_t addr, int size, uint64_t& value);
     bool store(Bus& bus, uint64_t addr, uint64_t value, int size);

@@ -1,6 +1,6 @@
 # xv6 / Linux / JIT Wave 1 实现计划
 
-> **文档状态：** 执行中（`2026-04-21` 已完成主线切换设计、状态文档、4 个 worktree 编排与第一轮 handoff 收集；`2026-04-22` 已按 `A -> B -> C -> D` 完成第一轮主工作树整合，并完成首轮 B / C post-integration follow-up：PLIC source split、`Machine` / CLI / debug CLI block transport 选择、`mycpu_virt` board 切到 `virtio-blk`；同日进一步的 A / B bug-driven follow-up 也已把 `xv6` 推到 5000-cycle boot-banner / allocator-warmup checkpoint；原 4 个专项 worktree / branch 已清理，当前剩余任务收敛到真实 `virtio` board path 上的 post-kinit 下一处真实 blocker）
+> **文档状态：** 执行中（`2026-04-21` 已完成主线切换设计、状态文档、4 个 worktree 编排与第一轮 handoff 收集；`2026-04-22` 已按 `A -> B -> C -> D` 完成第一轮主工作树整合，并完成首轮 B / C post-integration follow-up：PLIC source split、`Machine` / CLI / debug CLI block transport 选择、`mycpu_virt` board 切到 `virtio-blk`；同日进一步的 A / B bug-driven follow-up 已把 `xv6` 推到 shell，并落下 Linux-facing `flat/payload/set_gpr + linux_proto` foundation；`2026-04-24` 又修正了 `linux_proto` 在缺 `rootfs.cpio` 时会被 Make 依赖提前卡死的问题，并补上 repo-generated 最小 `rootfs.cpio` `/init` fallback；同日 `linux_sbi_shim` 也补上 early-trap UART 诊断，functional 路径补上最小 `RV64C`，modern `virtio-mmio` 也补齐 `VIRTIO_F_VERSION_1`，本地 `CONFIG_RISCV_ISA_C=y` Linux `Image` 已可稳定走到 `/init reached`；`2026-04-25` 又补上 `LINUX_PROTO_ROOTFS_MODE=block` 与 repo-generated `rootfs.ext4` fallback，并把 repo-generated block-rootfs `/init` 收口到 `mycpu linux initrd: stage=console-opened`、`stage=rootfs-rw-ok`、`stage=proc-readable`、`stage=sys-readable`、`stage=execve-post-init` 与 `mycpu linux userland: post-init reached`。原 4 个专项 worktree / branch 已清理，当前剩余任务收敛到：在这个最小 block-rootfs `post-init reached` baseline 之上冻结下一处更后 userland checkpoint）
 
 ## 文档定位
 
@@ -35,7 +35,7 @@
 - `docs/status/mainline_status.md`、`docs/status/project_priority_roadmap.md` 和 `docs/index.md` 已与当前主线切换口径对齐。
 - 各 agent 产出已经按 `A/B -> C -> D` 的顺序被协调者整合，且首轮 B / C follow-up 也已回收到 `main`。
 - `xv6` board profile 已切到真实 `virtio-blk`，并能通过 `xv6_boot_smoke` / `run-workload-xv6` 验证。
-- 当前剩余完成定义收敛为：在真实 `virtio` board path 上，把 `xv6` 从当前 5000-cycle boot-banner / allocator-warmup checkpoint 推到下一个稳定里程碑，并冻结新的 blocker 归属。
+- 当前剩余完成定义收敛为：把 `xv6` shell 守成稳定 guardrail，同时把真实 Linux bring-up 在 block-rootfs 下最小 `console-opened -> rootfs-rw-ok -> proc-readable -> sys-readable -> /init reached -> post-init reached` 之后的下一处稳定 checkpoint 一起冻结下来。
 
 ## 首轮 Worktree / Branch 矩阵（已执行，当前仅保留留档）
 
@@ -63,8 +63,10 @@
 - `2026-04-22` 已按默认顺序把 A / B / C / D 第一轮 foundation 整合进主工作树。
 - A：共享 `AtomicRequest` contract、`RV64A`、`misa.A`、`mhartid`、`wfi` 与对应 asm / host smoke 已进入主线，并通过 `make test-host-atomic_semantics_smoke test-atomic_basic test-atomic_ordering_smoke` 验证。
 - B：`virtio-mmio + virtqueue + virtio_device + virtio-blk` foundation 与 DMA helper 已进入主线；随后也已完成首轮平台 follow-up：PLIC 现在按 `xv6` 约定把 `virtio=1`、`UART=10` 分开接线，`Machine` / CLI / debug CLI 已支持 block transport 选择。
-- C：external workload harness、vendored `xv6-riscv`、board profile、`build/run/smoke-workload-xv6` 与 `xv6_boot_smoke` 已进入主线；当前 `mycpu_virt` board profile 已切到 `virtio-blk`，`xv6_boot_smoke` 与 `run-workload-xv6` 都已走真实 `virtio` board path，当前 smoke 已稳定到 5000-cycle `S` mode boot-banner / allocator-warmup checkpoint。
+- C：external workload harness、vendored `xv6-riscv`、board profile、`build/run/smoke-workload-xv6` 与 `xv6_boot_smoke` 已进入主线；当前 `mycpu_virt` board profile 已切到 `virtio-blk`，`xv6_shell_smoke` 与 `run-workload-xv6` 已把真实 `virtio` board path 守到 shell，当前 bring-up 近端重心已切到 Linux。
 - D：`execution_profile`、debug CLI profile 导出与代表性 workload smoke 已进入主线，`test-host-execution_profile_smoke` 也已补进默认 `make test` / `make test-pipeline`。
+- `2026-04-24` Linux harness follow-up：`linux_proto` 的 repo-generated `dtb` 生成已改成“缺 `initrd` 也能先生成占位 `chosen`”，并补上 repo-generated 最小 `rootfs.cpio` `/init` fallback；因此默认工作区的 `make run-workload WORKLOAD_NAME=linux_proto` 现在会继续进入 probe 入口，并把缺失输入收窄成 `Image` 单项，而不再被 Make 依赖错误提前中断。同日 functional 路径也已补上最小 `RV64C`，modern `virtio-mmio` 已补齐 `VIRTIO_F_VERSION_1`，本地 `CONFIG_RISCV_ISA_C=y` Linux `Image` 已能稳定走到 repo-generated initramfs `/init reached`。
+- `2026-04-25` Linux block-rootfs follow-up：`linux_proto` 现已支持 `LINUX_PROTO_ROOTFS_MODE=block` 与 repo-generated `rootfs.ext4` fallback，block 模式也会把 `chosen.initrd` 收口成零长度占位。基于本地 `CONFIG_RISCV_ISA_C=y` Linux `Image`，当前 block-rootfs 路径已稳定推进到 `EXT4-fs (vda)`、`VFS: Mounted root`、`devtmpfs: mounted`、`Run /init as init process`、`mycpu linux initrd: stage=console-opened`、`mycpu linux initrd: stage=rootfs-rw-ok`、`mycpu linux initrd: stage=proc-readable`、`mycpu linux initrd: stage=sys-readable`、`mycpu linux initrd: /init reached`、`mycpu linux initrd: stage=execve-post-init` 与 `mycpu linux userland: post-init reached`；当前剩余任务因此进一步收敛成 `post-init reached` 之后的下一处用户态 checkpoint，而不再是“有没有一份非空磁盘镜像”或“最小 `/init` console 输出是否闭环”。
 - 这一轮回归已覆盖 `make test-unit-mmio_contract_matrix`、`make test-host-debug_protocol_command_smoke`、`make test-host-virtio_blk_smoke`、`make test-host-xv6_boot_smoke`、`make run-workload-xv6`、`make test`、`make test-pipeline` 与 `cd frontend && node --test`；原 4 个专项 worktree / branch 也已完成清理。
 
 ## 任务
@@ -155,7 +157,7 @@
 - [x] **步骤 1：** 先完成外部 guest workload harness 设计，避免把 `xv6` 写成一条一次性 demo target。
 - [x] **步骤 2：** 盘清 `xv6-riscv` 的 boot、trap、timer、interrupt、block device、memory map 和 boot arg 依赖，形成 gap list。
 - [x] **步骤 3：** 在不越权修改 A/B ownership 的前提下，把 build / image / run / smoke harness 先搭起来。
-- [ ] **步骤 4：** 等 A/B 第一轮 contract 站稳后，逐步推进真实 boot smoke；当前已切到真实 `virtio` board path，并已推进到 5000-cycle boot-banner / allocator-warmup checkpoint，但还需要继续把 `xv6` 推到下一个稳定 post-kinit 里程碑。
+- [ ] **步骤 4：** 等 A/B 第一轮 contract 站稳后，逐步推进真实 boot smoke；当前 `xv6` 已稳定到真实 `virtio` board path 的 shell，`linux_proto` 在缺资产场景下也已走到 probe fail-closed，而在本地 `CONFIG_RISCV_ISA_C=y` Linux `Image` 上已能稳定走到 repo-generated initramfs `/init reached`，以及 repo-generated block-rootfs 的 `mycpu linux initrd: stage=console-opened`、`stage=rootfs-rw-ok`、`stage=proc-readable`、`stage=sys-readable`、`stage=execve-post-init` 与 `mycpu linux userland: post-init reached`。当前剩余任务收敛为：在这个最小 block-rootfs `/init` + rootfs-rw + procfs + sysfs + first post-init `exec` baseline 之上，冻结随之暴露的下一处用户态 checkpoint。
 - [x] **步骤 5：** 把 `xv6` 入口设计成未来可并列接入 `Linux` workload 的外部 guest profile，而不是只保留 `xv6` 特例。
 
 ### 任务 5：Workstream D — observation / profile foundation + default-line guardrail
@@ -191,8 +193,8 @@
 2. **首轮 B / C follow-up 也已经执行完毕。**
    - PLIC 已按 `xv6` 约定拆开 `virtio` / UART source，`Machine` / CLI / debug CLI 已支持 block transport 选择。
    - `xv6` board profile 已从 `simple_storage` 切到真实 `virtio-blk` contract，`xv6_boot_smoke` / `run-workload-xv6` 已开始消费这条路径。
-3. **当前剩余顺序改为：先推进 C 类真实 bring-up，再按暴露缺口回派 A / B / D。**
-   - C 先把 `xv6` 从当前 5000-cycle boot-banner / allocator-warmup checkpoint 推到下一个稳定 post-kinit 里程碑。
+3. **当前剩余顺序改为：先推进 C 类真实 Linux bring-up，再按暴露缺口回派 A / B / D。**
+   - C 先把 `xv6` shell 守成 guardrail，同时冻结 `linux_proto` 在 `devtmpfs/initramfs/xor` 之后的下一处稳定 checkpoint 或 blocker。
    - A / B / D 只随着新 blocker 进入 bug-driven 支撑，不反向抢占 C 的 bring-up ownership。
 4. **每一轮 follow-up 仍由协调者统一回写 status/docs。**
 

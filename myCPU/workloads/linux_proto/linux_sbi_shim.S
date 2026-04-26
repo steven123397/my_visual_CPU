@@ -9,6 +9,12 @@
 #define CSR_MSCRATCH 0x340
 #define CSR_MEPC 0x341
 #define CSR_MCAUSE 0x342
+#define CSR_MTVAL 0x343
+#define CSR_STVEC 0x105
+#define CSR_SSCRATCH 0x140
+#define CSR_SEPC 0x141
+#define CSR_SCAUSE 0x142
+#define CSR_STVAL 0x143
 #define CSR_PMPCFG0 0x3a0
 #define CSR_PMPADDR0 0x3b0
 
@@ -69,6 +75,11 @@ _start:
     la t0, trap_stack_top
     csrw CSR_MSCRATCH, t0
 
+    la t0, supervisor_trap_entry
+    csrw CSR_STVEC, t0
+    la t0, supervisor_trap_stack_top
+    csrw CSR_SSCRATCH, t0
+
     csrw CSR_MEPC, a2
     mret
 
@@ -77,7 +88,7 @@ trap_entry:
 
     csrr t0, CSR_MCAUSE
     li t1, CAUSE_ECALL_S
-    bne t0, t1, trap_park
+    bne t0, t1, unexpected_machine_trap
 
     li t0, SBI_EXT_BASE
     beq a7, t0, handle_base
@@ -156,11 +167,123 @@ sbi_return:
     csrrw sp, CSR_MSCRATCH, sp
     mret
 
+unexpected_machine_trap:
+    la a0, machine_trap_banner
+    jal uart_puts
+    csrr a0, CSR_MCAUSE
+    jal uart_put_hex_prefixed
+    la a0, trap_epc_prefix
+    jal uart_puts
+    csrr a0, CSR_MEPC
+    jal uart_put_hex_prefixed
+    la a0, trap_tval_prefix
+    jal uart_puts
+    csrr a0, CSR_MTVAL
+    jal uart_put_hex_prefixed
+    li a0, '\n'
+    jal uart_putc
+
 trap_park:
     j trap_park
+
+supervisor_trap_entry:
+    csrrw sp, CSR_SSCRATCH, sp
+    la a0, supervisor_trap_banner
+    jal uart_puts
+    csrr a0, CSR_SCAUSE
+    jal uart_put_hex_prefixed
+    la a0, trap_epc_prefix
+    jal uart_puts
+    csrr a0, CSR_SEPC
+    jal uart_put_hex_prefixed
+    la a0, trap_tval_prefix
+    jal uart_puts
+    csrr a0, CSR_STVAL
+    jal uart_put_hex_prefixed
+    li a0, '\n'
+    jal uart_putc
+    j trap_park
+
+uart_putc:
+    li t0, UART_BASE
+1:
+    lbu t1, UART_REG_LSR(t0)
+    andi t1, t1, UART_LSR_THRE
+    beqz t1, 1b
+    sb a0, UART_REG_THR(t0)
+    ret
+
+uart_puts:
+    addi sp, sp, -16
+    sd ra, 8(sp)
+1:
+    lbu t0, 0(a0)
+    beqz t0, 2f
+    addi a0, a0, 1
+    mv a1, a0
+    mv a0, t0
+    jal uart_putc
+    mv a0, a1
+    j 1b
+2:
+    ld ra, 8(sp)
+    addi sp, sp, 16
+    ret
+
+uart_put_hex_prefixed:
+    addi sp, sp, -16
+    sd ra, 8(sp)
+    sd a0, 0(sp)
+    li a0, '0'
+    jal uart_putc
+    li a0, 'x'
+    jal uart_putc
+    ld a0, 0(sp)
+    jal uart_put_hex64
+    ld ra, 8(sp)
+    addi sp, sp, 16
+    ret
+
+uart_put_hex64:
+    addi sp, sp, -32
+    sd ra, 24(sp)
+    sd a0, 16(sp)
+    li t2, 16
+1:
+    ld t0, 16(sp)
+    srli t1, t0, 60
+    la t3, hex_digits
+    add t3, t3, t1
+    lbu a0, 0(t3)
+    jal uart_putc
+    ld t0, 16(sp)
+    slli t0, t0, 4
+    sd t0, 16(sp)
+    addi t2, t2, -1
+    bnez t2, 1b
+    ld ra, 24(sp)
+    addi sp, sp, 32
+    ret
 
     .section .bss
     .align 12
 trap_stack:
     .space 4096
 trap_stack_top:
+
+    .align 12
+supervisor_trap_stack:
+    .space 4096
+supervisor_trap_stack_top:
+
+    .section .rodata
+machine_trap_banner:
+    .asciz "[linux-sbi-shim] machine trap mcause="
+supervisor_trap_banner:
+    .asciz "[linux-sbi-shim] supervisor trap scause="
+trap_epc_prefix:
+    .asciz " epc="
+trap_tval_prefix:
+    .asciz " tval="
+hex_digits:
+    .ascii "0123456789abcdef"

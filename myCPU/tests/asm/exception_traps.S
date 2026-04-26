@@ -1,4 +1,4 @@
-# exception_traps.S - 验证 breakpoint / illegal instruction trap 语义
+# exception_traps.S - 验证 breakpoint / illegal instruction trap 与 halfword target 语义
 .section .text
 .global _start
 _start:
@@ -34,45 +34,53 @@ after_reserved_system:
     li   t1, 3
     bne  t0, t1, fail
 
-misaligned_jalr_point:
-    la   t0, after_misaligned_jalr
-    addi t0, t0, 2
-misaligned_jalr_insn:
+halfword_jalr_point:
+    la   t0, halfword_jalr_target
+halfword_jalr_insn:
     jalr x0, 0(t0)
+    j    fail
 
-after_misaligned_jalr:
+    .2byte 0
+halfword_jalr_target:
+    li   t0, 4
+    csrw mscratch, t0
+    j    after_halfword_jalr
+
+after_halfword_jalr:
     csrr t0, mscratch
     li   t1, 4
     bne  t0, t1, fail
 
-misaligned_jal_point:
-misaligned_jal_insn:
-    jal  x0, misaligned_jal_target
+halfword_jal_point:
+halfword_jal_insn:
+    jal  x0, halfword_jal_target
     j    fail
 
     .2byte 0
-misaligned_jal_target:
-    .word 0x00000013
-    .2byte 0
+halfword_jal_target:
+    li   t0, 5
+    csrw mscratch, t0
+    j    after_halfword_jal
 
-after_misaligned_jal:
+after_halfword_jal:
     csrr t0, mscratch
     li   t1, 5
     bne  t0, t1, fail
 
-misaligned_branch_point:
+halfword_branch_point:
     li   t0, 1
     li   t1, 1
-misaligned_branch_insn:
-    beq  t0, t1, misaligned_branch_target
+halfword_branch_insn:
+    beq  t0, t1, halfword_branch_target
     j    fail
 
     .2byte 0
-misaligned_branch_target:
-    .word 0x00000013
-    .2byte 0
+halfword_branch_target:
+    li   t0, 6
+    csrw mscratch, t0
+    j    after_halfword_branch
 
-after_misaligned_branch:
+after_halfword_branch:
     csrr t0, mscratch
     li   t1, 6
     bne  t0, t1, fail
@@ -88,6 +96,7 @@ after_misaligned_branch:
     li   a0, 0
     ecall
 
+    .2byte 0
 trap_handler:
     csrr t0, mcause
 
@@ -96,9 +105,6 @@ trap_handler:
 
     li   t1, 2
     beq  t0, t1, handle_illegal
-
-    li   t1, 0
-    beq  t0, t1, handle_instruction_address_misaligned
 
     j    trap_fail
 
@@ -150,56 +156,6 @@ handle_reserved_system:
 
     csrr t0, mepc
     addi t0, t0, 4
-    csrw mepc, t0
-    mret
-
-handle_instruction_address_misaligned:
-    csrr t0, mepc
-    la   t1, misaligned_jalr_insn
-    beq  t0, t1, handle_misaligned_jalr
-
-    la   t1, misaligned_jal_insn
-    beq  t0, t1, handle_misaligned_jal
-
-    la   t1, misaligned_branch_insn
-    beq  t0, t1, handle_misaligned_branch
-
-    j    trap_fail
-
-handle_misaligned_jalr:
-    csrr t0, mtval
-    la   t1, after_misaligned_jalr
-    addi t1, t1, 2
-    bne  t0, t1, trap_fail
-
-    li   t0, 4
-    csrw mscratch, t0
-
-    la   t0, after_misaligned_jalr
-    csrw mepc, t0
-    mret
-
-handle_misaligned_jal:
-    csrr t0, mtval
-    la   t1, misaligned_jal_target
-    bne  t0, t1, trap_fail
-
-    li   t0, 5
-    csrw mscratch, t0
-
-    la   t0, after_misaligned_jal
-    csrw mepc, t0
-    mret
-
-handle_misaligned_branch:
-    csrr t0, mtval
-    la   t1, misaligned_branch_target
-    bne  t0, t1, trap_fail
-
-    li   t0, 6
-    csrw mscratch, t0
-
-    la   t0, after_misaligned_branch
     csrw mepc, t0
     mret
 

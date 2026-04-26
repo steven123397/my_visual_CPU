@@ -8,6 +8,9 @@ class VirtQueue;
 
 constexpr uint32_t VIRTIO_MMIO_VENDOR_ID = 0x554d4551;
 constexpr uint32_t VIRTIO_DEVICE_ID_BLOCK = 2;
+constexpr uint32_t VIRTIO_F_VERSION_1 = 32;
+constexpr uint32_t VIRTIO_F_VERSION_1_WORD = 1;
+constexpr uint32_t VIRTIO_F_VERSION_1_MASK = 1U << (VIRTIO_F_VERSION_1 - 32U);
 
 class VirtioDevice {
 public:

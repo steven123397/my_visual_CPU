@@ -126,6 +126,14 @@ PrivilegeMode effective_privilege_mode(AccessType type, const CoreState& core, u
 AddressSpace::AddressSpace(CoreState& core, CsrFile& csr, TrapController& trap)
     : core_(core), csr_(csr), trap_(trap) {}
 
+AddressSpace::AccessResult AddressSpace::fetch16_result(Bus& bus) {
+    return fetch16_result(bus, core_.pc());
+}
+
+AddressSpace::AccessResult AddressSpace::fetch16_result(Bus& bus, uint64_t pc) {
+    return access_result(bus, pc, 2, AccessType::Instruction);
+}
+
 void AddressSpace::flush_tlb() {
     for (TlbEntry& entry : tlb_) {
         entry.valid = false;
@@ -189,6 +197,16 @@ bool AddressSpace::fetch32(Bus& bus, uint32_t& raw) {
         return false;
     }
     raw = static_cast<uint32_t>(result.value);
+    return true;
+}
+
+bool AddressSpace::fetch16(Bus& bus, uint16_t& raw) {
+    const AccessResult result = fetch16_result(bus);
+    if (!result.ok) {
+        apply_fault(result.fault);
+        return false;
+    }
+    raw = static_cast<uint16_t>(result.value);
     return true;
 }
 

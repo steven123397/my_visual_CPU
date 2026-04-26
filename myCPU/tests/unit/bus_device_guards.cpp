@@ -114,8 +114,11 @@ int main() {
                 return fail("expected unmapped store to update last_access");
             }
 
-            if (bus.try_load(UART_BASE + 0x4, 1, value)) {
-                return fail("expected invalid UART offset to fail");
+            if (!bus.try_store(UART_BASE + UART_REG_MCR, 0x0B, 1)) {
+                return fail("expected valid UART MCR write to succeed");
+            }
+            if (!bus.try_load(UART_BASE + UART_REG_MCR, 1, value) || value != 0x0B) {
+                return fail("expected valid UART MCR load to succeed");
             }
             if (!bus.try_load(CLINT_BASE + CLINT_REG_MTIME, 8, value) || value != 0) {
                 return fail("expected valid CLINT register load to succeed");

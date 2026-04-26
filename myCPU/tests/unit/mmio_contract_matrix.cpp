@@ -136,8 +136,16 @@ int main() {
                              1,
                              "expected UART LCR write to leave divisor latch mode") ||
             !expect_load(bus, UART_BASE + UART_REG_LCR, 1, 0x03, "expected UART word length readback") ||
+            !expect_store_ok(bus, UART_BASE + UART_REG_MCR, 0x0B, 1, "expected UART MCR write") ||
+            !expect_load(bus, UART_BASE + UART_REG_MCR, 1, 0x0B, "expected UART MCR readback") ||
             !expect_store_ok(bus, UART_BASE + UART_REG_FCR, 0x07, 1, "expected UART FCR write") ||
             !expect_store_fail(bus, UART_BASE + UART_REG_LSR, 0, 1, "expected UART LSR write to fail") ||
+            !expect_load(bus,
+                         UART_BASE + UART_REG_MSR,
+                         1,
+                         UART_MSR_CTS | UART_MSR_DSR | UART_MSR_DCD,
+                         "expected UART MSR carrier/modem ready bits") ||
+            !expect_store_fail(bus, UART_BASE + UART_REG_MSR, 0, 1, "expected UART MSR write to fail") ||
             !expect_load_fail(bus, UART_BASE + UART_REG_IER, 2, "expected UART wide load to fail") ||
             !expect_store_fail(bus, UART_BASE + UART_SIZE - 1, 0, 2, "expected UART boundary crossing write to fail")) {
             return 1;

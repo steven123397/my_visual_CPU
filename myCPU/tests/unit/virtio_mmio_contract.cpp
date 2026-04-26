@@ -71,6 +71,22 @@ int main() {
                          VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_VENDOR_ID,
                          VIRTIO_MMIO_VENDOR_ID,
                          "expected vendor id") ||
+            !expect_load(bus,
+                         VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DEVICE_FEATURES,
+                         0,
+                         "expected legacy feature word to stay empty") ||
+            !expect_store(bus,
+                          VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DEVICE_FEATURES_SEL,
+                          1,
+                          "expected device features select write for high word") ||
+            !expect_load(bus,
+                         VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DEVICE_FEATURES,
+                         0x1,
+                         "expected modern feature word to expose VIRTIO_F_VERSION_1") ||
+            !expect_store(bus,
+                          VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DEVICE_FEATURES_SEL,
+                          0,
+                          "expected device features select reset") ||
             !expect_store(bus,
                           VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_QUEUE_SEL,
                           0,
@@ -87,6 +103,22 @@ int main() {
                          VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DRIVER_FEATURES,
                          0x12345678,
                          "expected driver features readback") ||
+            !expect_store(bus,
+                          VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DRIVER_FEATURES_SEL,
+                          1,
+                          "expected high-word driver features select write") ||
+            !expect_store(bus,
+                          VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DRIVER_FEATURES,
+                          0x1,
+                          "expected high-word driver features write") ||
+            !expect_load(bus,
+                         VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DRIVER_FEATURES,
+                         0x1,
+                         "expected high-word driver features readback") ||
+            !expect_store(bus,
+                          VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_DRIVER_FEATURES_SEL,
+                          0,
+                          "expected driver features select reset") ||
             !expect_load(bus,
                          VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_QUEUE_NUM_MAX,
                          8,
