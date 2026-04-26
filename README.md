@@ -3,7 +3,7 @@
 一套从零开始、独立设计的 RISC-V 系统模拟器，已经可以运行自制的小型操作系统内核。
 
 <!-- 如果已有截图，取消下面的注释 -->
-<!-- ![前端调试台截图](docs/screenshots/frontend_overview.png) -->
+<!-- ![前端调试台截图](docs/showcase/frontend_overview.png) -->
 
 ## 核心亮点
 
@@ -96,7 +96,7 @@ my_visual_CPU/
 ├── frontend/       # 本地调试服务、浏览器前端与 Node 测试
 │   ├── server/     #   Node.js 调试服务
 │   └── app/        #   浏览器前端（vanilla JS）
-├── docs/           # background / design / plan / status 文档
+├── docs/           # background / design / plan / status 文档与 showcase 展示材料
 └── README.md
 ```
 
@@ -252,4 +252,4 @@ SPIKE_PATH=/path/to/spike make test-host-spike_differential
 - [docs/design/phase4_preparation_design.md](docs/design/phase4_preparation_design.md)
 - [docs/design/future_expansion_roadmap_design.md](docs/design/future_expansion_roadmap_design.md)
 
-完整展示材料见 [docs/showcase.md](docs/showcase.md)。
+完整展示材料见 [docs/showcase/README.md](docs/showcase/README.md)，HTML 预览页见 [docs/showcase/preview.html](docs/showcase/preview.html)。

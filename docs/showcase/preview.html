@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>myCPU 项目汇报 HTML 预览</title>
+    <style>
+      :root {
+        --paper: #f5eddc;
+        --paper-deep: #e4d4b8;
+        --ink: #172126;
+        --muted: #68727a;
+        --line: rgba(23, 33, 38, 0.14);
+        --copper: #b35d2f;
+        --copper-dark: #72371d;
+        --cyan: #1c7780;
+        --cyan-soft: rgba(28, 119, 128, 0.14);
+        --terminal: #08151a;
+        --terminal-2: #10262d;
+        --terminal-ink: #d8f1e7;
+        --panel: rgba(255, 250, 239, 0.78);
+        --panel-solid: #fff8ea;
+        --shadow: 0 28px 80px rgba(49, 41, 29, 0.18);
+        --serif: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+        --sans: "Avenir Next", "Gill Sans", "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
+        --mono: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--sans);
+        background:
+          radial-gradient(circle at 8% 6%, rgba(179, 93, 47, 0.22), transparent 28rem),
+          radial-gradient(circle at 94% 16%, rgba(28, 119, 128, 0.18), transparent 30rem),
+          linear-gradient(135deg, var(--paper), var(--paper-deep));
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        content: "";
+        background:
+          linear-gradient(rgba(23, 33, 38, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(23, 33, 38, 0.04) 1px, transparent 1px);
+        background-size: 34px 34px;
+        mask-image: radial-gradient(circle at center, #000 15%, transparent 84%);
+      }
+
+      body::after {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        content: "";
+        pointer-events: none;
+        opacity: 0.12;
+        background-image:
+          repeating-linear-gradient(0deg, rgba(23, 33, 38, 0.4) 0, rgba(23, 33, 38, 0.4) 1px, transparent 1px, transparent 7px);
+        mix-blend-mode: multiply;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 28px 0 72px;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 14px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 250, 239, 0.72);
+        box-shadow: 0 18px 60px rgba(49, 41, 29, 0.12);
+        backdrop-filter: blur(18px);
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding-left: 8px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+      }
+
+      .brand-mark {
+        display: inline-grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff9ee;
+        background: linear-gradient(135deg, var(--copper), var(--cyan));
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .nav a {
+        padding: 8px 12px;
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      .nav a:hover {
+        color: var(--ink);
+        background: rgba(23, 33, 38, 0.07);
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 34px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(20px);
+      }
+
+      .section {
+        margin: 28px 0;
+        animation: reveal 0.8s ease both;
+      }
+
+      .hero {
+        position: relative;
+        display: grid;
+        min-height: 680px;
+        grid-template-columns: minmax(0, 1.05fr) minmax(380px, 0.95fr);
+        gap: 28px;
+        overflow: hidden;
+        padding: clamp(28px, 5vw, 58px);
+      }
+
+      .hero::before {
+        position: absolute;
+        inset: auto -10% -34% 42%;
+        height: 420px;
+        content: "";
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(28, 119, 128, 0.22), transparent 65%);
+      }
+
+      .eyebrow {
+        margin: 0 0 18px;
+        color: var(--copper-dark);
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family: var(--serif);
+        letter-spacing: -0.04em;
+      }
+
+      h1 {
+        max-width: 760px;
+        font-size: clamp(48px, 8vw, 96px);
+        line-height: 0.93;
+      }
+
+      .lead {
+        max-width: 650px;
+        margin: 28px 0 0;
+        color: #39464e;
+        font-size: clamp(18px, 2.3vw, 24px);
+        line-height: 1.65;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 34px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.44);
+        color: #405059;
+        font-size: 14px;
+      }
+
+      .pill strong {
+        color: var(--ink);
+      }
+
+      .hero-visual {
+        position: relative;
+        align-self: center;
+        min-height: 560px;
+      }
+
+      .screen-stack {
+        position: absolute;
+        inset: 0;
+      }
+
+      .screen {
+        position: absolute;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.38);
+        border-radius: 26px;
+        background: #111f24;
+        box-shadow: 0 24px 70px rgba(8, 21, 26, 0.28);
+      }
+
+      .screen img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .screen-main {
+        inset: 34px 16px 118px 0;
+        transform: rotate(-2.2deg);
+      }
+
+      .screen-side {
+        right: 0;
+        bottom: 32px;
+        width: 48%;
+        height: 42%;
+        transform: rotate(4deg);
+      }
+
+      .screen-terminal {
+        left: 24px;
+        right: 78px;
+        bottom: 0;
+        height: 190px;
+        padding: 18px;
+        color: var(--terminal-ink);
+        background:
+          linear-gradient(135deg, rgba(28, 119, 128, 0.13), transparent),
+          linear-gradient(180deg, var(--terminal), var(--terminal-2));
+      }
+
+      .term-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        color: #8fb3ad;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .term-lines {
+        margin: 0;
+        color: #daf6ed;
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.65;
+        white-space: pre-wrap;
+      }
+
+      .blink {
+        display: inline-block;
+        width: 8px;
+        height: 15px;
+        margin-left: 3px;
+        transform: translateY(2px);
+        background: #f0b65f;
+        animation: cursor 1.2s steps(2, start) infinite;
+      }
+
+      .section-head {
+        display: grid;
+        grid-template-columns: minmax(0, 0.82fr) minmax(260px, 0.38fr);
+        gap: 28px;
+        align-items: end;
+        margin-bottom: 18px;
+      }
+
+      .section-kicker {
+        margin: 0 0 10px;
+        color: var(--copper-dark);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h2 {
+        font-size: clamp(34px, 5vw, 58px);
+        line-height: 1;
+      }
+
+      .section-note {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .architecture {
+        padding: 34px;
+      }
+
+      .arch-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+      }
+
+      .arch-card {
+        position: relative;
+        min-height: 330px;
+        padding: 24px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 26px;
+        background: rgba(255, 255, 255, 0.42);
+      }
+
+      .arch-card::after {
+        position: absolute;
+        right: -28px;
+        bottom: -28px;
+        width: 126px;
+        height: 126px;
+        content: "";
+        border: 1px solid rgba(179, 93, 47, 0.28);
+        border-radius: 50%;
+      }
+
+      .arch-card strong {
+        display: block;
+        color: var(--copper-dark);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .arch-card h3 {
+        margin-top: 18px;
+        font-size: 29px;
+        line-height: 1.05;
+      }
+
+      .arch-card p {
+        color: #46535a;
+        line-height: 1.75;
+      }
+
+      .mini-flow {
+        display: grid;
+        gap: 8px;
+        margin-top: 18px;
+        color: var(--terminal-ink);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .mini-flow span {
+        display: block;
+        padding: 9px 10px;
+        border-radius: 12px;
+        background: #12252b;
+      }
+
+      .evidence {
+        display: grid;
+        grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.55fr);
+        gap: 18px;
+        align-items: stretch;
+        padding: 18px;
+      }
+
+      .evidence-shot {
+        overflow: hidden;
+        min-height: 520px;
+        border-radius: 26px;
+        background: #10242a;
+      }
+
+      .evidence-shot img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .evidence-copy {
+        display: grid;
+        gap: 14px;
+      }
+
+      .dark-card {
+        padding: 24px;
+        border-radius: 26px;
+        color: #f6ead7;
+        background:
+          radial-gradient(circle at 95% 4%, rgba(28, 119, 128, 0.34), transparent 38%),
+          linear-gradient(180deg, #14262b, #08151a);
+      }
+
+      .dark-card h3 {
+        font-size: 34px;
+      }
+
+      .dark-card p {
+        color: rgba(246, 234, 215, 0.74);
+        line-height: 1.75;
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .metric {
+        padding: 16px;
+        border: 1px solid rgba(246, 234, 215, 0.16);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .metric b {
+        display: block;
+        color: #f3bd70;
+        font-family: var(--serif);
+        font-size: 30px;
+        line-height: 1;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 8px;
+        color: rgba(246, 234, 215, 0.68);
+        font-size: 13px;
+      }
+
+      .video-placeholder {
+        position: relative;
+        display: grid;
+        min-height: 210px;
+        place-items: center;
+        overflow: hidden;
+        border: 1px dashed rgba(246, 234, 215, 0.34);
+        border-radius: 26px;
+        color: rgba(246, 234, 215, 0.72);
+        background:
+          linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+          linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+          rgba(8, 21, 26, 0.86);
+        background-size: 24px 24px;
+        font-family: var(--mono);
+        text-align: center;
+      }
+
+      .video-placeholder::before {
+        position: absolute;
+        width: 86px;
+        height: 86px;
+        content: "";
+        border: 1px solid rgba(243, 189, 112, 0.5);
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(243, 189, 112, 0.24), transparent 58%);
+      }
+
+      .video-placeholder span {
+        position: relative;
+        z-index: 1;
+        max-width: 260px;
+        line-height: 1.8;
+      }
+
+      .timeline {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        padding: 18px;
+        border-radius: 28px;
+        background: rgba(255, 248, 234, 0.54);
+      }
+
+      .phase {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.36);
+      }
+
+      .phase b {
+        color: var(--copper-dark);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+      }
+
+      .phase p {
+        margin: 10px 0 0;
+        color: #4b5960;
+        line-height: 1.55;
+      }
+
+      @keyframes reveal {
+        from {
+          opacity: 0;
+          transform: translateY(22px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes cursor {
+        0%,
+        45% {
+          opacity: 1;
+        }
+        46%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .section-head,
+        .evidence {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-visual {
+          min-height: 500px;
+        }
+
+        .arch-grid,
+        .timeline {
+          grid-template-columns: 1fr;
+        }
+
+        .evidence-shot {
+          min-height: 360px;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .page {
+          width: min(100% - 24px, 1180px);
+          padding-top: 12px;
+        }
+
+        .topbar {
+          position: static;
+          align-items: flex-start;
+          border-radius: 22px;
+          flex-direction: column;
+        }
+
+        .nav {
+          justify-content: flex-start;
+        }
+
+        .hero,
+        .architecture {
+          padding: 22px;
+          border-radius: 24px;
+        }
+
+        .hero-visual {
+          min-height: 440px;
+        }
+
+        .screen-main {
+          inset: 12px 0 148px 0;
+        }
+
+        .screen-side {
+          display: none;
+        }
+
+        .screen-terminal {
+          left: 0;
+          right: 0;
+        }
+
+        .metric-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="topbar" aria-label="页面导航">
+        <div class="brand">
+          <span class="brand-mark">rv</span>
+          <span>myCPU 汇报预览</span>
+        </div>
+        <nav class="nav">
+          <a href="#overview">项目定位</a>
+          <a href="#architecture">架构核心</a>
+          <a href="#evidence">运行证据</a>
+          <a href="#timeline">阶段路线</a>
+        </nav>
+      </header>
+
+      <section id="overview" class="section hero panel">
+        <div>
+          <p class="eyebrow">10 minute defense narrative</p>
+          <h1>一颗能跑系统的 RISC-V 模拟器</h1>
+          <p class="lead">
+            myCPU 从 C 原型演进为模块化 C++ 架构，目标不是停留在指令解释器，而是把 CPU、MMU、trap、外设和 guest runtime 接成可运行的系统闭环。
+          </p>
+          <div class="hero-actions" aria-label="项目能力摘要">
+            <span class="pill"><strong>RV64I / RV64M</strong> 参考执行路径</span>
+            <span class="pill"><strong>pipeline</strong> rename + ROB + LSQ</span>
+            <span class="pill"><strong>Sv39</strong> M/S/U 特权路径</span>
+            <span class="pill"><strong>xv6 shell</strong> 真实 workload 证据</span>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-label="调试前端截图组合">
+          <div class="screen-stack">
+            <figure class="screen screen-main">
+              <img src="frontend_overview.png" alt="myCPU 浏览器调试台首屏截图">
+            </figure>
+            <figure class="screen screen-side">
+              <img src="vector_panel.png" alt="向量寄存器与 CNN workload 面板截图">
+            </figure>
+            <div class="screen screen-terminal" aria-label="终端输出摘要">
+              <div class="term-title">
+                <span>guest workload checkpoint</span>
+                <span>pipeline</span>
+              </div>
+              <pre class="term-lines">$ kernel_alpha_demo
+KMVPETDS
+$ guest_vector_cnn_demo
+V3OK
+$ xv6-riscv
+init: starting sh<span class="blink"></span></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture" class="section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">architecture spine</p>
+            <h2>汇报只展开三条主线</h2>
+          </div>
+          <p class="section-note">
+            这段用于替代 PPT 中最容易散的功能罗列：先讲执行流，再讲内存与特权，最后落到 guest kernel bring-up。
+          </p>
+        </div>
+
+        <div class="architecture panel">
+          <div class="arch-grid">
+            <article class="arch-card">
+              <strong>core 01</strong>
+              <h3>CPU 核心执行流</h3>
+              <p>
+                以 functional 作为 ISA 级 reference path，同时保留 pipeline 后端观察 rename、ROB、LSQ 和最小真实 OoO execute 边界。
+              </p>
+              <div class="mini-flow">
+                <span>decode</span>
+                <span>rename / issue</span>
+                <span>execute / commit</span>
+              </div>
+            </article>
+
+            <article class="arch-card">
+              <strong>core 02</strong>
+              <h3>内存与特权系统</h3>
+              <p>
+                用 Sv39、TLB、sfence.vma、M/S/U privilege 和 trap delegation 把“指令能跑”推进到“系统能隔离运行”。
+              </p>
+              <div class="mini-flow">
+                <span>virtual address</span>
+                <span>Sv39 page walk</span>
+                <span>fault / trap</span>
+              </div>
+            </article>
+
+            <article class="arch-card">
+              <strong>core 03</strong>
+              <h3>guest runtime 闭环</h3>
+              <p>
+                guest 侧从 boot、PMM、页表、trap runtime 到用户态任务，支撑 kernel_alpha 和更真实的 xv6 workload。
+              </p>
+              <div class="mini-flow">
+                <span>boot / PMM</span>
+                <span>trap runtime</span>
+                <span>kernel bring-up</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="evidence" class="section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">evidence stage</p>
+            <h2>真实截图 + 录屏占位</h2>
+          </div>
+          <p class="section-note">
+            最终视频里，这一段可以切局部特写：左侧放真实截图，右侧替换成你录好的 xv6 shell 或 kernel_alpha 操作片段。
+          </p>
+        </div>
+
+        <div class="evidence panel">
+          <figure class="evidence-shot">
+            <img src="pipeline_timeline.png" alt="pipeline timeline 调试截图">
+          </figure>
+          <aside class="evidence-copy">
+            <div class="dark-card">
+              <p class="eyebrow">selected proof</p>
+              <h3>不是静态设计图，而是可运行证据</h3>
+              <p>
+                讲解时可以按 kernel_alpha、xv6 shell、vector/CNN demo 三个证据展开。页面本身不代替实操录屏，只负责把证据放进清晰的叙事位置。
+              </p>
+              <div class="metric-grid">
+                <div class="metric">
+                  <b>10</b>
+                  <span>kernel_alpha 正负回归基线</span>
+                </div>
+                <div class="metric">
+                  <b>xv6</b>
+                  <span>virtio-blk path 下已到 shell</span>
+                </div>
+                <div class="metric">
+                  <b>V-lite</b>
+                  <span>conv -> relu CNN-style demo</span>
+                </div>
+                <div class="metric">
+                  <b>259</b>
+                  <span>展示材料记录的测试文件规模</span>
+                </div>
+              </div>
+            </div>
+            <div class="video-placeholder" aria-label="录屏占位">
+              <span>VIDEO SLOT<br>这里后续替换为真实实操录屏<br>xv6 shell / kernel_alpha / vector demo</span>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="timeline" class="section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">closing frame</p>
+            <h2>最后用阶段路线收住边界</h2>
+          </div>
+          <p class="section-note">
+            答辩视频结尾不要说“所有方向都完成了”，而是明确当前成果、稳定化重点和后续阶段。
+          </p>
+        </div>
+        <div class="timeline panel">
+          <article class="phase">
+            <b>Phase 1</b>
+            <p>完成最小 OS / kernel bring-up，稳定 trap、MMU、外设和 guest runtime 主路径。</p>
+          </article>
+          <article class="phase">
+            <b>Phase 2</b>
+            <p>在统一 ISA 语义来源上维护 functional 与 pipeline 两种执行模型。</p>
+          </article>
+          <article class="phase">
+            <b>Phase 3</b>
+            <p>继续观察 rename、ROB、LSQ 和 OoO execute 的最小结构收益。</p>
+          </article>
+          <article class="phase">
+            <b>Phase 4</b>
+            <p>后续再评估 cache、DMA、multicore 等系统级扩展，不抢跑大范围功能面。</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

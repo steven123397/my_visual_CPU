@@ -2,6 +2,23 @@
 
 > 一套从零设计、独立实现的 RISC-V 系统模拟器，已经可以运行自制的小型操作系统内核。
 
+## 目录定位
+
+本目录集中维护项目展示相关材料，面向 README 引用、答辩展示和后续 HTML 汇报页迭代。
+
+- [README.md](README.md)
+  当前完整项目展示材料。
+- [preview.html](preview.html)
+  面向录屏讲解的 HTML 汇报页最小视觉预览。
+- [frontend_overview.png](frontend_overview.png)
+  前端调试台首屏截图。
+- [pipeline_timeline.png](pipeline_timeline.png)
+  Pipeline 时序与状态观察截图。
+- [interactive_terminal.png](interactive_terminal.png)
+  交互式终端运行截图。
+- [vector_panel.png](vector_panel.png)
+  向量 / CNN workload 观察面板截图。
+
 ## 项目定位
 
 myCPU 不是课程作业式的一次性原型，而是一套持续演进的系统模拟器工程：
@@ -212,9 +229,9 @@ graph TD
 
 | 文档 | 说明 |
 |-----|------|
-| [AGENTS.md](../AGENTS.md) | 项目总览与开发约定 |
-| [docs/index.md](index.md) | 文档统一入口 |
-| [mainline_status.md](status/mainline_status.md) | 主线当前状态 |
-| [kernel_alpha_status.md](status/kernel_alpha_status.md) | 内核 bring-up 状态 |
-| [vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md) | 向量/ML 设计文档 |
-| [phase4_preparation_design.md](design/phase4_preparation_design.md) | Phase 4 准备设计 |
+| [AGENTS.md](../../AGENTS.md) | 项目总览与开发约定 |
+| [docs/index.md](../index.md) | 文档统一入口 |
+| [mainline_status.md](../status/mainline_status.md) | 主线当前状态 |
+| [kernel_alpha_status.md](../status/kernel_alpha_status.md) | 内核 bring-up 状态 |
+| [vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md) | 向量 / ML 设计文档 |
+| [phase4_preparation_design.md](../design/phase4_preparation_design.md) | Phase 4 准备设计 |

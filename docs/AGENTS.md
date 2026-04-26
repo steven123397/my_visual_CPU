@@ -18,6 +18,8 @@
  具体实现计划、整改计划，以及统一的完成态归档。
 - [status](status)
   当前状态跟踪文档。
+- [showcase](showcase)
+  项目展示材料、展示截图和 HTML 汇报预览页。
 
 ## 文档分工
 
@@ -31,6 +33,8 @@
   记录 guest runtime 的实现基线、局部规则和已知问题。
 - [README.md](../README.md)
   面向读者的项目概览，保持可读、简洁，不承载过细实现流水账。
+- [showcase](showcase)
+  面向汇报、答辩和 README 引用的展示材料目录，不作为实时状态或执行计划来源。
 
 ## 文档角色规则
 
@@ -43,6 +47,8 @@
 - `status/`
   只回答“当前是什么状态、还有什么风险、下一步是什么”。同一模块的实时进度只能以对应 `status` 文档为准。
   代码审查 / 修改任务的 findings 默认集中到 [status/code_reself_status.md](status/code_reself_status.md)，除非用户明确要求另开专项状态文档。
+- `showcase/`
+  只回答“对外怎么展示项目”。可以放展示文案、截图、录屏占位页和 HTML 预览，不承载实时状态、长期设计边界或执行 checklist。
 
 ## 单一事实来源规则
 
@@ -50,6 +56,7 @@
 - 任务清单、勾选进度、执行结果，只写在 `plan/`。
 - 设计目标、边界、取舍、契约和收口标准，只写在 `design/`。
 - 项目背景和原始目标，只写在 `background/request.md`。
+- 对外展示文案、截图和 HTML 预览，只放在 `showcase/`。
 - `index.md` 只做导航，不重复承载同一主题的当前状态。
 - `AGENTS.md` 只定义规则和少量当前主线摘要，不复制模块状态正文。
 
@@ -63,6 +70,8 @@
   当某份设计已获确认、某轮整改需要跟踪执行、或对话中已经形成可执行任务清单时创建。
 - `status/`
   当某个模块、主线、子系统或专项审查需要持续跟踪实时状态时创建。代码自检报告也视为 `status` 文档。
+- `showcase/`
+  当项目展示、答辩、README 截图或 HTML 汇报页需要集中素材时维护；不为普通实现任务自动新增展示材料。
 
 ## 模板要求
 
@@ -70,6 +79,7 @@
 - 新增计划文档默认先套用 [plan/template.md](plan/template.md)。
 - 新增状态文档默认先套用 [status/template.md](status/template.md)。
 - `background/` 当前不提供自动模板。
+- `showcase/` 当前不提供固定模板，优先复用已有 [showcase/README.md](showcase/README.md) 和 [showcase/preview.html](showcase/preview.html) 的结构。
 - 如果计划文档不是从现有设计文档派生，而是直接来自用户确认的任务，也必须先套用计划模板，并在“来源设计”处明确写清来源。
 
 ## 命名与完成态规则

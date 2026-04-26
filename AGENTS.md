@@ -33,7 +33,7 @@
 - [frontend](frontend)
   本地调试服务、浏览器前端和 Node 测试。
 - [docs](docs)
-  按 `background / design / plan / status` 组织的正式技术文档，以及统一入口 [docs/index.md](docs/index.md)。
+  按 `background / design / plan / status / showcase` 组织的正式技术文档、展示材料，以及统一入口 [docs/index.md](docs/index.md)。
 - [README.md](README.md)
   面向读者的项目概览、构建和运行说明。
 
@@ -44,7 +44,7 @@
 - [myCPU/guest/AGENTS.md](myCPU/guest/AGENTS.md)
   guest runtime 说明：memory、PMM、VM、trap、runtime、user task/program 与独立 kernel alpha bring-up 的当前边界和下一步。
 - [docs/AGENTS.md](docs/AGENTS.md)
-  文档维护规则：四分法目录职责、模板、创建条件、完成态回写规则与索引要求。
+  文档维护规则：正式目录职责、模板、创建条件、完成态回写规则与索引要求。
 
 ## 当前状态
 
