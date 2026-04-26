@@ -755,8 +755,32 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
         self.assertEqual(strings_proc.returncode, 0, msg=strings_proc.stderr)
         self.assertIn("mycpu linux userland: stage=file-readable", strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=rootfs-rw-roundtrip-ok", strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=fork-child-wrote", strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=parent-wait4-ok", strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=execve-third-stage", strings_proc.stdout)
         self.assertIn("mycpu linux userland: file smoke failed", strings_proc.stdout)
+        self.assertIn("mycpu linux userland: rootfs rw smoke failed", strings_proc.stdout)
+        self.assertIn("mycpu linux userland: process smoke failed", strings_proc.stdout)
+        self.assertIn("mycpu linux userland: exec third-stage failed", strings_proc.stdout)
         self.assertIn("mycpu linux userland: post-init reached", strings_proc.stdout)
+
+        third_stage_elf = MYCPU_DIR / "workloads" / "linux_proto" / "linux_postinit_exec_smoke.elf"
+        third_stage_strings_proc = subprocess.run(
+            ["strings", str(third_stage_elf)],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(third_stage_strings_proc.returncode, 0, msg=third_stage_strings_proc.stderr)
+        self.assertIn("mycpu linux userland: stage=third-stage-reached", third_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=mkdir-chdir-ok", third_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=nested-file-roundtrip-ok", third_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: third-stage dir smoke failed", third_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: third-stage nested file smoke failed", third_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: post-init reached", third_stage_strings_proc.stdout)
 
     def test_make_build_workload_linux_proto_block_mode_mininit_message_lengths_exclude_nul(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
