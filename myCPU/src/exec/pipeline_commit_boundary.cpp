@@ -81,8 +81,19 @@ CommitBoundaryResult apply_commit_boundary(CPU& cpu,
     if (effects.atomic.kind != AtomicRequest::Kind::None) {
         const AtomicApplyResult atomic_result =
             apply_atomic_request(cpu, bus, effects.atomic);
+        result.atomic_memory_observed = atomic_result.memory_observed;
+        result.atomic_write_observed = atomic_result.write_observed;
+        result.atomic_paddr_valid = atomic_result.paddr_valid;
+        result.atomic_paddr = atomic_result.paddr;
+        result.atomic_bytes = atomic_result.bytes;
         if (!atomic_result.ok) {
-            return enter_precise_trap(atomic_result.trap);
+            CommitBoundaryResult trap = enter_precise_trap(atomic_result.trap);
+            trap.atomic_memory_observed = atomic_result.memory_observed;
+            trap.atomic_write_observed = atomic_result.write_observed;
+            trap.atomic_paddr_valid = atomic_result.paddr_valid;
+            trap.atomic_paddr = atomic_result.paddr;
+            trap.atomic_bytes = atomic_result.bytes;
+            return trap;
         }
         effects.rd_write = atomic_result.rd_write;
         result.platform_state_changed |= atomic_result.platform_state_changed;

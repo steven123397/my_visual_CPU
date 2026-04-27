@@ -125,6 +125,50 @@ std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cp
     };
 }
 
+std::optional<ExecutionMemoryObservation> make_atomic_memory_observation(const Bus& bus,
+                                                                         const AtomicRequest& request,
+                                                                         const CommitBoundaryResult& result) {
+    if (request.kind == AtomicRequest::Kind::None) {
+        return std::nullopt;
+    }
+
+    const bool write = request.kind != AtomicRequest::Kind::LoadReserved;
+    const uint64_t bytes = result.atomic_bytes != 0 ? result.atomic_bytes : static_cast<uint64_t>(request.size);
+    if (bytes == 0) {
+        return std::nullopt;
+    }
+
+    if (result.atomic_memory_observed && result.atomic_paddr_valid) {
+        return ExecutionMemoryObservation{
+            .valid = true,
+            .region = observed_region(bus, result.atomic_paddr, bytes),
+            .write = result.atomic_write_observed,
+            .fault = false,
+            .paddr_valid = true,
+            .paddr = result.atomic_paddr,
+            .bytes = bytes,
+        };
+    }
+
+    if (!result.trap_taken) {
+        return std::nullopt;
+    }
+
+    if (!result.atomic_paddr_valid) {
+        return fault_memory_observation(write, bytes);
+    }
+
+    return ExecutionMemoryObservation{
+        .valid = true,
+        .region = observed_region(bus, result.atomic_paddr, bytes),
+        .write = write,
+        .fault = true,
+        .paddr_valid = true,
+        .paddr = result.atomic_paddr,
+        .bytes = bytes,
+    };
+}
+
 ExecutionTrapObservation make_trap_observation(const CPU& cpu, uint64_t pc, uint32_t raw) {
     const uint64_t cause = active_trap_cause(cpu);
     return ExecutionTrapObservation{
@@ -215,6 +259,10 @@ void FunctionalBackend::step() {
         });
 
     if (const std::optional<ExecutionMemoryObservation> memory =
+            make_atomic_memory_observation(bus_, effects.atomic, result);
+        memory.has_value()) {
+        profile_.record_memory(*memory);
+    } else if (const std::optional<ExecutionMemoryObservation> memory =
             make_scalar_memory_observation(cpu_, bus_, effects.mem, result.trap_taken);
         memory.has_value()) {
         profile_.record_memory(*memory);

@@ -24,6 +24,7 @@ constexpr uint64_t kPteV = 1ULL << 0;
 constexpr uint64_t kPteR = 1ULL << 1;
 constexpr uint64_t kPteW = 1ULL << 2;
 constexpr uint64_t kPteX = 1ULL << 3;
+constexpr uint32_t kOpcodeAmo = 0x2fU;
 constexpr uint32_t kAuipcX10 = 0x00000517U;             // auipc x10, 0
 constexpr uint32_t kAddiX10Plus64 = 0x04050513U;        // addi x10, x10, 64
 constexpr uint32_t kLwX6FromX10 = 0x00052303U;          // lw x6, 0(x10)
@@ -33,6 +34,23 @@ constexpr uint32_t kJalX0Skip8 = 0x0080006fU;           // jal x0, 8
 constexpr uint32_t kAddiX1WrongPath = 0x06300093U;      // addi x1, x0, 99
 constexpr uint32_t kAddiA7Exit = 0x05d00893U;           // addi a7, x0, 93
 constexpr uint32_t kEcall = 0x00000073U;                // ecall
+
+constexpr uint32_t encode_amo(uint32_t funct5,
+                              bool aq,
+                              bool rl,
+                              uint32_t rs2,
+                              uint32_t rs1,
+                              uint32_t funct3,
+                              uint32_t rd) {
+    return (funct5 << 27) |
+           (static_cast<uint32_t>(aq) << 26) |
+           (static_cast<uint32_t>(rl) << 25) |
+           (rs2 << 20) |
+           (rs1 << 15) |
+           (funct3 << 12) |
+           (rd << 7) |
+           kOpcodeAmo;
+}
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -270,6 +288,49 @@ bool test_functional_profile_counts_reused_ram_line() {
                   "functional shadow-cache profile smoke should export the RAM-region miss count");
 }
 
+bool test_functional_profile_counts_atomic_lr_sc_observations() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    write32(ram, kEntry + 0, encode_amo(0x02, false, false, 0, 10, 0x2, 5));
+    write32(ram, kEntry + 4, encode_amo(0x03, false, false, 11, 10, 0x2, 6));
+    write32(ram, kEntry + 8, kAddiA7Exit);
+    write32(ram, kEntry + 12, kEcall);
+    ram.store(kDataAddr, 0x11223344U, 4);
+
+    cpu.core().write_gpr(10, kDataAddr);
+    cpu.core().write_gpr(11, 0x55667788U);
+
+    FunctionalBackend backend(cpu, bus);
+    for (int step = 0; step < 16 && !cpu.core().halted(); ++step) {
+        backend.step();
+    }
+
+    const ExecutionProfileSnapshot profile = backend.debug_snapshot().profile;
+    const ExecutionMemoryRegionEntry* ram_region = find_memory_region(profile, "ram");
+
+    return expect(cpu.core().halted(),
+                  "functional atomic profile smoke should halt via ecall") &&
+           expect(profile.total_memory_observations == 2,
+                  "functional atomic profile smoke should count lr/sc as two memory observations") &&
+           expect(ram_region != nullptr,
+                  "functional atomic profile smoke should classify lr/sc observations as RAM") &&
+           expect(ram_region->reads == 1,
+                  "functional atomic profile smoke should count lr as a read observation") &&
+           expect(ram_region->writes == 1,
+                  "functional atomic profile smoke should count successful sc as a write observation") &&
+           expect(ram_region->bytes == 8,
+                  "functional atomic profile smoke should preserve the lr/sc access widths") &&
+           expect(profile.shadow_cache.line_accesses == 2,
+                  "functional atomic profile smoke should count both atomic accesses in shadow cache") &&
+           expect(profile.shadow_cache.hits == 1,
+                  "functional atomic profile smoke should record the reused-line hit") &&
+           expect(profile.shadow_cache.misses == 1,
+                  "functional atomic profile smoke should record the first-touch miss");
+}
+
 }  // namespace
 
 int main() {
@@ -286,6 +347,9 @@ int main() {
         return 1;
     }
     if (!test_functional_profile_counts_reused_ram_line()) {
+        return 1;
+    }
+    if (!test_functional_profile_counts_atomic_lr_sc_observations()) {
         return 1;
     }
     std::puts("execution_profile_smoke: PASS");

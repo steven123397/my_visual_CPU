@@ -178,6 +178,7 @@ InsnEffects build_atomic_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v)
 AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& request) {
     AtomicApplyResult result;
     result.ok = false;
+    result.bytes = static_cast<uint64_t>(request.size);
 
     if (request.kind == AtomicRequest::Kind::None) {
         result.ok = true;
@@ -201,6 +202,8 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
         result.trap = translated.fault;
         return result;
     }
+    result.paddr_valid = true;
+    result.paddr = translated.paddr;
 
     const auto note_platform_state = [&]() {
         result.platform_state_changed |= bus.last_access().valid && bus.last_access().mmio;
@@ -214,6 +217,8 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
             return result;
         }
         note_platform_state();
+        result.memory_observed = true;
+        result.write_observed = false;
         cpu.trap().set_reservation(translated.paddr, request.size);
         result.rd_write = rd_write(request.rd, load_result_value(loaded, request.size));
         result.ok = true;
@@ -234,6 +239,8 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
             return result;
         }
         note_platform_state();
+        result.memory_observed = true;
+        result.write_observed = true;
         result.rd_write = rd_write(request.rd, 0);
         result.ok = true;
         return result;
@@ -264,6 +271,8 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
             return result;
         }
         note_platform_state();
+        result.memory_observed = true;
+        result.write_observed = true;
         cpu.trap().invalidate_reservation(translated.paddr, request.size);
         result.rd_write = rd_write(request.rd, load_result_value(loaded, request.size));
         result.ok = true;
