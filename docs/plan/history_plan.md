@@ -21,6 +21,15 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-04-27
+
+#### xv6-linux-jit-wave1-plan
+
+- 原文件：`xv6_linux_jit_wave1_plan.md`
+- 完成内容：完成 `xv6 / Linux / JIT` Wave 1 收口，把 `RV64A + virtio + CSR / privilege + xv6-riscv` 主线基础、真实 `virtio-blk` board guardrail，以及 Linux block-rootfs 的 `console-opened -> rootfs-rw-ok -> proc-readable -> sys-readable -> /init reached -> file-readable -> rootfs-rw-roundtrip-ok -> fork-child-wrote -> parent-wait4-ok -> execve-third-stage -> mkdir-chdir-ok -> nested-file-roundtrip-ok -> getdents64-nested-visible -> fstatat-nested-stat-ok -> renameat2-syscall-ok -> renameat2-nested-ok -> renameat2-dirent-updated -> renameat2-cleanup-ok -> unlinkat-parent-dirent-gone -> mkdirat-dir-name-reusable -> mkdirat-reused-dir-empty -> mkdirat-reused-dir-dot-only -> mkdirat-reused-dir-parent-stat-ok -> third-stage-reached -> post-init reached` baseline 一起收口到主工作树；同时把 `mainline_status`、`project_priority_roadmap`、`xv6_linux_jit_status` 与 `docs/index.md` 的口径切到归档态。
+- 实现过程摘要：这一轮继续沿“先补最窄 checkpoint、再回写状态与优先级、最后删除活跃计划文件”的收口路径；Wave 1 不再保留活跃 `plan`，后续 Linux 继续沿已冻结的 post-init userland baseline 推进更后的 checkpoint。
+- 结果参考：[xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md)
+
 ### 2026-04-24
 
 #### npu-tpu-accelerator-wave3-plan

@@ -34,7 +34,7 @@
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
 - 当前计划：
-  - [../plan/xv6_linux_jit_wave1_plan.md](../plan/xv6_linux_jit_wave1_plan.md)
+  - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
 
 ## 背景与问题
 
@@ -371,5 +371,5 @@
 
 - 当前有效：本文档作为从当前稳定基线出发的未来候选路线菜单。
 - 当前默认延续线、当前风险和“下一轮最该做什么”，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
-- 自 `2026-04-21` 起，标准 OS bring-up 切换线已经被正式激活；当前执行口径见 [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)、[../status/xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md) 和 [../plan/xv6_linux_jit_wave1_plan.md](../plan/xv6_linux_jit_wave1_plan.md)。
+- 自 `2026-04-21` 起，标准 OS bring-up 切换线已经被正式激活；当前执行口径见 [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)、[../status/xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md) 和 [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)。
 - 如果后续某条候选路线真正启动，其实时状态应回写到对应 `docs/status/` 文档，而不是在本文档里继续堆实时进度。

@@ -48,8 +48,8 @@
     `NPU / TPU-like` AI accelerator Wave 1 的完成归档：`DMA-ready` 基座、图包、控制面、数据面和 host/guest 接入结果。
 22. [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
     当前已激活的 `xv6 / Linux / JIT` 主线切换设计。
-23. [plan/xv6_linux_jit_wave1_plan.md](plan/xv6_linux_jit_wave1_plan.md)
-    当前 `xv6 / Linux / JIT` 主线切换的 Wave 1 执行计划、worktree 布局和 agent prompt。
+23. [plan/history_plan.md#xv6-linux-jit-wave1-plan](plan/history_plan.md#xv6-linux-jit-wave1-plan)
+    当前 `xv6 / Linux / JIT` 主线切换的 Wave 1 完成归档。
 24. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
     `P4-prep-1` 的完成归档与结果摘要。
 25. [plan/history_plan.md](plan/history_plan.md)
@@ -101,7 +101,7 @@
 - `xv6 / Linux / JIT foundation`
   - [status/xv6_linux_jit_status.md](status/xv6_linux_jit_status.md)
   - [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
-  - [plan/xv6_linux_jit_wave1_plan.md](plan/xv6_linux_jit_wave1_plan.md)
+  - [plan/history_plan.md#xv6-linux-jit-wave1-plan](plan/history_plan.md#xv6-linux-jit-wave1-plan)
 
 ## 目录说明
 
