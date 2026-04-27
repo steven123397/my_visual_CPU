@@ -590,7 +590,7 @@ test-host-ai_accel_guest_smoke: FORCE $(TARGET) $(GUEST_AI_ACCEL_DEMO) tests/hos
 	fi; \
 	printf '%s\n' "$$output"
 
-test-host-run_debug_cli_probe: FORCE
+test-host-run_debug_cli_probe: FORCE $(TARGET) build-workload-xv6
 	@echo "=== host:run_debug_cli_probe ==="; \
 	output="$$(python3 tests/host/run_debug_cli_probe_test.py 2>&1)"; \
 	status=$$?; \

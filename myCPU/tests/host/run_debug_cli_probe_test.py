@@ -206,6 +206,45 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("--block-transport virtio-blk", proc.stdout)
         self.assertNotIn("--flat", proc.stdout)
 
+    def test_real_xv6_probe_emits_functional_profile_summary(self) -> None:
+        proc = subprocess.run(
+            [
+                "python3",
+                "workloads/run_debug_cli_probe.py",
+                "--target",
+                "./mycpu",
+                "--image",
+                "external/xv6-riscv/kernel/kernel",
+                "--disk",
+                "external/xv6-riscv/fs.img",
+                "--block-transport",
+                "virtio-blk",
+                "--step-cycles",
+                "5000",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn(
+            "summary: cycle=5000 instret=5000 pc=0x800010dc privilege=S backend=functional",
+            proc.stdout,
+        )
+        self.assertIn("profile: retirements=5000 traps=0 memory=1570", proc.stdout)
+        self.assertIn(
+            "shadow-cache: line_size=64 capacity_lines=64 resident_lines=20 line_accesses=1515 hits=1495 misses=20 evictions=0 bypasses=55",
+            proc.stdout,
+        )
+        self.assertIn(
+            "memory-top: label=ram kind=ram accesses=1515 reads=621 writes=894 faults=0 bytes=8562",
+            proc.stdout,
+        )
+        self.assertIn("xv6 kernel is booting", proc.stdout)
+
     def test_make_run_workload_can_emit_flat_load_contract(self) -> None:
         proc = subprocess.run(
             [
