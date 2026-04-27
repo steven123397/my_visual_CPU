@@ -6,6 +6,7 @@
 #include "../../src/arch/csr_file.h"
 #include "../../src/cpu.h"
 #include "../../src/debug/debug_protocol.h"
+#include "../../src/exec/functional_backend.h"
 #include "../../src/exec/pipeline_backend.h"
 #include "../../src/mem/bus.h"
 #include "../../src/mem/ram.h"
@@ -221,6 +222,54 @@ bool test_pipeline_shadow_cache_counts_reused_ram_line() {
                            "shadow-cache profile smoke should count one miss followed by one hit on the reused RAM line");
 }
 
+bool test_functional_profile_counts_reused_ram_line() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    write32(ram, kEntry + 0, kAuipcX10);
+    write32(ram, kEntry + 4, kAddiX10Plus64);
+    write32(ram, kEntry + 8, kLwX6FromX10);
+    write32(ram, kEntry + 12, kLwX6FromX10Again);
+    write32(ram, kEntry + 16, kAddiA7Exit);
+    write32(ram, kEntry + 20, kEcall);
+    ram.write_bytes(kDataAddr, std::array<uint8_t, 4>{1, 0, 0, 0}.data(), 4);
+
+    FunctionalBackend backend(cpu, bus);
+    for (int step = 0; step < 16 && !cpu.core().halted(); ++step) {
+        backend.step();
+    }
+
+    const ExecutionProfileSnapshot profile = backend.debug_snapshot().profile;
+    const ExecutionMemoryRegionEntry* ram_region = find_memory_region(profile, "ram");
+
+    return expect(cpu.core().halted(),
+                  "functional shadow-cache profile smoke should halt via ecall") &&
+           expect(profile.total_retirements == 6,
+                  "functional shadow-cache profile smoke should record each retired instruction") &&
+           expect(profile.total_memory_observations == 2,
+                  "functional shadow-cache profile smoke should count both load observations") &&
+           expect(ram_region != nullptr,
+                  "functional shadow-cache profile smoke should classify the load observations as RAM") &&
+           expect(ram_region->reads == 2,
+                  "functional shadow-cache profile smoke should count both observations as reads") &&
+           expect(ram_region->writes == 0,
+                  "functional shadow-cache profile smoke should not classify the load observations as writes") &&
+           expect(profile.shadow_cache.line_accesses == 2,
+                  "functional shadow-cache profile smoke should count both RAM line accesses") &&
+           expect(profile.shadow_cache.hits == 1,
+                  "functional shadow-cache profile smoke should record one reused-line hit") &&
+           expect(profile.shadow_cache.misses == 1,
+                  "functional shadow-cache profile smoke should record one first-touch miss") &&
+           expect(ram_region->shadow_cache_line_accesses == 2,
+                  "functional shadow-cache profile smoke should export region-level line accesses") &&
+           expect(ram_region->shadow_cache_hits == 1,
+                  "functional shadow-cache profile smoke should export the RAM-region hit count") &&
+           expect(ram_region->shadow_cache_misses == 1,
+                  "functional shadow-cache profile smoke should export the RAM-region miss count");
+}
+
 }  // namespace
 
 int main() {
@@ -234,6 +283,9 @@ int main() {
         return 1;
     }
     if (!test_pipeline_shadow_cache_counts_reused_ram_line()) {
+        return 1;
+    }
+    if (!test_functional_profile_counts_reused_ram_line()) {
         return 1;
     }
     std::puts("execution_profile_smoke: PASS");

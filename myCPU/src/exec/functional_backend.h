@@ -1,6 +1,7 @@
 #pragma once
 
 #include "backend.h"
+#include "execution_profile.h"
 
 class CPU;
 class Bus;
@@ -16,4 +17,5 @@ public:
 private:
     CPU& cpu_;
     Bus& bus_;
+    ExecutionProfile profile_{};
 };
