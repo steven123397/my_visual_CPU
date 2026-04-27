@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <list>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../arch/core_state.h"
@@ -28,6 +30,8 @@ struct ExecutionMemoryObservation {
     PhysicalRegionInfo region{};
     bool write{false};
     bool fault{false};
+    bool paddr_valid{false};
+    uint64_t paddr{0};
     uint64_t bytes{0};
 };
 
@@ -72,6 +76,22 @@ struct ExecutionMemoryRegionEntry {
     uint64_t writes{0};
     uint64_t faults{0};
     uint64_t bytes{0};
+    uint64_t shadow_cache_line_accesses{0};
+    uint64_t shadow_cache_hits{0};
+    uint64_t shadow_cache_misses{0};
+    uint64_t shadow_cache_evictions{0};
+    uint64_t shadow_cache_bypasses{0};
+};
+
+struct ExecutionShadowCacheSnapshot {
+    uint64_t line_size_bytes{0};
+    uint64_t capacity_lines{0};
+    uint64_t resident_lines{0};
+    uint64_t line_accesses{0};
+    uint64_t hits{0};
+    uint64_t misses{0};
+    uint64_t evictions{0};
+    uint64_t bypasses{0};
 };
 
 struct ExecutionProfileSnapshot {
@@ -82,6 +102,7 @@ struct ExecutionProfileSnapshot {
     std::vector<ExecutionBranchEntry> branches{};
     std::vector<ExecutionSyscallEntry> syscalls{};
     std::vector<ExecutionTrapEntry> traps{};
+    ExecutionShadowCacheSnapshot shadow_cache{};
     std::vector<ExecutionMemoryRegionEntry> memory_regions{};
 };
 
@@ -182,6 +203,19 @@ private:
         uint64_t bytes{0};
     };
 
+    struct ShadowCacheStats {
+        uint64_t line_accesses{0};
+        uint64_t hits{0};
+        uint64_t misses{0};
+        uint64_t evictions{0};
+        uint64_t bypasses{0};
+    };
+
+    struct ShadowCacheLineState {
+        MemoryKey key{};
+        std::list<uint64_t>::iterator lru_position{};
+    };
+
     struct ActivePath {
         bool open{false};
         uint64_t start_pc{0};
@@ -191,8 +225,13 @@ private:
 
     void start_path(uint64_t pc);
     void finalize_path();
+    void record_shadow_cache(const MemoryKey& key, const ExecutionMemoryObservation& observation);
+    void shadow_cache_touch_line(const MemoryKey& key, uint64_t line_addr);
+    void shadow_cache_evict_lru();
 
     static constexpr size_t kSnapshotEntryLimit = 8;
+    static constexpr uint64_t kShadowCacheLineSize = 64;
+    static constexpr size_t kShadowCacheCapacityLines = 64;
 
     uint64_t total_retirements_{0};
     uint64_t total_traps_{0};
@@ -203,4 +242,8 @@ private:
     std::map<uint64_t, SyscallStats> syscalls_{};
     std::map<TrapKey, uint64_t> traps_{};
     std::map<MemoryKey, MemoryStats> memory_regions_{};
+    std::map<MemoryKey, ShadowCacheStats> shadow_cache_regions_{};
+    std::list<uint64_t> shadow_cache_lru_{};
+    std::unordered_map<uint64_t, ShadowCacheLineState> shadow_cache_lines_{};
+    ShadowCacheStats shadow_cache_summary_{};
 };

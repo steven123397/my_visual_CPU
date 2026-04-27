@@ -269,7 +269,7 @@ int main() {
     }
     if (!expect_contains(
             external_final_output,
-            "\"memory_regions\":[{\"label\":\"plic\",\"kind\":\"mmio\",\"cacheable\":false,\"dma_visible\":false,\"has_side_effect\":true,\"supports_burst\":false,\"accesses\":5,\"reads\":1,\"writes\":4,\"faults\":0,\"bytes\":20},{\"label\":\"uart\",\"kind\":\"mmio\",\"cacheable\":false,\"dma_visible\":false,\"has_side_effect\":true,\"supports_burst\":false,\"accesses\":4,\"reads\":0,\"writes\":4,\"faults\":0,\"bytes\":4}]",
+            "\"shadow_cache\":{\"line_size_bytes\":64,\"capacity_lines\":64,\"resident_lines\":0,\"line_accesses\":0,\"hits\":0,\"misses\":0,\"evictions\":0,\"bypasses\":9},\"memory_regions\":[{\"label\":\"plic\",\"kind\":\"mmio\",\"cacheable\":false,\"dma_visible\":false,\"has_side_effect\":true,\"supports_burst\":false,\"accesses\":5,\"reads\":1,\"writes\":4,\"faults\":0,\"bytes\":20,\"shadow_cache_line_accesses\":0,\"shadow_cache_hits\":0,\"shadow_cache_misses\":0,\"shadow_cache_evictions\":0,\"shadow_cache_bypasses\":5},{\"label\":\"uart\",\"kind\":\"mmio\",\"cacheable\":false,\"dma_visible\":false,\"has_side_effect\":true,\"supports_burst\":false,\"accesses\":4,\"reads\":0,\"writes\":4,\"faults\":0,\"bytes\":4,\"shadow_cache_line_accesses\":0,\"shadow_cache_hits\":0,\"shadow_cache_misses\":0,\"shadow_cache_evictions\":0,\"shadow_cache_bypasses\":4}]",
             "external interrupt final snapshot should lock representative MMIO memory-region profile counts")) {
         return 1;
     }
@@ -492,7 +492,7 @@ int main() {
     }
     if (!expect_contains(
             store_queue_output,
-            "\"profile\":{\"total_retirements\":2,\"total_traps\":0,\"total_memory_observations\":0,\"hot_paths\":[{\"start_pc\":\"0x80000078\",\"end_pc\":\"0x8000007c\",\"executions\":1,\"retired_instructions\":2}],\"branches\":[],\"syscalls\":[],\"traps\":[],\"memory_regions\":[]}",
+            "\"profile\":{\"total_retirements\":2,\"total_traps\":0,\"total_memory_observations\":0,\"hot_paths\":[{\"start_pc\":\"0x80000078\",\"end_pc\":\"0x8000007c\",\"executions\":1,\"retired_instructions\":2}],\"branches\":[],\"syscalls\":[],\"traps\":[],\"shadow_cache\":{\"line_size_bytes\":64,\"capacity_lines\":64,\"resident_lines\":0,\"line_accesses\":0,\"hits\":0,\"misses\":0,\"evictions\":0,\"bypasses\":0},\"memory_regions\":[]}",
             "pre-commit store queue snapshot should lock the zero-memory-observation profile shape")) {
         return 1;
     }

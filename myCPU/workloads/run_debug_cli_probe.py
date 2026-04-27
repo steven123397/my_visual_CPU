@@ -185,6 +185,20 @@ def emit_top_profile_entries(profile) -> None:
         f"memory={profile.get('total_memory_observations', 0)}",
     )
 
+    shadow_cache = profile.get("shadow_cache", {})
+    if shadow_cache:
+        print(
+            "shadow-cache:",
+            f"line_size={shadow_cache.get('line_size_bytes', 0)}",
+            f"capacity_lines={shadow_cache.get('capacity_lines', 0)}",
+            f"resident_lines={shadow_cache.get('resident_lines', 0)}",
+            f"line_accesses={shadow_cache.get('line_accesses', 0)}",
+            f"hits={shadow_cache.get('hits', 0)}",
+            f"misses={shadow_cache.get('misses', 0)}",
+            f"evictions={shadow_cache.get('evictions', 0)}",
+            f"bypasses={shadow_cache.get('bypasses', 0)}",
+        )
+
     hot_paths = profile.get("hot_paths", [])
     if hot_paths:
         top = hot_paths[0]

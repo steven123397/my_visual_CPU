@@ -51,6 +51,10 @@ void ExecutionProfile::clear() {
     syscalls_.clear();
     traps_.clear();
     memory_regions_.clear();
+    shadow_cache_regions_.clear();
+    shadow_cache_lru_.clear();
+    shadow_cache_lines_.clear();
+    shadow_cache_summary_ = {};
 }
 
 void ExecutionProfile::record_retire(const ExecutionRetireObservation& observation) {
@@ -109,14 +113,16 @@ void ExecutionProfile::record_memory(const ExecutionMemoryObservation& observati
     }
 
     ++total_memory_observations_;
-    MemoryStats& stats = memory_regions_[MemoryKey{
+    const MemoryKey key{
         .kind = observation.region.kind,
         .cacheable = observation.region.cacheable,
         .dma_visible = observation.region.dma_visible,
         .has_side_effect = observation.region.has_side_effect,
         .supports_burst = observation.region.supports_burst,
         .label = observation.region.label != nullptr ? observation.region.label : "unmapped",
-    }];
+    };
+
+    MemoryStats& stats = memory_regions_[key];
     stats.accesses += 1;
     stats.bytes += observation.bytes;
     if (observation.write) {
@@ -127,6 +133,8 @@ void ExecutionProfile::record_memory(const ExecutionMemoryObservation& observati
     if (observation.fault) {
         stats.faults += 1;
     }
+
+    record_shadow_cache(key, observation);
 }
 
 ExecutionProfileSnapshot ExecutionProfile::snapshot() const {
@@ -134,6 +142,16 @@ ExecutionProfileSnapshot ExecutionProfile::snapshot() const {
     snapshot.total_retirements = total_retirements_;
     snapshot.total_traps = total_traps_;
     snapshot.total_memory_observations = total_memory_observations_;
+    snapshot.shadow_cache = ExecutionShadowCacheSnapshot{
+        .line_size_bytes = kShadowCacheLineSize,
+        .capacity_lines = kShadowCacheCapacityLines,
+        .resident_lines = static_cast<uint64_t>(shadow_cache_lines_.size()),
+        .line_accesses = shadow_cache_summary_.line_accesses,
+        .hits = shadow_cache_summary_.hits,
+        .misses = shadow_cache_summary_.misses,
+        .evictions = shadow_cache_summary_.evictions,
+        .bypasses = shadow_cache_summary_.bypasses,
+    };
 
     std::map<HotPathKey, HotPathStats> visible_hot_paths = hot_paths_;
     if (active_path_.open && active_path_.retired_instructions != 0) {
@@ -241,6 +259,10 @@ ExecutionProfileSnapshot ExecutionProfile::snapshot() const {
     std::vector<ExecutionMemoryRegionEntry> memory_regions;
     memory_regions.reserve(memory_regions_.size());
     for (const auto& [key, stats] : memory_regions_) {
+        const auto shadow_it = shadow_cache_regions_.find(key);
+        const ShadowCacheStats shadow = shadow_it != shadow_cache_regions_.end()
+                                            ? shadow_it->second
+                                            : ShadowCacheStats{};
         memory_regions.push_back(ExecutionMemoryRegionEntry{
             .label = key.label,
             .kind = physical_region_kind_name(key.kind),
@@ -253,6 +275,11 @@ ExecutionProfileSnapshot ExecutionProfile::snapshot() const {
             .writes = stats.writes,
             .faults = stats.faults,
             .bytes = stats.bytes,
+            .shadow_cache_line_accesses = shadow.line_accesses,
+            .shadow_cache_hits = shadow.hits,
+            .shadow_cache_misses = shadow.misses,
+            .shadow_cache_evictions = shadow.evictions,
+            .shadow_cache_bypasses = shadow.bypasses,
         });
     }
     snapshot.memory_regions = top_entries(
@@ -272,6 +299,64 @@ ExecutionProfileSnapshot ExecutionProfile::snapshot() const {
         kSnapshotEntryLimit);
 
     return snapshot;
+}
+
+void ExecutionProfile::record_shadow_cache(const MemoryKey& key,
+                                           const ExecutionMemoryObservation& observation) {
+    ShadowCacheStats& stats = shadow_cache_regions_[key];
+
+    if (!observation.paddr_valid || observation.fault || !observation.region.cacheable) {
+        ++stats.bypasses;
+        ++shadow_cache_summary_.bypasses;
+        return;
+    }
+
+    const uint64_t start_line = observation.paddr / kShadowCacheLineSize;
+    const uint64_t end_line = (observation.paddr + observation.bytes - 1) / kShadowCacheLineSize;
+    for (uint64_t line = start_line; line <= end_line; ++line) {
+        shadow_cache_touch_line(key, line * kShadowCacheLineSize);
+        ++stats.line_accesses;
+        ++shadow_cache_summary_.line_accesses;
+    }
+}
+
+void ExecutionProfile::shadow_cache_touch_line(const MemoryKey& key, uint64_t line_addr) {
+    const auto existing = shadow_cache_lines_.find(line_addr);
+    if (existing != shadow_cache_lines_.end()) {
+        ++shadow_cache_summary_.hits;
+        ++shadow_cache_regions_[key].hits;
+        shadow_cache_lru_.splice(shadow_cache_lru_.begin(), shadow_cache_lru_, existing->second.lru_position);
+        existing->second.lru_position = shadow_cache_lru_.begin();
+        return;
+    }
+
+    ++shadow_cache_summary_.misses;
+    ++shadow_cache_regions_[key].misses;
+
+    if (shadow_cache_lines_.size() >= kShadowCacheCapacityLines) {
+        shadow_cache_evict_lru();
+    }
+
+    shadow_cache_lru_.push_front(line_addr);
+    shadow_cache_lines_[line_addr] = ShadowCacheLineState{
+        .key = key,
+        .lru_position = shadow_cache_lru_.begin(),
+    };
+}
+
+void ExecutionProfile::shadow_cache_evict_lru() {
+    if (shadow_cache_lru_.empty()) {
+        return;
+    }
+
+    const uint64_t line_addr = shadow_cache_lru_.back();
+    const auto line_it = shadow_cache_lines_.find(line_addr);
+    if (line_it != shadow_cache_lines_.end()) {
+        ++shadow_cache_summary_.evictions;
+        ++shadow_cache_regions_[line_it->second.key].evictions;
+        shadow_cache_lines_.erase(line_it);
+    }
+    shadow_cache_lru_.pop_back();
 }
 
 void ExecutionProfile::start_path(uint64_t pc) {

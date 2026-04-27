@@ -180,7 +180,16 @@ void append_execution_profile(std::ostringstream& out, const ExecutionProfileSna
             << ",\"count\":" << profile.traps[i].count
             << "}";
     }
-    out << "],\"memory_regions\":[";
+    out << "],\"shadow_cache\":{"
+        << "\"line_size_bytes\":" << profile.shadow_cache.line_size_bytes
+        << ",\"capacity_lines\":" << profile.shadow_cache.capacity_lines
+        << ",\"resident_lines\":" << profile.shadow_cache.resident_lines
+        << ",\"line_accesses\":" << profile.shadow_cache.line_accesses
+        << ",\"hits\":" << profile.shadow_cache.hits
+        << ",\"misses\":" << profile.shadow_cache.misses
+        << ",\"evictions\":" << profile.shadow_cache.evictions
+        << ",\"bypasses\":" << profile.shadow_cache.bypasses
+        << "},\"memory_regions\":[";
     for (size_t i = 0; i < profile.memory_regions.size(); ++i) {
         if (i != 0) {
             out << ",";
@@ -199,6 +208,11 @@ void append_execution_profile(std::ostringstream& out, const ExecutionProfileSna
             << ",\"writes\":" << profile.memory_regions[i].writes
             << ",\"faults\":" << profile.memory_regions[i].faults
             << ",\"bytes\":" << profile.memory_regions[i].bytes
+            << ",\"shadow_cache_line_accesses\":" << profile.memory_regions[i].shadow_cache_line_accesses
+            << ",\"shadow_cache_hits\":" << profile.memory_regions[i].shadow_cache_hits
+            << ",\"shadow_cache_misses\":" << profile.memory_regions[i].shadow_cache_misses
+            << ",\"shadow_cache_evictions\":" << profile.memory_regions[i].shadow_cache_evictions
+            << ",\"shadow_cache_bypasses\":" << profile.memory_regions[i].shadow_cache_bypasses
             << "}";
     }
     out << "]}";

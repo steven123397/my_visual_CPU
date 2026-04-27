@@ -20,6 +20,7 @@
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [../plan/history_plan.md#phase4-prep1-bus-memory-region-plan](../plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
 
 ## 背景与问题
@@ -59,7 +60,7 @@
 3. `P4-prep-3`
    - DMA-ready 的 initiator / transaction 合同
 
-其中当前已经落地的是 `P4-prep-1`；`NPU / TPU-like` AI accelerator Wave 1 也已经消费并落地了一条更窄的 `DMA-ready` initiator / transaction 合同。`P4-prep-2`、更通用的 DMA 设备模型，以及完整 `cache / multicore / coherence` 仍然只是候选后继项。
+其中当前已经落地的是 `P4-prep-1`，以及 `P4-prep-2` 的第一刀 `C1 / memory observation / shadow cache`；`NPU / TPU-like` AI accelerator Wave 1 也已经消费并落地了一条更窄的 `DMA-ready` initiator / transaction 合同。更通用的 DMA 设备模型，以及完整 `cache / multicore / coherence` 仍然只是候选后继项。
 
 ### 2. `P4-prep-1` 已沉淀的正式 contract
 
@@ -114,11 +115,12 @@
 
 ### 5. `P4-prep-2 / P4-prep-3` 的正式定位
 
-当前这些方向仍然只保留为候选后继项：
+当前这些方向的后续定位如下：
 
 - `P4-prep-2`
-  - 目标是增加更克制的 `memory observation / shadow cache`
-  - 重点在于收集 workload 证据，而不是立刻引入真实 cache 行为
+  - 第一刀 `C1` 已经落地为 `execution_profile` 下的地址级 memory observation / shadow cache
+  - `ExecutionMemoryObservation` 会携带可选物理地址，`ExecutionProfile` 会聚合全局和 region 级 shadow cache 统计，debug JSON 与 `run_debug_cli_probe` 文本摘要只读展示这些结果
+  - 重点仍是收集 workload 证据，而不是立刻引入真实 cache 行为
 - `P4-prep-3`
   - 首个窄切片已经由 `NPU / TPU-like` AI accelerator Wave 1 落地，形成 `dma_transaction`、`Bus::dma_read()/dma_write()` 与设备侧 fail-closed DMA 语义
   - 后续重点仍是继续定义更通用的 DMA / buffer ownership 边界，而不是把异步设备模型、cache coherence 或多设备 DMA 一次性做完
@@ -134,10 +136,12 @@
 
 如果改动集中在 memory / bus / vector memory boundary，至少额外关注：
 
+- `cd myCPU && make test-host-execution_profile_smoke`
 - `cd myCPU && make test-host-vector_vlite_smoke`
 - `cd myCPU && make test-host-vector_cnn_smoke`
 - `cd myCPU && make test-host-vector_pipeline_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
+- `cd myCPU && make test-host-run_debug_cli_probe`
 
 验证重点不是“性能有没有提升”，而是：
 
@@ -154,4 +158,4 @@
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `Phase 4` 当前准备性入口的统一设计来源。
-- 当前已完成的正式结果是 `P4-prep-1`，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract；后续是否继续 `P4-prep-2`、更通用的 `P4-prep-3` 或完整 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
+- 当前已完成的正式结果是 `P4-prep-1`、`P4-prep-2` 的 `C1 / memory observation / shadow cache` 第一刀，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract；后续是否继续更完整的 `P4-prep-2` workload 分析、更通用的 `P4-prep-3` 或完整 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。

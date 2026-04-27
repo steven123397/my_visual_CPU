@@ -35,6 +35,8 @@ ExecutionMemoryObservation fault_memory_observation(bool write, uint64_t bytes) 
         .region = make_unmapped_region_info(),
         .write = write,
         .fault = true,
+        .paddr_valid = false,
+        .paddr = 0,
         .bytes = bytes,
     };
 }
@@ -62,6 +64,8 @@ std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cp
         .region = observed_region(bus, translated.paddr, static_cast<uint64_t>(entry.size)),
         .write = entry.kind == LsqEntryKind::Store,
         .fault = fault,
+        .paddr_valid = translated.ok,
+        .paddr = translated.paddr,
         .bytes = static_cast<uint64_t>(entry.size),
     };
 }
@@ -99,6 +103,8 @@ std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cp
         .region = observed_region(bus, translated.paddr, bytes),
         .write = request.kind == VectorRequest::Kind::Store,
         .fault = fault,
+        .paddr_valid = translated.ok,
+        .paddr = translated.paddr,
         .bytes = bytes,
     };
 }

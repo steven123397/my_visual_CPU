@@ -288,6 +288,16 @@ class RunDebugCliProbeTest(unittest.TestCase):
                     "total_retirements": 4096,
                     "total_traps": 1,
                     "total_memory_observations": 5,
+                    "shadow_cache": {
+                        "line_size_bytes": 64,
+                        "capacity_lines": 64,
+                        "resident_lines": 2,
+                        "line_accesses": 5,
+                        "hits": 3,
+                        "misses": 2,
+                        "evictions": 0,
+                        "bypasses": 0,
+                    },
                     "hot_paths": [
                         {
                             "start_pc": "0x80200000",
@@ -345,6 +355,10 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
         self.assertIn("gpr-seeds: a0=0x0 a1=0x88000000", stdout.getvalue())
         self.assertIn("profile: retirements=4096 traps=1 memory=5", stdout.getvalue())
+        self.assertIn(
+            "shadow-cache: line_size=64 capacity_lines=64 resident_lines=2 line_accesses=5 hits=3 misses=2 evictions=0 bypasses=0",
+            stdout.getvalue(),
+        )
         self.assertIn(
             "hot-path: start=0x80200000 end=0x80200020 executions=3 retired=9",
             stdout.getvalue(),

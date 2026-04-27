@@ -26,6 +26,7 @@ constexpr uint64_t kPteX = 1ULL << 3;
 constexpr uint32_t kAuipcX10 = 0x00000517U;             // auipc x10, 0
 constexpr uint32_t kAddiX10Plus64 = 0x04050513U;        // addi x10, x10, 64
 constexpr uint32_t kLwX6FromX10 = 0x00052303U;          // lw x6, 0(x10)
+constexpr uint32_t kLwX6FromX10Again = 0x00052303U;     // lw x6, 0(x10)
 constexpr uint32_t kSwX6ToX10Plus4 = 0x00652223U;       // sw x6, 4(x10)
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;           // jal x0, 8
 constexpr uint32_t kAddiX1WrongPath = 0x06300093U;      // addi x1, x0, 99
@@ -182,6 +183,44 @@ bool test_pipeline_profile_counts_faulting_memory_observation() {
                   "faulting-memory profile smoke should preserve the access width");
 }
 
+bool test_pipeline_shadow_cache_counts_reused_ram_line() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    write32(ram, kEntry + 0, kAuipcX10);
+    write32(ram, kEntry + 4, kAddiX10Plus64);
+    write32(ram, kEntry + 8, kLwX6FromX10);
+    write32(ram, kEntry + 12, kLwX6FromX10Again);
+    write32(ram, kEntry + 16, kAddiA7Exit);
+    write32(ram, kEntry + 20, kEcall);
+    ram.write_bytes(kDataAddr, std::array<uint8_t, 4>{1, 0, 0, 0}.data(), 4);
+
+    PipelineBackend backend(cpu, bus);
+    for (int step = 0; step < 32 && !cpu.core().halted(); ++step) {
+        backend.step();
+    }
+
+    const BackendDebugSnapshot backend_snapshot = backend.debug_snapshot();
+    const ExecutionProfileSnapshot profile = backend.debug_snapshot().profile;
+    DebugSnapshot snapshot{};
+    snapshot.summary.pc = cpu.core().pc();
+    snapshot.summary.instret = cpu.core().instret();
+    snapshot.summary.halted = cpu.core().halted();
+    snapshot.summary.privilege = cpu.core().privilege_mode();
+    snapshot.summary.backend = backend.name();
+    snapshot.pipeline = backend_snapshot.pipeline;
+    snapshot.profile = profile;
+    const std::string output = debug_snapshot_json(snapshot);
+
+    return expect(cpu.core().halted(),
+                  "shadow-cache profile smoke should halt via ecall") &&
+           expect_contains(output,
+                           "\"shadow_cache\":{\"line_size_bytes\":64,\"capacity_lines\":64,\"resident_lines\":1,\"line_accesses\":2,\"hits\":1,\"misses\":1,\"evictions\":0,\"bypasses\":0}",
+                           "shadow-cache profile smoke should count one miss followed by one hit on the reused RAM line");
+}
+
 }  // namespace
 
 int main() {
@@ -192,6 +231,9 @@ int main() {
         return 1;
     }
     if (!test_pipeline_profile_counts_faulting_memory_observation()) {
+        return 1;
+    }
+    if (!test_pipeline_shadow_cache_counts_reused_ram_line()) {
         return 1;
     }
     std::puts("execution_profile_smoke: PASS");

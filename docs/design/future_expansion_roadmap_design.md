@@ -33,7 +33,8 @@
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
-- 当前计划：
+- 已完成计划归档：
+  - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
 
 ## 背景与问题
@@ -45,7 +46,7 @@
 - `Phase 1` 冻结：RV64IM reference path、M/S/U 特权级、Sv39、最小平台设备、`kernel_alpha` bring-up
 - `Phase 2` 收口：`functional / pipeline` 双后端、验证补洞两轮完成
 - `Phase 3` 首轮：最小 predictor、`rename + ROB + LSQ +` 最小 `OoO execute`、decode 边界收窄与当前后续取舍判断
-- `Phase 4` 准备：`P4-prep-1`（`bus / memory region` 合同）已完成
+- `Phase 4` 准备：`P4-prep-1`（`bus / memory region` 合同）与 `P4-prep-2` 第一刀 `C1 / memory observation / shadow cache` 已完成
 - 向量扩展：`V-lite` `V0 ~ V4` + 当前前端教学可视化已接通
 - 验证体系：现有 `make test` / `make test-pipeline`、guest 正负回归与 Spike 外部差分
 
@@ -83,7 +84,7 @@
   ├─ 默认延续线
   │    ├─ 向量 / ML workload 继续深化
   │    ├─ 独立 `NPU / TPU-like` tensor accelerator 建模
-  │    └─ P4-prep-2 / memory observation
+  │    └─ P4-prep-2 / memory observation（C1 第一刀已落地，后续看 workload 证据）
   ├─ 候选切换线
   │    └─ 标准 OS bring-up（xv6-riscv）
   └─ 远期激进线
@@ -232,14 +233,14 @@
 
 ### C1：`P4-prep-2` / memory observation / shadow cache
 
-**优先级**：中高。它是当前最健康的结构性候选切片之一。
+**优先级**：已完成第一刀，后续为条件触发。
 
 | 维度 | 说明 |
 |------|------|
-| 当前基线 | `P4-prep-1` 已收口 `bus / memory region` 合同 |
+| 当前基线 | `P4-prep-1` 已收口 `bus / memory region` 合同；`C1` 已把地址级 memory observation / shadow cache 接到 `execution_profile`、debug JSON 和 probe 摘要 |
 | 目标 | 在不改变 architected 语义的前提下，获取 cache 行为数据 |
 | 收益 | 为后续是否值得实现真实 cache 提供 workload 证据 |
-| 风险 | 如果没有稳定 workload，观测结果价值会偏低 |
+| 风险 | 如果没有稳定 workload，观测结果价值会偏低；当前仍不代表真实 cache 已进入实施 |
 
 ### C2：L1 cache 模型
 
@@ -316,7 +317,7 @@
 
 1. 常态维护 + bug-driven hardening
 2. 继续围绕 `V4` 现有边界做 observation / 补洞
-3. 在有更稳定 workload 之后，再评估 `C1` / `P4-prep-2`
+3. 基于已落地的 `C1` / `P4-prep-2` shadow-cache 观测结果，再评估是否需要继续扩大 workload 分析
 4. 由 workload 证据决定是否值得继续推进更完整的向量语义面、独立 `NPU / TPU-like` tensor accelerator，或更后的 cache 路线
 
 这条线的优点是：与当前 design / status 文档的默认判断最一致，风险也最低。

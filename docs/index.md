@@ -52,7 +52,9 @@
     当前 `xv6 / Linux / JIT` 主线切换的 Wave 1 完成归档。
 24. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
     `P4-prep-1` 的完成归档与结果摘要。
-25. [plan/history_plan.md](plan/history_plan.md)
+25. [plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
+    `C1 / P4-prep-2 memory observation / shadow cache` 的完成归档与结果摘要。
+26. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -86,6 +88,7 @@
   - [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)
   - [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+  - [plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
 - `platform / MMIO`
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)

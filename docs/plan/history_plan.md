@@ -23,6 +23,13 @@
 
 ### 2026-04-27
 
+#### phase4-prep2-memory-observation-shadow-cache-plan
+
+- 原文件：`phase4_prep2_memory_observation_shadow_cache_plan.md`
+- 完成内容：完成 `C1 / P4-prep-2 memory observation / shadow cache` 第一刀，把 `ExecutionMemoryObservation` 扩展为可携带物理地址的 memory observation，并在 `ExecutionProfile` 内新增只读 shadow-cache 统计；当前 debug JSON、`debug_cli_smoke` 与 `run_debug_cli_probe` 文本摘要都已能暴露 `profile.shadow_cache`，cacheable RAM 的重复 line access 会统计 `hits / misses / evictions / bypasses`，MMIO / fault / non-cacheable 场景继续作为 bypass 观测。
+- 实现过程摘要：这一轮继续沿“先补窄 host/probe 红灯，再接最小观测模型，最后统一回写 status / design / AGENTS 并删除活跃 plan”的路径推进；`shadow_cache` 只做 workload 证据收集，不参与执行提交语义，也不改变 guest 可见行为。验证覆盖 `make test-host-execution_profile_smoke`、`make test-host-debug_cli_smoke`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+
 #### xv6-linux-jit-wave1-plan
 
 - 原文件：`xv6_linux_jit_wave1_plan.md`
