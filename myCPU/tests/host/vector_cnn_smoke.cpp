@@ -100,13 +100,39 @@ bool expect(bool condition, const char* message) {
     return true;
 }
 
-bool profile_has_region_kind(const ExecutionProfileSnapshot& profile, const char* kind) {
+const ExecutionMemoryRegionEntry* find_profile_region_kind(const ExecutionProfileSnapshot& profile,
+                                                           const char* kind) {
     for (const ExecutionMemoryRegionEntry& entry : profile.memory_regions) {
         if (entry.kind == kind && entry.accesses != 0) {
-            return true;
+            return &entry;
         }
     }
-    return false;
+    return nullptr;
+}
+
+bool profile_has_region_kind(const ExecutionProfileSnapshot& profile, const char* kind) {
+    return find_profile_region_kind(profile, kind) != nullptr;
+}
+
+bool profile_has_shadow_cache_ram_signal(const ExecutionProfileSnapshot& profile) {
+    const ExecutionShadowCacheSnapshot& shadow = profile.shadow_cache;
+    const ExecutionMemoryRegionEntry* ram_region = find_profile_region_kind(profile, "ram");
+    if (ram_region == nullptr) {
+        return false;
+    }
+    return shadow.line_size_bytes == 64 &&
+           shadow.capacity_lines == 64 &&
+           shadow.resident_lines != 0 &&
+           shadow.line_accesses != 0 &&
+           shadow.hits != 0 &&
+           shadow.misses != 0 &&
+           shadow.evictions == 0 &&
+           shadow.bypasses == 0 &&
+           ram_region->shadow_cache_line_accesses == shadow.line_accesses &&
+           ram_region->shadow_cache_hits == shadow.hits &&
+           ram_region->shadow_cache_misses == shadow.misses &&
+           ram_region->shadow_cache_evictions == shadow.evictions &&
+           ram_region->shadow_cache_bypasses == shadow.bypasses;
 }
 
 uint32_t encode_rtype(uint8_t opcode,
@@ -413,6 +439,10 @@ bool test_vector_cnn_sample(const Sample& sample) {
     }
     if (!expect(profile_has_region_kind(pipeline.profile, "ram"),
                 "pipeline vector CNN smoke should expose RAM memory-region profile entries")) {
+        return false;
+    }
+    if (!expect(profile_has_shadow_cache_ram_signal(pipeline.profile),
+                "pipeline vector CNN smoke should expose RAM shadow-cache profile signal")) {
         return false;
     }
     if (!expect(functional.watched == expected,
