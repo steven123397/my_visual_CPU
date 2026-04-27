@@ -41,6 +41,16 @@ bool expect_contains(const std::string& text, const char* needle, const char* me
     return true;
 }
 
+const ExecutionMemoryRegionEntry* find_profile_region_kind(const ExecutionProfileSnapshot& profile,
+                                                           const char* kind) {
+    for (const ExecutionMemoryRegionEntry& entry : profile.memory_regions) {
+        if (entry.kind == kind && entry.accesses != 0) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
 }  // namespace
 
 int main() {
@@ -94,6 +104,9 @@ int main() {
 
     const CPU& cpu = machine.cpu();
     const CoreState& core = cpu.core();
+    const ExecutionProfileSnapshot profile = machine.backend().debug_snapshot().profile;
+    const ExecutionShadowCacheSnapshot& shadow = profile.shadow_cache;
+    const ExecutionMemoryRegionEntry* ram_region = find_profile_region_kind(profile, "ram");
     if (!expect(core.cycle() == 5000, "xv6 smoke should stop after the planned bring-up probe window") ||
         !expect(core.instret() == 5000,
                 "xv6 smoke should retire through the current post-banner bring-up checkpoint") ||
@@ -113,6 +126,50 @@ int main() {
                 "xv6 smoke should keep sepc clear through the boot banner checkpoint") ||
         !expect(cpu.csr().read(CSR_STVAL, core) == 0,
                 "xv6 smoke should keep stval clear through the boot banner checkpoint") ||
+        !expect(profile.total_retirements == 5000,
+                "xv6 smoke should export the expected functional retire count") ||
+        !expect(profile.total_traps == 0,
+                "xv6 smoke should avoid trap observations at the current functional checkpoint") ||
+        !expect(profile.total_memory_observations == 1570,
+                "xv6 smoke should export the current functional memory observation baseline") ||
+        !expect(ram_region != nullptr,
+                "xv6 smoke should classify the current functional workload profile under RAM") ||
+        !expect(ram_region->label == "ram",
+                "xv6 smoke should keep RAM as the top functional memory region") ||
+        !expect(ram_region->accesses == 1515,
+                "xv6 smoke should keep the current RAM access baseline") ||
+        !expect(ram_region->reads == 621,
+                "xv6 smoke should keep the current RAM read baseline") ||
+        !expect(ram_region->writes == 894,
+                "xv6 smoke should keep the current RAM write baseline") ||
+        !expect(ram_region->faults == 0,
+                "xv6 smoke should avoid RAM fault observations at the current checkpoint") ||
+        !expect(ram_region->bytes == 8562,
+                "xv6 smoke should keep the current RAM byte baseline") ||
+        !expect(shadow.line_size_bytes == 64,
+                "xv6 smoke should export the functional shadow-cache line size") ||
+        !expect(shadow.capacity_lines == 64,
+                "xv6 smoke should export the functional shadow-cache capacity") ||
+        !expect(shadow.resident_lines == 20,
+                "xv6 smoke should keep the current functional shadow-cache residency") ||
+        !expect(shadow.line_accesses == 1515,
+                "xv6 smoke should keep the current functional shadow-cache line-access baseline") ||
+        !expect(shadow.hits == 1495,
+                "xv6 smoke should keep the current functional shadow-cache hit baseline") ||
+        !expect(shadow.misses == 20,
+                "xv6 smoke should keep the current functional shadow-cache miss baseline") ||
+        !expect(shadow.evictions == 0,
+                "xv6 smoke should avoid shadow-cache evictions at the current checkpoint") ||
+        !expect(shadow.bypasses == 55,
+                "xv6 smoke should keep the current functional shadow-cache bypass baseline") ||
+        !expect(ram_region->shadow_cache_line_accesses == shadow.line_accesses,
+                "xv6 smoke should keep RAM shadow-cache line accesses aligned with the global summary") ||
+        !expect(ram_region->shadow_cache_hits == shadow.hits,
+                "xv6 smoke should keep RAM shadow-cache hits aligned with the global summary") ||
+        !expect(ram_region->shadow_cache_misses == shadow.misses,
+                "xv6 smoke should keep RAM shadow-cache misses aligned with the global summary") ||
+        !expect(ram_region->shadow_cache_evictions == shadow.evictions,
+                "xv6 smoke should keep RAM shadow-cache evictions aligned with the global summary") ||
         !expect_contains(machine.uart().output(),
                          "xv6 kernel is booting",
                          "xv6 smoke should print the boot banner before the allocator warm-up loop")) {

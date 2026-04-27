@@ -70,7 +70,7 @@
 - 当前主线虽然切到标准 OS bring-up，但 `V4`、`P4-prep-1`、`kernel_alpha`、`interactive_os` 和 debug / pipeline workload 仍然要继续守住。
 - 当前更值得并行保留的，不只是单纯的 `V4` hardening，还包括面向 `Linux / JIT / DBT` 的 execution profile / observation foundation；这条线现在也已经开始给 `run_debug_cli_probe`、payload/gpr seed summary 和 Linux boot profile dry-run 提供读侧支架。
 - 这条线的目标是为后续 hot-path 定位、memory behavior 观察、cache 评估和 JIT 候选路径选择提供证据，而不是现在就抢跑真实 JIT。
-- 当前 D 线已经整合进主线，并把 `execution_profile_smoke` 接进默认 `make test` / `make test-pipeline`；`C1 / P4-prep-2` 也已把 shadow-cache 观测接到 `execution_profile`、debug JSON 和 probe 摘要，并由 `vector_cnn_smoke` 锁住第一组 pipeline workload RAM shadow-cache 信号。当前 follow-up 又已把 `functional` backend 的最小 profile 观测接通，并继续纳入 `LR/SC/AMO` atomic traffic，因此默认 `run-workload-xv6` 已能稳定输出更完整的非零 `profile / shadow-cache`。下一步更应该先用这条 stable functional observation path 继续守住 workload guardrail，再判断是否值得单独收口 `xv6 / Linux` pipeline gap，而不是反向抢占 A/B/C 的 contract ownership。
+- 当前 D 线已经整合进主线，并把 `execution_profile_smoke` 接进默认 `make test` / `make test-pipeline`；`C1 / P4-prep-2` 也已把 shadow-cache 观测接到 `execution_profile`、debug JSON 和 probe 摘要，并由 `vector_cnn_smoke` 锁住第一组 pipeline workload RAM shadow-cache 信号。当前 follow-up 又已把 `functional` backend 的最小 profile 观测接通，并继续纳入 `LR/SC/AMO` atomic traffic，因此默认 `run-workload-xv6` 已能稳定输出更完整的非零 `profile / shadow-cache`，`xv6_boot_smoke` 也已锁住当前 functional 5000-step baseline。下一步更应该先用这条 stable functional observation path 继续守住 workload guardrail，再判断是否值得单独收口 `xv6 / Linux` pipeline gap，而不是反向抢占 A/B/C 的 contract ownership。
 
 ### 5. Spike 外部差分与更激进 `Phase 3` 继续维持条件触发
 
