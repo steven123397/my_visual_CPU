@@ -48,7 +48,14 @@ uint64_t Uart16550::load(uint64_t addr, int size) {
         return mcr_;
     }
     if (offset == UART_REG_LSR) {
-        return (input_.empty() ? 0U : UART_LSR_DR) | UART_LSR_THRE | UART_LSR_TEMT;
+        uint64_t lsr = input_.empty() ? 0U : UART_LSR_DR;
+        if (tx_holding_empty_) {
+            lsr |= UART_LSR_THRE;
+        }
+        if (tx_shift_empty_) {
+            lsr |= UART_LSR_TEMT;
+        }
+        return lsr;
     }
     if (offset == UART_REG_MSR) {
         return UART_MSR_CTS | UART_MSR_DSR | UART_MSR_DCD;
@@ -75,7 +82,10 @@ void Uart16550::store(uint64_t addr, uint64_t value, int size) {
             std::putchar(static_cast<int>(static_cast<unsigned char>(ch)));
             std::fflush(stdout);
         }
-        tx_interrupt_pending_ = tx_interrupt_enabled();
+        tx_holding_empty_ = false;
+        tx_shift_empty_ = false;
+        tx_drain_pending_ = true;
+        tx_interrupt_pending_ = false;
         update_interrupt_line();
         return;
     }
@@ -85,7 +95,7 @@ void Uart16550::store(uint64_t addr, uint64_t value, int size) {
             return;
         }
         ier_ = value8 & static_cast<uint8_t>(UART_IER_RDI | UART_IER_THRI);
-        tx_interrupt_pending_ = tx_interrupt_enabled();
+        tx_interrupt_pending_ = tx_interrupt_enabled() && tx_ready();
         update_interrupt_line();
         return;
     }
@@ -123,6 +133,23 @@ bool Uart16550::rx_interrupt_enabled() const {
 
 bool Uart16550::rx_interrupt_pending() const {
     return rx_interrupt_enabled() && !input_.empty();
+}
+
+bool Uart16550::tx_ready() const {
+    return tx_holding_empty_ && tx_shift_empty_;
+}
+
+PlatformEvents Uart16550::tick() {
+    if (tx_drain_pending_) {
+        tx_holding_empty_ = true;
+        tx_shift_empty_ = true;
+        tx_drain_pending_ = false;
+        if (tx_interrupt_enabled()) {
+            tx_interrupt_pending_ = true;
+        }
+    }
+    update_interrupt_line();
+    return {};
 }
 
 void Uart16550::update_interrupt_line() {

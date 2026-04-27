@@ -116,6 +116,37 @@ int main() {
             return 1;
         }
 
+        if (!bus.try_load(UART_BASE + UART_REG_LSR, 1, lsr) ||
+            (lsr & (UART_LSR_THRE | UART_LSR_TEMT)) != 0) {
+            std::fprintf(stderr, "expected UART TX write to clear THRE/TEMT until the next tick\n");
+            return 1;
+        }
+
+        if (!expect_store_ok(bus,
+                             UART_BASE + UART_REG_IER,
+                             UART_IER_THRI,
+                             1,
+                             "expected UART TX interrupt enable write") ||
+            plic.source_level(Plic::UART_SOURCE_ID)) {
+            std::fprintf(stderr, "expected UART THRE interrupt to stay low while TX is still draining\n");
+            return 1;
+        }
+
+        uart.tick();
+
+        if (!bus.try_load(UART_BASE + UART_REG_LSR, 1, lsr) ||
+            (lsr & (UART_LSR_THRE | UART_LSR_TEMT)) != (UART_LSR_THRE | UART_LSR_TEMT) ||
+            !plic.source_level(Plic::UART_SOURCE_ID) ||
+            !expect_load(bus,
+                         UART_BASE + UART_REG_IIR,
+                         1,
+                         UART_IIR_THRI,
+                         "expected UART IIR THRE interrupt identity after TX drain tick") ||
+            plic.source_level(Plic::UART_SOURCE_ID)) {
+            std::fprintf(stderr, "expected UART THRE interrupt to reassert after TX drain tick\n");
+            return 1;
+        }
+
         return 0;
     } catch (const std::exception& ex) {
         std::fprintf(stderr, "%s\n", ex.what());

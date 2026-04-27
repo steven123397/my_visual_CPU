@@ -12,6 +12,8 @@
 #define O_RDONLY 0
 #define O_RDWR 2
 
+#define INHERITED_CONSOLE_FD 3
+
     .section .rodata
 console_path:
     .asciz "/dev/console"
@@ -26,6 +28,21 @@ reused_dir_name:
 stage_unlinkat_reused_dirent_gone_msg:
     .asciz "mycpu linux userland: stage=unlinkat-reused-dirent-gone\n"
 stage_unlinkat_reused_dirent_gone_msg_end:
+stage_fourth_stage_entered_msg:
+    .asciz "mycpu linux userland: stage=fourth-stage-entered\n"
+stage_fourth_stage_entered_msg_end:
+stage_fourth_stage_console_opened_msg:
+    .asciz "mycpu linux userland: stage=fourth-stage-console-opened\n"
+stage_fourth_stage_console_opened_msg_end:
+stage_fourth_stage_console_fallback_msg:
+    .asciz "mycpu linux userland: stage=fourth-stage-console-fallback\n"
+stage_fourth_stage_console_fallback_msg_end:
+stage_fourth_stage_root_chdir_ok_msg:
+    .asciz "mycpu linux userland: stage=fourth-stage-root-chdir-ok\n"
+stage_fourth_stage_root_chdir_ok_msg_end:
+stage_fourth_stage_unlinkat_reused_dir_ok_msg:
+    .asciz "mycpu linux userland: stage=fourth-stage-unlinkat-reused-dir-ok\n"
+stage_fourth_stage_unlinkat_reused_dir_ok_msg_end:
 stage_fourth_stage_reached_msg:
     .asciz "mycpu linux userland: stage=fourth-stage-reached\n"
 stage_fourth_stage_reached_msg_end:
@@ -50,6 +67,16 @@ fourth_stage_write_short_msg_end:
 
 .set stage_unlinkat_reused_dirent_gone_msg_len, stage_unlinkat_reused_dirent_gone_msg_end - stage_unlinkat_reused_dirent_gone_msg
 .set stage_unlinkat_reused_dirent_gone_msg_len, stage_unlinkat_reused_dirent_gone_msg_len - 1
+.set stage_fourth_stage_entered_msg_len, stage_fourth_stage_entered_msg_end - stage_fourth_stage_entered_msg
+.set stage_fourth_stage_entered_msg_len, stage_fourth_stage_entered_msg_len - 1
+.set stage_fourth_stage_console_opened_msg_len, stage_fourth_stage_console_opened_msg_end - stage_fourth_stage_console_opened_msg
+.set stage_fourth_stage_console_opened_msg_len, stage_fourth_stage_console_opened_msg_len - 1
+.set stage_fourth_stage_console_fallback_msg_len, stage_fourth_stage_console_fallback_msg_end - stage_fourth_stage_console_fallback_msg
+.set stage_fourth_stage_console_fallback_msg_len, stage_fourth_stage_console_fallback_msg_len - 1
+.set stage_fourth_stage_root_chdir_ok_msg_len, stage_fourth_stage_root_chdir_ok_msg_end - stage_fourth_stage_root_chdir_ok_msg
+.set stage_fourth_stage_root_chdir_ok_msg_len, stage_fourth_stage_root_chdir_ok_msg_len - 1
+.set stage_fourth_stage_unlinkat_reused_dir_ok_msg_len, stage_fourth_stage_unlinkat_reused_dir_ok_msg_end - stage_fourth_stage_unlinkat_reused_dir_ok_msg
+.set stage_fourth_stage_unlinkat_reused_dir_ok_msg_len, stage_fourth_stage_unlinkat_reused_dir_ok_msg_len - 1
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_end - stage_fourth_stage_reached_msg
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_len - 1
 .set post_init_reached_msg_len, post_init_reached_msg_end - post_init_reached_msg
@@ -77,20 +104,54 @@ fourth_stage_dirent_buf:
     .section .text
     .globl _start
 _start:
+    li s0, INHERITED_CONSOLE_FD
+
+    mv a0, s0
+    la a1, stage_fourth_stage_entered_msg
+    li a2, stage_fourth_stage_entered_msg_len
+    jal ra, write_exact
+
     li a0, AT_FDCWD
     la a1, console_path
     li a2, O_RDWR
     li a3, 0
     li a7, SYS_OPENAT
     ecall
-    bltz a0, console_open_failed
+    bltz a0, console_open_fallback
     mv s0, a0
     li s1, 0
+
+    mv a0, s0
+    la a1, stage_fourth_stage_console_opened_msg
+    li a2, stage_fourth_stage_console_opened_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+    j fourth_stage_start
+
+console_open_fallback:
+    li s1, 0
+
+    mv a0, s0
+    la a1, stage_fourth_stage_console_fallback_msg
+    li a2, stage_fourth_stage_console_fallback_msg_len
+    jal ra, write_exact
+    bltz a0, console_open_failed
+    or s1, s1, a1
+
+fourth_stage_start:
 
     la a0, root_dir_path
     li a7, SYS_CHDIR
     ecall
     bltz a0, reused_dir_cleanup_failed
+
+    mv a0, s0
+    la a1, stage_fourth_stage_root_chdir_ok_msg
+    li a2, stage_fourth_stage_root_chdir_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
 
     li a0, AT_FDCWD
     la a1, reused_dir_path
@@ -98,6 +159,13 @@ _start:
     li a7, SYS_UNLINKAT
     ecall
     bltz a0, reused_dir_cleanup_failed
+
+    mv a0, s0
+    la a1, stage_fourth_stage_unlinkat_reused_dir_ok_msg
+    li a2, stage_fourth_stage_unlinkat_reused_dir_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
 
     la a0, reused_dir_name
     jal ra, dir_contains_name
@@ -174,7 +242,6 @@ write_exact:
     mv t0, a0
     mv t1, a1
     mv t2, a2
-    li t3, 0
 
 write_exact_loop:
     beqz t2, write_exact_done
@@ -185,8 +252,6 @@ write_exact_loop:
     ecall
     bltz a0, write_exact_error
     beqz a0, write_exact_zero
-    bge a0, t2, write_exact_advance
-    li t3, 1
 
 write_exact_advance:
     add t1, t1, a0
@@ -195,7 +260,7 @@ write_exact_advance:
 
 write_exact_done:
     li a0, 0
-    mv a1, t3
+    li a1, 0
     ret
 
 write_exact_error:

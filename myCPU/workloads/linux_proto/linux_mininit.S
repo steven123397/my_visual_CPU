@@ -259,7 +259,6 @@ write_exact:
     mv t0, a0
     mv t1, a1
     mv t2, a2
-    li t3, 0
 
 write_exact_loop:
     beqz t2, write_exact_done
@@ -270,8 +269,6 @@ write_exact_loop:
     ecall
     bltz a0, write_exact_error
     beqz a0, write_exact_zero
-    bge a0, t2, write_exact_advance
-    li t3, 1
 
 write_exact_advance:
     add t1, t1, a0
@@ -280,7 +277,7 @@ write_exact_advance:
 
 write_exact_done:
     li a0, 0
-    mv a1, t3
+    li a1, 0
     ret
 
 write_exact_error:

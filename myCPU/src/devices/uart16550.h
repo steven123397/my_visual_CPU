@@ -16,6 +16,7 @@ public:
 
     uint64_t load(uint64_t addr, int size) override;
     void store(uint64_t addr, uint64_t value, int size) override;
+    PlatformEvents tick() override;
     const char* debug_name() const override {
         return "uart";
     }
@@ -33,6 +34,7 @@ private:
     bool tx_interrupt_enabled() const;
     bool rx_interrupt_enabled() const;
     bool rx_interrupt_pending() const;
+    bool tx_ready() const;
     void update_interrupt_line();
 
     Plic& plic_;
@@ -42,6 +44,9 @@ private:
     uint8_t dll_{0};
     uint8_t dlm_{0};
     uint8_t fcr_{0};
+    bool tx_holding_empty_{true};
+    bool tx_shift_empty_{true};
+    bool tx_drain_pending_{false};
     bool tx_interrupt_pending_{false};
     std::deque<uint8_t> input_{};
     std::string output_{};

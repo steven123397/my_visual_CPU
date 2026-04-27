@@ -1029,7 +1029,6 @@ class RunDebugCliProbeTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(third_stage_strings_proc.returncode, 0, msg=third_stage_strings_proc.stderr)
-        self.assertIn("mycpu linux userland: stage=third-stage-reached", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=mkdir-chdir-ok", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=nested-file-roundtrip-ok", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=getdents64-nested-visible", third_stage_strings_proc.stdout)
@@ -1043,7 +1042,6 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("mycpu linux userland: stage=mkdirat-reused-dir-empty", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=mkdirat-reused-dir-dot-only", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=mkdirat-reused-dir-parent-stat-ok", third_stage_strings_proc.stdout)
-        self.assertIn("mycpu linux userland: stage=execve-fourth-stage", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: third-stage dir smoke failed", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: third-stage nested file smoke failed", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: third-stage getdents64 smoke failed", third_stage_strings_proc.stdout)
@@ -1067,6 +1065,11 @@ class RunDebugCliProbeTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(fourth_stage_strings_proc.returncode, 0, msg=str(fourth_stage_strings_proc.stderr))
+        self.assertIn("mycpu linux userland: stage=fourth-stage-entered", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=fourth-stage-console-opened", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=fourth-stage-console-fallback", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=fourth-stage-root-chdir-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=fourth-stage-unlinkat-reused-dir-ok", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=unlinkat-reused-dirent-gone", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=fourth-stage-reached", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: fourth-stage reused dir cleanup failed", fourth_stage_strings_proc.stdout)
@@ -1140,7 +1143,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(probe_proc.returncode, 0, msg=probe_proc.stderr)
-        self.assertIn("mycpu linux userland: stage=execve-fourth-stage", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=fourth-stage-entered", probe_proc.stdout)
         self.assertIn("mycpu linux userland: stage=unlinkat-reused-dirent-gone", probe_proc.stdout)
         self.assertIn("mycpu linux userland: stage=fourth-stage-reached", probe_proc.stdout)
 

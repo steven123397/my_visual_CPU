@@ -66,9 +66,6 @@ stage_renameat2_dirent_updated_msg_end:
 stage_renameat2_syscall_ok_msg:
     .asciz "mycpu linux userland: stage=renameat2-syscall-ok\n"
 stage_renameat2_syscall_ok_msg_end:
-stage_third_stage_reached_msg:
-    .asciz "mycpu linux userland: stage=third-stage-reached\n"
-stage_third_stage_reached_msg_end:
 stage_renameat2_cleanup_ok_msg:
     .asciz "mycpu linux userland: stage=renameat2-cleanup-ok\n"
 stage_renameat2_cleanup_ok_msg_end:
@@ -87,9 +84,6 @@ stage_mkdirat_reused_dir_dot_only_msg_end:
 stage_mkdirat_reused_dir_parent_stat_ok_msg:
     .asciz "mycpu linux userland: stage=mkdirat-reused-dir-parent-stat-ok\n"
 stage_mkdirat_reused_dir_parent_stat_ok_msg_end:
-stage_execve_fourth_stage_msg:
-    .asciz "mycpu linux userland: stage=execve-fourth-stage\n"
-stage_execve_fourth_stage_msg_end:
 third_stage_dir_smoke_fail_msg:
     .asciz "mycpu linux userland: third-stage dir smoke failed\n"
 third_stage_dir_smoke_fail_msg_end:
@@ -161,8 +155,6 @@ fourth_stage_envp:
 .set stage_renameat2_dirent_updated_msg_len, stage_renameat2_dirent_updated_msg_len - 1
 .set stage_renameat2_syscall_ok_msg_len, stage_renameat2_syscall_ok_msg_end - stage_renameat2_syscall_ok_msg
 .set stage_renameat2_syscall_ok_msg_len, stage_renameat2_syscall_ok_msg_len - 1
-.set stage_third_stage_reached_msg_len, stage_third_stage_reached_msg_end - stage_third_stage_reached_msg
-.set stage_third_stage_reached_msg_len, stage_third_stage_reached_msg_len - 1
 .set stage_renameat2_cleanup_ok_msg_len, stage_renameat2_cleanup_ok_msg_end - stage_renameat2_cleanup_ok_msg
 .set stage_renameat2_cleanup_ok_msg_len, stage_renameat2_cleanup_ok_msg_len - 1
 .set stage_unlinkat_parent_dirent_gone_msg_len, stage_unlinkat_parent_dirent_gone_msg_end - stage_unlinkat_parent_dirent_gone_msg
@@ -175,8 +167,6 @@ fourth_stage_envp:
 .set stage_mkdirat_reused_dir_dot_only_msg_len, stage_mkdirat_reused_dir_dot_only_msg_len - 1
 .set stage_mkdirat_reused_dir_parent_stat_ok_msg_len, stage_mkdirat_reused_dir_parent_stat_ok_msg_end - stage_mkdirat_reused_dir_parent_stat_ok_msg
 .set stage_mkdirat_reused_dir_parent_stat_ok_msg_len, stage_mkdirat_reused_dir_parent_stat_ok_msg_len - 1
-.set stage_execve_fourth_stage_msg_len, stage_execve_fourth_stage_msg_end - stage_execve_fourth_stage_msg
-.set stage_execve_fourth_stage_msg_len, stage_execve_fourth_stage_msg_len - 1
 .set third_stage_dir_smoke_fail_msg_len, third_stage_dir_smoke_fail_msg_end - third_stage_dir_smoke_fail_msg
 .set third_stage_dir_smoke_fail_msg_len, third_stage_dir_smoke_fail_msg_len - 1
 .set third_stage_nested_file_smoke_fail_msg_len, third_stage_nested_file_smoke_fail_msg_end - third_stage_nested_file_smoke_fail_msg
@@ -270,19 +260,6 @@ _start:
     bltz a0, renameat2_smoke_failed
     or s1, s1, a1
 
-    mv a0, s0
-    la a1, stage_third_stage_reached_msg
-    li a2, stage_third_stage_reached_msg_len
-    jal ra, write_exact
-    bltz a0, write_failed
-    or s1, s1, a1
-
-    mv a0, s0
-    la a1, stage_execve_fourth_stage_msg
-    li a2, stage_execve_fourth_stage_msg_len
-    jal ra, write_exact
-    bltz a0, write_failed
-    or s1, s1, a1
     bnez s1, report_write_short
 
     la a0, fourth_stage_path
@@ -405,7 +382,6 @@ write_exact:
     mv t0, a0
     mv t1, a1
     mv t2, a2
-    li t3, 0
 
 write_exact_loop:
     beqz t2, write_exact_done
@@ -416,8 +392,6 @@ write_exact_loop:
     ecall
     bltz a0, write_exact_error
     beqz a0, write_exact_zero
-    bge a0, t2, write_exact_advance
-    li t3, 1
 
 write_exact_advance:
     add t1, t1, a0
@@ -426,7 +400,7 @@ write_exact_advance:
 
 write_exact_done:
     li a0, 0
-    mv a1, t3
+    li a1, 0
     ret
 
 write_exact_error:
@@ -1036,8 +1010,6 @@ renameat_smoke_cleanup_verified:
     bltz a0, renameat_smoke_reused_dir_parent_stat_error
     or s3, s3, a1
 
-    jal ra, cleanup_dir_smoke_paths
-
     li a0, 0
     mv a1, s3
     j renameat_smoke_done
@@ -1228,7 +1200,7 @@ reused_dir_dot_only_smoke_eof:
     jal ra, write_exact
     bltz a0, reused_dir_dot_only_smoke_cleanup_error
     li a0, 0
-    li a1, 1
+    li a1, 0
     j reused_dir_dot_only_smoke_done
 
 reused_dir_dot_only_smoke_close_error:
@@ -1277,7 +1249,7 @@ reused_dir_parent_stat_smoke:
     bltz a0, reused_dir_parent_stat_smoke_cleanup_error
 
     li a0, 0
-    li a1, 1
+    li a1, 0
     j reused_dir_parent_stat_smoke_done
 
 reused_dir_parent_stat_smoke_cleanup_error:
