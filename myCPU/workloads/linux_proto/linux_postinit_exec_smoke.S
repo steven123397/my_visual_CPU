@@ -10,6 +10,7 @@
 #define SYS_NEWFSTATAT 79
 #define SYS_EXIT 93
 #define SYS_NANOSLEEP 101
+#define SYS_EXECVE 221
 
 #define AT_FDCWD -100
 #define AT_REMOVEDIR 512
@@ -39,6 +40,8 @@ third_stage_renamed_relative_path:
     .asciz "renamed.txt"
 third_stage_renamed_absolute_path:
     .asciz "/post-init-dir-smoke/renamed.txt"
+fourth_stage_path:
+    .asciz "/post-init-cleanup-smoke"
 third_stage_nested_expected:
     .asciz "third-stage-nested-ok\n"
 third_stage_nested_expected_end:
@@ -84,9 +87,9 @@ stage_mkdirat_reused_dir_dot_only_msg_end:
 stage_mkdirat_reused_dir_parent_stat_ok_msg:
     .asciz "mycpu linux userland: stage=mkdirat-reused-dir-parent-stat-ok\n"
 stage_mkdirat_reused_dir_parent_stat_ok_msg_end:
-post_init_reached_msg:
-    .asciz "mycpu linux userland: post-init reached\n"
-post_init_reached_msg_end:
+stage_execve_fourth_stage_msg:
+    .asciz "mycpu linux userland: stage=execve-fourth-stage\n"
+stage_execve_fourth_stage_msg_end:
 third_stage_dir_smoke_fail_msg:
     .asciz "mycpu linux userland: third-stage dir smoke failed\n"
 third_stage_dir_smoke_fail_msg_end:
@@ -123,6 +126,9 @@ third_stage_mkdirat_reused_dir_dot_only_smoke_fail_msg_end:
 third_stage_mkdirat_reused_dir_parent_stat_smoke_fail_msg:
     .asciz "mycpu linux userland: third-stage mkdirat reused dir parent stat smoke failed\n"
 third_stage_mkdirat_reused_dir_parent_stat_smoke_fail_msg_end:
+third_stage_exec_fourth_stage_fail_msg:
+    .asciz "mycpu linux userland: exec fourth-stage failed\n"
+third_stage_exec_fourth_stage_fail_msg_end:
 third_stage_console_fail_msg:
     .asciz "mycpu linux userland: third-stage console open failed\n"
 third_stage_console_fail_msg_end:
@@ -132,6 +138,12 @@ third_stage_write_fail_msg_end:
 third_stage_write_short_msg:
     .asciz "mycpu linux userland: third-stage write short\n"
 third_stage_write_short_msg_end:
+
+fourth_stage_argv:
+    .dword fourth_stage_path
+    .dword 0
+fourth_stage_envp:
+    .dword 0
 
 .set third_stage_nested_expected_len, third_stage_nested_expected_end - third_stage_nested_expected
 .set third_stage_nested_expected_len, third_stage_nested_expected_len - 1
@@ -163,8 +175,8 @@ third_stage_write_short_msg_end:
 .set stage_mkdirat_reused_dir_dot_only_msg_len, stage_mkdirat_reused_dir_dot_only_msg_len - 1
 .set stage_mkdirat_reused_dir_parent_stat_ok_msg_len, stage_mkdirat_reused_dir_parent_stat_ok_msg_end - stage_mkdirat_reused_dir_parent_stat_ok_msg
 .set stage_mkdirat_reused_dir_parent_stat_ok_msg_len, stage_mkdirat_reused_dir_parent_stat_ok_msg_len - 1
-.set post_init_reached_msg_len, post_init_reached_msg_end - post_init_reached_msg
-.set post_init_reached_msg_len, post_init_reached_msg_len - 1
+.set stage_execve_fourth_stage_msg_len, stage_execve_fourth_stage_msg_end - stage_execve_fourth_stage_msg
+.set stage_execve_fourth_stage_msg_len, stage_execve_fourth_stage_msg_len - 1
 .set third_stage_dir_smoke_fail_msg_len, third_stage_dir_smoke_fail_msg_end - third_stage_dir_smoke_fail_msg
 .set third_stage_dir_smoke_fail_msg_len, third_stage_dir_smoke_fail_msg_len - 1
 .set third_stage_nested_file_smoke_fail_msg_len, third_stage_nested_file_smoke_fail_msg_end - third_stage_nested_file_smoke_fail_msg
@@ -189,6 +201,8 @@ third_stage_write_short_msg_end:
 .set third_stage_mkdirat_reused_dir_dot_only_smoke_fail_msg_len, third_stage_mkdirat_reused_dir_dot_only_smoke_fail_msg_len - 1
 .set third_stage_mkdirat_reused_dir_parent_stat_smoke_fail_msg_len, third_stage_mkdirat_reused_dir_parent_stat_smoke_fail_msg_end - third_stage_mkdirat_reused_dir_parent_stat_smoke_fail_msg
 .set third_stage_mkdirat_reused_dir_parent_stat_smoke_fail_msg_len, third_stage_mkdirat_reused_dir_parent_stat_smoke_fail_msg_len - 1
+.set third_stage_exec_fourth_stage_fail_msg_len, third_stage_exec_fourth_stage_fail_msg_end - third_stage_exec_fourth_stage_fail_msg
+.set third_stage_exec_fourth_stage_fail_msg_len, third_stage_exec_fourth_stage_fail_msg_len - 1
 .set third_stage_console_fail_msg_len, third_stage_console_fail_msg_end - third_stage_console_fail_msg
 .set third_stage_console_fail_msg_len, third_stage_console_fail_msg_len - 1
 .set third_stage_write_fail_msg_len, third_stage_write_fail_msg_end - third_stage_write_fail_msg
@@ -264,13 +278,21 @@ _start:
     or s1, s1, a1
 
     mv a0, s0
-    la a1, post_init_reached_msg
-    li a2, post_init_reached_msg_len
+    la a1, stage_execve_fourth_stage_msg
+    li a2, stage_execve_fourth_stage_msg_len
     jal ra, write_exact
     bltz a0, write_failed
     or s1, s1, a1
-    beqz s1, sleep_forever
+    bnez s1, report_write_short
 
+    la a0, fourth_stage_path
+    la a1, fourth_stage_argv
+    la a2, fourth_stage_envp
+    li a7, SYS_EXECVE
+    ecall
+    j exec_fourth_stage_failed
+
+report_write_short:
     mv a0, s0
     la a1, third_stage_write_short_msg
     li a2, third_stage_write_short_msg_len
@@ -1082,6 +1104,15 @@ renameat_smoke_reused_dir_parent_stat_error:
     li a0, -7
     li a1, 0
     j renameat_smoke_done
+
+exec_fourth_stage_failed:
+    mv a0, s0
+    la a1, third_stage_exec_fourth_stage_fail_msg
+    li a2, third_stage_exec_fourth_stage_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
 
 renameat_smoke_cleanup_error:
     li t0, -1

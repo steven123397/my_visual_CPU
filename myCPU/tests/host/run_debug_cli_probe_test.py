@@ -2,6 +2,7 @@
 import contextlib
 import importlib.util
 import io
+import os
 import pathlib
 import subprocess
 import tempfile
@@ -16,6 +17,9 @@ if MODULE_SPEC is None or MODULE_SPEC.loader is None:
     raise RuntimeError(f"failed to load module spec for {MODULE_PATH}")
 PROBE = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(PROBE)
+DEFAULT_LINUX_PROTO_RUNTIME_IMAGE = (
+    MYCPU_DIR / "external" / "linux-riscv" / "arch" / "riscv" / "boot" / "Image"
+)
 
 
 def build_linux_dummy_flat_image(temp_dir: pathlib.Path) -> pathlib.Path:
@@ -915,6 +919,27 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("--disk workloads/linux_proto/rootfs.ext4", proc.stdout)
         self.assertNotIn("--payload workloads/linux_proto/rootfs.cpio 0x84000000", proc.stdout)
 
+    def test_make_test_host_run_debug_cli_probe_linux_proto_runtime_target_requests_real_linux_runtime(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_proto_runtime",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_RUN_LINUX_PROTO_RUNTIME=1", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested",
+            proc.stdout,
+        )
+
     def test_make_build_workload_linux_proto_block_mode_embeds_mininit_stage_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             proc = subprocess.run(
@@ -1018,6 +1043,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("mycpu linux userland: stage=mkdirat-reused-dir-empty", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=mkdirat-reused-dir-dot-only", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=mkdirat-reused-dir-parent-stat-ok", third_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=execve-fourth-stage", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: third-stage dir smoke failed", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: third-stage nested file smoke failed", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: third-stage getdents64 smoke failed", third_stage_strings_proc.stdout)
@@ -1030,7 +1056,93 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("mycpu linux userland: third-stage mkdirat reused dir smoke failed", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: third-stage mkdirat reused dir dot-only smoke failed", third_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: third-stage mkdirat reused dir parent stat smoke failed", third_stage_strings_proc.stdout)
-        self.assertIn("mycpu linux userland: post-init reached", third_stage_strings_proc.stdout)
+
+        fourth_stage_elf = MYCPU_DIR / "workloads" / "linux_proto" / "linux_postinit_cleanup_smoke.elf"
+        fourth_stage_strings_proc = subprocess.run(
+            ["strings", str(fourth_stage_elf)],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(fourth_stage_strings_proc.returncode, 0, msg=str(fourth_stage_strings_proc.stderr))
+        self.assertIn("mycpu linux userland: stage=unlinkat-reused-dirent-gone", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=fourth-stage-reached", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage reused dir cleanup failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage reused dir dirent smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: post-init reached", fourth_stage_strings_proc.stdout)
+
+    def test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_PROTO_RUNTIME") != "1":
+            self.skipTest("set MYCPU_RUN_LINUX_PROTO_RUNTIME=1 to run the real linux_proto runtime guardrail")
+
+        image_path = pathlib.Path(
+            os.environ.get("MYCPU_LINUX_PROTO_RUNTIME_IMAGE", str(DEFAULT_LINUX_PROTO_RUNTIME_IMAGE))
+        )
+        if not image_path.is_file():
+            self.fail(f"missing linux_proto runtime Image: {image_path}")
+
+        build_proc = subprocess.run(
+            [
+                "make",
+                "build-workload",
+                "WORKLOAD_NAME=linux_proto",
+                "LINUX_PROTO_ROOTFS_MODE=block",
+                f"LINUX_PROTO_IMAGE={image_path}",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+
+        probe_proc = subprocess.run(
+            [
+                "python3",
+                "workloads/run_debug_cli_probe.py",
+                "--target",
+                "./mycpu",
+                "--image",
+                "workloads/linux_proto/linux_sbi_shim.bin",
+                "--flat",
+                "--addr",
+                "0x80000000",
+                "--payload",
+                str(image_path),
+                "0x80200000",
+                "--payload",
+                "workloads/linux_proto/mycpu_virt.dtb",
+                "0x87f00000",
+                "--disk",
+                "workloads/linux_proto/rootfs.ext4",
+                "--block-transport",
+                "virtio-blk",
+                "--set-reg",
+                "a0",
+                "0x0",
+                "--set-reg",
+                "a1",
+                "0x87f00000",
+                "--set-reg",
+                "a2",
+                "0x80200000",
+                "--uart-wait",
+                "mycpu linux userland: stage=fourth-stage-reached",
+                "300000000",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(probe_proc.returncode, 0, msg=probe_proc.stderr)
+        self.assertIn("mycpu linux userland: stage=execve-fourth-stage", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-reused-dirent-gone", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=fourth-stage-reached", probe_proc.stdout)
 
     def test_make_build_workload_linux_proto_block_mode_mininit_message_lengths_exclude_nul(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

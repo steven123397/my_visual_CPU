@@ -80,6 +80,8 @@ LINUX_PROTO_POSTINIT_ELF = workloads/linux_proto/linux_postinit_smoke.elf
 LINUX_PROTO_POSTINIT_DEP = workloads/linux_proto/linux_postinit_smoke.d
 LINUX_PROTO_POSTINIT_EXEC_ELF = workloads/linux_proto/linux_postinit_exec_smoke.elf
 LINUX_PROTO_POSTINIT_EXEC_DEP = workloads/linux_proto/linux_postinit_exec_smoke.d
+LINUX_PROTO_POSTINIT_CLEANUP_ELF = workloads/linux_proto/linux_postinit_cleanup_smoke.elf
+LINUX_PROTO_POSTINIT_CLEANUP_DEP = workloads/linux_proto/linux_postinit_cleanup_smoke.d
 LINUX_PROTO_POSTINIT_DATA = workloads/linux_proto/post_init_data.txt
 LINUX_PROTO_GENERATED_INITRD = workloads/linux_proto/rootfs.cpio
 LINUX_PROTO_GENERATED_INITRD_DIR = workloads/linux_proto/rootfs_staging
@@ -311,28 +313,35 @@ $(LINUX_PROTO_POSTINIT_ELF): workloads/linux_proto/linux_postinit_smoke.S | chec
 $(LINUX_PROTO_POSTINIT_EXEC_ELF): workloads/linux_proto/linux_postinit_exec_smoke.S | check-riscv-toolchain
 	$(RV_CC) $(RV_FLAGS) -mcmodel=medany -mno-relax -nostdlib -nostartfiles -static -no-pie -MMD -MP -MF $(LINUX_PROTO_POSTINIT_EXEC_DEP) -o $@ workloads/linux_proto/linux_postinit_exec_smoke.S
 
-$(LINUX_PROTO_GENERATED_INITRD): $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_DATA)
+$(LINUX_PROTO_POSTINIT_CLEANUP_ELF): workloads/linux_proto/linux_postinit_cleanup_smoke.S | check-riscv-toolchain
+	$(RV_CC) $(RV_FLAGS) -mcmodel=medany -mno-relax -nostdlib -nostartfiles -static -no-pie -MMD -MP -MF $(LINUX_PROTO_POSTINIT_CLEANUP_DEP) -o $@ workloads/linux_proto/linux_postinit_cleanup_smoke.S
+
+$(LINUX_PROTO_GENERATED_INITRD): $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_POSTINIT_DATA)
 	@rm -rf $(LINUX_PROTO_GENERATED_INITRD_DIR)
 	@mkdir -p $(LINUX_PROTO_GENERATED_INITRD_DIR)
 	@cp $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/init
 	@cp $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-smoke
 	@cp $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-exec-smoke
+	@cp $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-cleanup-smoke
 	@cp $(LINUX_PROTO_POSTINIT_DATA) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-data.txt
 	@chmod 755 $(LINUX_PROTO_GENERATED_INITRD_DIR)/init
 	@chmod 755 $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-smoke
 	@chmod 755 $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-exec-smoke
+	@chmod 755 $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-cleanup-smoke
 	@(cd $(LINUX_PROTO_GENERATED_INITRD_DIR) && find . | LC_ALL=C sort | cpio -o -H newc --quiet > ../$(notdir $@))
 
-$(LINUX_PROTO_GENERATED_DISK): $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_DATA)
+$(LINUX_PROTO_GENERATED_DISK): $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_POSTINIT_DATA)
 	@rm -rf $(LINUX_PROTO_GENERATED_DISK_DIR)
 	@mkdir -p $(LINUX_PROTO_GENERATED_DISK_DIR)/dev
 	@cp $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/init
 	@cp $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-smoke
 	@cp $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-exec-smoke
+	@cp $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-cleanup-smoke
 	@cp $(LINUX_PROTO_POSTINIT_DATA) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-data.txt
 	@chmod 755 $(LINUX_PROTO_GENERATED_DISK_DIR)/init
 	@chmod 755 $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-smoke
 	@chmod 755 $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-exec-smoke
+	@chmod 755 $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-cleanup-smoke
 	@rm -f $@
 	@mke2fs -q -F -t ext4 -d $(LINUX_PROTO_GENERATED_DISK_DIR) -L rootfs $@ $(LINUX_PROTO_GENERATED_DISK_BLOCKS)
 
@@ -593,6 +602,16 @@ test-host-ai_accel_guest_smoke: FORCE $(TARGET) $(GUEST_AI_ACCEL_DEMO) tests/hos
 test-host-run_debug_cli_probe: FORCE $(TARGET) build-workload-xv6
 	@echo "=== host:run_debug_cli_probe ==="; \
 	output="$$(python3 tests/host/run_debug_cli_probe_test.py 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_proto_runtime: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_proto_runtime ==="; \
+	output="$$(MYCPU_RUN_LINUX_PROTO_RUNTIME=1 python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		printf '%s\n' "$$output" >&2; \
