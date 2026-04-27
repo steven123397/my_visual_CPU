@@ -5,6 +5,7 @@ import io
 import pathlib
 import subprocess
 import tempfile
+import textwrap
 import unittest
 
 
@@ -15,6 +16,70 @@ if MODULE_SPEC is None or MODULE_SPEC.loader is None:
     raise RuntimeError(f"failed to load module spec for {MODULE_PATH}")
 PROBE = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(PROBE)
+
+
+def build_linux_dummy_flat_image(temp_dir: pathlib.Path) -> pathlib.Path:
+    asm_path = temp_dir / "linux_dummy.S"
+    elf_path = temp_dir / "linux_dummy.elf"
+    bin_path = temp_dir / "linux_dummy.bin"
+    asm_path.write_text(
+        textwrap.dedent(
+            """\
+            .section .text
+            .globl _start
+        _start:
+            li t0, 0x84000000
+            addi t1, a1, 0
+            li t2, 0x80201000
+        loop:
+            lw t3, 0(t1)
+            lw t4, 0(t0)
+            sw t3, 0(t2)
+            sw t4, 4(t2)
+            j loop
+            """
+        )
+    )
+
+    compile_proc = subprocess.run(
+        [
+            "riscv64-unknown-elf-gcc",
+            "-nostdlib",
+            "-static",
+            "-march=rv64ima",
+            "-mabi=lp64",
+            "-Ttext=0x80200000",
+            "-o",
+            str(elf_path),
+            str(asm_path),
+        ],
+        cwd=MYCPU_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if compile_proc.returncode != 0:
+        raise AssertionError(compile_proc.stderr)
+
+    objcopy_proc = subprocess.run(
+        [
+            "riscv64-unknown-elf-objcopy",
+            "-O",
+            "binary",
+            str(elf_path),
+            str(bin_path),
+        ],
+        cwd=MYCPU_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if objcopy_proc.returncode != 0:
+        raise AssertionError(objcopy_proc.stderr)
+
+    return bin_path
 
 
 class RunDebugCliProbeTest(unittest.TestCase):
@@ -272,6 +337,89 @@ class RunDebugCliProbeTest(unittest.TestCase):
             proc.stdout,
         )
         self.assertIn("xv6 kernel is booting", proc.stdout)
+
+    def test_linux_proto_dummy_payload_probe_emits_functional_profile_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            dummy_image = build_linux_dummy_flat_image(temp_path)
+
+            build_proc = subprocess.run(
+                [
+                    "make",
+                    "build-workload",
+                    "WORKLOAD_NAME=linux_proto",
+                    f"LINUX_PROTO_EXTERNAL_DIR={temp_dir}",
+                    f"LINUX_PROTO_IMAGE={dummy_image}",
+                ],
+                cwd=MYCPU_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+
+            probe_proc = subprocess.run(
+                [
+                    "python3",
+                    "workloads/run_debug_cli_probe.py",
+                    "--target",
+                    "./mycpu",
+                    "--image",
+                    "workloads/linux_proto/linux_sbi_shim.bin",
+                    "--flat",
+                    "--addr",
+                    "0x80000000",
+                    "--payload",
+                    str(dummy_image),
+                    "0x80200000",
+                    "--payload",
+                    "workloads/linux_proto/mycpu_virt.dtb",
+                    "0x87f00000",
+                    "--payload",
+                    "workloads/linux_proto/rootfs.cpio",
+                    "0x84000000",
+                    "--set-reg",
+                    "a0",
+                    "0x0",
+                    "--set-reg",
+                    "a1",
+                    "0x87f00000",
+                    "--set-reg",
+                    "a2",
+                    "0x80200000",
+                    "--step-cycles",
+                    "64",
+                ],
+                cwd=MYCPU_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(probe_proc.returncode, 0, msg=probe_proc.stderr)
+        self.assertIn(
+            "load: image=workloads/linux_proto/linux_sbi_shim.bin format=flat addr=0x80000000 disk=none block_transport=default",
+            probe_proc.stdout,
+        )
+        self.assertIn(f"payloads: {dummy_image}@0x80200000", probe_proc.stdout)
+        self.assertIn("workloads/linux_proto/mycpu_virt.dtb@0x87f00000", probe_proc.stdout)
+        self.assertIn("workloads/linux_proto/rootfs.cpio@0x84000000", probe_proc.stdout)
+        self.assertIn("gpr-seeds: a0=0x0 a1=0x87f00000 a2=0x80200000", probe_proc.stdout)
+        self.assertIn(
+            "summary: cycle=64 instret=64 pc=0x80200024 privilege=S backend=functional",
+            probe_proc.stdout,
+        )
+        self.assertIn("profile: retirements=64 traps=0 memory=19", probe_proc.stdout)
+        self.assertIn(
+            "shadow-cache: line_size=64 capacity_lines=64 resident_lines=3 line_accesses=19 hits=16 misses=3 evictions=0 bypasses=0",
+            probe_proc.stdout,
+        )
+        self.assertIn(
+            "memory-top: label=ram kind=ram accesses=19 reads=10 writes=9 faults=0 bytes=76",
+            probe_proc.stdout,
+        )
 
     def test_make_run_workload_can_emit_flat_load_contract(self) -> None:
         proc = subprocess.run(

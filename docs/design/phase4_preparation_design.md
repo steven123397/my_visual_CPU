@@ -120,6 +120,10 @@
 - `P4-prep-2`
   - 第一刀 `C1` 已经落地为 `execution_profile` 下的地址级 memory observation / shadow cache
   - `ExecutionMemoryObservation` 会携带可选物理地址，`ExecutionProfile` 会聚合全局和 region 级 shadow cache 统计，debug JSON 与 `run_debug_cli_probe` 文本摘要只读展示这些结果
+  - 当前第一组稳定 baseline 已经收口为：
+    - pipeline `vector_cnn` 的 RAM shadow-cache 信号
+    - `xv6` 的 functional 5000-step observation baseline
+    - 不依赖外部 Linux `Image` 的 `linux_proto` dummy-payload functional observation baseline
   - 重点仍是收集 workload 证据，而不是立刻引入真实 cache 行为
 - `P4-prep-3`
   - 首个窄切片已经由 `NPU / TPU-like` AI accelerator Wave 1 落地，形成 `dma_transaction`、`Bus::dma_read()/dma_write()` 与设备侧 fail-closed DMA 语义
@@ -158,4 +162,4 @@
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `Phase 4` 当前准备性入口的统一设计来源。
-- 当前已完成的正式结果是 `P4-prep-1`、`P4-prep-2` 的 `C1 / memory observation / shadow cache` 第一刀，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract；后续是否继续更完整的 `P4-prep-2` workload 分析、更通用的 `P4-prep-3` 或完整 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
+- 当前已完成的正式结果是 `P4-prep-1`、`P4-prep-2` 的 `C1 / memory observation / shadow cache` 第一刀及其首轮 workload baseline 收口，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract；后续是否继续更完整的 `P4-prep-2` workload 分析、更通用的 `P4-prep-3` 或完整 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
