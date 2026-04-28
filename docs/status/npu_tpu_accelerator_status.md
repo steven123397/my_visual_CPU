@@ -23,7 +23,7 @@
 
 ## 目标 / 主题
 
-这份状态文档跟踪的不是“CPU 侧再补一些向量指令”，而是一条独立未来方向：把当前仓库继续推进到独立 `MMIO` AI accelerator 设备。它的目标是为后续 `CNN` 与 `GEMM / Transformer-like` 推理提供更贴近真实 `NPU / TPU` 的设备级结构边界，同时不污染当前 CPU reference path 与已激活的 `xv6 / Linux` 主线。
+这份状态文档跟踪的不是“CPU 侧再补一些向量指令”，而是一条已经排入主线后续 wave 的独立设备路线：把当前仓库继续推进到独立 `MMIO` AI accelerator 设备。它的目标是为后续 `CNN` 与 `GEMM / Transformer-like` 推理提供更贴近真实 `NPU / TPU` 的设备级结构边界，同时不污染当前 CPU reference path 与当前近端的 `xv6 / Linux` 主线推进。
 
 ## 当前状态
 

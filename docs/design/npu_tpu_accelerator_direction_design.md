@@ -32,11 +32,11 @@
 
 但这条线在设计上仍然应和“CPU 侧向量能力 + 教学式 workload 闭环”区分开。Wave 1 已经补齐真正 AI 加速器依赖的第一批独立设备边界：异步提交、descriptor / queue 合同、显式 `DMA`、片上 `scratchpad / tile buffer`、子图级执行器、host / guest 共用的设备 ABI，以及面向 `CNN` 与 `GEMM / Transformer-like` 推理的代表性算子与 dtype 合同。后续设计重点不再是证明入口能否接通，而是继续细化 timing、overlap、queue overhead 与更真实 workload 证据。
 
-如果继续把这件事理解为“沿 `V-lite` 再补一些向量指令”，很容易把 CPU ISA 扩展、vector-aware `pipeline`、DMA-ready memory contract 和 AI 设备软件栈混成一件事。对当前仓库来说，更健康的做法是把这条线明确建模为一条新的未来方向：独立挂在 `Bus` 上的 `MMIO` AI 加速器设备。CPU 继续负责程序控制、buffer 生命周期和 doorbell / interrupt，而 tensor 执行、数据搬运和片上存储由设备内部统一负责。
+如果继续把这件事理解为“沿 `V-lite` 再补一些向量指令”，很容易把 CPU ISA 扩展、vector-aware `pipeline`、DMA-ready memory contract 和 AI 设备软件栈混成一件事。对当前仓库来说，更健康的做法是把这条线明确建模为主线后续 wave 中的一条独立设备路线：独立挂在 `Bus` 上的 `MMIO` AI 加速器设备。CPU 继续负责程序控制、buffer 生命周期和 doorbell / interrupt，而 tensor 执行、数据搬运和片上存储由设备内部统一负责。
 
 ## 目标
 
-- 把“独立 `MMIO` AI 加速器设备”定义为与现有 `V-lite` 并行的正式未来方向，而不是继续膨胀 CPU 向量语义。
+- 把“独立 `MMIO` AI 加速器设备”定义为与现有 `V-lite` 并行、且已纳入主线后续 wave 的正式路线，而不是继续膨胀 CPU 向量语义。
 - 定义 `v1` 的正式边界：推理优先、静态 shape、静态子图、`scratchpad + DMA`、host / guest 双入口、统一 descriptor / queue / completion 合同。
 - 统一收口 `v1` 的最小算子族、dtype family、执行流和故障语义。
 - 明确 Wave 1 已补齐的项目基座，以及后续仍需深化的 `timed-simple`、overlap、buffer ownership 与 profile 观测面。
@@ -51,7 +51,7 @@
 - 不在 Wave 2 中承诺完整动态 shape runtime；Wave 2 只允许先落 bounded dynamic shape 的最小合同和代表性闭环。
 - 不在 Wave 2 中实现训练、反向传播、optimizer 或梯度同步；训练前向 + 反向是 `v2+ / v3` 方向，必须在后续计划中单独拆分。
 - 不在 `v1` 中承诺完整深度学习编译器、完整 kernel library 或 Linux 驱动完成态。
-- 不把本文档理解成当前主线的即时实施指令；它只是未来候选方向的正式设计来源。
+- 不把本文档理解成当前近端波次的即时实施指令；它描述的是已经纳入主线后续 wave 的正式设计来源。
 
 ## 约束与边界
 
@@ -417,5 +417,5 @@ Wave 1 已经把本设计从纯方案推进到可执行 foundation。当前有�
 ## 当前有效性说明
 
 - 当前有效：本文档作为独立 `MMIO NPU / TPU-like` AI 加速器方向的正式设计来源。
-- 当前这条线仍然只是未来候选方向，不是当前已激活主线；当前优先级判断以 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 与 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前这条线已经纳入主线后续 wave，但不是当前近端 active wave；当前优先级判断以 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 与 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 - 当前对应的专项状态见 [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)，Wave 1 完成态已归档到 [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)；后续执行进度应回写到状态文档和新的活跃计划，而不是继续堆在本文档里。

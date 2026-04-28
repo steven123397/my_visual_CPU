@@ -23,6 +23,13 @@
 
 ### 2026-04-27
 
+#### mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan
+
+- 原文件：`mainline_roadmap_rewrite_and_linux_checkpoint_closure_plan.md`
+- 完成内容：把 [future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md) 从“未来候选路线菜单”重写成主线长期排期设计，并把当前 active wave 明确切到 Wave 3；同时把 Linux block-rootfs fourth-stage runtime baseline 再往前冻结一刀，新增 `stage=unlinkat-open-fd-survives`，把最小 open-fd lifetime 合同并入既有 `symlink/readlink/hardlink/link metadata` checkpoint 线。
+- 实现过程摘要：这一轮继续沿“先补 strings/runtime 断言、再补最小实现、最后统一回写 status / AGENTS / index / design 并删除活跃 plan”的路径推进；repo-generated `rootfs` staging 也改成 `install -m`，避免 runtime guardrail 因 staging 目录已有目标文件而假失败。验证覆盖 `python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`、`MYCPU_RUN_LINUX_PROTO_RUNTIME=1 MYCPU_LINUX_PROTO_RUNTIME_IMAGE=/tmp/mycpu-linux-build-riscv64-linux-gnu/arch/riscv/boot/Image python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md)
+
 #### phase4-prep2-memory-observation-shadow-cache-plan
 
 - 原文件：`phase4_prep2_memory_observation_shadow_cache_plan.md`

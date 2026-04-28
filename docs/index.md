@@ -33,28 +33,30 @@
 14. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     `V-lite` 当前统一设计边界：最小 ISA、workload、vector-aware `pipeline` 与 `Phase 4` 衔接口径。
 15. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
-    独立 `MMIO NPU / TPU-like` AI 加速器方向：静态子图、`scratchpad + DMA`、host / guest 共用设备 ABI 的未来设计边界。
+    独立 `MMIO NPU / TPU-like` AI 加速器方向：静态子图、`scratchpad + DMA`、host / guest 共用设备 ABI 的主线后续 wave 设计边界。
 16. [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
     `Phase 4` 当前准备性入口设计，以及 `P4-prep-1` 的正式边界。
 17. [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
-    未来扩展路线图：ISA 补全、workload 升级、微架构深化、系统级跃迁的统一规划与依赖图。
-18. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
+    主线长期路线图与排期：ISA 补全、workload 升级、微架构深化、系统级跃迁的统一波次安排与依赖图。
+18. [plan/history_plan.md#mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan](plan/history_plan.md#mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan)
+    主线路线图重写与 Linux 当前 checkpoint 收口归档：Wave 2 完成态、`unlinkat-open-fd-survives` runtime checkpoint 与文档统一口径。
+19. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 的专项状态：当前冻结边界、风险和下一步。
-19. [plan/history_plan.md#npu-tpu-accelerator-wave3-plan](plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
+20. [plan/history_plan.md#npu-tpu-accelerator-wave3-plan](plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
     `NPU / TPU-like` AI accelerator Wave 3 的完成归档：runtime-shape fail-closed matrix、manifest 负向矩阵、itemized profile 文本出口与 lifecycle 收口。
-20. [plan/history_plan.md#npu-tpu-accelerator-wave2-plan](plan/history_plan.md#npu-tpu-accelerator-wave2-plan)
+21. [plan/history_plan.md#npu-tpu-accelerator-wave2-plan](plan/history_plan.md#npu-tpu-accelerator-wave2-plan)
     `NPU / TPU-like` AI accelerator Wave 2 的完成归档：profile attribution、tiny model、bounded dynamic shape 合同与 dynamic `GEMM / FC-like` 第一刀。
-21. [plan/history_plan.md#npu-tpu-accelerator-wave1-plan](plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
+22. [plan/history_plan.md#npu-tpu-accelerator-wave1-plan](plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
     `NPU / TPU-like` AI accelerator Wave 1 的完成归档：`DMA-ready` 基座、图包、控制面、数据面和 host/guest 接入结果。
-22. [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
+23. [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
     当前已激活的 `xv6 / Linux / JIT` 主线切换设计。
-23. [plan/history_plan.md#xv6-linux-jit-wave1-plan](plan/history_plan.md#xv6-linux-jit-wave1-plan)
+24. [plan/history_plan.md#xv6-linux-jit-wave1-plan](plan/history_plan.md#xv6-linux-jit-wave1-plan)
     当前 `xv6 / Linux / JIT` 主线切换的 Wave 1 完成归档。
-24. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
+25. [plan/history_plan.md#phase4-prep1-bus-memory-region-plan](plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
     `P4-prep-1` 的完成归档与结果摘要。
-25. [plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
+26. [plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
     `C1 / P4-prep-2 memory observation / shadow cache` 的完成归档与结果摘要。
-26. [plan/history_plan.md](plan/history_plan.md)
+27. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -99,7 +101,7 @@
 - `Spike 外部差分验证`
   - [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
   - [plan/history_plan.md#spike-external-differential-validation-plan](plan/history_plan.md#spike-external-differential-validation-plan)
-- `未来扩展路线图`
+- `主线长期路线图`
   - [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
 - `xv6 / Linux / JIT foundation`
   - [status/xv6_linux_jit_status.md](status/xv6_linux_jit_status.md)

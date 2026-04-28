@@ -4,7 +4,7 @@
 
 本文档用于说明：
 
-- 为什么当前要从未来候选路线里正式激活 `xv6-riscv` 这条切换线
+- 为什么当前要把 `xv6-riscv` 这条标准 OS bring-up 路径作为主线近端执行波次
 - 为什么这次推进不能再按“一次性最小跑通”来组织
 - 如何把 `xv6`、后续 `Linux`、以及更远的 `JIT / 动态二进制翻译` 放进同一条可持续扩展的工程路径里
 
@@ -26,18 +26,18 @@
 
 ## 背景与问题
 
-`future_expansion_roadmap_design.md` 已经把“默认延续线 / 候选切换线 / 远期激进线”区分清楚。此前仓库的默认推进顺序仍是围绕 `V4` hardening 和 `P4-prep-2` 可行性判断继续收口，但当前已经明确决定：要把主线切到“标准 OS bring-up + 后续 Linux / JIT 预留”的更激进路径上。
+`future_expansion_roadmap_design.md` 现在已经改成主线长期排期设计。此前仓库的默认推进顺序仍是围绕 `V4` hardening 和 `P4-prep-2` 可行性判断继续收口，但当前已经明确决定：要把“标准 OS bring-up + 后续 Linux / JIT 预留”作为主线近端执行波次来推进。
 
 这意味着当前不再只是“评估要不要做 `xv6-riscv`”，而是要把 `xv6-riscv` 作为近端牵引目标，并让当前波次的结构决策直接服务后续 `Linux` 与 `JIT / 动态二进制翻译`。因此，本轮不能继续接受“一次性最小跑通、以后再推倒重来”的短寿命实现；一旦某个抽象是迟早都要引入的，就应该优先选择可被 `xv6 -> Linux -> JIT / DBT` 复用的形态。
 
-与此同时，当前默认延续线已经落地的 guardrail 不能丢。`kernel_alpha`、`debug/frontend`、`pipeline`、`V4`、`P4-prep-1` 和既有回归矩阵仍然是现阶段最关键的稳定性护栏。切主线不等于放弃它们，而是要让它们成为这条新主线的 correctness 基线、观测基础和回归支架。
+与此同时，当前并行 guardrail workstream 已经落地的护栏不能丢。`kernel_alpha`、`debug/frontend`、`pipeline`、`V4`、`P4-prep-1` 和既有回归矩阵仍然是现阶段最关键的稳定性护栏。推进近端主线波次不等于放弃它们，而是要让它们成为这条主线的 correctness 基线、观测基础和回归支架。
 
 ## 目标
 
 - 把 `RV64A + CSR / privilege 补全 + virtio 平台 + xv6-riscv bring-up` 确立为当前主线的近端执行路径。
 - 在实现上避免只服务单一 `xv6` 场景的短寿命 hack，优先采用后续 `Linux` 与 `JIT / DBT` 可以继续复用的结构边界。
 - 保持 `reference-first` 原则：共享 `InstructionSemantics + functional backend` 仍是 ISA 真值来源，`pipeline` 与未来 `JIT` 都复用同一份语义事实来源。
-- 保留默认延续线的 guardrail：`V4`、`P4-prep-1`、现有 debug/guest/pipeline 回归不被新主线反向污染。
+- 保留并行 guardrail workstream：`V4`、`P4-prep-1`、现有 debug/guest/pipeline 回归不被新主线反向污染。
 - 用低交叉依赖的 4 条 workstream 支撑 4 个独立 worktree / 对话并行推进。
 
 ## 非目标
@@ -68,7 +68,7 @@
 | A：ISA / privilege foundation | 落地 `RV64A` 与按需 CSR / privilege contract 补全 | `decode / instruction_semantics / cpu / trap / csr` | 为 `xv6`、`Linux`、未来 `JIT` 提供稳定语义底座 |
 | B：platform / virtio foundation | 引入可扩展的 `virtio-mmio + virtqueue + virtio-blk` 平台层 | `devices / mem / platform` | 为 `xv6` 现在、`Linux` 后续，以及更多 virtio 设备留统一入口 |
 | C：external guest workload harness | 把 `xv6-riscv` 接入成外部 workload，并搭出可复用的 board / boot / smoke harness | `external workload tree + Makefile + machine/run glue` | 为未来 `Linux` 保留一致的 workload 接入方式 |
-| D：observation / profile foundation | 继续保留默认延续线 guardrail，并补上面向 `Linux / JIT` 的观测与 profiling 合同 | `debug / exec / tests` | 为后续 hot-path 识别、cache 观测、JIT 候选区间定位提供基础 |
+| D：observation / profile foundation | 继续保留并行 guardrail，并补上面向 `Linux / JIT` 的观测与 profiling 合同 | `debug / exec / tests` | 为后续 hot-path 识别、cache 观测、JIT 候选区间定位提供基础 |
 
 这 4 条线的顺序关系是：
 
@@ -133,7 +133,7 @@
 - Workstream A：新增 `RV64A` asm / host smoke，必要时补更窄的 Spike differential 子集；守住 `make test` 和相关 CSR / trap / privilege 回归。
 - Workstream B：新增 `virtio-mmio` / `virtqueue` / `virtio-blk` unit / host smoke；守住 `bus / device / platform` 相关现有门禁。
 - Workstream C：新增 `xv6` boot smoke / harness smoke；在接通前先形成明确 gap audit，避免盲目调试。
-- Workstream D：扩展 `debug_cli_smoke`、代表性 workload smoke 和 profile 观测回归；继续守住 `V4`、`interactive_os`、`kernel_alpha` 等默认延续线护栏。
+- Workstream D：扩展 `debug_cli_smoke`、代表性 workload smoke 和 profile 观测回归；继续守住 `V4`、`interactive_os`、`kernel_alpha` 等并行 guardrail。
 - 主线整体验证仍以 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 和 `cd frontend && node --test` 为底线，再按 workstream 触达路径补窄门禁。
 
 ## 风险与取舍
@@ -141,7 +141,7 @@
 - `xv6` 会暴露大量 CSR / trap / device 细节缺口，短期内工作量不可预测；因此必须把 A/B/C 分开，而不是让 bring-up 对话顺手乱修 simulator 全域。
 - “不做短寿命最小实现”会提升本轮抽象成本；因此必须严格限定在那些确定会被 `xv6 -> Linux -> JIT` 复用的公共层，不为远期目标提前造空框架。
 - `virtio`、外部 workload harness、profile 合同都会引入新边界；如果 ownership 不清晰，多 agent 会互相踩文件。必须通过 worktree / branch 和文件 ownership 管理交叉风险。
-- 默认延续线 guardrail 一旦失守，主线切换会把 reference path 稳定性一起拖下水；因此 D 线不是“可有可无的锦上添花”，而是这轮激进推进的保护层。
+- 并行 guardrail 一旦失守，主线推进会把 reference path 稳定性一起拖下水；因此 D 线不是“可有可无的锦上添花”，而是这轮激进推进的保护层。
 
 ## 当前有效性说明
 
