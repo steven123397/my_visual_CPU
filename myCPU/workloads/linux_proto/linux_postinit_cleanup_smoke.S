@@ -1,10 +1,17 @@
+#define SYS_CLONE3 435
+#define SYS_DUP 23
+#define SYS_EXECVE 221
+#define SYS_WAIT4 260
+#define SYS_EXIT_GROUP 94
 #define SYS_UNLINKAT 35
 #define SYS_SYMLINKAT 36
 #define SYS_LINKAT 37
+#define SYS_FTRUNCATE 46
 #define SYS_CHDIR 49
 #define SYS_OPENAT 56
 #define SYS_CLOSE 57
 #define SYS_GETDENTS64 61
+#define SYS_LSEEK 62
 #define SYS_READ 63
 #define SYS_WRITE 64
 #define SYS_READLINKAT 78
@@ -14,12 +21,15 @@
 #define SYS_NANOSLEEP 101
 
 #define ENOENT 2
+#define SIGCHLD 17
 
 #define AT_FDCWD -100
 #define AT_REMOVEDIR 512
 #define AT_SYMLINK_NOFOLLOW 256
 #define O_RDONLY 0
 #define O_RDWR 2
+#define SEEK_SET 0
+#define SEEK_END 2
 
 #define INHERITED_CONSOLE_FD 3
 
@@ -34,6 +44,31 @@ post_init_data_name:
 post_init_data_expected:
     .asciz "post-init-data-ok\n"
 post_init_data_expected_end:
+post_init_data_anonymous_expected:
+    .asciz "post-init-anon-ok\n"
+post_init_data_anonymous_expected_end:
+post_init_data_dup_expected:
+    .asciz "post-init-dupw-ok\n"
+post_init_data_dup_expected_end:
+post_init_data_dup_truncate_expected:
+    .asciz "post-trunc-ok\n"
+post_init_data_dup_truncate_expected_end:
+post_init_data_dup_append_tail:
+    .asciz "append-ok\n"
+post_init_data_dup_append_tail_end:
+post_init_data_dup_append_expected:
+    .asciz "post-trunc-ok\nappend-ok\n"
+post_init_data_dup_append_expected_end:
+post_init_data_dup_fork_expected:
+    .asciz "post-fork-dup-ok\nsyncok\n"
+post_init_data_dup_fork_expected_end:
+post_init_data_execve_expected:
+    .asciz "post-exec-dup-ok\nsyncok\n"
+post_init_data_execve_expected_end:
+execve_open_fd_self_path:
+    .asciz "/post-init-cleanup-smoke"
+execve_open_fd_mode_arg:
+    .asciz "--exec-open-fd"
 post_init_data_link_path:
     .asciz "/post-init-data-link"
 post_init_data_link_name:
@@ -122,6 +157,60 @@ stage_unlinkat_open_fd_nlink_zero_msg_end:
 stage_unlinkat_open_fd_survives_msg:
     .asciz "mycpu linux userland: stage=unlinkat-open-fd-survives\n"
 stage_unlinkat_open_fd_survives_msg_end:
+stage_unlinkat_open_fd_anon_write_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-anon-write-ok\n"
+stage_unlinkat_open_fd_anon_write_ok_msg_end:
+stage_unlinkat_open_fd_anon_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-anon-readback-ok\n"
+stage_unlinkat_open_fd_anon_readback_ok_msg_end:
+stage_unlinkat_open_fd_dup_survives_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-survives\n"
+stage_unlinkat_open_fd_dup_survives_msg_end:
+stage_unlinkat_open_fd_dup_write_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-write-ok\n"
+stage_unlinkat_open_fd_dup_write_ok_msg_end:
+stage_unlinkat_open_fd_dup_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-readback-ok\n"
+stage_unlinkat_open_fd_dup_readback_ok_msg_end:
+stage_unlinkat_open_fd_dup_truncate_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-truncate-ok\n"
+stage_unlinkat_open_fd_dup_truncate_ok_msg_end:
+stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-truncate-roundtrip-ok\n"
+stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg_end:
+stage_unlinkat_open_fd_dup_append_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-append-ok\n"
+stage_unlinkat_open_fd_dup_append_ok_msg_end:
+stage_unlinkat_open_fd_dup_append_truncate_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-append-truncate-ok\n"
+stage_unlinkat_open_fd_dup_append_truncate_ok_msg_end:
+stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-grow-zero-fill-ok\n"
+stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg_end:
+stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-grow-tail-write-ok\n"
+stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg_end:
+stage_unlinkat_open_fd_dup_fork_child_write_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-fork-child-write-ok\n"
+stage_unlinkat_open_fd_dup_fork_child_write_ok_msg_end:
+stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-dup-fork-parent-readback-ok\n"
+stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg_end:
+stage_unlinkat_open_fd_procfd_reopen_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-procfd-reopen-ok\n"
+stage_unlinkat_open_fd_procfd_reopen_ok_msg_end:
+stage_unlinkat_open_fd_procfd_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-procfd-readback-ok\n"
+stage_unlinkat_open_fd_procfd_readback_ok_msg_end:
+stage_unlinkat_open_fd_execve_child_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-execve-child-readback-ok\n"
+stage_unlinkat_open_fd_execve_child_readback_ok_msg_end:
+stage_unlinkat_open_fd_execve_child_write_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-execve-child-write-ok\n"
+stage_unlinkat_open_fd_execve_child_write_ok_msg_end:
+stage_unlinkat_open_fd_execve_parent_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-execve-parent-readback-ok\n"
+stage_unlinkat_open_fd_execve_parent_readback_ok_msg_end:
 stage_fourth_stage_reached_msg:
     .asciz "mycpu linux userland: stage=fourth-stage-reached\n"
 stage_fourth_stage_reached_msg_end:
@@ -194,6 +283,54 @@ fourth_stage_open_fd_fstat_smoke_fail_msg_end:
 fourth_stage_open_fd_survival_smoke_fail_msg:
     .asciz "mycpu linux userland: fourth-stage open fd survival smoke failed\n"
 fourth_stage_open_fd_survival_smoke_fail_msg_end:
+fourth_stage_open_fd_anon_append_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd anon overwrite failed\n"
+fourth_stage_open_fd_anon_append_fail_msg_end:
+fourth_stage_open_fd_anon_stat_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd anon stat smoke failed\n"
+fourth_stage_open_fd_anon_stat_fail_msg_end:
+fourth_stage_open_fd_anon_write_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd anon write smoke failed\n"
+fourth_stage_open_fd_anon_write_smoke_fail_msg_end:
+fourth_stage_open_fd_anon_readback_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd anon readback smoke failed\n"
+fourth_stage_open_fd_anon_readback_smoke_fail_msg_end:
+fourth_stage_open_fd_dup_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup smoke failed\n"
+fourth_stage_open_fd_dup_smoke_fail_msg_end:
+fourth_stage_open_fd_dup_write_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup write smoke failed\n"
+fourth_stage_open_fd_dup_write_smoke_fail_msg_end:
+fourth_stage_open_fd_dup_readback_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup readback smoke failed\n"
+fourth_stage_open_fd_dup_readback_smoke_fail_msg_end:
+fourth_stage_open_fd_dup_truncate_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup truncate smoke failed\n"
+fourth_stage_open_fd_dup_truncate_smoke_fail_msg_end:
+fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup truncate roundtrip failed\n"
+fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg_end:
+fourth_stage_open_fd_dup_append_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup append failed\n"
+fourth_stage_open_fd_dup_append_fail_msg_end:
+fourth_stage_open_fd_dup_append_truncate_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup append truncate failed\n"
+fourth_stage_open_fd_dup_append_truncate_fail_msg_end:
+fourth_stage_open_fd_dup_grow_zero_fill_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup grow zero-fill failed\n"
+fourth_stage_open_fd_dup_grow_zero_fill_fail_msg_end:
+fourth_stage_open_fd_dup_grow_tail_write_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup grow tail write failed\n"
+fourth_stage_open_fd_dup_grow_tail_write_fail_msg_end:
+fourth_stage_open_fd_dup_fork_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd dup fork smoke failed\n"
+fourth_stage_open_fd_dup_fork_smoke_fail_msg_end:
+fourth_stage_open_fd_procfd_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd procfd smoke failed\n"
+fourth_stage_open_fd_procfd_smoke_fail_msg_end:
+fourth_stage_open_fd_execve_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd execve smoke failed\n"
+fourth_stage_open_fd_execve_smoke_fail_msg_end:
 fourth_stage_console_fail_msg:
     .asciz "mycpu linux userland: fourth-stage console open failed\n"
 fourth_stage_console_fail_msg_end:
@@ -208,6 +345,20 @@ fourth_stage_write_short_msg_end:
 .set post_init_data_path_len, post_init_data_path_len - 1
 .set post_init_data_expected_len, post_init_data_expected_end - post_init_data_expected
 .set post_init_data_expected_len, post_init_data_expected_len - 1
+.set post_init_data_anonymous_expected_len, post_init_data_anonymous_expected_end - post_init_data_anonymous_expected
+.set post_init_data_anonymous_expected_len, post_init_data_anonymous_expected_len - 1
+.set post_init_data_dup_expected_len, post_init_data_dup_expected_end - post_init_data_dup_expected
+.set post_init_data_dup_expected_len, post_init_data_dup_expected_len - 1
+.set post_init_data_dup_truncate_expected_len, post_init_data_dup_truncate_expected_end - post_init_data_dup_truncate_expected
+.set post_init_data_dup_truncate_expected_len, post_init_data_dup_truncate_expected_len - 1
+.set post_init_data_dup_append_tail_len, post_init_data_dup_append_tail_end - post_init_data_dup_append_tail
+.set post_init_data_dup_append_tail_len, post_init_data_dup_append_tail_len - 1
+.set post_init_data_dup_append_expected_len, post_init_data_dup_append_expected_end - post_init_data_dup_append_expected
+.set post_init_data_dup_append_expected_len, post_init_data_dup_append_expected_len - 1
+.set post_init_data_dup_fork_expected_len, post_init_data_dup_fork_expected_end - post_init_data_dup_fork_expected
+.set post_init_data_dup_fork_expected_len, post_init_data_dup_fork_expected_len - 1
+.set post_init_data_execve_expected_len, post_init_data_execve_expected_end - post_init_data_execve_expected
+.set post_init_data_execve_expected_len, post_init_data_execve_expected_len - 1
 .set fourth_stage_stat_buf_len, 128
 .set fourth_stage_stat_st_ino_offset, 8
 .set fourth_stage_stat_st_mode_offset, 16
@@ -264,6 +415,42 @@ fourth_stage_write_short_msg_end:
 .set stage_unlinkat_open_fd_nlink_zero_msg_len, stage_unlinkat_open_fd_nlink_zero_msg_len - 1
 .set stage_unlinkat_open_fd_survives_msg_len, stage_unlinkat_open_fd_survives_msg_end - stage_unlinkat_open_fd_survives_msg
 .set stage_unlinkat_open_fd_survives_msg_len, stage_unlinkat_open_fd_survives_msg_len - 1
+.set stage_unlinkat_open_fd_anon_write_ok_msg_len, stage_unlinkat_open_fd_anon_write_ok_msg_end - stage_unlinkat_open_fd_anon_write_ok_msg
+.set stage_unlinkat_open_fd_anon_write_ok_msg_len, stage_unlinkat_open_fd_anon_write_ok_msg_len - 1
+.set stage_unlinkat_open_fd_anon_readback_ok_msg_len, stage_unlinkat_open_fd_anon_readback_ok_msg_end - stage_unlinkat_open_fd_anon_readback_ok_msg
+.set stage_unlinkat_open_fd_anon_readback_ok_msg_len, stage_unlinkat_open_fd_anon_readback_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_survives_msg_len, stage_unlinkat_open_fd_dup_survives_msg_end - stage_unlinkat_open_fd_dup_survives_msg
+.set stage_unlinkat_open_fd_dup_survives_msg_len, stage_unlinkat_open_fd_dup_survives_msg_len - 1
+.set stage_unlinkat_open_fd_dup_write_ok_msg_len, stage_unlinkat_open_fd_dup_write_ok_msg_end - stage_unlinkat_open_fd_dup_write_ok_msg
+.set stage_unlinkat_open_fd_dup_write_ok_msg_len, stage_unlinkat_open_fd_dup_write_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_readback_ok_msg_len, stage_unlinkat_open_fd_dup_readback_ok_msg_end - stage_unlinkat_open_fd_dup_readback_ok_msg
+.set stage_unlinkat_open_fd_dup_readback_ok_msg_len, stage_unlinkat_open_fd_dup_readback_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_truncate_ok_msg_len, stage_unlinkat_open_fd_dup_truncate_ok_msg_end - stage_unlinkat_open_fd_dup_truncate_ok_msg
+.set stage_unlinkat_open_fd_dup_truncate_ok_msg_len, stage_unlinkat_open_fd_dup_truncate_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg_len, stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg_end - stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg
+.set stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg_len, stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_append_ok_msg_len, stage_unlinkat_open_fd_dup_append_ok_msg_end - stage_unlinkat_open_fd_dup_append_ok_msg
+.set stage_unlinkat_open_fd_dup_append_ok_msg_len, stage_unlinkat_open_fd_dup_append_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_append_truncate_ok_msg_len, stage_unlinkat_open_fd_dup_append_truncate_ok_msg_end - stage_unlinkat_open_fd_dup_append_truncate_ok_msg
+.set stage_unlinkat_open_fd_dup_append_truncate_ok_msg_len, stage_unlinkat_open_fd_dup_append_truncate_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg_len, stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg_end - stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg
+.set stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg_len, stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg_len, stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg_end - stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg
+.set stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg_len, stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_fork_child_write_ok_msg_len, stage_unlinkat_open_fd_dup_fork_child_write_ok_msg_end - stage_unlinkat_open_fd_dup_fork_child_write_ok_msg
+.set stage_unlinkat_open_fd_dup_fork_child_write_ok_msg_len, stage_unlinkat_open_fd_dup_fork_child_write_ok_msg_len - 1
+.set stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg_len, stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg_end - stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg
+.set stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg_len, stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg_len - 1
+.set stage_unlinkat_open_fd_procfd_reopen_ok_msg_len, stage_unlinkat_open_fd_procfd_reopen_ok_msg_end - stage_unlinkat_open_fd_procfd_reopen_ok_msg
+.set stage_unlinkat_open_fd_procfd_reopen_ok_msg_len, stage_unlinkat_open_fd_procfd_reopen_ok_msg_len - 1
+.set stage_unlinkat_open_fd_procfd_readback_ok_msg_len, stage_unlinkat_open_fd_procfd_readback_ok_msg_end - stage_unlinkat_open_fd_procfd_readback_ok_msg
+.set stage_unlinkat_open_fd_procfd_readback_ok_msg_len, stage_unlinkat_open_fd_procfd_readback_ok_msg_len - 1
+.set stage_unlinkat_open_fd_execve_child_readback_ok_msg_len, stage_unlinkat_open_fd_execve_child_readback_ok_msg_end - stage_unlinkat_open_fd_execve_child_readback_ok_msg
+.set stage_unlinkat_open_fd_execve_child_readback_ok_msg_len, stage_unlinkat_open_fd_execve_child_readback_ok_msg_len - 1
+.set stage_unlinkat_open_fd_execve_child_write_ok_msg_len, stage_unlinkat_open_fd_execve_child_write_ok_msg_end - stage_unlinkat_open_fd_execve_child_write_ok_msg
+.set stage_unlinkat_open_fd_execve_child_write_ok_msg_len, stage_unlinkat_open_fd_execve_child_write_ok_msg_len - 1
+.set stage_unlinkat_open_fd_execve_parent_readback_ok_msg_len, stage_unlinkat_open_fd_execve_parent_readback_ok_msg_end - stage_unlinkat_open_fd_execve_parent_readback_ok_msg
+.set stage_unlinkat_open_fd_execve_parent_readback_ok_msg_len, stage_unlinkat_open_fd_execve_parent_readback_ok_msg_len - 1
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_end - stage_fourth_stage_reached_msg
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_len - 1
 .set post_init_reached_msg_len, post_init_reached_msg_end - post_init_reached_msg
@@ -312,33 +499,125 @@ fourth_stage_write_short_msg_end:
 .set fourth_stage_open_fd_fstat_smoke_fail_msg_len, fourth_stage_open_fd_fstat_smoke_fail_msg_len - 1
 .set fourth_stage_open_fd_survival_smoke_fail_msg_len, fourth_stage_open_fd_survival_smoke_fail_msg_end - fourth_stage_open_fd_survival_smoke_fail_msg
 .set fourth_stage_open_fd_survival_smoke_fail_msg_len, fourth_stage_open_fd_survival_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_anon_append_fail_msg_len, fourth_stage_open_fd_anon_append_fail_msg_end - fourth_stage_open_fd_anon_append_fail_msg
+.set fourth_stage_open_fd_anon_append_fail_msg_len, fourth_stage_open_fd_anon_append_fail_msg_len - 1
+.set fourth_stage_open_fd_anon_stat_fail_msg_len, fourth_stage_open_fd_anon_stat_fail_msg_end - fourth_stage_open_fd_anon_stat_fail_msg
+.set fourth_stage_open_fd_anon_stat_fail_msg_len, fourth_stage_open_fd_anon_stat_fail_msg_len - 1
+.set fourth_stage_open_fd_anon_write_smoke_fail_msg_len, fourth_stage_open_fd_anon_write_smoke_fail_msg_end - fourth_stage_open_fd_anon_write_smoke_fail_msg
+.set fourth_stage_open_fd_anon_write_smoke_fail_msg_len, fourth_stage_open_fd_anon_write_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_anon_readback_smoke_fail_msg_len, fourth_stage_open_fd_anon_readback_smoke_fail_msg_end - fourth_stage_open_fd_anon_readback_smoke_fail_msg
+.set fourth_stage_open_fd_anon_readback_smoke_fail_msg_len, fourth_stage_open_fd_anon_readback_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_smoke_fail_msg_len, fourth_stage_open_fd_dup_smoke_fail_msg_end - fourth_stage_open_fd_dup_smoke_fail_msg
+.set fourth_stage_open_fd_dup_smoke_fail_msg_len, fourth_stage_open_fd_dup_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_write_smoke_fail_msg_len, fourth_stage_open_fd_dup_write_smoke_fail_msg_end - fourth_stage_open_fd_dup_write_smoke_fail_msg
+.set fourth_stage_open_fd_dup_write_smoke_fail_msg_len, fourth_stage_open_fd_dup_write_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_readback_smoke_fail_msg_len, fourth_stage_open_fd_dup_readback_smoke_fail_msg_end - fourth_stage_open_fd_dup_readback_smoke_fail_msg
+.set fourth_stage_open_fd_dup_readback_smoke_fail_msg_len, fourth_stage_open_fd_dup_readback_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_truncate_smoke_fail_msg_len, fourth_stage_open_fd_dup_truncate_smoke_fail_msg_end - fourth_stage_open_fd_dup_truncate_smoke_fail_msg
+.set fourth_stage_open_fd_dup_truncate_smoke_fail_msg_len, fourth_stage_open_fd_dup_truncate_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg_len, fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg_end - fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg
+.set fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg_len, fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_append_fail_msg_len, fourth_stage_open_fd_dup_append_fail_msg_end - fourth_stage_open_fd_dup_append_fail_msg
+.set fourth_stage_open_fd_dup_append_fail_msg_len, fourth_stage_open_fd_dup_append_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_append_truncate_fail_msg_len, fourth_stage_open_fd_dup_append_truncate_fail_msg_end - fourth_stage_open_fd_dup_append_truncate_fail_msg
+.set fourth_stage_open_fd_dup_append_truncate_fail_msg_len, fourth_stage_open_fd_dup_append_truncate_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_grow_zero_fill_fail_msg_len, fourth_stage_open_fd_dup_grow_zero_fill_fail_msg_end - fourth_stage_open_fd_dup_grow_zero_fill_fail_msg
+.set fourth_stage_open_fd_dup_grow_zero_fill_fail_msg_len, fourth_stage_open_fd_dup_grow_zero_fill_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_grow_tail_write_fail_msg_len, fourth_stage_open_fd_dup_grow_tail_write_fail_msg_end - fourth_stage_open_fd_dup_grow_tail_write_fail_msg
+.set fourth_stage_open_fd_dup_grow_tail_write_fail_msg_len, fourth_stage_open_fd_dup_grow_tail_write_fail_msg_len - 1
+.set fourth_stage_open_fd_dup_fork_smoke_fail_msg_len, fourth_stage_open_fd_dup_fork_smoke_fail_msg_end - fourth_stage_open_fd_dup_fork_smoke_fail_msg
+.set fourth_stage_open_fd_dup_fork_smoke_fail_msg_len, fourth_stage_open_fd_dup_fork_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_procfd_smoke_fail_msg_len, fourth_stage_open_fd_procfd_smoke_fail_msg_end - fourth_stage_open_fd_procfd_smoke_fail_msg
+.set fourth_stage_open_fd_procfd_smoke_fail_msg_len, fourth_stage_open_fd_procfd_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_execve_smoke_fail_msg_len, fourth_stage_open_fd_execve_smoke_fail_msg_end - fourth_stage_open_fd_execve_smoke_fail_msg
+.set fourth_stage_open_fd_execve_smoke_fail_msg_len, fourth_stage_open_fd_execve_smoke_fail_msg_len - 1
 .set fourth_stage_console_fail_msg_len, fourth_stage_console_fail_msg_end - fourth_stage_console_fail_msg
 .set fourth_stage_console_fail_msg_len, fourth_stage_console_fail_msg_len - 1
 .set fourth_stage_write_fail_msg_len, fourth_stage_write_fail_msg_end - fourth_stage_write_fail_msg
 .set fourth_stage_write_fail_msg_len, fourth_stage_write_fail_msg_len - 1
 .set fourth_stage_write_short_msg_len, fourth_stage_write_short_msg_end - fourth_stage_write_short_msg
 .set fourth_stage_write_short_msg_len, fourth_stage_write_short_msg_len - 1
+.set clone3_args_size, 88
 .set fourth_stage_dirent_buf_len, 1024
+.set fourth_stage_post_init_data_buf_len, post_init_data_dup_append_expected_len
 
+clone3_args:
+    .dword 0
+    .dword 0
+    .dword 0
+    .dword 0
+    .dword SIGCHLD
+    .dword 0
+    .dword 0
+    .dword 0
+    .dword 0
+    .dword 0
+    .dword 0
+    .balign 8
 sleep_spec:
     .dword 1
     .dword 0
+
+    .section .data
+execve_open_fd_argv:
+    .dword execve_open_fd_self_path
+    .dword execve_open_fd_mode_arg
+    .dword execve_open_fd_fd_arg
+    .dword 0
+execve_open_fd_envp:
+    .dword 0
+proc_self_fd_path:
+    .ascii "/proc/self/fd/"
+proc_self_fd_digit:
+    .byte '0'
+proc_self_fd_path_end:
+    .byte 0
+execve_open_fd_fd_arg:
+    .byte '0'
+    .byte 0
 
     .section .bss
 fourth_stage_dirent_buf:
     .space fourth_stage_dirent_buf_len
 fourth_stage_post_init_data_buf:
-    .space post_init_data_expected_len
+    .space fourth_stage_post_init_data_buf_len
 fourth_stage_readlink_buf:
     .space post_init_data_path_len
 fourth_stage_stat_buf:
     .space fourth_stage_stat_buf_len
 fourth_stage_stat_buf_alt:
     .space fourth_stage_stat_buf_len
+    .balign 8
+fourth_stage_wait_status:
+    .word 0
 
     .section .text
     .globl _start
 _start:
+    ld t0, 0(sp)
+    li t1, 3
+    blt t0, t1, fourth_stage_default_start
+    addi t1, sp, 8
+    ld t2, 8(t1)
+    beqz t2, fourth_stage_default_start
+    mv a0, t2
+    la a1, execve_open_fd_mode_arg
+    jal ra, compare_cstr
+    bnez a0, fourth_stage_default_start
+    addi t1, sp, 8
+    ld t3, 16(t1)
+    beqz t3, open_fd_execve_smoke_failed_entry
+    lbu t0, 0(t3)
+    addi t0, t0, -'0'
+    bltz t0, open_fd_execve_smoke_failed_entry
+    li t1, 9
+    blt t1, t0, open_fd_execve_smoke_failed_entry
+    lbu t2, 1(t3)
+    bnez t2, open_fd_execve_smoke_failed_entry
+    mv s4, t0
+    j open_fd_execve_child_entry
+
+fourth_stage_default_start:
     li s0, INHERITED_CONSOLE_FD
 
     mv a0, s0
@@ -603,7 +882,7 @@ fourth_stage_start:
 
     mv a0, s2
     la a1, post_init_data_hardlink_name
-    li a2, O_RDONLY
+    li a2, O_RDWR
     li a3, 0
     li a7, SYS_OPENAT
     ecall
@@ -772,7 +1051,7 @@ fourth_stage_start:
 
     mv a0, s2
     la a1, post_init_data_hardlink_name
-    li a2, O_RDONLY
+    li a2, O_RDWR
     li a3, 0
     li a7, SYS_OPENAT
     ecall
@@ -883,11 +1162,6 @@ fourth_stage_start:
     li t1, post_init_data_expected_len
     bne a0, t1, dirfd_unlinkat_data_close_error
 
-    mv a0, s3
-    li a7, SYS_CLOSE
-    ecall
-    bltz a0, dirfd_unlinkat_root_close_error
-
     la a0, fourth_stage_post_init_data_buf
     la a1, post_init_data_expected
     li a2, post_init_data_expected_len
@@ -901,10 +1175,806 @@ fourth_stage_start:
     bltz a0, write_failed
     or s1, s1, a1
 
+    mv a0, s3
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_anon_write_close_error
+
+    mv a0, s3
+    la a1, post_init_data_anonymous_expected
+    li a2, post_init_data_anonymous_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, post_init_data_anonymous_expected_len
+    bne a0, t1, open_fd_anon_append_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_anon_stat_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_anon_stat_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_expected_len
+    bne t1, t2, open_fd_anon_stat_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_anon_stat_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_anon_write_ok_msg
+    li a2, stage_unlinkat_open_fd_anon_write_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s3
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_anon_readback_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_anonymous_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_anonymous_expected_len
+    bne a0, t1, open_fd_anon_readback_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_anonymous_expected
+    li a2, post_init_data_anonymous_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_anon_readback_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_anon_readback_ok_msg
+    li a2, stage_unlinkat_open_fd_anon_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li s4, -1
+    mv a0, s3
+    li a7, SYS_DUP
+    ecall
+    bltz a0, open_fd_dup_close_error
+    mv s4, a0
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, open_fd_dup_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_expected_len
+    bne t1, t2, open_fd_dup_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_anonymous_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_anonymous_expected_len
+    bne a0, t1, open_fd_dup_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_anonymous_expected
+    li a2, post_init_data_anonymous_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_dup_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_survives_msg
+    li a2, stage_unlinkat_open_fd_dup_survives_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_write_close_error
+
+    mv a0, s4
+    la a1, post_init_data_dup_expected
+    li a2, post_init_data_dup_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, post_init_data_dup_expected_len
+    bne a0, t1, open_fd_dup_write_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_write_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_write_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_expected_len
+    bne t1, t2, open_fd_dup_write_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_write_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_write_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_write_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_readback_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_expected_len
+    bne a0, t1, open_fd_dup_readback_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_expected
+    li a2, post_init_data_dup_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_dup_readback_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_readback_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a1, 0
+    li a7, SYS_FTRUNCATE
+    ecall
+    bltz a0, open_fd_dup_truncate_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_truncate_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_truncate_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    bnez t1, open_fd_dup_truncate_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_truncate_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_truncate_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, open_fd_dup_truncate_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_truncate_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_truncate_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_truncate_roundtrip_close_error
+
+    mv a0, s4
+    la a1, post_init_data_dup_truncate_expected
+    li a2, post_init_data_dup_truncate_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, post_init_data_dup_truncate_expected_len
+    bne a0, t1, open_fd_dup_truncate_roundtrip_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_truncate_roundtrip_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_truncate_roundtrip_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_truncate_expected_len
+    bne t1, t2, open_fd_dup_truncate_roundtrip_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_truncate_roundtrip_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_truncate_roundtrip_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_truncate_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_truncate_expected_len
+    bne a0, t1, open_fd_dup_truncate_roundtrip_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_truncate_expected
+    li a2, post_init_data_dup_truncate_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_dup_truncate_roundtrip_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_truncate_roundtrip_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_END
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_append_close_error
+    li t1, post_init_data_dup_truncate_expected_len
+    bne a0, t1, open_fd_dup_append_close_error
+
+    mv a0, s4
+    la a1, post_init_data_dup_append_tail
+    li a2, post_init_data_dup_append_tail_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, post_init_data_dup_append_tail_len
+    bne a0, t1, open_fd_dup_append_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_append_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_append_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_append_expected_len
+    bne t1, t2, open_fd_dup_append_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_append_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_END
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_append_close_error
+    li t1, post_init_data_dup_append_expected_len
+    bne a0, t1, open_fd_dup_append_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_append_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_append_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_append_expected_len
+    bne a0, t1, open_fd_dup_append_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_append_expected
+    li a2, post_init_data_dup_append_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_dup_append_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_append_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_append_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a1, post_init_data_dup_truncate_expected_len
+    li a7, SYS_FTRUNCATE
+    ecall
+    bltz a0, open_fd_dup_append_truncate_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_append_truncate_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_append_truncate_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_truncate_expected_len
+    bne t1, t2, open_fd_dup_append_truncate_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_append_truncate_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_END
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_append_truncate_close_error
+    li t1, post_init_data_dup_truncate_expected_len
+    bne a0, t1, open_fd_dup_append_truncate_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_append_truncate_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_truncate_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_truncate_expected_len
+    bne a0, t1, open_fd_dup_append_truncate_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_truncate_expected
+    li a2, post_init_data_dup_truncate_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_dup_append_truncate_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_append_truncate_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_append_truncate_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a1, post_init_data_dup_append_expected_len
+    li a7, SYS_FTRUNCATE
+    ecall
+    bltz a0, open_fd_dup_grow_zero_fill_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_grow_zero_fill_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_grow_zero_fill_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_append_expected_len
+    bne t1, t2, open_fd_dup_grow_zero_fill_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_grow_zero_fill_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_END
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_grow_zero_fill_close_error
+    li t1, post_init_data_dup_append_expected_len
+    bne a0, t1, open_fd_dup_grow_zero_fill_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_grow_zero_fill_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_append_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_append_expected_len
+    bne a0, t1, open_fd_dup_grow_zero_fill_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_truncate_expected
+    li a2, post_init_data_dup_truncate_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_dup_grow_zero_fill_close_error
+
+    la t0, fourth_stage_post_init_data_buf
+    li t1, post_init_data_dup_truncate_expected_len
+    add t0, t0, t1
+    li t1, post_init_data_dup_append_tail_len
+open_fd_dup_grow_zero_fill_loop:
+    beqz t1, open_fd_dup_grow_zero_fill_loop_done
+    lbu t2, 0(t0)
+    bnez t2, open_fd_dup_grow_zero_fill_close_error
+    addi t0, t0, 1
+    addi t1, t1, -1
+    j open_fd_dup_grow_zero_fill_loop
+open_fd_dup_grow_zero_fill_loop_done:
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_grow_zero_fill_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a1, post_init_data_dup_truncate_expected_len
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_grow_tail_write_close_error
+    li t1, post_init_data_dup_truncate_expected_len
+    bne a0, t1, open_fd_dup_grow_tail_write_close_error
+
+    mv a0, s4
+    la a1, post_init_data_dup_append_tail
+    li a2, post_init_data_dup_append_tail_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, post_init_data_dup_append_tail_len
+    bne a0, t1, open_fd_dup_grow_tail_write_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_grow_tail_write_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_grow_tail_write_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_append_expected_len
+    bne t1, t2, open_fd_dup_grow_tail_write_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_grow_tail_write_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_END
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_grow_tail_write_close_error
+    li t1, post_init_data_dup_append_expected_len
+    bne a0, t1, open_fd_dup_grow_tail_write_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_grow_tail_write_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_append_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_append_expected_len
+    bne a0, t1, open_fd_dup_grow_tail_write_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_append_expected
+    li a2, post_init_data_dup_append_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_dup_grow_tail_write_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_grow_tail_write_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, open_fd_dup_fork_close_error
+    beqz a0, open_fd_dup_fork_child
+    mv t0, a0
+
+    la t1, fourth_stage_wait_status
+    sw zero, 0(t1)
+    mv a0, t0
+    mv a1, t1
+    li a2, 0
+    li a3, 0
+    li a7, SYS_WAIT4
+    ecall
+    bltz a0, open_fd_dup_fork_close_error
+    bne a0, t0, open_fd_dup_fork_close_error
+    lw t2, 0(t1)
+    bnez t2, open_fd_dup_fork_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_fork_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_fork_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_fork_expected_len
+    bne t1, t2, open_fd_dup_fork_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_fork_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_fork_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_fork_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_fork_expected_len
+    bne a0, t1, open_fd_dup_fork_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_fork_expected
+    li a2, post_init_data_dup_fork_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_dup_fork_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_fork_parent_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li t0, 9
+    blt t0, s4, open_fd_procfd_primary_close_error
+    addi t0, s4, '0'
+    la t1, proc_self_fd_digit
+    sb t0, 0(t1)
+
+    li a0, AT_FDCWD
+    la a1, proc_self_fd_path
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, open_fd_procfd_primary_close_error
+    mv s3, a0
+
+    mv a0, s3
+    la a1, fourth_stage_stat_buf
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_procfd_close_error
+
+    la t0, fourth_stage_stat_buf
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_procfd_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_fork_expected_len
+    bne t1, t2, open_fd_procfd_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_procfd_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_procfd_reopen_ok_msg
+    li a2, stage_unlinkat_open_fd_procfd_reopen_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s3
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_procfd_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_fork_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_fork_expected_len
+    bne a0, t1, open_fd_procfd_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_fork_expected
+    li a2, post_init_data_dup_fork_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_procfd_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, open_fd_procfd_primary_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_procfd_readback_ok_msg
+    li a2, stage_unlinkat_open_fd_procfd_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li t0, 9
+    blt t0, s4, open_fd_execve_close_error
+    addi t0, s4, '0'
+    la t1, execve_open_fd_fd_arg
+    sb t0, 0(t1)
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, open_fd_execve_close_error
+    beqz a0, open_fd_execve_child_exec
+    mv t0, a0
+
+    la t1, fourth_stage_wait_status
+    sw zero, 0(t1)
+    mv a0, t0
+    mv a1, t1
+    li a2, 0
+    li a3, 0
+    li a7, SYS_WAIT4
+    ecall
+    bltz a0, open_fd_execve_close_error
+    bne a0, t0, open_fd_execve_close_error
+    lw t2, 0(t1)
+    bnez t2, open_fd_execve_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_execve_close_error
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_execve_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_execve_expected_len
+    bne t1, t2, open_fd_execve_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_execve_close_error
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_execve_close_error
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_execve_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_execve_expected_len
+    bne a0, t1, open_fd_execve_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_execve_expected
+    li a2, post_init_data_execve_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_execve_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_execve_parent_readback_ok_msg
+    li a2, stage_unlinkat_open_fd_execve_parent_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, open_fd_execve_root_close_error
+
     mv a0, s2
     li a7, SYS_CLOSE
     ecall
-    bltz a0, dirfd_unlinkat_smoke_failed
+    bltz a0, open_fd_execve_report_failed
 
     mv a0, s0
     la a1, stage_fourth_stage_reached_msg
@@ -936,6 +2006,55 @@ console_open_failed:
     ecall
     li a0, 1
     li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_fork_child:
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_dup_fork_child_fail
+
+    mv a0, s4
+    la a1, post_init_data_dup_fork_expected
+    li a2, post_init_data_dup_fork_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, post_init_data_dup_fork_expected_len
+    bne a0, t1, open_fd_dup_fork_child_fail
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_dup_fork_child_fail
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_dup_fork_child_fail
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_fork_expected_len
+    bne t1, t2, open_fd_dup_fork_child_fail
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_dup_fork_child_fail
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_dup_fork_child_write_ok_msg
+    li a2, stage_unlinkat_open_fd_dup_fork_child_write_ok_msg_len
+    jal ra, write_exact
+    bltz a0, open_fd_dup_fork_child_fail
+
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+open_fd_dup_fork_child_fail:
+    li a0, 1
+    li a7, SYS_EXIT_GROUP
     ecall
 
 reused_dir_cleanup_failed:
@@ -1138,7 +2257,9 @@ hardlink_smoke_close_error:
 hardlink_smoke_failed:
     mv a0, s0
     la a1, fourth_stage_hardlink_smoke_fail_msg
-    li a2, fourth_stage_hardlink_smoke_fail_msg_len
+    la a2, fourth_stage_hardlink_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     li a0, 1
     li a7, SYS_EXIT
@@ -1147,7 +2268,9 @@ hardlink_smoke_failed:
 hardlink_stat_smoke_failed:
     mv a0, s0
     la a1, fourth_stage_hardlink_stat_smoke_fail_msg
-    li a2, fourth_stage_hardlink_stat_smoke_fail_msg_len
+    la a2, fourth_stage_hardlink_stat_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     li a0, 1
     li a7, SYS_EXIT
@@ -1161,7 +2284,9 @@ hardlink_survival_close_error:
 hardlink_survival_smoke_failed:
     mv a0, s0
     la a1, fourth_stage_hardlink_survival_smoke_fail_msg
-    li a2, fourth_stage_hardlink_survival_smoke_fail_msg_len
+    la a2, fourth_stage_hardlink_survival_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     li a0, 1
     li a7, SYS_EXIT
@@ -1170,7 +2295,9 @@ hardlink_survival_smoke_failed:
 hardlink_nlink_smoke_failed:
     mv a0, s0
     la a1, fourth_stage_hardlink_nlink_smoke_fail_msg
-    li a2, fourth_stage_hardlink_nlink_smoke_fail_msg_len
+    la a2, fourth_stage_hardlink_nlink_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     li a0, 1
     li a7, SYS_EXIT
@@ -1179,7 +2306,9 @@ hardlink_nlink_smoke_failed:
 hardlink_cleanup_failed:
     mv a0, s0
     la a1, fourth_stage_hardlink_cleanup_fail_msg
-    li a2, fourth_stage_hardlink_cleanup_fail_msg_len
+    la a2, fourth_stage_hardlink_cleanup_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     li a0, 1
     li a7, SYS_EXIT
@@ -1188,7 +2317,9 @@ hardlink_cleanup_failed:
 hardlink_dirent_smoke_failed:
     mv a0, s0
     la a1, fourth_stage_hardlink_dirent_smoke_fail_msg
-    li a2, fourth_stage_hardlink_dirent_smoke_fail_msg_len
+    la a2, fourth_stage_hardlink_dirent_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     li a0, 1
     li a7, SYS_EXIT
@@ -1205,7 +2336,9 @@ open_fd_fstat_close_error:
 open_fd_fstat_smoke_failed:
     mv a0, s0
     la a1, fourth_stage_open_fd_fstat_smoke_fail_msg
-    li a2, fourth_stage_open_fd_fstat_smoke_fail_msg_len
+    la a2, fourth_stage_open_fd_fstat_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     li a0, 1
     li a7, SYS_EXIT
@@ -1219,7 +2352,501 @@ open_fd_survival_close_error:
 open_fd_survival_smoke_failed:
     mv a0, s0
     la a1, fourth_stage_open_fd_survival_smoke_fail_msg
-    li a2, fourth_stage_open_fd_survival_smoke_fail_msg_len
+    la a2, fourth_stage_open_fd_survival_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_anon_write_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+open_fd_anon_write_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_anon_write_smoke_failed
+
+open_fd_anon_append_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_anon_append_fail_msg
+    la a2, fourth_stage_open_fd_anon_append_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, write_failed
+    j open_fd_anon_write_smoke_failed
+
+open_fd_anon_stat_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_anon_stat_fail_msg
+    la a2, fourth_stage_open_fd_anon_stat_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, write_failed
+    j open_fd_anon_write_smoke_failed
+
+open_fd_anon_append_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_anon_append_failed
+
+open_fd_anon_stat_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_anon_stat_failed
+
+open_fd_anon_write_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_anon_write_smoke_fail_msg
+    la a2, fourth_stage_open_fd_anon_write_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_anon_readback_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_anon_readback_smoke_failed
+
+open_fd_anon_readback_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_anon_readback_smoke_fail_msg
+    la a2, fourth_stage_open_fd_anon_readback_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_smoke_fail_msg
+    la a2, fourth_stage_open_fd_dup_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_write_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_write_smoke_failed
+
+open_fd_dup_write_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_write_smoke_fail_msg
+    la a2, fourth_stage_open_fd_dup_write_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_readback_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_readback_smoke_failed
+
+open_fd_dup_readback_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_readback_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_readback_smoke_fail_msg
+    la a2, fourth_stage_open_fd_dup_readback_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_truncate_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_truncate_smoke_failed
+
+open_fd_dup_truncate_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_truncate_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_truncate_smoke_fail_msg
+    la a2, fourth_stage_open_fd_dup_truncate_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_truncate_roundtrip_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_truncate_roundtrip_smoke_failed
+
+open_fd_dup_truncate_roundtrip_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_truncate_roundtrip_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg
+    la a2, fourth_stage_open_fd_dup_truncate_roundtrip_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_append_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_append_smoke_failed
+
+open_fd_dup_append_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_append_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_append_fail_msg
+    la a2, fourth_stage_open_fd_dup_append_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_append_truncate_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_append_truncate_smoke_failed
+
+open_fd_dup_append_truncate_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_append_truncate_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_append_truncate_fail_msg
+    la a2, fourth_stage_open_fd_dup_append_truncate_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_grow_zero_fill_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_grow_zero_fill_smoke_failed
+
+open_fd_dup_grow_zero_fill_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_grow_zero_fill_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_grow_zero_fill_fail_msg
+    la a2, fourth_stage_open_fd_dup_grow_zero_fill_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_grow_tail_write_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_grow_tail_write_smoke_failed
+
+open_fd_dup_grow_tail_write_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_grow_tail_write_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_grow_tail_write_fail_msg
+    la a2, fourth_stage_open_fd_dup_grow_tail_write_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_dup_fork_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    j open_fd_dup_fork_smoke_failed
+
+open_fd_dup_fork_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_dup_fork_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_dup_fork_smoke_fail_msg
+    la a2, fourth_stage_open_fd_dup_fork_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_procfd_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_procfd_primary_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_procfd_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_procfd_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_procfd_smoke_fail_msg
+    la a2, fourth_stage_open_fd_procfd_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_execve_child_exec:
+    la a0, execve_open_fd_self_path
+    la a1, execve_open_fd_argv
+    la a2, execve_open_fd_envp
+    li a7, SYS_EXECVE
+    ecall
+    j open_fd_execve_report_failed
+
+open_fd_execve_smoke_failed_entry:
+    li s0, INHERITED_CONSOLE_FD
+
+    li a0, AT_FDCWD
+    la a1, console_path
+    li a2, O_RDWR
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, open_fd_execve_report_failed
+    mv s0, a0
+    j open_fd_execve_report_failed
+
+open_fd_execve_child_entry:
+    li s0, INHERITED_CONSOLE_FD
+
+    li a0, AT_FDCWD
+    la a1, console_path
+    li a2, O_RDWR
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, open_fd_execve_child_start
+    mv s0, a0
+
+open_fd_execve_child_start:
+    mv a0, s4
+    la a1, fourth_stage_stat_buf
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_execve_report_failed
+
+    la t0, fourth_stage_stat_buf
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_execve_report_failed
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_dup_fork_expected_len
+    bne t1, t2, open_fd_execve_report_failed
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_execve_report_failed
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_execve_report_failed
+
+    mv a0, s4
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_dup_fork_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_dup_fork_expected_len
+    bne a0, t1, open_fd_execve_report_failed
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_dup_fork_expected
+    li a2, post_init_data_dup_fork_expected_len
+    jal ra, compare_bytes
+    bltz a0, open_fd_execve_report_failed
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_execve_child_readback_ok_msg
+    li a2, stage_unlinkat_open_fd_execve_child_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, open_fd_execve_report_failed
+
+    mv a0, s4
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, open_fd_execve_report_failed
+
+    mv a0, s4
+    la a1, post_init_data_execve_expected
+    li a2, post_init_data_execve_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, post_init_data_execve_expected_len
+    bne a0, t1, open_fd_execve_report_failed
+
+    mv a0, s4
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, open_fd_execve_report_failed
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, open_fd_execve_report_failed
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_execve_expected_len
+    bne t1, t2, open_fd_execve_report_failed
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    bnez t1, open_fd_execve_report_failed
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_execve_child_write_ok_msg
+    li a2, stage_unlinkat_open_fd_execve_child_write_ok_msg_len
+    jal ra, write_exact
+    bltz a0, open_fd_execve_report_failed
+
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+open_fd_execve_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_execve_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_execve_report_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_execve_smoke_fail_msg
+    la a2, fourth_stage_open_fd_execve_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     li a0, 1
     li a7, SYS_EXIT
@@ -1228,7 +2855,9 @@ open_fd_survival_smoke_failed:
 write_failed:
     li a0, 1
     la a1, fourth_stage_write_fail_msg
-    li a2, fourth_stage_write_fail_msg_len
+    la a2, fourth_stage_write_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     li a7, SYS_WRITE
     ecall
     li a0, 1

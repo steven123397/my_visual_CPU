@@ -1088,6 +1088,24 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("mycpu linux userland: stage=unlinkat-hardlink-dirent-gone", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-nlink-zero", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-survives", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-anon-write-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-anon-readback-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-survives", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-write-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-readback-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-truncate-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-truncate-roundtrip-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-append-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-append-truncate-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-grow-zero-fill-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-grow-tail-write-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-fork-child-write-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-fork-parent-readback-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-procfd-reopen-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-procfd-readback-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-execve-child-readback-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-execve-child-write-ok", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-execve-parent-readback-ok", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=unlinkat-reused-dirent-gone", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: stage=fourth-stage-reached", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: fourth-stage reused dir cleanup failed", fourth_stage_strings_proc.stdout)
@@ -1112,6 +1130,22 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("mycpu linux userland: fourth-stage hardlink dirent smoke failed", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: fourth-stage open fd fstat smoke failed", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: fourth-stage open fd survival smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd anon overwrite failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd anon stat smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd anon write smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd anon readback smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup write smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup readback smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup truncate smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup truncate roundtrip failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup append failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup append truncate failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup grow zero-fill failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup grow tail write failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd dup fork smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd procfd smoke failed", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: fourth-stage open fd execve smoke failed", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: post-init reached", fourth_stage_strings_proc.stdout)
 
     def test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested(self) -> None:
@@ -1171,7 +1205,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
                 "a2",
                 "0x80200000",
                 "--uart-wait",
-                "mycpu linux userland: stage=fourth-stage-reached",
+                "mycpu linux userland: post-init reached",
                 "300000000",
             ],
             cwd=MYCPU_DIR,
@@ -1200,9 +1234,27 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("mycpu linux userland: stage=unlinkat-hardlink-dirent-gone", probe_proc.stdout)
         self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-nlink-zero", probe_proc.stdout)
         self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-survives", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-anon-write-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-anon-readback-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-survives", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-write-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-readback-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-truncate-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-truncate-roundtrip-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-append-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-append-truncate-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-grow-zero-fill-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-grow-tail-write-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-fork-child-write-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-dup-fork-parent-readback-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-procfd-reopen-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-procfd-readback-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-execve-child-readback-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-execve-child-write-ok", probe_proc.stdout)
+        self.assertIn("mycpu linux userland: stage=unlinkat-open-fd-execve-parent-readback-ok", probe_proc.stdout)
         self.assertIn("mycpu linux userland: stage=unlinkat-reused-dirent-gone", probe_proc.stdout)
         self.assertIn("mycpu linux userland: stage=fourth-stage-reached", probe_proc.stdout)
-
+        self.assertIn("mycpu linux userland: post-init reached", probe_proc.stdout)
     def test_make_build_workload_linux_proto_block_mode_mininit_message_lengths_exclude_nul(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             proc = subprocess.run(
