@@ -14,7 +14,6 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关设计：
   - [debug_frontend_integration.md](debug_frontend_integration.md)
@@ -129,4 +128,4 @@ browser terminal
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `interactive_os` 当前设计边界的参考资料。
-- 当前实时状态与后续是否继续扩交互面，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
+- 当前实时状态与后续是否继续扩交互面，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。

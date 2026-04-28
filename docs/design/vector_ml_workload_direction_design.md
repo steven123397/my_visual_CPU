@@ -17,7 +17,6 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关设计：
   - [debug_frontend_integration.md](debug_frontend_integration.md)
   - [phase4_preparation_design.md](phase4_preparation_design.md)
@@ -218,4 +217,4 @@
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为 `向量扩展 + ML workload` 的统一设计边界。
-- 当前实现进度、当前优先级、后续是否重开更重向量子线或 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
+- 当前实现进度、当前优先级、后续是否重开更重向量子线或 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。

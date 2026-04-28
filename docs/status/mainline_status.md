@@ -2,128 +2,118 @@
 
 ## 文档定位
 
-本文档只记录当前 `main` 分支的稳定快照、少量关键历史节点、当前仍有效的风险和下一步。
+本文档是仓库唯一的主线实时状态文档，用于记录：
 
-执行过程、阶段性 checklist 和专项落地细节统一归档到 [../plan/history_plan.md](../plan/history_plan.md)；更细的优先级判断见 [project_priority_roadmap.md](project_priority_roadmap.md)。
+- 当前稳定快照
+- 当前优先级
+- active wave 与近端 blocker
+- 当前仍然有效的风险 / 限制
+- 下一步工作
+
+执行过程、阶段性 checklist 和已完成专项统一归档到
+[../plan/history_plan.md](../plan/history_plan.md)。
 
 ## 关联文档
 
 - 相关设计：
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
-  - [../design/debug_frontend_integration.md](../design/debug_frontend_integration.md)
-  - [../design/minimal_interactive_os_design.md](../design/minimal_interactive_os_design.md)
   - [../design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [../design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
-  - [../design/vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)
 - 相关状态：
-  - [project_priority_roadmap.md](project_priority_roadmap.md)
   - [kernel_alpha_status.md](kernel_alpha_status.md)
-  - [xv6_linux_jit_status.md](xv6_linux_jit_status.md)
+  - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
+  - [code_reself_status.md](code_reself_status.md)
 - 当前计划：
-  - 当前无活跃计划；Wave 1、`C1 / P4-prep-2`，以及“主线路线图重写 + Linux 当前 checkpoint 收口”都已归档到 [../plan/history_plan.md](../plan/history_plan.md)
+  - 当前无活跃计划。
 - 已完成计划归档：
   - [../plan/history_plan.md#mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan](../plan/history_plan.md#mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan)
   - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
-  - [../plan/history_plan.md#phase4-prep1-bus-memory-region-plan](../plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
-  - [../plan/history_plan.md#vector-v4-plan](../plan/history_plan.md#vector-v4-plan)
-  - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
-  - [../plan/history_plan.md#spike-external-differential-validation-plan](../plan/history_plan.md#spike-external-differential-validation-plan)
-  - [../plan/history_plan.md#p2-validation-gap-backfill-round-2](../plan/history_plan.md#p2-validation-gap-backfill-round-2)
 
-## 当前快照
+## 目标 / 主题
+
+当前主线仍围绕 `reference-first`、真实 workload bring-up 和可观察性收口展开。
+近端工程目标不是抢跑更重 `Phase 4`，而是继续沿现有 `xv6 / Linux`
+guardrail 把 Linux block-rootfs 的真实 userland checkpoint 推向下一处自然边界。
+
+## 当前状态
 
 - 当前仓库已经是一个已可运行的模拟器原型，不是纯设计稿。
-- `phase1-stable`（`283aee6`）对应的 Phase 1 核心 bring-up 冻结基线已经形成，`functional` reference path、`kernel_alpha` 正向与 9 条负向回归都已稳定接通。
-- `pipeline`、`make test-pipeline`、`debug_session / protocol`、本地 Node 调试服务和浏览器前端都已经正式接入主线，不再是待合入功能。
-- `P1` 结构收口与 `P2` 首轮验证补洞已经完成；当前自 `2026-04-21` 起已正式进入标准 OS bring-up 主线，并在 `2026-04-27` 继续进入“Linux 当前 checkpoint 收口 + 主线排期统一”的 active wave。
-- 按 [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md) 的长期排期定义，当前 active wave 仍是 Wave 3：Linux 当前 checkpoint 线还在持续产出高信号 userland 边界，`shadow_cache` 的稳定证据也还主要停在 pipeline vector CNN 与 `xv6/linux_proto` functional observation，尚不满足 Wave 4 激活门槛。
-- 当前近端主线已经明确切到 `RV64A + virtio 平台 + CSR / privilege 补全 + xv6-riscv bring-up`，对应的当前设计、状态和归档摘要分别见 [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)、[xv6_linux_jit_status.md](xv6_linux_jit_status.md) 和 [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)。
-- 此次主线推进并不放弃并行 guardrail workstream：`V4`、`P4-prep-1`、`kernel_alpha`、`debug/frontend`、Spike 外部差分和现有回归矩阵继续作为新主线的 correctness / observation guardrail。
-- `向量扩展 + ML workload` 已纳入主线后续 wave，同时继续承担代表性 workload corpus 角色，为 profile / observation 和更后续 `Phase 4` 判断提供信号。
-- `Phase 4` 当前只正式打开准备性入口：`P4-prep-1` 已完成，`bus / memory region` 已成为统一事实来源；`C1 / P4-prep-2 memory observation / shadow cache` 第一刀也已完成，当前只做观测和 workload 证据收集，不改变 guest 可见语义，也不意味着完整 `cache / DMA / multicore` 已进入主线实施阶段。
-- Spike 外部差分验证已经形成一条独立离线 oracle，当前处于维护态，主要服务 reference correctness 疑点排查，而不是新的默认主门禁。
-- `2026-04-22` 当前主线切换的第一轮 A / B / C / D foundation 已按默认顺序整合到主工作树：A 已把 `RV64A + CSR / privilege` contract 变成主线事实来源，B 已接入 `virtio-mmio + virtqueue + virtio-blk` foundation，C 已把 external `xv6-riscv` workload harness 与刷新后的 `xv6_boot_smoke` 接进主线，D 已把 `execution_profile` 与 profile guardrail 接进默认回归。
-- 同日也已完成第一轮 B / C post-integration follow-up：PLIC 现按 `xv6` 约定把 `virtio=1`、`UART=10` 分开接线，`Machine` / CLI / debug CLI / workload probe 已支持 block transport 选择，`mycpu_virt` board 已切到 `virtio-blk`，`xv6_boot_smoke` / `run-workload-xv6` 现已走真实 `virtio` board path。
-- 同日第一轮 post-integration correctness findings 也已关闭：普通 `store` 现在会正确打破 `LR/SC` reservation，translation-fault memory access 也会进入 `execution_profile` 的 fault 统计；随后同日的 bug-driven A / B follow-up 先把 `xv6` 推过旧的 early-boot trap，再把真实 `virtio-blk` board path 推到 shell，并落下了 Linux-facing `flat/payload/set_gpr + linux_proto profile` foundation。主线优先级也因此继续收敛到：把 `xv6` shell 守成稳定 guardrail，并把真实 Linux 资产与 `DTB/chosen/cmdline` 接到现有 foundation 上。
-- `2026-04-24` 又补上一层更窄的 Linux harness follow-up：`linux_proto` 的 repo-generated `dtb` 现在不再在缺 `rootfs.cpio` 时提前被 Make 依赖卡死，同日也补上了 repo-generated 最小 `rootfs.cpio` `/init` fallback；因此 `make run-workload WORKLOAD_NAME=linux_proto` 会继续进入 probe 入口，并在默认工作区只针对缺失 `Image` 统一 fail-closed。当前主线因此能更干净地区分“资产未落位”和“真实 Linux bring-up blocker”。
-- 同日也已把 Linux bring-up 的两处近端兼容性缺口关掉：functional 路径现已补上最小 `RV64C`，而 modern `virtio-mmio` 也已补齐 `VIRTIO_F_VERSION_1`。在本地 `CONFIG_RISCV_ISA_C=y` Linux `Image` 上，当前 repo-generated `dtb + initrd` 路径已能稳定通过 `virtio_blk` 探测、枚举 `vda`，并继续推进到 `/init reached`。
-- 同日也把下一步 block-rootfs 入口收口成显式 harness 合同：`linux_proto` profile 现支持 `LINUX_PROTO_DISK` / `LINUX_PROTO_BOOTARGS` alias，`mycpu_virt.dts` 会按当前 bootargs 强制重生成。当前默认 `disk=none` 路径下，Linux 会稳定枚举 `0 B` 的 `vda`；因此更后的真实 blocker 已收敛成“提供非空磁盘镜像 + 切 bootargs 到 block root”，而不再是 `RVC` 或 modern virtio 探测。
-- `2026-04-25` 又把 block-rootfs bring-up 本身收口成 repo-generated fallback：`linux_proto` 现支持 `LINUX_PROTO_ROOTFS_MODE=block`，会在缺外部 Linux 磁盘镜像时默认生成最小 `rootfs.ext4`，并自动切到 `root=/dev/vda rw rootfstype=ext4 rootwait init=/init`；同日 `mycpu_virt.dts` 在 block 模式下也改成只按实际 payload 的 initrd 生成 `chosen.initrd`，避免旧 `rootfs.cpio` 大小泄漏进 DTB。随后 repo-generated `/init` 也已收口成可观察的最小用户态闭环：它现在会容忍 block-rootfs 下已预先挂载的 `devtmpfs`，并通过 staged marker 依次暴露 `stage=console-opened`、`stage=rootfs-rw-ok`、`stage=proc-readable` 与 `stage=sys-readable`；同日又把 repo-generated second-stage ELF `/post-init-smoke` 接进同一条 rootfs，让 `/init` 在最小 smoke 之后显式 `execve()` 到真实 post-init 用户态。基于本地 `CONFIG_RISCV_ISA_C=y` Linux `Image`，当前 block-rootfs 路径已稳定推进到 `virtio_blk virtio0: [vda] 16384 ...`、`EXT4-fs (vda)`、`VFS: Mounted root`、`devtmpfs: mounted`、`Run /init as init process`、`mycpu linux initrd: stage=console-opened`、`mycpu linux initrd: stage=rootfs-rw-ok`、`mycpu linux initrd: stage=proc-readable`、`mycpu linux initrd: stage=sys-readable`、`mycpu linux initrd: /init reached`、`mycpu linux initrd: stage=execve-post-init` 与 `mycpu linux userland: post-init reached`；因此活跃 blocker 已进一步从“缺非空磁盘镜像”与“最小 `/init` 输出不完整”收窄到 `post-init reached` 之后的下一处更后 userland checkpoint。
-- `2026-04-27` 又把这条 block-rootfs second-stage userland baseline 继续推进一刀：在既有 `renameat2` 目录项更新与 cleanup contract 之后，repo-generated third-stage ELF `/post-init-exec-smoke` 现在会先回到父目录再做一次 `getdents64` 目录遍历，要求已被 `unlinkat(AT_REMOVEDIR)` 清掉的 `post-init-dir-smoke` 目录项不再可见，并通过 `stage=unlinkat-parent-dirent-gone` 暴露到 UART；随后又立刻复用同一个目录名重新 `mkdirat()`，确认该名字已经可以重新分配，并通过 `stage=mkdirat-dir-name-reusable` 暴露到 UART；最后再 `chdir()` 进入这个重建目录，确认旧的 `nested.txt` / `renamed.txt` 都已不可见，并通过 `stage=mkdirat-reused-dir-empty` 暴露到 UART。
-- `2026-04-27` 同日后续也把 fourth-stage cleanup 真正冻结到 runtime：repo-generated fourth-stage ELF `/post-init-cleanup-smoke` 当前会稳定暴露 `stage=fourth-stage-entered`、`stage=fourth-stage-console-opened`、`stage=fourth-stage-root-chdir-ok`、`stage=unlinkat-reused-dirent-gone`、`stage=symlinkat-target-readable`、`stage=fstatat-symlink-nofollow-ok`、`stage=readlinkat-target-ok`、`stage=unlinkat-symlink-dirent-gone`、`stage=dirfd-relative-openat-ok`、`stage=dirfd-relative-fstatat-ok`、`stage=dirfd-relative-linkat-ok`、`stage=linkat-target-readable`、`stage=linkat-shared-inode-ok`、`stage=unlinkat-origin-hardlink-survives`、`stage=unlinkat-origin-link-count-dropped`、`stage=dirfd-relative-unlinkat-ok`、`stage=dirfd-relative-reopen-gone`、`stage=dirfd-relative-fstatat-gone`、`stage=dirfd-relative-getdents-gone`、`stage=unlinkat-hardlink-dirent-gone`、`stage=unlinkat-open-fd-nlink-zero`、`stage=unlinkat-open-fd-survives`、`stage=fourth-stage-reached` 与 `post-init reached`。这一轮同时修正了 stage helper 的 partial-write 合同、third/fourth-stage cleanup ownership，以及 Linux 8250 依赖的最小 UART `THRE/TEMT` drain 时序；repo-generated `rootfs` staging 也已改成 `install -m`，避免 runtime guardrail 因 staging 目录已有目标文件而假失败。因此显式 opt-in 的 runtime guardrail `make test-host-run_debug_cli_probe_linux_proto_runtime` 在提供真实 `Image` 时已稳定通过。当前更近的活跃 blocker 也因此继续收敛到 multi-stage post-init exec + path-resolution + getdents64 目录遍历 + `fstatat` 元数据读回 + `renameat2`/`unlinkat` 目录项可见性 + `mkdirat` 名字复用 + 重建目录再次 cleanup + symlink/readlink/hardlink lifecycle + dirfd-relative path resolution + dirfd-relative metadata readback + dirfd-relative link creation + dirfd-relative unlink cleanup + same-dirfd getdents disappearance + open-fd `nlink=0` metadata + open-fd lifetime + link metadata baseline 之后的下一处更后 userland checkpoint。
-- `2026-04-28` 又沿 fourth-stage baseline 继续把 open-fd lifecycle 从同进程内的匿名 inode 读写，推进到跨进程、procfs 重物化与真实 `execve()` 程序镜像切换边界：repo-generated `/post-init-cleanup-smoke` 现在会在 `stage=unlinkat-open-fd-dup-grow-tail-write-ok` 之后继续稳定命中 `stage=unlinkat-open-fd-dup-fork-child-write-ok`、`stage=unlinkat-open-fd-dup-fork-parent-readback-ok`、`stage=unlinkat-open-fd-procfd-reopen-ok`、`stage=unlinkat-open-fd-procfd-readback-ok`、`stage=unlinkat-open-fd-execve-child-readback-ok`、`stage=unlinkat-open-fd-execve-child-write-ok` 与 `stage=unlinkat-open-fd-execve-parent-readback-ok`，要求最后一个 hardlink dirent 已删除、匿名 open-fd alias 已经 `nlink=0` 之后，这份 inode 不仅能跨 `clone3()/wait4()` 进程边界继续保持 regular-file、size 不变、`nlink=0` 与 readback 合同，也能经由 `/proc/self/fd/<n>` 再次重物化成新的只读句柄，并最终跨一次真实 `execve()` 在新程序镜像里先读回旧内容、再覆写匿名 inode，随后再由 parent 对同一原始 fd 读回新内容。它验证的已经不是另一层 `size/EOF` 微变体，而是新的进程、路径与 program-image 边界；当前更近的活跃 blocker 也因此继续收窄到 `unlinkat-open-fd-execve-parent-readback-ok` 之后的下一处更后 userland checkpoint。
-- `2026-04-27` 同日完成 `C1 / P4-prep-2 memory observation / shadow cache` 第一刀：`ExecutionMemoryObservation` 已携带可选物理地址，`ExecutionProfile` 已聚合全局与 region 级 shadow cache 统计，debug JSON 与 `run_debug_cli_probe` 文本摘要已暴露只读观测面；这一路径只用于 cacheable RAM line 的 workload 观测和 MMIO / fault / non-cacheable bypass 统计，不改变 guest 可见语义。
-- `2026-04-27` 后续又把第一组可回归 workload 观测收窄到 pipeline vector CNN：`vector_cnn_smoke` 现在会要求 pipeline 路径暴露非零 RAM `shadow_cache` 信号，并锁住全局统计与 RAM region 统计一致。同日 follow-up 也已把 `functional` backend 的最小 `ExecutionProfile` 观测接到 debug snapshot，并继续补到 `LR/SC/AMO` atomic traffic；默认 `run-workload-xv6` 现会在真实 `virtio-blk` board path 上稳定导出包含 atomic traffic 在内的非零 `profile / shadow-cache` 信号，`xv6_boot_smoke` 也已锁住当前 5000-step functional baseline（`memory=1570`、`shadow_cache line_accesses=1515 hits=1495 misses=20 bypasses=55`）与 RAM region 一致性，`test-host-run_debug_cli_probe` 则进一步锁住真实 `run_debug_cli_probe.py + --debug-cli + xv6` 的同一组 summary 输出；这两条 xv6 observation guardrail 现也已提升进默认 `make test` / `make test-pipeline`。同一条 probe harness 现在还额外锁住一组不依赖外部 Linux `Image` 的 `linux_proto` functional observation baseline：repo-local dummy payload 走 `linux_sbi_shim + payload + dtb/initrd` 合同后，会稳定导出 `retirements=64`、`memory=19` 与 `shadow-cache hits=16 misses=3`。`xv6` 的 pipeline probe 仍会落入当前 pipeline 不支持的陷阱路径，因此当前稳定的 shadow-cache baseline 仍以 pipeline vector CNN 为准，`xv6` 则转为 stable functional observation path。
+- `phase1-stable`（`283aee6`）仍是 Phase 1 冻结参考点。
+- `xv6-riscv` 已在真实 `virtio-blk` board path 上稳定到 shell，当前主要承担
+  workload guardrail 角色，不再是近端 blocker。
+- Linux `linux_proto` 的 repo-generated block-rootfs fourth-stage runtime guardrail
+  已稳定推进到：
+  - `mycpu linux userland: stage=unlinkat-open-fd-mmap-shared-fork-parent-readback-ok`
+- 当前已知的下一处自然边界是 `pipe2 + clone3()/wait4()` 匿名 IPC；探索结果表明，
+  该 slice 仍会在上面这个 checkpoint 之后命中：
+  - `mycpu linux userland: fourth-stage pipe2 smoke failed`
+- `P4-prep-1` 和 `C1 / P4-prep-2 memory observation / shadow cache` 已完成。
+  当前稳定的观测 guardrail 主要是：
+  - pipeline vector CNN 的 `shadow_cache` RAM baseline
+  - functional `xv6` 的稳定 profile / `shadow_cache` baseline
+  - functional `linux_proto` dummy-payload observation baseline
+- `debug/frontend`、`kernel_alpha` 十条基线、`make test` / `make test-pipeline`
+  和现有 workload smoke 都已进入维护态。
+- 当前 active wave 仍是 Wave 3，不是 Wave 4。
+
+## 当前优先级
+
+1. 继续沿 Linux 当前 baseline 往后收窄新的 userland checkpoint 或 blocker。
+   当前首选入口就是 `shared-fork-parent-readback-ok` 之后的 `pipe2` IPC 边界。
+2. 把 `xv6` shell、Linux probe、`kernel_alpha`、`pipeline`、debug CLI 和
+   现有回归矩阵守成稳定 guardrail。
+3. 继续积累 `shadow_cache / observation / representative workload` 证据，
+   但只做观测，不提前切到真实 `cache / DMA / multicore / coherence`。
+4. 更后续 wave 上的 `NPU / TPU-like`、向量 workload 和更重 `Phase 4`
+   当前都不是近端 blocker，继续保持 maintenance / bug-driven 节奏。
 
 ## 关键历史节点
 
+- `2026-04-28`
+  - Linux fourth-stage baseline 已推进到
+    `unlinkat-open-fd-mmap-shared-fork-parent-readback-ok`。
+  - 这一轮验证了匿名 open-fd alias 跨 `clone3()/wait4()`、`/proc/self/fd/<n>`、
+    `execve()`、`execveat()`、`mmap(MAP_SHARED)`、`mmap(MAP_PRIVATE)` 和
+    shared mapping fork 可见性等更后边界。
+  - 下一处已探索自然边界已收敛到 `pipe2 + clone3()/wait4()` 匿名 IPC。
+- `2026-04-27`
+  - repo-generated block-rootfs `/init + post-init` 路径与 fourth-stage cleanup
+    runtime guardrail 冻结通过。
+  - `C1 / P4-prep-2 memory observation / shadow cache` 第一刀完成，并接入
+    `execution_profile`、debug JSON 和 probe 摘要。
 - `2026-04-22`
-  - 完成第一轮 `A -> B -> C -> D` 主线整合。
-  - `xv6_boot_smoke` 已从旧的 `mhartid` illegal trap 口径刷新到 post-A 的 early-boot checkpoint。
-  - `execution_profile_smoke` 已接入默认 `make test` / `make test-pipeline`。
-  - 第一轮 post-integration correctness findings 已关闭：普通 `store` 会正确失效 `LR/SC` reservation，translation-fault memory observation 已计入 `execution_profile`。
-  - 已完成 B / C follow-up：PLIC source wiring 拆分、`Machine` block transport 选择、`mycpu_virt` board profile 切到 `virtio-blk`，`xv6_boot_smoke` / `run-workload-xv6` 开始消费真实 `virtio` board path。
-  - 同日进一步的 A / B bug-driven follow-up 也已完成：A 已补齐 `pmpcfg0/pmpaddr0/menvcfg/stimecmp` 最小 contract，B 已补齐 `xv6 uartinit()` 所需的 UART 16550 bring-up contract；`xv6` 先稳定到 5000-cycle boot-banner / allocator-warmup checkpoint，随后又推进到真实 `virtio-blk` board path 下的 shell。
-  - 同日也已把 Linux-facing boot contract foundation 接进主线：generic `flat/payload/set_gpr`、probe summary 的 `payloads/gpr-seeds` 输出、`DebugSession reset` replay，以及 `linux_proto` board/profile 级 boot layout dry-run。
-  - 这一轮验证已覆盖 `python3 tests/host/run_debug_cli_probe_test.py`、`make test-host-run_debug_cli_probe`、`make test-host-debug_protocol_command_smoke`、`make test-unit-machine_loader_reset`、`make test-host-debug_cli_smoke`、`make test-host-virtio_blk_smoke`、`make test-host-xv6_boot_smoke`、`make test-host-xv6_shell_smoke`、`make run-workload-xv6`、`make test`、`make test-pipeline` 与 `cd frontend && node --test`。
-- `2026-04-24`
-  - 已修正 `linux_proto` 的 `dtb` 生成规则：缺 `rootfs.cpio` 时不再直接报 `No rule to make target`。
-  - 已补上 repo-generated 最小 `rootfs.cpio` `/init` fallback；默认工作区现在不再把外部 `initrd` 当成必需输入。
-  - `make run-workload WORKLOAD_NAME=linux_proto` 现在会继续走到 probe 层，并 fail-closed 列出缺失 `Image` 文件。
-  - functional 路径已补上最小 `RV64C`，modern `virtio-mmio` 已补齐 `VIRTIO_F_VERSION_1`，`virtio_blk` 探测不再因 modern feature 缺失而失败。
-  - `linux_proto` profile 已新增 `LINUX_PROTO_DISK` / `LINUX_PROTO_BOOTARGS` alias，且 `mycpu_virt.dts` 会随 bootargs 变更强制重生成。
-  - 这一轮验证已覆盖 `make build-workload WORKLOAD_NAME=linux_proto LINUX_PROTO_EXTERNAL_DIR=/tmp/mycpu-linux-missing`、`make WORKLOAD_NAME=linux_proto LINUX_PROTO_EXTERNAL_DIR=/tmp/mycpu-linux-missing run-workload`、更新后的 `run_debug_cli_probe` Linux profile 单测、`make test-unit-virtio_mmio_contract`、`make test-host-virtio_blk_smoke`、`make test`、`make test-pipeline` 与本地 `CONFIG_RISCV_ISA_C=y` Linux `Image` 的 `/init reached` probe。
-- `2026-04-25`
-  - `linux_proto` 现已支持 `LINUX_PROTO_ROOTFS_MODE=block`，并在缺外部 Linux 磁盘镜像时默认生成 repo-owned 最小 `rootfs.ext4`；block 模式会自动切到 `root=/dev/vda rw rootfstype=ext4 rootwait init=/init`。
-  - `mycpu_virt.dts` 在 block 模式下会把 `chosen.initrd` 收口成零长度占位，而不是复用旧 `rootfs.cpio` 的大小。
-  - repo-generated `/init` 现在会容忍 block-rootfs 路径下已预先挂载的 `devtmpfs`，并通过 staged marker 把最小用户态闭环收口成可观察 checkpoint；同日又补上一层更窄的 post-init smoke：在 console 打通后做一次 ext4 `rootfs` 写入/读回一致性检查、把 `procfs` 挂载与 `/proc/cmdline` 可读性纳入最小 `/init` 路径，再继续把 `sysfs` 挂载与 `/sys/devices/system/cpu/online` 可读性也纳入同一条 baseline。随后又修正了 `linux_mininit` 的 staged-marker 长度常量，让 `console-opened / rootfs-rw-ok / proc-readable / sys-readable / /init reached` 这些 UART 输出不再把 trailing `NUL` 一起写出；这轮继续把 repo-generated second-stage ELF `/post-init-smoke` 接到同一条 rootfs，并让 `/init` 在完成最小 smoke 后显式 `execve()` 到它；随后 post-init userland 也已补上只读文件 smoke 和 first writable-rootfs round-trip。基于本地 `CONFIG_RISCV_ISA_C=y` Linux `Image`，repo-generated `rootfs.ext4` 路径已稳定推进到 `EXT4-fs (vda)`、`VFS: Mounted root (ext4 filesystem) on device 254:0.`、`devtmpfs: mounted`、`Run /init as init process`、`mycpu linux initrd: stage=console-opened`、`mycpu linux initrd: stage=rootfs-rw-ok`、`mycpu linux initrd: stage=proc-readable`、`mycpu linux initrd: stage=sys-readable`、`mycpu linux initrd: /init reached`、`mycpu linux initrd: stage=execve-post-init`、`mycpu linux userland: stage=file-readable`、`mycpu linux userland: stage=rootfs-rw-roundtrip-ok` 与 `mycpu linux userland: post-init reached`。
-  - 这一轮验证已覆盖 `make build-workload WORKLOAD_NAME=linux_proto LINUX_PROTO_ROOTFS_MODE=block LINUX_PROTO_IMAGE=/tmp/mycpu-linux-build-riscv64-linux-gnu/arch/riscv/boot/Image`、`python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline`，以及本地 `CONFIG_RISCV_ISA_C=y` Linux `Image` 的 `python3 workloads/run_debug_cli_probe.py ... --uart-wait "mycpu linux userland: stage=mkdirat-dir-name-reusable" 300000000` block-rootfs probe。
-- `2026-04-26`
-  - repo-generated second-stage ELF `/post-init-smoke` 现已继续补上最小 `clone3/fork-like -> child write -> parent wait4` process lifecycle smoke，并新增 `stage=execve-third-stage` marker 与 `execve()` 到 repo-generated third-stage ELF `/post-init-exec-smoke` 的最小 contract。
-  - 基于本地 `CONFIG_RISCV_ISA_C=y` Linux `Image`，当前 repo-generated `rootfs.ext4` 路径会在 `mycpu linux userland: stage=file-readable`、`stage=rootfs-rw-roundtrip-ok`、`stage=fork-child-wrote`、`stage=parent-wait4-ok` 之后继续稳定命中 `stage=execve-third-stage`、`stage=mkdir-chdir-ok`、`stage=nested-file-roundtrip-ok`、`stage=getdents64-nested-visible`、`stage=fstatat-nested-stat-ok`、`stage=renameat2-syscall-ok`、`stage=renameat2-nested-ok`、`stage=renameat2-dirent-updated`、`stage=renameat2-cleanup-ok`、`stage=unlinkat-parent-dirent-gone`、`stage=mkdirat-dir-name-reusable`、`stage=mkdirat-reused-dir-parent-stat-ok`、`stage=fourth-stage-entered`、`stage=fourth-stage-console-opened`、`stage=fourth-stage-root-chdir-ok`、`stage=unlinkat-reused-dirent-gone`、`stage=symlinkat-target-readable`、`stage=fstatat-symlink-nofollow-ok`、`stage=readlinkat-target-ok`、`stage=unlinkat-symlink-dirent-gone`、`stage=dirfd-relative-openat-ok`、`stage=dirfd-relative-fstatat-ok`、`stage=dirfd-relative-linkat-ok`、`stage=linkat-target-readable`、`stage=linkat-shared-inode-ok`、`stage=unlinkat-origin-hardlink-survives`、`stage=unlinkat-origin-link-count-dropped`、`stage=dirfd-relative-unlinkat-ok`、`stage=dirfd-relative-reopen-gone`、`stage=dirfd-relative-fstatat-gone`、`stage=dirfd-relative-getdents-gone`、`stage=unlinkat-hardlink-dirent-gone`、`stage=unlinkat-open-fd-nlink-zero`、`stage=unlinkat-open-fd-survives`、`stage=fourth-stage-reached` 与 `post-init reached`。
-  - 这一轮验证已覆盖 `python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`、`make test-host-run_debug_cli_probe`、`make build-workload WORKLOAD_NAME=linux_proto LINUX_PROTO_ROOTFS_MODE=block LINUX_PROTO_IMAGE=/tmp/mycpu-linux-build-riscv64-linux-gnu/arch/riscv/boot/Image`、`make test`、`make test-pipeline`，以及本地 `CONFIG_RISCV_ISA_C=y` Linux `Image` 的 `python3 workloads/run_debug_cli_probe.py ... --uart-wait "mycpu linux userland: stage=mkdirat-dir-name-reusable" 300000000` 与 `--uart-wait "mycpu linux userland: post-init reached" 300000000` 两次 block-rootfs probe。
-- `2026-04-21`
-  - 正式把标准 OS bring-up 提升为当前主线 Wave 1 的近端执行路径；当前长期排期语义随后已统一回写到 [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)。
-  - 新增 `xv6 / Linux / JIT` 主线 design / status / wave 1 plan，并按 4 个独立 worktree 启动并行工作流。
-  - 当天晚些时候 4 个 worktree 的第一轮 handoff 全部收齐，当前主线进入“按 ownership 整合已完成 foundation / harness”的阶段。
+  - `xv6` 在真实 `virtio-blk` board path 上稳定到 shell。
+  - Linux-facing `flat image + payload + set_gpr + linux_sbi_shim + repo DTB`
+    foundation 进入主线。
 - `2026-04-12`
-  - 完成 `P4-prep-1`，`Bus` 已统一暴露 `RAM / MMIO / unmapped` 与保守 region 属性。
-  - 向量 / CNN 可视化正式接入 `debug/frontend`。
-- `2026-04-10` 到 `2026-04-11`
-  - `V-lite` `V0 ~ V4` 及第一轮更窄 hardening 落地，形成固定 `conv -> relu` 的最小 CNN-style guest 闭环与最小 vector-aware pipeline 边界。
-- `2026-04-07`
-  - Spike 外部差分扩到第一批 device-free `Sv39 / page fault` final-state subset，并补上 returning trap handler 的 first-trap checkpoint。
-- `2026-04-05`
-  - decode 级 `BlockedByUnresolvedStore` 边界收窄完成，且主线已明确：当前不主动继续扩大更激进的 `issue / replay / speculation`。
-  - `debug/frontend` 补上更窄的长会话、session replacement 与 terminal 输入压力验证。
-- `2026-04-04`
-  - `P1` 结构收口与 `P2` 首轮验证补洞完成两轮收口，新增 loader 单测、guest smoke 窄单测、真实 debug e2e smoke 与 pipeline smoke 拆分。
+  - `P4-prep-1` 完成，`bus / memory_region` 合同收口为统一事实来源。
 
 ## 当前仍然有效的风险 / 限制
 
-- `debug/frontend` 当前已经够用，但它的正式定位仍然是“教学演示可用 + 最小工程调试”，不应顺势扩成通用调试器。
-- 当前 `pipeline` 已具备最小真实 `OoO execute`，但仍是单发射、顺序退休、保守 replay 的克制形态；当前没有足够证据支持继续主动扩大更激进的 `issue / replay / speculation`。
-- 当前并行整合阶段虽已结束，但后续 `xv6` 暴露的 blocker 仍会跨 ISA、platform、guest workload 三类边界；必须继续按 A / B / C / D ownership 分类，避免回到 `main` 工作区后重新变成“谁顺手谁修”。
-- 当前 `xv6-riscv` 虽已在真实 `virtio-blk` board path 上推进到 shell，但这条线更多已经变成稳定 workload guardrail；当前仍不能把这件事误读成 Linux 或 `JIT / DBT` 已接近本轮交付。
-- 当前 `V4` 虽已落地，但仍刻意不扩到向量 load/store path、lane 模型、vector rename 或更重 memory speculation；在继续 hardening 与 workload 观察之前，直接抢跑更重 `Phase 4` 的性价比仍然偏低。
-- 当前 `P4-prep-1` 与 `C1 / P4-prep-2` 都只是准备性收口：`shadow_cache` 目前只提供读侧观测和统计，不代表真实 cache / DMA / multicore 已进入正式实施阶段；当前 `xv6` 默认 functional probe 已具备稳定的 workload 观测出口，但 `xv6 / Linux` 若要拿到更像未来 cache 评估的 pipeline-side memory signal，仍需要后续单独收口 pipeline bring-up gap。
-- guest runtime 的 `vm*`、`trap*`、`kernel_bringup`、`kernel_runtime` 等边界已经比早期清晰得多，但后续仍要防止真实 bug 修复把职责重新揉回大文件。
-- 当前 `linux_proto` 已经具备 `linux_sbi_shim + payload/GPR seed + repo-generated dtb/chosen/cmdline + optional disk/bootargs alias + repo-generated block-rootfs fallback` 的 Linux-facing foundation；在显式提供真实 `Image` 时，这条路径已能稳定推进到 `Unpacking initramfs...`、`devtmpfs: initialized`、`xor`、repo-generated initramfs `/init reached`，以及 repo-generated ext4 block-rootfs 的 `mycpu linux initrd: stage=rootfs-rw-ok`、`stage=proc-readable`、`stage=sys-readable`、`stage=execve-post-init`、`mycpu linux userland: stage=file-readable`、`stage=rootfs-rw-roundtrip-ok`、`stage=fork-child-wrote`、`stage=parent-wait4-ok`、`stage=execve-third-stage`、`stage=mkdir-chdir-ok`、`stage=nested-file-roundtrip-ok`、`stage=getdents64-nested-visible`、`stage=fstatat-nested-stat-ok`、`stage=renameat2-syscall-ok`、`stage=renameat2-nested-ok`、`stage=renameat2-dirent-updated`、`stage=renameat2-cleanup-ok`、`stage=unlinkat-parent-dirent-gone`、`stage=mkdirat-dir-name-reusable`、`stage=mkdirat-reused-dir-empty`、`stage=mkdirat-reused-dir-dot-only`、`stage=mkdirat-reused-dir-parent-stat-ok`、`stage=fourth-stage-entered`、`stage=fourth-stage-console-opened`、`stage=fourth-stage-root-chdir-ok`、`stage=unlinkat-reused-dirent-gone`、`stage=symlinkat-target-readable`、`stage=fstatat-symlink-nofollow-ok`、`stage=readlinkat-target-ok`、`stage=unlinkat-symlink-dirent-gone`、`stage=dirfd-relative-openat-ok`、`stage=dirfd-relative-fstatat-ok`、`stage=dirfd-relative-linkat-ok`、`stage=linkat-target-readable`、`stage=linkat-shared-inode-ok`、`stage=unlinkat-origin-hardlink-survives`、`stage=unlinkat-origin-link-count-dropped`、`stage=dirfd-relative-unlinkat-ok`、`stage=dirfd-relative-reopen-gone`、`stage=dirfd-relative-fstatat-gone`、`stage=dirfd-relative-getdents-gone`、`stage=unlinkat-hardlink-dirent-gone`、`stage=unlinkat-open-fd-nlink-zero`、`stage=unlinkat-open-fd-survives`、`stage=unlinkat-open-fd-anon-write-ok`、`stage=unlinkat-open-fd-anon-readback-ok`、`stage=unlinkat-open-fd-dup-survives`、`stage=unlinkat-open-fd-dup-write-ok`、`stage=unlinkat-open-fd-dup-readback-ok`、`stage=unlinkat-open-fd-dup-truncate-ok`、`stage=unlinkat-open-fd-dup-truncate-roundtrip-ok`、`stage=unlinkat-open-fd-dup-append-ok`、`stage=unlinkat-open-fd-dup-append-truncate-ok`、`stage=unlinkat-open-fd-dup-grow-zero-fill-ok`、`stage=unlinkat-open-fd-dup-grow-tail-write-ok`、`stage=unlinkat-open-fd-dup-fork-child-write-ok`、`stage=unlinkat-open-fd-dup-fork-parent-readback-ok`、`stage=unlinkat-open-fd-procfd-reopen-ok`、`stage=unlinkat-open-fd-procfd-readback-ok`、`stage=unlinkat-open-fd-execve-child-readback-ok`、`stage=unlinkat-open-fd-execve-child-write-ok`、`stage=unlinkat-open-fd-execve-parent-readback-ok`、`stage=fourth-stage-reached` 与 `post-init reached`。当前默认工作区已经通过 repo-generated 最小 `rootfs.cpio` 与 `rootfs.ext4` 去掉了外部 `initrd` / disk 镜像依赖；仓库默认位置仍不携带真实 Linux `Image`，因此 fourth-stage runtime guardrail 继续保持 opt-in，但它本身已经在显式提供真实 `Image` 时冻结通过，不再是“等待 `Image` 才能验证”的未决入口；当前近端 Linux blocker 也已从同进程匿名 fd 变体，推进到匿名 fd 穿过一次真实 `execve()` / program-image switch 之后的下一处自然 checkpoint。
-- `linux_sbi_shim` 现在还会把 Linux 接管 `stvec` 之前的 unexpected early `M/S` trap 直接打印到 UART；它先把一颗本地新构建 `Image` 的入口失败明确收窄到 `RVC`，随后 functional 路径又已补上最小 `RV64C`。当前真正仍未关闭的 bring-up blocker 已不再是 `RVC`、modern virtio feature、block-rootfs 挂载本身，或最小 `/init` 的 console / rootfs-rw / procfs / sysfs 闭环；当前更后、也更值得继续收窄的 gap 已更新为“post-init file-read/write + process lifecycle + multi-stage exec + path-resolution + getdents64 目录遍历 + `fstatat` 元数据读回 + 重建目录再次 cleanup + symlink/readlink/hardlink lifecycle + dirfd-relative path resolution + dirfd-relative metadata readback + dirfd-relative link creation + dirfd-relative unlink cleanup + same-dirfd getdents disappearance + open-fd `nlink=0` metadata + open-fd lifetime + anonymous open-fd overwrite + anonymous open-fd readback + open-fd dup alias lifetime + open-fd dup alias overwrite + open-fd dup alias readback + open-fd dup alias truncate + open-fd dup alias post-truncate roundtrip + open-fd dup alias append + open-fd dup alias append truncate + open-fd dup alias grow zero-fill + open-fd dup alias grow-tail overwrite/readback + `clone3()/wait4()` 进程边界 + `/proc/self/fd/<n>` 路径重物化 + 跨 `execve()` / program-image switch 的匿名 fd readback/writeback 之后的下一处 userland / platform checkpoint”，而不是继续回头处理已关闭的 console prefix 问题。
-- 当前 `Machine` 默认 block transport 仍保持 `simple_storage` 以守住既有 guest / debug 路径；真实 `virtio` path 需要 workload / CLI 显式选择，这条兼容性策略当前是有意保留的。
-- A 已经补齐第一轮 `RV64A + CSR / privilege` foundation，但这不代表 `xv6` 后续会用到的全部 timer / privilege contract 都已落齐；`pmp*`、`menvcfg`、`stimecmp` 等缺口仍可能继续暴露。
+- Linux 当前 checkpoint 线仍然在持续产出高信号 userland contract，
+  因此它仍是近端 blocker，而不是低收益重复挖掘。
+- `shadow_cache` 虽然已经有稳定 guardrail，但证据仍不足以证明：
+  “继续深挖 Linux 只会得到低收益重复”，所以还不能激活 Wave 4。
+- 仓库默认位置仍不携带真实 Linux `Image`；因此 Linux runtime guardrail
+  继续保持 opt-in，但它本身已经在显式提供真实 `Image` 时冻结通过。
+- `xv6 / Linux` 的 pipeline-side workload 观测还不够稳定，当前更可靠的
+  workload 观测仍主要落在 pipeline vector CNN 和 functional `xv6/linux_proto`。
+- `debug/frontend`、`pipeline` 和 guest runtime 都已形成可维护边界，但后续
+  仍要避免真实 bug 修复把职责重新揉回大文件。
 
 ## 下一步
 
-1. 把 `xv6` shell 继续守成真实 `virtio-blk` board path 的稳定 guardrail，并只按真实 bug 或明确收益补更窄 smoke。
-2. 在现有 `flat/payload/set_gpr`、`LINUX_PROTO_ROOTFS_MODE=block` 与 repo-generated `rootfs.ext4` foundation 之上，继续沿真实 Linux `Image` 路径把最小 `console-opened -> rootfs-rw-ok -> proc-readable -> sys-readable -> /init reached -> file-readable -> rootfs-rw-roundtrip-ok -> fork-child-wrote -> parent-wait4-ok -> execve-third-stage -> mkdir-chdir-ok -> nested-file-roundtrip-ok -> getdents64-nested-visible -> fstatat-nested-stat-ok -> renameat2-syscall-ok -> renameat2-nested-ok -> renameat2-dirent-updated -> renameat2-cleanup-ok -> unlinkat-parent-dirent-gone -> mkdirat-dir-name-reusable -> mkdirat-reused-dir-empty -> mkdirat-reused-dir-dot-only -> mkdirat-reused-dir-parent-stat-ok -> fourth-stage-entered -> fourth-stage-console-opened -> fourth-stage-root-chdir-ok -> unlinkat-reused-dirent-gone -> symlinkat-target-readable -> fstatat-symlink-nofollow-ok -> readlinkat-target-ok -> unlinkat-symlink-dirent-gone -> dirfd-relative-openat-ok -> dirfd-relative-fstatat-ok -> dirfd-relative-linkat-ok -> linkat-target-readable -> linkat-shared-inode-ok -> unlinkat-origin-hardlink-survives -> unlinkat-origin-link-count-dropped -> dirfd-relative-unlinkat-ok -> dirfd-relative-reopen-gone -> dirfd-relative-fstatat-gone -> dirfd-relative-getdents-gone -> unlinkat-hardlink-dirent-gone -> unlinkat-open-fd-nlink-zero -> unlinkat-open-fd-survives -> unlinkat-open-fd-anon-write-ok -> unlinkat-open-fd-anon-readback-ok -> unlinkat-open-fd-dup-survives -> unlinkat-open-fd-dup-write-ok -> unlinkat-open-fd-dup-readback-ok -> unlinkat-open-fd-dup-truncate-ok -> unlinkat-open-fd-dup-truncate-roundtrip-ok -> unlinkat-open-fd-dup-append-ok -> unlinkat-open-fd-dup-append-truncate-ok -> unlinkat-open-fd-dup-grow-zero-fill-ok -> unlinkat-open-fd-dup-grow-tail-write-ok -> unlinkat-open-fd-dup-fork-child-write-ok -> unlinkat-open-fd-dup-fork-parent-readback-ok -> unlinkat-open-fd-procfd-reopen-ok -> unlinkat-open-fd-procfd-readback-ok -> unlinkat-open-fd-execve-child-readback-ok -> unlinkat-open-fd-execve-child-write-ok -> unlinkat-open-fd-execve-parent-readback-ok -> fourth-stage-reached -> post-init reached` baseline 推向更后的 userland checkpoint；当前优先不再是“先补 runtime 输入”，而是沿这条已冻结的 runtime baseline 收窄随后暴露的下一处更后 contract。由于仓库默认位置仍不携带 Linux `Image`，这条 runtime guardrail 继续保持 opt-in；当前 active wave 仍是 Wave 3，不建议提前激活 Wave 4。
-3. A / B 后续都保持围绕 Linux bring-up 的 bug-driven hardening：`RVC`、UART 8250、modern `virtio-mmio`、block-rootfs 挂载，以及最小 `/init` console / rootfs-rw / procfs / sysfs 闭环的近端 contract 已经补齐；接下来随着真实 Linux 暴露更后的 userland / tty / platform 缺口，再补最窄 contract，不主动扩大无关 ISA / device 面。
-4. D 线当前已完成首轮 workload guardrail 收口：优先继续用 `execution_profile`、`shadow_cache` 观测、debug CLI、`run_debug_cli_probe` 与既有 workload smoke 守住 `xv6 / virtio / Linux profile` 路径的行为变化；当前至少要同时守住默认 functional `run-workload-xv6` 的非零 profile/shadow-cache、repo-local `linux_proto` dummy-payload functional baseline，以及 pipeline vector CNN 的 RAM shadow-cache baseline。
-5. 继续把 `pipeline`、guest runtime、`kernel_alpha` 十条基线、`debug/frontend` 和 Spike 外部差分限定在当前已接入、可验证的范围内维护，不让新主线反向污染 reference path。
+1. 从 `unlinkat-open-fd-mmap-shared-fork-parent-readback-ok` 之后继续收窄
+   `pipe2 + clone3()/wait4()` 匿名 IPC，或找到更自然的后续 userland 边界。
+2. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
+   `make test` 和 `make test-pipeline` 这些稳定 guardrail。
+3. 只有在下面两条同时成立时，才考虑建议激活 Wave 4：
+   - Linux 当前 checkpoint 线已经不再是近端 blocker
+   - `shadow_cache / observation / representative workload` 证据已经足够稳定
 
 ## 验证基线
 
@@ -131,16 +121,12 @@
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`
 
-如果改动集中在 loader、guest smoke orchestration 或调试链路，至少额外关注：
+如果改动集中在 Linux / `xv6` workload harness、probe 或 runtime guardrail，
+还应至少关注：
 
-- `cd myCPU && make test-unit-binary_loader`
-- `cd myCPU && make test-unit-machine_loader_reset`
-- `cd myCPU && make test-unit-supervisor_demo_smoke`
-- `cd myCPU && make test-unit-user_program_smoke`
 - `cd myCPU && make test-host-run_debug_cli_probe`
-- `cd myCPU && make test-host-debug_cli_smoke`
-- `cd myCPU && make test-host-interactive_terminal_smoke`
-- `cd myCPU && make test-host-virtio_blk_smoke`
 - `cd myCPU && make test-host-xv6_boot_smoke`
 - `cd myCPU && make test-host-xv6_shell_smoke`
 - `cd myCPU && make run-workload-xv6`
+- `cd myCPU && python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`
+- `cd myCPU && MYCPU_RUN_LINUX_PROTO_RUNTIME=1 MYCPU_LINUX_PROTO_RUNTIME_IMAGE=<Image> python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested`

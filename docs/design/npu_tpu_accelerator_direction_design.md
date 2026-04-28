@@ -14,7 +14,6 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
   - [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
 - 相关设计：
   - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
@@ -417,5 +416,5 @@ Wave 1 已经把本设计从纯方案推进到可执行 foundation。当前有�
 ## 当前有效性说明
 
 - 当前有效：本文档作为独立 `MMIO NPU / TPU-like` AI 加速器方向的正式设计来源。
-- 当前这条线已经纳入主线后续 wave，但不是当前近端 active wave；当前优先级判断以 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 与 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前这条线已经纳入主线后续 wave，但不是当前近端 active wave；当前优先级判断以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 - 当前对应的专项状态见 [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)，Wave 1 完成态已归档到 [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)；后续执行进度应回写到状态文档和新的活跃计划，而不是继续堆在本文档里。

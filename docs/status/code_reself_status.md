@@ -10,7 +10,6 @@
 
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
-  - [project_priority_roadmap.md](project_priority_roadmap.md)
 - 当前计划：
   - 当前无活跃计划。
 

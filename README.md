@@ -239,8 +239,8 @@ SPIKE_PATH=/path/to/spike make test-host-spike_differential
 
 1. [docs/index.md](docs/index.md)
 2. [docs/status/mainline_status.md](docs/status/mainline_status.md)
-3. [docs/status/project_priority_roadmap.md](docs/status/project_priority_roadmap.md)
-4. [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
+3. [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
+4. [docs/status/npu_tpu_accelerator_status.md](docs/status/npu_tpu_accelerator_status.md)
 
 设计文档：
 

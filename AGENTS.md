@@ -6,10 +6,11 @@
 
 使用顺序：
 
-1. 先读本文件，理解项目范围、阶段目标和全局约定。
+1. 先读本文件，理解项目范围、全局约定和默认工作流。
 2. 进入具体子树后，再读对应子目录下的 `AGENTS.md`。
+3. 需要看实时进度、当前优先级、active wave 或近端 blocker 时，只看 [docs/status/mainline_status.md](docs/status/mainline_status.md)。
 
-本仓库后续只维护 `AGENTS.md` 体系，不再维护 `CLAUDE.md`。
+本仓库只维护 `AGENTS.md` 体系，不再维护 `CLAUDE.md`。
 
 ## 项目概况
 
@@ -18,13 +19,22 @@
 当前定位：
 
 - 已经是一个已可运行的模拟器原型，不是纯设计稿。
-- 当前已达成 Phase 1 核心 bring-up 目标，正处于 Phase 1 冻结后的稳定化，以及Phase2、3、4的有序推进阶段。
-- 正在同步推进一轮有明确结构收益的 C++ 重构。
+- 当前以 `reference-first`、可观察性和小步收口为默认方法。
+- `Phase 1` 冻结基线已经形成，后续工作主要围绕 `xv6 / Linux` bring-up、`pipeline` 维护，以及更后续 wave 的准备性收口展开。
 
-长期目标：
+## 单一事实来源
 
-- 先把模拟器扩展到足以支撑一个自制的小型 OS / kernel bring-up。
-- 在保持统一 ISA 语义来源的前提下，继续深化 pipeline，并逐步进入 OoO、cache、multicore 等更复杂模型。
+- 仓库级实时状态、当前优先级、active wave、当前 blocker：
+  - [docs/status/mainline_status.md](docs/status/mainline_status.md)
+- 专项状态只在确有独立持续跟踪价值时保留，例如：
+  - [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
+  - [docs/status/npu_tpu_accelerator_status.md](docs/status/npu_tpu_accelerator_status.md)
+  - [docs/status/code_reself_status.md](docs/status/code_reself_status.md)
+- 根目录和子树 `AGENTS.md` 只保留范围、规则、方法、局部边界和验证要求，不承载实时进度流水账。
+- `design / plan / status` 分工保持严格分离：
+  - `design` 记录长期有效的边界、取舍和契约。
+  - `plan` 记录执行步骤、checklist 和完成归档。
+  - `status` 记录当前状态、风险、优先级和下一步。
 
 ## 仓库结构
 
@@ -33,126 +43,26 @@
 - [frontend](frontend)
   本地调试服务、浏览器前端和 Node 测试。
 - [docs](docs)
-  按 `background / design / plan / status / showcase` 组织的正式技术文档、展示材料，以及统一入口 [docs/index.md](docs/index.md)。
+  按 `background / design / plan / status / showcase` 组织的正式技术文档。
 - [README.md](README.md)
   面向读者的项目概览、构建和运行说明。
 
 ## 子目录 AGENTS 索引
 
 - [myCPU/AGENTS.md](myCPU/AGENTS.md)
-  simulator 主体说明：CPU、CSR、trap、MMU、platform、device、loader、tests 的当前实现与局部规则。
+  simulator 主体的方法、局部规则和验证要求。
 - [myCPU/guest/AGENTS.md](myCPU/guest/AGENTS.md)
-  guest runtime 说明：memory、PMM、VM、trap、runtime、user task/program 与独立 kernel alpha bring-up 的当前边界和下一步。
+  guest runtime 的实现边界、局部规则和验证要求。
 - [docs/AGENTS.md](docs/AGENTS.md)
-  文档维护规则：正式目录职责、模板、创建条件、完成态回写规则与索引要求。
-
-## 当前状态
-
-当前仓库已经具备以下高层能力：
-
-- RV64I / RV64M 参考执行路径。
-- `functional` / `pipeline` 两种执行后端。
-- `pipeline` 当前已具备首轮 `rename + ROB + LSQ +` 最小真实 `OoO execute` 主路径。
-- ELF64 与 flat binary 加载。
-- 基础 CSR 访问与 M-mode trap。
-- 初步 `M/S/U` 特权路径。
-- 最小 UART / CLINT / PLIC / MMIO block storage 平台。
-- Sv39、最小 TLB、`sfence.vma`。
-- Sv39 特权边界：`S-mode` 对 `U=1` 可执行页的取指，以及 `U-mode` 对 supervisor-only 可执行页 / data page 的取指、load、store都会稳定触发 page fault。
-- 一套最小 guest supervisor runtime。
-- 一条独立的 `kernel_alpha` bring-up 路径及其正负回归。
-- 一条本地 `debug_session/protocol + frontend` 教学演示链路。
-- 一条面向外部 workload 的 `xv6 / Linux` bring-up foundation：`xv6-riscv` 当前已能在真实 `virtio-blk` board path 上稳定到 shell，Linux-facing boot path 也已具备 generic `flat image + payload + set_gpr` 合同。
-
-当前 guest 侧已经打通：
-
-- early allocator。
-- bitmap PMM。
-- guest-side Sv39 page table / address space。
-- trap / runtime / process / user task / user program 分层。
-- 最小 U-mode enter / return。
-- timer / external / page-fault / user-`ecall` smoke 路径。
-- 独立 kernel alpha 的 boot / PMM / Sv39 / external interrupt / timer interrupt / storage readiness probe / storage read 正向路径。
-- 独立 kernel alpha 的 CLINT unmapped、timer not-ready、PLIC not-ready、storage no-media、storage not-ready、storage bad-magic、storage bad-block-count、storage LBA-range 与 storage bad-command 九条负向路径。
-- 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 guest/runtime 收口默认按 post-Phase1 hardening 理解。
-
-最近一轮关键历史节点只保留以下几项：
-
-- `2026-04-28` 已沿 Linux block-rootfs fourth-stage baseline 再往后推进十八刀：repo-generated `/post-init-cleanup-smoke` 现已把 `stage=unlinkat-open-fd-anon-write-ok`、`stage=unlinkat-open-fd-anon-readback-ok`、`stage=unlinkat-open-fd-dup-survives`、`stage=unlinkat-open-fd-dup-write-ok`、`stage=unlinkat-open-fd-dup-readback-ok`、`stage=unlinkat-open-fd-dup-truncate-ok`、`stage=unlinkat-open-fd-dup-truncate-roundtrip-ok`、`stage=unlinkat-open-fd-dup-append-ok`、`stage=unlinkat-open-fd-dup-append-truncate-ok`、`stage=unlinkat-open-fd-dup-grow-zero-fill-ok`、`stage=unlinkat-open-fd-dup-grow-tail-write-ok`，以及随后新增的 `stage=unlinkat-open-fd-dup-fork-child-write-ok`、`stage=unlinkat-open-fd-dup-fork-parent-readback-ok`、`stage=unlinkat-open-fd-procfd-reopen-ok`、`stage=unlinkat-open-fd-procfd-readback-ok`、`stage=unlinkat-open-fd-execve-child-readback-ok`、`stage=unlinkat-open-fd-execve-child-write-ok` 与 `stage=unlinkat-open-fd-execve-parent-readback-ok` 一起冻结进 build-time strings 与显式 opt-in runtime guardrail：在最后一个 hardlink dirent 清掉、匿名 open-fd alias 已经 `nlink=0` 之后，guest 不仅要完成同一进程内的 overwrite/readback、`dup()` alias lifetime、truncate/append/regrow/zero-fill/tail-write，还要继续证明这份匿名 inode 能跨 `clone3()/wait4()` 进程边界保持 regular-file、size 不变、`nlink=0` 与 readback 合同，经由 `/proc/self/fd/<n>` 路径重物化成新的只读句柄继续读回同一内容，并最终跨一次真实 `execve()` / program-image switch，在新程序镜像里先读回旧内容、再覆写匿名 inode，最后由 parent 对同一原始 fd 读回新内容。这一轮也顺手关掉了一个 smoke 自身的假 blocker：先前的 `fourth-stage open fd anon overwrite failed` 实际上来自把最终保活 fd 误开成 `O_RDONLY`。当前近端 Linux blocker 因此进一步收敛到“`unlinkat-open-fd-execve-parent-readback-ok` 之后的下一处更后 userland checkpoint”；按 [docs/design/future_expansion_roadmap_design.md](docs/design/future_expansion_roadmap_design.md) 的门槛判断，当前 active wave 仍是 Wave 3，尚不满足 Wave 4 激活条件。
-- `2026-04-27` 已把 Linux block-rootfs bring-up 继续推进到 repo-generated multi-stage post-init userland baseline，并在显式提供真实 `Image` 时把 fourth-stage cleanup runtime guardrail 也冻结下来：当前 `linux_proto` 的最小 `rootfs.ext4` 路径已稳定经过 `mycpu linux initrd: stage=console-opened`、`stage=rootfs-rw-ok`、`stage=proc-readable`、`stage=sys-readable`、`/init reached`、`mycpu linux userland: stage=file-readable`、`stage=rootfs-rw-roundtrip-ok`、`stage=fork-child-wrote`、`stage=parent-wait4-ok`、`stage=execve-third-stage`、`stage=mkdir-chdir-ok`、`stage=nested-file-roundtrip-ok`、`stage=getdents64-nested-visible`、`stage=fstatat-nested-stat-ok`、`stage=renameat2-syscall-ok`、`stage=renameat2-nested-ok`、`stage=renameat2-dirent-updated`、`stage=renameat2-cleanup-ok`、`stage=unlinkat-parent-dirent-gone`、`stage=mkdirat-dir-name-reusable`、`stage=mkdirat-reused-dir-empty`、`stage=mkdirat-reused-dir-dot-only`、`stage=mkdirat-reused-dir-parent-stat-ok`、`stage=fourth-stage-entered`、`stage=fourth-stage-console-opened`、`stage=fourth-stage-root-chdir-ok`、`stage=unlinkat-reused-dirent-gone`、`stage=symlinkat-target-readable`、`stage=fstatat-symlink-nofollow-ok`、`stage=readlinkat-target-ok`、`stage=unlinkat-symlink-dirent-gone`、`stage=dirfd-relative-openat-ok`、`stage=dirfd-relative-fstatat-ok`、`stage=dirfd-relative-linkat-ok`、`stage=linkat-target-readable`、`stage=linkat-shared-inode-ok`、`stage=unlinkat-origin-hardlink-survives`、`stage=unlinkat-origin-link-count-dropped`、`stage=dirfd-relative-unlinkat-ok`、`stage=dirfd-relative-reopen-gone`、`stage=dirfd-relative-fstatat-gone`、`stage=dirfd-relative-getdents-gone`、`stage=unlinkat-hardlink-dirent-gone`、`stage=unlinkat-open-fd-nlink-zero`、`stage=unlinkat-open-fd-survives`、`stage=fourth-stage-reached` 与 `post-init reached`。这一轮也把 repo-generated `rootfs` staging 改成 `install -m`，避免 runtime guardrail 在 staging 目录已有目标文件时假失败。当前近端 Linux blocker 也因此继续收敛到“这条最小 writable-rootfs + multi-stage exec + path-resolution + getdents64 目录遍历 + `fstatat` 元数据读回 + `renameat2`/`unlinkat` 目录项可见性 + `mkdirat` 名字复用 + 重建目录再次 cleanup + symlink/readlink/hardlink lifecycle + dirfd-relative path resolution + dirfd-relative metadata readback + dirfd-relative link creation + dirfd-relative unlink cleanup + same-dirfd getdents disappearance + open-fd `nlink=0` metadata + open-fd lifetime + link metadata baseline 之后的下一处更后 userland checkpoint”。
-- `2026-04-27` 同日已完成 `C1 / P4-prep-2 memory observation / shadow cache` 第一刀：`ExecutionProfile` 已具备地址级 memory observation、全局与 region 级 shadow-cache 统计，debug JSON 与 `run_debug_cli_probe` 文本摘要已能只读暴露 `profile.shadow_cache`；这一路径继续只做观测，不改变 guest 可见语义，也不代表真实 cache / DMA / multicore 已进入实施。
-- `2026-04-22` 已把 `xv6 / Linux / JIT` 主线继续推进到新的稳定里程碑：真实 `virtio-blk` board path 下的 `xv6-riscv` 当前已稳定到 shell，`xv6_shell_smoke` 已锁住 `ls`、`cat README`、`wc README`、`grep qemu README | wc`、root/nested 路径文件创建/读回/删除、`forktest` 与 `stressfs`；同日也已落下 Linux-facing `flat/payload/set_gpr + linux_proto profile` foundation，随后又补上最小 `linux_sbi_shim`、PLIC contiguous source window 与 repo-generated `mycpu_virt.dtb` `chosen/cmdline/timebase` contract，把真实 Linux 推到 `Unpacking initramfs...`、`devtmpfs: initialized` 与 `xor: measuring software checksum speed` checkpoint。
-- `2026-04-12` 已完成 `P4-prep-1`：`Bus` 当前已统一暴露 `RAM / MMIO / unmapped` 与 `cacheable / dma_visible / has_side_effect / supports_burst / label`，`vector` span 预校验、`pipeline` memory 判断与 `LSQ` forwarding 也已改为复用这一路径；这一轮继续不改变 guest 可见语义，也不顺势扩大到 `cache / DMA / multicore`。
-- `2026-04-05` 已完成 decode 级收窄之后的 `Phase 3` 后续取舍评估：在当前单发射、decode 级 load 前置分类、单 memory execute 通道与 coarse replay flush 基线上，不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 是否值得做。
-- `2026-04-05` 同日也已补上一层更窄的 `pipeline stall attribution` 观测：当前 debug snapshot / CLI 已能直接暴露 `stall_reason`，为后续是否值得重开 issue decoupling 提供更直接的证据。
-- `2026-04-05` 已把 decode 级 `BlockedByUnresolvedStore` 串行化边界收窄到“仅 older store 地址未知才阻塞”；地址已知但 data 未 ready 的 older store 不再全局阻塞非重叠 younger load，重叠场景继续走 `BlockedByOverlappingStore`。
-- `2026-04-05` 已为 `debug/frontend` 补上一组更窄的压力验证：Node/runtime 级持续 `run/pause`、运行中 session replacement、高吞吐 terminal 输入聚合，以及 `DebugCliSession` timeout fail-closed，避免迟到 CLI 响应错配后续请求。
-- `2026-04-05` 同日也继续把 `debug/frontend` 压力验证外推到 repeated `run/pause` 长会话、`reset` 后 terminal reset / offset 重启语义，以及真实 `debug server + mycpu --debug-cli` 下 `guest_interactive_os_demo` 的 `run/pause + terminal-input` e2e。
-- `2026-04-04` 已完成 `P1` 最后一批结构收口与 `P2` 首轮验证补洞两轮收口：`BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` / `user_program_smoke` 更窄单测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node/C++ 两侧调试预算常量收口，以及 `pipeline` mega-smoke 拆分都已进入现有门禁。
-- `2026-03-25` 已完成一批 simulator-side correctness 修复：非法整数编码、`DIV/REM` 溢出边界、ELF pure-BSS `PT_LOAD`、bus / device 第一轮边界防御。
-- `2026-03-26` 已完成一轮更系统的 Phase 1 hardening 回归扩充：非法编码样本扩展、CPU 侧 MMIO access-fault asm、ELF segment/reject/header 单元回归、host-side MMIO contract matrix，以及 CSR illegal matrix 均已接入现有门禁。
-- `2026-03-26` 已新增 [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)，作为当前 Phase 1 / Phase 2 回归收口标准。
-- `kernel_alpha_demo` 已完成首个可回归 alpha bring-up，当前正向输出为 `KMVPETDS`。
-- `kernel_alpha_fault_demo` 当前负向输出为 `KMVX`。
-- `kernel_alpha_storage_no_media_demo` 当前负向输出为 `KMVNX`。
-- `kernel_alpha_storage_not_ready_demo` 当前负向输出为 `KMVRX`。
-- `kernel_alpha_storage_bad_magic_demo` 当前负向输出为 `KMVGX`。
-- `kernel_alpha_storage_bad_block_count_demo` 当前负向输出为 `KMVBX`。
-- `kernel_alpha_storage_lba_range_demo` 当前负向输出为 `KMVLX`。
-- `kernel_alpha_storage_bad_command_demo` 当前负向输出为 `KMVCX`。
-- `kernel_alpha_plic_not_ready_demo` 当前负向输出为 `KMVPX`。
-- `kernel_alpha_timer_not_ready_demo` 当前负向输出为 `KMVPETX`。
-
-## 当前优先级
-
-决策顺序保持不变：
-
-0. 先把当前原型整理成更稳的 C++ 结构边界。
-1. 保持正确、可调试的 ISA 级 reference model。
-2. 把模拟器推进到足以支撑小型 OS / kernel bring-up。
-3. 只有在 Phase 1 稳定后，才进入更多执行模型和微架构扩展。
-
-不要把这几条路线混在同一实现步骤里。
-
-## 当前焦点
-
-当前阶段的主线工作是：
-
-- 继续稳住 simulator reference path 的 correctness 与可观察性。
-- 继续沿已落地的 hardening 矩阵，维护非法编码、MMIO 边界、ELF 段布局以及特权 / CSR 合同闭环，并按新增 bug 补最小回归。
-- 把独立 `kernel_alpha` 十条回归基线维持在可回归的 Phase 1 完成态，并继续做 bug-driven hardening。
-- 把真实 `virtio-blk` board path 下的 `xv6` shell 守成稳定 guardrail，并在现有 `flat/payload/set_gpr`、`linux_proto`、最小 `linux_sbi_shim`、repo-generated board DTB 与 repo-generated `rootfs.ext4` foundation 之上继续把真实 Linux 从当前 `console-opened -> rootfs-rw-ok -> proc-readable -> sys-readable -> /init reached -> file-readable -> rootfs-rw-roundtrip-ok -> fork-child-wrote -> parent-wait4-ok -> execve-third-stage -> mkdir-chdir-ok -> nested-file-roundtrip-ok -> getdents64-nested-visible -> fstatat-nested-stat-ok -> renameat2-syscall-ok -> renameat2-nested-ok -> renameat2-dirent-updated -> renameat2-cleanup-ok -> unlinkat-parent-dirent-gone -> mkdirat-dir-name-reusable -> mkdirat-reused-dir-empty -> mkdirat-reused-dir-dot-only -> mkdirat-reused-dir-parent-stat-ok -> fourth-stage-entered -> fourth-stage-console-opened -> fourth-stage-root-chdir-ok -> unlinkat-reused-dirent-gone -> symlinkat-target-readable -> fstatat-symlink-nofollow-ok -> readlinkat-target-ok -> unlinkat-symlink-dirent-gone -> dirfd-relative-openat-ok -> dirfd-relative-fstatat-ok -> dirfd-relative-linkat-ok -> linkat-target-readable -> linkat-shared-inode-ok -> unlinkat-origin-hardlink-survives -> unlinkat-origin-link-count-dropped -> dirfd-relative-unlinkat-ok -> dirfd-relative-reopen-gone -> dirfd-relative-fstatat-gone -> dirfd-relative-getdents-gone -> unlinkat-hardlink-dirent-gone -> unlinkat-open-fd-nlink-zero -> unlinkat-open-fd-survives -> unlinkat-open-fd-anon-write-ok -> unlinkat-open-fd-anon-readback-ok -> unlinkat-open-fd-dup-survives -> unlinkat-open-fd-dup-write-ok -> unlinkat-open-fd-dup-readback-ok -> unlinkat-open-fd-dup-truncate-ok -> unlinkat-open-fd-dup-truncate-roundtrip-ok -> unlinkat-open-fd-dup-append-ok -> unlinkat-open-fd-dup-append-truncate-ok -> unlinkat-open-fd-dup-grow-zero-fill-ok -> unlinkat-open-fd-dup-grow-tail-write-ok -> unlinkat-open-fd-dup-fork-child-write-ok -> unlinkat-open-fd-dup-fork-parent-readback-ok -> unlinkat-open-fd-procfd-reopen-ok -> unlinkat-open-fd-procfd-readback-ok -> unlinkat-open-fd-execve-child-readback-ok -> unlinkat-open-fd-execve-child-write-ok -> unlinkat-open-fd-execve-parent-readback-ok -> fourth-stage-reached -> post-init reached` baseline 推向更后的 userland checkpoint。
-- 按主线长期排期判断，当前 active wave 仍是 Wave 3：Linux 当前 checkpoint 线还在持续产出高信号 userland 边界，而 `shadow_cache` 的稳定 guardrail 仍主要停在 pipeline vector CNN 与 `xv6/linux_proto` functional observation，尚不足以说明继续深挖 Linux 只会得到低收益重复，因此不要提前切到 Wave 4。
-- `P1` 结构收口和 `P2` 首轮验证补洞已经全部完成；当前不再把重点放在继续扩功能面。
-- `debug/frontend` 的 Node/runtime 级持续 `run/pause`、session replacement、高吞吐 terminal 聚合、repeated `run/pause` 长会话、`reset` cadence 与真实 `interactive_os` e2e 门禁已经够用；当前这轮不扩功能面的 UI refresh 也已完成，范围继续收窄在浏览器壳层布局、视觉层级和 `terminal` 收起交互语义，后续仍按真实 bug 或明确 UI 需求补最小回归，不主动扩大协议或压力面。
-- `Phase 3` 的 decode 级 `BlockedByUnresolvedStore` 最小收窄之后，主线判断已经完成：当前不主动继续扩大更激进的 `issue / replay / speculation`；若未来重开，优先先看 issue decoupling 这类有明确结构收益的最小切片，而不是直接放大 memory speculation / replay。
-- `Phase 4` 当前已经完成准备性第一刀 `P4-prep-1` 与 `C1 / P4-prep-2 memory observation / shadow cache` 第一刀：`bus / memory region` 合同已经收口成统一事实来源，shadow-cache 观测也已接入 `execution_profile` / debug JSON / probe 摘要；后续只在有更稳定 workload 证据时，再评估是否扩大 memory analysis，不直接跳到真实 `cache / DMA / multicore / coherence`。
-- 继续把 `pipeline`、loader/debug smoke 和 guest runtime 保持在当前已接入、可验证的范围内，不让它们反向污染 reference path。
-- 更后续主线 wave 上，`向量扩展 + ML workload` 已被明确排进长期路线图；其 `V0 / V1`、`V2`、`V3`、一轮更窄的 `V3 hardening`、`V4` 首刀与第一轮更窄的 `V4` hardening 都已落地，当前已具备固定 `conv -> relu` 的最小 CNN-style guest 闭环、non-memory vector ALU 的最小 vector-aware pipeline 边界，以及更像真实依赖链的 host smoke；后续更健康的下一步仍是先围绕这条已落地边界做 bug-driven hardening，而不是直接抢跑 `Pool / FC`、向量 load/store path 或更重的 `Phase 4`。
-
-相关状态文档见：
-
-- [docs/status/mainline_status.md](docs/status/mainline_status.md)
-- [docs/status/project_priority_roadmap.md](docs/status/project_priority_roadmap.md)
-- [docs/design/regression_completion_criteria.md](docs/design/regression_completion_criteria.md)
-- [docs/design/vector_ml_workload_direction_design.md](docs/design/vector_ml_workload_direction_design.md)
-- [docs/design/phase4_preparation_design.md](docs/design/phase4_preparation_design.md)
-- [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
-
-## 技术栈
-
-- host simulator：C + C++17
-- guest runtime：C11 + RISC-V assembly
-- 构建：GNU Make
-- 交叉工具链：`riscv64-unknown-elf-gcc` / `riscv64-unknown-elf-objcopy`
-- 文档：Markdown
+  文档目录职责、索引要求和治理规则。
 
 ## 全局开发约定
 
 - 任何实现改动都应优先维护 reference path 的正确性与可观察性。
-- README、`docs/` 和各层 `AGENTS.md` 必须与当前实现同步。
-- 状态文档优先保留当前状态、少量关键历史节点和下一步，不要长期堆积已完成 checklist。
-- 不要做没有结构收益的纯 cosmetic 重写或纯语言迁移。
+- 共享 `InstructionSemantics + functional backend` 仍是 ISA 真值来源；`pipeline`、未来 `JIT` 和其他执行形态只消费共享语义。
+- 文档要与实现同步，但不要制造并行事实来源。
+- 状态文档优先保留当前状态、少量关键历史节点和下一步，不长期堆已完成 checklist。
+- 不做没有结构收益的纯 cosmetic 重写或纯语言迁移。
 - 优先小步落地，避免一次引入过大的抽象。
 - 不要提交构建产物，尤其是：
   - `myCPU/guest/supervisor_demo.elf`
@@ -166,42 +76,24 @@
   - `myCPU/guest/kernel_alpha_storage_bad_command_demo.elf`
   - `myCPU/guest/kernel_alpha_plic_not_ready_demo.elf`
   - `myCPU/guest/kernel_alpha_timer_not_ready_demo.elf`
+  - `myCPU/workloads/linux_proto/linux_postinit_cleanup_smoke.elf`
 
 ## Agent 默认工作流
 
-除非用户明确要求跳过、简化或改顺序，否则后续对话默认按下面流程推进。
-
-### 实现 / 设计类任务
+除非用户明确要求跳过、简化或改顺序，否则默认按下面流程推进：
 
 1. 先确认上下文。
-   至少阅读仓库根 `AGENTS.md`、目标子树 `AGENTS.md`、相关 `status/design` 文档，并在预计会改代码或文档时先本地确认 `git status`、当前分支和未提交改动。
-2. 遇到新增大模块、大功能面、较大行为变化或新边界时，先和开发者对齐设计，再在 `docs/design/` 撰写或更新设计文档。
-   如果只是小功能、小修复、小范围合同补洞，可以按实际收益决定是否单独写设计文档。
-3. 设计或方向确定后，先同步 `docs/status/` 和相关 `AGENTS.md` 里的当前主线、下一步、优先级或边界说明，不要等代码写完再回头补口径。
-4. 决定实施载体。
-   根据工作规模和风险，明确是在当前根目录直接工作，还是新开 worktree / branch；同时决定是否需要多 agent 并行协作。
-5. 决定是否写 `plan`。
-   任务较大、步骤较多、需要分阶段验收或多人并行时，在 `docs/plan/` 撰写计划文档；简单任务可以不单独写 `plan`。
-6. 根据 `plan` 或用户要求开始执行。
-   优先小步落地，先补最窄回归或最小验证，再扩到实现和更大门禁。
-7. 工作完成后，优先同步文档。
-   至少检查并更新相关 `status`、各级 `AGENTS.md`、必要时的 `README.md` / `docs/index.md`，确保文档口径和当前进度一致。
-8. 汇报结果，并把提交与清理交还给开发者决定。
-   汇报里要说明改动摘要、验证结果、剩余风险和建议下一步；不要默认自动提交，也不要默认自动清理 worktree / branch，除非用户明确要求。
-
-### 代码审查 / 修改类任务
-
-1. 审查发现默认集中写入 `docs/status/code_reself_status.md`。
-   如果文件不存在，就先创建；如果没有发现问题，也要明确写清“当前无活跃问题”。
-2. 审查结论形成后，先同步 `docs/status/` 和相关 `AGENTS.md` 里的下一步、优先级和处理口径。
-3. 后续如果要进入修复，实现流程默认回到上面的第 4 步到第 8 步执行。
-
-### 额外约束
-
-- 不要跳过文档同步。
-- 不要在未经确认的情况下直接提交或清理分支 / worktree。
-- 不要把设计、状态、计划和实现混成一份文档；按 `docs/AGENTS.md` 的分工维护。
-- 如果用户给了更具体的流程或边界，用户指令优先。
+   至少阅读根 `AGENTS.md`、目标子树 `AGENTS.md` 和直接相关的 `design / status` 文档；预计会改代码或文档时，先本地确认 `git status --short --branch`。
+2. 先判断是否需要设计文档。
+   新模块、大功能面、较大行为变化或新长期边界，先更新 `docs/design/`；小修复或窄合同补洞可直接实施。
+3. 再判断是否需要计划文档。
+   多步骤、多阶段验收或明显需要 checklist 的任务，写入 `docs/plan/`；简单任务可以不单独写 `plan`。
+4. 实施期间保持单一事实来源。
+   需要回写实时状态时，只更新相关 `status` 文档；不要把同一进度同时抄到多个文件。
+5. 工作完成后优先同步文档。
+   至少检查相关 `status`、`AGENTS.md`、必要时的 `README.md` / `docs/index.md`。
+6. 汇报结果，把提交和清理交还给开发者决定。
+   不默认自动提交，也不默认自动清理 branch / worktree，除非用户明确要求。
 
 ## 全局验证基线
 
@@ -245,32 +137,6 @@
 - `cd myCPU && make test-guest-kernel_alpha_plic_not_ready_demo`
 - `cd myCPU && make test-guest-kernel_alpha_timer_not_ready_demo`
 
-## 开发阶段
-
-### Phase 1
-
-目标：
-
-- 跑起一个小型自制 OS / kernel，具备基本中断、内存管理和控制台输出。
-
-### Phase 2
-
-目标：
-
-- 在保持统一 ISA 语义来源的前提下，引入多种执行模型。
-
-### Phase 3
-
-目标：
-
-- 在可测试前提下推进预测、重命名、ROB、LSQ 等高级微架构。
-
-### Phase 4
-
-目标：
-
-- 逐步加入 cache hierarchy、DMA、multicore 和一致性。
-
 ## 报告与总结规则
 
 - 描述项目时，要把当前仓库表述为“已可运行的模拟器原型”。
@@ -279,4 +145,4 @@
   - 项目 owner 已完成的既有工作
   - 已落地的当前结构成果
   - 当前下一步工程任务
-  - 更远期的 Phase 2 / 3 / 4 工作
+  - 更远期的 `Phase 2 / 3 / 4` 工作

@@ -14,7 +14,6 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关设计：
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
@@ -162,4 +161,4 @@
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `Phase 4` 当前准备性入口的统一设计来源。
-- 当前已完成的正式结果是 `P4-prep-1`、`P4-prep-2` 的 `C1 / memory observation / shadow cache` 第一刀及其首轮 workload baseline 收口，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract；后续是否继续更完整的 `P4-prep-2` workload 分析、更通用的 `P4-prep-3` 或完整 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
+- 当前已完成的正式结果是 `P4-prep-1`、`P4-prep-2` 的 `C1 / memory observation / shadow cache` 第一刀及其首轮 workload baseline 收口，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract；后续是否继续更完整的 `P4-prep-2` workload 分析、更通用的 `P4-prep-3` 或完整 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。

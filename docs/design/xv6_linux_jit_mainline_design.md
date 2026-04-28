@@ -13,9 +13,7 @@
 ## 关联文档
 
 - 状态文档：
-  - [../status/xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md)
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关计划：
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
   - [../plan/history_plan.md](../plan/history_plan.md)
@@ -146,5 +144,5 @@
 ## 当前有效性说明
 
 - 当前有效：自 `2026-04-21` 起，本文档作为“当前已激活的 `xv6 / Linux / JIT` 主线切换设计”。
-- 当前结果以 [../status/xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md) 与 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前结果以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 - 当前执行计划已归档到 [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)。

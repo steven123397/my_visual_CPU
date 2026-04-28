@@ -8,13 +8,12 @@
 - 当前实现的结构拆分、输入输出契约和用户入口
 - 哪些限制是 V1 的有意识收窄，哪些方向适合后续继续扩
 
-本文档不承担实时进度更新。当前是否已经落地、跑通哪些门禁、下一步优先级如何变化，统一以 [../status/mainline_status.md](../status/mainline_status.md) 和 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
+本文档不承担实时进度更新。当前是否已经落地、跑通哪些门禁、下一步优先级如何变化，统一以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 已完成计划归档：
   - [../plan/history_plan.md#spike-external-differential-validation-plan](../plan/history_plan.md#spike-external-differential-validation-plan)
 - 用户入口：
@@ -202,5 +201,5 @@ Spike runner 当前会显式拒绝以下 setup：
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效。
-- 实时状态、已接入场景和下一步优先级，请看 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)。
+- 实时状态、已接入场景和下一步优先级，请看 [../status/mainline_status.md](../status/mainline_status.md)。
 - 相关完成态计划已归档到 [../plan/history_plan.md#spike-external-differential-validation-plan](../plan/history_plan.md#spike-external-differential-validation-plan)。

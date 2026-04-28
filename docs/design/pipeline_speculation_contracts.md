@@ -15,7 +15,6 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关设计：
   - [phase3_ooo_execution_model_design.md](phase3_ooo_execution_model_design.md)
 - 已完成计划归档：
@@ -154,4 +153,4 @@
 ## 当前有效性说明
 
 - 当前有效：本文档作为当前 `pipeline` 投机执行、commit boundary 与 side effect 可见性的正式 contract。
-- 当前实现状态和后续取舍，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 为准。
+- 当前实现状态和后续取舍，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。

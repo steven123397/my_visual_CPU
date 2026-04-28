@@ -15,7 +15,6 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
 - 相关设计：
   - [minimal_interactive_os_design.md](minimal_interactive_os_design.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
@@ -198,4 +197,4 @@ browser
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `debug_session / protocol + frontend` 的统一设计边界。
-- 当前实时状态与后续优先级，以 [../status/mainline_status.md](../status/mainline_status.md)、[../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 与 [../../README.md](../../README.md) 为准。
+- 当前实时状态与后续优先级，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../../README.md](../../README.md) 为准。

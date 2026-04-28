@@ -28,21 +28,21 @@
 - 原文件：`mainline_roadmap_rewrite_and_linux_checkpoint_closure_plan.md`
 - 完成内容：把 [future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md) 从“未来候选路线菜单”重写成主线长期排期设计，并把当前 active wave 明确切到 Wave 3；同时把 Linux block-rootfs fourth-stage runtime baseline 再往前冻结一刀，新增 `stage=unlinkat-open-fd-survives`，把最小 open-fd lifetime 合同并入既有 `symlink/readlink/hardlink/link metadata` checkpoint 线。
 - 实现过程摘要：这一轮继续沿“先补 strings/runtime 断言、再补最小实现、最后统一回写 status / AGENTS / index / design 并删除活跃 plan”的路径推进；repo-generated `rootfs` staging 也改成 `install -m`，避免 runtime guardrail 因 staging 目录已有目标文件而假失败。验证覆盖 `python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`、`MYCPU_RUN_LINUX_PROTO_RUNTIME=1 MYCPU_LINUX_PROTO_RUNTIME_IMAGE=/tmp/mycpu-linux-build-riscv64-linux-gnu/arch/riscv/boot/Image python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md)
+- 结果参考：[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### phase4-prep2-memory-observation-shadow-cache-plan
 
 - 原文件：`phase4_prep2_memory_observation_shadow_cache_plan.md`
 - 完成内容：完成 `C1 / P4-prep-2 memory observation / shadow cache` 第一刀，把 `ExecutionMemoryObservation` 扩展为可携带物理地址的 memory observation，并在 `ExecutionProfile` 内新增只读 shadow-cache 统计；当前 debug JSON、`debug_cli_smoke` 与 `run_debug_cli_probe` 文本摘要都已能暴露 `profile.shadow_cache`，cacheable RAM 的重复 line access 会统计 `hits / misses / evictions / bypasses`，MMIO / fault / non-cacheable 场景继续作为 bypass 观测。
 - 实现过程摘要：这一轮继续沿“先补窄 host/probe 红灯，再接最小观测模型，最后统一回写 status / design / AGENTS 并删除活跃 plan”的路径推进；`shadow_cache` 只做 workload 证据收集，不参与执行提交语义，也不改变 guest 可见行为。验证覆盖 `make test-host-execution_profile_smoke`、`make test-host-debug_cli_smoke`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### xv6-linux-jit-wave1-plan
 
 - 原文件：`xv6_linux_jit_wave1_plan.md`
-- 完成内容：完成 `xv6 / Linux / JIT` Wave 1 收口，把 `RV64A + virtio + CSR / privilege + xv6-riscv` 主线基础、真实 `virtio-blk` board guardrail，以及 Linux block-rootfs 的 `console-opened -> rootfs-rw-ok -> proc-readable -> sys-readable -> /init reached -> file-readable -> rootfs-rw-roundtrip-ok -> fork-child-wrote -> parent-wait4-ok -> execve-third-stage -> mkdir-chdir-ok -> nested-file-roundtrip-ok -> getdents64-nested-visible -> fstatat-nested-stat-ok -> renameat2-syscall-ok -> renameat2-nested-ok -> renameat2-dirent-updated -> renameat2-cleanup-ok -> unlinkat-parent-dirent-gone -> mkdirat-dir-name-reusable -> mkdirat-reused-dir-empty -> mkdirat-reused-dir-dot-only -> mkdirat-reused-dir-parent-stat-ok -> third-stage-reached -> post-init reached` baseline 一起收口到主工作树；同时把 `mainline_status`、`project_priority_roadmap`、`xv6_linux_jit_status` 与 `docs/index.md` 的口径切到归档态。
+- 完成内容：完成 `xv6 / Linux / JIT` Wave 1 收口，把 `RV64A + virtio + CSR / privilege + xv6-riscv` 主线基础、真实 `virtio-blk` board guardrail，以及 Linux block-rootfs 的 `console-opened -> rootfs-rw-ok -> proc-readable -> sys-readable -> /init reached -> file-readable -> rootfs-rw-roundtrip-ok -> fork-child-wrote -> parent-wait4-ok -> execve-third-stage -> mkdir-chdir-ok -> nested-file-roundtrip-ok -> getdents64-nested-visible -> fstatat-nested-stat-ok -> renameat2-syscall-ok -> renameat2-nested-ok -> renameat2-dirent-updated -> renameat2-cleanup-ok -> unlinkat-parent-dirent-gone -> mkdirat-dir-name-reusable -> mkdirat-reused-dir-empty -> mkdirat-reused-dir-dot-only -> mkdirat-reused-dir-parent-stat-ok -> third-stage-reached -> post-init reached` baseline 一起收口到主工作树；同时把当时并行维护的主线状态口径统一收口回 `mainline_status` 与 `docs/index.md`。
 - 实现过程摘要：这一轮继续沿“先补最窄 checkpoint、再回写状态与优先级、最后删除活跃计划文件”的收口路径；Wave 1 不再保留活跃 `plan`，后续 Linux 继续沿已冻结的 post-init userland baseline 推进更后的 checkpoint。
-- 结果参考：[xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)、[xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md)
+- 结果参考：[xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 ### 2026-04-24
 
@@ -67,7 +67,7 @@
 - 原文件：`npu_tpu_accelerator_wave1_plan.md`
 - 完成内容：完成独立 `MMIO NPU / TPU-like` AI accelerator Wave 1 foundation，把 `DMA-ready` memory contract、静态 graph package / tensor golden model、独立 AI accelerator 控制面、`scratchpad + DMA/load-store engine`、静态调度器与代表性 compute path、host `ai_proto` packaging/profile 入口，以及 guest driver / demo / debug profile 闭环一起落到主工作树。
 - 实现过程摘要：整体按 `DMA-ready -> graph/golden -> control plane -> data plane -> compute path -> host profile -> guest/debug` 的顺序小步推进，并把性能口径收口为 `timed-simple simulated cycles`，不使用宿主机 wall-clock 表述“加速”。同日后续 hardening 又补上 manifest `format=ai_proto_manifest_v1` / 重复单值 key reject，以及 guest `ai_accel` queue helper，避免 host profile 与 guest completion ring 继续依赖 fail-open 假设。
-- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)
 
 ### 2026-04-12
 
@@ -76,14 +76,14 @@
 - 原文件：`phase4_prep1_bus_memory_region_plan.md`
 - 完成内容：完成 `P4-prep-1`，新增统一 `memory_region` 类型与 `Bus::describe_region()/describe_span()`，把 `RAM / MMIO / unmapped` 与 `cacheable / dma_visible / has_side_effect / supports_burst / label` 收口成单一事实来源；同轮也把 `vector` span 预校验、`pipeline` RAM/MMIO 判断与 `LSQ` RAM-only forwarding 迁到这一路径，并新增 `bus_region_contract` unit test 守住 region / span 合同。
 - 实现过程摘要：整体继续采用“先补红灯 unit test、再做最小 contract 落地、最后迁移现有调用点并守总门禁”的克制路径；这一轮明确不把问题顺势放大到 `cache / DMA / multicore / coherence`，也不改变现有 guest fault / MMIO side effect 口径，并最终守住 `cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
-- 结果参考：[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### vector-frontend-visualization-plan
 
 - 原文件：`vector_frontend_visualization_plan.md`
 - 完成内容：完成 `vector / NN frontend visualization`，当前浏览器端已经能直接选择 `guest_vector_demo` 与 `guest_vector_cnn_demo`，并展示 workload 说明卡、向量指令 `config / memory / ALU` 高亮、`SEW / VL + v0..v31` 最小寄存器快照、固定 `conv -> relu` 专题卡，以及当前 `vector_state_busy` / serializing guard 的最小执行边界提示。
 - 实现过程摘要：整体继续采用“先设计冻结、再按 `P0 -> P3` 顺序小步落地、最后统一回写状态与归档”的克制路径；这一轮只新增最小 `DebugSnapshot` 向量状态与前端只读展示，不扩成通用调试器，也不把问题顺势放大到通用模型可视化、lane 级性能图或更大协议面，并最终守住 `cd frontend && node --test`、`cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd myCPU && make test-host-debug_cli_smoke`。
-- 结果参考：[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
 
 ### 2026-04-10
 
@@ -99,28 +99,28 @@
 - 原文件：`vector_v2_plan.md`
 - 完成内容：完成 `V-lite` `V2` 首刀落地，新增 `vector_operator_smoke` 的 `dot / GEMM / Conv / ReLU` workload 回归、独立 `guest/vector_demo`，以及 functional / pipeline 两侧 guest 门禁。
 - 实现过程摘要：整体采用“先补 host 算子 smoke、再补独立最小 guest demo、最后统一回写状态与归档”的克制路径；这一轮明确不改现有 `V-lite` ISA 面、不接 `guest/kernel/*` 主线，也不把 `pipeline` 扩成 vector-aware 执行模型，并最终守住 `cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
-- 结果参考：[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### vector-v3-plan
 
 - 原文件：`vector_v3_plan.md`
 - 完成内容：完成 `V-lite` `V3` 首刀落地，新增独立 `guest/vector_cnn_demo`，以固定 `conv -> relu` 链路形成最小 CNN-style guest 闭环，并接通 functional / pipeline 两侧 guest 门禁；同轮也补上 `test-host-vector_vlite_smoke` 与 `test-host-vector_backend_smoke` 的显式 `make` alias。
 - 实现过程摘要：整体继续采用“先补最小工程卫生改动、再补独立固定 guest workload、最后统一回写状态与归档”的克制路径；这一轮保持现有 `V-lite` ISA 面与 `pipeline` serializing fallback 不变，不把问题顺势放大到 `Pool / FC`、模型加载、`guest/kernel/*` 主线或 vector-aware `pipeline`，并最终守住 `cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
-- 结果参考：[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### vector-v3-hardening-v4-design-plan
 
 - 原文件：`vector_v3_hardening_v4_plan.md`
 - 完成内容：完成一轮很窄的 `V3 hardening`，新增 `vector_cnn_smoke` host 回归，直接守住 mixed `SEW/VL` 的 `conv -> relu` 链路与全负卷积输出的 `relu` 零钳位；同轮也完成 `V4` 首刀设计收口，明确下一步只收窄 non-memory vector ALU 的最小 vector-aware pipeline 边界。
 - 实现过程摘要：整体继续采用“先补最窄 host regression、再顺手把下一刀设计冻结”的克制路径；这一轮不扩 guest 新 demo、不改现有 `V-lite` ISA 面，也不把问题顺势放大到向量 load/store path、lane 模型或更重 `Phase 4`，并最终守住 `cd myCPU && make test-host-vector_cnn_smoke`、`cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
-- 结果参考：[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### vector-v4-plan
 
 - 原文件：`vector_v4_minimal_vector_pipeline_plan.md`
 - 完成内容：完成 `V4` 首刀落地，让 non-memory vector ALU 脱离统一 serializing fallback，形成“execute 先 materialize、commit 再落地 architected vector state”的最小 vector-aware pipeline；同轮也新增 `vector_pipeline_smoke`，直接守住“older scalar ROB head 未退休时 vector ALU 仍可先执行”与“older vector state 未提交时 younger vector ALU 必须保守等待”的边界。
 - 实现过程摘要：整体继续采用“先补最窄红灯 smoke、再以最小 payload / ROB / commit 接线收窄当前边界”的克制路径；这一轮明确不扩到向量 load/store path、lane 模型、vector rename、vector phys file 或更重 memory speculation，并最终守住 `cd myCPU && make test-host-vector_pipeline_smoke`、`cd myCPU && make test` 与 `cd myCPU && make test-pipeline`。
-- 结果参考：[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[vector_ml_workload_direction_design.md](../design/vector_ml_workload_direction_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 ### 2026-04-06
 
@@ -249,46 +249,46 @@
 - 原文件：未单独保留活跃 plan；本轮直接按路线图 `P1-6` 收口。
 - 完成内容：完成 `debug_protocol` / `debug_server` 的协议与运行时边界收口；当前 `debug_protocol` 已拆成命令解码、响应序列化与 `CLI loop` 三块，`debug_server` 已拆成 `DebugCliSession`、server runtime 与 HTTP / WebSocket 入口，terminal 跟踪不再和子进程管理、路由分发揉在同一文件里。
 - 实现过程摘要：整体采用“先补新边界测试，再做文件切分”的克制路径；C++ 侧新增 `debug_protocol_command_smoke` 守住协议解码合同，Node 侧新增 `debug_server_runtime` 直测，并继续复用既有 `debug_server` / `interactive_terminal` smoke 守住外部行为不漂移。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)
 
 #### p1-guest-smoke-orchestration-refinement-plan
 
 - 原文件：`p1_guest_smoke_orchestration_refinement.md`
 - 完成内容：完成 `P1-2` guest smoke orchestration 收口，把 `user_program_smoke` 的 `prepare / enter round / active memory` 改成更窄的内部阶段 helper，并让 `supervisor_demo_smoke` 退回 bootstrap / user / session 组合层。
 - 实现过程摘要：先补 `prepare_standard()` runtime-stage rollback characterization，再按 freestanding 约束整理 guest smoke 内部编排；本轮刻意不扩到 `P1-5` 的 guest public header API 收口。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)
 
 #### p1-guest-public-header-boundary-refinement-plan
 
 - 原文件：`p1_guest_public_header_boundary_refinement.md`
 - 完成内容：完成 `P1-5` guest 公共头文件边界收口，把 `kernel_runtime`、`supervisor_runtime` 与 `user_program_smoke` 的跨模块使用面改成以窄 helper / accessor 为主，减少 direct `struct` layout 依赖。
 - 实现过程摘要：先补 interrupt state 的 configure / counter / delivered / wait helper，再把 `monitor_commands`、`kernel_alpha`、`supervisor_demo_smoke` 和相关单测迁到新访问面；本轮刻意不把这些 public struct 整体改成 opaque handle，也不顺手扩成更大范围的 guest 生命周期重构。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)
 
 #### p1-pipeline-backend-boundary-refinement-plan
 
 - 原文件：`p1_pipeline_backend_boundary_refinement.md`
 - 完成内容：完成 `P1-1` `pipeline_backend` 边界收口，把原本单文件承载的主调度、commit-replay、execute 和 frontend 职责拆成独立编译单元，并保持 `PipelineBackend` 外部接口与现有 `pipeline` 合同不变。
 - 实现过程摘要：整体采取“只拆文件边界、不改行为合同”的克制路径；`pipeline_backend.cpp` 退回构造与 debug snapshot 侧职责，其余逻辑分别下沉到 `pipeline_backend_cycle.cpp`、`pipeline_backend_execute.cpp` 与 `pipeline_backend_frontend.cpp`。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)
 
 #### p1-reference-platform-contract-refinement-plan
 
 - 原文件：未单独保留活跃 plan；本轮直接按路线图 `P1-12 / P1-13 / P1-14` 并行收口。
 - 完成内容：完成 `page walk` 总线失败 fault 分类、`PLIC` claim / complete 按 context 记账，以及 ELF header reject 合同三项 reference / platform 边界收口；当前页表物理访问失败与 A/D 位回写失败会稳定回到 access fault，错误 context 的 `PLIC complete` 不再释放 claim，ELF loader 也已明确 reject endianness / ident version / ELF version / type / machine / entry-range 非法输入。
 - 实现过程摘要：代码改动分别在独立 worktree 上并行落地，子分支只改生产代码和测试；最终统一回到 `main` 合并，并在主线文档中一次性回写路线图、状态和归档。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)
 
 #### p2-validation-gap-backfill-round-1
 
 - 原文件：未单独保留活跃 plan；本轮直接按路线图 `P2-1 / P2-2 / P2-3 / P2-4 / P2-5 / P2-7` 的建议拆分推进，并由主集成线统一回写状态。
 - 完成内容：完成 `BinaryLoader` 直接单测、`Machine::load_elf()/load_binary()` 最小 reload/reset 回归、`supervisor_demo_smoke` 直接单测、真实 `debug server + mycpu --debug-cli` 端到端 smoke、Node 侧调试预算常量收口，以及 `pipeline` mega-smoke 首轮拆分。
 - 实现过程摘要：代码线按 `A/B/C/D` worktree 并行落地，子线只改代码和测试；主线最后统一集成并重新跑 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd frontend && node --test`。本轮刻意没有把 `user_program_smoke` 更窄 helper 直测和全部跨语言预算常量一次性收完，后续仍按剩余 gap 继续推进。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)
 
 #### p2-validation-gap-backfill-round-2
 
 - 原文件：未单独保留活跃 plan；本轮直接沿 `p2-validation-gap-backfill-round-1` 剩余 gap 继续补洞。
 - 完成内容：补齐 `user_program_smoke` 的 `active-memory / interrupt round` 更窄直测，并把 C++ `debug_session.cpp`、`interactive_terminal_smoke.cpp` 的预算常量收口到共享命名入口。
 - 实现过程摘要：继续在主集成线以“先窄门禁、后总验证”的方式推进；guest 侧只扩 host stub 与直测，不改 `user_program_smoke` public surface，C++ 侧新增 `debug_budget.h` 统一 `step_commit` 与 interactive boot/command budget，然后重新跑 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd frontend && node --test`。
-- 结果参考：[mainline_status.md](../status/mainline_status.md)、[project_priority_roadmap.md](../status/project_priority_roadmap.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)

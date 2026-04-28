@@ -25,9 +25,7 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/project_priority_roadmap.md](../status/project_priority_roadmap.md)
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-  - [../status/xv6_linux_jit_status.md](../status/xv6_linux_jit_status.md)
 - 相关设计：
   - [debug_frontend_integration.md](debug_frontend_integration.md)
   - [minimal_interactive_os_design.md](minimal_interactive_os_design.md)
@@ -255,5 +253,5 @@ Wave 6 的激活门槛：
 ## 当前有效性说明
 
 - 当前有效：本文档作为主线长期排期设计。
-- 当前实时状态、当前风险和“这一轮先做什么”，仍以 [../status/mainline_status.md](../status/mainline_status.md)、[../status/project_priority_roadmap.md](../status/project_priority_roadmap.md) 与各专项状态文档为准。
+- 当前实时状态、当前风险和“这一轮先做什么”，仍以 [../status/mainline_status.md](../status/mainline_status.md) 与各专项状态文档为准。
 - 当前 active wave 的具体执行结果，应继续回写到对应 `status` 文档和活跃 `plan`，而不是在本文档里堆实时进度。
