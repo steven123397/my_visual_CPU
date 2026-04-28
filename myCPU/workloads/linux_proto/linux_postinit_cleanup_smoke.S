@@ -1,14 +1,22 @@
 #define SYS_UNLINKAT 35
+#define SYS_SYMLINKAT 36
+#define SYS_LINKAT 37
 #define SYS_CHDIR 49
 #define SYS_OPENAT 56
 #define SYS_CLOSE 57
 #define SYS_GETDENTS64 61
+#define SYS_READ 63
 #define SYS_WRITE 64
+#define SYS_READLINKAT 78
+#define SYS_NEWFSTATAT 79
 #define SYS_EXIT 93
 #define SYS_NANOSLEEP 101
 
+#define ENOENT 2
+
 #define AT_FDCWD -100
 #define AT_REMOVEDIR 512
+#define AT_SYMLINK_NOFOLLOW 256
 #define O_RDONLY 0
 #define O_RDWR 2
 
@@ -17,6 +25,22 @@
     .section .rodata
 console_path:
     .asciz "/dev/console"
+post_init_data_path:
+    .asciz "/post-init-data.txt"
+post_init_data_path_end:
+post_init_data_name:
+    .asciz "post-init-data.txt"
+post_init_data_expected:
+    .asciz "post-init-data-ok\n"
+post_init_data_expected_end:
+post_init_data_link_path:
+    .asciz "/post-init-data-link"
+post_init_data_link_name:
+    .asciz "post-init-data-link"
+post_init_data_hardlink_path:
+    .asciz "/post-init-data-hardlink"
+post_init_data_hardlink_name:
+    .asciz "post-init-data-hardlink"
 root_dir_path:
     .asciz "/"
 current_dir_path:
@@ -43,6 +67,54 @@ stage_fourth_stage_root_chdir_ok_msg_end:
 stage_fourth_stage_unlinkat_reused_dir_ok_msg:
     .asciz "mycpu linux userland: stage=fourth-stage-unlinkat-reused-dir-ok\n"
 stage_fourth_stage_unlinkat_reused_dir_ok_msg_end:
+stage_symlinkat_target_readable_msg:
+    .asciz "mycpu linux userland: stage=symlinkat-target-readable\n"
+stage_symlinkat_target_readable_msg_end:
+stage_fstatat_symlink_nofollow_ok_msg:
+    .asciz "mycpu linux userland: stage=fstatat-symlink-nofollow-ok\n"
+stage_fstatat_symlink_nofollow_ok_msg_end:
+stage_readlinkat_target_ok_msg:
+    .asciz "mycpu linux userland: stage=readlinkat-target-ok\n"
+stage_readlinkat_target_ok_msg_end:
+stage_unlinkat_symlink_dirent_gone_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-symlink-dirent-gone\n"
+stage_unlinkat_symlink_dirent_gone_msg_end:
+stage_dirfd_relative_openat_ok_msg:
+    .asciz "mycpu linux userland: stage=dirfd-relative-openat-ok\n"
+stage_dirfd_relative_openat_ok_msg_end:
+stage_dirfd_relative_fstatat_ok_msg:
+    .asciz "mycpu linux userland: stage=dirfd-relative-fstatat-ok\n"
+stage_dirfd_relative_fstatat_ok_msg_end:
+stage_dirfd_relative_linkat_ok_msg:
+    .asciz "mycpu linux userland: stage=dirfd-relative-linkat-ok\n"
+stage_dirfd_relative_linkat_ok_msg_end:
+stage_dirfd_relative_unlinkat_ok_msg:
+    .asciz "mycpu linux userland: stage=dirfd-relative-unlinkat-ok\n"
+stage_dirfd_relative_unlinkat_ok_msg_end:
+stage_dirfd_relative_reopen_gone_msg:
+    .asciz "mycpu linux userland: stage=dirfd-relative-reopen-gone\n"
+stage_dirfd_relative_reopen_gone_msg_end:
+stage_dirfd_relative_fstatat_gone_msg:
+    .asciz "mycpu linux userland: stage=dirfd-relative-fstatat-gone\n"
+stage_dirfd_relative_fstatat_gone_msg_end:
+stage_linkat_target_readable_msg:
+    .asciz "mycpu linux userland: stage=linkat-target-readable\n"
+stage_linkat_target_readable_msg_end:
+stage_linkat_shared_inode_ok_msg:
+    .asciz "mycpu linux userland: stage=linkat-shared-inode-ok\n"
+stage_linkat_shared_inode_ok_msg_end:
+stage_unlinkat_origin_hardlink_survives_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-origin-hardlink-survives\n"
+stage_unlinkat_origin_hardlink_survives_msg_end:
+stage_unlinkat_origin_link_count_dropped_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-origin-link-count-dropped\n"
+stage_unlinkat_origin_link_count_dropped_msg_end:
+stage_unlinkat_hardlink_dirent_gone_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-hardlink-dirent-gone\n"
+stage_unlinkat_hardlink_dirent_gone_msg_end:
+stage_unlinkat_open_fd_survives_msg:
+    .asciz "mycpu linux userland: stage=unlinkat-open-fd-survives\n"
+stage_unlinkat_open_fd_survives_msg_end:
 stage_fourth_stage_reached_msg:
     .asciz "mycpu linux userland: stage=fourth-stage-reached\n"
 stage_fourth_stage_reached_msg_end:
@@ -55,6 +127,60 @@ fourth_stage_reused_dir_cleanup_fail_msg_end:
 fourth_stage_reused_dir_dirent_smoke_fail_msg:
     .asciz "mycpu linux userland: fourth-stage reused dir dirent smoke failed\n"
 fourth_stage_reused_dir_dirent_smoke_fail_msg_end:
+fourth_stage_symlink_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage symlink smoke failed\n"
+fourth_stage_symlink_smoke_fail_msg_end:
+fourth_stage_symlink_stat_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage symlink stat smoke failed\n"
+fourth_stage_symlink_stat_smoke_fail_msg_end:
+fourth_stage_readlinkat_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage readlinkat smoke failed\n"
+fourth_stage_readlinkat_smoke_fail_msg_end:
+fourth_stage_symlink_cleanup_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage symlink cleanup failed\n"
+fourth_stage_symlink_cleanup_fail_msg_end:
+fourth_stage_symlink_dirent_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage symlink dirent smoke failed\n"
+fourth_stage_symlink_dirent_smoke_fail_msg_end:
+fourth_stage_dirfd_openat_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage dirfd openat smoke failed\n"
+fourth_stage_dirfd_openat_smoke_fail_msg_end:
+fourth_stage_dirfd_fstatat_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage dirfd fstatat smoke failed\n"
+fourth_stage_dirfd_fstatat_smoke_fail_msg_end:
+fourth_stage_dirfd_linkat_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage dirfd linkat smoke failed\n"
+fourth_stage_dirfd_linkat_smoke_fail_msg_end:
+fourth_stage_dirfd_unlinkat_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage dirfd unlinkat smoke failed\n"
+fourth_stage_dirfd_unlinkat_smoke_fail_msg_end:
+fourth_stage_dirfd_reopen_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage dirfd reopen smoke failed\n"
+fourth_stage_dirfd_reopen_smoke_fail_msg_end:
+fourth_stage_dirfd_gone_fstatat_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage dirfd gone-fstatat smoke failed\n"
+fourth_stage_dirfd_gone_fstatat_smoke_fail_msg_end:
+fourth_stage_hardlink_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage hardlink smoke failed\n"
+fourth_stage_hardlink_smoke_fail_msg_end:
+fourth_stage_hardlink_stat_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage hardlink stat smoke failed\n"
+fourth_stage_hardlink_stat_smoke_fail_msg_end:
+fourth_stage_hardlink_survival_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage hardlink survival smoke failed\n"
+fourth_stage_hardlink_survival_smoke_fail_msg_end:
+fourth_stage_hardlink_nlink_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage hardlink nlink smoke failed\n"
+fourth_stage_hardlink_nlink_smoke_fail_msg_end:
+fourth_stage_hardlink_cleanup_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage hardlink cleanup failed\n"
+fourth_stage_hardlink_cleanup_fail_msg_end:
+fourth_stage_hardlink_dirent_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage hardlink dirent smoke failed\n"
+fourth_stage_hardlink_dirent_smoke_fail_msg_end:
+fourth_stage_open_fd_survival_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage open fd survival smoke failed\n"
+fourth_stage_open_fd_survival_smoke_fail_msg_end:
 fourth_stage_console_fail_msg:
     .asciz "mycpu linux userland: fourth-stage console open failed\n"
 fourth_stage_console_fail_msg_end:
@@ -65,6 +191,18 @@ fourth_stage_write_short_msg:
     .asciz "mycpu linux userland: fourth-stage write short\n"
 fourth_stage_write_short_msg_end:
 
+.set post_init_data_path_len, post_init_data_path_end - post_init_data_path
+.set post_init_data_path_len, post_init_data_path_len - 1
+.set post_init_data_expected_len, post_init_data_expected_end - post_init_data_expected
+.set post_init_data_expected_len, post_init_data_expected_len - 1
+.set fourth_stage_stat_buf_len, 128
+.set fourth_stage_stat_st_ino_offset, 8
+.set fourth_stage_stat_st_mode_offset, 16
+.set fourth_stage_stat_st_nlink_offset, 20
+.set fourth_stage_stat_st_size_offset, 48
+.set fourth_stage_stat_mode_mask, 61440
+.set fourth_stage_stat_mode_regular, 32768
+.set fourth_stage_stat_mode_symlink, 40960
 .set stage_unlinkat_reused_dirent_gone_msg_len, stage_unlinkat_reused_dirent_gone_msg_end - stage_unlinkat_reused_dirent_gone_msg
 .set stage_unlinkat_reused_dirent_gone_msg_len, stage_unlinkat_reused_dirent_gone_msg_len - 1
 .set stage_fourth_stage_entered_msg_len, stage_fourth_stage_entered_msg_end - stage_fourth_stage_entered_msg
@@ -77,6 +215,38 @@ fourth_stage_write_short_msg_end:
 .set stage_fourth_stage_root_chdir_ok_msg_len, stage_fourth_stage_root_chdir_ok_msg_len - 1
 .set stage_fourth_stage_unlinkat_reused_dir_ok_msg_len, stage_fourth_stage_unlinkat_reused_dir_ok_msg_end - stage_fourth_stage_unlinkat_reused_dir_ok_msg
 .set stage_fourth_stage_unlinkat_reused_dir_ok_msg_len, stage_fourth_stage_unlinkat_reused_dir_ok_msg_len - 1
+.set stage_symlinkat_target_readable_msg_len, stage_symlinkat_target_readable_msg_end - stage_symlinkat_target_readable_msg
+.set stage_symlinkat_target_readable_msg_len, stage_symlinkat_target_readable_msg_len - 1
+.set stage_fstatat_symlink_nofollow_ok_msg_len, stage_fstatat_symlink_nofollow_ok_msg_end - stage_fstatat_symlink_nofollow_ok_msg
+.set stage_fstatat_symlink_nofollow_ok_msg_len, stage_fstatat_symlink_nofollow_ok_msg_len - 1
+.set stage_readlinkat_target_ok_msg_len, stage_readlinkat_target_ok_msg_end - stage_readlinkat_target_ok_msg
+.set stage_readlinkat_target_ok_msg_len, stage_readlinkat_target_ok_msg_len - 1
+.set stage_unlinkat_symlink_dirent_gone_msg_len, stage_unlinkat_symlink_dirent_gone_msg_end - stage_unlinkat_symlink_dirent_gone_msg
+.set stage_unlinkat_symlink_dirent_gone_msg_len, stage_unlinkat_symlink_dirent_gone_msg_len - 1
+.set stage_dirfd_relative_openat_ok_msg_len, stage_dirfd_relative_openat_ok_msg_end - stage_dirfd_relative_openat_ok_msg
+.set stage_dirfd_relative_openat_ok_msg_len, stage_dirfd_relative_openat_ok_msg_len - 1
+.set stage_dirfd_relative_fstatat_ok_msg_len, stage_dirfd_relative_fstatat_ok_msg_end - stage_dirfd_relative_fstatat_ok_msg
+.set stage_dirfd_relative_fstatat_ok_msg_len, stage_dirfd_relative_fstatat_ok_msg_len - 1
+.set stage_dirfd_relative_linkat_ok_msg_len, stage_dirfd_relative_linkat_ok_msg_end - stage_dirfd_relative_linkat_ok_msg
+.set stage_dirfd_relative_linkat_ok_msg_len, stage_dirfd_relative_linkat_ok_msg_len - 1
+.set stage_dirfd_relative_unlinkat_ok_msg_len, stage_dirfd_relative_unlinkat_ok_msg_end - stage_dirfd_relative_unlinkat_ok_msg
+.set stage_dirfd_relative_unlinkat_ok_msg_len, stage_dirfd_relative_unlinkat_ok_msg_len - 1
+.set stage_dirfd_relative_reopen_gone_msg_len, stage_dirfd_relative_reopen_gone_msg_end - stage_dirfd_relative_reopen_gone_msg
+.set stage_dirfd_relative_reopen_gone_msg_len, stage_dirfd_relative_reopen_gone_msg_len - 1
+.set stage_dirfd_relative_fstatat_gone_msg_len, stage_dirfd_relative_fstatat_gone_msg_end - stage_dirfd_relative_fstatat_gone_msg
+.set stage_dirfd_relative_fstatat_gone_msg_len, stage_dirfd_relative_fstatat_gone_msg_len - 1
+.set stage_linkat_target_readable_msg_len, stage_linkat_target_readable_msg_end - stage_linkat_target_readable_msg
+.set stage_linkat_target_readable_msg_len, stage_linkat_target_readable_msg_len - 1
+.set stage_linkat_shared_inode_ok_msg_len, stage_linkat_shared_inode_ok_msg_end - stage_linkat_shared_inode_ok_msg
+.set stage_linkat_shared_inode_ok_msg_len, stage_linkat_shared_inode_ok_msg_len - 1
+.set stage_unlinkat_origin_hardlink_survives_msg_len, stage_unlinkat_origin_hardlink_survives_msg_end - stage_unlinkat_origin_hardlink_survives_msg
+.set stage_unlinkat_origin_hardlink_survives_msg_len, stage_unlinkat_origin_hardlink_survives_msg_len - 1
+.set stage_unlinkat_origin_link_count_dropped_msg_len, stage_unlinkat_origin_link_count_dropped_msg_end - stage_unlinkat_origin_link_count_dropped_msg
+.set stage_unlinkat_origin_link_count_dropped_msg_len, stage_unlinkat_origin_link_count_dropped_msg_len - 1
+.set stage_unlinkat_hardlink_dirent_gone_msg_len, stage_unlinkat_hardlink_dirent_gone_msg_end - stage_unlinkat_hardlink_dirent_gone_msg
+.set stage_unlinkat_hardlink_dirent_gone_msg_len, stage_unlinkat_hardlink_dirent_gone_msg_len - 1
+.set stage_unlinkat_open_fd_survives_msg_len, stage_unlinkat_open_fd_survives_msg_end - stage_unlinkat_open_fd_survives_msg
+.set stage_unlinkat_open_fd_survives_msg_len, stage_unlinkat_open_fd_survives_msg_len - 1
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_end - stage_fourth_stage_reached_msg
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_len - 1
 .set post_init_reached_msg_len, post_init_reached_msg_end - post_init_reached_msg
@@ -85,6 +255,42 @@ fourth_stage_write_short_msg_end:
 .set fourth_stage_reused_dir_cleanup_fail_msg_len, fourth_stage_reused_dir_cleanup_fail_msg_len - 1
 .set fourth_stage_reused_dir_dirent_smoke_fail_msg_len, fourth_stage_reused_dir_dirent_smoke_fail_msg_end - fourth_stage_reused_dir_dirent_smoke_fail_msg
 .set fourth_stage_reused_dir_dirent_smoke_fail_msg_len, fourth_stage_reused_dir_dirent_smoke_fail_msg_len - 1
+.set fourth_stage_symlink_smoke_fail_msg_len, fourth_stage_symlink_smoke_fail_msg_end - fourth_stage_symlink_smoke_fail_msg
+.set fourth_stage_symlink_smoke_fail_msg_len, fourth_stage_symlink_smoke_fail_msg_len - 1
+.set fourth_stage_symlink_stat_smoke_fail_msg_len, fourth_stage_symlink_stat_smoke_fail_msg_end - fourth_stage_symlink_stat_smoke_fail_msg
+.set fourth_stage_symlink_stat_smoke_fail_msg_len, fourth_stage_symlink_stat_smoke_fail_msg_len - 1
+.set fourth_stage_readlinkat_smoke_fail_msg_len, fourth_stage_readlinkat_smoke_fail_msg_end - fourth_stage_readlinkat_smoke_fail_msg
+.set fourth_stage_readlinkat_smoke_fail_msg_len, fourth_stage_readlinkat_smoke_fail_msg_len - 1
+.set fourth_stage_symlink_cleanup_fail_msg_len, fourth_stage_symlink_cleanup_fail_msg_end - fourth_stage_symlink_cleanup_fail_msg
+.set fourth_stage_symlink_cleanup_fail_msg_len, fourth_stage_symlink_cleanup_fail_msg_len - 1
+.set fourth_stage_symlink_dirent_smoke_fail_msg_len, fourth_stage_symlink_dirent_smoke_fail_msg_end - fourth_stage_symlink_dirent_smoke_fail_msg
+.set fourth_stage_symlink_dirent_smoke_fail_msg_len, fourth_stage_symlink_dirent_smoke_fail_msg_len - 1
+.set fourth_stage_dirfd_openat_smoke_fail_msg_len, fourth_stage_dirfd_openat_smoke_fail_msg_end - fourth_stage_dirfd_openat_smoke_fail_msg
+.set fourth_stage_dirfd_openat_smoke_fail_msg_len, fourth_stage_dirfd_openat_smoke_fail_msg_len - 1
+.set fourth_stage_dirfd_fstatat_smoke_fail_msg_len, fourth_stage_dirfd_fstatat_smoke_fail_msg_end - fourth_stage_dirfd_fstatat_smoke_fail_msg
+.set fourth_stage_dirfd_fstatat_smoke_fail_msg_len, fourth_stage_dirfd_fstatat_smoke_fail_msg_len - 1
+.set fourth_stage_dirfd_linkat_smoke_fail_msg_len, fourth_stage_dirfd_linkat_smoke_fail_msg_end - fourth_stage_dirfd_linkat_smoke_fail_msg
+.set fourth_stage_dirfd_linkat_smoke_fail_msg_len, fourth_stage_dirfd_linkat_smoke_fail_msg_len - 1
+.set fourth_stage_dirfd_unlinkat_smoke_fail_msg_len, fourth_stage_dirfd_unlinkat_smoke_fail_msg_end - fourth_stage_dirfd_unlinkat_smoke_fail_msg
+.set fourth_stage_dirfd_unlinkat_smoke_fail_msg_len, fourth_stage_dirfd_unlinkat_smoke_fail_msg_len - 1
+.set fourth_stage_dirfd_reopen_smoke_fail_msg_len, fourth_stage_dirfd_reopen_smoke_fail_msg_end - fourth_stage_dirfd_reopen_smoke_fail_msg
+.set fourth_stage_dirfd_reopen_smoke_fail_msg_len, fourth_stage_dirfd_reopen_smoke_fail_msg_len - 1
+.set fourth_stage_dirfd_gone_fstatat_smoke_fail_msg_len, fourth_stage_dirfd_gone_fstatat_smoke_fail_msg_end - fourth_stage_dirfd_gone_fstatat_smoke_fail_msg
+.set fourth_stage_dirfd_gone_fstatat_smoke_fail_msg_len, fourth_stage_dirfd_gone_fstatat_smoke_fail_msg_len - 1
+.set fourth_stage_hardlink_smoke_fail_msg_len, fourth_stage_hardlink_smoke_fail_msg_end - fourth_stage_hardlink_smoke_fail_msg
+.set fourth_stage_hardlink_smoke_fail_msg_len, fourth_stage_hardlink_smoke_fail_msg_len - 1
+.set fourth_stage_hardlink_stat_smoke_fail_msg_len, fourth_stage_hardlink_stat_smoke_fail_msg_end - fourth_stage_hardlink_stat_smoke_fail_msg
+.set fourth_stage_hardlink_stat_smoke_fail_msg_len, fourth_stage_hardlink_stat_smoke_fail_msg_len - 1
+.set fourth_stage_hardlink_survival_smoke_fail_msg_len, fourth_stage_hardlink_survival_smoke_fail_msg_end - fourth_stage_hardlink_survival_smoke_fail_msg
+.set fourth_stage_hardlink_survival_smoke_fail_msg_len, fourth_stage_hardlink_survival_smoke_fail_msg_len - 1
+.set fourth_stage_hardlink_nlink_smoke_fail_msg_len, fourth_stage_hardlink_nlink_smoke_fail_msg_end - fourth_stage_hardlink_nlink_smoke_fail_msg
+.set fourth_stage_hardlink_nlink_smoke_fail_msg_len, fourth_stage_hardlink_nlink_smoke_fail_msg_len - 1
+.set fourth_stage_hardlink_cleanup_fail_msg_len, fourth_stage_hardlink_cleanup_fail_msg_end - fourth_stage_hardlink_cleanup_fail_msg
+.set fourth_stage_hardlink_cleanup_fail_msg_len, fourth_stage_hardlink_cleanup_fail_msg_len - 1
+.set fourth_stage_hardlink_dirent_smoke_fail_msg_len, fourth_stage_hardlink_dirent_smoke_fail_msg_end - fourth_stage_hardlink_dirent_smoke_fail_msg
+.set fourth_stage_hardlink_dirent_smoke_fail_msg_len, fourth_stage_hardlink_dirent_smoke_fail_msg_len - 1
+.set fourth_stage_open_fd_survival_smoke_fail_msg_len, fourth_stage_open_fd_survival_smoke_fail_msg_end - fourth_stage_open_fd_survival_smoke_fail_msg
+.set fourth_stage_open_fd_survival_smoke_fail_msg_len, fourth_stage_open_fd_survival_smoke_fail_msg_len - 1
 .set fourth_stage_console_fail_msg_len, fourth_stage_console_fail_msg_end - fourth_stage_console_fail_msg
 .set fourth_stage_console_fail_msg_len, fourth_stage_console_fail_msg_len - 1
 .set fourth_stage_write_fail_msg_len, fourth_stage_write_fail_msg_end - fourth_stage_write_fail_msg
@@ -100,6 +306,14 @@ sleep_spec:
     .section .bss
 fourth_stage_dirent_buf:
     .space fourth_stage_dirent_buf_len
+fourth_stage_post_init_data_buf:
+    .space post_init_data_expected_len
+fourth_stage_readlink_buf:
+    .space post_init_data_path_len
+fourth_stage_stat_buf:
+    .space fourth_stage_stat_buf_len
+fourth_stage_stat_buf_alt:
+    .space fourth_stage_stat_buf_len
 
     .section .text
     .globl _start
@@ -178,6 +392,462 @@ fourth_stage_start:
     bltz a0, write_failed
     or s1, s1, a1
 
+    la a0, post_init_data_path
+    li a1, AT_FDCWD
+    la a2, post_init_data_link_path
+    li a7, SYS_SYMLINKAT
+    ecall
+    bltz a0, symlink_smoke_failed
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_link_path
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, symlink_smoke_failed
+    mv t0, a0
+
+    mv a0, t0
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_expected_len
+    bne a0, t1, symlink_smoke_close_error
+
+    mv a0, t0
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, symlink_smoke_failed
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_expected
+    li a2, post_init_data_expected_len
+    jal ra, compare_bytes
+    bltz a0, symlink_smoke_failed
+
+    mv a0, s0
+    la a1, stage_symlinkat_target_readable_msg
+    li a2, stage_symlinkat_target_readable_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_link_path
+    la a2, fourth_stage_stat_buf
+    li a3, AT_SYMLINK_NOFOLLOW
+    li a7, SYS_NEWFSTATAT
+    ecall
+    bltz a0, symlink_stat_smoke_failed
+
+    la t0, fourth_stage_stat_buf
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_symlink
+    bne t1, t2, symlink_stat_smoke_failed
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_path_len
+    bne t1, t2, symlink_stat_smoke_failed
+
+    mv a0, s0
+    la a1, stage_fstatat_symlink_nofollow_ok_msg
+    li a2, stage_fstatat_symlink_nofollow_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_link_path
+    la a2, fourth_stage_readlink_buf
+    li a3, post_init_data_path_len
+    li a7, SYS_READLINKAT
+    ecall
+    li t1, post_init_data_path_len
+    bne a0, t1, readlinkat_smoke_failed
+
+    la a0, fourth_stage_readlink_buf
+    la a1, post_init_data_path
+    li a2, post_init_data_path_len
+    jal ra, compare_bytes
+    bltz a0, readlinkat_smoke_failed
+
+    mv a0, s0
+    la a1, stage_readlinkat_target_ok_msg
+    li a2, stage_readlinkat_target_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_link_path
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, symlink_cleanup_failed
+
+    la a0, post_init_data_link_name
+    jal ra, dir_contains_name
+    bnez a0, symlink_dirent_smoke_failed
+
+    mv a0, s0
+    la a1, stage_unlinkat_symlink_dirent_gone_msg
+    li a2, stage_unlinkat_symlink_dirent_gone_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, AT_FDCWD
+    la a1, root_dir_path
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, dirfd_openat_smoke_failed
+    mv s2, a0
+
+    mv a0, s2
+    la a1, post_init_data_name
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, dirfd_openat_root_close_error
+    mv s3, a0
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_expected_len
+    bne a0, t1, dirfd_openat_data_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, dirfd_openat_root_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_expected
+    li a2, post_init_data_expected_len
+    jal ra, compare_bytes
+    bltz a0, dirfd_openat_smoke_failed
+
+    mv a0, s0
+    la a1, stage_dirfd_relative_openat_ok_msg
+    li a2, stage_dirfd_relative_openat_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    la a1, post_init_data_name
+    la a2, fourth_stage_stat_buf
+    li a3, 0
+    li a7, SYS_NEWFSTATAT
+    ecall
+    bltz a0, dirfd_fstatat_root_close_error
+
+    la t0, fourth_stage_stat_buf
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, dirfd_fstatat_root_close_error
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_expected_len
+    bne t1, t2, dirfd_fstatat_root_close_error
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    li t2, 1
+    bne t1, t2, dirfd_fstatat_root_close_error
+
+    mv a0, s0
+    la a1, stage_dirfd_relative_fstatat_ok_msg
+    li a2, stage_dirfd_relative_fstatat_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    la a1, post_init_data_name
+    mv a2, s2
+    la a3, post_init_data_hardlink_name
+    li a4, 0
+    li a7, SYS_LINKAT
+    ecall
+    bltz a0, dirfd_linkat_root_close_error
+
+    mv a0, s2
+    la a1, post_init_data_hardlink_name
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, dirfd_linkat_root_close_error
+    mv s3, a0
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_expected_len
+    bne a0, t1, dirfd_linkat_data_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, dirfd_linkat_root_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_expected
+    li a2, post_init_data_expected_len
+    jal ra, compare_bytes
+    bltz a0, dirfd_linkat_root_close_error
+
+    mv a0, s0
+    la a1, stage_dirfd_relative_linkat_ok_msg
+    li a2, stage_dirfd_relative_linkat_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s0
+    la a1, stage_linkat_target_readable_msg
+    li a2, stage_linkat_target_readable_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_path
+    la a2, fourth_stage_stat_buf
+    li a3, 0
+    li a7, SYS_NEWFSTATAT
+    ecall
+    bltz a0, hardlink_stat_smoke_failed
+
+    la t0, fourth_stage_stat_buf
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, hardlink_stat_smoke_failed
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_expected_len
+    bne t1, t2, hardlink_stat_smoke_failed
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    li t2, 2
+    bne t1, t2, hardlink_stat_smoke_failed
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_hardlink_path
+    la a2, fourth_stage_stat_buf_alt
+    li a3, 0
+    li a7, SYS_NEWFSTATAT
+    ecall
+    bltz a0, hardlink_stat_smoke_failed
+
+    la t0, fourth_stage_stat_buf_alt
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, hardlink_stat_smoke_failed
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_expected_len
+    bne t1, t2, hardlink_stat_smoke_failed
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    li t2, 2
+    bne t1, t2, hardlink_stat_smoke_failed
+    ld t1, fourth_stage_stat_st_ino_offset(t0)
+    la t0, fourth_stage_stat_buf
+    ld t2, fourth_stage_stat_st_ino_offset(t0)
+    bne t1, t2, hardlink_stat_smoke_failed
+
+    mv a0, s0
+    la a1, stage_linkat_shared_inode_ok_msg
+    li a2, stage_linkat_shared_inode_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_path
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, hardlink_survival_smoke_failed
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_hardlink_path
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, hardlink_survival_smoke_failed
+    mv t0, a0
+
+    mv a0, t0
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_expected_len
+    bne a0, t1, hardlink_survival_close_error
+
+    mv a0, t0
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, hardlink_survival_smoke_failed
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_expected
+    li a2, post_init_data_expected_len
+    jal ra, compare_bytes
+    bltz a0, hardlink_survival_smoke_failed
+
+    mv a0, s0
+    la a1, stage_unlinkat_origin_hardlink_survives_msg
+    li a2, stage_unlinkat_origin_hardlink_survives_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, AT_FDCWD
+    la a1, post_init_data_hardlink_path
+    la a2, fourth_stage_stat_buf
+    li a3, 0
+    li a7, SYS_NEWFSTATAT
+    ecall
+    bltz a0, hardlink_nlink_smoke_failed
+
+    la t0, fourth_stage_stat_buf
+    lw t1, fourth_stage_stat_st_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, hardlink_nlink_smoke_failed
+    ld t1, fourth_stage_stat_st_size_offset(t0)
+    li t2, post_init_data_expected_len
+    bne t1, t2, hardlink_nlink_smoke_failed
+    lw t1, fourth_stage_stat_st_nlink_offset(t0)
+    li t2, 1
+    bne t1, t2, hardlink_nlink_smoke_failed
+    ld t1, fourth_stage_stat_st_ino_offset(t0)
+    la t0, fourth_stage_stat_buf_alt
+    ld t2, fourth_stage_stat_st_ino_offset(t0)
+    bne t1, t2, hardlink_nlink_smoke_failed
+
+    mv a0, s0
+    la a1, stage_unlinkat_origin_link_count_dropped_msg
+    li a2, stage_unlinkat_origin_link_count_dropped_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    la a1, post_init_data_hardlink_name
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, dirfd_unlinkat_smoke_failed
+    mv s3, a0
+
+    mv a0, s2
+    la a1, post_init_data_hardlink_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, dirfd_unlinkat_data_close_error
+
+    la a0, post_init_data_hardlink_name
+    jal ra, dir_contains_name
+    bnez a0, dirfd_unlinkat_data_close_error
+
+    mv a0, s0
+    la a1, stage_dirfd_relative_unlinkat_ok_msg
+    li a2, stage_dirfd_relative_unlinkat_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    la a1, post_init_data_hardlink_name
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bgez a0, dirfd_reopen_close_error
+    li t1, -ENOENT
+    bne a0, t1, dirfd_reopen_smoke_failed
+
+    mv a0, s0
+    la a1, stage_dirfd_relative_reopen_gone_msg
+    li a2, stage_dirfd_relative_reopen_gone_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    la a1, post_init_data_hardlink_name
+    la a2, fourth_stage_stat_buf
+    li a3, 0
+    li a7, SYS_NEWFSTATAT
+    ecall
+    bgez a0, dirfd_gone_fstatat_root_close_error
+    li t1, -ENOENT
+    bne a0, t1, dirfd_gone_fstatat_root_close_error
+
+    mv a0, s0
+    la a1, stage_dirfd_relative_fstatat_gone_msg
+    li a2, stage_dirfd_relative_fstatat_gone_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s0
+    la a1, stage_unlinkat_hardlink_dirent_gone_msg
+    li a2, stage_unlinkat_hardlink_dirent_gone_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_expected_len
+    bne a0, t1, dirfd_unlinkat_data_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, dirfd_unlinkat_root_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_expected
+    li a2, post_init_data_expected_len
+    jal ra, compare_bytes
+    bltz a0, dirfd_unlinkat_root_close_error
+
+    mv a0, s0
+    la a1, stage_unlinkat_open_fd_survives_msg
+    li a2, stage_unlinkat_open_fd_survives_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, dirfd_unlinkat_smoke_failed
+
     mv a0, s0
     la a1, stage_fourth_stage_reached_msg
     li a2, stage_fourth_stage_reached_msg_len
@@ -228,6 +898,241 @@ reused_dir_dirent_smoke_failed:
     li a7, SYS_EXIT
     ecall
 
+symlink_smoke_close_error:
+    mv a0, t0
+    li a7, SYS_CLOSE
+    ecall
+
+symlink_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_symlink_smoke_fail_msg
+    li a2, fourth_stage_symlink_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+symlink_stat_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_symlink_stat_smoke_fail_msg
+    li a2, fourth_stage_symlink_stat_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+readlinkat_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_readlinkat_smoke_fail_msg
+    li a2, fourth_stage_readlinkat_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+symlink_cleanup_failed:
+    mv a0, s0
+    la a1, fourth_stage_symlink_cleanup_fail_msg
+    li a2, fourth_stage_symlink_cleanup_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+symlink_dirent_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_symlink_dirent_smoke_fail_msg
+    li a2, fourth_stage_symlink_dirent_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+dirfd_openat_data_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_openat_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_openat_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_dirfd_openat_smoke_fail_msg
+    li a2, fourth_stage_dirfd_openat_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+dirfd_fstatat_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_fstatat_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_dirfd_fstatat_smoke_fail_msg
+    li a2, fourth_stage_dirfd_fstatat_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+dirfd_linkat_data_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_linkat_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_linkat_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_dirfd_linkat_smoke_fail_msg
+    li a2, fourth_stage_dirfd_linkat_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+dirfd_unlinkat_data_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_unlinkat_root_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_unlinkat_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_dirfd_unlinkat_smoke_fail_msg
+    li a2, fourth_stage_dirfd_unlinkat_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+dirfd_reopen_close_error:
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_reopen_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_dirfd_reopen_smoke_fail_msg
+    li a2, fourth_stage_dirfd_reopen_smoke_fail_msg_len
+    jal ra, write_exact
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+dirfd_gone_fstatat_root_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+dirfd_gone_fstatat_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_dirfd_gone_fstatat_smoke_fail_msg
+    li a2, fourth_stage_dirfd_gone_fstatat_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+hardlink_smoke_close_error:
+    mv a0, t0
+    li a7, SYS_CLOSE
+    ecall
+
+hardlink_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_hardlink_smoke_fail_msg
+    li a2, fourth_stage_hardlink_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+hardlink_stat_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_hardlink_stat_smoke_fail_msg
+    li a2, fourth_stage_hardlink_stat_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+hardlink_survival_close_error:
+    mv a0, t0
+    li a7, SYS_CLOSE
+    ecall
+
+hardlink_survival_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_hardlink_survival_smoke_fail_msg
+    li a2, fourth_stage_hardlink_survival_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+hardlink_nlink_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_hardlink_nlink_smoke_fail_msg
+    li a2, fourth_stage_hardlink_nlink_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+hardlink_cleanup_failed:
+    mv a0, s0
+    la a1, fourth_stage_hardlink_cleanup_fail_msg
+    li a2, fourth_stage_hardlink_cleanup_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+hardlink_dirent_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_hardlink_dirent_smoke_fail_msg
+    li a2, fourth_stage_hardlink_dirent_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+open_fd_survival_close_error:
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+open_fd_survival_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_open_fd_survival_smoke_fail_msg
+    li a2, fourth_stage_open_fd_survival_smoke_fail_msg_len
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
 write_failed:
     li a0, 1
     la a1, fourth_stage_write_fail_msg
@@ -270,6 +1175,26 @@ write_exact_error:
 write_exact_zero:
     li a0, -1
     li a1, 0
+    ret
+
+compare_bytes:
+    beqz a2, compare_bytes_equal
+
+compare_bytes_loop:
+    lbu t0, 0(a0)
+    lbu t1, 0(a1)
+    bne t0, t1, compare_bytes_notequal
+    addi a0, a0, 1
+    addi a1, a1, 1
+    addi a2, a2, -1
+    bnez a2, compare_bytes_loop
+
+compare_bytes_equal:
+    li a0, 0
+    ret
+
+compare_bytes_notequal:
+    li a0, -1
     ret
 
 compare_cstr:

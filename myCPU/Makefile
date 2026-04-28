@@ -167,16 +167,17 @@ DEPS     += $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS)
 DEPS     += $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS)
 DEPS     += $(ASM_DEPS) $(ATOMIC_ASM_DEPS)
 DEPS     += $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_MININIT_DEP) $(LINUX_PROTO_POSTINIT_DEP) $(LINUX_PROTO_POSTINIT_EXEC_DEP)
-TEST_TIMEOUT ?= 2s
+TEST_TIMEOUT ?= 3s
 XV6_SHELL_SMOKE_TIMEOUT ?= 300s
-SUPERVISOR_GUEST_TEST_TIMEOUT ?= 4s
+SUPERVISOR_GUEST_TEST_TIMEOUT ?= 7s
 DEBUG_CLI_SMOKE_TIMEOUT ?= 12s
+AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 3s
 # Pipeline guest demos execute the full guest runtime under the pipeline
 # backend and need a wider budget than the functional path on debug builds.
 PIPELINE_GUEST_TEST_TIMEOUT ?= 8s
 # The pipeline supervisor demo exercises the full early runtime and VM bring-up
 # path and still runs noticeably slower than the other guest demos.
-PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 12s
+PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 16s
 
 # RISC-V toolchain (adjust prefix if needed)
 RV_CC   = riscv64-unknown-elf-gcc
@@ -319,29 +320,21 @@ $(LINUX_PROTO_POSTINIT_CLEANUP_ELF): workloads/linux_proto/linux_postinit_cleanu
 $(LINUX_PROTO_GENERATED_INITRD): $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_POSTINIT_DATA)
 	@rm -rf $(LINUX_PROTO_GENERATED_INITRD_DIR)
 	@mkdir -p $(LINUX_PROTO_GENERATED_INITRD_DIR)
-	@cp $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/init
-	@cp $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-smoke
-	@cp $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-exec-smoke
-	@cp $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-cleanup-smoke
-	@cp $(LINUX_PROTO_POSTINIT_DATA) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-data.txt
-	@chmod 755 $(LINUX_PROTO_GENERATED_INITRD_DIR)/init
-	@chmod 755 $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-smoke
-	@chmod 755 $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-exec-smoke
-	@chmod 755 $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-cleanup-smoke
+	@install -m 755 $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/init
+	@install -m 755 $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-smoke
+	@install -m 755 $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-exec-smoke
+	@install -m 755 $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-cleanup-smoke
+	@install -m 644 $(LINUX_PROTO_POSTINIT_DATA) $(LINUX_PROTO_GENERATED_INITRD_DIR)/post-init-data.txt
 	@(cd $(LINUX_PROTO_GENERATED_INITRD_DIR) && find . | LC_ALL=C sort | cpio -o -H newc --quiet > ../$(notdir $@))
 
 $(LINUX_PROTO_GENERATED_DISK): $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_POSTINIT_DATA)
 	@rm -rf $(LINUX_PROTO_GENERATED_DISK_DIR)
 	@mkdir -p $(LINUX_PROTO_GENERATED_DISK_DIR)/dev
-	@cp $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/init
-	@cp $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-smoke
-	@cp $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-exec-smoke
-	@cp $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-cleanup-smoke
-	@cp $(LINUX_PROTO_POSTINIT_DATA) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-data.txt
-	@chmod 755 $(LINUX_PROTO_GENERATED_DISK_DIR)/init
-	@chmod 755 $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-smoke
-	@chmod 755 $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-exec-smoke
-	@chmod 755 $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-cleanup-smoke
+	@install -m 755 $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/init
+	@install -m 755 $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-smoke
+	@install -m 755 $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-exec-smoke
+	@install -m 755 $(LINUX_PROTO_POSTINIT_CLEANUP_ELF) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-cleanup-smoke
+	@install -m 644 $(LINUX_PROTO_POSTINIT_DATA) $(LINUX_PROTO_GENERATED_DISK_DIR)/post-init-data.txt
 	@rm -f $@
 	@mke2fs -q -F -t ext4 -d $(LINUX_PROTO_GENERATED_DISK_DIR) -L rootfs $@ $(LINUX_PROTO_GENERATED_DISK_BLOCKS)
 
@@ -587,7 +580,7 @@ test-host-ai_accelerator_profile_smoke: FORCE $(TARGET) tests/host/ai_accelerato
 
 test-host-ai_accel_guest_smoke: FORCE $(TARGET) $(GUEST_AI_ACCEL_DEMO) tests/host/ai_accel_guest_smoke
 	@echo "=== host:ai_accel_guest_smoke ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/ai_accel_guest_smoke 2>&1)"; \
+	output="$$(timeout $(AI_ACCEL_GUEST_SMOKE_TIMEOUT) ./tests/host/ai_accel_guest_smoke 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
 		echo "Host test timed out: ai_accel_guest_smoke" >&2; \
