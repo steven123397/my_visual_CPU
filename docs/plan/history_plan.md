@@ -23,6 +23,13 @@
 
 ### 2026-04-29
 
+#### mainline-wave5-closeout-wave6-readiness-plan
+
+- 原文件：`mainline_wave5_closeout_wave6_readiness_plan.md`
+- 完成内容：完成主线 `Wave 5 closeout / Wave 6 readiness`。本轮把 `Wave 5` `Slice A ~ F` 固定为首轮 cache / memory-system 收口：当前完成态是默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，加上显式 opt-in 观察面、frontend 只读展示、边界 hardening 和 lifecycle guardrail；它仍不代表 write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启动。
+- 实现过程摘要：这一轮只做 readiness 判断和文档状态切换，不改 simulator 行为。结论是 `Wave 6` 可以激活，但第一刀必须选择低风险的 `JIT / DBT hot-path evidence`，只固定 hot-path / translation candidate 观察合同，不实现 JIT engine、DBT translator、IR、block cache、host code emission、multicore 或 coherence。验证覆盖 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_f_l1d_lifecycle_guardrail_plan.md`

@@ -20,8 +20,9 @@
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
 - 当前计划：
-  - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
+  - [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
@@ -193,4 +194,8 @@
 - `Slice F / L1D lifecycle guardrail` 已由
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   收口；它只固定 L1D lifecycle guardrail，不扩成新大功能。
-- 当前暂无主线活跃计划，继续推进 `Wave 5` 时应先新建计划。
+- `Wave 5 closeout / Wave 6 readiness` 已由
+  [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
+  收口；`Wave 5` 首轮完成，主线 active wave 转入 `Wave 6`。
+- 当前主线活跃计划是
+  [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)。

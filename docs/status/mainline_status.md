@@ -22,14 +22,16 @@
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)
+  - [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
   - [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)
 - 相关状态：
   - [kernel_alpha_status.md](kernel_alpha_status.md)
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
 - 当前计划：
-  - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
+  - [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
@@ -48,30 +50,20 @@
 `timerfd-one-shot-readback-ok`，后续不再默认继续扩同类 syscall breadth。
 主线 `Wave 4` 的 AI accelerator A/B/C 三段切片已经完成并归档。
 
-当前 active wave 仍是 `Wave 5 / cache / memory-system`。`Slice A / signal +
-contract` 已完成：已有 `shadow_cache` 证据已经补上一条 pipeline-side `xv6`
-memory observation guardrail，后续最小 L1 data cache 的第一版合同也已固定为
-RAM-only、write-through、no dirty write-back，并对 MMIO / unmapped / side-effect、
-atomic / fence 和 DMA interaction 采用保守口径。`Slice B / minimal executable L1D`
-也已完成：当前已有默认关闭、可显式启用、RAM-only、write-through、no dirty
-write-back 的最小 L1D 执行模型，并通过 `AddressSpace` 仅接入 data load/store。
-instruction fetch、page walk、atomic、MMIO、unmapped 和 side-effect region 继续
-bypass L1D。`Slice C / L1D opt-in observation + guardrail` 也已完成：当前 debug
-snapshot 顶层暴露只读 `l1_data_cache` counters，`run_debug_cli_probe.py --l1d`
-提供显式 opt-in probe guardrail；默认执行路径仍不打开 L1D，既有 `shadow_cache`
-字段语义不变。`Slice D / L1D hardening` 也已完成：当前 L1D 对跨 cache line
-store 会在 bypass 后失效重叠 line，store miss 固定为 write-through + no-allocate
-并可观察为 miss，non-cacheable / side-effect / unmapped / refill fault 路径和
-atomic、page-walk、instruction fetch 继续 bypass L1D；默认 `make test` /
-`make test-pipeline` 仍不打开 L1D。这些结果仍不代表 full cache、DMA coherence、
-multicore、JIT 或 AI accelerator 后续专项已经启动。`Slice E / L1D frontend
-observation` 也已完成：frontend 平台组现在只读展示已有 `l1_data_cache` counters，
-缺失字段和默认关闭 snapshot 均有稳定 fallback；本轮不扩 debug ABI 或 cache
-功能面。`Slice F / L1D lifecycle guardrail` 也已完成：当前 primary load /
-debug reset 继续清空 L1D line state 与 counters，debug reset 保留显式
-`enabled=true` 状态；payload load 覆盖已缓存 RAM line 后会失效对应 L1D line，
-避免后续 data load 读到旧 payload bytes。这些结果仍不代表 write-back、DMA
-coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启动。
+`Wave 5 / cache / memory-system` 的 `Slice A ~ F` 已完成首轮收口：已有
+`shadow_cache` 证据补上一条 pipeline-side `xv6` memory observation guardrail；
+最小 L1D 已以默认关闭、显式 opt-in、RAM-only、write-through、no dirty write-back
+的方式接入 data load/store；debug/probe/frontend 已有只读观察面；跨 line、store
+miss、non-cacheable / side-effect / unmapped / refill fault、atomic、page-walk、
+instruction fetch、load / reset / payload lifecycle 等边界也已经 hardening。
+这些结果足够把 `Wave 5` 作为首轮 cache / memory-system 收口，但仍不代表
+write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance
+instruction 已启动。
+
+当前 active wave 已切到 `Wave 6 / JIT / DBT`。第一刀是
+`Slice A / JIT DBT hot-path evidence`，只固定 hot-path / translation candidate
+观察合同，不实现 JIT engine、DBT translator、IR、block cache、host code emission、
+multicore、coherence 或新的 memory consistency 模型。
 
 ## 当前状态
 
@@ -105,8 +97,8 @@ coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启�
   - functional `linux_proto` dummy-payload observation baseline
 - `debug/frontend`、`kernel_alpha` 十条基线、`make test` / `make test-pipeline`
   和现有 workload smoke 都已进入维护态。
-- 当前 active wave 是 `Wave 5 / cache / memory-system`，不是继续深挖 Linux
-  checkpoint 的 `Wave 3`，也不是 AI accelerator 后续专项。
+- 当前 active wave 是 `Wave 6 / JIT / DBT`，不是继续深挖 Linux checkpoint 的
+  `Wave 3`，也不是 AI accelerator 后续专项或完整 multicore / coherence 专项。
 - 主线 `Wave 4` 的 AI accelerator 切片 A 已完成：`bounded dynamic shape`
   已从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，
   并新增 `dynamic_tiny_model` 动态小模型 workload。
@@ -140,14 +132,19 @@ coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启�
 - 主线 `Wave 5` 的 `Slice F / L1D lifecycle guardrail` 已完成：opt-in L1D 在
   primary load / reset / payload load 下的 line state 与 counters 生命周期合同已
   固定；payload 覆盖已缓存 RAM line 后会失效对应 L1D line，不扩 cache 功能面。
+- 主线 `Wave 5 closeout / Wave 6 readiness` 已完成：`Wave 5` `Slice A ~ F` 作为
+  首轮 cache / memory-system 收口；`Wave 6` 正式激活，但第一刀只做 `JIT / DBT`
+  hot-path evidence。
+- 主线 `Wave 6` 的当前活跃计划是
+  [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)。
 
 ## 当前优先级
 
-1. 当前 `Wave 5` `Slice A ~ F` 已完成并归档；继续推进下一刀前先新建活跃计划，
-   不得直接跳 write-back / DMA coherence / multicore / JIT / I-cache /
-   cache maintenance instruction。
+1. 当前 `Wave 6` 已激活，近端只推进 `Slice A / JIT DBT hot-path evidence`；
+   不得直接实现 JIT engine、DBT translator、IR、block cache、host code emission、
+   multicore、coherence 或新的 memory consistency 模型。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
-   real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 5`
+   real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
 3. Linux `timerfd-one-shot-readback-ok` 作为 `Wave 3` 冻结边界进入守成；除非真实
    runtime 重新暴露新 blocker，不再继续向当前 fourth-stage smoke 追加同类
@@ -157,7 +154,7 @@ coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启�
 4. 把 `xv6` shell、Linux probe、`kernel_alpha`、`pipeline`、debug CLI 和
    现有回归矩阵守成稳定 guardrail。
 5. 继续积累 `shadow_cache / observation / representative workload` 证据；后续
-   `Wave 5` follow-up 也不得提前承诺 write-back、DMA coherence、multicore 或 JIT。
+   cache / DMA / multicore / coherence 或 JIT engine 都必须另开设计/计划并补足验证。
 
 ## 关键历史节点
 
@@ -216,6 +213,12 @@ coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启�
     这一刀固定 opt-in L1D 在 primary load / debug reset 下继续清空 line state
     与 counters，debug reset 保留 `enabled=true`；payload load 覆盖已缓存 RAM
     line 后会失效对应 L1D line，避免后续 data load 读到旧 payload bytes。
+  - 同日完成主线 `Wave 5 closeout / Wave 6 readiness` 并归档：
+    [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)。
+    这一刀把 `Wave 5` `Slice A ~ F` 固定为首轮 cache / memory-system 收口，并把
+    主线 active wave 切到 `Wave 6`；`Wave 6` 第一刀选择 `JIT / DBT hot-path
+    evidence`，不实现 JIT engine、block cache、host code emission、multicore 或
+    coherence。
   - 这次收口把 `xv6 / Linux` pipeline-side memory signal 明确降级为
     `Wave 5 / cache` 前置证据，而不是阻塞 `Wave 4` 的硬门槛；当前 `Wave 4`
     依赖的观测证据来自 pipeline vector CNN、functional `xv6`、functional
@@ -269,6 +272,11 @@ coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启�
   只落地默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，
   显式 opt-in 的 L1D debug/probe 观察面、frontend 只读展示，以及若干 L1D 边界和
   lifecycle hardening 合同。
+- `Wave 6` 已激活不代表 JIT / DBT engine 已实现；当前第一刀只允许做 hot-path /
+  translation candidate 证据，不生成宿主代码，不引入 block cache，不改变 guest
+  可见语义。
+- multicore / coherence 虽然属于 `Wave 6` 长期目标，但当前仍未启动；它必须等待
+  atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
   最小静态 `fp32` row-wise softmax 和极小 attention-like profile 闭环；不要把它
   写成完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
@@ -277,14 +285,15 @@ coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启�
 
 ## 下一步
 
-1. 当前暂无主线活跃计划；继续推进 `Wave 5` 后续切片前，先新建 `docs/plan/`
-   活跃计划，并继续禁止直接跳 write-back、DMA coherence、multicore、JIT、
-   I-cache 或 cache maintenance instruction。
+1. 执行当前活跃计划：
+   [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)。
+   第一刀只固定 `JIT / DBT` hot-path candidate 观察合同，不改 guest 可见语义。
 2. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
-   dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 cache 前置 guardrail。
+   dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 `Wave 6`
+   hot-path evidence 的前置 guardrail。
 3. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
    driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan，并
-   明确不占用主线 `Wave 5`。
+   明确不占用主线 `Wave 6`。
 4. Wave 4 AI accelerator 的完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
 5. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
