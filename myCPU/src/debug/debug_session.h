@@ -24,14 +24,16 @@ public:
                   BlockTransport block_transport = BlockTransport::SimpleStorage,
                   const char* disk_image = nullptr,
                   bool disk_ready = true,
-                  bool disk_magic_valid = true);
+                  bool disk_magic_valid = true,
+                  bool l1d_enabled = false);
     void load_binary(const std::string& path,
                      uint64_t addr,
                      BackendKind backend_kind,
                      BlockTransport block_transport = BlockTransport::SimpleStorage,
                      const char* disk_image = nullptr,
                      bool disk_ready = true,
-                     bool disk_magic_valid = true);
+                     bool disk_magic_valid = true,
+                     bool l1d_enabled = false);
     void load_binary_payload(const std::string& path, uint64_t addr);
     void set_gpr(std::string_view reg_name, uint64_t value);
     void reset();
@@ -74,6 +76,7 @@ private:
         bool disk_attached{false};
         bool disk_ready{true};
         bool disk_magic_valid{true};
+        bool l1d_enabled{false};
         std::vector<PostLoadAction> post_load_actions{};
     };
 

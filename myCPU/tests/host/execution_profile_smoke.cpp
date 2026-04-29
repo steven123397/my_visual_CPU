@@ -114,7 +114,10 @@ bool test_debug_snapshot_json_exposes_profile_contract() {
            expect_contains(output, "\"memory_regions\":[",
                            "debug snapshot JSON should expose memory-region observations") &&
            expect_contains(output, "\"traps\":[",
-                           "debug snapshot JSON should expose trap observations");
+                           "debug snapshot JSON should expose trap observations") &&
+           expect_contains(output,
+                           "\"l1_data_cache\":{\"enabled\":false,\"line_size_bytes\":64,\"capacity_lines\":64,\"loads\":0,\"stores\":0,\"hits\":0,\"misses\":0,\"evictions\":0,\"bypasses\":0,\"write_through_stores\":0}",
+                           "debug snapshot JSON should expose default-off L1D cache counters");
 }
 
 bool test_pipeline_snapshot_json_exposes_hot_path_memory_and_trap_signals() {

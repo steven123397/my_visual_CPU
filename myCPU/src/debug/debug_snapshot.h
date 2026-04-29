@@ -69,6 +69,19 @@ struct BackendDebugSnapshot {
     ExecutionProfileSnapshot profile{};
 };
 
+struct DebugL1DataCacheSnapshot {
+    bool enabled{false};
+    uint64_t line_size_bytes{64};
+    uint64_t capacity_lines{64};
+    uint64_t loads{0};
+    uint64_t stores{0};
+    uint64_t hits{0};
+    uint64_t misses{0};
+    uint64_t evictions{0};
+    uint64_t bypasses{0};
+    uint64_t write_through_stores{0};
+};
+
 struct DebugBusAccess {
     bool valid{false};
     bool success{true};
@@ -188,6 +201,7 @@ struct DebugSnapshot {
     DebugSummarySnapshot summary{};
     PipelineDebugSnapshot pipeline{};
     ExecutionProfileSnapshot profile{};
+    DebugL1DataCacheSnapshot l1_data_cache{};
     std::array<uint64_t, 32> gpr{};
     DebugVectorSnapshot vector{};
     DebugCsrSnapshot csrs{};

@@ -52,6 +52,11 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disk", default="")
     parser.add_argument("--block-transport", default="")
     parser.add_argument("--backend", default="functional")
+    parser.add_argument(
+        "--l1d",
+        action="store_true",
+        help="enable the opt-in L1 data cache model for this probe",
+    )
     parser.add_argument("--flat", action="store_true")
     parser.add_argument(
         "--addr",
@@ -113,6 +118,8 @@ def build_commands(args):
     if args.flat:
         load["flat"] = True
         load["addr"] = args.addr
+    if args.l1d:
+        load["l1d"] = True
     commands.append(load)
     commands.extend(args.boot_actions)
 
@@ -156,6 +163,8 @@ def load_mode_summary(args) -> list[str]:
     fields.append(
         f"block_transport={args.block_transport if args.block_transport else 'default'}"
     )
+    if args.l1d:
+        fields.append("l1d=on")
     return fields
 
 
@@ -237,6 +246,25 @@ def emit_top_profile_entries(profile) -> None:
         )
 
 
+def emit_l1d_cache_summary(snapshot) -> None:
+    cache = snapshot.get("l1_data_cache", {})
+    if not cache or not cache.get("enabled", False):
+        return
+    print(
+        "l1d-cache:",
+        f"enabled={'true' if cache.get('enabled', False) else 'false'}",
+        f"line_size={cache.get('line_size_bytes', 0)}",
+        f"capacity_lines={cache.get('capacity_lines', 0)}",
+        f"loads={cache.get('loads', 0)}",
+        f"stores={cache.get('stores', 0)}",
+        f"hits={cache.get('hits', 0)}",
+        f"misses={cache.get('misses', 0)}",
+        f"evictions={cache.get('evictions', 0)}",
+        f"bypasses={cache.get('bypasses', 0)}",
+        f"write_through_stores={cache.get('write_through_stores', 0)}",
+    )
+
+
 def emit_gpr_seed_summary(args) -> None:
     if not args.gpr_seeds:
         return
@@ -287,6 +315,7 @@ def emit_probe_summary(args, lines) -> int:
         f"satp={csrs['satp']}",
     )
     emit_top_profile_entries(snapshot.get("profile", {}))
+    emit_l1d_cache_summary(snapshot)
     uart_snapshot = snapshot.get("devices", {}).get("uart", {})
     print(
         "uart-tail:",

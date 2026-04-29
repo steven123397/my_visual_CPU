@@ -31,6 +31,7 @@ struct DebugCliCommand {
     bool disk_ready{true};
     bool disk_magic_valid{true};
     bool flat{false};
+    bool l1d_enabled{false};
     std::string reg_name{};
     uint64_t addr{MEM_BASE};
     uint64_t value{0};

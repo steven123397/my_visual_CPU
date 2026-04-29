@@ -32,6 +32,8 @@ public:
     void clear();
     void set_enabled(bool enabled);
     bool enabled() const;
+    uint64_t line_size_bytes() const;
+    size_t capacity_lines() const;
     const SimpleL1DataCacheStats& stats() const;
 
 private:

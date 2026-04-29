@@ -35,7 +35,8 @@ void DebugSession::load_elf(const std::string& path,
                             BlockTransport block_transport,
                             const char* disk_image,
                             bool disk_ready,
-                            bool disk_magic_valid) {
+                            bool disk_magic_valid,
+                            bool l1d_enabled) {
     config_.image_kind = ImageKind::Elf;
     config_.image_path = path;
     config_.binary_addr = MEM_BASE;
@@ -45,6 +46,7 @@ void DebugSession::load_elf(const std::string& path,
     config_.disk_image = config_.disk_attached ? disk_image : "";
     config_.disk_ready = disk_ready;
     config_.disk_magic_valid = disk_magic_valid;
+    config_.l1d_enabled = l1d_enabled;
     config_.post_load_actions.clear();
     recreate_machine();
     events_.clear();
@@ -56,7 +58,8 @@ void DebugSession::load_binary(const std::string& path,
                                BlockTransport block_transport,
                                const char* disk_image,
                                bool disk_ready,
-                               bool disk_magic_valid) {
+                               bool disk_magic_valid,
+                               bool l1d_enabled) {
     config_.image_kind = ImageKind::Binary;
     config_.image_path = path;
     config_.binary_addr = addr;
@@ -66,6 +69,7 @@ void DebugSession::load_binary(const std::string& path,
     config_.disk_image = config_.disk_attached ? disk_image : "";
     config_.disk_ready = disk_ready;
     config_.disk_magic_valid = disk_magic_valid;
+    config_.l1d_enabled = l1d_enabled;
     config_.post_load_actions.clear();
     recreate_machine();
     events_.clear();
@@ -225,6 +229,7 @@ void DebugSession::recreate_machine() {
     machine_ = std::make_unique<Machine>();
     machine_->set_backend_kind(config_.backend_kind);
     machine_->set_block_transport(config_.block_transport);
+    machine_->set_l1_data_cache_enabled(config_.l1d_enabled);
     if (config_.disk_attached) {
         machine_->attach_storage_image(config_.disk_image, config_.disk_ready, config_.disk_magic_valid);
     }
@@ -267,6 +272,18 @@ DebugSnapshot DebugSession::collect_snapshot() const {
     snapshot.summary.backend = backend_snapshot.backend_name.empty() ? machine().backend().name() : backend_snapshot.backend_name;
     snapshot.pipeline = backend_snapshot.pipeline;
     snapshot.profile = backend_snapshot.profile;
+    const SimpleL1DataCache& l1d = cpu.l1_data_cache();
+    const SimpleL1DataCacheStats& l1d_stats = l1d.stats();
+    snapshot.l1_data_cache.enabled = l1d.enabled();
+    snapshot.l1_data_cache.line_size_bytes = l1d.line_size_bytes();
+    snapshot.l1_data_cache.capacity_lines = static_cast<uint64_t>(l1d.capacity_lines());
+    snapshot.l1_data_cache.loads = l1d_stats.loads;
+    snapshot.l1_data_cache.stores = l1d_stats.stores;
+    snapshot.l1_data_cache.hits = l1d_stats.hits;
+    snapshot.l1_data_cache.misses = l1d_stats.misses;
+    snapshot.l1_data_cache.evictions = l1d_stats.evictions;
+    snapshot.l1_data_cache.bypasses = l1d_stats.bypasses;
+    snapshot.l1_data_cache.write_through_stores = l1d_stats.write_through_stores;
     for (size_t i = 0; i < snapshot.gpr.size(); ++i) {
         snapshot.gpr[i] = core.read_gpr(static_cast<uint32_t>(i));
     }

@@ -28,8 +28,9 @@
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
 - 当前计划：
-  - 暂无主线活跃计划；下一轮如继续推进 `Wave 5`，应先新建 `docs/plan/` 计划。
+  - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
   - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
@@ -52,8 +53,11 @@ atomic / fence 和 DMA interaction 采用保守口径。`Slice B / minimal execu
 也已完成：当前已有默认关闭、可显式启用、RAM-only、write-through、no dirty
 write-back 的最小 L1D 执行模型，并通过 `AddressSpace` 仅接入 data load/store。
 instruction fetch、page walk、atomic、MMIO、unmapped 和 side-effect region 继续
-bypass L1D。它不代表 full cache、DMA coherence、multicore、JIT 或 AI accelerator
-后续专项已经启动。
+bypass L1D。`Slice C / L1D opt-in observation + guardrail` 也已完成：当前 debug
+snapshot 顶层暴露只读 `l1_data_cache` counters，`run_debug_cli_probe.py --l1d`
+提供显式 opt-in probe guardrail；默认执行路径仍不打开 L1D，既有 `shadow_cache`
+字段语义不变。这些结果仍不代表 full cache、DMA coherence、multicore、JIT 或
+AI accelerator 后续专项已经启动。当前暂无主线活跃计划。
 
 ## 当前状态
 
@@ -108,12 +112,16 @@ bypass L1D。它不代表 full cache、DMA coherence、multicore、JIT 或 AI ac
   只在 data load/store 绑定且启用时走 L1D；默认 reference path 不变，且继续
   保持 RAM-only、write-through、no dirty write-back、MMIO / side-effect bypass、
   atomic / fence 保守处理，以及 DMA 不透明 coherence 的边界。
+- 主线 `Wave 5` 的 `Slice C / L1D opt-in observation + guardrail` 已完成：默认关闭
+  的 L1D 现在有顶层 `l1_data_cache` debug snapshot 只读 counters，
+  `run_debug_cli_probe.py --l1d` 可显式打开 L1D 并输出 `l1d-cache:` 摘要；默认
+  执行路径不变，既有 `shadow_cache` 字段语义不变。
 
 ## 当前优先级
 
-1. 下一轮如继续推进 `Wave 5`，应先新建计划；候选方向包括最小 debug/profile cache
-   counters 或更窄的 L1D opt-in workload guardrail，但不得直接跳 write-back / DMA
-   coherence / multicore / JIT。
+1. 如继续推进 `Wave 5`，先新建活跃计划；下一刀可以围绕更窄的 opt-in L1D
+   观察消费或 hardening 展开，不得直接跳 write-back / DMA coherence / multicore /
+   JIT。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 5`
    定位。
@@ -163,6 +171,11 @@ bypass L1D。它不代表 full cache、DMA coherence、multicore、JIT 或 AI ac
     这一刀新增默认关闭、可显式启用、RAM-only、write-through 的最小 L1D 执行模型，
     只接入 data load/store；instruction fetch、page walk、atomic、MMIO、
     unmapped 和 side-effect region 继续 bypass L1D。
+  - 同日完成主线 `Wave 5` `Slice C / L1D opt-in observation + guardrail` 并归档：
+    [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)。
+    这一刀新增顶层 `l1_data_cache` debug snapshot 只读 counters，并给
+    `run_debug_cli_probe.py` 增加显式 `--l1d` guardrail；默认路径仍关闭 L1D，
+    既有 `shadow_cache` 输出合同不变。
   - 这次收口把 `xv6 / Linux` pipeline-side memory signal 明确降级为
     `Wave 5 / cache` 前置证据，而不是阻塞 `Wave 4` 的硬门槛；当前 `Wave 4`
     依赖的观测证据来自 pipeline vector CNN、functional `xv6`、functional
@@ -212,8 +225,9 @@ bypass L1D。它不代表 full cache、DMA coherence、multicore、JIT 或 AI ac
   harness、构建、marker 和 dummy-payload observation 没有回退。
 - pipeline-side `xv6` memory observation 已有稳定 guardrail，但它只是
   `shadow_cache` / memory profile 信号，不是 pipeline 完整 boot `xv6` 的支持声明。
-- `Wave 5` `Slice B` 完成不代表完整 cache / DMA / multicore 已完成；当前只落地
-  默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型。
+- `Wave 5` `Slice B / C` 完成不代表完整 cache / DMA / multicore 已完成；当前只落地
+  默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，
+  以及显式 opt-in 的 L1D debug/probe 观察面。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
   最小静态 `fp32` row-wise softmax 和极小 attention-like profile 闭环；不要把它
   写成完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
@@ -222,8 +236,8 @@ bypass L1D。它不代表 full cache、DMA coherence、multicore、JIT 或 AI ac
 
 ## 下一步
 
-1. 如继续推进 `Wave 5`，先新建活跃计划；下一刀候选是最小 cache counter 观察面或
-   L1D opt-in workload guardrail，不直接扩成 write-back / DMA coherence。
+1. 如继续推进 `Wave 5`，先新建活跃计划；下一刀候选是 opt-in L1D 观察消费、
+   frontend 只读展示或更窄 hardening，不直接扩成 write-back / DMA coherence。
 2. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 cache 前置 guardrail。
 3. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU

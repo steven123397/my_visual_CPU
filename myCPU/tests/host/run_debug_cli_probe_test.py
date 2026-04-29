@@ -86,6 +86,72 @@ def build_linux_dummy_flat_image(temp_dir: pathlib.Path) -> pathlib.Path:
     return bin_path
 
 
+def build_l1d_probe_flat_image(temp_dir: pathlib.Path) -> pathlib.Path:
+    asm_path = temp_dir / "l1d_probe.S"
+    elf_path = temp_dir / "l1d_probe.elf"
+    bin_path = temp_dir / "l1d_probe.bin"
+    asm_path.write_text(
+        textwrap.dedent(
+            """\
+            .section .text
+            .globl _start
+        _start:
+            la t0, data
+            lw t1, 0(t0)
+            lw t2, 0(t0)
+            sw t2, 4(t0)
+            li a7, 93
+            ecall
+
+            .align 3
+        data:
+            .word 0x11223344
+            .word 0
+            """
+        )
+    )
+
+    compile_proc = subprocess.run(
+        [
+            "riscv64-unknown-elf-gcc",
+            "-nostdlib",
+            "-static",
+            "-march=rv64ima",
+            "-mabi=lp64",
+            "-Ttext=0x80000000",
+            "-o",
+            str(elf_path),
+            str(asm_path),
+        ],
+        cwd=MYCPU_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if compile_proc.returncode != 0:
+        raise AssertionError(compile_proc.stderr)
+
+    objcopy_proc = subprocess.run(
+        [
+            "riscv64-unknown-elf-objcopy",
+            "-O",
+            "binary",
+            str(elf_path),
+            str(bin_path),
+        ],
+        cwd=MYCPU_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if objcopy_proc.returncode != 0:
+        raise AssertionError(objcopy_proc.stderr)
+
+    return bin_path
+
+
 class RunDebugCliProbeTest(unittest.TestCase):
     def test_missing_input_paths_reports_primary_image_and_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -219,6 +285,37 @@ class RunDebugCliProbeTest(unittest.TestCase):
             commands,
             [
                 {"cmd": "load", "image": "kernel.elf", "backend": "functional"},
+                {"cmd": "step_cycle", "count": 64},
+                {"cmd": "snapshot"},
+                {"cmd": "uart_output", "offset": 0},
+                {"cmd": "quit"},
+            ],
+        )
+
+    def test_l1d_probe_load_contract_is_explicit_opt_in(self) -> None:
+        args = PROBE.parse_args(
+            [
+                "--target",
+                "./mycpu",
+                "--image",
+                "kernel.elf",
+                "--l1d",
+                "--step-cycles",
+                "64",
+            ]
+        )
+
+        commands = PROBE.build_commands(args)
+
+        self.assertEqual(
+            commands,
+            [
+                {
+                    "cmd": "load",
+                    "image": "kernel.elf",
+                    "backend": "functional",
+                    "l1d": True,
+                },
                 {"cmd": "step_cycle", "count": 64},
                 {"cmd": "snapshot"},
                 {"cmd": "uart_output", "offset": 0},
@@ -634,6 +731,109 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
         self.assertIn('uart-tail: bytes=14 recent="Booting Linux\\n"', stdout.getvalue())
         self.assertIn("uart: Booting Linux", stdout.getvalue())
+
+    def test_emit_probe_summary_exposes_l1d_cache_when_enabled(self) -> None:
+        args = PROBE.parse_args(
+            [
+                "--target",
+                "./mycpu",
+                "--image",
+                "Image",
+                "--flat",
+                "--addr",
+                "0x80000000",
+                "--l1d",
+            ]
+        )
+        lines = [
+            {
+                "type": "snapshot",
+                "summary": {
+                    "cycle": 16,
+                    "instret": 6,
+                    "pc": "0x80000014",
+                    "privilege": "M",
+                    "backend": "functional",
+                },
+                "csrs": {
+                    "mcause": "0x0",
+                    "mepc": "0x0",
+                    "mtval": "0x0",
+                    "scause": "0x0",
+                    "sepc": "0x0",
+                    "stval": "0x0",
+                    "stvec": "0x0",
+                    "satp": "0x0",
+                },
+                "profile": {},
+                "l1_data_cache": {
+                    "enabled": True,
+                    "line_size_bytes": 64,
+                    "capacity_lines": 64,
+                    "loads": 2,
+                    "stores": 1,
+                    "hits": 2,
+                    "misses": 1,
+                    "evictions": 0,
+                    "bypasses": 0,
+                    "write_through_stores": 1,
+                },
+                "devices": {
+                    "uart": {
+                        "output_size": 0,
+                        "recent_output": "",
+                    }
+                },
+            }
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            rc = PROBE.emit_probe_summary(args, lines)
+
+        self.assertEqual(rc, 0)
+        self.assertIn(
+            "load: image=Image format=flat addr=0x80000000 disk=none block_transport=default l1d=on",
+            stdout.getvalue(),
+        )
+        self.assertIn(
+            "l1d-cache: enabled=true line_size=64 capacity_lines=64 loads=2 stores=1 hits=2 misses=1 evictions=0 bypasses=0 write_through_stores=1",
+            stdout.getvalue(),
+        )
+
+    def test_l1d_opt_in_flat_probe_exposes_cache_counters(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            image = build_l1d_probe_flat_image(temp_path)
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    "workloads/run_debug_cli_probe.py",
+                    "--target",
+                    "./mycpu",
+                    "--image",
+                    str(image),
+                    "--flat",
+                    "--addr",
+                    "0x80000000",
+                    "--l1d",
+                    "--step-cycles",
+                    "16",
+                ],
+                cwd=MYCPU_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("l1d=on", proc.stdout)
+        self.assertIn(
+            "l1d-cache: enabled=true line_size=64 capacity_lines=64 loads=2 stores=1 hits=2 misses=1 evictions=0 bypasses=0 write_through_stores=1",
+            proc.stdout,
+        )
 
     def test_payload_actions_follow_primary_load_command(self) -> None:
         args = PROBE.parse_args(

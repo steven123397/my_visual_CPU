@@ -40,8 +40,9 @@
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
 - 当前计划：
-  - 暂无主线活跃计划；继续推进 `Wave 5` 时应先新建 `docs/plan/` 计划。
+  - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
   - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
@@ -243,6 +244,10 @@ Wave 5 仍然属于主线，当前 `Slice A / signal + contract` 已完成。目
 收口：当前只落地默认关闭、RAM-only、write-through、no dirty write-back 的最小
 data cache 模型，MMIO / side-effect / unmapped / fault、instruction fetch、page walk
 和 atomic 第一版均继续 bypass。
+`Slice C / L1D opt-in observation + guardrail` 已由
+[../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
+收口：当前只新增显式 opt-in 的 L1D counters 与 workload guardrail，不扩成完整 cache
+或 coherence 方案。继续推进 `Wave 5` 时需先新建活跃计划。
 
 Wave 5 的激活门槛：
 

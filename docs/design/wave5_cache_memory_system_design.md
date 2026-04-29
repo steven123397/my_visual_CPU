@@ -17,7 +17,10 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
+- 当前计划：
+  - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
 - 相关设计：
@@ -76,7 +79,7 @@ cache 模型必须遵守的合同。
 
 ### 结构设计
 
-`Wave 5` 按两段推进：
+`Wave 5` 按小切片推进：
 
 1. `Slice A / signal + contract`
    - 固定 pipeline-side workload memory signal。
@@ -87,6 +90,10 @@ cache 模型必须遵守的合同。
    - 初始模型应是可关闭、可验证、保守的 L1 data cache。
    - 默认策略倾向 `write-through + no dirty write-back`，避免第一刀引入 flush /
      eviction / DMA coherence 语义。
+3. `Slice C / L1D opt-in observation + guardrail`
+   - 仅在 Slice B 默认关闭、行为等价的 L1D 执行模型稳定后启动。
+   - 只增加只读 debug/probe counters 和显式 opt-in workload guardrail。
+   - 不改写既有 `shadow_cache` 字段语义，不声明性能提升。
 
 ### Slice A 收口结果
 
@@ -152,6 +159,23 @@ Slice A 的验证重点是证据与合同：
 - `Machine` 默认不启用 L1D；只有显式调用 `set_l1_data_cache_enabled(true)` 时才打开。
 - `Slice B` 不新增 debug/profile cache counters，不声明性能提升。
 
+### Slice C 收口结果
+
+当前 `Slice C / L1D opt-in observation + guardrail` 已完成，结果归档见
+[../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)。
+本轮完成结果是：
+
+- 为默认关闭的 `SimpleL1DataCache` 暴露顶层 `l1_data_cache` debug snapshot
+  只读 counters。
+- 为 `run_debug_cli_probe.py --l1d` 增加显式 opt-in L1D 开关和 `l1d-cache:`
+  文本摘要；默认 probe 路径仍不打开 L1D。
+- 用最小 flat workload guardrail 证明打开 L1D 后 guest 结果等价，并能观察到 hit /
+  miss / write-through 信号。
+- 既有 `shadow_cache` 字段语义不变；本轮只提供观察与 guardrail，不声明性能提升。
+
+后续仍不允许直接把 L1D 扩成 write-back、DMA coherence、multicore、JIT、I-cache 或
+cache maintenance instruction。
+
 ## 风险与取舍
 
 - 先做 Slice A 会让 `Wave 5` 启动看起来偏“证据化”，但它可以防止真实 cache 模型过早污染
@@ -168,6 +192,9 @@ Slice A 的验证重点是证据与合同：
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)。
 - `Slice B / minimal executable L1D` 已完成，结果归档见
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)。
-  后续继续推进时仍必须遵守 `write-through + no dirty write-back`、RAM-only、
+- `Slice C / L1D opt-in observation + guardrail` 已完成，结果归档见
+  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)。
+- 当前暂无主线活跃计划。后续继续推进时仍必须遵守 `write-through + no dirty
+  write-back`、RAM-only、
   MMIO/unmapped/side-effect bypass、atomic/fence conservative serialize/bypass，
   以及 DMA 不透明 coherence 的边界，除非先另开设计/计划并补足验证。

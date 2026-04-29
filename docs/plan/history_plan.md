@@ -23,6 +23,13 @@
 
 ### 2026-04-29
 
+#### mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan
+
+- 原文件：`mainline_wave5_cache_memory_system_slice_c_l1d_observation_guardrail_plan.md`
+- 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice C / L1D opt-in observation + guardrail`。本轮为默认关闭的 `SimpleL1DataCache` 增加顶层 `l1_data_cache` debug snapshot 只读 counters，并为 `run_debug_cli_probe.py` 增加显式 `--l1d` opt-in load/probe 路径；默认 CLI / debug / probe 路径仍不启用 L1D，既有 `shadow_cache` schema 与语义保持不变。
+- 实现过程摘要：这一轮按 `TDD` 先固定默认关闭 snapshot JSON 与 `--l1d` probe 摘要红灯，再接入 debug CLI load 显式 L1D 开关和最小 flat workload guardrail。opt-in workload 能稳定暴露 RAM line miss、reused-line hit 与 write-through store 计数，同时 guest 正常 halt；本轮仍不实现 write-back、I-cache、cache maintenance instruction、DMA coherence、multicore、JIT 或 AI accelerator 后续专项。验证覆盖 `make test-host-execution_profile_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_b_minimal_l1d_plan.md`

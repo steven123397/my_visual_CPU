@@ -218,6 +218,21 @@ void append_execution_profile(std::ostringstream& out, const ExecutionProfileSna
     out << "]}";
 }
 
+void append_l1_data_cache(std::ostringstream& out, const DebugL1DataCacheSnapshot& cache) {
+    out << "{"
+        << "\"enabled\":" << (cache.enabled ? "true" : "false")
+        << ",\"line_size_bytes\":" << cache.line_size_bytes
+        << ",\"capacity_lines\":" << cache.capacity_lines
+        << ",\"loads\":" << cache.loads
+        << ",\"stores\":" << cache.stores
+        << ",\"hits\":" << cache.hits
+        << ",\"misses\":" << cache.misses
+        << ",\"evictions\":" << cache.evictions
+        << ",\"bypasses\":" << cache.bypasses
+        << ",\"write_through_stores\":" << cache.write_through_stores
+        << "}";
+}
+
 std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
     std::ostringstream out;
     out << "{"
@@ -290,6 +305,8 @@ std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
         << "}";
     out << "},\"profile\":";
     append_execution_profile(out, snapshot.profile);
+    out << ",\"l1_data_cache\":";
+    append_l1_data_cache(out, snapshot.l1_data_cache);
     out << ",\"gpr\":[";
     for (size_t i = 0; i < snapshot.gpr.size(); ++i) {
         if (i != 0) {

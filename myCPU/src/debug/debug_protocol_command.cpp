@@ -310,6 +310,7 @@ DebugCliCommand parse_debug_cli_command(const std::string& line) {
         parsed.disk_ready = try_extract_bool(object, "disk_ready", true);
         parsed.disk_magic_valid = try_extract_bool(object, "disk_magic_valid", true);
         parsed.flat = try_extract_bool(object, "flat", false);
+        parsed.l1d_enabled = try_extract_bool(object, "l1d", false);
         parsed.addr = try_extract_u64(object, "addr", MEM_BASE);
         return parsed;
     }

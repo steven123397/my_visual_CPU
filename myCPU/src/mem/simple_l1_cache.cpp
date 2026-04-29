@@ -87,6 +87,14 @@ bool SimpleL1DataCache::enabled() const {
     return config_.enabled;
 }
 
+uint64_t SimpleL1DataCache::line_size_bytes() const {
+    return config_.line_size_bytes;
+}
+
+size_t SimpleL1DataCache::capacity_lines() const {
+    return config_.capacity_lines;
+}
+
 const SimpleL1DataCacheStats& SimpleL1DataCache::stats() const {
     return stats_;
 }

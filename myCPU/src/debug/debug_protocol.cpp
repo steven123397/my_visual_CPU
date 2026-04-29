@@ -61,7 +61,8 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                         block_transport,
                         command.disk.empty() ? nullptr : command.disk.c_str(),
                         command.disk_ready,
-                        command.disk_magic_valid);
+                        command.disk_magic_valid,
+                        command.l1d_enabled);
                 } else {
                     session.load_elf(
                         command.image,
@@ -69,7 +70,8 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                         block_transport,
                         command.disk.empty() ? nullptr : command.disk.c_str(),
                         command.disk_ready,
-                        command.disk_magic_valid);
+                        command.disk_magic_valid,
+                        command.l1d_enabled);
                 }
                 out << debug_protocol_ok_json("load") << '\n';
                 continue;

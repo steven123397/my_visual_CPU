@@ -20,8 +20,9 @@
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
 - 当前计划：
-  - 暂无主线活跃计划；继续推进 `Wave 5` 时应先新建 `docs/plan/` 计划。
+  - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
   - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
@@ -176,3 +177,7 @@
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   收口；它只落地默认关闭、RAM-only、write-through 的最小 data cache 模型，
   不代表完整 cache / DMA / multicore / coherence 已经实现。
+- `Slice C / L1D opt-in observation + guardrail` 已由
+  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
+  收口；它只补显式 opt-in 的 L1D debug/probe 观察面和行为等价 guardrail。
+  当前暂无主线活跃计划，继续推进 `Wave 5` 时应先新建计划。
