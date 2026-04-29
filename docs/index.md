@@ -50,6 +50,9 @@
 - `AI accelerator / NPU`
   - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
   - [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+  - [plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md](plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md)
+  - [plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md](plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md)
+  - [plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md](plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md)
   - [plan/history_plan.md#npu-tpu-accelerator-wave3-plan](plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
 - `Phase 4 准备`
   - [design/phase4_preparation_design.md](design/phase4_preparation_design.md)

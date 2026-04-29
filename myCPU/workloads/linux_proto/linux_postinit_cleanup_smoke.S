@@ -1,12 +1,18 @@
 #define SYS_CLONE3 435
+#define SYS_INOTIFY_INIT1 26
+#define SYS_INOTIFY_ADD_WATCH 27
+#define SYS_INOTIFY_RM_WATCH 28
 #define SYS_DUP 23
 #define SYS_FCNTL 25
 #define SYS_EXECVE 221
 #define SYS_EXECVEAT 281
 #define SYS_MMAP 222
 #define SYS_MUNMAP 215
+#define SYS_WAITID 95
 #define SYS_WAIT4 260
 #define SYS_EXIT_GROUP 94
+#define SYS_RT_SIGPROCMASK 135
+#define SYS_SIGNALFD4 74
 #define SYS_UNLINKAT 35
 #define SYS_SYMLINKAT 36
 #define SYS_LINKAT 37
@@ -14,26 +20,57 @@
 #define SYS_CHDIR 49
 #define SYS_OPENAT 56
 #define SYS_CLOSE 57
+#define SYS_PIPE2 59
 #define SYS_GETDENTS64 61
 #define SYS_LSEEK 62
 #define SYS_READ 63
 #define SYS_WRITE 64
+#define SYS_EVENTFD2 19
+#define SYS_EPOLL_CREATE1 20
+#define SYS_EPOLL_CTL 21
+#define SYS_EPOLL_PWAIT 22
+#define SYS_PPOLL 73
+#define SYS_SPLICE 76
 #define SYS_READLINKAT 78
 #define SYS_NEWFSTATAT 79
 #define SYS_FSTAT 80
+#define SYS_TIMERFD_CREATE 85
+#define SYS_TIMERFD_SETTIME 86
 #define SYS_EXIT 93
+#define SYS_FUTEX 98
 #define SYS_NANOSLEEP 101
+#define SYS_SOCKETPAIR 199
+#define SYS_SENDMSG 211
+#define SYS_RECVMSG 212
+#define SYS_PIDFD_OPEN 434
+#define SYS_OPENAT2 437
+#define SYS_RENAMEAT2 276
+#define SYS_COPY_FILE_RANGE 285
+#define SYS_STATX 291
 
 #define ENOENT 2
 #define EBADF 9
+#define EAGAIN 11
 #define SIGCHLD 17
 
 #define AT_FDCWD -100
 #define AT_EMPTY_PATH 4096
 #define AT_REMOVEDIR 512
 #define AT_SYMLINK_NOFOLLOW 256
+#define AF_UNIX 1
+#define SOL_SOCKET 1
+#define SCM_RIGHTS 1
+#define IN_CLOSE_WRITE 8
+#define EPOLL_CTL_ADD 1
+#define POLLIN 1
+#define CLD_EXITED 1
+#define CLOCK_MONOTONIC 1
 #define O_RDONLY 0
 #define O_RDWR 2
+#define O_CREAT 64
+#define O_TRUNC 512
+#define P_PIDFD 3
+#define SOCK_STREAM 1
 #define SEEK_SET 0
 #define SEEK_END 2
 #define PROT_READ 1
@@ -41,9 +78,18 @@
 #define PROT_READ_WRITE 3
 #define MAP_SHARED 1
 #define MAP_PRIVATE 2
+#define MAP_ANONYMOUS 32
+#define MAP_SHARED_ANONYMOUS 33
 #define F_GETFD 1
 #define F_SETFD 2
 #define FD_CLOEXEC 1
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+#define RESOLVE_NO_SYMLINKS 4
+#define RESOLVE_BENEATH 8
+#define RENAME_EXCHANGE 2
+#define SIG_BLOCK 0
+#define WEXITED 4
 
 #define INHERITED_CONSOLE_FD 3
 
@@ -88,8 +134,58 @@ post_init_data_mmap_private_expected_end:
 post_init_data_mmap_shared_fork_expected:
     .asciz "post-mshf-dup-ok\nsyncok\n"
 post_init_data_mmap_shared_fork_expected_end:
+pipe2_roundtrip_expected:
+    .asciz "pipe2-fork-ok\n"
+pipe2_roundtrip_expected_end:
+futex_shared_expected:
+    .asciz "futex-shared-ok\n"
+futex_shared_expected_end:
+socketpair_roundtrip_expected:
+    .asciz "socketpair-fork-ok\n"
+socketpair_roundtrip_expected_end:
+self_elf_magic_expected:
+    .byte 0x7f, 'E', 'L', 'F'
+self_elf_magic_expected_end:
+renameat2_src_name:
+    .asciz "post-init-renameat2-src"
+renameat2_dst_name:
+    .asciz "post-init-renameat2-dst"
+renameat2_src_expected:
+    .asciz "renameat2-src\n"
+renameat2_src_expected_end:
+renameat2_dst_expected:
+    .asciz "renameat2-dst\n"
+renameat2_dst_expected_end:
+copy_file_range_src_name:
+    .asciz "post-init-copyfr-src"
+copy_file_range_dst_name:
+    .asciz "post-init-copyfr-dst"
+copy_file_range_expected:
+    .asciz "copy-file-range-ok\n"
+copy_file_range_expected_end:
+splice_src_name:
+    .asciz "post-init-splice-src"
+splice_dst_name:
+    .asciz "post-init-splice-dst"
+splice_expected:
+    .asciz "splice-pipe-file-ok\n"
+splice_expected_end:
+statx_name:
+    .asciz "post-init-statx"
+statx_expected:
+    .asciz "statx-size-mode-ok\n"
+statx_expected_end:
+inotify_name:
+    .asciz "post-init-inotify"
+inotify_expected:
+    .asciz "inotify-close-write-ok\n"
+inotify_expected_end:
+timerfd_expected:
+    .quad 1
 execve_open_fd_self_path:
     .asciz "/post-init-cleanup-smoke"
+execve_open_fd_self_name:
+    .asciz "post-init-cleanup-smoke"
 execve_open_fd_mode_arg:
     .asciz "--exec-open-fd"
 execve_cloexec_fd_mode_arg:
@@ -268,6 +364,57 @@ stage_unlinkat_open_fd_mmap_shared_fork_child_write_ok_msg_end:
 stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg:
     .asciz "mycpu linux userland: stage=unlinkat-open-fd-mmap-shared-fork-parent-readback-ok\n"
 stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg_end:
+stage_pipe2_fork_child_write_ok_msg:
+    .asciz "mycpu linux userland: stage=pipe2-fork-child-write-ok\n"
+stage_pipe2_fork_child_write_ok_msg_end:
+stage_pipe2_fork_parent_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=pipe2-fork-parent-readback-ok\n"
+stage_pipe2_fork_parent_readback_ok_msg_end:
+stage_futex_shared_child_wake_ok_msg:
+    .asciz "mycpu linux userland: stage=futex-shared-child-wake-ok\n"
+stage_futex_shared_child_wake_ok_msg_end:
+stage_futex_shared_parent_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=futex-shared-parent-readback-ok\n"
+stage_futex_shared_parent_readback_ok_msg_end:
+stage_socketpair_fork_child_write_ok_msg:
+    .asciz "mycpu linux userland: stage=socketpair-fork-child-write-ok\n"
+stage_socketpair_fork_child_write_ok_msg_end:
+stage_socketpair_fork_parent_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=socketpair-fork-parent-readback-ok\n"
+stage_socketpair_fork_parent_readback_ok_msg_end:
+stage_openat2_self_beneath_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=openat2-self-beneath-readback-ok\n"
+stage_openat2_self_beneath_readback_ok_msg_end:
+stage_pidfd_open_ppoll_waitid_ok_msg:
+    .asciz "mycpu linux userland: stage=pidfd-open-ppoll-waitid-ok\n"
+stage_pidfd_open_ppoll_waitid_ok_msg_end:
+stage_signalfd_sigchld_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=signalfd-sigchld-readback-ok\n"
+stage_signalfd_sigchld_readback_ok_msg_end:
+stage_renameat2_exchange_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=renameat2-exchange-readback-ok\n"
+stage_renameat2_exchange_readback_ok_msg_end:
+stage_eventfd_epoll_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=eventfd-epoll-readback-ok\n"
+stage_eventfd_epoll_readback_ok_msg_end:
+stage_scm_rights_parent_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=scm-rights-parent-readback-ok\n"
+stage_scm_rights_parent_readback_ok_msg_end:
+stage_copy_file_range_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=copy-file-range-readback-ok\n"
+stage_copy_file_range_readback_ok_msg_end:
+stage_splice_pipe_file_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=splice-pipe-file-readback-ok\n"
+stage_splice_pipe_file_readback_ok_msg_end:
+stage_statx_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=statx-size-mode-readback-ok\n"
+stage_statx_readback_ok_msg_end:
+stage_inotify_close_write_event_ok_msg:
+    .asciz "mycpu linux userland: stage=inotify-close-write-event-ok\n"
+stage_inotify_close_write_event_ok_msg_end:
+stage_timerfd_one_shot_readback_ok_msg:
+    .asciz "mycpu linux userland: stage=timerfd-one-shot-readback-ok\n"
+stage_timerfd_one_shot_readback_ok_msg_end:
 stage_fourth_stage_reached_msg:
     .asciz "mycpu linux userland: stage=fourth-stage-reached\n"
 stage_fourth_stage_reached_msg_end:
@@ -403,6 +550,48 @@ fourth_stage_open_fd_mmap_private_smoke_fail_msg_end:
 fourth_stage_open_fd_mmap_fork_smoke_fail_msg:
     .asciz "mycpu linux userland: fourth-stage open fd mmap fork smoke failed\n"
 fourth_stage_open_fd_mmap_fork_smoke_fail_msg_end:
+fourth_stage_pipe2_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage pipe2 smoke failed\n"
+fourth_stage_pipe2_smoke_fail_msg_end:
+fourth_stage_futex_shared_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage futex shared smoke failed\n"
+fourth_stage_futex_shared_smoke_fail_msg_end:
+fourth_stage_socketpair_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage socketpair smoke failed\n"
+fourth_stage_socketpair_smoke_fail_msg_end:
+fourth_stage_openat2_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage openat2 smoke failed\n"
+fourth_stage_openat2_smoke_fail_msg_end:
+fourth_stage_pidfd_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage pidfd smoke failed\n"
+fourth_stage_pidfd_smoke_fail_msg_end:
+fourth_stage_signalfd_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage signalfd smoke failed\n"
+fourth_stage_signalfd_smoke_fail_msg_end:
+fourth_stage_renameat2_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage renameat2 smoke failed\n"
+fourth_stage_renameat2_smoke_fail_msg_end:
+fourth_stage_eventfd_epoll_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage eventfd epoll smoke failed\n"
+fourth_stage_eventfd_epoll_smoke_fail_msg_end:
+fourth_stage_scm_rights_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage scm-rights smoke failed\n"
+fourth_stage_scm_rights_smoke_fail_msg_end:
+fourth_stage_copy_file_range_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage copy-file-range smoke failed\n"
+fourth_stage_copy_file_range_smoke_fail_msg_end:
+fourth_stage_splice_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage splice smoke failed\n"
+fourth_stage_splice_smoke_fail_msg_end:
+fourth_stage_statx_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage statx smoke failed\n"
+fourth_stage_statx_smoke_fail_msg_end:
+fourth_stage_inotify_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage inotify smoke failed\n"
+fourth_stage_inotify_smoke_fail_msg_end:
+fourth_stage_timerfd_smoke_fail_msg:
+    .asciz "mycpu linux userland: fourth-stage timerfd smoke failed\n"
+fourth_stage_timerfd_smoke_fail_msg_end:
 fourth_stage_console_fail_msg:
     .asciz "mycpu linux userland: fourth-stage console open failed\n"
 fourth_stage_console_fail_msg_end:
@@ -437,7 +626,67 @@ fourth_stage_write_short_msg_end:
 .set post_init_data_mmap_private_expected_len, post_init_data_mmap_private_expected_len - 1
 .set post_init_data_mmap_shared_fork_expected_len, post_init_data_mmap_shared_fork_expected_end - post_init_data_mmap_shared_fork_expected
 .set post_init_data_mmap_shared_fork_expected_len, post_init_data_mmap_shared_fork_expected_len - 1
+.set pipe2_roundtrip_expected_len, pipe2_roundtrip_expected_end - pipe2_roundtrip_expected
+.set pipe2_roundtrip_expected_len, pipe2_roundtrip_expected_len - 1
+.set futex_shared_expected_len, futex_shared_expected_end - futex_shared_expected
+.set futex_shared_expected_len, futex_shared_expected_len - 1
+.set socketpair_roundtrip_expected_len, socketpair_roundtrip_expected_end - socketpair_roundtrip_expected
+.set socketpair_roundtrip_expected_len, socketpair_roundtrip_expected_len - 1
+.set renameat2_src_expected_len, renameat2_src_expected_end - renameat2_src_expected
+.set renameat2_src_expected_len, renameat2_src_expected_len - 1
+.set renameat2_dst_expected_len, renameat2_dst_expected_end - renameat2_dst_expected
+.set renameat2_dst_expected_len, renameat2_dst_expected_len - 1
+.set copy_file_range_expected_len, copy_file_range_expected_end - copy_file_range_expected
+.set copy_file_range_expected_len, copy_file_range_expected_len - 1
+.set splice_expected_len, splice_expected_end - splice_expected
+.set splice_expected_len, splice_expected_len - 1
+.set statx_expected_len, statx_expected_end - statx_expected
+.set statx_expected_len, statx_expected_len - 1
+.set inotify_expected_len, inotify_expected_end - inotify_expected
+.set inotify_expected_len, inotify_expected_len - 1
+.set self_elf_magic_expected_len, self_elf_magic_expected_end - self_elf_magic_expected
+.set futex_shared_state_offset, 0
+.set futex_shared_data_offset, 8
+.set futex_shared_map_len, futex_shared_data_offset + futex_shared_expected_len
+.set fourth_stage_siginfo_buf_len, 128
+.set fourth_stage_siginfo_signo_offset, 0
+.set fourth_stage_siginfo_code_offset, 8
+.set fourth_stage_siginfo_pid_offset, 16
+.set fourth_stage_siginfo_status_offset, 24
+.set fourth_stage_signalfd_siginfo_len, 128
+.set fourth_stage_signalfd_ssi_signo_offset, 0
+.set fourth_stage_signalfd_ssi_code_offset, 8
+.set fourth_stage_signalfd_ssi_pid_offset, 12
+.set fourth_stage_signalfd_ssi_status_offset, 40
+.set fourth_stage_rt_sigset_len, 8
+.set fourth_stage_pollfd_fd_offset, 0
+.set fourth_stage_pollfd_events_offset, 4
+.set fourth_stage_pollfd_revents_offset, 6
+.set fourth_stage_pollfd_len, 8
+.set fourth_stage_epoll_event_events_offset, 0
+.set fourth_stage_epoll_event_data_offset, 8
+.set fourth_stage_epoll_event_len, 16
+.set fourth_stage_eventfd_counter_len, 8
+.set fourth_stage_scm_iovec_base_offset, 0
+.set fourth_stage_scm_iovec_len_offset, 8
+.set fourth_stage_scm_iovec_len, 16
+.set fourth_stage_scm_msghdr_name_offset, 0
+.set fourth_stage_scm_msghdr_namelen_offset, 8
+.set fourth_stage_scm_msghdr_iov_offset, 16
+.set fourth_stage_scm_msghdr_iovlen_offset, 24
+.set fourth_stage_scm_msghdr_control_offset, 32
+.set fourth_stage_scm_msghdr_controllen_offset, 40
+.set fourth_stage_scm_msghdr_flags_offset, 48
+.set fourth_stage_scm_msghdr_len, 56
+.set fourth_stage_scm_cmsg_len_offset, 0
+.set fourth_stage_scm_cmsg_level_offset, 8
+.set fourth_stage_scm_cmsg_type_offset, 12
+.set fourth_stage_scm_cmsg_data_offset, 16
+.set fourth_stage_scm_cmsg_fd_len, 20
+.set fourth_stage_scm_cmsg_buf_len, 24
+.set fourth_stage_scm_data_len, 1
 .set fourth_stage_stat_buf_len, 128
+.set fourth_stage_statx_buf_len, 256
 .set fourth_stage_stat_st_ino_offset, 8
 .set fourth_stage_stat_st_mode_offset, 16
 .set fourth_stage_stat_st_nlink_offset, 20
@@ -445,6 +694,21 @@ fourth_stage_write_short_msg_end:
 .set fourth_stage_stat_mode_mask, 61440
 .set fourth_stage_stat_mode_regular, 32768
 .set fourth_stage_stat_mode_symlink, 40960
+.set fourth_stage_statx_mask_offset, 0
+.set fourth_stage_statx_mode_offset, 28
+.set fourth_stage_statx_size_offset, 40
+.set fourth_stage_statx_mask_basic, 515
+.set fourth_stage_timerfd_spec_len, 32
+.set fourth_stage_timerfd_interval_sec_offset, 0
+.set fourth_stage_timerfd_interval_nsec_offset, 8
+.set fourth_stage_timerfd_value_sec_offset, 16
+.set fourth_stage_timerfd_value_nsec_offset, 24
+.set fourth_stage_timerfd_one_shot_nsec, 10000000
+.set fourth_stage_inotify_event_wd_offset, 0
+.set fourth_stage_inotify_event_mask_offset, 4
+.set fourth_stage_inotify_event_cookie_offset, 8
+.set fourth_stage_inotify_event_name_len_offset, 12
+.set fourth_stage_inotify_event_len, 16
 .set stage_unlinkat_reused_dirent_gone_msg_len, stage_unlinkat_reused_dirent_gone_msg_end - stage_unlinkat_reused_dirent_gone_msg
 .set stage_unlinkat_reused_dirent_gone_msg_len, stage_unlinkat_reused_dirent_gone_msg_len - 1
 .set stage_fourth_stage_entered_msg_len, stage_fourth_stage_entered_msg_end - stage_fourth_stage_entered_msg
@@ -549,6 +813,34 @@ fourth_stage_write_short_msg_end:
 .set stage_unlinkat_open_fd_mmap_shared_fork_child_write_ok_msg_len, stage_unlinkat_open_fd_mmap_shared_fork_child_write_ok_msg_len - 1
 .set stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg_len, stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg_end - stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg
 .set stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg_len, stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg_len - 1
+.set stage_pipe2_fork_child_write_ok_msg_len, stage_pipe2_fork_child_write_ok_msg_end - stage_pipe2_fork_child_write_ok_msg
+.set stage_pipe2_fork_child_write_ok_msg_len, stage_pipe2_fork_child_write_ok_msg_len - 1
+.set stage_pipe2_fork_parent_readback_ok_msg_len, stage_pipe2_fork_parent_readback_ok_msg_end - stage_pipe2_fork_parent_readback_ok_msg
+.set stage_pipe2_fork_parent_readback_ok_msg_len, stage_pipe2_fork_parent_readback_ok_msg_len - 1
+.set stage_futex_shared_child_wake_ok_msg_len, stage_futex_shared_child_wake_ok_msg_end - stage_futex_shared_child_wake_ok_msg
+.set stage_futex_shared_child_wake_ok_msg_len, stage_futex_shared_child_wake_ok_msg_len - 1
+.set stage_futex_shared_parent_readback_ok_msg_len, stage_futex_shared_parent_readback_ok_msg_end - stage_futex_shared_parent_readback_ok_msg
+.set stage_futex_shared_parent_readback_ok_msg_len, stage_futex_shared_parent_readback_ok_msg_len - 1
+.set stage_socketpair_fork_child_write_ok_msg_len, stage_socketpair_fork_child_write_ok_msg_end - stage_socketpair_fork_child_write_ok_msg
+.set stage_socketpair_fork_child_write_ok_msg_len, stage_socketpair_fork_child_write_ok_msg_len - 1
+.set stage_socketpair_fork_parent_readback_ok_msg_len, stage_socketpair_fork_parent_readback_ok_msg_end - stage_socketpair_fork_parent_readback_ok_msg
+.set stage_socketpair_fork_parent_readback_ok_msg_len, stage_socketpair_fork_parent_readback_ok_msg_len - 1
+.set stage_openat2_self_beneath_readback_ok_msg_len, stage_openat2_self_beneath_readback_ok_msg_end - stage_openat2_self_beneath_readback_ok_msg
+.set stage_openat2_self_beneath_readback_ok_msg_len, stage_openat2_self_beneath_readback_ok_msg_len - 1
+.set stage_pidfd_open_ppoll_waitid_ok_msg_len, stage_pidfd_open_ppoll_waitid_ok_msg_end - stage_pidfd_open_ppoll_waitid_ok_msg
+.set stage_pidfd_open_ppoll_waitid_ok_msg_len, stage_pidfd_open_ppoll_waitid_ok_msg_len - 1
+.set stage_signalfd_sigchld_readback_ok_msg_len, stage_signalfd_sigchld_readback_ok_msg_end - stage_signalfd_sigchld_readback_ok_msg
+.set stage_signalfd_sigchld_readback_ok_msg_len, stage_signalfd_sigchld_readback_ok_msg_len - 1
+.set stage_renameat2_exchange_readback_ok_msg_len, stage_renameat2_exchange_readback_ok_msg_end - stage_renameat2_exchange_readback_ok_msg
+.set stage_renameat2_exchange_readback_ok_msg_len, stage_renameat2_exchange_readback_ok_msg_len - 1
+.set stage_eventfd_epoll_readback_ok_msg_len, stage_eventfd_epoll_readback_ok_msg_end - stage_eventfd_epoll_readback_ok_msg
+.set stage_eventfd_epoll_readback_ok_msg_len, stage_eventfd_epoll_readback_ok_msg_len - 1
+.set stage_scm_rights_parent_readback_ok_msg_len, stage_scm_rights_parent_readback_ok_msg_end - stage_scm_rights_parent_readback_ok_msg
+.set stage_scm_rights_parent_readback_ok_msg_len, stage_scm_rights_parent_readback_ok_msg_len - 1
+.set stage_copy_file_range_readback_ok_msg_len, stage_copy_file_range_readback_ok_msg_end - stage_copy_file_range_readback_ok_msg
+.set stage_copy_file_range_readback_ok_msg_len, stage_copy_file_range_readback_ok_msg_len - 1
+.set stage_splice_pipe_file_readback_ok_msg_len, stage_splice_pipe_file_readback_ok_msg_end - stage_splice_pipe_file_readback_ok_msg
+.set stage_splice_pipe_file_readback_ok_msg_len, stage_splice_pipe_file_readback_ok_msg_len - 1
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_end - stage_fourth_stage_reached_msg
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_len - 1
 .set post_init_reached_msg_len, post_init_reached_msg_end - post_init_reached_msg
@@ -635,6 +927,28 @@ fourth_stage_write_short_msg_end:
 .set fourth_stage_execveat_self_fd_smoke_fail_msg_len, fourth_stage_execveat_self_fd_smoke_fail_msg_len - 1
 .set fourth_stage_open_fd_mmap_smoke_fail_msg_len, fourth_stage_open_fd_mmap_smoke_fail_msg_end - fourth_stage_open_fd_mmap_smoke_fail_msg
 .set fourth_stage_open_fd_mmap_smoke_fail_msg_len, fourth_stage_open_fd_mmap_smoke_fail_msg_len - 1
+.set fourth_stage_pipe2_smoke_fail_msg_len, fourth_stage_pipe2_smoke_fail_msg_end - fourth_stage_pipe2_smoke_fail_msg
+.set fourth_stage_pipe2_smoke_fail_msg_len, fourth_stage_pipe2_smoke_fail_msg_len - 1
+.set fourth_stage_futex_shared_smoke_fail_msg_len, fourth_stage_futex_shared_smoke_fail_msg_end - fourth_stage_futex_shared_smoke_fail_msg
+.set fourth_stage_futex_shared_smoke_fail_msg_len, fourth_stage_futex_shared_smoke_fail_msg_len - 1
+.set fourth_stage_socketpair_smoke_fail_msg_len, fourth_stage_socketpair_smoke_fail_msg_end - fourth_stage_socketpair_smoke_fail_msg
+.set fourth_stage_socketpair_smoke_fail_msg_len, fourth_stage_socketpair_smoke_fail_msg_len - 1
+.set fourth_stage_openat2_smoke_fail_msg_len, fourth_stage_openat2_smoke_fail_msg_end - fourth_stage_openat2_smoke_fail_msg
+.set fourth_stage_openat2_smoke_fail_msg_len, fourth_stage_openat2_smoke_fail_msg_len - 1
+.set fourth_stage_pidfd_smoke_fail_msg_len, fourth_stage_pidfd_smoke_fail_msg_end - fourth_stage_pidfd_smoke_fail_msg
+.set fourth_stage_pidfd_smoke_fail_msg_len, fourth_stage_pidfd_smoke_fail_msg_len - 1
+.set fourth_stage_signalfd_smoke_fail_msg_len, fourth_stage_signalfd_smoke_fail_msg_end - fourth_stage_signalfd_smoke_fail_msg
+.set fourth_stage_signalfd_smoke_fail_msg_len, fourth_stage_signalfd_smoke_fail_msg_len - 1
+.set fourth_stage_renameat2_smoke_fail_msg_len, fourth_stage_renameat2_smoke_fail_msg_end - fourth_stage_renameat2_smoke_fail_msg
+.set fourth_stage_renameat2_smoke_fail_msg_len, fourth_stage_renameat2_smoke_fail_msg_len - 1
+.set fourth_stage_eventfd_epoll_smoke_fail_msg_len, fourth_stage_eventfd_epoll_smoke_fail_msg_end - fourth_stage_eventfd_epoll_smoke_fail_msg
+.set fourth_stage_eventfd_epoll_smoke_fail_msg_len, fourth_stage_eventfd_epoll_smoke_fail_msg_len - 1
+.set fourth_stage_scm_rights_smoke_fail_msg_len, fourth_stage_scm_rights_smoke_fail_msg_end - fourth_stage_scm_rights_smoke_fail_msg
+.set fourth_stage_scm_rights_smoke_fail_msg_len, fourth_stage_scm_rights_smoke_fail_msg_len - 1
+.set fourth_stage_copy_file_range_smoke_fail_msg_len, fourth_stage_copy_file_range_smoke_fail_msg_end - fourth_stage_copy_file_range_smoke_fail_msg
+.set fourth_stage_copy_file_range_smoke_fail_msg_len, fourth_stage_copy_file_range_smoke_fail_msg_len - 1
+.set fourth_stage_splice_smoke_fail_msg_len, fourth_stage_splice_smoke_fail_msg_end - fourth_stage_splice_smoke_fail_msg
+.set fourth_stage_splice_smoke_fail_msg_len, fourth_stage_splice_smoke_fail_msg_len - 1
 .set fourth_stage_console_fail_msg_len, fourth_stage_console_fail_msg_end - fourth_stage_console_fail_msg
 .set fourth_stage_console_fail_msg_len, fourth_stage_console_fail_msg_len - 1
 .set fourth_stage_write_fail_msg_len, fourth_stage_write_fail_msg_end - fourth_stage_write_fail_msg
@@ -678,6 +992,13 @@ execveat_self_fd_argv:
     .dword execveat_self_fd_mode_arg
     .dword execve_open_fd_fd_arg
     .dword 0
+fourth_stage_openat2_self_how:
+    .dword O_RDONLY
+    .dword 0
+    .dword RESOLVE_NO_SYMLINKS | RESOLVE_BENEATH
+fourth_stage_openat2_self_how_end:
+fourth_stage_sigchld_rt_mask:
+    .dword 65536
 execve_open_fd_envp:
     .dword 0
 empty_path:
@@ -691,6 +1012,7 @@ proc_self_fd_path_end:
 execve_open_fd_fd_arg:
     .byte '0'
     .byte 0
+.set fourth_stage_openat2_self_how_size, fourth_stage_openat2_self_how_end - fourth_stage_openat2_self_how
 
     .section .bss
 fourth_stage_dirent_buf:
@@ -704,8 +1026,36 @@ fourth_stage_stat_buf:
 fourth_stage_stat_buf_alt:
     .space fourth_stage_stat_buf_len
     .balign 8
+fourth_stage_statx_buf:
+    .space fourth_stage_statx_buf_len
+    .balign 8
+fourth_stage_timerfd_spec:
+    .space fourth_stage_timerfd_spec_len
+    .balign 8
 fourth_stage_wait_status:
     .word 0
+    .balign 4
+fourth_stage_pipe_fds:
+    .space 8
+fourth_stage_socketpair_fds:
+    .space 8
+fourth_stage_pollfd:
+    .space fourth_stage_pollfd_len
+fourth_stage_epoll_event:
+    .space fourth_stage_epoll_event_len
+fourth_stage_siginfo_buf:
+    .space fourth_stage_siginfo_buf_len
+fourth_stage_eventfd_counter:
+    .space fourth_stage_eventfd_counter_len
+    .balign 8
+fourth_stage_scm_iovec:
+    .space fourth_stage_scm_iovec_len
+fourth_stage_scm_msghdr:
+    .space fourth_stage_scm_msghdr_len
+fourth_stage_scm_cmsg_buf:
+    .space fourth_stage_scm_cmsg_buf_len
+fourth_stage_scm_data_byte:
+    .space fourth_stage_scm_data_len
 
     .section .text
     .globl _start
@@ -2424,7 +2774,9 @@ open_fd_dup_grow_zero_fill_loop_done:
 
     mv a0, s0
     la a1, stage_unlinkat_open_fd_mmap_private_fd_unchanged_ok_msg
-    li a2, stage_unlinkat_open_fd_mmap_private_fd_unchanged_ok_msg_len
+    la a2, stage_unlinkat_open_fd_mmap_private_fd_unchanged_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     bltz a0, write_failed
     or s1, s1, a1
@@ -2521,7 +2873,1353 @@ open_fd_dup_grow_zero_fill_loop_done:
 
     mv a0, s0
     la a1, stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg
-    li a2, stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg_len
+    la a2, stage_unlinkat_open_fd_mmap_shared_fork_parent_readback_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    la a0, fourth_stage_pipe_fds
+    li a1, 0
+    li a7, SYS_PIPE2
+    ecall
+    bltz a0, pipe2_smoke_failed
+
+    la t0, fourth_stage_pipe_fds
+    lw s3, 0(t0)
+    lw s5, 4(t0)
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, pipe2_close_error
+    beqz a0, pipe2_fork_child
+    mv t0, a0
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, pipe2_read_close_error
+    li s5, -1
+
+    la t1, fourth_stage_wait_status
+    sw zero, 0(t1)
+    mv a0, t0
+    mv a1, t1
+    li a2, 0
+    li a3, 0
+    li a7, SYS_WAIT4
+    ecall
+    bltz a0, pipe2_read_close_error
+    bne a0, t0, pipe2_read_close_error
+    lw t2, 0(t1)
+    bnez t2, pipe2_read_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, pipe2_roundtrip_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, pipe2_roundtrip_expected_len
+    bne a0, t1, pipe2_read_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, pipe2_roundtrip_expected
+    li a2, pipe2_roundtrip_expected_len
+    jal ra, compare_bytes
+    bltz a0, pipe2_read_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, pipe2_read_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, pipe2_root_close_error
+    li s3, -1
+
+    mv a0, s0
+    la a1, stage_pipe2_fork_parent_readback_ok_msg
+    li a2, stage_pipe2_fork_parent_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, 0
+    li a1, futex_shared_map_len
+    li a2, PROT_READ_WRITE
+    li a3, MAP_SHARED_ANONYMOUS
+    li a4, -1
+    li a5, 0
+    li a7, SYS_MMAP
+    ecall
+    bltz a0, futex_shared_smoke_failed
+    mv s6, a0
+
+    sw zero, futex_shared_state_offset(s6)
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, futex_shared_unmap_error
+    beqz a0, futex_shared_child
+    mv t0, a0
+
+futex_shared_parent_wait_loop:
+    lw t1, futex_shared_state_offset(s6)
+    li t2, 1
+    beq t1, t2, futex_shared_parent_wait_done
+
+    mv a0, s6
+    li a1, FUTEX_WAIT
+    li a2, 0
+    li a3, 0
+    li a4, 0
+    li a5, 0
+    li a7, SYS_FUTEX
+    ecall
+    beqz a0, futex_shared_parent_wait_loop
+    li t3, -EAGAIN
+    beq a0, t3, futex_shared_parent_wait_loop
+    bltz a0, futex_shared_unmap_error
+    j futex_shared_unmap_error
+
+futex_shared_parent_wait_done:
+    fence rw, rw
+
+    la t1, fourth_stage_wait_status
+    sw zero, 0(t1)
+    mv a0, t0
+    mv a1, t1
+    li a2, 0
+    li a3, 0
+    li a7, SYS_WAIT4
+    ecall
+    bltz a0, futex_shared_unmap_error
+    bne a0, t0, futex_shared_unmap_error
+    lw t2, 0(t1)
+    bnez t2, futex_shared_unmap_error
+
+    addi a0, s6, futex_shared_data_offset
+    la a1, futex_shared_expected
+    li a2, futex_shared_expected_len
+    jal ra, compare_bytes
+    bltz a0, futex_shared_unmap_error
+
+    mv a0, s6
+    li a1, futex_shared_map_len
+    li a7, SYS_MUNMAP
+    ecall
+    bltz a0, futex_shared_root_close_error
+    li s6, 0
+
+    mv a0, s0
+    la a1, stage_futex_shared_parent_readback_ok_msg
+    la a2, stage_futex_shared_parent_readback_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, AF_UNIX
+    li a1, SOCK_STREAM
+    li a2, 0
+    la a3, fourth_stage_socketpair_fds
+    li a7, SYS_SOCKETPAIR
+    ecall
+    bltz a0, socketpair_smoke_failed
+
+    la t0, fourth_stage_socketpair_fds
+    lw s3, 0(t0)
+    lw s5, 4(t0)
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, socketpair_close_error
+    beqz a0, socketpair_fork_child
+    mv t0, a0
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, socketpair_read_close_error
+    li s5, -1
+
+    la t1, fourth_stage_wait_status
+    sw zero, 0(t1)
+    mv a0, t0
+    mv a1, t1
+    li a2, 0
+    li a3, 0
+    li a7, SYS_WAIT4
+    ecall
+    bltz a0, socketpair_read_close_error
+    bne a0, t0, socketpair_read_close_error
+    lw t2, 0(t1)
+    bnez t2, socketpair_read_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, socketpair_roundtrip_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, socketpair_roundtrip_expected_len
+    bne a0, t1, socketpair_read_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, socketpair_roundtrip_expected
+    li a2, socketpair_roundtrip_expected_len
+    jal ra, compare_bytes
+    bltz a0, socketpair_read_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, socketpair_read_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, socketpair_root_close_error
+    li s3, -1
+
+    mv a0, s0
+    la a1, stage_socketpair_fork_parent_readback_ok_msg
+    la a2, stage_socketpair_fork_parent_readback_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    la a1, execve_open_fd_self_name
+    la a2, fourth_stage_openat2_self_how
+    li a3, fourth_stage_openat2_self_how_size
+    li a7, SYS_OPENAT2
+    ecall
+    bltz a0, openat2_smoke_failed
+    mv s3, a0
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, self_elf_magic_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, self_elf_magic_expected_len
+    bne a0, t1, openat2_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, self_elf_magic_expected
+    li a2, self_elf_magic_expected_len
+    jal ra, compare_bytes
+    bltz a0, openat2_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, openat2_root_close_error
+    li s3, -1
+
+    mv a0, s0
+    la a1, stage_openat2_self_beneath_readback_ok_msg
+    li a2, stage_openat2_self_beneath_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, pidfd_smoke_failed
+    beqz a0, pidfd_waitid_child
+    mv s5, a0
+
+    mv a0, s5
+    li a1, 0
+    li a7, SYS_PIDFD_OPEN
+    ecall
+    bltz a0, pidfd_smoke_failed
+    mv s3, a0
+
+    la t0, fourth_stage_pollfd
+    sw s3, fourth_stage_pollfd_fd_offset(t0)
+    li t1, POLLIN
+    sh t1, fourth_stage_pollfd_events_offset(t0)
+    sh zero, fourth_stage_pollfd_revents_offset(t0)
+
+    la a0, fourth_stage_pollfd
+    li a1, 1
+    li a2, 0
+    li a3, 0
+    li a4, 0
+    li a7, SYS_PPOLL
+    ecall
+    li t1, 1
+    bne a0, t1, pidfd_close_error
+
+    la t0, fourth_stage_pollfd
+    lhu t1, fourth_stage_pollfd_revents_offset(t0)
+    li t2, POLLIN
+    and t1, t1, t2
+    beqz t1, pidfd_close_error
+
+    li a0, P_PIDFD
+    mv a1, s3
+    la a2, fourth_stage_siginfo_buf
+    li a3, WEXITED
+    li a4, 0
+    li a7, SYS_WAITID
+    ecall
+    bltz a0, pidfd_close_error
+
+    la t0, fourth_stage_siginfo_buf
+    lw t1, fourth_stage_siginfo_signo_offset(t0)
+    li t2, SIGCHLD
+    bne t1, t2, pidfd_close_error
+    lw t1, fourth_stage_siginfo_code_offset(t0)
+    li t2, CLD_EXITED
+    bne t1, t2, pidfd_close_error
+    lw t1, fourth_stage_siginfo_pid_offset(t0)
+    bne t1, s5, pidfd_close_error
+    lw t1, fourth_stage_siginfo_status_offset(t0)
+    bnez t1, pidfd_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, pidfd_root_close_error
+    li s3, -1
+
+    mv a0, s0
+    la a1, stage_pidfd_open_ppoll_waitid_ok_msg
+    li a2, stage_pidfd_open_ppoll_waitid_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, SIG_BLOCK
+    la a1, fourth_stage_sigchld_rt_mask
+    li a2, 0
+    li a3, fourth_stage_rt_sigset_len
+    li a7, SYS_RT_SIGPROCMASK
+    ecall
+    bltz a0, signalfd_smoke_failed
+
+    li a0, -1
+    la a1, fourth_stage_sigchld_rt_mask
+    li a2, fourth_stage_rt_sigset_len
+    li a3, 0
+    li a7, SYS_SIGNALFD4
+    ecall
+    bltz a0, signalfd_smoke_failed
+    mv s3, a0
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, signalfd_close_error
+    beqz a0, signalfd_sigchld_child
+    mv s5, a0
+
+    mv a0, s3
+    la a1, fourth_stage_siginfo_buf
+    li a2, fourth_stage_signalfd_siginfo_len
+    li a7, SYS_READ
+    ecall
+    li t1, fourth_stage_signalfd_siginfo_len
+    bne a0, t1, signalfd_close_error
+
+    la t0, fourth_stage_siginfo_buf
+    lw t1, fourth_stage_signalfd_ssi_signo_offset(t0)
+    li t2, SIGCHLD
+    bne t1, t2, signalfd_close_error
+    lw t1, fourth_stage_signalfd_ssi_code_offset(t0)
+    li t2, CLD_EXITED
+    bne t1, t2, signalfd_close_error
+    lw t1, fourth_stage_signalfd_ssi_pid_offset(t0)
+    bne t1, s5, signalfd_close_error
+    lw t1, fourth_stage_signalfd_ssi_status_offset(t0)
+    bnez t1, signalfd_close_error
+
+    la t1, fourth_stage_wait_status
+    sw zero, 0(t1)
+    mv a0, s5
+    mv a1, t1
+    li a2, 0
+    li a3, 0
+    li a7, SYS_WAIT4
+    ecall
+    bltz a0, signalfd_close_error
+    bne a0, s5, signalfd_close_error
+    lw t2, 0(t1)
+    bnez t2, signalfd_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, signalfd_root_close_error
+    li s3, -1
+
+    mv a0, s0
+    la a1, stage_signalfd_sigchld_readback_ok_msg
+    li a2, stage_signalfd_sigchld_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    la a1, renameat2_src_name
+    li a2, O_RDWR | O_CREAT | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, renameat2_smoke_failed
+    mv s3, a0
+
+    mv a0, s3
+    la a1, renameat2_src_expected
+    li a2, renameat2_src_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, renameat2_src_expected_len
+    bne a0, t1, renameat2_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, renameat2_smoke_failed
+    li s3, -1
+
+    mv a0, s2
+    la a1, renameat2_dst_name
+    li a2, O_RDWR | O_CREAT | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, renameat2_smoke_failed
+    mv s3, a0
+
+    mv a0, s3
+    la a1, renameat2_dst_expected
+    li a2, renameat2_dst_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, renameat2_dst_expected_len
+    bne a0, t1, renameat2_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, renameat2_smoke_failed
+    li s3, -1
+
+    mv a0, s2
+    la a1, renameat2_src_name
+    mv a2, s2
+    la a3, renameat2_dst_name
+    li a4, RENAME_EXCHANGE
+    li a7, SYS_RENAMEAT2
+    ecall
+    bltz a0, renameat2_smoke_failed
+
+    mv a0, s2
+    la a1, renameat2_src_name
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, renameat2_smoke_failed
+    mv s3, a0
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, renameat2_dst_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, renameat2_dst_expected_len
+    bne a0, t1, renameat2_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, renameat2_dst_expected
+    li a2, renameat2_dst_expected_len
+    jal ra, compare_bytes
+    bltz a0, renameat2_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, renameat2_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, renameat2_smoke_failed
+    li s3, -1
+
+    mv a0, s2
+    la a1, renameat2_dst_name
+    li a2, O_RDONLY
+    li a3, 0
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, renameat2_smoke_failed
+    mv s3, a0
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, renameat2_src_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, renameat2_src_expected_len
+    bne a0, t1, renameat2_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, renameat2_src_expected
+    li a2, renameat2_src_expected_len
+    jal ra, compare_bytes
+    bltz a0, renameat2_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, renameat2_close_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, renameat2_smoke_failed
+    li s3, -1
+
+    mv a0, s2
+    la a1, renameat2_src_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, renameat2_smoke_failed
+
+    mv a0, s2
+    la a1, renameat2_dst_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, renameat2_smoke_failed
+
+    mv a0, s0
+    la a1, stage_renameat2_exchange_readback_ok_msg
+    li a2, stage_renameat2_exchange_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li a0, 0
+    li a1, 0
+    li a7, SYS_EVENTFD2
+    ecall
+    bltz a0, eventfd_epoll_smoke_failed
+    mv s3, a0
+
+    li a0, 0
+    li a7, SYS_EPOLL_CREATE1
+    ecall
+    bltz a0, eventfd_epoll_close_error
+    mv s5, a0
+
+    la t0, fourth_stage_epoll_event
+    li t1, POLLIN
+    sw t1, fourth_stage_epoll_event_events_offset(t0)
+    sd s3, fourth_stage_epoll_event_data_offset(t0)
+
+    mv a0, s5
+    li a1, EPOLL_CTL_ADD
+    mv a2, s3
+    la a3, fourth_stage_epoll_event
+    li a7, SYS_EPOLL_CTL
+    ecall
+    bltz a0, eventfd_epoll_root_close_error
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, eventfd_epoll_root_close_error
+    beqz a0, eventfd_epoll_child
+    mv t0, a0
+
+    mv a0, s5
+    la a1, fourth_stage_epoll_event
+    li a2, 1
+    li a3, -1
+    li a4, 0
+    li a5, 0
+    li a7, SYS_EPOLL_PWAIT
+    ecall
+    li t1, 1
+    bne a0, t1, eventfd_epoll_root_close_error
+
+    la t1, fourth_stage_epoll_event
+    lw t2, fourth_stage_epoll_event_events_offset(t1)
+    li t3, POLLIN
+    and t2, t2, t3
+    beqz t2, eventfd_epoll_root_close_error
+    ld t2, fourth_stage_epoll_event_data_offset(t1)
+    bne t2, s3, eventfd_epoll_root_close_error
+
+    mv a0, s3
+    la a1, fourth_stage_eventfd_counter
+    li a2, fourth_stage_eventfd_counter_len
+    li a7, SYS_READ
+    ecall
+    li t1, fourth_stage_eventfd_counter_len
+    bne a0, t1, eventfd_epoll_root_close_error
+
+    la t3, fourth_stage_eventfd_counter
+    ld t1, 0(t3)
+    li t2, 1
+    bne t1, t2, eventfd_epoll_root_close_error
+
+    la t1, fourth_stage_wait_status
+    sw zero, 0(t1)
+    mv a0, t0
+    mv a1, t1
+    li a2, 0
+    li a3, 0
+    li a7, SYS_WAIT4
+    ecall
+    bltz a0, eventfd_epoll_root_close_error
+    bne a0, t0, eventfd_epoll_root_close_error
+    lw t2, 0(t1)
+    bnez t2, eventfd_epoll_root_close_error
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, eventfd_epoll_close_error
+    li s5, -1
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, eventfd_epoll_smoke_failed
+    li s3, -1
+
+    mv a0, s0
+    la a1, stage_eventfd_epoll_readback_ok_msg
+    li a2, stage_eventfd_epoll_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li s6, -1
+
+    li a0, AF_UNIX
+    li a1, SOCK_STREAM
+    li a2, 0
+    la a3, fourth_stage_socketpair_fds
+    li a7, SYS_SOCKETPAIR
+    ecall
+    bltz a0, scm_rights_smoke_failed
+
+    la t1, fourth_stage_socketpair_fds
+    lw s3, 0(t1)
+    lw s5, 4(t1)
+
+    la a0, clone3_args
+    li a1, clone3_args_size
+    li a7, SYS_CLONE3
+    ecall
+    bltz a0, scm_rights_cleanup_error
+    beqz a0, scm_rights_child
+    mv t0, a0
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, scm_rights_cleanup_error
+    li s5, -1
+
+    la t1, fourth_stage_scm_data_byte
+    sb zero, 0(t1)
+
+    la t1, fourth_stage_scm_iovec
+    la t2, fourth_stage_scm_data_byte
+    sd t2, fourth_stage_scm_iovec_base_offset(t1)
+    li t2, fourth_stage_scm_data_len
+    sd t2, fourth_stage_scm_iovec_len_offset(t1)
+
+    la t1, fourth_stage_scm_cmsg_buf
+    sd zero, 0(t1)
+    sd zero, 8(t1)
+    sd zero, 16(t1)
+
+    la t1, fourth_stage_scm_msghdr
+    sd zero, fourth_stage_scm_msghdr_name_offset(t1)
+    sw zero, fourth_stage_scm_msghdr_namelen_offset(t1)
+    la t2, fourth_stage_scm_iovec
+    sd t2, fourth_stage_scm_msghdr_iov_offset(t1)
+    li t2, 1
+    sd t2, fourth_stage_scm_msghdr_iovlen_offset(t1)
+    la t2, fourth_stage_scm_cmsg_buf
+    sd t2, fourth_stage_scm_msghdr_control_offset(t1)
+    li t2, fourth_stage_scm_cmsg_buf_len
+    sd t2, fourth_stage_scm_msghdr_controllen_offset(t1)
+    sw zero, fourth_stage_scm_msghdr_flags_offset(t1)
+
+    mv a0, s3
+    la a1, fourth_stage_scm_msghdr
+    li a2, 0
+    li a7, SYS_RECVMSG
+    ecall
+    li t1, fourth_stage_scm_data_len
+    bne a0, t1, scm_rights_cleanup_error
+
+    la t1, fourth_stage_scm_data_byte
+    lbu t2, 0(t1)
+    li t3, 'R'
+    bne t2, t3, scm_rights_cleanup_error
+
+    la t1, fourth_stage_scm_cmsg_buf
+    ld t2, fourth_stage_scm_cmsg_len_offset(t1)
+    li t3, fourth_stage_scm_cmsg_fd_len
+    bne t2, t3, scm_rights_cleanup_error
+    lw t2, fourth_stage_scm_cmsg_level_offset(t1)
+    li t3, SOL_SOCKET
+    bne t2, t3, scm_rights_cleanup_error
+    lw t2, fourth_stage_scm_cmsg_type_offset(t1)
+    li t3, SCM_RIGHTS
+    bne t2, t3, scm_rights_cleanup_error
+    lw s6, fourth_stage_scm_cmsg_data_offset(t1)
+    bltz s6, scm_rights_cleanup_error
+
+    la t1, fourth_stage_wait_status
+    sw zero, 0(t1)
+    mv a0, t0
+    mv a1, t1
+    li a2, 0
+    li a3, 0
+    li a7, SYS_WAIT4
+    ecall
+    bltz a0, scm_rights_cleanup_error
+    bne a0, t0, scm_rights_cleanup_error
+    lw t2, 0(t1)
+    bnez t2, scm_rights_cleanup_error
+
+    mv a0, s6
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, scm_rights_cleanup_error
+
+    la t1, fourth_stage_stat_buf_alt
+    lw t2, fourth_stage_stat_st_mode_offset(t1)
+    li t3, fourth_stage_stat_mode_mask
+    and t2, t2, t3
+    li t3, fourth_stage_stat_mode_regular
+    bne t2, t3, scm_rights_cleanup_error
+    ld t2, fourth_stage_stat_st_size_offset(t1)
+    li t3, post_init_data_mmap_shared_fork_expected_len
+    bne t2, t3, scm_rights_cleanup_error
+    lw t2, fourth_stage_stat_st_nlink_offset(t1)
+    bnez t2, scm_rights_cleanup_error
+
+    mv a0, s6
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, scm_rights_cleanup_error
+
+    mv a0, s6
+    la a1, fourth_stage_post_init_data_buf
+    li a2, post_init_data_mmap_shared_fork_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, post_init_data_mmap_shared_fork_expected_len
+    bne a0, t1, scm_rights_cleanup_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, post_init_data_mmap_shared_fork_expected
+    li a2, post_init_data_mmap_shared_fork_expected_len
+    jal ra, compare_bytes
+    bltz a0, scm_rights_cleanup_error
+
+    mv a0, s6
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, scm_rights_cleanup_error
+
+    mv a0, s6
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, scm_rights_cleanup_error
+    li s6, -1
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, scm_rights_smoke_failed
+    li s3, -1
+
+    mv a0, s0
+    la a1, stage_scm_rights_parent_readback_ok_msg
+    li a2, stage_scm_rights_parent_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    mv a0, s2
+    la a1, copy_file_range_src_name
+    li a2, O_RDWR | O_CREAT | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, copy_file_range_smoke_failed
+    mv s3, a0
+
+    mv a0, s2
+    la a1, copy_file_range_dst_name
+    li a2, O_RDWR | O_CREAT | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, copy_file_range_close_error
+    mv s5, a0
+
+    mv a0, s3
+    la a1, copy_file_range_expected
+    li a2, copy_file_range_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, copy_file_range_expected_len
+    bne a0, t1, copy_file_range_close_error
+
+    mv a0, s3
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, copy_file_range_close_error
+
+    mv a0, s3
+    li a1, 0
+    mv a2, s5
+    li a3, 0
+    li a4, copy_file_range_expected_len
+    li a5, 0
+    li a7, SYS_COPY_FILE_RANGE
+    ecall
+    li t1, copy_file_range_expected_len
+    bne a0, t1, copy_file_range_close_error
+
+    mv a0, s5
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, copy_file_range_close_error
+
+    la t1, fourth_stage_stat_buf_alt
+    lw t2, fourth_stage_stat_st_mode_offset(t1)
+    li t3, fourth_stage_stat_mode_mask
+    and t2, t2, t3
+    li t3, fourth_stage_stat_mode_regular
+    bne t2, t3, copy_file_range_close_error
+    ld t2, fourth_stage_stat_st_size_offset(t1)
+    li t3, copy_file_range_expected_len
+    bne t2, t3, copy_file_range_close_error
+
+    mv a0, s5
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, copy_file_range_close_error
+
+    mv a0, s5
+    la a1, fourth_stage_post_init_data_buf
+    li a2, copy_file_range_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, copy_file_range_expected_len
+    bne a0, t1, copy_file_range_close_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, copy_file_range_expected
+    li a2, copy_file_range_expected_len
+    jal ra, compare_bytes
+    bltz a0, copy_file_range_close_error
+
+    mv a0, s5
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, copy_file_range_close_error
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, copy_file_range_cleanup_error
+    li s5, -1
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, copy_file_range_cleanup_error
+    li s3, -1
+
+    mv a0, s2
+    la a1, copy_file_range_src_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, copy_file_range_smoke_failed
+
+    mv a0, s2
+    la a1, copy_file_range_dst_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, copy_file_range_smoke_failed
+
+    mv a0, s0
+    la a1, stage_copy_file_range_readback_ok_msg
+    li a2, stage_copy_file_range_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li s3, -1
+    li s5, -1
+    li s6, -1
+
+    la t0, fourth_stage_pipe_fds
+    li t1, -1
+    sw t1, 0(t0)
+    sw t1, 4(t0)
+
+    mv a0, s2
+    la a1, splice_src_name
+    li a2, O_RDWR | O_CREAT | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, splice_smoke_failed
+    mv s3, a0
+
+    mv a0, s2
+    la a1, splice_dst_name
+    li a2, O_RDWR | O_CREAT | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, splice_cleanup_error
+    mv s5, a0
+
+    mv a0, s3
+    la a1, splice_expected
+    li a2, splice_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, splice_expected_len
+    bne a0, t1, splice_cleanup_error
+
+    mv a0, s3
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, splice_cleanup_error
+
+    la a0, fourth_stage_pipe_fds
+    li a1, 0
+    li a7, SYS_PIPE2
+    ecall
+    bltz a0, splice_cleanup_error
+
+    la t0, fourth_stage_pipe_fds
+    lw s6, 0(t0)
+    lw t2, 4(t0)
+
+    mv a0, s3
+    li a1, 0
+    mv a2, t2
+    li a3, 0
+    li a4, splice_expected_len
+    li a5, 0
+    li a7, SYS_SPLICE
+    ecall
+    li t1, splice_expected_len
+    bne a0, t1, splice_cleanup_error
+
+    mv a0, t2
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, splice_cleanup_error
+    la t0, fourth_stage_pipe_fds
+    li t1, -1
+    sw t1, 4(t0)
+
+    mv a0, s6
+    li a1, 0
+    mv a2, s5
+    li a3, 0
+    li a4, splice_expected_len
+    li a5, 0
+    li a7, SYS_SPLICE
+    ecall
+    li t1, splice_expected_len
+    bne a0, t1, splice_cleanup_error
+
+    mv a0, s6
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, splice_cleanup_error
+    li s6, -1
+    la t0, fourth_stage_pipe_fds
+    li t1, -1
+    sw t1, 0(t0)
+
+    mv a0, s5
+    la a1, fourth_stage_stat_buf_alt
+    li a7, SYS_FSTAT
+    ecall
+    bltz a0, splice_cleanup_error
+
+    la t1, fourth_stage_stat_buf_alt
+    lw t2, fourth_stage_stat_st_mode_offset(t1)
+    li t3, fourth_stage_stat_mode_mask
+    and t2, t2, t3
+    li t3, fourth_stage_stat_mode_regular
+    bne t2, t3, splice_cleanup_error
+    ld t2, fourth_stage_stat_st_size_offset(t1)
+    li t3, splice_expected_len
+    bne t2, t3, splice_cleanup_error
+
+    mv a0, s5
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, splice_cleanup_error
+
+    mv a0, s5
+    la a1, fourth_stage_post_init_data_buf
+    li a2, splice_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, splice_expected_len
+    bne a0, t1, splice_cleanup_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, splice_expected
+    li a2, splice_expected_len
+    jal ra, compare_bytes
+    bltz a0, splice_cleanup_error
+
+    mv a0, s5
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, splice_cleanup_error
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, splice_cleanup_error
+    li s5, -1
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, splice_cleanup_error
+    li s3, -1
+
+    mv a0, s2
+    la a1, splice_src_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, splice_smoke_failed
+
+    mv a0, s2
+    la a1, splice_dst_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, splice_smoke_failed
+
+    mv a0, s0
+    la a1, stage_splice_pipe_file_readback_ok_msg
+    li a2, stage_splice_pipe_file_readback_ok_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li s3, -1
+
+    mv a0, s2
+    la a1, statx_name
+    li a2, O_RDWR | O_CREAT | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, statx_smoke_failed
+    mv s3, a0
+
+    mv a0, s3
+    la a1, statx_expected
+    li a2, statx_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, statx_expected_len
+    bne a0, t1, statx_cleanup_error
+
+    mv a0, s2
+    la a1, statx_name
+    li a2, 0
+    li a3, fourth_stage_statx_mask_basic
+    la a4, fourth_stage_statx_buf
+    li a7, SYS_STATX
+    ecall
+    bltz a0, statx_cleanup_error
+
+    la t0, fourth_stage_statx_buf
+    lw t1, fourth_stage_statx_mask_offset(t0)
+    li t2, fourth_stage_statx_mask_basic
+    and t1, t1, t2
+    bne t1, t2, statx_cleanup_error
+    lhu t1, fourth_stage_statx_mode_offset(t0)
+    li t2, fourth_stage_stat_mode_mask
+    and t1, t1, t2
+    li t2, fourth_stage_stat_mode_regular
+    bne t1, t2, statx_cleanup_error
+    ld t1, fourth_stage_statx_size_offset(t0)
+    li t2, statx_expected_len
+    bne t1, t2, statx_cleanup_error
+
+    mv a0, s3
+    li a1, 0
+    li a2, SEEK_SET
+    li a7, SYS_LSEEK
+    ecall
+    bltz a0, statx_cleanup_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, statx_expected_len
+    li a7, SYS_READ
+    ecall
+    li t1, statx_expected_len
+    bne a0, t1, statx_cleanup_error
+
+    la a0, fourth_stage_post_init_data_buf
+    la a1, statx_expected
+    li a2, statx_expected_len
+    jal ra, compare_bytes
+    bltz a0, statx_cleanup_error
+
+    mv a0, s3
+    la a1, fourth_stage_post_init_data_buf
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bnez a0, statx_cleanup_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, statx_cleanup_error
+    li s3, -1
+
+    mv a0, s2
+    la a1, statx_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, statx_smoke_failed
+
+    mv a0, s0
+    la a1, stage_statx_readback_ok_msg
+    la a2, stage_statx_readback_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li s3, -1
+    li s5, -1
+    li s6, -1
+
+    mv a0, s2
+    la a1, inotify_name
+    li a2, O_RDWR | O_CREAT | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, inotify_smoke_failed
+    mv s3, a0
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, inotify_cleanup_error
+    li s3, -1
+
+    li a0, 0
+    li a7, SYS_INOTIFY_INIT1
+    ecall
+    bltz a0, inotify_smoke_failed
+    mv s5, a0
+
+    mv a0, s5
+    la a1, inotify_name
+    li a2, IN_CLOSE_WRITE
+    li a7, SYS_INOTIFY_ADD_WATCH
+    ecall
+    bltz a0, inotify_cleanup_error
+    mv s6, a0
+
+    mv a0, s2
+    la a1, inotify_name
+    li a2, O_RDWR | O_TRUNC
+    li a3, 420
+    li a7, SYS_OPENAT
+    ecall
+    bltz a0, inotify_cleanup_error
+    mv s3, a0
+
+    mv a0, s3
+    la a1, inotify_expected
+    li a2, inotify_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, inotify_expected_len
+    bne a0, t1, inotify_cleanup_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, inotify_cleanup_error
+    li s3, -1
+
+    mv a0, s5
+    la a1, fourth_stage_post_init_data_buf
+    li a2, fourth_stage_inotify_event_len
+    li a7, SYS_READ
+    ecall
+    li t1, fourth_stage_inotify_event_len
+    bne a0, t1, inotify_cleanup_error
+
+    la t0, fourth_stage_post_init_data_buf
+    lw t1, fourth_stage_inotify_event_wd_offset(t0)
+    bne t1, s6, inotify_cleanup_error
+    lw t1, fourth_stage_inotify_event_mask_offset(t0)
+    li t2, IN_CLOSE_WRITE
+    and t1, t1, t2
+    bne t1, t2, inotify_cleanup_error
+    lw t1, fourth_stage_inotify_event_name_len_offset(t0)
+    bnez t1, inotify_cleanup_error
+
+    mv a0, s5
+    mv a1, s6
+    li a7, SYS_INOTIFY_RM_WATCH
+    ecall
+    bltz a0, inotify_cleanup_error
+    li s6, -1
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, inotify_cleanup_error
+    li s5, -1
+
+    mv a0, s2
+    la a1, inotify_name
+    li a2, 0
+    li a7, SYS_UNLINKAT
+    ecall
+    bltz a0, inotify_smoke_failed
+
+    mv a0, s0
+    la a1, stage_inotify_close_write_event_ok_msg
+    la a2, stage_inotify_close_write_event_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, write_failed
+    or s1, s1, a1
+
+    li s3, -1
+
+    li a0, CLOCK_MONOTONIC
+    li a1, 0
+    li a7, SYS_TIMERFD_CREATE
+    ecall
+    bltz a0, timerfd_smoke_failed
+    mv s3, a0
+
+    la t0, fourth_stage_timerfd_spec
+    sd zero, fourth_stage_timerfd_interval_sec_offset(t0)
+    sd zero, fourth_stage_timerfd_interval_nsec_offset(t0)
+    sd zero, fourth_stage_timerfd_value_sec_offset(t0)
+    li t1, fourth_stage_timerfd_one_shot_nsec
+    sd t1, fourth_stage_timerfd_value_nsec_offset(t0)
+
+    mv a0, s3
+    li a1, 0
+    la a2, fourth_stage_timerfd_spec
+    li a3, 0
+    li a7, SYS_TIMERFD_SETTIME
+    ecall
+    bltz a0, timerfd_cleanup_error
+
+    mv a0, s3
+    la a1, fourth_stage_eventfd_counter
+    li a2, fourth_stage_eventfd_counter_len
+    li a7, SYS_READ
+    ecall
+    li t1, fourth_stage_eventfd_counter_len
+    bne a0, t1, timerfd_cleanup_error
+
+    la a0, fourth_stage_eventfd_counter
+    la a1, timerfd_expected
+    li a2, fourth_stage_eventfd_counter_len
+    jal ra, compare_bytes
+    bltz a0, timerfd_cleanup_error
+
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, timerfd_cleanup_error
+    li s3, -1
+
+    mv a0, s0
+    la a1, stage_timerfd_one_shot_readback_ok_msg
+    la a2, stage_timerfd_one_shot_readback_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     bltz a0, write_failed
     or s1, s1, a1
@@ -3598,7 +5296,9 @@ open_fd_mmap_fork_child:
 
     mv a0, s0
     la a1, stage_unlinkat_open_fd_mmap_shared_fork_child_write_ok_msg
-    li a2, stage_unlinkat_open_fd_mmap_shared_fork_child_write_ok_msg_len
+    la a2, stage_unlinkat_open_fd_mmap_shared_fork_child_write_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
     jal ra, write_exact
     bltz a0, open_fd_mmap_fork_child_fail
 
@@ -3627,6 +5327,560 @@ open_fd_mmap_fork_close_error:
     mv a0, s0
     la a1, fourth_stage_open_fd_mmap_fork_smoke_fail_msg
     la a2, fourth_stage_open_fd_mmap_fork_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+pipe2_fork_child:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, pipe2_fork_child_fail
+
+    mv a0, s5
+    la a1, pipe2_roundtrip_expected
+    li a2, pipe2_roundtrip_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, pipe2_roundtrip_expected_len
+    bne a0, t1, pipe2_fork_child_fail
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, pipe2_fork_child_fail
+
+    mv a0, s0
+    la a1, stage_pipe2_fork_child_write_ok_msg
+    la a2, stage_pipe2_fork_child_write_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, pipe2_fork_child_fail
+
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+pipe2_fork_child_fail:
+    li a0, 1
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+futex_shared_child:
+    addi a0, s6, futex_shared_data_offset
+    la a1, futex_shared_expected
+    li a2, futex_shared_expected_len
+    jal ra, copy_bytes
+    fence rw, rw
+
+    li t0, 1
+    sw t0, futex_shared_state_offset(s6)
+    fence rw, rw
+
+    mv a0, s6
+    li a1, FUTEX_WAKE
+    li a2, 1
+    li a3, 0
+    li a4, 0
+    li a5, 0
+    li a7, SYS_FUTEX
+    ecall
+    bltz a0, futex_shared_child_fail
+
+    mv a0, s0
+    la a1, stage_futex_shared_child_wake_ok_msg
+    la a2, stage_futex_shared_child_wake_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, futex_shared_child_fail
+
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+futex_shared_child_fail:
+    li a0, 1
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+socketpair_fork_child:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, socketpair_fork_child_fail
+
+    mv a0, s5
+    la a1, socketpair_roundtrip_expected
+    li a2, socketpair_roundtrip_expected_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, socketpair_roundtrip_expected_len
+    bne a0, t1, socketpair_fork_child_fail
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, socketpair_fork_child_fail
+
+    mv a0, s0
+    la a1, stage_socketpair_fork_child_write_ok_msg
+    la a2, stage_socketpair_fork_child_write_ok_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    bltz a0, socketpair_fork_child_fail
+
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+socketpair_fork_child_fail:
+    li a0, 1
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+pidfd_waitid_child:
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+signalfd_sigchld_child:
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+eventfd_epoll_child:
+    li t0, 1
+    la t2, fourth_stage_eventfd_counter
+    sd t0, 0(t2)
+
+    mv a0, s3
+    la a1, fourth_stage_eventfd_counter
+    li a2, fourth_stage_eventfd_counter_len
+    li a7, SYS_WRITE
+    ecall
+    li t1, fourth_stage_eventfd_counter_len
+    bne a0, t1, eventfd_epoll_child_fail
+
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+eventfd_epoll_child_fail:
+    li a0, 1
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+scm_rights_child:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, scm_rights_child_fail
+
+    la t1, fourth_stage_scm_data_byte
+    li t2, 'R'
+    sb t2, 0(t1)
+
+    la t1, fourth_stage_scm_iovec
+    la t2, fourth_stage_scm_data_byte
+    sd t2, fourth_stage_scm_iovec_base_offset(t1)
+    li t2, fourth_stage_scm_data_len
+    sd t2, fourth_stage_scm_iovec_len_offset(t1)
+
+    la t1, fourth_stage_scm_cmsg_buf
+    li t2, fourth_stage_scm_cmsg_fd_len
+    sd t2, fourth_stage_scm_cmsg_len_offset(t1)
+    li t2, SOL_SOCKET
+    sw t2, fourth_stage_scm_cmsg_level_offset(t1)
+    li t2, SCM_RIGHTS
+    sw t2, fourth_stage_scm_cmsg_type_offset(t1)
+    sd zero, 16(t1)
+    sw s4, fourth_stage_scm_cmsg_data_offset(t1)
+
+    la t1, fourth_stage_scm_msghdr
+    sd zero, fourth_stage_scm_msghdr_name_offset(t1)
+    sw zero, fourth_stage_scm_msghdr_namelen_offset(t1)
+    la t2, fourth_stage_scm_iovec
+    sd t2, fourth_stage_scm_msghdr_iov_offset(t1)
+    li t2, 1
+    sd t2, fourth_stage_scm_msghdr_iovlen_offset(t1)
+    la t2, fourth_stage_scm_cmsg_buf
+    sd t2, fourth_stage_scm_msghdr_control_offset(t1)
+    li t2, fourth_stage_scm_cmsg_buf_len
+    sd t2, fourth_stage_scm_msghdr_controllen_offset(t1)
+    sw zero, fourth_stage_scm_msghdr_flags_offset(t1)
+
+    mv a0, s5
+    la a1, fourth_stage_scm_msghdr
+    li a2, 0
+    li a7, SYS_SENDMSG
+    ecall
+    li t1, fourth_stage_scm_data_len
+    bne a0, t1, scm_rights_child_fail
+
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    bltz a0, scm_rights_child_fail
+
+    li a0, 0
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+scm_rights_child_fail:
+    li a0, 1
+    li a7, SYS_EXIT_GROUP
+    ecall
+
+pipe2_close_error:
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+
+pipe2_read_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+pipe2_root_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+futex_shared_unmap_error:
+    mv a0, s6
+    li a1, futex_shared_map_len
+    li a7, SYS_MUNMAP
+    ecall
+
+futex_shared_root_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+socketpair_close_error:
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+
+socketpair_read_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+socketpair_root_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+openat2_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+openat2_root_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+openat2_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_openat2_smoke_fail_msg
+    la a2, fourth_stage_openat2_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+pidfd_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+pidfd_root_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+pidfd_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_pidfd_smoke_fail_msg
+    la a2, fourth_stage_pidfd_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+signalfd_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+signalfd_root_close_error:
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+signalfd_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_signalfd_smoke_fail_msg
+    la a2, fourth_stage_signalfd_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+renameat2_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+renameat2_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_renameat2_smoke_fail_msg
+    la a2, fourth_stage_renameat2_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+eventfd_epoll_close_error:
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+
+eventfd_epoll_root_close_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+
+eventfd_epoll_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_eventfd_epoll_smoke_fail_msg
+    la a2, fourth_stage_eventfd_epoll_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+scm_rights_cleanup_error:
+    mv a0, s6
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+scm_rights_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_scm_rights_smoke_fail_msg
+    la a2, fourth_stage_scm_rights_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+copy_file_range_close_error:
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+
+copy_file_range_cleanup_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+copy_file_range_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_copy_file_range_smoke_fail_msg
+    la a2, fourth_stage_copy_file_range_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+splice_cleanup_error:
+    mv a0, s6
+    li a7, SYS_CLOSE
+    ecall
+    la t0, fourth_stage_pipe_fds
+    lw a0, 0(t0)
+    li a7, SYS_CLOSE
+    ecall
+    lw a0, 4(t0)
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+splice_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_splice_smoke_fail_msg
+    la a2, fourth_stage_splice_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+statx_cleanup_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+statx_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_statx_smoke_fail_msg
+    la a2, fourth_stage_statx_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+inotify_cleanup_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s5
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+inotify_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_inotify_smoke_fail_msg
+    la a2, fourth_stage_inotify_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+timerfd_cleanup_error:
+    mv a0, s3
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s4
+    li a7, SYS_CLOSE
+    ecall
+    mv a0, s2
+    li a7, SYS_CLOSE
+    ecall
+
+timerfd_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_timerfd_smoke_fail_msg
+    la a2, fourth_stage_timerfd_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+socketpair_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_socketpair_smoke_fail_msg
+    la a2, fourth_stage_socketpair_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+futex_shared_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_futex_shared_smoke_fail_msg
+    la a2, fourth_stage_futex_shared_smoke_fail_msg_end
+    sub a2, a2, a1
+    addi a2, a2, -1
+    jal ra, write_exact
+    li a0, 1
+    li a7, SYS_EXIT
+    ecall
+
+pipe2_smoke_failed:
+    mv a0, s0
+    la a1, fourth_stage_pipe2_smoke_fail_msg
+    la a2, fourth_stage_pipe2_smoke_fail_msg_end
     sub a2, a2, a1
     addi a2, a2, -1
     jal ra, write_exact

@@ -9,6 +9,7 @@
 - 定义主线长期排期
 - 明确各条 workstream 的依赖关系和激活门槛
 - 给出从已完成基线到更后续 `Linux / observation / AI accelerator / cache / JIT / multicore` 的统一波次安排
+- 把展示、产品化体验和服务器部署作为远期收口 wave 纳入主线，而不是把公网部署当成单点目标
 
 与当前 design / status 体系的分工如下：
 
@@ -37,6 +38,10 @@
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
+- 当前计划：
+  - [../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md](../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md)
+  - [../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md](../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md)
+  - [../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md](../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
@@ -51,6 +56,7 @@
 - 当前哪些波次已经完成
 - 当前 active wave 的完成定义是什么
 - 哪些后续波次只能在前一波次给出稳定证据后再激活
+- 已完成能力最终如何被整理成可展示、可体验、可部署的产品化形态
 
 当前主线已经完成或基本完成的基线包括：
 
@@ -66,7 +72,7 @@
 
 ## 目标
 
-- 给出从当前稳定基线继续往后的主线长期排期，覆盖 ISA、平台、workload、微架构、系统级跃迁 5 个维度。
+- 给出从当前稳定基线继续往后的主线长期排期，覆盖 ISA、平台、workload、微架构、系统级跃迁、展示与产品化 6 个维度。
 - 明确各 workstream 的依赖链、激活门槛和波次关系，避免前置条件未满足时抢跑。
 - 为每个方向提供当前所处 wave、下一波目标和进入条件。
 - 与当前 `reference-first`、`workload-driven`、`small-wave` 的仓库方法论保持一致。
@@ -80,7 +86,7 @@
 
 ## 主线组成
 
-当前主线由 6 条长期 workstream 组成：
+当前主线由 6 条技术 workstream 和 1 条产品化收口线组成：
 
 1. `A`：reference correctness / hardening 常态维护
 2. `B`：标准 OS bring-up（当前近端以 `xv6 -> Linux` 为核心）
@@ -88,6 +94,7 @@
 4. `D`：独立 `NPU / TPU-like` AI accelerator
 5. `E`：cache / memory-system 路线
 6. `F`：`JIT / DBT` 与更重系统级跃迁（multicore / coherence）
+7. `G`：产品化展示、在线调试体验与服务器部署
 
 这些 workstream 全部已经纳入主线排期；差别只在于它们位于不同 wave，且激活门槛不同。
 
@@ -98,7 +105,25 @@
 3. `D` 已不再是“未来候选方向”，而是主线的后续 wave；当前只是不在近端 blocker 上。
 4. `E` 必须等 `C1 / shadow_cache` 和更稳定 workload 证据足够后再激活。
 5. `F` 必须等 `Linux` 与 hot-path/profile 证据都更稳定后再激活。
-6. 任何时点最多只允许 1 条重推进线 + 1~2 条并行 guardrail / hardening 线。
+6. `G` 必须等核心能力边界相对稳定后再激活，不能用产品化工作掩盖模拟器 contract 尚未收口的问题。
+7. 任何时点最多只允许 1 条重推进线 + 1~2 条并行 guardrail / hardening 线。
+
+## Wave 命名约定
+
+本文档中的 `Wave 1 / 2 / 3 / 4 / ...` 只表示仓库主线长期排期 wave。
+`NPU / TPU-like` AI accelerator 在本方向内部曾经也用 Wave 1 / 2 / 3
+描述专项演进；这些是 AI accelerator 局部历史阶段，不等同于本文档的主线 wave。
+
+因此，当前正在执行的不是“AI accelerator 局部 Wave 4”，而是“主线 Wave 4
+中的 AI accelerator 切片”。为了避免歧义，当前活跃计划统一命名为：
+
+- `mainline_wave4_ai_accelerator_slice_a_*`
+- `mainline_wave4_ai_accelerator_slice_b_*`
+- `mainline_wave4_ai_accelerator_slice_c_*`
+
+后续如果继续推进 `INT4 / training / Linux-facing driver` 等 AI accelerator
+专项，也应称为“AI accelerator 后续专项阶段”，不要和主线 `Wave 5`
+混写。
 
 ## 总体依赖关系
 
@@ -106,10 +131,11 @@
 已完成基线
   -> Wave 1：标准 OS foundation + xv6 shell + Linux block-rootfs 多阶段基线
   -> Wave 2：Linux 当前 checkpoint 收口 + 主线排期统一
-  -> Wave 3：Linux 更后 userland checkpoint + observation/pipeline gap 判断
-  -> Wave 4：AI accelerator 下一轮扩展 + 向量/observation 继续深化
+  -> Wave 3：已收口的 Linux 更后 userland checkpoint + observation/pipeline gap 判断
+  -> Wave 4：当前 active wave，AI accelerator 下一轮扩展 + 向量/observation 继续深化
   -> Wave 5：cache / memory-system 第一刀（以 workload 证据触发）
   -> Wave 6：JIT / DBT 与 multicore / coherence（以前置证据触发）
+  -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
 ```
 
 重点不是所有线同时推进，而是所有线都已经被排入主线，只是按依赖顺序逐波激活。
@@ -157,30 +183,48 @@ Wave 2 的完成结果：
 - `future_expansion_roadmap_design.md` 的“未来 / 候选”语义全部移除
 - `status / AGENTS / 相关 design` 不再把 AI accelerator、`V4`、`cache`、`JIT` 表述成“主线外待定菜单”
 
-### Wave 3：当前 active wave
+### Wave 3：已收口的 Linux 后续 checkpoint
 
-Wave 3 是当前 active wave，计划目标：
+Wave 3 已按当前实现现状收口，完成目标包括：
 
 - 继续沿真实 Linux `Image + rootfs.ext4` 路径冻结下一处更后 userland 或 platform checkpoint
 - 在不扩大 Linux 功能面的前提下，判断当前 `functional` observation guardrail 是否已经足够，还是需要单独收口 `xv6 / Linux` pipeline gap
 
-Wave 3 的激活门槛：
+Wave 3 的收口结果：
 
-- Wave 2 的 Linux 当前 checkpoint 线已经形成自然停顿点
-- 当前 `xv6` shell 与 probe guardrail 稳定
+- Linux fourth-stage checkpoint 线冻结到 `timerfd-one-shot-readback-ok`
+- 当前不再继续向同一条 Linux smoke 追加同类 `open-fd / mmap / pipe / futex /
+  socketpair / openat2 / pidfd / signalfd / renameat2 / eventfd / epoll /
+  SCM_RIGHTS / copy_file_range / splice / statx / inotify / timerfd` 微分支
+- `xv6 / Linux` pipeline-side memory signal 后移为 `Wave 5 / cache` 前置证据，
+  不再阻塞 `Wave 4` 激活
+- 真实 Linux `Image` 不在默认仓库内；因此 runtime 断言仍保留为 opt-in 验证项
 
-### Wave 4：AI accelerator 与向量 / observation 深化
+### Wave 4：当前 active wave，AI accelerator 与向量 / observation 深化
 
 Wave 4 不是可选方向，而是已排进主线的后续波次，目标包括：
 
-- 沿 `NPU / TPU-like` 当前 Wave 3 完成态继续扩下一刀
+- 沿 `NPU / TPU-like` 当前 Wave 3 完成态继续扩下一刀：核心是
+  `bounded dynamic shape`、profile / timing attribution、代表性 workload 与最小
+  frontend 观察面
 - 继续围绕 `V4` 与 workload observation 做更窄 hardening
 - 只在有明确收益时再补更像 cache 评估前置的 workload 分析
+
+主线 Wave 4 采用偏激进但仍可收口的范围：`Softmax + tiny static attention` 可以作为
+后段 stretch goal，但训练、`INT4`、`GELU / Sigmoid`、MobileNet、Linux-facing
+NPU driver、真实 DMA overlap 和多 outstanding queue 不进入 Wave 4 完成定义；
+这些内容进入 AI accelerator 后续专项阶段，不改变主线 `Wave 5` 仍是
+`cache / memory-system` 第一刀的定位。
 
 Wave 4 的激活门槛：
 
 - Linux 当前 checkpoint 线不再是近端 blocker
 - `shadow_cache` 和代表性 workload 已能提供足够稳定的读侧信号
+
+当前 `Wave 4` 已由 [../status/mainline_status.md](../status/mainline_status.md)
+激活；它仍然不是 `cache / DMA / multicore / coherence` 的正式实施入口。
+如果后续要切 `Wave 5`，仍必须补足更可信的 pipeline-side `xv6 / Linux`
+memory signal。
 
 ### Wave 5：cache / memory-system 第一刀
 
@@ -206,6 +250,31 @@ Wave 6 的激活门槛：
 - 有足够明确的 hot-path/profile 证据
 - `cache / DMA` 路线已不再处于准备态
 - 当前平台与 Linux bring-up 不再频繁暴露基础 contract 缺口
+
+### Wave 7：产品化展示与在线调试平台收口
+
+Wave 7 不是“把当前前端直接放到公网”，而是在 Wave 6 基本稳定之后，把已经完成的模拟器能力整理成更像产品的展示与调试平台。服务器部署是这个 wave 的最后一步，而不是第一步。
+
+Wave 7 的目标包括：
+
+- 把已完成能力整理成稳定展示面：`kernel_alpha`、向量 workload、`NPU / TPU-like`、`xv6 / Linux` bring-up、pipeline/profile/observation 等都要有清晰入口、说明和可复现 demo
+- 把前端调试页从“开发辅助页面”推进到“产品化体验”：统一导航、预置 workload、运行状态、日志裁剪、错误解释、profile 可视化和学习路径
+- 把后端调试服务收口成可控 session 模型：每个用户会话独立 simulator 进程，限制 CPU、内存、step 数、日志大小、运行时间和临时文件生命周期
+- 完成发布形态设计：只读 demo 资产、版本标识、构建脚本、服务配置、健康检查、崩溃恢复和部署文档
+- 最后再部署到 Ubuntu 云服务器，通过域名、HTTPS、Nginx 反代和 WebSocket / HTTP API 暴露受控调试入口
+
+Wave 7 的激活门槛：
+
+- Wave 6 的主要能力已经接近稳定，不再频繁重写公开展示所依赖的核心 contract
+- 已完成能力的 demo corpus 和观测输出足够稳定，可以被长期展示，而不是每次演示都依赖临时命令
+- 前端、debug server 和 simulator 之间已经有清晰 API / session 边界
+- 公网部署前已经确定安全边界：默认白名单 demo、资源限额、认证或访问控制、限流、日志脱敏和进程隔离
+
+Wave 7 的完成定义：
+
+- 本地产品化展示链路可一键启动，用户不需要理解内部构建细节即可体验主要已完成功能
+- showcase / README / 前端页面对同一批能力使用一致口径，不再各自维护一套演示说法
+- 服务器部署完成，域名可访问前端调试页面，并且公网入口只暴露受控 session 与白名单 workload
 
 ## 各方向当前安排
 
@@ -243,12 +312,19 @@ Wave 6 的激活门槛：
 - 当前也已纳入主线长期排期。
 - 但它们只在 Linux 更稳定、profile 更明确、cache 路线更实之后才允许激活。
 
+### G：产品化展示 / 在线调试平台 / 部署
+
+- 当前已纳入 Wave 7，而不是当前 Wave 4 的近端任务。
+- 这条线的核心不是“公网部署”，而是先把所有已完成能力整理成稳定、统一、可复现、可解释的产品化展示。
+- 服务器部署是 Wave 7 的最终验收项；在此之前必须先完成 demo corpus、前端体验、session 管理、安全边界和发布形态收口。
+
 ## 风险与取舍
 
 - 把所有方向都纳入主线排期，能避免“未来候选”歧义，但也更要求严格的波次门槛；否则容易重新回到所有方向同时抢跑。
 - Linux 当前 checkpoint 线如果继续无限细分，会拖住后续 wave；因此 Wave 2 完成定义必须强调“自然停顿点”，而不是追求无限 marker。
 - AI accelerator 被纳入主线后，不代表它立刻变成近端 blocker；它当前仍应服从 Linux 波次让路。
 - `cache / JIT / multicore` 都已被明确排期，但激活条件必须依赖 workload 证据，而不是排期一到就机械开工。
+- Wave 7 如果过早启动，容易把尚未稳定的工程能力包装成产品界面；因此必须先收口已完成功能展示和 session / 安全边界，再把部署服务器作为最后一步。
 
 ## 当前有效性说明
 

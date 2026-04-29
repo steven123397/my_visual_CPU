@@ -20,6 +20,10 @@
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [phase4_preparation_design.md](phase4_preparation_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
+- 当前计划：
+  - [../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md](../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md)
+  - [../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md](../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md)
+  - [../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md](../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md)
 - 已完成计划：
   - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
@@ -372,6 +376,26 @@ Wave 1 已经把本设计从纯方案推进到可执行 foundation。当前有�
 - `LeNet / tiny MLP`
   - 比 MobileNet 更适合作为下一批端到端教学 workload
   - 可先在 host `ai_proto` profile 中落地，再考虑 guest / frontend
+
+### 主线 Wave 4 中的 AI accelerator 切片边界
+
+当前主线 `Wave 4` 已由主线状态激活。这里的 `Wave 4` 指 [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md) 中的仓库主线 wave，不是 AI accelerator 局部历史里的 Wave 1 / 2 / 3 后再延续出的局部 Wave 4。为了避免把 AI accelerator 重新扩成无法收口的大版本，主线 Wave 4 中 AI accelerator 切片的边界补充如下：
+
+- 核心目标仍是 `bounded dynamic shape`、profile / timing attribution、代表性 workload 和最小前端观察面。
+- `bounded dynamic shape` 应从现有 `dynamic GEMM / FC-like` 第一刀扩到现有 op family 的正向或 fail-closed 合同，优先覆盖 `conv2d / relu / pool / reduce / layout_transpose` 的 runtime shape、memory plan mismatch 与 scratchpad 边界。
+- `ai_proto` 至少新增 1 条更像模型的动态 workload，例如 `dynamic_tiny_model`；如果不引入新 dtype / op 语义即可完成，再补 `dynamic_cnn_block`。
+- profile / timing 继续使用 `timed-simple simulated cycles`，可以细化 stall / tile / scratchpad / DMA attribution，但不在本 wave 承诺真实并行 DMA engine、cache coherence 或多 outstanding queue。
+- 前端只做 AI accelerator 观察面，不做 Wave 7 的产品化展示收口；它只能消费 debug snapshot / manifest 中已有或本轮明确冻结的只读字段。
+- `Softmax + tiny static attention` 可作为主线 Wave 4 后段 stretch goal：只有前述核心目标已经收口时才启动；第一刀固定为小规模静态 `fp32` softmax 与 `gemm -> softmax -> gemm` 代表性闭环，不承诺完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
+
+剩余远期目标应拆到 AI accelerator 后续专项阶段，而不是塞进主线 `Wave 4`。这里的“AI accelerator 后续专项阶段”是本方向内部的后续排期，不等同于主线 `Wave 5：cache / memory-system 第一刀`：
+
+- `INT4`：需要单独定义 packing、scale / zero-point、sign-extension、accumulate 和 fault 语义。
+- `GELU / Sigmoid`：等 `Softmax` 与 tiny attention 的数值策略稳定后再评估。
+- `MobileNet` 或 depthwise / pointwise conv：需要新 op 或新 attrs 语义，不作为 Wave 4 核心完成项。
+- 训练前向 + 反向：需要 activation 保存、gradient tensor role、backward primitive、profile 和 fault 新语义，必须另开专项设计 / 计划。
+- Linux-facing NPU driver：当前 guest demo 已足够守住 ABI；Linux driver 属于系统集成专项。
+- 真实 DMA overlap、多 outstanding queue、多设备调度和 frontend 产品化展示：分别等待 timing / memory contract 和 Wave 7 产品化边界成熟。
 
 ### 验证思路
 
