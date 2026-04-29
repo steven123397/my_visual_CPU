@@ -660,6 +660,12 @@ class RunDebugCliProbeTest(unittest.TestCase):
                     },
                     "hot_paths": [
                         {
+                            "start_pc": "0x80200100",
+                            "end_pc": "0x80200108",
+                            "executions": 1,
+                            "retired_instructions": 100,
+                        },
+                        {
                             "start_pc": "0x80200000",
                             "end_pc": "0x80200020",
                             "executions": 3,
@@ -720,7 +726,11 @@ class RunDebugCliProbeTest(unittest.TestCase):
             stdout.getvalue(),
         )
         self.assertIn(
-            "hot-path: start=0x80200000 end=0x80200020 executions=3 retired=9",
+            "hot-path: start=0x80200100 end=0x80200108 executions=1 retired=100",
+            stdout.getvalue(),
+        )
+        self.assertIn(
+            "translation-candidate: start=0x80200000 end=0x80200020 executions=3 retired=9",
             stdout.getvalue(),
         )
         self.assertIn(
@@ -733,6 +743,62 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
         self.assertIn('uart-tail: bytes=14 recent="Booting Linux\\n"', stdout.getvalue())
         self.assertIn("uart: Booting Linux", stdout.getvalue())
+
+    def test_emit_probe_summary_reports_empty_translation_candidate_fallback(self) -> None:
+        args = PROBE.parse_args(
+            [
+                "--target",
+                "./mycpu",
+                "--image",
+                "Image",
+                "--step-cycles",
+                "4",
+            ]
+        )
+        lines = [
+            {
+                "type": "snapshot",
+                "summary": {
+                    "cycle": 4,
+                    "instret": 0,
+                    "pc": "0x80000000",
+                    "privilege": "M",
+                    "backend": "functional",
+                },
+                "csrs": {
+                    "mcause": "0x0",
+                    "mepc": "0x0",
+                    "mtval": "0x0",
+                    "scause": "0x0",
+                    "sepc": "0x0",
+                    "stval": "0x0",
+                    "stvec": "0x0",
+                    "satp": "0x0",
+                },
+                "profile": {
+                    "total_retirements": 0,
+                    "total_traps": 0,
+                    "total_memory_observations": 0,
+                    "hot_paths": [],
+                },
+                "devices": {
+                    "uart": {
+                        "output_size": 0,
+                        "recent_output": "",
+                    }
+                },
+            }
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            rc = PROBE.emit_probe_summary(args, lines)
+
+        self.assertEqual(rc, 0)
+        self.assertIn(
+            "translation-candidate: none reason=no-hot-paths",
+            stdout.getvalue(),
+        )
 
     def test_emit_probe_summary_exposes_l1d_cache_when_enabled(self) -> None:
         args = PROBE.parse_args(

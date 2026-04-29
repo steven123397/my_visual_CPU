@@ -23,6 +23,13 @@
 
 ### 2026-04-29
 
+#### mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan
+
+- 原文件：`mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 `Slice A / hot-path evidence`。本轮确认现有 `ExecutionProfile` 已有 PC range hot paths、branch、syscall、trap、memory-region 和 `shadow_cache` 统计入口；第一版 translation candidate 直接复用 `profile.hot_paths`，按 `executions -> retired_instructions -> start_pc -> end_pc` 排序，并在 probe 文本中输出 `translation-candidate:` 摘要或 `none` fallback。
+- 实现过程摘要：这一轮按 `TDD` 先固定 probe candidate 输出与空候选 fallback 红灯，再只在 `run_debug_cli_probe.py` 文本层接入最小候选摘要；不扩 debug JSON schema，不实现 JIT engine、DBT translator、IR、block cache、host code emission、multicore 或 coherence，也不改变 guest 可见语义。验证覆盖 `python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_emit_probe_summary_exposes_linux_facing_checkpoint_fields tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_emit_probe_summary_reports_empty_translation_candidate_fallback`、`make test-host-run_debug_cli_probe`、`make test-host-execution_profile_smoke`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave5-closeout-wave6-readiness-plan
 
 - 原文件：`mainline_wave5_closeout_wave6_readiness_plan.md`

@@ -41,8 +41,9 @@
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
 - 当前计划：
-  - [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)
+  - 暂无主线活跃计划；继续推进 `Wave 6` 下一刀前先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
@@ -275,17 +276,18 @@ Wave 5 的激活门槛：
 
 ### Wave 6：JIT / DBT 与 multicore / coherence
 
-Wave 6 也是主线内排期，当前已激活，但第一刀只允许推进 `JIT / DBT hot-path
-evidence`。目标是：
+Wave 6 也是主线内排期，当前已激活，且第一刀 `JIT / DBT hot-path evidence`
+已经完成。目标是：
 
 - 基于 Linux / workload / profile 证据决定 `JIT / DBT` 是否值得正式启动
 - 基于 cache 路线与 memory-order 验证进展决定 multicore / coherence 是否可启动
 
-当前活跃计划是
-[../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)。
-`Slice A` 只固定 hot-path / translation candidate 观察合同，不实现 JIT engine、
-DBT translator、IR、block cache、host code emission、multicore、coherence 或新的
-memory consistency 模型。multicore / coherence 仍属于后续高门槛切片，必须另开设计和计划。
+`Slice A` 已由
+[../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
+收口：当前只固定 probe 级 hot-path / translation candidate 观察合同，不实现
+JIT engine、DBT translator、IR、block cache、host code emission、multicore、
+coherence 或新的 memory consistency 模型。multicore / coherence 仍属于后续高门槛
+切片，必须另开设计和计划。
 
 Wave 6 第一刀的激活门槛：
 
@@ -354,8 +356,9 @@ Wave 7 的完成定义：
 ### F：JIT / DBT / multicore / coherence
 
 - 当前已进入主线 `Wave 6`。
-- 第一刀只做 `JIT / DBT hot-path evidence`，为未来 translation contract 提供证据；
-  multicore / coherence 仍等待 atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
+- 第一刀 `JIT / DBT hot-path evidence` 已完成，为未来 translation contract 提供
+  probe 级候选证据；multicore / coherence 仍等待 atomic、memory-order、DMA /
+  cache 交界和验证矩阵另行收口。
 
 ### G：产品化展示 / 在线调试平台 / 部署
 

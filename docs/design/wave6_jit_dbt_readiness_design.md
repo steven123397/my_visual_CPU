@@ -11,15 +11,16 @@
 - `Wave 6 Slice A` 允许推进到哪里，哪些内容仍必须留在后续切片。
 
 本文档不记录执行 checklist。当前进度以
-[../status/mainline_status.md](../status/mainline_status.md)、活跃计划和计划归档为准。
+[../status/mainline_status.md](../status/mainline_status.md) 和计划归档为准。
 
 ## 关联文档
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
 - 当前计划：
-  - [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)
+  - 暂无主线活跃计划；继续推进 `Wave 6` 下一刀前先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
 - 相关设计：
@@ -96,6 +97,29 @@ multicore / coherence 仍需要新的设计和计划。
 - 不把 hot-path candidate 写成 guest ABI 或 debug ABI 的破坏性变更。
 - 不把 pipeline speculation、L1D counters 或 AI accelerator timing 混成同一个性能结论。
 
+### Slice A 收口结果
+
+当前 `Slice A / JIT DBT hot-path evidence` 已完成，结果归档见
+[../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)。
+本轮结论是：
+
+- 现有 `ExecutionProfile` 已具备第一刀需要的 PC range、branch、syscall、trap、
+  memory-region 和 `shadow_cache` 统计入口。
+- `translation-candidate` 的第一版输入直接复用 `profile.hot_paths`，排序口径为
+  `executions` 降序、`retired_instructions` 降序、`start_pc` 升序、`end_pc` 升序。
+- `run_debug_cli_probe.py` 新增 probe 文本摘要：
+  `translation-candidate: start=... end=... executions=... retired=...`。
+- 没有 hot path、没有重复执行或 retired 计数为空时，probe 输出
+  `translation-candidate: none reason=...`，避免把低证据路径写成假热点。
+- 本轮不扩 debug JSON schema，不引入 guest ABI，不启用 JIT / DBT 执行路径。
+
+延期到后续切片的信号缺口：
+
+- per-PC memory cost、branch target 热度、cycle cost、translation invalidation 和
+  helper / fault 回退合同都还没有固定。
+- 这些缺口不阻塞 `Slice A` 的 evidence 合同，但如果进入 `Slice B / translation
+  contract design`，必须先在新的设计 / 计划中收口。
+
 ### 后续切片候选
 
 后续只有在 `Slice A` 给出稳定证据后，才允许继续拆分：
@@ -128,8 +152,6 @@ multicore / coherence 仍需要新的设计和计划。
 ## 当前有效性说明
 
 - 当前有效：本文档作为主线 `Wave 6 / JIT / DBT` 首轮 readiness 与 Slice A 设计入口。
-- 当前活跃计划是
-  [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)。
-- `Wave 6` 已激活，但当前只允许推进 `JIT / DBT hot-path evidence`；JIT engine、
-  multicore / coherence、write-back cache、I-cache 和 cache maintenance instruction
-  仍未启动。
+- `Slice A / JIT DBT hot-path evidence` 已完成并归档；当前暂无主线活跃计划。
+- `Wave 6` 已激活，但当前只完成候选观察合同；JIT engine、multicore / coherence、
+  write-back cache、I-cache 和 cache maintenance instruction 仍未启动。

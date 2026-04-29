@@ -15,7 +15,7 @@
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
-  - [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
   - [../plan/history_plan.md](../plan/history_plan.md)
 - 来源设计：
@@ -147,6 +147,6 @@
 - 当前有效：自 `2026-04-21` 起，本文档作为“当前已激活的 `xv6 / Linux / JIT` 主线切换设计”。
 - 当前结果以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 - 当前执行计划已归档到 [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)。
-- 当前 `Wave 6` 已激活，第一刀活跃计划见
-  [../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](../plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)；
-  该计划只做 `JIT / DBT` hot-path evidence，不实现 JIT engine 或改变 guest 可见语义。
+- 当前 `Wave 6` 已激活，第一刀 `JIT / DBT hot-path evidence` 已归档到
+  [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)；
+  该切片只固定候选观察合同，不实现 JIT engine 或改变 guest 可见语义。

@@ -72,7 +72,7 @@
   - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
 - `Wave 6 / JIT / DBT`
   - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
-  - [plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md](plan/mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md)
+  - [plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
 - `kernel_alpha`
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)

@@ -219,6 +219,8 @@ def emit_top_profile_entries(profile) -> None:
             f"retired={top.get('retired_instructions', 0)}",
         )
 
+    emit_translation_candidate_summary(profile)
+
     traps = profile.get("traps", [])
     if traps:
         top = traps[0]
@@ -244,6 +246,57 @@ def emit_top_profile_entries(profile) -> None:
             f"faults={top.get('faults', 0)}",
             f"bytes={top.get('bytes', 0)}",
         )
+
+
+def profile_int(value, default=0) -> int:
+    try:
+        if isinstance(value, str):
+            return int(value, 0)
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def profile_hex(value) -> str:
+    if isinstance(value, str):
+        return value
+    return hex(profile_int(value))
+
+
+def select_translation_candidate(profile):
+    hot_paths = profile.get("hot_paths", [])
+    if not hot_paths:
+        return None, "no-hot-paths"
+
+    candidates = sorted(
+        hot_paths,
+        key=lambda entry: (
+            -profile_int(entry.get("executions", 0)),
+            -profile_int(entry.get("retired_instructions", 0)),
+            profile_int(entry.get("start_pc", 0)),
+            profile_int(entry.get("end_pc", 0)),
+        ),
+    )
+    top = candidates[0]
+    if profile_int(top.get("executions", 0)) < 2:
+        return None, "insufficient-repetition"
+    if profile_int(top.get("retired_instructions", 0)) == 0:
+        return None, "empty-hot-path"
+    return top, ""
+
+
+def emit_translation_candidate_summary(profile) -> None:
+    candidate, reason = select_translation_candidate(profile)
+    if candidate is None:
+        print("translation-candidate:", f"none reason={reason}")
+        return
+    print(
+        "translation-candidate:",
+        f"start={profile_hex(candidate.get('start_pc', '0x0'))}",
+        f"end={profile_hex(candidate.get('end_pc', '0x0'))}",
+        f"executions={profile_int(candidate.get('executions', 0))}",
+        f"retired={profile_int(candidate.get('retired_instructions', 0))}",
+    )
 
 
 def emit_l1d_cache_summary(snapshot) -> None:
