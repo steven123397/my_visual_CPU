@@ -23,6 +23,13 @@
 
 ### 2026-04-29
 
+#### mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan
+
+- 原文件：`mainline_wave5_cache_memory_system_slice_e_l1d_frontend_observation_plan.md`
+- 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice E / L1D frontend observation`。本轮把已有 debug snapshot 顶层 `l1_data_cache` counters 接入 frontend 平台组的只读 `L1 data cache` 面板，展示 enabled、line size、capacity、loads、stores、hits、misses、evictions、bypasses 和 write-through stores；缺失 counters 或默认关闭 snapshot 都有稳定 fallback。
+- 实现过程摘要：这一轮只消费现有 debug ABI，不扩 debug protocol、后端 L1D 功能或默认执行开关；`L1D` 仍只在显式 debug/probe opt-in 路径打开。验证覆盖 `frontend` Node 全量测试、`make test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_d_l1d_hardening_plan.md`

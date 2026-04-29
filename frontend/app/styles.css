@@ -577,13 +577,15 @@ button:hover {
   gap: 14px;
 }
 
-.panel-ai-accelerator {
+.panel-ai-accelerator,
+.panel-l1-data-cache {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.ai-accelerator-panel {
+.ai-accelerator-panel,
+.l1-data-cache-panel {
   display: grid;
   gap: 14px;
 }
@@ -628,7 +630,8 @@ button:hover {
   color: #9a6610;
 }
 
-.ai-accelerator-grid {
+.ai-accelerator-grid,
+.l1-data-cache-grid {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1587,6 +1590,7 @@ button:hover {
   .vector-panel__topline,
   .ai-accelerator-panel__topline,
   .ai-accelerator-grid,
+  .l1-data-cache-grid,
   .vector-cnn-card__grid {
     grid-template-columns: 1fr;
   }
@@ -1607,6 +1611,7 @@ button:hover {
     .vector-register-grid,
     .ai-accelerator-panel__topline,
     .ai-accelerator-grid,
+    .l1-data-cache-grid,
     .vector-cnn-card__grid {
     grid-template-columns: 1fr;
   }

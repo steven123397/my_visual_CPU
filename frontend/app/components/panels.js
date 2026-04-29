@@ -4,6 +4,7 @@ export {
   renderEvents,
   renderDevices,
   renderAiAccelerator,
+  renderL1DataCache,
   renderRegisters,
   renderCsrs,
   renderBus,

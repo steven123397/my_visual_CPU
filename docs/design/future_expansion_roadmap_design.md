@@ -42,6 +42,7 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
@@ -251,7 +252,11 @@ data cache 模型，MMIO / side-effect / unmapped / fault、instruction fetch、
 或 coherence 方案。`Slice D / L1D hardening` 已由
 [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
 收口：当前只固定 L1D 边界合同，不扩成 write-back、DMA coherence、multicore、JIT、
-I-cache 或 cache maintenance instruction。继续推进 `Wave 5` 时需先新建活跃计划。
+I-cache 或 cache maintenance instruction。`Slice E / L1D frontend observation` 已由
+[../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
+收口：当前只把现有 L1D counters 接入 frontend 平台组只读观察面，不扩 debug ABI
+或 cache 功能面。
+继续推进 `Wave 5` 的后续切片时仍需先新建活跃计划。
 
 Wave 5 的激活门槛：
 

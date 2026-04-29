@@ -36,12 +36,20 @@ export function renderDevices(snapshot) {
   );
 }
 
-function renderAiField(label, value) {
+function renderCounterField(label, value) {
   return `<div class="kv-row"><span>${label}</span><strong>${value}</strong></div>`;
 }
 
-function formatAiCounter(value, fallback = '-') {
+function renderAiField(label, value) {
+  return renderCounterField(label, value);
+}
+
+function formatCounter(value, fallback = '-') {
   return Number.isFinite(value) ? value : fallback;
+}
+
+function formatAiCounter(value, fallback = '-') {
+  return formatCounter(value, fallback);
 }
 
 export function renderAiAccelerator(snapshot) {
@@ -98,6 +106,52 @@ export function renderAiAccelerator(snapshot) {
       </div>
     `,
     'panel-ai-accelerator',
+  );
+}
+
+export function renderL1DataCache(snapshot) {
+  const cache = snapshot?.l1_data_cache ?? null;
+  if (!cache) {
+    return card(
+      'L1 data cache',
+      '<div class="empty-state">当前 snapshot 未暴露 L1D counters。</div>',
+      'panel-l1-data-cache',
+    );
+  }
+
+  const enabledLabel = typeof cache.enabled === 'boolean'
+    ? (cache.enabled ? 'enabled' : 'disabled')
+    : '-';
+  return card(
+    'L1 data cache',
+    `
+      <div class="l1-data-cache-panel">
+        <div class="metric-pill-row">
+          ${renderMetricPill('enabled', enabledLabel)}
+          ${renderMetricPill('line_size', formatCounter(cache.line_size_bytes))}
+          ${renderMetricPill('capacity', formatCounter(cache.capacity_lines))}
+        </div>
+        <div class="l1-data-cache-grid">
+          <div class="kv-list">
+            ${renderCounterField('enabled', enabledLabel)}
+            ${renderCounterField('line_size_bytes', formatCounter(cache.line_size_bytes))}
+            ${renderCounterField('capacity_lines', formatCounter(cache.capacity_lines))}
+          </div>
+          <div class="kv-list">
+            ${renderCounterField('loads', formatCounter(cache.loads))}
+            ${renderCounterField('stores', formatCounter(cache.stores))}
+            ${renderCounterField('hits', formatCounter(cache.hits))}
+            ${renderCounterField('misses', formatCounter(cache.misses))}
+          </div>
+          <div class="kv-list">
+            ${renderCounterField('evictions', formatCounter(cache.evictions))}
+            ${renderCounterField('bypasses', formatCounter(cache.bypasses))}
+            ${renderCounterField('write_through_stores', formatCounter(cache.write_through_stores))}
+          </div>
+        </div>
+      </div>
+    `,
+    'panel-l1-data-cache',
   );
 }
 
@@ -181,10 +235,11 @@ export function renderArchitectureGroup(snapshot, registers, isOpen = false) {
 export function renderPlatformGroup(snapshot, isOpen = false) {
   return groupPanel(
     '平台与 I/O',
-    '设备状态 · AI accelerator · 总线访问 · 事件流',
+    '设备状态 · AI accelerator · L1D cache · 总线访问 · 事件流',
     [
       renderDevices(snapshot),
       renderAiAccelerator(snapshot),
+      renderL1DataCache(snapshot),
       renderBus(snapshot),
       renderEvents(snapshot),
     ],

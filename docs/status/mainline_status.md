@@ -30,6 +30,7 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
@@ -62,7 +63,10 @@ store 会在 bypass 后失效重叠 line，store miss 固定为 write-through + 
 并可观察为 miss，non-cacheable / side-effect / unmapped / refill fault 路径和
 atomic、page-walk、instruction fetch 继续 bypass L1D；默认 `make test` /
 `make test-pipeline` 仍不打开 L1D。这些结果仍不代表 full cache、DMA coherence、
-multicore、JIT 或 AI accelerator 后续专项已经启动。当前暂无主线活跃计划。
+multicore、JIT 或 AI accelerator 后续专项已经启动。`Slice E / L1D frontend
+observation` 也已完成：frontend 平台组现在只读展示已有 `l1_data_cache` counters，
+缺失字段和默认关闭 snapshot 均有稳定 fallback；本轮不扩 debug ABI 或 cache
+功能面。当前暂无主线活跃计划，继续推进 `Wave 5` 时应先新建计划。
 
 ## 当前状态
 
@@ -125,12 +129,15 @@ multicore、JIT 或 AI accelerator 后续专项已经启动。当前暂无主线
   store bypass 后失效重叠 line、store miss write-through + no-allocate、fault
   refill 不污染 cache line，以及 non-cacheable / side-effect / unmapped、
   atomic、page-walk、instruction fetch 和默认路径继续 bypass / 默认关闭的合同。
+- 主线 `Wave 5` 的 `Slice E / L1D frontend observation` 已完成：frontend 平台组
+  新增只读 `L1 data cache` 面板，展示已有顶层 `l1_data_cache` debug snapshot
+  counters；缺失字段和默认关闭 snapshot 均有稳定 fallback，默认路径仍不打开 L1D。
 
 ## 当前优先级
 
-1. 如继续推进 `Wave 5`，先新建活跃计划；下一刀可以围绕更窄的 L1D 观察消费、
-   frontend 只读展示或继续 hardening 展开，不得直接跳 write-back /
-   DMA coherence / multicore / JIT / I-cache / cache maintenance instruction。
+1. 当前 `Wave 5` `Slice A ~ E` 已完成并归档；继续推进下一刀前先新建活跃计划，
+   不得直接跳 write-back / DMA coherence / multicore / JIT / I-cache /
+   cache maintenance instruction。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 5`
    定位。
@@ -191,6 +198,11 @@ multicore、JIT 或 AI accelerator 后续专项已经启动。当前暂无主线
     write-through + no-allocate、non-cacheable / side-effect / unmapped / refill
     fault 不污染 cache state，以及 atomic、page-walk、instruction fetch 继续
     bypass L1D；默认 `make test` / `make test-pipeline` 仍不打开 L1D。
+  - 同日完成主线 `Wave 5` `Slice E / L1D frontend observation` 并归档：
+    [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)。
+    这一刀把已有顶层 `l1_data_cache` debug snapshot counters 接入 frontend 平台组
+    只读观察面，缺失字段和默认关闭 snapshot 都保持稳定 fallback；本轮不扩
+    debug ABI、cache 功能面或默认 L1D 开关。
   - 这次收口把 `xv6 / Linux` pipeline-side memory signal 明确降级为
     `Wave 5 / cache` 前置证据，而不是阻塞 `Wave 4` 的硬门槛；当前 `Wave 4`
     依赖的观测证据来自 pipeline vector CNN、functional `xv6`、functional
@@ -240,9 +252,10 @@ multicore、JIT 或 AI accelerator 后续专项已经启动。当前暂无主线
   harness、构建、marker 和 dummy-payload observation 没有回退。
 - pipeline-side `xv6` memory observation 已有稳定 guardrail，但它只是
   `shadow_cache` / memory profile 信号，不是 pipeline 完整 boot `xv6` 的支持声明。
-- `Wave 5` `Slice B / C / D` 完成不代表完整 cache / DMA / multicore 已完成；当前
+- `Wave 5` `Slice B / C / D / E` 完成不代表完整 cache / DMA / multicore 已完成；当前
   只落地默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，
-  显式 opt-in 的 L1D debug/probe 观察面，以及若干 L1D 边界 hardening 合同。
+  显式 opt-in 的 L1D debug/probe 观察面、frontend 只读展示，以及若干 L1D 边界
+  hardening 合同。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
   最小静态 `fp32` row-wise softmax 和极小 attention-like profile 闭环；不要把它
   写成完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
@@ -251,8 +264,9 @@ multicore、JIT 或 AI accelerator 后续专项已经启动。当前暂无主线
 
 ## 下一步
 
-1. 如继续推进 `Wave 5`，先新建活跃计划；下一刀候选是更窄的 L1D 观察消费、
-   frontend 只读展示或继续 hardening，不直接扩成 write-back / DMA coherence。
+1. 当前暂无主线活跃计划；继续推进 `Wave 5` 后续切片前，先新建 `docs/plan/`
+   活跃计划，并继续禁止直接跳 write-back、DMA coherence、multicore、JIT、
+   I-cache 或 cache maintenance instruction。
 2. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 cache 前置 guardrail。
 3. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
