@@ -35,10 +35,15 @@
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
   - [phase4_preparation_design.md](phase4_preparation_design.md)
+  - [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
+- 当前计划：
+  - 暂无主线活跃计划；继续推进 `Wave 5` 时应先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
   - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
@@ -129,8 +134,8 @@
   -> Wave 1：标准 OS foundation + xv6 shell + Linux block-rootfs 多阶段基线
   -> Wave 2：Linux 当前 checkpoint 收口 + 主线排期统一
   -> Wave 3：已收口的 Linux 更后 userland checkpoint + observation/pipeline gap 判断
-  -> Wave 4：当前 active wave，AI accelerator 下一轮扩展 + 向量/observation 继续深化
-  -> Wave 5：cache / memory-system 第一刀（以 workload 证据触发）
+  -> Wave 4：已完成，AI accelerator 下一轮扩展 + 向量/observation 继续深化
+  -> Wave 5：当前 active wave，cache / memory-system 第一刀（以 workload 证据触发）
   -> Wave 6：JIT / DBT 与 multicore / coherence（以前置证据触发）
   -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
 ```
@@ -225,10 +230,19 @@ memory signal。
 
 ### Wave 5：cache / memory-system 第一刀
 
-Wave 5 仍然属于主线，但只在证据充分时激活。目标是：
+Wave 5 仍然属于主线，当前 `Slice A / signal + contract` 已完成。目标是：
 
 - 基于现有 `memory_region` 与 `shadow_cache` 证据，决定是否落最小 L1 cache 模型
 - 在不破坏 reference-first 的前提下，把 cache 从“只读观测”推进到“真实可执行模型”
+
+`Slice A` 已由 [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md)
+和 [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
+收口：pipeline-side `xv6` memory signal 已固定，Linux runtime 仍保持 opt-in。
+`Slice B / minimal executable L1D` 已由
+[../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
+收口：当前只落地默认关闭、RAM-only、write-through、no dirty write-back 的最小
+data cache 模型，MMIO / side-effect / unmapped / fault、instruction fetch、page walk
+和 atomic 第一版均继续 bypass。
 
 Wave 5 的激活门槛：
 

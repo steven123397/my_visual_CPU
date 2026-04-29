@@ -4,6 +4,7 @@
 #include "../arch/csr_file.h"
 #include "../trap.h"
 #include "bus.h"
+#include "simple_l1_cache.h"
 
 namespace {
 
@@ -141,6 +142,10 @@ void AddressSpace::flush_tlb() {
     next_tlb_victim_ = 0;
 }
 
+void AddressSpace::bind_l1_data_cache(SimpleL1DataCache* cache) {
+    l1_data_cache_ = cache;
+}
+
 AddressSpace::AccessResult AddressSpace::fetch32_result(Bus& bus) {
     return fetch32_result(bus, core_.pc());
 }
@@ -176,7 +181,7 @@ AddressSpace::AccessResult AddressSpace::store_result(Bus& bus, uint64_t addr, u
         }
 
         const uint64_t chunk_value = remaining_value & size_mask(chunk);
-        if (!bus.try_store(paddr, chunk_value, chunk)) {
+        if (!try_data_store(bus, paddr, chunk_value, chunk)) {
             result.fault = make_fault(access_fault_cause(AccessType::Store), current_addr);
             return result;
         }
@@ -387,7 +392,10 @@ AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr,
         }
 
         uint64_t chunk_value = 0;
-        if (!bus.try_load(paddr, chunk, chunk_value)) {
+        const bool loaded = type == AccessType::Load
+                                ? try_data_load(bus, paddr, chunk, chunk_value)
+                                : bus.try_load(paddr, chunk, chunk_value);
+        if (!loaded) {
             result.fault = make_fault(access_fault_cause(type), current_addr);
             return result;
         }
@@ -399,6 +407,20 @@ AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr,
     }
     result.ok = true;
     return result;
+}
+
+bool AddressSpace::try_data_load(Bus& bus, uint64_t paddr, int size, uint64_t& value) {
+    if (l1_data_cache_ != nullptr && l1_data_cache_->enabled()) {
+        return l1_data_cache_->load(bus, paddr, size, value);
+    }
+    return bus.try_load(paddr, size, value);
+}
+
+bool AddressSpace::try_data_store(Bus& bus, uint64_t paddr, uint64_t value, int size) {
+    if (l1_data_cache_ != nullptr && l1_data_cache_->enabled()) {
+        return l1_data_cache_->store(bus, paddr, value, size);
+    }
+    return bus.try_store(paddr, value, size);
 }
 
 void AddressSpace::apply_fault(const TrapRequest& fault) {

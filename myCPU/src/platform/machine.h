@@ -65,6 +65,8 @@ public:
     Machine();
 
     void set_backend_kind(BackendKind kind);
+    void set_l1_data_cache_enabled(bool enabled);
+    bool l1_data_cache_enabled() const;
     void set_block_transport(BlockTransport transport);
     void load_elf(const std::string& path);
     void load_binary(const std::string& path, uint64_t addr);

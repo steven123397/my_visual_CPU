@@ -5,6 +5,7 @@
 #include "arch/core_state.h"
 #include "arch/csr_file.h"
 #include "mem/address_space.h"
+#include "mem/simple_l1_cache.h"
 #include "trap.h"
 
 class Bus;
@@ -28,12 +29,15 @@ public:
 
     AddressSpace& address_space();
     const AddressSpace& address_space() const;
+    SimpleL1DataCache& l1_data_cache();
+    const SimpleL1DataCache& l1_data_cache() const;
 
 private:
     CoreState core_{};
     CsrFile csr_{};
     TrapController trap_;
     AddressSpace address_space_;
+    SimpleL1DataCache l1_data_cache_{};
 };
 
 void cpu_init(CPU& cpu, uint64_t entry);

@@ -44,6 +44,7 @@ bool execute(CPU& cpu, Bus& bus, Insn* in) {
 
 CPU::CPU() : trap_(core_, csr_), address_space_(core_, csr_, trap_) {
     csr_.bind_address_space(&address_space_);
+    address_space_.bind_l1_data_cache(&l1_data_cache_);
 }
 
 CoreState& CPU::core() {
@@ -78,10 +79,19 @@ const AddressSpace& CPU::address_space() const {
     return address_space_;
 }
 
+SimpleL1DataCache& CPU::l1_data_cache() {
+    return l1_data_cache_;
+}
+
+const SimpleL1DataCache& CPU::l1_data_cache() const {
+    return l1_data_cache_;
+}
+
 void cpu_init(CPU& cpu, uint64_t entry) {
     cpu.core().reset(entry);
     cpu.csr().reset();
     cpu.address_space().flush_tlb();
+    cpu.l1_data_cache().clear();
 }
 
 uint64_t csr_read(const CPU& cpu, uint32_t addr) {

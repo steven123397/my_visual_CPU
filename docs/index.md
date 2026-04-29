@@ -24,15 +24,17 @@
    `Phase 4` 当前准备性入口设计。
 10. [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
     主线长期路线图和 wave 激活门槛。
-11. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+11. [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
+    主线 `Wave 5 / cache / memory-system` 当前设计入口。
+12. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     向量扩展与 ML workload 的统一设计边界。
-12. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+13. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 方向设计。
-13. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+14. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
     `debug_session / protocol + frontend` 设计边界。
-14. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+15. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
     Spike 外部差分验证边界。
-15. [plan/history_plan.md](plan/history_plan.md)
+16. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -56,6 +58,10 @@
   - [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)
   - [plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
+- `Wave 5 / cache / memory-system`
+  - [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
+  - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
+  - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
 - `kernel_alpha`
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)

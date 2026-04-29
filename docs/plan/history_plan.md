@@ -23,6 +23,20 @@
 
 ### 2026-04-29
 
+#### mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan
+
+- 原文件：`mainline_wave5_cache_memory_system_slice_b_minimal_l1d_plan.md`
+- 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice B / minimal executable L1D`。本轮新增默认关闭、可显式启用的 `SimpleL1DataCache`，只覆盖 `cacheable && !has_side_effect` 的 RAM region；data load/store 在启用后可经由 L1D，instruction fetch、page walk、atomic、MMIO、unmapped、fault access 与 side-effect region 继续 bypass；store 采用 write-through，不引入 dirty line 或 write-back 生命周期。
+- 实现过程摘要：这一轮按 `TDD` 先固定 hit / miss / bypass / write-through / eviction 后 refill 的最小合同，再把 L1D 以可选绑定接入 `AddressSpace`，并由 `Machine` 提供显式开关，默认 CLI / debug CLI 路径不启用。验证覆盖 `make test-unit-simple_l1_cache`、`make test-host-execution_profile_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave5-cache-memory-system-slice-a-signal-contract-plan
+
+- 原文件：`mainline_wave5_cache_memory_system_slice_a_signal_contract_plan.md`
+- 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice A / signal + contract`。本轮新增并固定 pipeline-side `xv6 --backend pipeline` 5000-cycle debug CLI probe，锁住 `profile.memory`、`shadow-cache` 和 RAM `memory-top` 摘要；默认仓库仍不携带真实 Linux `Image`，Linux runtime 继续保持 opt-in；最小 L1D 第一版合同收口为可关闭、RAM-only、write-through、no dirty write-back，MMIO / unmapped / side-effect / fault access bypass，atomic / fence 保守 serialize/bypass，DMA interaction 不承诺透明 coherence。
+- 实现过程摘要：这一轮只把 memory signal 与 cache contract 收口，不实现 full cache、write-back、coherence、JIT 或 AI accelerator 后续专项。`Slice A` 给出进入 `Slice B / minimal executable L1D` 的绿灯，但下一刀必须先补最窄 hit / miss / bypass / write-through 行为等价测试，并继续以 reference-first 与现有 `shadow_cache` 输出合同为前置 guardrail。验证覆盖 `make test-host-execution_profile_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test-host-run_debug_cli_probe test-host-xv6_boot_smoke`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave4-ai-accelerator-slices-plan
 
 - 原文件：

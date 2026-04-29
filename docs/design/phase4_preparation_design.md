@@ -15,10 +15,15 @@
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
 - 相关设计：
+  - [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
+- 当前计划：
+  - 暂无主线活跃计划；继续推进 `Wave 5` 时应先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
   - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [../plan/history_plan.md#phase4-prep1-bus-memory-region-plan](../plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
 
@@ -160,5 +165,14 @@
 
 ## 当前有效性说明
 
-- 当前有效：本文档作为 `Phase 4` 当前准备性入口的统一设计来源。
-- 当前已完成的正式结果是 `P4-prep-1`、`P4-prep-2` 的 `C1 / memory observation / shadow cache` 第一刀及其首轮 workload baseline 收口，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract；后续是否继续更完整的 `P4-prep-2` workload 分析、更通用的 `P4-prep-3` 或完整 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前有效：本文档作为 `Phase 4` 准备性入口的统一设计来源。
+- 当前已完成的正式结果是 `P4-prep-1`、`P4-prep-2` 的 `C1 / memory observation / shadow cache` 第一刀及其首轮 workload baseline 收口，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract。
+- 主线 `Wave 5` 已开始消费这些准备性边界，`Slice A / signal + contract` 已由
+  [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md) 与
+  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
+  收口；它只证明 memory signal 与 cache contract 已进入后续最小 L1D 的入口条件，
+  不代表完整 cache / DMA / multicore / coherence 已经实现。
+- `Slice B / minimal executable L1D` 已由
+  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
+  收口；它只落地默认关闭、RAM-only、write-through 的最小 data cache 模型，
+  不代表完整 cache / DMA / multicore / coherence 已经实现。

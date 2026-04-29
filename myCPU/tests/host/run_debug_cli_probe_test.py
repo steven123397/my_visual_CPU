@@ -288,6 +288,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         self.assertIn("=== host:xv6_boot_smoke ===", proc.stdout)
         self.assertIn("=== host:run_debug_cli_probe ===", proc.stdout)
+        self.assertNotIn("test-host-run_debug_cli_probe_linux_proto_runtime", proc.stdout)
 
     def test_default_make_test_pipeline_includes_xv6_observation_guardrails(self) -> None:
         proc = subprocess.run(
@@ -302,6 +303,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         self.assertIn("=== host:xv6_boot_smoke ===", proc.stdout)
         self.assertIn("=== host:run_debug_cli_probe ===", proc.stdout)
+        self.assertNotIn("test-host-run_debug_cli_probe_linux_proto_runtime", proc.stdout)
 
     def test_real_xv6_probe_emits_functional_profile_summary(self) -> None:
         proc = subprocess.run(
@@ -341,6 +343,46 @@ class RunDebugCliProbeTest(unittest.TestCase):
             proc.stdout,
         )
         self.assertIn("xv6 kernel is booting", proc.stdout)
+
+    def test_real_xv6_probe_emits_pipeline_memory_signal(self) -> None:
+        proc = subprocess.run(
+            [
+                "python3",
+                "workloads/run_debug_cli_probe.py",
+                "--target",
+                "./mycpu",
+                "--image",
+                "external/xv6-riscv/kernel/kernel",
+                "--disk",
+                "external/xv6-riscv/fs.img",
+                "--block-transport",
+                "virtio-blk",
+                "--backend",
+                "pipeline",
+                "--step-cycles",
+                "5000",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn(
+            "summary: cycle=5000 instret=278 pc=0x0 privilege=S backend=pipeline",
+            proc.stdout,
+        )
+        self.assertIn("profile: retirements=279 traps=4593 memory=85", proc.stdout)
+        self.assertIn(
+            "shadow-cache: line_size=64 capacity_lines=64 resident_lines=11 line_accesses=78 hits=67 misses=11 evictions=0 bypasses=7",
+            proc.stdout,
+        )
+        self.assertIn(
+            "memory-top: label=ram kind=ram accesses=78 reads=21 writes=57 faults=0 bytes=588",
+            proc.stdout,
+        )
 
     def test_linux_proto_dummy_payload_probe_emits_functional_profile_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

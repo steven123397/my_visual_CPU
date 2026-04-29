@@ -9,6 +9,7 @@
 class Bus;
 class CoreState;
 class CsrFile;
+class SimpleL1DataCache;
 class TrapController;
 enum class PrivilegeMode : uint8_t;
 
@@ -49,6 +50,7 @@ public:
     bool load(Bus& bus, uint64_t addr, int size, uint64_t& value);
     bool store(Bus& bus, uint64_t addr, uint64_t value, int size);
     void flush_tlb();
+    void bind_l1_data_cache(SimpleL1DataCache* cache);
 
 private:
     struct TlbEntry {
@@ -77,6 +79,8 @@ private:
                    TrapRequest& fault,
                    bool update_access_bits);
     AccessResult access_result(Bus& bus, uint64_t vaddr, int size, AccessType type);
+    bool try_data_load(Bus& bus, uint64_t paddr, int size, uint64_t& value);
+    bool try_data_store(Bus& bus, uint64_t paddr, uint64_t value, int size);
     void apply_fault(const TrapRequest& fault);
     bool walk_page_table(Bus& bus,
                          uint64_t vaddr,
@@ -88,6 +92,7 @@ private:
     CoreState& core_;
     CsrFile& csr_;
     TrapController& trap_;
+    SimpleL1DataCache* l1_data_cache_{nullptr};
     std::array<TlbEntry, 32> tlb_{};
     size_t next_tlb_victim_{0};
 };

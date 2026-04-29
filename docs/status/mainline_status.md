@@ -21,14 +21,17 @@
   - [../design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
+  - [../design/wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)
   - [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)
 - 相关状态：
   - [kernel_alpha_status.md](kernel_alpha_status.md)
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
 - 当前计划：
-  - 暂无主线活跃计划；下一轮应先为 `Wave 5 / cache / memory-system` 写新的 plan。
+  - 暂无主线活跃计划；下一轮如继续推进 `Wave 5`，应先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
   - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan](../plan/history_plan.md#mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan)
   - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
@@ -39,13 +42,18 @@
 当前主线仍围绕 `reference-first`、真实 workload bring-up 和可观察性收口展开。
 `Wave 3` 已按真实实现现状收口：Linux fourth-stage checkpoint 线冻结在
 `timerfd-one-shot-readback-ok`，后续不再默认继续扩同类 syscall breadth。
-当前 active wave 切到 `Wave 4`，近端目标转为 AI accelerator 下一刀、向量 /
-observation hardening，以及继续守住既有 `xv6 / Linux` guardrail。`Wave 4`
-当前采用偏激进但可收口的范围：核心是 `bounded dynamic shape`、profile /
-timing、代表性 workload 与最小前端观察面；`Softmax + tiny static attention`
-作为后段 stretch，不把训练、`INT4`、MobileNet 或 Linux-facing NPU driver 混入本轮。
-这里的 `Wave 4` 指主线 wave；AI accelerator 已归档的 Wave 1 / 2 / 3 是该方向
-自己的局部历史阶段，二者不能混写。
+主线 `Wave 4` 的 AI accelerator A/B/C 三段切片已经完成并归档。
+
+当前 active wave 仍是 `Wave 5 / cache / memory-system`。`Slice A / signal +
+contract` 已完成：已有 `shadow_cache` 证据已经补上一条 pipeline-side `xv6`
+memory observation guardrail，后续最小 L1 data cache 的第一版合同也已固定为
+RAM-only、write-through、no dirty write-back，并对 MMIO / unmapped / side-effect、
+atomic / fence 和 DMA interaction 采用保守口径。`Slice B / minimal executable L1D`
+也已完成：当前已有默认关闭、可显式启用、RAM-only、write-through、no dirty
+write-back 的最小 L1D 执行模型，并通过 `AddressSpace` 仅接入 data load/store。
+instruction fetch、page walk、atomic、MMIO、unmapped 和 side-effect region 继续
+bypass L1D。它不代表 full cache、DMA coherence、multicore、JIT 或 AI accelerator
+后续专项已经启动。
 
 ## 当前状态
 
@@ -79,7 +87,8 @@ timing、代表性 workload 与最小前端观察面；`Softmax + tiny static at
   - functional `linux_proto` dummy-payload observation baseline
 - `debug/frontend`、`kernel_alpha` 十条基线、`make test` / `make test-pipeline`
   和现有 workload smoke 都已进入维护态。
-- 当前 active wave 是 `Wave 4`，不是继续深挖 Linux checkpoint 的 `Wave 3`。
+- 当前 active wave 是 `Wave 5 / cache / memory-system`，不是继续深挖 Linux
+  checkpoint 的 `Wave 3`，也不是 AI accelerator 后续专项。
 - 主线 `Wave 4` 的 AI accelerator 切片 A 已完成：`bounded dynamic shape`
   已从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，
   并新增 `dynamic_tiny_model` 动态小模型 workload。
@@ -90,30 +99,40 @@ timing、代表性 workload 与最小前端观察面；`Softmax + tiny static at
 - 主线 `Wave 4` 的 AI accelerator 切片 C stretch 已完成：新增静态 `fp32`
   row-wise `Softmax`，并新增 `tiny_attention_static` host workload，固定验证
   `gemm -> softmax -> gemm` 的最小 attention-like profile 闭环。
+- 主线 `Wave 5` 的 `Slice A / signal + contract` 已完成：pipeline-side memory
+  signal 固定为 `run_debug_cli_probe` 的 `xv6 --backend pipeline` 5000-cycle
+  probe；该 guardrail 只证明 memory observation / `shadow_cache` 输出合同，不证明
+  pipeline 已完整 boot `xv6`。
+- 主线 `Wave 5` 的 `Slice B / minimal executable L1D` 已完成：新增
+  `SimpleL1DataCache`，以默认关闭的 `Machine` 开关显式启用，`AddressSpace`
+  只在 data load/store 绑定且启用时走 L1D；默认 reference path 不变，且继续
+  保持 RAM-only、write-through、no dirty write-back、MMIO / side-effect bypass、
+  atomic / fence 保守处理，以及 DMA 不透明 coherence 的边界。
 
 ## 当前优先级
 
-1. 主线 `Wave 4` 的 AI accelerator 三段切片已经完成；下一步主线优先级应切到
-   `Wave 5 / cache / memory-system` 第一刀。AI accelerator 的 `INT4 / training /
-   MobileNet / Linux-facing NPU driver / real DMA overlap / multi outstanding queue`
-   等后续专项不得改写主线 `Wave 5` 定位。
-2. Linux `timerfd-one-shot-readback-ok` 作为 `Wave 3` 冻结边界进入守成；除非真实
+1. 下一轮如继续推进 `Wave 5`，应先新建计划；候选方向包括最小 debug/profile cache
+   counters 或更窄的 L1D opt-in workload guardrail，但不得直接跳 write-back / DMA
+   coherence / multicore / JIT。
+2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
+   real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 5`
+   定位。
+3. Linux `timerfd-one-shot-readback-ok` 作为 `Wave 3` 冻结边界进入守成；除非真实
    runtime 重新暴露新 blocker，不再继续向当前 fourth-stage smoke 追加同类
    `open-fd / mmap / pipe / futex / socketpair / openat2 / pidfd / signalfd /
    renameat2 / eventfd / epoll / sendmsg / recvmsg / SCM_RIGHTS / copy_file_range /
    splice / statx / inotify / timerfd` 微分支。
-3. 把 `xv6` shell、Linux probe、`kernel_alpha`、`pipeline`、debug CLI 和
+4. 把 `xv6` shell、Linux probe、`kernel_alpha`、`pipeline`、debug CLI 和
    现有回归矩阵守成稳定 guardrail。
-4. 继续积累 `shadow_cache / observation / representative workload` 证据，
-   但 `Wave 4` 仍只做读侧观测和 workload hardening，不提前切到真实
-   `cache / DMA / multicore / coherence`。
+5. 继续积累 `shadow_cache / observation / representative workload` 证据；后续
+   `Wave 5` follow-up 也不得提前承诺 write-back、DMA coherence、multicore 或 JIT。
 
 ## 关键历史节点
 
 - `2026-04-29`
   - `Wave 3` 按当前真实实现收口：Linux checkpoint 线冻结到
     `timerfd-one-shot-readback-ok`，后续不再继续扩同类 Linux syscall breadth；
-    `Wave 4` 激活为当前 active wave。
+    `Wave 4` 随后激活并完成 AI accelerator 三段切片。
   - 同日为主线 `Wave 4` 打开 AI accelerator 三段切片计划：先做 `bounded dynamic
     shape / workload`，再做 profile / frontend 观察面，最后把 `Softmax + tiny
     static attention` 作为可降级 stretch；训练、`INT4`、MobileNet、Linux-facing
@@ -130,6 +149,20 @@ timing、代表性 workload 与最小前端观察面；`Softmax + tiny static at
     row-wise `Softmax` 和 `tiny_attention_static` workload，固定验证
     `gemm -> softmax -> gemm` 的最小 attention-like 闭环；它不是完整 attention /
     Transformer runtime。
+  - 主线 `Wave 4` 变更已提交为 `b11d10a`
+    `feat(主线): 收口 Wave 4 AI accelerator 切片`。
+  - 主线 `Wave 5 / cache / memory-system` 的 `Slice A / signal + contract` 已完成并
+    归档：
+    [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)。
+    这一刀新增 pipeline-side `xv6 --backend pipeline` memory observation guardrail，
+    继续保持 Linux 真实 `Image` runtime 为 opt-in，并固定后续最小 L1D 的
+    RAM-only、write-through、no dirty write-back、bypass side-effect region 与 DMA
+    不透明 coherence 合同。
+  - 同日完成主线 `Wave 5` `Slice B / minimal executable L1D` 并归档：
+    [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)。
+    这一刀新增默认关闭、可显式启用、RAM-only、write-through 的最小 L1D 执行模型，
+    只接入 data load/store；instruction fetch、page walk、atomic、MMIO、
+    unmapped 和 side-effect region 继续 bypass L1D。
   - 这次收口把 `xv6 / Linux` pipeline-side memory signal 明确降级为
     `Wave 5 / cache` 前置证据，而不是阻塞 `Wave 4` 的硬门槛；当前 `Wave 4`
     依赖的观测证据来自 pipeline vector CNN、functional `xv6`、functional
@@ -177,10 +210,10 @@ timing、代表性 workload 与最小前端观察面；`Softmax + tiny static at
 - 仓库默认位置仍不携带真实 Linux `Image`；因此 `timerfd` 冻结点的发布级 runtime
   断言仍需要开发者显式提供 `Image` 后重新运行 opt-in guardrail。默认门禁只能证明
   harness、构建、marker 和 dummy-payload observation 没有回退。
-- `xv6 / Linux` 的 pipeline-side workload 观测还不够稳定；当前把它降级为
-  `Wave 5 / cache` 前置证据，而不是 `Wave 4` 激活 blocker。
-- `Wave 4` 不能被误读成真实 cache / DMA / multicore 已启动；当前只能推进
-  AI accelerator、向量和 observation 的窄 hardening。
+- pipeline-side `xv6` memory observation 已有稳定 guardrail，但它只是
+  `shadow_cache` / memory profile 信号，不是 pipeline 完整 boot `xv6` 的支持声明。
+- `Wave 5` `Slice B` 完成不代表完整 cache / DMA / multicore 已完成；当前只落地
+  默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
   最小静态 `fp32` row-wise softmax 和极小 attention-like profile 闭环；不要把它
   写成完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
@@ -189,18 +222,20 @@ timing、代表性 workload 与最小前端观察面；`Softmax + tiny static at
 
 ## 下一步
 
-1. 为 `Wave 5 / cache / memory-system` 第一刀补新的设计/计划入口；不要把主线
-   `Wave 5` 改成 AI accelerator 后续专项。
-2. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+1. 如继续推进 `Wave 5`，先新建活跃计划；下一刀候选是最小 cache counter 观察面或
+   L1D opt-in workload guardrail，不直接扩成 write-back / DMA coherence。
+2. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
+   dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 cache 前置 guardrail。
+3. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
    driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan，并
    明确不占用主线 `Wave 5`。
-3. Wave 4 AI accelerator 的完成记录统一见
+4. Wave 4 AI accelerator 的完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
-4. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
+5. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
    guardrail；未提供 `Image` 时，不把该项写成默认已证明。
-5. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
+6. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
    `make test` 和 `make test-pipeline` 这些稳定 guardrail。
-6. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
+7. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
    暴露新 blocker，再按 blocker 驱动回补最窄 Linux guardrail。
 
 ## 验证基线

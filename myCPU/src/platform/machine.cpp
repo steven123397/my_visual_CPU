@@ -324,6 +324,15 @@ void Machine::set_backend_kind(BackendKind kind) {
     rebuild_backend();
 }
 
+void Machine::set_l1_data_cache_enabled(bool enabled) {
+    cpu_.l1_data_cache().clear();
+    cpu_.l1_data_cache().set_enabled(enabled);
+}
+
+bool Machine::l1_data_cache_enabled() const {
+    return cpu_.l1_data_cache().enabled();
+}
+
 void Machine::set_block_transport(BlockTransport transport) {
     if (block_transport_bound_ && block_transport_ != transport) {
         throw std::runtime_error("block transport already bound");
