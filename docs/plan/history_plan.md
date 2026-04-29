@@ -23,6 +23,13 @@
 
 ### 2026-04-29
 
+#### mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan
+
+- 原文件：`mainline_wave5_cache_memory_system_slice_d_l1d_hardening_plan.md`
+- 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice D / L1D hardening`。本轮固定跨 cache line store 继续 bypass L1D 但会在成功写入 backing bus 后失效重叠 cached line，避免后续 load 读到陈旧 bytes；store miss 固定为 write-through + no-allocate 并作为 miss 进入 counters；non-cacheable、side-effect、unmapped 和 refill fault 路径不污染 cache state；atomic、page-walk 和 instruction fetch 继续 bypass L1D；默认 `make test` / `make test-pipeline` 仍不打开 L1D。
+- 实现过程摘要：这一轮按 `TDD` 先用 `simple_l1_cache` unit test 暴露跨 line bypass stale-line 缺口，再补最小 invalidation 与 store miss 统计合同，并加 host 断言固定默认门禁不携带 `--l1d`。本轮仍不实现 write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance instruction。验证覆盖 `make test-unit-simple_l1_cache`、`make test-host-execution_profile_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_c_l1d_observation_guardrail_plan.md`

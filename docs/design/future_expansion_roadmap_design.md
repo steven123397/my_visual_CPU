@@ -42,6 +42,7 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
@@ -247,7 +248,10 @@ data cache 模型，MMIO / side-effect / unmapped / fault、instruction fetch、
 `Slice C / L1D opt-in observation + guardrail` 已由
 [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
 收口：当前只新增显式 opt-in 的 L1D counters 与 workload guardrail，不扩成完整 cache
-或 coherence 方案。继续推进 `Wave 5` 时需先新建活跃计划。
+或 coherence 方案。`Slice D / L1D hardening` 已由
+[../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
+收口：当前只固定 L1D 边界合同，不扩成 write-back、DMA coherence、multicore、JIT、
+I-cache 或 cache maintenance instruction。继续推进 `Wave 5` 时需先新建活跃计划。
 
 Wave 5 的激活门槛：
 

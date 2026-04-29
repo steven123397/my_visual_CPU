@@ -385,6 +385,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         self.assertIn("=== host:xv6_boot_smoke ===", proc.stdout)
         self.assertIn("=== host:run_debug_cli_probe ===", proc.stdout)
+        self.assertNotIn("--l1d", proc.stdout)
         self.assertNotIn("test-host-run_debug_cli_probe_linux_proto_runtime", proc.stdout)
 
     def test_default_make_test_pipeline_includes_xv6_observation_guardrails(self) -> None:
@@ -400,6 +401,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         self.assertIn("=== host:xv6_boot_smoke ===", proc.stdout)
         self.assertIn("=== host:run_debug_cli_probe ===", proc.stdout)
+        self.assertNotIn("--l1d", proc.stdout)
         self.assertNotIn("test-host-run_debug_cli_probe_linux_proto_runtime", proc.stdout)
 
     def test_real_xv6_probe_emits_functional_profile_summary(self) -> None:

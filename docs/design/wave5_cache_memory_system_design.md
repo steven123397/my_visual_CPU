@@ -20,6 +20,7 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
@@ -176,6 +177,23 @@ Slice A 的验证重点是证据与合同：
 后续仍不允许直接把 L1D 扩成 write-back、DMA coherence、multicore、JIT、I-cache 或
 cache maintenance instruction。
 
+### Slice D 收口结果
+
+当前 `Slice D / L1D hardening` 已完成，结果归档见
+[../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)。
+本轮完成结果是：
+
+- 跨 cache line store 继续 bypass L1D，但成功写入 backing bus 后会失效所有重叠
+  cached line，避免后续 load 读到陈旧 cache bytes。
+- store miss 固定为 write-through + no-allocate，并作为 miss 进入 L1D counters。
+- non-cacheable、side-effect、unmapped 和 refill fault 路径不污染 cache state。
+- instruction fetch、page walk 和 atomic memory operation 继续绕过 L1D。
+- 默认 `make test` / `make test-pipeline` 不携带 `--l1d`；L1D 仍只在显式
+  debug/probe opt-in 路径打开。
+
+本轮仍不实现 write-back、DMA coherence、multicore、JIT、I-cache 或 cache
+maintenance instruction。
+
 ## 风险与取舍
 
 - 先做 Slice A 会让 `Wave 5` 启动看起来偏“证据化”，但它可以防止真实 cache 模型过早污染
@@ -194,7 +212,8 @@ cache maintenance instruction。
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)。
 - `Slice C / L1D opt-in observation + guardrail` 已完成，结果归档见
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)。
-- 当前暂无主线活跃计划。后续继续推进时仍必须遵守 `write-through + no dirty
-  write-back`、RAM-only、
+- `Slice D / L1D hardening` 已完成，结果归档见
+  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)。
+- 当前暂无主线活跃计划。后续继续推进时仍必须遵守 `write-through + no dirty write-back`、RAM-only、
   MMIO/unmapped/side-effect bypass、atomic/fence conservative serialize/bypass，
   以及 DMA 不透明 coherence 的边界，除非先另开设计/计划并补足验证。

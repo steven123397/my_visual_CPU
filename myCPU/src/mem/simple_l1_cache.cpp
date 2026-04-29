@@ -52,7 +52,18 @@ bool SimpleL1DataCache::store(Bus& bus, uint64_t addr, uint64_t value, int size)
     ++stats_.stores;
     if (should_bypass(bus, addr, size)) {
         ++stats_.bypasses;
-        return bus.try_store(addr, value, size);
+        const bool stored = bus.try_store(addr, value, size);
+        if (stored) {
+            invalidate_overlapping_lines(addr, size);
+        }
+        return stored;
+    }
+
+    Line* line = find_line(line_base(addr));
+    if (line != nullptr) {
+        ++stats_.hits;
+    } else {
+        ++stats_.misses;
     }
 
     if (!bus.try_store(addr, value, size)) {
@@ -60,8 +71,7 @@ bool SimpleL1DataCache::store(Bus& bus, uint64_t addr, uint64_t value, int size)
     }
     ++stats_.write_through_stores;
 
-    if (Line* line = find_line(line_base(addr))) {
-        ++stats_.hits;
+    if (line != nullptr) {
         touch(*line);
         write_line_value(*line, line_offset(addr), value, size);
     }
@@ -173,6 +183,25 @@ uint64_t SimpleL1DataCache::line_offset(uint64_t addr) const {
 
 bool SimpleL1DataCache::access_fits_one_line(uint64_t addr, int size) const {
     return line_offset(addr) + static_cast<uint64_t>(size) <= config_.line_size_bytes;
+}
+
+void SimpleL1DataCache::invalidate_overlapping_lines(uint64_t addr, int size) {
+    if (size <= 0) {
+        return;
+    }
+
+    const uint64_t access_begin = addr;
+    const uint64_t access_end = addr + static_cast<uint64_t>(size);
+    for (Line& line : lines_) {
+        if (!line.valid) {
+            continue;
+        }
+        const uint64_t line_begin = line.base;
+        const uint64_t line_end = line.base + config_.line_size_bytes;
+        if (access_begin < line_end && line_begin < access_end) {
+            line.valid = false;
+        }
+    }
 }
 
 uint64_t SimpleL1DataCache::read_line_value(const Line& line, uint64_t offset, int size) const {

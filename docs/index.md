@@ -60,6 +60,7 @@
   - [plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
 - `Wave 5 / cache / memory-system`
   - [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
+  - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)

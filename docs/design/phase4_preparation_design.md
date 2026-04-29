@@ -22,6 +22,7 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
@@ -180,4 +181,7 @@
 - `Slice C / L1D opt-in observation + guardrail` 已由
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   收口；它只补显式 opt-in 的 L1D debug/probe 观察面和行为等价 guardrail。
-  当前暂无主线活跃计划，继续推进 `Wave 5` 时应先新建计划。
+- `Slice D / L1D hardening` 已由
+  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
+  收口；它只固定 L1D 边界合同，不扩成新大功能。
+- 当前暂无主线活跃计划，继续推进 `Wave 5` 时应先新建计划。
