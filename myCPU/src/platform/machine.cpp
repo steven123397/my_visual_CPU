@@ -400,7 +400,8 @@ void Machine::load_binary_payload(const std::string& path, uint64_t addr) {
     if (!loaded_) {
         throw std::runtime_error("machine image not loaded");
     }
-    binary_loader_.load(ram_, path.c_str(), addr);
+    const uint64_t byte_count = binary_loader_.load(ram_, path.c_str(), addr);
+    cpu_.l1_data_cache().invalidate_range(addr, byte_count);
 }
 
 void Machine::set_gpr(const std::string& reg_name, uint64_t value) {

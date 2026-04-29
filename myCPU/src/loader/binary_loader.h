@@ -6,5 +6,5 @@ class Ram;
 
 class BinaryLoader {
 public:
-    void load(Ram& ram, const char* path, uint64_t addr) const;
+    uint64_t load(Ram& ram, const char* path, uint64_t addr) const;
 };

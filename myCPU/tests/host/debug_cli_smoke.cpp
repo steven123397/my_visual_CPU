@@ -656,6 +656,45 @@ int main() {
                             kDebugProgramAddr,
                             BackendKind::Functional,
                             BlockTransport::SimpleStorage,
+                            nullptr,
+                            true,
+                            true,
+                            true);
+        const AddressSpace::AccessResult loaded = session.machine().cpu().address_space().load_result(
+            session.machine().bus(),
+            kDebugProgramAddr,
+            4);
+        if (!loaded.ok) {
+            std::fprintf(stderr, "debug session L1D setup load should succeed\n");
+            return 1;
+        }
+        const DebugSnapshot populated = session.snapshot();
+        if (!populated.l1_data_cache.enabled || populated.l1_data_cache.loads == 0 ||
+            populated.l1_data_cache.misses == 0) {
+            std::fprintf(stderr, "debug session L1D setup should expose populated counters\n");
+            return 1;
+        }
+        session.reset();
+        const DebugSnapshot reset_snapshot = session.snapshot();
+        if (!reset_snapshot.l1_data_cache.enabled) {
+            std::fprintf(stderr, "debug session reset should preserve opt-in L1D enabled state\n");
+            return 1;
+        }
+        if (reset_snapshot.l1_data_cache.loads != 0 || reset_snapshot.l1_data_cache.stores != 0 ||
+            reset_snapshot.l1_data_cache.hits != 0 || reset_snapshot.l1_data_cache.misses != 0 ||
+            reset_snapshot.l1_data_cache.evictions != 0 || reset_snapshot.l1_data_cache.bypasses != 0 ||
+            reset_snapshot.l1_data_cache.write_through_stores != 0) {
+            std::fprintf(stderr, "debug session reset should clear L1D counters\n");
+            return 1;
+        }
+    }
+
+    {
+        DebugSession session;
+        session.load_binary(predictor_binary.path,
+                            kDebugProgramAddr,
+                            BackendKind::Functional,
+                            BlockTransport::SimpleStorage,
                             nullptr);
         session.load_binary_payload(store_queue_binary.path, kDebugProgramAddr + 0x100);
         session.set_gpr("a1", 0x88000000ULL);

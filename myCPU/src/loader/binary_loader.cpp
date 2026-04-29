@@ -8,7 +8,7 @@
 #include "../mem/ram.h"
 #include "../platform/address_map.h"
 
-void BinaryLoader::load(Ram& ram, const char* path, uint64_t addr) const {
+uint64_t BinaryLoader::load(Ram& ram, const char* path, uint64_t addr) const {
     std::ifstream file(path, std::ios::binary);
     if (!file) {
         throw std::runtime_error(std::string("failed to open binary: ") + path);
@@ -34,4 +34,5 @@ void BinaryLoader::load(Ram& ram, const char* path, uint64_t addr) const {
     }
 
     ram.write_bytes(addr, bytes.data(), bytes.size());
+    return byte_count;
 }

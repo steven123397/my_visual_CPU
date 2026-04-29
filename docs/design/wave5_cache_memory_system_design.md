@@ -20,6 +20,7 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
@@ -102,6 +103,11 @@ cache 模型必须遵守的合同。
 5. `Slice E / L1D frontend observation`
    - 只把已有 `l1_data_cache` counters 接入 frontend 只读观察面。
    - 不扩 debug ABI、后端 cache 功能或默认 L1D 开关。
+6. `Slice F / L1D lifecycle guardrail`
+   - 只固定显式 opt-in L1D 在 machine / debug load lifecycle 下的清理和失效合同。
+   - 覆盖 payload load 覆盖 cached RAM line、reset 清空 counters 等生命周期边界。
+   - 不扩 write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance
+     instruction。
 
 ### Slice A 收口结果
 
@@ -218,6 +224,21 @@ maintenance instruction。
 本轮仍不实现 write-back、DMA coherence、multicore、JIT、I-cache 或 cache
 maintenance instruction。
 
+### Slice F 收口结果
+
+当前 `Slice F / L1D lifecycle guardrail` 已完成，结果归档见
+[../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)。
+本轮完成结果是：
+
+- `BinaryLoader::load()` 返回写入 byte count，供调用方按覆盖范围处理后续状态。
+- `Machine::load_binary_payload()` 写入 RAM payload 后，会按 payload 覆盖范围失效
+  L1D line，避免启用中的 L1D 在 payload 覆盖后继续返回旧 cached bytes。
+- primary load / `cpu_init()` / debug reset 继续清空 L1D line state 与 counters。
+- debug reset 保留显式 opt-in 的 `enabled=true` 状态，但 counters 回到 0。
+
+本轮仍不实现 write-back、DMA coherence、multicore、JIT、I-cache 或 cache
+maintenance instruction。
+
 ## 风险与取舍
 
 - 先做 Slice A 会让 `Wave 5` 启动看起来偏“证据化”，但它可以防止真实 cache 模型过早污染
@@ -240,6 +261,8 @@ maintenance instruction。
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)。
 - `Slice E / L1D frontend observation` 已完成，结果归档见
   [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)。
+- `Slice F / L1D lifecycle guardrail` 已完成，结果归档见
+  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)。
 - 当前暂无主线活跃计划。后续继续推进时仍必须遵守 `write-through + no dirty write-back`、RAM-only、
   MMIO/unmapped/side-effect bypass、atomic/fence conservative serialize/bypass，
   以及 DMA 不透明 coherence 的边界，除非先另开设计/计划并补足验证。

@@ -30,6 +30,7 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 5` 时先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
@@ -66,7 +67,11 @@ atomic、page-walk、instruction fetch 继续 bypass L1D；默认 `make test` /
 multicore、JIT 或 AI accelerator 后续专项已经启动。`Slice E / L1D frontend
 observation` 也已完成：frontend 平台组现在只读展示已有 `l1_data_cache` counters，
 缺失字段和默认关闭 snapshot 均有稳定 fallback；本轮不扩 debug ABI 或 cache
-功能面。当前暂无主线活跃计划，继续推进 `Wave 5` 时应先新建计划。
+功能面。`Slice F / L1D lifecycle guardrail` 也已完成：当前 primary load /
+debug reset 继续清空 L1D line state 与 counters，debug reset 保留显式
+`enabled=true` 状态；payload load 覆盖已缓存 RAM line 后会失效对应 L1D line，
+避免后续 data load 读到旧 payload bytes。这些结果仍不代表 write-back、DMA
+coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启动。
 
 ## 当前状态
 
@@ -132,10 +137,13 @@ observation` 也已完成：frontend 平台组现在只读展示已有 `l1_data_
 - 主线 `Wave 5` 的 `Slice E / L1D frontend observation` 已完成：frontend 平台组
   新增只读 `L1 data cache` 面板，展示已有顶层 `l1_data_cache` debug snapshot
   counters；缺失字段和默认关闭 snapshot 均有稳定 fallback，默认路径仍不打开 L1D。
+- 主线 `Wave 5` 的 `Slice F / L1D lifecycle guardrail` 已完成：opt-in L1D 在
+  primary load / reset / payload load 下的 line state 与 counters 生命周期合同已
+  固定；payload 覆盖已缓存 RAM line 后会失效对应 L1D line，不扩 cache 功能面。
 
 ## 当前优先级
 
-1. 当前 `Wave 5` `Slice A ~ E` 已完成并归档；继续推进下一刀前先新建活跃计划，
+1. 当前 `Wave 5` `Slice A ~ F` 已完成并归档；继续推进下一刀前先新建活跃计划，
    不得直接跳 write-back / DMA coherence / multicore / JIT / I-cache /
    cache maintenance instruction。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
@@ -203,6 +211,11 @@ observation` 也已完成：frontend 平台组现在只读展示已有 `l1_data_
     这一刀把已有顶层 `l1_data_cache` debug snapshot counters 接入 frontend 平台组
     只读观察面，缺失字段和默认关闭 snapshot 都保持稳定 fallback；本轮不扩
     debug ABI、cache 功能面或默认 L1D 开关。
+  - 同日完成主线 `Wave 5` `Slice F / L1D lifecycle guardrail` 并归档：
+    [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)。
+    这一刀固定 opt-in L1D 在 primary load / debug reset 下继续清空 line state
+    与 counters，debug reset 保留 `enabled=true`；payload load 覆盖已缓存 RAM
+    line 后会失效对应 L1D line，避免后续 data load 读到旧 payload bytes。
   - 这次收口把 `xv6 / Linux` pipeline-side memory signal 明确降级为
     `Wave 5 / cache` 前置证据，而不是阻塞 `Wave 4` 的硬门槛；当前 `Wave 4`
     依赖的观测证据来自 pipeline vector CNN、functional `xv6`、functional
@@ -252,10 +265,10 @@ observation` 也已完成：frontend 平台组现在只读展示已有 `l1_data_
   harness、构建、marker 和 dummy-payload observation 没有回退。
 - pipeline-side `xv6` memory observation 已有稳定 guardrail，但它只是
   `shadow_cache` / memory profile 信号，不是 pipeline 完整 boot `xv6` 的支持声明。
-- `Wave 5` `Slice B / C / D / E` 完成不代表完整 cache / DMA / multicore 已完成；当前
+- `Wave 5` `Slice B / C / D / E / F` 完成不代表完整 cache / DMA / multicore 已完成；当前
   只落地默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，
-  显式 opt-in 的 L1D debug/probe 观察面、frontend 只读展示，以及若干 L1D 边界
-  hardening 合同。
+  显式 opt-in 的 L1D debug/probe 观察面、frontend 只读展示，以及若干 L1D 边界和
+  lifecycle hardening 合同。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
   最小静态 `fp32` row-wise softmax 和极小 attention-like profile 闭环；不要把它
   写成完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。

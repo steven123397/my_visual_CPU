@@ -30,6 +30,7 @@ public:
     bool store(Bus& bus, uint64_t addr, uint64_t value, int size);
 
     void clear();
+    void invalidate_range(uint64_t addr, uint64_t size);
     void set_enabled(bool enabled);
     bool enabled() const;
     uint64_t line_size_bytes() const;
@@ -51,7 +52,6 @@ private:
     uint64_t line_base(uint64_t addr) const;
     uint64_t line_offset(uint64_t addr) const;
     bool access_fits_one_line(uint64_t addr, int size) const;
-    void invalidate_overlapping_lines(uint64_t addr, int size);
     uint64_t read_line_value(const Line& line, uint64_t offset, int size) const;
     void write_line_value(Line& line, uint64_t offset, uint64_t value, int size);
     void touch(Line& line);

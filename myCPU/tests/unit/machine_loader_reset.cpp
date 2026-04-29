@@ -220,6 +220,33 @@ bool expect_gpr_seed_preserves_state(Machine& machine,
                   "set_gpr should update the requested architectural register");
 }
 
+bool expect_payload_load_invalidates_enabled_l1d(Machine& machine,
+                                                 const std::string& payload_path,
+                                                 uint64_t addr,
+                                                 uint16_t expected_value) {
+    machine.set_l1_data_cache_enabled(true);
+
+    const AddressSpace::AccessResult first_load =
+        machine.cpu().address_space().load_result(machine.bus(), addr, 2);
+    if (!expect(first_load.ok, "initial L1D data load should succeed") ||
+        !expect(first_load.value == 0xBBAA,
+                "initial L1D data load should observe the original binary bytes") ||
+        !expect(machine.cpu().l1_data_cache().stats().misses == 1,
+                "initial L1D data load should populate one cache line")) {
+        return false;
+    }
+
+    machine.load_binary_payload(payload_path, addr);
+
+    const AddressSpace::AccessResult second_load =
+        machine.cpu().address_space().load_result(machine.bus(), addr, 2);
+    return expect(second_load.ok, "post-payload L1D data load should succeed") &&
+           expect(second_load.value == expected_value,
+                  "post-payload L1D data load should observe payload bytes") &&
+           expect(machine.cpu().l1_data_cache().stats().misses == 2,
+                  "payload overwrite should invalidate the cached line before the next load");
+}
+
 bool trigger_no_media_storage_error(Machine& machine) {
     machine.storage().clear_image();
     return expect(machine.bus().try_store(STORAGE_BASE + STORAGE_REG_COMMAND,
@@ -320,6 +347,22 @@ int main() {
                                                      kBinaryAddr,
                                                      second_bytes[0],
                                                      second_bytes[1])) {
+                std::remove(first_binary.c_str());
+                std::remove(second_binary.c_str());
+                std::remove(first_elf.c_str());
+                std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
+                return 1;
+            }
+        }
+
+        {
+            Machine machine;
+            machine.load_binary(first_binary, kBinaryAddr);
+            if (!expect_payload_load_invalidates_enabled_l1d(machine,
+                                                             second_binary,
+                                                             kBinaryAddr,
+                                                             0x2211)) {
                 std::remove(first_binary.c_str());
                 std::remove(second_binary.c_str());
                 std::remove(first_elf.c_str());

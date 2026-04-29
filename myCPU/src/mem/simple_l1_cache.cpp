@@ -54,7 +54,7 @@ bool SimpleL1DataCache::store(Bus& bus, uint64_t addr, uint64_t value, int size)
         ++stats_.bypasses;
         const bool stored = bus.try_store(addr, value, size);
         if (stored) {
-            invalidate_overlapping_lines(addr, size);
+            invalidate_range(addr, static_cast<uint64_t>(size));
         }
         return stored;
     }
@@ -86,6 +86,25 @@ void SimpleL1DataCache::clear() {
         line.base = 0;
         line.last_used = 0;
         std::fill(line.bytes.begin(), line.bytes.end(), 0);
+    }
+}
+
+void SimpleL1DataCache::invalidate_range(uint64_t addr, uint64_t size) {
+    if (size == 0) {
+        return;
+    }
+
+    const uint64_t access_begin = addr;
+    const uint64_t access_end = size > UINT64_MAX - addr ? UINT64_MAX : addr + size;
+    for (Line& line : lines_) {
+        if (!line.valid) {
+            continue;
+        }
+        const uint64_t line_begin = line.base;
+        const uint64_t line_end = line.base + config_.line_size_bytes;
+        if (access_begin < line_end && line_begin < access_end) {
+            line.valid = false;
+        }
     }
 }
 
@@ -183,25 +202,6 @@ uint64_t SimpleL1DataCache::line_offset(uint64_t addr) const {
 
 bool SimpleL1DataCache::access_fits_one_line(uint64_t addr, int size) const {
     return line_offset(addr) + static_cast<uint64_t>(size) <= config_.line_size_bytes;
-}
-
-void SimpleL1DataCache::invalidate_overlapping_lines(uint64_t addr, int size) {
-    if (size <= 0) {
-        return;
-    }
-
-    const uint64_t access_begin = addr;
-    const uint64_t access_end = addr + static_cast<uint64_t>(size);
-    for (Line& line : lines_) {
-        if (!line.valid) {
-            continue;
-        }
-        const uint64_t line_begin = line.base;
-        const uint64_t line_end = line.base + config_.line_size_bytes;
-        if (access_begin < line_end && line_begin < access_end) {
-            line.valid = false;
-        }
-    }
 }
 
 uint64_t SimpleL1DataCache::read_line_value(const Line& line, uint64_t offset, int size) const {

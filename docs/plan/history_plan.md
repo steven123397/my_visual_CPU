@@ -23,6 +23,13 @@
 
 ### 2026-04-29
 
+#### mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan
+
+- 原文件：`mainline_wave5_cache_memory_system_slice_f_l1d_lifecycle_guardrail_plan.md`
+- 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice F / L1D lifecycle guardrail`。本轮固定 opt-in L1D 在 machine / debug load lifecycle 下的清理与失效合同：primary load / debug reset 继续清空 line state 和 counters，debug reset 保留显式 `enabled=true` 状态；`Machine::load_binary_payload()` 覆盖已缓存 RAM line 后会失效对应 L1D line，避免后续 data load 读到旧 payload bytes。
+- 实现过程摘要：这一轮按 `TDD` 先用 `machine_loader_reset` 暴露 payload 覆盖后的 stale-line 缺口，再让 `BinaryLoader::load()` 返回写入长度，并在 payload load 后按覆盖范围失效 L1D line；同时补 debug session reset 的 opt-in counters 清理断言。本轮仍不实现 write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance instruction。验证覆盖 `make test-unit-machine_loader_reset test-host-debug_cli_smoke`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_e_l1d_frontend_observation_plan.md`
