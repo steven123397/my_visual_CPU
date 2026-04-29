@@ -19,6 +19,18 @@ public:
         std::string text{};
     };
 
+    struct TranslationPlanSnapshot {
+        bool candidate{false};
+        bool inlineable{false};
+        uint64_t start_pc{0};
+        uint64_t end_pc{0};
+        uint64_t executions{0};
+        uint64_t retired_instructions{0};
+        uint64_t inlineable_instructions{0};
+        uint64_t fallback_pc{0};
+        std::string reason{};
+    };
+
     void load_elf(const std::string& path,
                   BackendKind backend_kind,
                   BlockTransport block_transport = BlockTransport::SimpleStorage,
@@ -46,6 +58,7 @@ public:
     void run_until_halt(uint64_t max_steps);
     void uart_input(std::string_view text);
     UartOutputChunk uart_output(size_t offset) const;
+    TranslationPlanSnapshot translation_plan();
     DebugSnapshot snapshot() const;
 
 private:

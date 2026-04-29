@@ -493,6 +493,35 @@ std::string debug_protocol_uart_output_json(const DebugSession::UartOutputChunk&
     return out.str();
 }
 
+std::string debug_protocol_translation_plan_json(const DebugSession::TranslationPlanSnapshot& plan) {
+    std::ostringstream out;
+    out << "{\"type\":\"translation_plan\"";
+    if (!plan.candidate) {
+        out << ",\"status\":\"none\""
+            << ",\"reason\":";
+        append_json_string(out, plan.reason.empty() ? "no-hot-paths" : plan.reason);
+        out << "}";
+        return out.str();
+    }
+
+    out << ",\"status\":\"" << (plan.inlineable ? "inlineable" : "fallback") << "\""
+        << ",\"start_pc\":";
+    append_json_string(out, hex_u64(plan.start_pc));
+    out << ",\"end_pc\":";
+    append_json_string(out, hex_u64(plan.end_pc));
+    out << ",\"executions\":" << plan.executions
+        << ",\"retired_instructions\":" << plan.retired_instructions
+        << ",\"inlineable_instructions\":" << plan.inlineable_instructions;
+    if (!plan.inlineable) {
+        out << ",\"fallback_pc\":";
+        append_json_string(out, hex_u64(plan.fallback_pc));
+        out << ",\"reason\":";
+        append_json_string(out, plan.reason);
+    }
+    out << "}";
+    return out.str();
+}
+
 std::string debug_protocol_error_json(const std::string& message) {
     std::ostringstream out;
     out << "{\"type\":\"error\",\"message\":";

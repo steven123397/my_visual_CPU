@@ -21,6 +21,22 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-04-30
+
+#### mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan
+
+- 原文件：`mainline_wave6_jit_dbt_fallback_equivalence_slice_f_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 `Slice F / fallback equivalence`。本轮新增显式 host-smoke-only helper `run_interpreter_dbt_prototype_with_functional_fallback()`：preflight 成功的纯 inlineable block 仍走 prototype path；preflight 遇到 helper-required 或 control-flow boundary 时，用 `FunctionalBackend` 从 block start replay 到 first boundary。
+- 实现过程摘要：这一轮按 `TDD` 先补 inlineable block 不使用 fallback、`addi + lw` helper boundary fallback replay、`addi + jal` control-flow boundary fallback replay 的 host smoke 红灯，再实现最小 functional fallback replay。fallback replay 会与直接 functional reference 对齐 GPR / PC / `instret` / `cycle`，但它不是 runtime 调度器，不执行 memory / CSR / trap / vector helper，不接入默认 backend，不创建 block cache，不生成 host code，也不改变 guest 可见语义。验证覆盖 `make test-host-interpreter_dbt_prototype_smoke`、`make test-host-run_debug_cli_probe`、`make test-host-debug_cli_smoke`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave6-jit-dbt-translation-plan-slice-e-plan
+
+- 原文件：`mainline_wave6_jit_dbt_translation_plan_slice_e_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 `Slice E / translation plan dry-run`。本轮新增 `plan_interpreter_dbt_prototype_hot_path()`，把 `ExecutionProfile.hot_paths` 的 top candidate 按 `executions -> retired_instructions -> start_pc -> end_pc` 排序后接入 Slice D preflight；debug CLI 新增 opt-in `translation_plan` command，`run_debug_cli_probe.py --translation-plan` 输出 `translation-plan: none / inlineable / fallback` 摘要。
+- 实现过程摘要：这一轮按 `TDD` 先补 C++ hot-path preflight smoke 与 probe `--translation-plan` 红灯，再实现最小 dry-run helper 和真实 flat probe 集成测试。`addi + lw + loop` 会报告 first memory boundary 为 `helper-required`，且不提交前缀状态；默认 probe 不新增 `translation-plan:` 行，默认执行路径不启用 JIT / DBT，不执行 prototype，不生成 host code，也不创建长期 block cache。验证覆盖 `make test-host-interpreter_dbt_prototype_smoke`、`make test-host-run_debug_cli_probe`、`make test-host-debug_cli_smoke`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 ### 2026-04-29
 
 #### mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan

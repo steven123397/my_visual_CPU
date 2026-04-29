@@ -8,7 +8,7 @@
 
 - 为什么 `Wave 6` 可以在 `Wave 5` 首轮收口后激活。
 - 为什么第一刀选择 `JIT / DBT hot-path evidence`，而不是直接实现 JIT engine 或 multicore / coherence。
-- `Wave 6 Slice A / B / C / D` 已经固定了哪些观察、translation contract 与 prototype
+- `Wave 6 Slice A / B / C / D / E / F` 已经固定了哪些观察、translation contract 与 prototype
   guardrail，哪些内容仍必须留在后续切片。
 
 本文档不记录执行 checklist。当前进度以
@@ -21,6 +21,8 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 6` 下一刀前先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
@@ -61,7 +63,7 @@ cache，不改变 guest 可见语义。
 
 ## 非目标
 
-- 不在 `Slice A / B / C / D` 实现 JIT engine、DBT translator、IR、block cache 或 host code emission。
+- 不在 `Slice A / B / C / D / E / F` 实现 JIT engine、DBT translator、IR、block cache 或 host code emission。
 - 不申请可执行内存，不引入宿主平台相关代码生成。
 - 不改变 `InstructionSemantics` 的 ISA 真值来源定位。
 - 不改变 guest 可见 fault / trap / CSR / memory 语义。
@@ -69,6 +71,10 @@ cache，不改变 guest 可见语义。
   helper-required 指令伪装成 inlineable。
 - `Slice D` 只扩 prototype preflight / lifecycle guardrail，不执行 helper，不 replay
   fallback，不接 workload-level runtime harness。
+- `Slice E` 只做 opt-in translation-plan dry-run，不执行 prototype，不接默认 backend
+  调度，不把 `translation-plan` 写成长期 debug snapshot schema。
+- `Slice F` 只做 host-smoke-only functional fallback replay 等价性，不把 fallback
+  replay 接成 runtime 调度器，不执行 prototype helper。
 - 不启动 multicore、coherence、memory consistency 新模型、write-back cache、I-cache 或
   cache maintenance instruction。
 - 不把 AI accelerator 后续专项并入 `Wave 6`。
@@ -86,8 +92,10 @@ cache，不改变 guest 可见语义。
 
 这些条件已经支撑 `Wave 6 Slice A` 完成证据收集和候选区间合同，支撑
 `Slice B` 在文档层固定 translation contract，也支撑 `Slice C` 以显式 host smoke
-形式落地一个 interpreter-assisted prototype，并支撑 `Slice D` 对 prototype 的
-preflight / lifecycle guardrail 做窄扩展。后续 JIT engine、host code emission、长期
+形式落地一个 interpreter-assisted prototype，支撑 `Slice D` 对 prototype 的
+preflight / lifecycle guardrail 做窄扩展，并支撑 `Slice E` 把 top hot-path candidate
+接到 opt-in dry-run translation plan，支撑 `Slice F` 证明 first-boundary fallback
+可以从 block start 回到 functional reference。后续 JIT engine、host code emission、长期
 block cache 或 multicore / coherence 仍需要新的设计和计划。
 
 ## 方案
@@ -353,14 +361,100 @@ cache。它不持久化 plan，不做 invalidation，不执行 helper，不生�
   invalidation matrix implementation、IR、translation cache、host code emission 或
   executable memory policy。
 
+### Slice E：translation plan dry-run / opt-in harness
+
+`Slice E` 只回答“当前 profile top candidate 如果交给 prototype preflight，会得到什么
+plan 结果”。它仍不执行 prototype，也不进入默认 backend 调度。
+
+新增合同：
+
+- `plan_interpreter_dbt_prototype_hot_path()` 复用 `Slice A` 的候选排序口径：
+  `executions -> retired_instructions -> start_pc -> end_pc`。
+- 没有 hot path、重复次数不足或 retired 计数为空时，返回
+  `no-hot-paths` / `insufficient-repetition` / `empty-hot-path`，不触发 block
+  preflight。
+- 有足够候选证据时，只把候选区间交给 `plan_interpreter_dbt_prototype_block()` 做
+  dry-run preflight；返回 `inlineable`、`helper-required` 或 `fallback-required`
+  观察结果。
+- debug CLI 新增 opt-in `translation_plan` command，`run_debug_cli_probe.py` 只有在
+  显式传入 `--translation-plan` 时才发出该 command 并输出 `translation-plan:`
+  文本摘要。
+
+这个 dry-run command 是 probe / debug harness 的观察合同，不是 guest ABI，也不是
+长期 debug snapshot schema。它不会执行候选块，不提交 CPU state，不推进 PC、`instret`
+或 `cycle`。
+
+### Slice E 收口结果
+
+当前 `Slice E / translation plan dry-run` 已完成，结果归档见
+[../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan)。
+本轮结论是：
+
+- top hot-path candidate 现在可以通过 `plan_interpreter_dbt_prototype_hot_path()`
+  进入 Slice D preflight，排序口径继续复用 `Slice A`。
+- `run_debug_cli_probe.py --translation-plan` 可显式输出
+  `translation-plan: none / inlineable / fallback` 摘要；默认 probe 不新增该行。
+- 真实 flat probe 已覆盖 `addi + lw + loop` 这类 first memory boundary，dry-run
+  会报告 `helper-required`，且不提交前缀状态。
+- 默认 `make test` / `make test-pipeline` 仍不会启用 JIT / DBT 执行路径。
+
+仍延期到后续切片的缺口：
+
+- 仍未执行 memory / CSR / trap / vector helper，也未做 fallback replay。
+- 仍没有 persistent block lifecycle、invalidation matrix implementation、IR、
+  translation cache、host code emission 或 executable memory policy。
+- `translation-plan:` 当前只是 opt-in probe 文本和 debug-cli response，不是长期
+  debug snapshot ABI。
+
+### Slice F：functional fallback replay equivalence
+
+`Slice F` 只回答“preflight 拒绝候选块之后，是否能从 block start 回到 functional
+reference，把 inlineable prefix 和 first boundary 一起提交到等价状态”。它不是 helper
+内联，也不是 runtime JIT harness。
+
+新增合同：
+
+- `run_interpreter_dbt_prototype_with_functional_fallback()` 是显式 host smoke helper。
+- preflight 成功时继续复用 `run_interpreter_dbt_prototype_block()`，并报告
+  `used_fallback=false`。
+- preflight 失败时，不允许先提交 prototype 前缀；helper 会从当前 block start 创建
+  `FunctionalBackend`，执行 `inlineable_instructions + 1` 步，即执行到 first
+  helper / fallback boundary。
+- replay 结果报告 `used_fallback=true`、first fallback PC 和 fallback reason。
+
+这个 helper 只证明 fallback replay 的状态等价性，不创建长期 block lifecycle，不持久化
+translation plan，不做 invalidation，不生成 host code。
+
+### Slice F 收口结果
+
+当前 `Slice F / fallback equivalence` 已完成，结果归档见
+[../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan)。
+本轮结论是：
+
+- pure inlineable block 仍走 prototype path，`used_fallback=false`。
+- `addi + lw` 这类 helper-required boundary 会用 functional fallback replay 从 block
+  start 执行到 first boundary，并与直接 functional reference 的 GPR / PC /
+  `instret` / `cycle` 结果等价。
+- `addi + jal` 这类 control-flow boundary 会用 functional fallback replay 从 block
+  start 执行到 first boundary，并与直接 functional reference 的 GPR / PC /
+  `instret` / `cycle` 结果等价。
+- 默认 `make test` / `make test-pipeline` 仍不会启用 JIT / DBT 执行路径。
+
+仍延期到后续切片的缺口：
+
+- 仍未在 prototype 内执行 memory / CSR / trap / vector helper。
+- fallback replay 仍只是 host-smoke-only helper，不是 workload runtime 调度器。
+- 仍没有 persistent block lifecycle、invalidation matrix implementation、IR、
+  translation cache、host code emission 或 executable memory policy。
+
 ### 后续切片候选
 
-后续只有在 `Slice A / B / C / D` 给出稳定证据、contract、最小 prototype 和 preflight
-guardrail 后，才允许继续拆分：
+后续只有在 `Slice A / B / C / D / E / F` 给出稳定证据、contract、最小 prototype、
+preflight guardrail、dry-run 观察和 fallback replay 等价性后，才允许继续拆分：
 
-- `Slice E / prototype helper-equivalence or opt-in harness`
-  - 只允许继续补 helper/fallback 等价性、preflight 兼容的 workload-level opt-in harness
-    或更窄 block lifecycle 观察；仍不得直接进入 host code emission 或长期 block cache。
+- `Slice G / block lifecycle observation or helper boundary taxonomy`
+  - 只允许继续补更窄 block lifecycle 观察、helper boundary 分类或 workload-level
+    opt-in 观测；仍不得直接进入 host code emission 或长期 block cache。
 - `multicore / coherence readiness`
   - 必须另开设计，先补 atomic、memory-order、DMA / cache 交界和 verification matrix。
 
@@ -400,6 +494,22 @@ guardrail 后，才允许继续拆分：
 - `make test`
 - `make test-pipeline`
 
+`Slice E` 的验证重点是“translation plan 只做 opt-in dry-run，默认 probe 不新增输出”：
+
+- `make test-host-interpreter_dbt_prototype_smoke`
+- `make test-host-run_debug_cli_probe`
+- `make test-host-debug_cli_smoke`
+- `make test`
+- `make test-pipeline`
+
+`Slice F` 的验证重点是“fallback replay 只在显式 host smoke helper 中发生，默认路径仍不启用 JIT / DBT”：
+
+- `make test-host-interpreter_dbt_prototype_smoke`
+- `make test-host-run_debug_cli_probe`
+- `make test-host-debug_cli_smoke`
+- `make test`
+- `make test-pipeline`
+
 ## 风险与取舍
 
 - 第一刀只做 evidence，看起来不像“真正 JIT”；但这能防止在没有热点证据和回退合同前过早引入执行语义分叉。
@@ -411,15 +521,24 @@ guardrail 后，才允许继续拆分：
 - `Slice D` 继续保持很窄：它只增加 preflight / lifecycle guardrail，并主动拒绝含
   helper 或 control-flow 边界的候选块；这会让 prototype 短期看起来更保守，但能避免
   在没有 precise replay 和 block stitching 前提交错误前缀状态。
+- `Slice E` 只把 hot-path candidate 与 preflight 接成 dry-run 观察。它可以让后续
+  更早看见真实 workload 的 first boundary 分布，但仍不能被理解为 runtime JIT
+  harness 或 block cache。
+- `Slice F` 只证明 fallback replay 可以从 block start 回到 functional reference 并到达
+  first boundary；它仍不代表 prototype 已经具备 memory helper、branch stitching 或
+  runtime fallback 调度能力。
 - multicore / coherence 与 JIT 同属 `Wave 6`，但不应同刀启动；它需要更重的 memory-order 和 DMA / cache 交界验证。
 
 ## 当前有效性说明
 
 - 当前有效：本文档作为主线 `Wave 6 / JIT / DBT` 首轮 readiness、Slice A 观察合同
-  与 Slice B / C / D 设计入口。
+  与 Slice B / C / D / E / F 设计入口。
 - `Slice A / JIT DBT hot-path evidence`、`Slice B / translation contract design` 与
   `Slice C / observation + interpreter-assisted DBT prototype`、`Slice D / prototype
-  guardrail expansion` 均已完成并归档；当前暂无主线活跃计划。
+  guardrail expansion`、`Slice E / translation plan dry-run`、`Slice F / fallback
+  equivalence` 均已完成并归档；当前暂无主线活跃计划。
 - `Wave 6` 已激活，但当前只完成候选观察合同、translation contract、host-smoke-only
-  prototype 与 preflight guardrail；JIT engine、host code emission、长期 block cache、multicore /
+  prototype、preflight guardrail、opt-in dry-run translation plan 与 host-smoke-only
+  fallback replay 等价性；JIT engine、
+  host code emission、长期 block cache、multicore /
   coherence、write-back cache、I-cache 和 cache maintenance instruction 仍未启动。

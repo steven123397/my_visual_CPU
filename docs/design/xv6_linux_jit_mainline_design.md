@@ -15,6 +15,8 @@
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
@@ -158,6 +160,12 @@
   [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)。
   `prototype guardrail expansion` 已归档到
   [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)。
+  `translation plan dry-run` 已归档到
+  [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan)。
+  `fallback equivalence` 已归档到
+  [../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan)。
   这几刀只固定候选观察合同、helper / fallback 设计边界和 host-smoke-only prototype；
-  当前新增的 preflight guardrail 也只证明候选块执行前会整体拒绝 helper / control-flow
-  边界，不实现 host code emission、长期 block cache 或改变 guest 可见语义。
+  当前新增的 preflight guardrail、opt-in translation-plan dry-run 和 fallback replay
+  等价性也只证明候选块执行前会整体拒绝 helper / control-flow 边界，能报告 top
+  candidate 的 first boundary，并能从 block start 回到 functional reference 执行到
+  first boundary；不实现 host code emission、长期 block cache 或改变 guest 可见语义。

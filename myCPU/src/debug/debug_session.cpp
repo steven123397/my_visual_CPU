@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "../arch/csr_file.h"
+#include "../exec/interpreter_dbt_prototype.h"
 
 namespace {
 
@@ -215,6 +216,30 @@ DebugSession::UartOutputChunk DebugSession::uart_output(size_t offset) const {
         .offset = start,
         .next_offset = output.size(),
         .text = output.substr(start),
+    };
+}
+
+DebugSession::TranslationPlanSnapshot DebugSession::translation_plan() {
+    ensure_loaded();
+    const BackendDebugSnapshot backend_snapshot = machine().backend().debug_snapshot();
+    const InterpreterDbtPrototypePlan plan =
+        plan_interpreter_dbt_prototype_hot_path(machine().cpu(),
+                                               machine().bus(),
+                                               backend_snapshot.profile);
+
+    const bool none = plan.fallback_reason == "no-hot-paths" ||
+                      plan.fallback_reason == "insufficient-repetition" ||
+                      plan.fallback_reason == "empty-hot-path";
+    return TranslationPlanSnapshot{
+        .candidate = !none,
+        .inlineable = plan.ok,
+        .start_pc = plan.start_pc,
+        .end_pc = plan.end_pc,
+        .executions = plan.candidate_executions,
+        .retired_instructions = plan.candidate_retired_instructions,
+        .inlineable_instructions = plan.inlineable_instructions,
+        .fallback_pc = plan.fallback_pc,
+        .reason = plan.fallback_reason,
     };
 }
 

@@ -146,7 +146,7 @@
   -> Wave 3：已收口的 Linux 更后 userland checkpoint + observation/pipeline gap 判断
   -> Wave 4：已完成，AI accelerator 下一轮扩展 + 向量/observation 继续深化
   -> Wave 5：已完成首轮收口，cache / memory-system 第一刀（以 workload 证据触发）
-  -> Wave 6：当前 active wave，JIT / DBT hot-path evidence、translation contract、opt-in prototype 与 preflight guardrail
+  -> Wave 6：当前 active wave，JIT / DBT hot-path evidence、translation contract、opt-in prototype、preflight guardrail、translation-plan dry-run 与 fallback replay 等价性
   -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
 ```
 
@@ -379,8 +379,8 @@ Wave 7 的完成定义：
 
 - 当前已进入主线 `Wave 6`。
 - `JIT / DBT hot-path evidence`、`translation contract design` 与最小 opt-in
-  prototype、preflight guardrail 已完成，为未来 helper/fallback 等价性和 block
-  lifecycle 观察提供入口；multicore / coherence 仍等待 atomic、memory-order、
+  prototype、preflight guardrail、translation-plan dry-run、fallback replay 等价性已完成，
+  为未来 helper boundary 分类和 block lifecycle 观察提供入口；multicore / coherence 仍等待 atomic、memory-order、
   DMA / cache 交界和验证矩阵另行收口。
 
 ### G：产品化展示 / 在线调试平台 / 部署
@@ -396,7 +396,8 @@ Wave 7 的完成定义：
 - AI accelerator 被纳入主线后，不代表它立刻变成近端 blocker；它当前仍应服从 Linux 波次让路。
 - `cache / JIT / multicore` 都已被明确排期；当前 `Wave 6` 只完成 JIT / DBT
   evidence、translation contract、host-smoke-only prototype 与 preflight guardrail，
-  不代表 JIT engine 或 multicore / coherence 已经可以直接实现。
+  以及 opt-in translation-plan dry-run 和 host-smoke-only fallback replay 等价性，不代表
+  JIT engine 或 multicore / coherence 已经可以直接实现。
 - Wave 7 如果过早启动，容易把尚未稳定的工程能力包装成产品界面；因此必须先收口已完成功能展示和 session / 安全边界，再把部署服务器作为最后一步。
 
 ## 当前有效性说明

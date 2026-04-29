@@ -57,6 +57,11 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="enable the opt-in L1 data cache model for this probe",
     )
+    parser.add_argument(
+        "--translation-plan",
+        action="store_true",
+        help="emit an opt-in dry-run translation plan for the top hot path candidate",
+    )
     parser.add_argument("--flat", action="store_true")
     parser.add_argument(
         "--addr",
@@ -127,6 +132,9 @@ def build_commands(args):
         commands.extend(args.probe_actions)
     else:
         commands.append({"cmd": "step_cycle", "count": args.step_cycles})
+
+    if args.translation_plan:
+        commands.append({"cmd": "translation_plan"})
 
     commands.extend(
         [
@@ -327,6 +335,29 @@ def emit_translation_candidate_summary(profile) -> None:
     )
 
 
+def emit_translation_plan_summary(plan) -> None:
+    if not plan:
+        print("translation-plan:", "none reason=missing-translation-plan")
+        return
+
+    status = plan.get("status", "none")
+    if status == "none":
+        print("translation-plan:", f"none reason={plan.get('reason', 'unknown')}")
+        return
+
+    fields = [
+        f"start={profile_hex(plan.get('start_pc', '0x0'))}",
+        f"end={profile_hex(plan.get('end_pc', '0x0'))}",
+        f"executions={profile_int(plan.get('executions', 0))}",
+        f"retired={profile_int(plan.get('retired_instructions', 0))}",
+        f"inlineable={profile_int(plan.get('inlineable_instructions', 0))}",
+    ]
+    if status == "fallback":
+        fields.append(f"fallback_pc={profile_hex(plan.get('fallback_pc', '0x0'))}")
+        fields.append(f"reason={plan.get('reason', 'unknown')}")
+    print("translation-plan:", status, *fields)
+
+
 def emit_l1d_cache_summary(snapshot) -> None:
     cache = snapshot.get("l1_data_cache", {})
     if not cache or not cache.get("enabled", False):
@@ -363,6 +394,10 @@ def emit_payload_summary(args) -> None:
 
 def emit_probe_summary(args, lines) -> int:
     snapshot = next((line for line in reversed(lines) if line.get("type") == "snapshot"), None)
+    translation_plan = next(
+        (line for line in reversed(lines) if line.get("type") == "translation_plan"),
+        None,
+    )
     uart = next((line for line in reversed(lines) if line.get("type") == "uart_output"), None)
     if snapshot is None:
         sys.stderr.write("debug-cli probe did not return a snapshot\n")
@@ -396,6 +431,8 @@ def emit_probe_summary(args, lines) -> int:
         f"satp={csrs['satp']}",
     )
     emit_top_profile_entries(snapshot.get("profile", {}))
+    if args.translation_plan:
+        emit_translation_plan_summary(translation_plan)
     emit_l1d_cache_summary(snapshot)
     uart_snapshot = snapshot.get("devices", {}).get("uart", {})
     print(

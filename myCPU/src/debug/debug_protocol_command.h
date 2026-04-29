@@ -18,6 +18,7 @@ enum class DebugCliCommandKind {
     Reset,
     UartInput,
     UartOutput,
+    TranslationPlan,
     Quit,
 };
 

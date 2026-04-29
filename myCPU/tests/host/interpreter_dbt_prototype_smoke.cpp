@@ -2,6 +2,7 @@
 #include <cstdio>
 
 #include "../../src/cpu.h"
+#include "../../src/exec/execution_profile.h"
 #include "../../src/exec/functional_backend.h"
 #include "../../src/exec/interpreter_dbt_prototype.h"
 #include "../../src/mem/bus.h"
@@ -14,7 +15,10 @@ constexpr uint32_t kAddiX1One = 0x00100093U;      // addi x1, x0, 1
 constexpr uint32_t kAddiX2X1Two = 0x00208113U;    // addi x2, x1, 2
 constexpr uint32_t kAddX3X1X2 = 0x002081b3U;      // add x3, x1, x2
 constexpr uint32_t kLwX1FromX0 = 0x00002083U;     // lw x1, 0(x0)
+constexpr uint32_t kLwX2FromX4 = 0x00022103U;     // lw x2, 0(x4)
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;     // jal x0, 8
+constexpr uint64_t kData = MEM_BASE + 0x100;
+constexpr uint32_t kDataWord = 0x11223344U;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -187,6 +191,228 @@ bool test_control_flow_boundary_block_is_rejected_before_prefix_commit() {
                   "interpreter DBT prototype should keep cycle unchanged after control-flow rejection");
 }
 
+bool test_hot_path_candidate_plan_uses_profile_ranking() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    write32(ram, kEntry + 0, kAddiX1One);
+    write32(ram, kEntry + 4, kAddiX2X1Two);
+    write32(ram, kEntry + 8, kAddX3X1X2);
+
+    ExecutionProfileSnapshot profile;
+    profile.hot_paths = {
+        ExecutionHotPathEntry{
+            .start_pc = kEntry + 0x40,
+            .end_pc = kEntry + 0x44,
+            .executions = 1,
+            .retired_instructions = 200,
+        },
+        ExecutionHotPathEntry{
+            .start_pc = kEntry,
+            .end_pc = kEntry + 8,
+            .executions = 3,
+            .retired_instructions = 9,
+        },
+    };
+
+    const InterpreterDbtPrototypePlan plan =
+        plan_interpreter_dbt_prototype_hot_path(cpu, bus, profile);
+
+    return expect(plan.ok, "hot path prototype plan should select the repeated candidate") &&
+           expect(plan.start_pc == kEntry,
+                  "hot path prototype plan should use the ranked candidate start PC") &&
+           expect(plan.end_pc == kEntry + 8,
+                  "hot path prototype plan should use the ranked candidate end PC") &&
+           expect(plan.inlineable_instructions == 3,
+                  "hot path prototype plan should preflight the ranked candidate");
+}
+
+bool test_hot_path_candidate_without_repetition_reports_none() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    ExecutionProfileSnapshot profile;
+    profile.hot_paths = {
+        ExecutionHotPathEntry{
+            .start_pc = kEntry,
+            .end_pc = kEntry + 8,
+            .executions = 1,
+            .retired_instructions = 3,
+        },
+    };
+
+    const InterpreterDbtPrototypePlan plan =
+        plan_interpreter_dbt_prototype_hot_path(cpu, bus, profile);
+
+    return expect(!plan.ok, "hot path prototype plan should reject one-off paths") &&
+           expect(plan.start_pc == kEntry,
+                  "hot path prototype plan should preserve the rejected candidate start PC") &&
+           expect(plan.end_pc == kEntry + 8,
+                  "hot path prototype plan should preserve the rejected candidate end PC") &&
+           expect(plan.inlineable_instructions == 0,
+                  "hot path prototype plan should not preflight one-off paths") &&
+           expect(plan.fallback_reason == "insufficient-repetition",
+                  "hot path prototype plan should report insufficient repetition");
+}
+
+bool test_hot_path_candidate_helper_boundary_does_not_commit_prefix() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    write32(ram, kEntry + 0, kAddiX1One);
+    write32(ram, kEntry + 4, kLwX1FromX0);
+
+    ExecutionProfileSnapshot profile;
+    profile.hot_paths = {
+        ExecutionHotPathEntry{
+            .start_pc = kEntry,
+            .end_pc = kEntry + 4,
+            .executions = 4,
+            .retired_instructions = 8,
+        },
+    };
+
+    const InterpreterDbtPrototypePlan plan =
+        plan_interpreter_dbt_prototype_hot_path(cpu, bus, profile);
+
+    return expect(!plan.ok, "hot path prototype plan should reject helper boundary") &&
+           expect(plan.inlineable_instructions == 1,
+                  "hot path prototype plan should report inlineable prefix before helper boundary") &&
+           expect(plan.fallback_pc == kEntry + 4,
+                  "hot path prototype plan should report first helper boundary PC") &&
+           expect(plan.fallback_reason == "helper-required",
+                  "hot path prototype plan should report helper-required boundary") &&
+           expect(cpu.core().read_gpr(1) == 0,
+                  "hot path prototype plan should not commit inlineable prefix") &&
+           expect(cpu.core().pc() == kEntry,
+                  "hot path prototype plan should not advance PC") &&
+           expect(cpu.core().instret() == 0,
+                  "hot path prototype plan should not advance instret") &&
+           expect(cpu.core().cycle() == 0,
+                  "hot path prototype plan should not advance cycles");
+}
+
+bool test_inline_block_uses_prototype_without_functional_fallback() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    write32(ram, kEntry + 0, kAddiX1One);
+    write32(ram, kEntry + 4, kAddiX2X1Two);
+    write32(ram, kEntry + 8, kAddX3X1X2);
+
+    const InterpreterDbtPrototypeResult result =
+        run_interpreter_dbt_prototype_with_functional_fallback(cpu, bus, kEntry, kEntry + 8);
+
+    return expect(result.ok, "inlineable fallback wrapper should complete") &&
+           expect(!result.used_fallback,
+                  "inlineable fallback wrapper should stay on prototype path") &&
+           expect(result.retired_instructions == 3,
+                  "inlineable fallback wrapper should retire full block") &&
+           expect(result.fallback_reason.empty(),
+                  "inlineable fallback wrapper should not report fallback reason") &&
+           expect(cpu.core().read_gpr(3) == 4,
+                  "inlineable fallback wrapper should execute prototype effects");
+}
+
+bool test_helper_boundary_replays_from_functional_fallback() {
+    Ram reference_ram;
+    Bus reference_bus(reference_ram);
+    CPU reference_cpu;
+    cpu_init(reference_cpu, kEntry);
+    reference_cpu.core().write_gpr(4, kData);
+    write32(reference_ram, kEntry + 0, kAddiX1One);
+    write32(reference_ram, kEntry + 4, kLwX2FromX4);
+    write32(reference_ram, kData, kDataWord);
+
+    Ram fallback_ram;
+    Bus fallback_bus(fallback_ram);
+    CPU fallback_cpu;
+    cpu_init(fallback_cpu, kEntry);
+    fallback_cpu.core().write_gpr(4, kData);
+    write32(fallback_ram, kEntry + 0, kAddiX1One);
+    write32(fallback_ram, kEntry + 4, kLwX2FromX4);
+    write32(fallback_ram, kData, kDataWord);
+
+    FunctionalBackend reference(reference_cpu, reference_bus);
+    reference.step();
+    reference.step();
+
+    const InterpreterDbtPrototypeResult result =
+        run_interpreter_dbt_prototype_with_functional_fallback(fallback_cpu,
+                                                              fallback_bus,
+                                                              kEntry,
+                                                              kEntry + 4);
+
+    return expect(result.ok, "helper boundary fallback replay should complete") &&
+           expect(result.used_fallback,
+                  "helper boundary fallback replay should use functional fallback") &&
+           expect(result.retired_instructions == 2,
+                  "helper boundary fallback replay should execute prefix and boundary") &&
+           expect(result.fallback_pc == kEntry + 4,
+                  "helper boundary fallback replay should report first boundary PC") &&
+           expect(result.fallback_reason == "helper-required",
+                  "helper boundary fallback replay should preserve helper reason") &&
+           expect(fallback_cpu.core().read_gpr(1) == reference_cpu.core().read_gpr(1),
+                  "helper boundary fallback replay should match functional prefix result") &&
+           expect(fallback_cpu.core().read_gpr(2) == reference_cpu.core().read_gpr(2),
+                  "helper boundary fallback replay should match functional load result") &&
+           expect(fallback_cpu.core().pc() == reference_cpu.core().pc(),
+                  "helper boundary fallback replay should match functional PC") &&
+           expect(fallback_cpu.core().instret() == reference_cpu.core().instret(),
+                  "helper boundary fallback replay should match functional instret") &&
+           expect(fallback_cpu.core().cycle() == reference_cpu.core().cycle(),
+                  "helper boundary fallback replay should match functional cycle");
+}
+
+bool test_control_flow_boundary_replays_from_functional_fallback() {
+    Ram reference_ram;
+    Bus reference_bus(reference_ram);
+    CPU reference_cpu;
+    cpu_init(reference_cpu, kEntry);
+    write32(reference_ram, kEntry + 0, kAddiX1One);
+    write32(reference_ram, kEntry + 4, kJalX0Skip8);
+
+    Ram fallback_ram;
+    Bus fallback_bus(fallback_ram);
+    CPU fallback_cpu;
+    cpu_init(fallback_cpu, kEntry);
+    write32(fallback_ram, kEntry + 0, kAddiX1One);
+    write32(fallback_ram, kEntry + 4, kJalX0Skip8);
+
+    FunctionalBackend reference(reference_cpu, reference_bus);
+    reference.step();
+    reference.step();
+
+    const InterpreterDbtPrototypeResult result =
+        run_interpreter_dbt_prototype_with_functional_fallback(fallback_cpu,
+                                                              fallback_bus,
+                                                              kEntry,
+                                                              kEntry + 4);
+
+    return expect(result.ok, "control-flow fallback replay should complete") &&
+           expect(result.used_fallback,
+                  "control-flow fallback replay should use functional fallback") &&
+           expect(result.retired_instructions == 2,
+                  "control-flow fallback replay should execute prefix and boundary") &&
+           expect(result.fallback_pc == kEntry + 4,
+                  "control-flow fallback replay should report first boundary PC") &&
+           expect(result.fallback_reason == "fallback-required",
+                  "control-flow fallback replay should preserve fallback reason") &&
+           expect(fallback_cpu.core().read_gpr(1) == reference_cpu.core().read_gpr(1),
+                  "control-flow fallback replay should match functional prefix result") &&
+           expect(fallback_cpu.core().pc() == reference_cpu.core().pc(),
+                  "control-flow fallback replay should match functional redirected PC") &&
+           expect(fallback_cpu.core().instret() == reference_cpu.core().instret(),
+                  "control-flow fallback replay should match functional instret") &&
+           expect(fallback_cpu.core().cycle() == reference_cpu.core().cycle(),
+                  "control-flow fallback replay should match functional cycle");
+}
+
 }  // namespace
 
 int main() {
@@ -200,6 +426,24 @@ int main() {
         return 1;
     }
     if (!test_control_flow_boundary_block_is_rejected_before_prefix_commit()) {
+        return 1;
+    }
+    if (!test_hot_path_candidate_plan_uses_profile_ranking()) {
+        return 1;
+    }
+    if (!test_hot_path_candidate_without_repetition_reports_none()) {
+        return 1;
+    }
+    if (!test_hot_path_candidate_helper_boundary_does_not_commit_prefix()) {
+        return 1;
+    }
+    if (!test_inline_block_uses_prototype_without_functional_fallback()) {
+        return 1;
+    }
+    if (!test_helper_boundary_replays_from_functional_fallback()) {
+        return 1;
+    }
+    if (!test_control_flow_boundary_replays_from_functional_fallback()) {
         return 1;
     }
     std::puts("interpreter_dbt_prototype_smoke: PASS");

@@ -31,6 +31,8 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 6` 下一刀前先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
@@ -80,7 +82,14 @@ pure straight-line inlineable block，并把 memory / CSR / trap / atomic / vect
 control-flow 统一 fallback。`Slice D / prototype guardrail expansion` 已完成：
 prototype 新增 block preflight / lifecycle guardrail，候选块必须先整体证明为
 inlineable 才会执行；含 helper-required 或 control-flow boundary 的 block 会在执行前
-整体拒绝，不提交前缀指令。
+整体拒绝，不提交前缀指令。`Slice E / translation plan dry-run` 已完成：
+top hot-path candidate 可显式交给 preflight 做 dry-run，probe 只有在
+`--translation-plan` opt-in 时输出 `translation-plan:` 摘要；默认执行路径仍不启用
+JIT / DBT，也不执行 prototype。`Slice F / fallback equivalence` 已完成：
+`run_interpreter_dbt_prototype_with_functional_fallback()` 在 preflight 成功时仍走
+prototype path；遇到 helper-required 或 control-flow boundary 时，从 block start
+回到 `FunctionalBackend` replay 到 first boundary，并用 host smoke 证明与直接
+functional reference 的 GPR / PC / `instret` / `cycle` 结果等价。
 
 ## 当前状态
 
@@ -166,14 +175,24 @@ inlineable 才会执行；含 helper-required 或 control-flow boundary 的 bloc
   `interpreter_dbt_prototype` 新增 `InterpreterDbtPrototypePlan` 和 preflight API；
   `run_interpreter_dbt_prototype_block()` 会先整体检查候选块，helper-required 或
   control-flow boundary 会在执行前拒绝整块，且不提交前缀指令。当前没有主线活跃计划。
+- 主线 `Wave 6` 的 `Slice E / translation plan dry-run` 已完成：
+  `plan_interpreter_dbt_prototype_hot_path()` 复用 `Slice A` candidate 排序并接入
+  `Slice D` preflight；debug CLI / probe 新增显式 opt-in 的 `translation-plan:`
+  文本摘要，默认 probe 不新增该行，也不执行 prototype。当前没有主线活跃计划。
+- 主线 `Wave 6` 的 `Slice F / fallback equivalence` 已完成：
+  `run_interpreter_dbt_prototype_with_functional_fallback()` 在纯 inlineable block 上仍走
+  prototype path，不使用 fallback；helper-required 或 control-flow boundary 会显式回到
+  `FunctionalBackend` 从 block start replay 到 first boundary，并与直接 functional
+  reference 对齐 GPR / PC / `instret` / `cycle`。当前没有主线活跃计划。
 
 ## 当前优先级
 
 1. 当前 `Wave 6` 已激活，`Slice A / JIT DBT hot-path evidence`、`Slice B /
    translation contract design`、`Slice C / observation + interpreter-assisted
-   DBT prototype` 与 `Slice D / prototype guardrail expansion` 均已完成并归档；继续推进
-   下一刀前先新建活跃计划，不得直接进入 host code emission、长期 block cache、
-   multicore、coherence 或新的 memory consistency 模型。
+   DBT prototype`、`Slice D / prototype guardrail expansion`、`Slice E /
+   translation plan dry-run` 与 `Slice F / fallback equivalence` 均已完成并归档；继续推进下一刀前先新建活跃计划，不得直接进入
+   host code emission、长期 block cache、multicore、coherence 或新的 memory
+   consistency 模型。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
@@ -188,6 +207,25 @@ inlineable 才会执行；含 helper-required 或 control-flow boundary 的 bloc
    cache / DMA / multicore / coherence 或 JIT engine 都必须另开设计/计划并补足验证。
 
 ## 关键历史节点
+
+- `2026-04-30`
+  - 完成主线 `Wave 6` `Slice F / fallback equivalence` 并归档：
+    [../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan)。
+    这一刀新增显式 host-smoke-only helper：
+    `run_interpreter_dbt_prototype_with_functional_fallback()`。preflight 成功的纯
+    inlineable block 仍走 prototype path；遇到 `addi + lw` 这类 helper-required
+    boundary 或 `addi + jal` 这类 control-flow boundary 时，从 block start 回到
+    `FunctionalBackend` replay 到 first boundary，并与直接 functional reference 的
+    GPR / PC / `instret` / `cycle` 对齐。默认执行路径仍不启用 JIT / DBT、不执行
+    prototype、不生成 host code、不创建 block cache。
+  - 完成主线 `Wave 6` `Slice E / translation plan dry-run` 并归档：
+    [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan)。
+    这一刀把 `ExecutionProfile.hot_paths` 的 top candidate 与 Slice D preflight 接起来：
+    `plan_interpreter_dbt_prototype_hot_path()` 复用 `executions -> retired_instructions ->
+    start_pc -> end_pc` 排序；debug CLI / probe 只有在显式 `--translation-plan` 时才输出
+    `translation-plan: none / inlineable / fallback` 摘要。真实 flat probe 已覆盖 first
+    memory boundary 报 `helper-required` 的 dry-run 合同；默认执行路径仍不启用 JIT /
+    DBT、不执行 prototype、不生成 host code。
 
 - `2026-04-29`
   - `Wave 3` 按当前真实实现收口：Linux checkpoint 线冻结到
@@ -328,16 +366,18 @@ inlineable 才会执行；含 helper-required 或 control-flow boundary 的 bloc
   只落地默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，
   显式 opt-in 的 L1D debug/probe 观察面、frontend 只读展示，以及若干 L1D 边界和
   lifecycle hardening 合同。
-- `Wave 6` `Slice A / B / C / D` 只固定了 probe 级 hot-path / translation candidate
+- `Wave 6` `Slice A / B / C / D / E / F` 只固定了 probe 级 hot-path / translation candidate
   观察合同、文档级 translation contract、窄 per-PC / branch-target 观察合同、
-  host-smoke-only interpreter-assisted prototype，以及 prototype preflight guardrail；
+  host-smoke-only interpreter-assisted prototype、prototype preflight guardrail，以及
+  opt-in `translation-plan` dry-run 和 host-smoke-only fallback replay 等价性；
   这不是完整 JIT / DBT engine。当前仍不生成宿主代码，不引入长期 block cache，不改变
   guest 可见语义。
 - 当前 `pc_costs.cycles` 只是 retire-side 观察成本，不是稳定性能模型或 benchmark
   结论。`interpreter_dbt_prototype` 仍只覆盖 pure straight-line inlineable block；
   memory、CSR、trap、atomic、vector、control-flow、system boundary 都还是 helper /
-  fallback；当前已有 preflight 拒绝整块的 lifecycle guardrail，但尚未有 helper replay、
-  fallback replay、persistent block lifecycle 或 workload-level opt-in runtime。
+  fallback；当前已有 preflight 拒绝整块的 lifecycle guardrail、opt-in translation-plan
+  观察和 host-smoke-only functional fallback replay，但尚未有 helper replay、
+  persistent block lifecycle 或 workload-level runtime execution harness。
 - multicore / coherence 虽然属于 `Wave 6` 长期目标，但当前仍未启动；它必须等待
   atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
@@ -351,10 +391,10 @@ inlineable 才会执行；含 helper-required 或 control-flow boundary 的 bloc
 1. 当前暂无主线活跃计划；继续推进 `Wave 6` 下一刀前，先基于
    [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
    新建 `docs/plan/` 计划。
-2. 如果下一刀继续推进 `Wave 6`，优先补 `Slice E / prototype helper-equivalence or
-   opt-in harness` 活跃计划，只允许扩 helper/fallback 等价性、preflight 兼容的
-   workload-level opt-in harness 或更窄 block lifecycle 观察；不得直接进入 host code
-   emission 或长期 block cache。
+2. 如果下一刀继续推进 `Wave 6`，优先补 `Slice G / block lifecycle observation or
+   helper boundary taxonomy` 活跃计划，只允许扩更窄 block lifecycle 观察、helper/fallback
+   边界分类或 preflight 兼容的 workload-level opt-in harness；不得直接进入
+   host code emission 或长期 block cache。
 3. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
    如需调整排序或字段，必须先补 probe / host smoke 兼容门禁。
 4. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux

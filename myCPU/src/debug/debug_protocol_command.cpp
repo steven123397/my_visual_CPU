@@ -365,6 +365,10 @@ DebugCliCommand parse_debug_cli_command(const std::string& line) {
         parsed.offset = static_cast<size_t>(try_extract_u64(object, "offset", 0));
         return parsed;
     }
+    if (command == "translation_plan") {
+        parsed.kind = DebugCliCommandKind::TranslationPlan;
+        return parsed;
+    }
     if (command == "quit") {
         parsed.kind = DebugCliCommandKind::Quit;
         return parsed;

@@ -129,6 +129,11 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                     << '\n';
                 continue;
             }
+            if (command.kind == DebugCliCommandKind::TranslationPlan) {
+                out << debug_protocol_translation_plan_json(session.translation_plan())
+                    << '\n';
+                continue;
+            }
             if (command.kind == DebugCliCommandKind::Quit) {
                 out << debug_protocol_ok_json("quit") << '\n';
                 return 0;
