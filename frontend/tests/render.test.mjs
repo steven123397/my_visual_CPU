@@ -1140,3 +1140,162 @@ test('renderApp preserves 64-bit vector lane precision in the register summary',
   assert.match(elements.vector.innerHTML, /2305843009213693953/);
   assert.doesNotMatch(elements.vector.innerHTML, /2305843009213694000/);
 });
+
+test('renderApp shows AI accelerator workload guide and aggregate counters', () => {
+  const state = createAppState();
+  state.runState = 'halted';
+  state.backend = 'pipeline';
+  state.loadedSession = {
+    test: 'guest_ai_accel_demo',
+    backend: 'pipeline',
+  };
+  state.tests = [
+    {
+      name: 'guest_ai_accel_demo',
+      menuLabel: 'guest_ai_accel_demo · AI accel MMIO',
+      kind: 'guest',
+      title: 'AI Accelerator Demo',
+      badge: 'AI Accelerator',
+      summary: '通过 MMIO 提交一个最小 graph package，并用 KMVAI 验证 guest 到设备的闭环。',
+      workload: {
+        stage: 'Wave 4',
+        expectedMarker: 'KMVAI',
+        ops: ['graph package', 'MMIO doorbell', 'DMA load/store', 'timed-simple profile'],
+        pipelineNote: '当前 frontend 只展示 debug snapshot 中的 aggregate counters；op summary 和真实 DMA overlap 后移到后续专项阶段。',
+        progress: [
+          ['Queue', '单 entry submission / completion queue'],
+          ['DMA', 'load/store bytes 来自 debug snapshot'],
+          ['Compute', 'timed-simple compute / stall attribution'],
+          ['Profile', '只读 aggregate counters'],
+        ],
+      },
+    },
+  ];
+  state.selectedTest = 'guest_ai_accel_demo';
+  state.terminal.connected = true;
+  state.layout.debugPanelOpen = true;
+  state.layout.platformGroupOpen = true;
+
+  pushSnapshot(state, {
+    summary: {
+      cycle: 128,
+      instret: 64,
+      pc: '0x80000120',
+      halted: true,
+      privilege: 'M',
+      backend: 'pipeline',
+    },
+    pipeline: {
+      if: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      id: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      ex: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      mem: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      wb: { valid: false, pc: '0x0', raw: '0x0', text: '' },
+      flags: {
+        stalled: false,
+        stall_reason: 'none',
+        redirected: false,
+        trap_flush: false,
+        replay_flush: false,
+        committed: true,
+      },
+      ooo: {
+        rob_depth: 0,
+        rob_head_sequence_id: 0,
+        lsq_depth: 0,
+        lsq_head_sequence_id: 0,
+        lsq_load_state: 'none',
+        lsq_load_sequence_id: 0,
+        lsq_store_sequence_id: 0,
+      },
+      predictor: {
+        mode: 'bimodal-2bit',
+        total_predictions: 0,
+        correct_predictions: 0,
+        mispredictions: 0,
+      },
+    },
+    gpr: Array.from({ length: 32 }, () => '0x0'),
+    csrs: {
+      mstatus: '0x0',
+      sstatus: '0x0',
+      mepc: '0x0',
+      sepc: '0x0',
+      mcause: '0x0',
+      scause: '0x0',
+      mie: '0x0',
+      mip: '0x0',
+      satp: '0x0',
+    },
+    devices: {
+      uart: { ier: 0, output_size: 5, recent_output: 'KMVAI' },
+      clint: { mtime: 128, mtimecmp: 0, timer_interrupt_pending: false },
+      plic: { pending: false, level: false },
+      storage: { attached: false, lba: 0 },
+      ai_accelerator: {
+        present: true,
+        queue_depth: 0,
+        doorbell_count: 1,
+        last_fault: 0,
+        completion_count: 1,
+        engine_busy: false,
+        scratchpad_occupancy_bytes: 0,
+        dma_load_bytes: 12,
+        dma_store_bytes: 4,
+        device_cycles: 8,
+        dma_cycles: 6,
+        compute_cycles: 1,
+        stall_cycles: 1,
+        busy_cycles: 10,
+        queue_cycles: 1,
+        completion_cycles: 1,
+        effective_ops_per_cycle: 3,
+        utilization: 10,
+      },
+    },
+    bus: {
+      valid: false,
+      success: true,
+      write: false,
+      mmio: false,
+      device: '',
+      addr: '0x0',
+      value: '0x0',
+      size: 0,
+      detail: '',
+    },
+    events: [],
+  });
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.workload.innerHTML, /AI Accelerator Demo/);
+  assert.match(elements.workload.innerHTML, /KMVAI/);
+  assert.match(elements.workload.innerHTML, /graph package/);
+  assert.match(elements.workload.innerHTML, /timed-simple profile/);
+  assert.match(elements.workload.innerHTML, /Queue/);
+  assert.match(elements.devices.innerHTML, /AI accelerator/);
+  assert.match(elements.devices.innerHTML, /<span>queue_depth<\/span><strong>0<\/strong>/);
+  assert.match(elements.devices.innerHTML, /<span>engine_busy<\/span><strong>idle<\/strong>/);
+  assert.match(elements.devices.innerHTML, /<span>dma_load_bytes<\/span><strong>12<\/strong>/);
+  assert.match(elements.devices.innerHTML, /<span>dma_store_bytes<\/span><strong>4<\/strong>/);
+  assert.match(elements.devices.innerHTML, /<span>compute_cycles<\/span><strong>1<\/strong>/);
+  assert.match(elements.devices.innerHTML, /<span>stall_cycles<\/span><strong>1<\/strong>/);
+  assert.match(elements.devices.innerHTML, /<span>utilization<\/span><strong>10<\/strong>/);
+});

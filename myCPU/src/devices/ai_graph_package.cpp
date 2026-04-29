@@ -187,7 +187,12 @@ bool requires_binary_inputs(AiOpCode opcode) {
 
 bool requires_unary_input(AiOpCode opcode) {
     return opcode == AiOpCode::EltwiseRelu || opcode == AiOpCode::PoolMax ||
-           opcode == AiOpCode::ReduceSum || opcode == AiOpCode::LayoutTranspose;
+           opcode == AiOpCode::ReduceSum || opcode == AiOpCode::LayoutTranspose ||
+           opcode == AiOpCode::Softmax;
+}
+
+bool same_shape(const AiTensorMetadata& lhs, const AiTensorMetadata& rhs) {
+    return lhs.rank == rhs.rank && lhs.dims == rhs.dims;
 }
 
 bool compatible_accumulator_dtype(AiDataType input_dtype, AiDataType accum_dtype) {
@@ -256,6 +261,195 @@ uint64_t runtime_tensor_byte_size(const AiRuntimeShapeEntry& runtime_shape, AiDa
     return runtime_shape_element_count(runtime_shape) * ai_dtype_size_bytes(dtype);
 }
 
+bool validate_gemm_contract(const AiGraphPackage& package,
+                            const AiOpDescriptor& op,
+                            std::string& error) {
+    const AiTensorMetadata& lhs = package.tensors[op.input0];
+    const AiTensorMetadata& rhs = package.tensors[op.input1];
+    const AiTensorMetadata& output = package.tensors[op.output];
+    if (lhs.rank != 2 || rhs.rank != 2 || output.rank != 2) {
+        error = "GEMM tensor shape rank is invalid";
+        return false;
+    }
+    if (lhs.dims[1] != rhs.dims[0] || output.dims[0] != lhs.dims[0] ||
+        output.dims[1] != rhs.dims[1]) {
+        error = "GEMM tensor shape is inconsistent";
+        return false;
+    }
+    if (lhs.dtype != op.input_dtype || rhs.dtype != op.input_dtype) {
+        error = "GEMM input tensor dtype is inconsistent";
+        return false;
+    }
+    if ((op.input_dtype == AiDataType::Int8 || op.input_dtype == AiDataType::Int16) &&
+        output.dtype != AiDataType::Int32) {
+        error = "GEMM output dtype is inconsistent";
+        return false;
+    }
+    if ((op.input_dtype == AiDataType::Fp16 || op.input_dtype == AiDataType::Bf16) &&
+        output.dtype != AiDataType::Fp32) {
+        error = "GEMM output dtype is inconsistent";
+        return false;
+    }
+    if (op.input_dtype == AiDataType::Fp32 && output.dtype != AiDataType::Fp32) {
+        error = "GEMM output dtype is inconsistent";
+        return false;
+    }
+    return true;
+}
+
+bool validate_conv_contract(const AiGraphPackage& package,
+                            const AiOpDescriptor& op,
+                            std::string& error) {
+    const AiTensorMetadata& input = package.tensors[op.input0];
+    const AiTensorMetadata& kernel = package.tensors[op.input1];
+    const AiTensorMetadata& output = package.tensors[op.output];
+    if (input.rank != 2 || kernel.rank != 2 || output.rank != 2) {
+        error = "Conv2d tensor shape rank is invalid";
+        return false;
+    }
+    if (kernel.dims[0] > input.dims[0] || kernel.dims[1] > input.dims[1] ||
+        output.dims[0] != input.dims[0] - kernel.dims[0] + 1 ||
+        output.dims[1] != input.dims[1] - kernel.dims[1] + 1) {
+        error = "Conv2d tensor shape is inconsistent";
+        return false;
+    }
+    if (input.dtype != op.input_dtype || kernel.dtype != op.input_dtype ||
+        output.dtype != AiDataType::Int32) {
+        error = "Conv2d tensor dtype is inconsistent";
+        return false;
+    }
+    return true;
+}
+
+bool validate_relu_contract(const AiGraphPackage& package,
+                            const AiOpDescriptor& op,
+                            std::string& error) {
+    const AiTensorMetadata& input = package.tensors[op.input0];
+    const AiTensorMetadata& output = package.tensors[op.output];
+    if (!same_shape(input, output)) {
+        error = "EltwiseRelu tensor shape is inconsistent";
+        return false;
+    }
+    if (input.dtype != output.dtype || input.dtype != op.input_dtype) {
+        error = "EltwiseRelu tensor dtype is inconsistent";
+        return false;
+    }
+    return true;
+}
+
+bool validate_pool_contract(const AiGraphPackage& package,
+                            const AiOpDescriptor& op,
+                            std::string& error) {
+    const AiTensorMetadata& input = package.tensors[op.input0];
+    const AiTensorMetadata& output = package.tensors[op.output];
+    if (input.rank != 2 || output.rank != 2 ||
+        input.dtype != AiDataType::Fp32 || output.dtype != AiDataType::Fp32) {
+        error = "PoolMax tensor shape or dtype is inconsistent";
+        return false;
+    }
+
+    const uint32_t window_h = static_cast<uint32_t>(op.attrs[0]);
+    const uint32_t window_w = static_cast<uint32_t>(op.attrs[1]);
+    const uint32_t stride_h = static_cast<uint32_t>(op.attrs[2]);
+    const uint32_t stride_w = static_cast<uint32_t>(op.attrs[3]);
+    if (window_h == 0 || window_w == 0 || stride_h == 0 || stride_w == 0) {
+        return true;
+    }
+    if (window_h > input.dims[0] || window_w > input.dims[1]) {
+        error = "PoolMax tensor shape is inconsistent";
+        return false;
+    }
+    const uint32_t expected_h = 1 + (input.dims[0] - window_h) / stride_h;
+    const uint32_t expected_w = 1 + (input.dims[1] - window_w) / stride_w;
+    if (output.dims[0] != expected_h || output.dims[1] != expected_w) {
+        error = "PoolMax tensor shape is inconsistent";
+        return false;
+    }
+    return true;
+}
+
+bool validate_reduce_contract(const AiGraphPackage& package,
+                              const AiOpDescriptor& op,
+                              std::string& error) {
+    const AiTensorMetadata& input = package.tensors[op.input0];
+    const AiTensorMetadata& output = package.tensors[op.output];
+    if (input.rank != 2 || output.rank != 1 || output.dims[0] != input.dims[0]) {
+        error = "ReduceSum tensor shape is inconsistent";
+        return false;
+    }
+    if (input.dtype != AiDataType::Int32 || output.dtype != AiDataType::Int32 ||
+        op.input_dtype != AiDataType::Int32) {
+        error = "ReduceSum tensor dtype is inconsistent";
+        return false;
+    }
+    return true;
+}
+
+bool validate_layout_contract(const AiGraphPackage& package,
+                              const AiOpDescriptor& op,
+                              std::string& error) {
+    const AiTensorMetadata& input = package.tensors[op.input0];
+    const AiTensorMetadata& output = package.tensors[op.output];
+    if (input.rank != 2 || output.rank != 2 ||
+        output.dims[0] != input.dims[1] || output.dims[1] != input.dims[0]) {
+        error = "LayoutTranspose tensor shape is inconsistent";
+        return false;
+    }
+    if (input.dtype != AiDataType::Int32 || output.dtype != AiDataType::Int32 ||
+        op.input_dtype != AiDataType::Int32) {
+        error = "LayoutTranspose tensor dtype is inconsistent";
+        return false;
+    }
+    return true;
+}
+
+bool validate_softmax_contract(const AiGraphPackage& package,
+                               const AiOpDescriptor& op,
+                               std::string& error) {
+    const AiTensorMetadata& input = package.tensors[op.input0];
+    const AiTensorMetadata& output = package.tensors[op.output];
+    if (package.shape_mode != AiShapeMode::Static) {
+        error = "Softmax only supports static shape";
+        return false;
+    }
+    if (input.rank != 2 || output.rank != 2 || !same_shape(input, output)) {
+        error = "Softmax tensor shape is inconsistent";
+        return false;
+    }
+    if (input.dtype != AiDataType::Fp32 || output.dtype != AiDataType::Fp32 ||
+        op.input_dtype != AiDataType::Fp32 || op.accum_dtype != AiDataType::Fp32) {
+        error = "Softmax tensor dtype is inconsistent";
+        return false;
+    }
+    return true;
+}
+
+bool validate_op_tensor_contract(const AiGraphPackage& package,
+                                 const AiOpDescriptor& op,
+                                 std::string& error) {
+    switch (op.opcode) {
+    case AiOpCode::Gemm:
+        return validate_gemm_contract(package, op, error);
+    case AiOpCode::Conv2d:
+        return validate_conv_contract(package, op, error);
+    case AiOpCode::EltwiseRelu:
+        return validate_relu_contract(package, op, error);
+    case AiOpCode::PoolMax:
+        return validate_pool_contract(package, op, error);
+    case AiOpCode::ReduceSum:
+        return validate_reduce_contract(package, op, error);
+    case AiOpCode::LayoutTranspose:
+        return validate_layout_contract(package, op, error);
+    case AiOpCode::Softmax:
+        return validate_softmax_contract(package, op, error);
+    case AiOpCode::Invalid:
+        error = "opcode is unsupported";
+        return false;
+    }
+    error = "opcode is unsupported";
+    return false;
+}
+
 }  // namespace
 
 bool ai_dtype_supported(AiDataType dtype) {
@@ -272,7 +466,8 @@ bool ai_tensor_role_supported(AiTensorRole role) {
 bool ai_opcode_supported(AiOpCode opcode) {
     return opcode == AiOpCode::Gemm || opcode == AiOpCode::Conv2d ||
            opcode == AiOpCode::EltwiseRelu || opcode == AiOpCode::PoolMax ||
-           opcode == AiOpCode::ReduceSum || opcode == AiOpCode::LayoutTranspose;
+           opcode == AiOpCode::ReduceSum || opcode == AiOpCode::LayoutTranspose ||
+           opcode == AiOpCode::Softmax;
 }
 
 bool ai_shape_mode_supported(AiShapeMode shape_mode) {
@@ -330,6 +525,8 @@ const char* ai_opcode_name(AiOpCode opcode) {
         return "reduce_sum";
     case AiOpCode::LayoutTranspose:
         return "layout_transpose";
+    case AiOpCode::Softmax:
+        return "softmax";
     case AiOpCode::Invalid:
         return "invalid";
     }
@@ -431,6 +628,9 @@ bool validate_ai_graph_package(const AiGraphPackage& package, std::string& error
                 error = "opcode unary tensor indexes are invalid";
                 return false;
             }
+        }
+        if (!validate_op_tensor_contract(package, op, error)) {
+            return false;
         }
     }
 

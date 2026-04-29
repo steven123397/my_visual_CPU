@@ -20,11 +20,8 @@
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [phase4_preparation_design.md](phase4_preparation_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
-- 当前计划：
-  - [../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md](../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md)
-  - [../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md](../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md)
-  - [../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md](../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md)
 - 已完成计划：
+  - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave2-plan](../plan/history_plan.md#npu-tpu-accelerator-wave2-plan)

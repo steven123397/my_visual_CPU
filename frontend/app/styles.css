@@ -577,6 +577,63 @@ button:hover {
   gap: 14px;
 }
 
+.panel-ai-accelerator {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-accelerator-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.ai-accelerator-panel__topline {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 0.75fr) minmax(220px, 1.25fr);
+  align-items: stretch;
+}
+
+.ai-accelerator-status {
+  min-height: 82px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(24, 33, 39, 0.08);
+  background: rgba(255, 255, 255, 0.76);
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+
+.ai-accelerator-status span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ai-accelerator-status strong {
+  color: var(--teal);
+  font-family: var(--mono);
+  font-size: 20px;
+}
+
+.ai-accelerator-status.is-busy {
+  border-color: rgba(198, 132, 30, 0.3);
+  background: rgba(198, 132, 30, 0.12);
+}
+
+.ai-accelerator-status.is-busy strong {
+  color: #9a6610;
+}
+
+.ai-accelerator-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .ooo-grid {
   display: grid;
   gap: 10px;
@@ -1528,6 +1585,8 @@ button:hover {
 
   .workload-panel__hero,
   .vector-panel__topline,
+  .ai-accelerator-panel__topline,
+  .ai-accelerator-grid,
   .vector-cnn-card__grid {
     grid-template-columns: 1fr;
   }
@@ -1542,11 +1601,13 @@ button:hover {
   .stages-grid,
   .summary-grid,
   .workload-progress,
-  .ooo-grid,
-  .debug-inspector-grid,
-  .vector-stage-strip,
-  .vector-register-grid,
-  .vector-cnn-card__grid {
+    .ooo-grid,
+    .debug-inspector-grid,
+    .vector-stage-strip,
+    .vector-register-grid,
+    .ai-accelerator-panel__topline,
+    .ai-accelerator-grid,
+    .vector-cnn-card__grid {
     grid-template-columns: 1fr;
   }
 

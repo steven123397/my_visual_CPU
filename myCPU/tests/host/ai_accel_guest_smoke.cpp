@@ -92,8 +92,8 @@ int main() {
 
         if (!expect(device_cycles == 8, "guest AI accel demo should lock device_cycles=8") ||
             !expect(dma_cycles == 6, "guest AI accel demo should lock dma_cycles=6") ||
-            !expect(compute_cycles == 2, "guest AI accel demo should lock compute_cycles=2") ||
-            !expect(stall_cycles == 0, "guest AI accel demo should lock stall_cycles=0") ||
+            !expect(compute_cycles == 1, "guest AI accel demo should lock compute_cycles=1") ||
+            !expect(stall_cycles == 1, "guest AI accel demo should lock stall_cycles=1") ||
             !expect(dma_load_bytes == 12, "guest AI accel demo should lock dma_load_bytes=12") ||
             !expect(dma_store_bytes == 4, "guest AI accel demo should lock dma_store_bytes=4")) {
             return 1;

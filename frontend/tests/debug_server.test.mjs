@@ -420,10 +420,15 @@ test('GET /api/tests returns built-in test manifest', async () => {
     assert.ok(body.tests.some((item) => item.name === 'guest_interactive_os_demo'));
     assert.ok(body.tests.some((item) => item.name === 'guest_kernel_alpha_demo'));
     assert.ok(body.tests.some((item) => item.name === 'guest_kernel_alpha_storage_not_ready_demo'));
+    const aiAccelDemo = body.tests.find((item) => item.name === 'guest_ai_accel_demo');
     const vectorDemo = body.tests.find((item) => item.name === 'guest_vector_demo');
     const vectorCnnDemo = body.tests.find((item) => item.name === 'guest_vector_cnn_demo');
+    assert.ok(aiAccelDemo);
     assert.ok(vectorDemo);
     assert.ok(vectorCnnDemo);
+    assert.equal(aiAccelDemo.badge, 'AI Accelerator');
+    assert.equal(aiAccelDemo.workload.expectedMarker, 'KMVAI');
+    assert.deepEqual(aiAccelDemo.workload.ops, ['graph package', 'MMIO doorbell', 'DMA load/store', 'timed-simple profile']);
     assert.equal(vectorDemo.title, 'V-lite Operator Demo');
     assert.equal(vectorDemo.workload.expectedMarker, 'V2OK');
     assert.equal(vectorCnnDemo.badge, 'Vector + NN');

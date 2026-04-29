@@ -325,6 +325,51 @@ bool execute_layout_transpose(const AiGraphPackage& package,
     return true;
 }
 
+bool execute_softmax(const AiGraphPackage& package,
+                     const std::vector<const AiMemoryPlanEntry*>& memory_plan_by_tensor,
+                     const AiOpDescriptor& op,
+                     AiScratchpad& scratchpad,
+                     uint64_t& retired_ops,
+                     uint32_t& fault_code,
+                     std::string& error) {
+    const AiTensorMetadata& input_tensor = package.tensors[op.input0];
+    const AiTensorMetadata& output_tensor = package.tensors[op.output];
+    if (input_tensor.rank != 2 || output_tensor.rank != 2 ||
+        input_tensor.dims != output_tensor.dims ||
+        input_tensor.dtype != AiDataType::Fp32 || output_tensor.dtype != AiDataType::Fp32 ||
+        op.input_dtype != AiDataType::Fp32 || op.accum_dtype != AiDataType::Fp32) {
+        fault_code = AI_ACCEL_FAULT_ILLEGAL_OP;
+        error = "Softmax tensor shape or dtype is inconsistent";
+        return false;
+    }
+
+    const AiMemoryPlanEntry* input_entry = required_entry(memory_plan_by_tensor, op.input0, error);
+    if (input_entry == nullptr) {
+        fault_code = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+        return false;
+    }
+    const AiMemoryPlanEntry* output_entry = required_entry(memory_plan_by_tensor, op.output, error);
+    if (output_entry == nullptr) {
+        fault_code = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+        return false;
+    }
+
+    std::vector<float> input{};
+    if (!read_tensor_values(scratchpad, *input_entry, input, error)) {
+        fault_code = AI_ACCEL_FAULT_EXECUTION;
+        return false;
+    }
+    const std::vector<float> output =
+        tensor_golden_softmax_rows_f32(input, input_tensor.dims[0], input_tensor.dims[1]);
+    if (!write_tensor_values(scratchpad, *output_entry, output, error)) {
+        fault_code = AI_ACCEL_FAULT_EXECUTION;
+        return false;
+    }
+
+    retired_ops = tensor_element_count(output_tensor);
+    return true;
+}
+
 }  // namespace
 
 bool ai_execute_elementwise_op(const AiGraphPackage& package,
@@ -371,6 +416,14 @@ bool ai_execute_elementwise_op(const AiGraphPackage& package,
                                         retired_ops,
                                         fault_code,
                                         error);
+    case AiOpCode::Softmax:
+        return execute_softmax(package,
+                               memory_plan_by_tensor,
+                               op,
+                               scratchpad,
+                               retired_ops,
+                               fault_code,
+                               error);
     case AiOpCode::Invalid:
     case AiOpCode::Gemm:
     case AiOpCode::Conv2d:

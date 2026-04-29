@@ -93,13 +93,14 @@ bool expect_op_summary(const AiAcceleratorOpProfileSummary& summary,
                        AiOpCode expected_opcode,
                        uint64_t expected_retired_ops,
                        uint64_t expected_compute_cycles,
+                       uint64_t expected_stall_cycles,
                        uint64_t expected_tile_count,
                        const char* context) {
     return expect(summary.op_index == expected_index, context) &&
            expect(summary.opcode == expected_opcode, context) &&
            expect(summary.retired_ops == expected_retired_ops, context) &&
            expect(summary.compute_cycles == expected_compute_cycles, context) &&
-           expect(summary.stall_cycles == 0, context) &&
+           expect(summary.stall_cycles == expected_stall_cycles, context) &&
            expect(summary.tile_count == expected_tile_count, context);
 }
 
@@ -277,6 +278,55 @@ bool build_dynamic_gemm_graph_package(std::vector<uint8_t>& bytes,
         .scratchpad_offset = 48,
         .byte_size = 32,
         .scratchpad_bytes = 32,
+    });
+    if (!serialize_ai_graph_package(package, bytes, error)) {
+        return false;
+    }
+    package_bytes = static_cast<uint32_t>(bytes.size());
+    return true;
+}
+
+bool build_softmax_graph_package(std::vector<uint8_t>& bytes,
+                                 uint32_t& package_bytes,
+                                 std::string& error) {
+    AiGraphPackage package{};
+    package.scratchpad_budget_bytes = 64;
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Fp32,
+        .role = AiTensorRole::Input,
+        .rank = 2,
+        .dims = {2, 2, 0, 0},
+        .tile_dims = {2, 2, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Fp32,
+        .role = AiTensorRole::Output,
+        .rank = 2,
+        .dims = {2, 2, 0, 0},
+        .tile_dims = {2, 2, 0, 0},
+    });
+    package.ops.push_back(AiOpDescriptor{
+        .opcode = AiOpCode::Softmax,
+        .input_dtype = AiDataType::Fp32,
+        .accum_dtype = AiDataType::Fp32,
+        .input0 = 0,
+        .input1 = kAiInvalidTensorIndex,
+        .input2 = kAiInvalidTensorIndex,
+        .output = 1,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 0,
+        .system_offset = 0,
+        .scratchpad_offset = 0,
+        .byte_size = 16,
+        .scratchpad_bytes = 16,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 1,
+        .system_offset = 0,
+        .scratchpad_offset = 32,
+        .byte_size = 16,
+        .scratchpad_bytes = 16,
     });
     if (!serialize_ai_graph_package(package, bytes, error)) {
         return false;
@@ -485,15 +535,15 @@ int main() {
             !expect(almost_equal(output_tensor, 4.0f), "expected GEMM output tensor") ||
             !expect(device_cycles == 13, "expected GEMM device cycles") ||
             !expect(dma_cycles == 9, "expected GEMM DMA cycles") ||
-            !expect(compute_cycles == 4, "expected GEMM compute cycles") ||
-            !expect(stall_cycles == 0, "expected zero GEMM stall cycles") ||
+            !expect(compute_cycles == 2, "expected GEMM compute cycles") ||
+            !expect(stall_cycles == 2, "expected GEMM stall cycles") ||
             !expect(success_profile.tile_count == 2, "expected GEMM aggregate tile count") ||
             !expect(success_profile.scratchpad_peak_bytes == 36,
                     "expected GEMM aggregate scratchpad peak bytes") ||
             !expect(success_profile.op_summaries.size() == 2, "expected two GEMM op summaries") ||
-            !expect_op_summary(success_profile.op_summaries[0], 0, AiOpCode::Gemm, 8, 2, 1,
+            !expect_op_summary(success_profile.op_summaries[0], 0, AiOpCode::Gemm, 8, 1, 1, 1,
                                "expected GEMM op profile summary") ||
-            !expect_op_summary(success_profile.op_summaries[1], 1, AiOpCode::PoolMax, 4, 2, 1,
+            !expect_op_summary(success_profile.op_summaries[1], 1, AiOpCode::PoolMax, 4, 1, 1, 1,
                                "expected pool op profile summary")) {
             return 1;
         }
@@ -555,8 +605,8 @@ int main() {
             !expect(fault_completion.bytes_moved == 16, "expected fault DMA byte accounting") ||
             !expect(device_cycles == 19, "expected cumulative GEMM device cycles") ||
             !expect(dma_cycles == 15, "expected cumulative GEMM DMA cycles") ||
-            !expect(compute_cycles == 4, "expected cumulative GEMM compute cycles") ||
-            !expect(stall_cycles == 0, "expected cumulative GEMM stall cycles") ||
+            !expect(compute_cycles == 2, "expected cumulative GEMM compute cycles") ||
+            !expect(stall_cycles == 2, "expected cumulative GEMM stall cycles") ||
             !expect(dma_load_bytes == 32, "expected cumulative GEMM DMA load bytes") ||
             !expect(dma_store_bytes == 4, "expected cumulative GEMM DMA store bytes") ||
             !expect(fault_profile.tile_count == 2, "expected GEMM tile profile to remain stable on fault") ||
@@ -564,13 +614,124 @@ int main() {
                     "expected GEMM scratchpad peak to remain stable on fault") ||
             !expect(fault_profile.op_summaries.size() == 2,
                     "expected GEMM op summaries to remain stable on fault") ||
-            !expect_op_summary(fault_profile.op_summaries[0], 0, AiOpCode::Gemm, 8, 2, 1,
+            !expect_op_summary(fault_profile.op_summaries[0], 0, AiOpCode::Gemm, 8, 1, 1, 1,
                                "expected stable GEMM op profile after fault") ||
-            !expect_op_summary(fault_profile.op_summaries[1], 1, AiOpCode::PoolMax, 4, 2, 1,
+            !expect_op_summary(fault_profile.op_summaries[1], 1, AiOpCode::PoolMax, 4, 1, 1, 1,
                                "expected stable pool op profile after fault") ||
             !expect(machine.ai_accelerator().completion_count() == 2, "expected GEMM completion count") ||
             !expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_ILLEGAL_OP, "expected last GEMM fault") ||
             !expect(machine.plic().supervisor_has_pending(), "expected GEMM IRQ pending")) {
+            return 1;
+        }
+
+        Machine softmax_machine;
+        Bus& softmax_bus = softmax_machine.bus();
+        if (!load_u32(softmax_bus,
+                      AI_ACCEL_BASE + AI_ACCEL_REG_MAGIC,
+                      AI_ACCEL_MMIO_MAGIC,
+                      "expected mapped softmax AI accelerator") ||
+            !configure_queue(softmax_bus)) {
+            return 1;
+        }
+
+        std::vector<uint8_t> softmax_graph_package_bytes{};
+        uint32_t softmax_graph_package_size = 0;
+        if (!build_softmax_graph_package(softmax_graph_package_bytes,
+                                         softmax_graph_package_size,
+                                         error)) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            return 1;
+        }
+
+        const std::array<uint64_t, 2> softmax_input_table{{kLhsTensorAddr, 0}};
+        const std::array<uint64_t, 2> softmax_output_table{{0, kOutputTensorAddr}};
+        const std::array<float, 4> softmax_input{{0.0f, 0.0f, 7.0f, 7.0f}};
+        const std::array<float, 4> softmax_zero_output{{0.0f, 0.0f, 0.0f, 0.0f}};
+        const AiSubmissionDescriptor softmax_descriptor{
+            .token = 0x534F4654ULL,
+            .graph_package_addr = kGraphPackageAddr,
+            .graph_package_bytes = softmax_graph_package_size,
+            .flags = AI_ACCEL_SUBMISSION_FLAG_PROFILE,
+            .input_table_addr = kInputTableAddr,
+            .output_table_addr = kOutputTableAddr,
+            .source_tag = 59,
+        };
+        std::array<uint8_t, kAiSubmissionDescriptorBytes> softmax_descriptor_bytes{};
+        encode_ai_submission_descriptor(softmax_descriptor, softmax_descriptor_bytes);
+
+        uint64_t softmax_prev_device_cycles = 0;
+        uint64_t softmax_prev_dma_cycles = 0;
+        uint64_t softmax_prev_compute_cycles = 0;
+        uint64_t softmax_prev_stall_cycles = 0;
+        if (!store_bytes(softmax_bus,
+                         kGraphPackageAddr,
+                         softmax_graph_package_bytes.data(),
+                         softmax_graph_package_bytes.size()) ||
+            !store_bytes(softmax_bus, kInputTableAddr, softmax_input_table.data(), sizeof(softmax_input_table)) ||
+            !store_bytes(softmax_bus, kOutputTableAddr, softmax_output_table.data(), sizeof(softmax_output_table)) ||
+            !store_bytes(softmax_bus, kLhsTensorAddr, softmax_input.data(), sizeof(softmax_input)) ||
+            !store_bytes(softmax_bus, kOutputTensorAddr, softmax_zero_output.data(), sizeof(softmax_zero_output)) ||
+            !store_bytes(softmax_bus,
+                         kSubmitQueueAddr,
+                         softmax_descriptor_bytes.data(),
+                         softmax_descriptor_bytes.size()) ||
+            !store_u32(softmax_bus, AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_TAIL, 1, "softmax submit tail") ||
+            !store_u32(softmax_bus, AI_ACCEL_BASE + AI_ACCEL_REG_DOORBELL, 1, "softmax doorbell") ||
+            !tick_until_tail(softmax_bus,
+                             1,
+                             softmax_prev_device_cycles,
+                             softmax_prev_dma_cycles,
+                             softmax_prev_compute_cycles,
+                             softmax_prev_stall_cycles)) {
+            return 1;
+        }
+
+        std::array<uint8_t, kAiCompletionEntryBytes> softmax_completion_bytes{};
+        AiCompletionEntry softmax_completion{};
+        std::array<float, 4> softmax_output{};
+        uint64_t softmax_compute_cycles = 0;
+        uint64_t softmax_stall_cycles = 0;
+        if (!load_bytes(softmax_bus,
+                        kCompleteQueueAddr,
+                        softmax_completion_bytes.data(),
+                        softmax_completion_bytes.size()) ||
+            !load_bytes(softmax_bus, kOutputTensorAddr, softmax_output.data(), sizeof(softmax_output)) ||
+            !load_counter(softmax_bus,
+                          AI_ACCEL_BASE + AI_ACCEL_REG_COMPUTE_CYCLES_LOW,
+                          AI_ACCEL_BASE + AI_ACCEL_REG_COMPUTE_CYCLES_HIGH,
+                          softmax_compute_cycles) ||
+            !load_counter(softmax_bus,
+                          AI_ACCEL_BASE + AI_ACCEL_REG_STALL_CYCLES_LOW,
+                          AI_ACCEL_BASE + AI_ACCEL_REG_STALL_CYCLES_HIGH,
+                          softmax_stall_cycles)) {
+            return 1;
+        }
+        decode_ai_completion_entry(softmax_completion_bytes, softmax_completion);
+        const AiAcceleratorProfileSummary& softmax_profile =
+            softmax_machine.ai_accelerator().profile_summary();
+        if (!expect(softmax_completion.status == AI_ACCEL_COMPLETION_STATUS_SUCCESS,
+                    "expected Softmax completion success") ||
+            !expect(softmax_completion.retired_ops == 4,
+                    "expected Softmax retired ops") ||
+            !expect(softmax_completion.bytes_moved == 32,
+                    "expected Softmax DMA byte accounting") ||
+            !expect(almost_equal(softmax_output[0], 0.5f) &&
+                        almost_equal(softmax_output[1], 0.5f) &&
+                        almost_equal(softmax_output[2], 0.5f) &&
+                        almost_equal(softmax_output[3], 0.5f),
+                    "expected Softmax output tensor") ||
+            !expect(softmax_compute_cycles == 1,
+                    "expected Softmax compute cycles") ||
+            !expect(softmax_stall_cycles == 1,
+                    "expected Softmax stall cycles") ||
+            !expect(softmax_profile.tile_count == 1,
+                    "expected Softmax aggregate tile count") ||
+            !expect(softmax_profile.scratchpad_peak_bytes == 48,
+                    "expected Softmax scratchpad peak bytes") ||
+            !expect(softmax_profile.op_summaries.size() == 1,
+                    "expected one Softmax op summary") ||
+            !expect_op_summary(softmax_profile.op_summaries[0], 0, AiOpCode::Softmax, 4, 1, 1, 1,
+                               "expected Softmax op profile summary")) {
             return 1;
         }
 
@@ -766,7 +927,7 @@ int main() {
                     "expected dynamic GEMM small scratchpad peak bytes") ||
             !expect(dynamic_small_profile.op_summaries.size() == 1,
                     "expected one dynamic GEMM small op summary") ||
-            !expect_op_summary(dynamic_small_profile.op_summaries[0], 0, AiOpCode::Gemm, 32, 2, 1,
+            !expect_op_summary(dynamic_small_profile.op_summaries[0], 0, AiOpCode::Gemm, 32, 1, 1, 1,
                                "expected dynamic GEMM small op profile summary")) {
             return 1;
         }
@@ -820,7 +981,7 @@ int main() {
                     "expected dynamic GEMM large scratchpad peak bytes") ||
             !expect(dynamic_large_profile.op_summaries.size() == 1,
                     "expected one dynamic GEMM large op summary") ||
-            !expect_op_summary(dynamic_large_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
+            !expect_op_summary(dynamic_large_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 2, 2, 2,
                                "expected dynamic GEMM large op profile summary")) {
             return 1;
         }
@@ -872,7 +1033,7 @@ int main() {
                     "expected dynamic GEMM scratchpad peak stability after unaligned fault") ||
             !expect(dynamic_unaligned_profile.op_summaries.size() == 1,
                     "expected dynamic GEMM op summary stability after unaligned fault") ||
-            !expect_op_summary(dynamic_unaligned_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
+            !expect_op_summary(dynamic_unaligned_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 2, 2, 2,
                                "expected dynamic GEMM op profile stability after unaligned fault")) {
             return 1;
         }
@@ -924,7 +1085,7 @@ int main() {
                     "expected dynamic GEMM scratchpad peak stability after fault") ||
             !expect(dynamic_fault_profile.op_summaries.size() == 1,
                     "expected dynamic GEMM op summary stability after fault") ||
-            !expect_op_summary(dynamic_fault_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
+            !expect_op_summary(dynamic_fault_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 2, 2, 2,
                                "expected dynamic GEMM op profile stability after fault") ||
             !expect(dynamic_machine.ai_accelerator().completion_count() == 4,
                     "expected dynamic GEMM completion count") ||
@@ -1059,7 +1220,7 @@ int main() {
                     "expected dynamic GEMM scratchpad stability after overlap fault") ||
             !expect(runtime_fault_overlap_profile.op_summaries.size() == 1,
                     "expected dynamic GEMM op summary stability after overlap fault") ||
-            !expect_op_summary(runtime_fault_overlap_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 4, 2,
+            !expect_op_summary(runtime_fault_overlap_profile.op_summaries[0], 0, AiOpCode::Gemm, 64, 2, 2, 2,
                                "expected dynamic GEMM op profile stability after overlap fault")) {
             return 1;
         }
@@ -1121,7 +1282,8 @@ int main() {
                                0,
                                AiOpCode::Gemm,
                                64,
-                               4,
+                               2,
+                               2,
                                2,
                                "expected dynamic GEMM op profile stability after out-of-window fault")) {
             return 1;

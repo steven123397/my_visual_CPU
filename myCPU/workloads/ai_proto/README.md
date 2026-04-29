@@ -2,7 +2,7 @@
 
 `ai_proto` 是 AI accelerator Wave 1 / Wave 2 的 host-side packaging/profile 入口。
 
-当前覆盖 4 条固定 workload：
+当前覆盖 6 条固定 workload：
 
 - `cnn`
   quantized `conv2d -> relu -> transpose -> reduce` 闭环。
@@ -13,6 +13,10 @@
   这条线暂时不强行扩到 `conv -> relu -> pool -> fc`，避免为了 workload 打开新的 dtype / op 合同面。
 - `dynamic_gemm`
   Wave 2 bounded dynamic shape 的固定 matmul-family workload：graph package 先声明 max dims，manifest 再通过 `runtime_shape_table` 提供本次 `2x8 -> 2x4` runtime dims。
+- `dynamic_tiny_model`
+  主线 Wave 4 的动态小模型 workload，复用现有 `fp16 gemm -> fp32 relu -> fp32 max-pool` 算子面；graph package 声明 max batch，manifest 通过 runtime shape table 运行本次 `1x3 -> 1x2 -> 1x1` 闭环。
+- `tiny_attention_static`
+  主线 Wave 4 的 stretch workload，固定为 `fp16 gemm -> fp32 softmax -> fp32 gemm` 的极小静态 attention-like 闭环；只证明当前 graph / scheduler / profile path 能表达这一方向，不代表完整 Transformer runtime。
 
 ## 生成打包产物
 
@@ -21,6 +25,8 @@ python3 workloads/ai_proto/pack_graph.py --workload cnn --out-dir workloads/ai_p
 python3 workloads/ai_proto/pack_graph.py --workload gemm --out-dir workloads/ai_proto/generated
 python3 workloads/ai_proto/pack_graph.py --workload tiny_model --out-dir workloads/ai_proto/generated
 python3 workloads/ai_proto/pack_graph.py --workload dynamic_gemm --out-dir workloads/ai_proto/generated
+python3 workloads/ai_proto/pack_graph.py --workload dynamic_tiny_model --out-dir workloads/ai_proto/generated
+python3 workloads/ai_proto/pack_graph.py --workload tiny_attention_static --out-dir workloads/ai_proto/generated
 ```
 
 每个 workload 会生成：
@@ -43,6 +49,8 @@ make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=cnn
 make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=gemm
 make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_model
 make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_gemm
+make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_tiny_model
+make run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_attention_static
 ```
 
 运行入口会调用：

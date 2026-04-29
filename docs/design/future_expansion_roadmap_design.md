@@ -38,11 +38,8 @@
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
-- 当前计划：
-  - [../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md](../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md)
-  - [../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md](../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md)
-  - [../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md](../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
 
@@ -114,8 +111,8 @@
 `NPU / TPU-like` AI accelerator 在本方向内部曾经也用 Wave 1 / 2 / 3
 描述专项演进；这些是 AI accelerator 局部历史阶段，不等同于本文档的主线 wave。
 
-因此，当前正在执行的不是“AI accelerator 局部 Wave 4”，而是“主线 Wave 4
-中的 AI accelerator 切片”。为了避免歧义，当前活跃计划统一命名为：
+因此，这一轮已经完成的不是“AI accelerator 局部 Wave 4”，而是“主线 Wave 4
+中的 AI accelerator 切片”。为了避免歧义，完成态计划统一命名为：
 
 - `mainline_wave4_ai_accelerator_slice_a_*`
 - `mainline_wave4_ai_accelerator_slice_b_*`
@@ -200,7 +197,7 @@ Wave 3 的收口结果：
   不再阻塞 `Wave 4` 激活
 - 真实 Linux `Image` 不在默认仓库内；因此 runtime 断言仍保留为 opt-in 验证项
 
-### Wave 4：当前 active wave，AI accelerator 与向量 / observation 深化
+### Wave 4：AI accelerator 与向量 / observation 深化
 
 Wave 4 不是可选方向，而是已排进主线的后续波次，目标包括：
 
@@ -221,8 +218,8 @@ Wave 4 的激活门槛：
 - Linux 当前 checkpoint 线不再是近端 blocker
 - `shadow_cache` 和代表性 workload 已能提供足够稳定的读侧信号
 
-当前 `Wave 4` 已由 [../status/mainline_status.md](../status/mainline_status.md)
-激活；它仍然不是 `cache / DMA / multicore / coherence` 的正式实施入口。
+当前 `Wave 4` 的 AI accelerator 切片已经由 [../status/mainline_status.md](../status/mainline_status.md)
+记录为完成；它仍然不是 `cache / DMA / multicore / coherence` 的正式实施入口。
 如果后续要切 `Wave 5`，仍必须补足更可信的 pipeline-side `xv6 / Linux`
 memory signal。
 

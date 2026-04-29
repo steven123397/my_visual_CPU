@@ -1,5 +1,5 @@
 import { classifyEventTone } from '../../state.js';
-import { card, groupPanel } from './shared.js';
+import { card, groupPanel, renderMetricPill } from './shared.js';
 
 export function renderEvents(snapshot) {
   const events = snapshot?.events ?? [];
@@ -33,6 +33,71 @@ export function renderDevices(snapshot) {
       </div>
     `,
     'panel-devices',
+  );
+}
+
+function renderAiField(label, value) {
+  return `<div class="kv-row"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+function formatAiCounter(value, fallback = '-') {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+export function renderAiAccelerator(snapshot) {
+  const ai = snapshot?.devices?.ai_accelerator ?? null;
+  if (!ai || ai.present === false) {
+    return card(
+      'AI accelerator',
+      '<div class="empty-state">当前 snapshot 未暴露 AI accelerator counters。</div>',
+      'panel-ai-accelerator',
+    );
+  }
+
+  const busyLabel = ai.engine_busy ? 'busy' : 'idle';
+  return card(
+    'AI accelerator',
+    `
+      <div class="ai-accelerator-panel">
+        <div class="ai-accelerator-panel__topline">
+          <div class="ai-accelerator-status ${ai.engine_busy ? 'is-busy' : 'is-idle'}">
+            <span>engine_busy</span>
+            <strong>${busyLabel}</strong>
+          </div>
+          <div class="metric-pill-row">
+            ${renderMetricPill('queue', formatAiCounter(ai.queue_depth))}
+            ${renderMetricPill('scratchpad', formatAiCounter(ai.scratchpad_occupancy_bytes))}
+            ${renderMetricPill('utilization', formatAiCounter(ai.utilization))}
+          </div>
+        </div>
+        <div class="ai-accelerator-grid">
+          <div class="kv-list">
+            ${renderAiField('queue_depth', formatAiCounter(ai.queue_depth))}
+            ${renderAiField('doorbell_count', formatAiCounter(ai.doorbell_count))}
+            ${renderAiField('completion_count', formatAiCounter(ai.completion_count))}
+            ${renderAiField('last_fault', formatAiCounter(ai.last_fault))}
+            ${renderAiField('engine_busy', busyLabel)}
+            ${renderAiField('scratchpad_occupancy_bytes', formatAiCounter(ai.scratchpad_occupancy_bytes))}
+          </div>
+          <div class="kv-list">
+            ${renderAiField('dma_load_bytes', formatAiCounter(ai.dma_load_bytes))}
+            ${renderAiField('dma_store_bytes', formatAiCounter(ai.dma_store_bytes))}
+            ${renderAiField('device_cycles', formatAiCounter(ai.device_cycles))}
+            ${renderAiField('dma_cycles', formatAiCounter(ai.dma_cycles))}
+            ${renderAiField('compute_cycles', formatAiCounter(ai.compute_cycles))}
+            ${renderAiField('stall_cycles', formatAiCounter(ai.stall_cycles))}
+          </div>
+          <div class="kv-list">
+            ${renderAiField('busy_cycles', formatAiCounter(ai.busy_cycles))}
+            ${renderAiField('queue_cycles', formatAiCounter(ai.queue_cycles))}
+            ${renderAiField('completion_cycles', formatAiCounter(ai.completion_cycles))}
+            ${renderAiField('effective_ops_per_cycle', formatAiCounter(ai.effective_ops_per_cycle))}
+            ${renderAiField('utilization', formatAiCounter(ai.utilization))}
+          </div>
+        </div>
+      </div>
+    `,
+    'panel-ai-accelerator',
   );
 }
 
@@ -116,9 +181,10 @@ export function renderArchitectureGroup(snapshot, registers, isOpen = false) {
 export function renderPlatformGroup(snapshot, isOpen = false) {
   return groupPanel(
     '平台与 I/O',
-    '设备状态 · 总线访问 · 事件流',
+    '设备状态 · AI accelerator · 总线访问 · 事件流',
     [
       renderDevices(snapshot),
+      renderAiAccelerator(snapshot),
       renderBus(snapshot),
       renderEvents(snapshot),
     ],

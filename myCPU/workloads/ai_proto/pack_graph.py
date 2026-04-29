@@ -41,6 +41,7 @@ OPCODE = {
     "pool_max": 4,
     "reduce_sum": 5,
     "layout_transpose": 6,
+    "softmax": 7,
 }
 
 SHAPE_MODE = {
@@ -421,9 +422,125 @@ def build_dynamic_gemm(out_dir: pathlib.Path) -> None:
     )
 
 
+def build_dynamic_tiny_model(out_dir: pathlib.Path) -> None:
+    name = "dynamic_tiny_model"
+    tensors = [
+        Tensor("fp16", "input", 2, (2, 3, 0, 0), (1, 3, 0, 0)),
+        Tensor("fp16", "weight", 2, (3, 2, 0, 0), (3, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (2, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (2, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp32", "output", 2, (2, 1, 0, 0), (1, 1, 0, 0)),
+    ]
+    ops = [
+        Op("gemm", "fp16", "fp32", 0, 1, 0xFFFF, 2),
+        Op("eltwise_relu", "fp32", "fp32", 2, 0xFFFF, 0xFFFF, 3),
+        Op("pool_max", "fp32", "fp32", 3, 0xFFFF, 0xFFFF, 4, (1, 2, 1, 2)),
+    ]
+    dependencies = [(0, 1), (1, 2)]
+    memory_plan = [
+        MemoryPlan(0, 0, 0, 12, 12),
+        MemoryPlan(1, 0, 12, 12, 12),
+        MemoryPlan(2, 0, 24, 16, 16),
+        MemoryPlan(3, 0, 40, 16, 16),
+        MemoryPlan(4, 0, 56, 8, 8),
+    ]
+    graph = serialize_graph_package(
+        64,
+        tensors,
+        ops,
+        dependencies,
+        memory_plan,
+        shape_mode="dynamic_bounded",
+        dynamic_tensors=[
+            DynamicTensor(0, 12),
+            DynamicTensor(2, 16),
+            DynamicTensor(3, 16),
+            DynamicTensor(4, 8),
+        ],
+    )
+    runtime_shape_table = serialize_runtime_shape_table([
+        RuntimeShape(0, 2, (1, 3, 0, 0)),
+        RuntimeShape(2, 2, (1, 2, 0, 0)),
+        RuntimeShape(3, 2, (1, 2, 0, 0)),
+        RuntimeShape(4, 2, (1, 1, 0, 0)),
+    ])
+    (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    (out_dir / f"{name}.runtime_shape.bin").write_bytes(runtime_shape_table)
+    (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<3H", 0x3C00, 0xC000, 0x4200))
+    (out_dir / f"{name}.input1.bin").write_bytes(
+        struct.pack("<6H", 0x3C00, 0xBC00, 0x4000, 0x3800, 0xBC00, 0x3E00)
+    )
+    (out_dir / f"{name}.output0.expected.bin").write_bytes(struct.pack("<f", 2.5))
+    write_manifest(
+        out_dir / f"{name}.manifest",
+        name=name,
+        graph_package=f"{name}.graph.bin",
+        runtime_shape_table=f"{name}.runtime_shape.bin",
+        inputs=[f"{name}.input0.bin", f"{name}.input1.bin"],
+        outputs=[f"{name}.output0.actual.bin"],
+        expected_outputs=[f"{name}.output0.expected.bin"],
+        max_ticks=128,
+        source_tag=45,
+    )
+
+
+def build_tiny_attention_static(out_dir: pathlib.Path) -> None:
+    name = "tiny_attention_static"
+    tensors = [
+        Tensor("fp16", "input", 2, (1, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp16", "weight", 2, (2, 2, 0, 0), (2, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (1, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (1, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp32", "weight", 2, (2, 1, 0, 0), (2, 1, 0, 0)),
+        Tensor("fp32", "output", 2, (1, 1, 0, 0), (1, 1, 0, 0)),
+    ]
+    ops = [
+        Op("gemm", "fp16", "fp32", 0, 1, 0xFFFF, 2),
+        Op("softmax", "fp32", "fp32", 2, 0xFFFF, 0xFFFF, 3),
+        Op("gemm", "fp32", "fp32", 3, 4, 0xFFFF, 5),
+    ]
+    dependencies = [(0, 1), (1, 2)]
+    memory_plan = [
+        MemoryPlan(0, 0, 0, 4, 4),
+        MemoryPlan(1, 0, 8, 8, 8),
+        MemoryPlan(2, 0, 16, 8, 8),
+        MemoryPlan(3, 0, 24, 8, 8),
+        MemoryPlan(4, 0, 32, 8, 8),
+        MemoryPlan(5, 0, 48, 4, 4),
+    ]
+    graph = serialize_graph_package(64, tensors, ops, dependencies, memory_plan)
+    (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<2H", 0x0000, 0x0000))
+    (out_dir / f"{name}.input1.bin").write_bytes(struct.pack("<4H", 0x3C00, 0x3C00, 0x3C00, 0x3C00))
+    (out_dir / f"{name}.input2.bin").write_bytes(struct.pack("<2f", 1.0, 3.0))
+    (out_dir / f"{name}.output0.expected.bin").write_bytes(struct.pack("<f", 2.0))
+    write_manifest(
+        out_dir / f"{name}.manifest",
+        name=name,
+        graph_package=f"{name}.graph.bin",
+        inputs=[f"{name}.input0.bin", f"{name}.input1.bin", f"{name}.input2.bin"],
+        outputs=[f"{name}.output0.actual.bin"],
+        expected_outputs=[f"{name}.output0.expected.bin"],
+        max_ticks=128,
+        source_tag=61,
+    )
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Pack fixed AI accelerator graph workloads")
-    parser.add_argument("--workload", choices=["cnn", "gemm", "tiny_model", "dynamic_gemm", "all"], default="all")
+    parser.add_argument(
+        "--workload",
+        choices=[
+            "cnn",
+            "gemm",
+            "tiny_model",
+            "dynamic_gemm",
+            "dynamic_tiny_model",
+            "tiny_attention_static",
+            "all",
+        ],
+        default="all",
+    )
     parser.add_argument("--out-dir", required=True)
     return parser
 
@@ -441,6 +558,10 @@ def main(argv: list[str] | None = None) -> int:
         build_tiny_model(out_dir)
     if args.workload in ("dynamic_gemm", "all"):
         build_dynamic_gemm(out_dir)
+    if args.workload in ("dynamic_tiny_model", "all"):
+        build_dynamic_tiny_model(out_dir)
+    if args.workload in ("tiny_attention_static", "all"):
+        build_tiny_attention_static(out_dir)
 
     print(f"packed workload={args.workload} out_dir={out_dir}")
     return 0

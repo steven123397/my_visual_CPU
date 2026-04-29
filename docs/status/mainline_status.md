@@ -27,10 +27,9 @@
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
 - 当前计划：
-  - [../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md](../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md)
-  - [../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md](../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md)
-  - [../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md](../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md)
+  - 暂无主线活跃计划；下一轮应先为 `Wave 5 / cache / memory-system` 写新的 plan。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan](../plan/history_plan.md#mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan)
   - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
@@ -81,12 +80,23 @@ timing、代表性 workload 与最小前端观察面；`Softmax + tiny static at
 - `debug/frontend`、`kernel_alpha` 十条基线、`make test` / `make test-pipeline`
   和现有 workload smoke 都已进入维护态。
 - 当前 active wave 是 `Wave 4`，不是继续深挖 Linux checkpoint 的 `Wave 3`。
+- 主线 `Wave 4` 的 AI accelerator 切片 A 已完成：`bounded dynamic shape`
+  已从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，
+  并新增 `dynamic_tiny_model` 动态小模型 workload。
+- 主线 `Wave 4` 的 AI accelerator 切片 B 已完成：`timed-simple` profile 现在把
+  tile setup 归入 `stall_cycles`，debug snapshot 保持 aggregate-only schema，
+  frontend 已为 `guest_ai_accel_demo` 增加 workload presentation 与 AI accelerator
+  只读 counters 面板。
+- 主线 `Wave 4` 的 AI accelerator 切片 C stretch 已完成：新增静态 `fp32`
+  row-wise `Softmax`，并新增 `tiny_attention_static` host workload，固定验证
+  `gemm -> softmax -> gemm` 的最小 attention-like profile 闭环。
 
 ## 当前优先级
 
-1. 执行主线 `Wave 4` 的 AI accelerator 三段切片：
-   `dynamic shape / workload -> profile / frontend -> Softmax + tiny static attention stretch`。
-   其中前两段是核心完成定义，第三段是可降级 stretch。
+1. 主线 `Wave 4` 的 AI accelerator 三段切片已经完成；下一步主线优先级应切到
+   `Wave 5 / cache / memory-system` 第一刀。AI accelerator 的 `INT4 / training /
+   MobileNet / Linux-facing NPU driver / real DMA overlap / multi outstanding queue`
+   等后续专项不得改写主线 `Wave 5` 定位。
 2. Linux `timerfd-one-shot-readback-ok` 作为 `Wave 3` 冻结边界进入守成；除非真实
    runtime 重新暴露新 blocker，不再继续向当前 fourth-stage smoke 追加同类
    `open-fd / mmap / pipe / futex / socketpair / openat2 / pidfd / signalfd /
@@ -108,6 +118,18 @@ timing、代表性 workload 与最小前端观察面；`Softmax + tiny static at
     shape / workload`，再做 profile / frontend 观察面，最后把 `Softmax + tiny
     static attention` 作为可降级 stretch；训练、`INT4`、MobileNet、Linux-facing
     NPU driver 等剩余远期目标后移到 AI accelerator 后续专项阶段。
+  - 主线 `Wave 4` 的 AI accelerator 切片 A 已完成：`bounded dynamic shape`
+    已从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，
+    并新增 `dynamic_tiny_model` 动态小模型 workload。
+  - 主线 `Wave 4` 的 AI accelerator 切片 B 已完成：profile / timing attribution
+    已把 tile setup 归到 `stall_cycles`，host profile 与 guest debug counters
+    稳定暴露 aggregate 字段；frontend 的 `guest_ai_accel_demo` workload card 和
+    平台组 AI accelerator panel 已接入 `KMVAI`、queue、scratchpad、DMA bytes、
+    device / dma / compute / stall cycles 与 utilization 等只读字段。
+  - 主线 `Wave 4` 的 AI accelerator 切片 C stretch 已完成：新增静态 `fp32`
+    row-wise `Softmax` 和 `tiny_attention_static` workload，固定验证
+    `gemm -> softmax -> gemm` 的最小 attention-like 闭环；它不是完整 attention /
+    Transformer runtime。
   - 这次收口把 `xv6 / Linux` pipeline-side memory signal 明确降级为
     `Wave 5 / cache` 前置证据，而不是阻塞 `Wave 4` 的硬门槛；当前 `Wave 4`
     依赖的观测证据来自 pipeline vector CNN、functional `xv6`、functional
@@ -159,19 +181,21 @@ timing、代表性 workload 与最小前端观察面；`Softmax + tiny static at
   `Wave 5 / cache` 前置证据，而不是 `Wave 4` 激活 blocker。
 - `Wave 4` 不能被误读成真实 cache / DMA / multicore 已启动；当前只能推进
   AI accelerator、向量和 observation 的窄 hardening。
-- `Softmax + tiny static attention` 只是 `Wave 4` 后段 stretch；如果它打开过大的
-  数值或 op 合同矩阵，应降级到 AI accelerator 后续专项阶段，而不是拖住
-  `bounded dynamic shape / profile / frontend` 核心收口。
+- `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
+  最小静态 `fp32` row-wise softmax 和极小 attention-like profile 闭环；不要把它
+  写成完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
 - `debug/frontend`、`pipeline` 和 guest runtime 都已形成可维护边界，但后续
   仍要避免真实 bug 修复把职责重新揉回大文件。
 
 ## 下一步
 
-1. 先执行 [../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md](../plan/mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md)，
-   把 `bounded dynamic shape` 扩到现有 op family 的正向或 fail-closed 合同，并新增动态小模型 workload。
-2. 再执行 [../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md](../plan/mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md)，
-   收口 profile / timing attribution 和最小 AI accelerator frontend 观察面。
-3. 当前两段为绿灯后，再决定是否执行 [../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md](../plan/mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md)。
+1. 为 `Wave 5 / cache / memory-system` 第一刀补新的设计/计划入口；不要把主线
+   `Wave 5` 改成 AI accelerator 后续专项。
+2. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+   driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan，并
+   明确不占用主线 `Wave 5`。
+3. Wave 4 AI accelerator 的完成记录统一见
+   [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
 4. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
    guardrail；未提供 `Image` 时，不把该项写成默认已证明。
 5. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、

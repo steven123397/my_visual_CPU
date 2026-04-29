@@ -3,6 +3,7 @@ export { renderPredictor, renderOooPanel } from './panels/predictor_ooo.js';
 export {
   renderEvents,
   renderDevices,
+  renderAiAccelerator,
   renderRegisters,
   renderCsrs,
   renderBus,

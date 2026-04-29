@@ -201,6 +201,7 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
                              uint64_t expected_device_cycles,
                              uint64_t expected_dma_cycles,
                              uint64_t expected_compute_cycles,
+                             uint64_t expected_stall_cycles,
                              uint64_t expected_busy_cycles,
                              uint64_t expected_queue_cycles,
                              uint64_t expected_completion_cycles,
@@ -258,6 +259,9 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
         !expect_contains(profile.output,
                          ("compute_cycles=" + std::to_string(expected_compute_cycles)).c_str(),
                          "expected compute cycle summary") ||
+        !expect_contains(profile.output,
+                         ("stall_cycles=" + std::to_string(expected_stall_cycles)).c_str(),
+                         "expected stall cycle summary") ||
         !expect_contains(profile.output,
                          ("busy_cycles=" + std::to_string(expected_busy_cycles)).c_str(),
                          "expected busy cycle summary") ||
@@ -341,19 +345,20 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
         !expect_contains(profile.output, "runtime_shapes=t0:2x8,t2:2x4", "expected runtime shape summary") ||
         !expect_contains(profile.output, "device_cycles=15", "expected dynamic_gemm device cycle summary") ||
         !expect_contains(profile.output, "dma_cycles=11", "expected dynamic_gemm DMA cycle summary") ||
-        !expect_contains(profile.output, "compute_cycles=4", "expected dynamic_gemm compute cycle summary") ||
+        !expect_contains(profile.output, "compute_cycles=2", "expected dynamic_gemm compute cycle summary") ||
+        !expect_contains(profile.output, "stall_cycles=2", "expected dynamic_gemm stall cycle summary") ||
         !expect_contains(profile.output, "busy_cycles=17", "expected dynamic_gemm busy cycle summary") ||
         !expect_contains(profile.output, "queue_cycles=1", "expected dynamic_gemm queue cycle summary") ||
         !expect_contains(profile.output, "completion_cycles=1", "expected dynamic_gemm completion cycle summary") ||
-        !expect_contains(profile.output, "effective_ops_per_cycle=16", "expected dynamic_gemm op/cycle summary") ||
-        !expect_contains(profile.output, "utilization=23", "expected dynamic_gemm utilization summary") ||
+        !expect_contains(profile.output, "effective_ops_per_cycle=32", "expected dynamic_gemm op/cycle summary") ||
+        !expect_contains(profile.output, "utilization=11", "expected dynamic_gemm utilization summary") ||
         !expect_contains(profile.output, "bytes_moved=80", "expected dynamic_gemm bytes moved summary") ||
         !expect_contains(profile.output, "retired_ops=64", "expected dynamic_gemm retired op summary") ||
         !expect_contains(profile.output,
                          "ai_profile_aggregate tile_count=2 scratchpad_peak_bytes=80 op_count=1",
                          "expected dynamic_gemm aggregate itemized profile output") ||
         !expect_contains(profile.output,
-                         "ai_profile_op op_index=0 opcode=gemm retired_ops=64 compute_cycles=4 stall_cycles=0 tile_count=2",
+                         "ai_profile_op op_index=0 opcode=gemm retired_ops=64 compute_cycles=2 stall_cycles=2 tile_count=2",
                          "expected dynamic_gemm op itemized profile output") ||
         !expect_file_exists(actual, "expected dynamic_gemm actual output")) {
         return false;
@@ -361,6 +366,86 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
 
     return expect(read_binary_file(actual) == read_binary_file(expected),
                   "expected dynamic_gemm output to match packaged expectation");
+}
+
+bool expect_pack_and_profile_dynamic_tiny_model(const std::filesystem::path& temp_dir) {
+    const std::string pack_command =
+        "python3 workloads/ai_proto/pack_graph.py --workload dynamic_tiny_model --out-dir " +
+        temp_dir.string();
+    const CommandResult pack = run_command(pack_command);
+    if (!expect(pack.exit_code == 0, "expected dynamic_tiny_model pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+
+    const std::filesystem::path manifest = temp_dir / "dynamic_tiny_model.manifest";
+    const std::filesystem::path graph = temp_dir / "dynamic_tiny_model.graph.bin";
+    const std::filesystem::path runtime_shape = temp_dir / "dynamic_tiny_model.runtime_shape.bin";
+    const std::filesystem::path actual = temp_dir / "dynamic_tiny_model.output0.actual.bin";
+    const std::filesystem::path expected = temp_dir / "dynamic_tiny_model.output0.expected.bin";
+    if (!expect_file_exists(manifest, "expected dynamic_tiny_model manifest") ||
+        !expect_file_exists(graph, "expected dynamic_tiny_model graph package") ||
+        !expect_file_exists(runtime_shape, "expected dynamic_tiny_model runtime shape table") ||
+        !expect_file_exists(expected, "expected dynamic_tiny_model expected output")) {
+        return false;
+    }
+
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph), package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    if (!expect(package.shape_mode == AiShapeMode::DynamicBounded,
+                "expected dynamic_tiny_model packaged graph shape mode") ||
+        !expect(package.dynamic_tensors.size() == 4,
+                "expected dynamic_tiny_model packaged graph dynamic tensors")) {
+        return false;
+    }
+
+    const CommandResult profile =
+        run_command("./mycpu --ai-profile-manifest " + manifest.string());
+    if (!expect(profile.exit_code == 0, "expected dynamic_tiny_model ai profile command to succeed")) {
+        std::fprintf(stderr, "%s\n", profile.output.c_str());
+        return false;
+    }
+
+    if (!expect_contains(profile.output, "name=dynamic_tiny_model", "expected dynamic tiny workload name") ||
+        !expect_contains(profile.output, "shape_mode=dynamic_bounded", "expected dynamic tiny shape mode summary") ||
+        !expect_contains(profile.output,
+                         "runtime_shapes=t0:1x3,t2:1x2,t3:1x2,t4:1x1",
+                         "expected dynamic tiny runtime shape summary") ||
+        !expect_contains(profile.output, "device_cycles=15", "expected dynamic tiny device cycle summary") ||
+        !expect_contains(profile.output, "dma_cycles=9", "expected dynamic tiny DMA cycle summary") ||
+        !expect_contains(profile.output, "compute_cycles=3", "expected dynamic tiny compute cycle summary") ||
+        !expect_contains(profile.output, "stall_cycles=3", "expected dynamic tiny stall cycle summary") ||
+        !expect_contains(profile.output, "busy_cycles=17", "expected dynamic tiny busy cycle summary") ||
+        !expect_contains(profile.output, "queue_cycles=1", "expected dynamic tiny queue cycle summary") ||
+        !expect_contains(profile.output, "completion_cycles=1", "expected dynamic tiny completion cycle summary") ||
+        !expect_contains(profile.output,
+                         "effective_ops_per_cycle=3",
+                         "expected dynamic tiny op/cycle summary") ||
+        !expect_contains(profile.output, "utilization=17", "expected dynamic tiny utilization summary") ||
+        !expect_contains(profile.output, "bytes_moved=22", "expected dynamic tiny bytes moved summary") ||
+        !expect_contains(profile.output, "retired_ops=10", "expected dynamic tiny retired op summary") ||
+        !expect_contains(profile.output,
+                         "ai_profile_aggregate tile_count=3 scratchpad_peak_bytes=60 op_count=3",
+                         "expected dynamic tiny aggregate itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=0 opcode=gemm retired_ops=6 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic tiny GEMM itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic tiny ReLU itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=2 opcode=pool_max retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic tiny pool itemized profile output") ||
+        !expect_file_exists(actual, "expected dynamic_tiny_model actual output")) {
+        return false;
+    }
+
+    return expect(read_binary_file(actual) == read_binary_file(expected),
+                  "expected dynamic_tiny_model output to match packaged expectation");
 }
 
 }  // namespace
@@ -384,11 +469,19 @@ int main() {
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_model");
         const CommandResult dynamic_gemm_make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_gemm");
+        const CommandResult dynamic_tiny_model_make_run = run_command(
+            "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_tiny_model");
+        const CommandResult tiny_attention_make_run = run_command(
+            "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_attention_static");
         if (!expect(make_run.exit_code == 0, "expected ai workload make dry-run to succeed") ||
             !expect(tiny_model_make_run.exit_code == 0,
                     "expected tiny model ai workload make dry-run to succeed") ||
             !expect(dynamic_gemm_make_run.exit_code == 0,
                     "expected dynamic_gemm ai workload make dry-run to succeed") ||
+            !expect(dynamic_tiny_model_make_run.exit_code == 0,
+                    "expected dynamic_tiny_model ai workload make dry-run to succeed") ||
+            !expect(tiny_attention_make_run.exit_code == 0,
+                    "expected tiny_attention_static ai workload make dry-run to succeed") ||
             !expect_contains(profile_text,
                              "WORKLOAD_RUN_MODE := ai-profile",
                              "expected ai_proto workload run mode") ||
@@ -400,7 +493,13 @@ int main() {
                              "expected tiny model dry-run manifest argument") ||
             !expect_contains(dynamic_gemm_make_run.output,
                              "--ai-profile-manifest workloads/ai_proto/generated/dynamic_gemm.manifest",
-                             "expected dynamic_gemm dry-run manifest argument")) {
+                             "expected dynamic_gemm dry-run manifest argument") ||
+            !expect_contains(dynamic_tiny_model_make_run.output,
+                             "--ai-profile-manifest workloads/ai_proto/generated/dynamic_tiny_model.manifest",
+                             "expected dynamic_tiny_model dry-run manifest argument") ||
+            !expect_contains(tiny_attention_make_run.output,
+                             "--ai-profile-manifest workloads/ai_proto/generated/tiny_attention_static.manifest",
+                             "expected tiny_attention_static dry-run manifest argument")) {
             std::fprintf(stderr, "%s\n", make_run.output.c_str());
             return 1;
         }
@@ -534,59 +633,83 @@ int main() {
                                     "name=cnn",
                                     18,
                                     9,
-                                    9,
+                                    5,
+                                    4,
                                     20,
                                     1,
                                     1,
-                                    7,
-                                    45,
+                                    12,
+                                    25,
                                     32,
                                     63,
                                     {
                                         "ai_profile_aggregate tile_count=4 scratchpad_peak_bytes=188 op_count=4",
-                                        "ai_profile_op op_index=0 opcode=conv2d retired_ops=36 compute_cycles=3 stall_cycles=0 tile_count=1",
-                                        "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=9 compute_cycles=2 stall_cycles=0 tile_count=1",
-                                        "ai_profile_op op_index=2 opcode=layout_transpose retired_ops=9 compute_cycles=2 stall_cycles=0 tile_count=1",
-                                        "ai_profile_op op_index=3 opcode=reduce_sum retired_ops=9 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=0 opcode=conv2d retired_ops=36 compute_cycles=2 stall_cycles=1 tile_count=1",
+                                        "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=9 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                        "ai_profile_op op_index=2 opcode=layout_transpose retired_ops=9 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                        "ai_profile_op op_index=3 opcode=reduce_sum retired_ops=9 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
             expect_pack_and_profile(temp_dir,
                                     "gemm",
                                     "name=gemm",
                                     13,
                                     9,
-                                    4,
+                                    2,
+                                    2,
                                     15,
                                     1,
                                     1,
-                                    3,
-                                    26,
+                                    6,
+                                    13,
                                     20,
                                     12,
                                     {
                                         "ai_profile_aggregate tile_count=2 scratchpad_peak_bytes=36 op_count=2",
-                                        "ai_profile_op op_index=0 opcode=gemm retired_ops=8 compute_cycles=2 stall_cycles=0 tile_count=1",
-                                        "ai_profile_op op_index=1 opcode=pool_max retired_ops=4 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=0 opcode=gemm retired_ops=8 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                        "ai_profile_op op_index=1 opcode=pool_max retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
             expect_pack_and_profile(temp_dir,
                                     "tiny_model",
                                     "name=tiny_model",
                                     15,
                                     9,
-                                    6,
+                                    3,
+                                    3,
                                     17,
                                     1,
                                     1,
-                                    3,
-                                    35,
+                                    6,
+                                    17,
                                     28,
                                     20,
                                     {
                                         "ai_profile_aggregate tile_count=3 scratchpad_peak_bytes=60 op_count=3",
-                                        "ai_profile_op op_index=0 opcode=gemm retired_ops=12 compute_cycles=2 stall_cycles=0 tile_count=1",
-                                        "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=4 compute_cycles=2 stall_cycles=0 tile_count=1",
-                                        "ai_profile_op op_index=2 opcode=pool_max retired_ops=4 compute_cycles=2 stall_cycles=0 tile_count=1",
+                                        "ai_profile_op op_index=0 opcode=gemm retired_ops=12 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                        "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                        "ai_profile_op op_index=2 opcode=pool_max retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
-            expect_pack_and_profile_dynamic(temp_dir);
+            expect_pack_and_profile(temp_dir,
+                                    "tiny_attention_static",
+                                    "name=tiny_attention_static",
+                                    18,
+                                    12,
+                                    3,
+                                    3,
+                                    20,
+                                    1,
+                                    1,
+                                    2,
+                                    15,
+                                    24,
+                                    8,
+                                    {
+                                        "ai_profile_aggregate tile_count=3 scratchpad_peak_bytes=52 op_count=3",
+                                        "ai_profile_op op_index=0 opcode=gemm retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                        "ai_profile_op op_index=1 opcode=softmax retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                        "ai_profile_op op_index=2 opcode=gemm retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                    }) &&
+            expect_pack_and_profile_dynamic(temp_dir) &&
+            expect_pack_and_profile_dynamic_tiny_model(temp_dir);
 
         std::filesystem::remove_all(temp_dir);
         if (!ok) {

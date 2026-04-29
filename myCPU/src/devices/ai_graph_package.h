@@ -39,6 +39,7 @@ enum class AiOpCode : uint8_t {
     PoolMax = 4,
     ReduceSum = 5,
     LayoutTranspose = 6,
+    Softmax = 7,
 };
 
 enum class AiShapeMode : uint8_t {

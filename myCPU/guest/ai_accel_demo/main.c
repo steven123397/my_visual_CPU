@@ -165,8 +165,8 @@ static bool ai_accel_demo_submit(kernel_runtime_t* runtime) {
     ai_accel_read_counters(&counters);
     if (counters.device_cycles != 8 ||
         counters.dma_cycles != 6 ||
-        counters.compute_cycles != 2 ||
-        counters.stall_cycles != 0 ||
+        counters.compute_cycles != 1 ||
+        counters.stall_cycles != 1 ||
         counters.dma_load_bytes != 12 ||
         counters.dma_store_bytes != 4) {
         return false;

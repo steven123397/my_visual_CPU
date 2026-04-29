@@ -43,6 +43,15 @@ export function renderSummary(snapshot, runState) {
   );
 }
 
+function workloadProgressItems(workload) {
+  return workload?.progress ?? [
+    ['P0', 'demo 入口 + workload 卡 + 指令高亮'],
+    ['P1', 'vector snapshot + 寄存器 diff'],
+    ['P2', '固定 conv -> relu 专题视图'],
+    ['P3', '当前向量执行边界提示'],
+  ];
+}
+
 export function renderWorkloadPanel(testEntry, snapshot) {
   if (!testEntry) {
     return '';
@@ -68,12 +77,7 @@ export function renderWorkloadPanel(testEntry, snapshot) {
           ${(workload.ops ?? []).map((op) => renderWorkloadTag(op, 'neutral')).join('')}
         </div>
         <div class="workload-progress">
-          ${[
-            ['P0', 'demo 入口 + workload 卡 + 指令高亮'],
-            ['P1', 'vector snapshot + 寄存器 diff'],
-            ['P2', '固定 conv -> relu 专题视图'],
-            ['P3', '当前向量执行边界提示'],
-          ].map(([label, detail]) => `
+          ${workloadProgressItems(workload).map(([label, detail]) => `
             <div class="workload-progress__item">
               <span>${label}</span>
               <strong>${detail}</strong>

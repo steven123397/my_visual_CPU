@@ -19,17 +19,17 @@ uint64_t tile_count(const AiTensorMetadata& tensor) {
     return count;
 }
 
-uint64_t op_cycles(uint64_t retired_ops,
-                   uint64_t output_tiles,
-                   const AiGraphSchedulerTiming& timing) {
-    const uint64_t setup_cycles =
-        output_tiles * static_cast<uint64_t>(timing.tile_setup_cycles);
-    const uint64_t throughput_cycles =
-        retired_ops == 0 ? 0
-                         : (retired_ops + timing.ops_per_cycle - 1) /
-                               static_cast<uint64_t>(timing.ops_per_cycle == 0 ? 1
-                                                                                : timing.ops_per_cycle);
-    return setup_cycles + throughput_cycles;
+uint64_t op_compute_cycles(uint64_t retired_ops,
+                           const AiGraphSchedulerTiming& timing) {
+    return retired_ops == 0 ? 0
+                            : (retired_ops + timing.ops_per_cycle - 1) /
+                                  static_cast<uint64_t>(timing.ops_per_cycle == 0 ? 1
+                                                                                   : timing.ops_per_cycle);
+}
+
+uint64_t op_stall_cycles(uint64_t output_tiles,
+                         const AiGraphSchedulerTiming& timing) {
+    return output_tiles * static_cast<uint64_t>(timing.tile_setup_cycles);
 }
 
 uint32_t scratchpad_peak_bytes(const AiGraphPackage& package) {
@@ -128,6 +128,7 @@ bool AiGraphScheduler::execute(const AiGraphPackage& package,
         case AiOpCode::PoolMax:
         case AiOpCode::ReduceSum:
         case AiOpCode::LayoutTranspose:
+        case AiOpCode::Softmax:
             ok = ai_execute_elementwise_op(package,
                                            memory_plan_by_tensor,
                                            op,
@@ -149,16 +150,18 @@ bool AiGraphScheduler::execute(const AiGraphPackage& package,
         }
 
         const uint64_t output_tiles = tile_count(package.tensors[op.output]);
-        const uint64_t compute_cycles = op_cycles(retired_ops, output_tiles, timing_);
+        const uint64_t compute_cycles = op_compute_cycles(retired_ops, timing_);
+        const uint64_t stall_cycles = op_stall_cycles(output_tiles, timing_);
         result.retired_ops += retired_ops;
         result.compute_cycles += compute_cycles;
+        result.stall_cycles += stall_cycles;
         result.tile_count += output_tiles;
         result.op_summaries.push_back(AiOpProfileSummary{
             .op_index = op_index,
             .opcode = op.opcode,
             .retired_ops = retired_ops,
             .compute_cycles = compute_cycles,
-            .stall_cycles = 0,
+            .stall_cycles = stall_cycles,
             .tile_count = output_tiles,
         });
         ++executed_ops;
@@ -177,8 +180,5 @@ bool AiGraphScheduler::execute(const AiGraphPackage& package,
         return false;
     }
 
-    if (!timing_.allow_dma_compute_overlap) {
-        result.stall_cycles = 0;
-    }
     return true;
 }

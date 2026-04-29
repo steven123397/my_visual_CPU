@@ -203,8 +203,27 @@ bool ai_execute_gemm_op(const AiGraphPackage& package,
         }
         break;
     }
+    case AiDataType::Fp32: {
+        if (output_tensor.dtype != AiDataType::Fp32) {
+            fault_code = AI_ACCEL_FAULT_UNSUPPORTED_DTYPE;
+            error = "FP32 GEMM requires FP32 output";
+            return false;
+        }
+        std::vector<float> lhs{};
+        std::vector<float> rhs{};
+        if (!read_tensor_values(scratchpad, *lhs_entry, lhs, error) ||
+            !read_tensor_values(scratchpad, *rhs_entry, rhs, error)) {
+            fault_code = AI_ACCEL_FAULT_EXECUTION;
+            return false;
+        }
+        std::vector<float> output = tensor_golden_gemm_f32(lhs, rhs, m, k, n);
+        if (!write_tensor_values(scratchpad, *output_entry, output, error)) {
+            fault_code = AI_ACCEL_FAULT_EXECUTION;
+            return false;
+        }
+        break;
+    }
     case AiDataType::Int32:
-    case AiDataType::Fp32:
     case AiDataType::Invalid:
         fault_code = AI_ACCEL_FAULT_UNSUPPORTED_DTYPE;
         error = "GEMM dtype is unsupported";

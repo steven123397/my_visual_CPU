@@ -86,6 +86,28 @@ export function listTests(repoRoot) {
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_plic_not_ready_demo'));
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_timer_not_ready_demo'));
   manifest.push(withPresentation(
+    guestEntry(myCpuRoot, 'guest_ai_accel_demo'),
+    {
+      menuLabel: 'guest_ai_accel_demo · AI accel MMIO',
+      title: 'AI Accelerator Demo',
+      badge: 'AI Accelerator',
+      summary: '通过 MMIO 提交一个最小 graph package，并用 KMVAI 验证 guest 到设备的闭环。',
+      workload: {
+        stage: 'Wave 4',
+        category: 'ai-accelerator-demo',
+        expectedMarker: 'KMVAI',
+        ops: ['graph package', 'MMIO doorbell', 'DMA load/store', 'timed-simple profile'],
+        pipelineNote: '当前 frontend 只展示 debug snapshot 中的 aggregate counters；op summary 和真实 DMA overlap 后移到后续专项阶段。',
+        progress: [
+          ['Queue', '单 entry submission / completion queue'],
+          ['DMA', 'load/store bytes 来自 debug snapshot'],
+          ['Compute', 'timed-simple compute / stall attribution'],
+          ['Profile', '只读 aggregate counters'],
+        ],
+      },
+    },
+  ));
+  manifest.push(withPresentation(
     guestEntry(myCpuRoot, 'guest_vector_demo'),
     {
       menuLabel: 'guest_vector_demo · V-lite ops',

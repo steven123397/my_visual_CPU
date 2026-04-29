@@ -574,9 +574,13 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
         if (!parse_ai_runtime_shape_table(runtime_shape_bytes,
                                           package.dynamic_tensors.size(),
                                           runtime_shapes,
-                                          error) ||
-            !resolve_ai_runtime_shape_package(package, runtime_shapes, package, error)) {
+                                          error)) {
             fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
+            detail = descriptor.runtime_shape_table_offset;
+            return false;
+        }
+        if (!resolve_ai_runtime_shape_package(package, runtime_shapes, package, error)) {
+            fault = graph_package_fault(error);
             detail = descriptor.runtime_shape_table_offset;
             return false;
         }

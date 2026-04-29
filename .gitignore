@@ -54,6 +54,7 @@ __pycache__/
 /myCPU/workloads/linux_proto/linux_mininit.elf
 /myCPU/workloads/linux_proto/linux_postinit_smoke.elf
 /myCPU/workloads/linux_proto/linux_postinit_exec_smoke.elf
+/myCPU/workloads/linux_proto/linux_postinit_cleanup_smoke.elf
 /myCPU/workloads/linux_proto/mycpu_virt.dts
 /myCPU/workloads/linux_proto/mycpu_virt.dtb
 /myCPU/workloads/linux_proto/rootfs.cpio

@@ -21,6 +21,18 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-04-29
+
+#### mainline-wave4-ai-accelerator-slices-plan
+
+- 原文件：
+  - `mainline_wave4_ai_accelerator_slice_a_dynamic_shape_workload_plan.md`
+  - `mainline_wave4_ai_accelerator_slice_b_profile_frontend_plan.md`
+  - `mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md`
+- 完成内容：完成主线 `Wave 4` 中的 AI accelerator A/B/C 三段切片。切片 A 把 bounded dynamic shape 从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，并新增 `dynamic_tiny_model`；切片 B 把 `timed-simple` profile 的 tile setup 归到 `stall_cycles`，并把 `guest_ai_accel_demo` workload presentation 与 AI accelerator aggregate counters 接入 frontend；切片 C 作为 stretch 完成最小静态 `Softmax` 与 `tiny_attention_static`，固定为 `gemm -> softmax -> gemm` 小闭环。
+- 实现过程摘要：这一轮继续采用“先切片 A/B 核心目标，再按绿灯条件启动 stretch”的路径；debug snapshot 仍保持 aggregate-only schema，没有把 host-side itemized op summary 扩成 MMIO / debug ABI。`Softmax + tiny static attention` 只证明当前 graph package / scheduler / profile path 能表达最小 attention-like block，不代表完整 Transformer runtime、动态 sequence length、KV-cache、多 head attention、训练、`INT4`、MobileNet 或 Linux-facing NPU driver。
+- 结果参考：[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[mainline_status.md](../status/mainline_status.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
+
 ### 2026-04-27
 
 #### mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan

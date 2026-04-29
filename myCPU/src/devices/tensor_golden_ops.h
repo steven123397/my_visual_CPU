@@ -34,6 +34,12 @@ std::vector<float> tensor_golden_gemm_bf16_to_fp32(
     uint32_t m,
     uint32_t k,
     uint32_t n);
+std::vector<float> tensor_golden_gemm_f32(
+    const std::vector<float>& lhs,
+    const std::vector<float>& rhs,
+    uint32_t m,
+    uint32_t k,
+    uint32_t n);
 
 std::vector<int32_t> tensor_golden_conv2d_valid_i8_to_i32(
     const std::vector<int8_t>& input,
@@ -67,4 +73,7 @@ std::vector<int32_t> tensor_golden_transpose_2d_i32(
     const std::vector<int32_t>& input,
     uint32_t rows,
     uint32_t cols);
-
+std::vector<float> tensor_golden_softmax_rows_f32(
+    const std::vector<float>& input,
+    uint32_t rows,
+    uint32_t cols);

@@ -738,13 +738,13 @@ int main() {
                     "\"dma_store_bytes\":4",
                     "\"device_cycles\":8",
                     "\"dma_cycles\":6",
-                    "\"compute_cycles\":2",
-                    "\"stall_cycles\":0",
+                    "\"compute_cycles\":1",
+                    "\"stall_cycles\":1",
                     "\"busy_cycles\":10",
                     "\"queue_cycles\":1",
                     "\"completion_cycles\":1",
-                    "\"effective_ops_per_cycle\":1",
-                    "\"utilization\":20",
+                    "\"effective_ops_per_cycle\":3",
+                    "\"utilization\":10",
                 },
                 "AI guest demo snapshot should expose final AI accelerator debug counters")) {
             return 1;

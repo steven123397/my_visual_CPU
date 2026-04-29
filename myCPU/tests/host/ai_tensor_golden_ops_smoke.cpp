@@ -70,11 +70,18 @@ bool test_semi_precision_gemm() {
     const std::vector<uint16_t> bf16_rhs = {0x3F80, 0x3FC0, 0x4000, 0x4040};
     const std::vector<float> bf16_gemm =
         tensor_golden_gemm_bf16_to_fp32(bf16_lhs, bf16_rhs, 2, 2, 2);
-    return expect(almost_equal(bf16_gemm[0], 5.0f) &&
-                      almost_equal(bf16_gemm[1], 7.5f) &&
-                      almost_equal(bf16_gemm[2], 11.0f) &&
-                      almost_equal(bf16_gemm[3], 16.5f),
-                  "expected bf16 GEMM golden values");
+    if (!expect(almost_equal(bf16_gemm[0], 5.0f) &&
+                    almost_equal(bf16_gemm[1], 7.5f) &&
+                    almost_equal(bf16_gemm[2], 11.0f) &&
+                    almost_equal(bf16_gemm[3], 16.5f),
+                "expected bf16 GEMM golden values")) {
+        return false;
+    }
+
+    const std::vector<float> f32_gemm =
+        tensor_golden_gemm_f32({0.5f, 0.5f}, {1.0f, 3.0f}, 1, 2, 1);
+    return expect(f32_gemm.size() == 1 && almost_equal(f32_gemm[0], 2.0f),
+                  "expected fp32 GEMM golden values");
 }
 
 bool test_elementwise_pool_reduce_and_layout() {
@@ -117,6 +124,19 @@ bool test_elementwise_pool_reduce_and_layout() {
                   "expected transpose golden output");
 }
 
+bool test_softmax_rows_f32() {
+    const std::vector<float> softmax =
+        tensor_golden_softmax_rows_f32({0.0f, 0.0f, 7.0f, 7.0f}, 2, 2);
+    if (!expect(softmax.size() == 4, "expected softmax output shape")) {
+        return false;
+    }
+    return expect(almost_equal(softmax[0], 0.5f) &&
+                      almost_equal(softmax[1], 0.5f) &&
+                      almost_equal(softmax[2], 0.5f) &&
+                      almost_equal(softmax[3], 0.5f),
+                  "expected deterministic row-wise softmax golden output");
+}
+
 }  // namespace
 
 int main() {
@@ -128,6 +148,9 @@ int main() {
             return 1;
         }
         if (!test_elementwise_pool_reduce_and_layout()) {
+            return 1;
+        }
+        if (!test_softmax_rows_f32()) {
             return 1;
         }
         std::puts("ai_tensor_golden_ops_smoke: PASS");

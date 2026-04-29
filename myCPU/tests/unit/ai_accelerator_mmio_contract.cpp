@@ -257,16 +257,16 @@ int main() {
                           completion_cycles) ||
             !expect(device_cycles == 8, "expected total device cycles") ||
             !expect(dma_cycles == 6, "expected total DMA cycles") ||
-            !expect(compute_cycles == 2, "expected total compute cycles") ||
-            !expect(stall_cycles == 0, "expected zero stall cycles") ||
+            !expect(compute_cycles == 1, "expected total compute cycles") ||
+            !expect(stall_cycles == 1, "expected total stall cycles") ||
             !expect(busy_cycles == 10, "expected busy cycles to include queue and completion attribution") ||
             !expect(queue_cycles == 1, "expected one queue/control cycle") ||
             !expect(completion_cycles == 1, "expected one completion cycle") ||
             !load_reg(bus,
                       AI_ACCEL_REG_EFFECTIVE_OPS_PER_CYCLE,
-                      4,
+                      8,
                       "expected effective ops per compute cycle") ||
-            !load_reg(bus, AI_ACCEL_REG_UTILIZATION, 20, "expected compute utilization percent") ||
+            !load_reg(bus, AI_ACCEL_REG_UTILIZATION, 10, "expected compute utilization percent") ||
             !expect(plic.source_level(AI_ACCEL_PLIC_SOURCE), "expected AI accelerator IRQ line asserted")) {
             return 1;
         }

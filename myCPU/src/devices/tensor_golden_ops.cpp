@@ -222,6 +222,29 @@ std::vector<float> tensor_golden_gemm_bf16_to_fp32(const std::vector<uint16_t>& 
     return golden_gemm_low_precision_to_fp32(lhs, rhs, m, k, n, AiDataType::Bf16);
 }
 
+std::vector<float> tensor_golden_gemm_f32(const std::vector<float>& lhs,
+                                          const std::vector<float>& rhs,
+                                          uint32_t m,
+                                          uint32_t k,
+                                          uint32_t n) {
+    if (m == 0 || k == 0 || n == 0) {
+        throw std::invalid_argument("GEMM shape must be non-zero");
+    }
+    expect_size(lhs, static_cast<uint64_t>(m) * k, "GEMM lhs");
+    expect_size(rhs, static_cast<uint64_t>(k) * n, "GEMM rhs");
+    std::vector<float> out(static_cast<size_t>(m) * n, 0.0f);
+    for (uint32_t row = 0; row < m; ++row) {
+        for (uint32_t col = 0; col < n; ++col) {
+            float acc = 0.0f;
+            for (uint32_t depth = 0; depth < k; ++depth) {
+                acc += lhs[row * k + depth] * rhs[depth * n + col];
+            }
+            out[row * n + col] = acc;
+        }
+    }
+    return out;
+}
+
 std::vector<int32_t> tensor_golden_conv2d_valid_i8_to_i32(const std::vector<int8_t>& input,
                                                           uint32_t input_h,
                                                           uint32_t input_w,
@@ -312,6 +335,39 @@ std::vector<int32_t> tensor_golden_transpose_2d_i32(const std::vector<int32_t>& 
     for (uint32_t row = 0; row < rows; ++row) {
         for (uint32_t col = 0; col < cols; ++col) {
             out[col * rows + row] = input[row * cols + col];
+        }
+    }
+    return out;
+}
+
+std::vector<float> tensor_golden_softmax_rows_f32(const std::vector<float>& input,
+                                                  uint32_t rows,
+                                                  uint32_t cols) {
+    if (rows == 0 || cols == 0) {
+        throw std::invalid_argument("softmax shape must be non-zero");
+    }
+    expect_size(input, static_cast<uint64_t>(rows) * cols, "softmax input");
+
+    std::vector<float> out(input.size(), 0.0f);
+    for (uint32_t row = 0; row < rows; ++row) {
+        const size_t base = static_cast<size_t>(row) * cols;
+        float row_max = input[base];
+        for (uint32_t col = 1; col < cols; ++col) {
+            row_max = std::max(row_max, input[base + col]);
+        }
+
+        float denominator = 0.0f;
+        for (uint32_t col = 0; col < cols; ++col) {
+            const float value = std::exp(input[base + col] - row_max);
+            out[base + col] = value;
+            denominator += value;
+        }
+
+        if (denominator == 0.0f) {
+            throw std::invalid_argument("softmax denominator is zero");
+        }
+        for (uint32_t col = 0; col < cols; ++col) {
+            out[base + col] /= denominator;
         }
     }
     return out;

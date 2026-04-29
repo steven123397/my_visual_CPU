@@ -23,30 +23,30 @@ AiGraphPackage make_valid_package() {
     package.tensors.push_back(AiTensorMetadata{
         .dtype = AiDataType::Int8,
         .role = AiTensorRole::Input,
-        .rank = 4,
-        .dims = {1, 4, 4, 1},
-        .tile_dims = {1, 2, 2, 1},
+        .rank = 2,
+        .dims = {4, 4, 0, 0},
+        .tile_dims = {4, 4, 0, 0},
     });
     package.tensors.push_back(AiTensorMetadata{
         .dtype = AiDataType::Int8,
         .role = AiTensorRole::Weight,
-        .rank = 4,
-        .dims = {3, 3, 1, 2},
-        .tile_dims = {3, 3, 1, 1},
+        .rank = 2,
+        .dims = {2, 2, 0, 0},
+        .tile_dims = {2, 2, 0, 0},
     });
     package.tensors.push_back(AiTensorMetadata{
         .dtype = AiDataType::Int32,
         .role = AiTensorRole::Intermediate,
-        .rank = 4,
-        .dims = {1, 2, 2, 2},
-        .tile_dims = {1, 2, 2, 1},
+        .rank = 2,
+        .dims = {3, 3, 0, 0},
+        .tile_dims = {3, 3, 0, 0},
     });
     package.tensors.push_back(AiTensorMetadata{
         .dtype = AiDataType::Int32,
         .role = AiTensorRole::Output,
-        .rank = 4,
-        .dims = {1, 2, 2, 2},
-        .tile_dims = {1, 2, 2, 1},
+        .rank = 2,
+        .dims = {3, 3, 0, 0},
+        .tile_dims = {3, 3, 0, 0},
     });
 
     package.ops.push_back(AiOpDescriptor{
@@ -86,22 +86,22 @@ AiGraphPackage make_valid_package() {
         .tensor_index = 1,
         .system_offset = 0x0100,
         .scratchpad_offset = 0x0020,
-        .byte_size = 18,
-        .scratchpad_bytes = 18,
+        .byte_size = 4,
+        .scratchpad_bytes = 4,
     });
     package.memory_plan.push_back(AiMemoryPlanEntry{
         .tensor_index = 2,
         .system_offset = 0x0200,
         .scratchpad_offset = 0x0040,
-        .byte_size = 32,
-        .scratchpad_bytes = 32,
+        .byte_size = 36,
+        .scratchpad_bytes = 36,
     });
     package.memory_plan.push_back(AiMemoryPlanEntry{
         .tensor_index = 3,
         .system_offset = 0x0300,
         .scratchpad_offset = 0x0080,
-        .byte_size = 32,
-        .scratchpad_bytes = 32,
+        .byte_size = 36,
+        .scratchpad_bytes = 36,
     });
     return package;
 }
@@ -134,9 +134,220 @@ AiGraphPackage make_dynamic_bounded_package() {
     });
     package.dynamic_tensors.push_back(AiDynamicTensorMetadata{
         .tensor_index = 3,
-        .max_tensor_bytes = 32,
+        .max_tensor_bytes = 36,
     });
     return package;
+}
+
+AiGraphPackage make_dynamic_cnn_chain_package() {
+    AiGraphPackage package;
+    package.shape_mode = AiShapeMode::DynamicBounded;
+    package.scratchpad_budget_bytes = 192;
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int8,
+        .role = AiTensorRole::Input,
+        .rank = 2,
+        .dims = {4, 4, 0, 0},
+        .tile_dims = {2, 4, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int8,
+        .role = AiTensorRole::Weight,
+        .rank = 2,
+        .dims = {2, 2, 0, 0},
+        .tile_dims = {2, 2, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int32,
+        .role = AiTensorRole::Intermediate,
+        .rank = 2,
+        .dims = {3, 3, 0, 0},
+        .tile_dims = {2, 3, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int32,
+        .role = AiTensorRole::Intermediate,
+        .rank = 2,
+        .dims = {3, 3, 0, 0},
+        .tile_dims = {2, 3, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int32,
+        .role = AiTensorRole::Intermediate,
+        .rank = 2,
+        .dims = {3, 3, 0, 0},
+        .tile_dims = {3, 2, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Int32,
+        .role = AiTensorRole::Output,
+        .rank = 1,
+        .dims = {3, 0, 0, 0},
+        .tile_dims = {2, 0, 0, 0},
+    });
+
+    package.ops.push_back(AiOpDescriptor{
+        .opcode = AiOpCode::Conv2d,
+        .input_dtype = AiDataType::Int8,
+        .accum_dtype = AiDataType::Int32,
+        .input0 = 0,
+        .input1 = 1,
+        .input2 = kAiInvalidTensorIndex,
+        .output = 2,
+    });
+    package.ops.push_back(AiOpDescriptor{
+        .opcode = AiOpCode::EltwiseRelu,
+        .input_dtype = AiDataType::Int32,
+        .accum_dtype = AiDataType::Int32,
+        .input0 = 2,
+        .input1 = kAiInvalidTensorIndex,
+        .input2 = kAiInvalidTensorIndex,
+        .output = 3,
+    });
+    package.ops.push_back(AiOpDescriptor{
+        .opcode = AiOpCode::LayoutTranspose,
+        .input_dtype = AiDataType::Int32,
+        .accum_dtype = AiDataType::Int32,
+        .input0 = 3,
+        .input1 = kAiInvalidTensorIndex,
+        .input2 = kAiInvalidTensorIndex,
+        .output = 4,
+    });
+    package.ops.push_back(AiOpDescriptor{
+        .opcode = AiOpCode::ReduceSum,
+        .input_dtype = AiDataType::Int32,
+        .accum_dtype = AiDataType::Int32,
+        .input0 = 4,
+        .input1 = kAiInvalidTensorIndex,
+        .input2 = kAiInvalidTensorIndex,
+        .output = 5,
+    });
+    package.dependencies.push_back(AiDependencyEdge{.source_op = 0, .target_op = 1});
+    package.dependencies.push_back(AiDependencyEdge{.source_op = 1, .target_op = 2});
+    package.dependencies.push_back(AiDependencyEdge{.source_op = 2, .target_op = 3});
+
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 0,
+        .system_offset = 0x0000,
+        .scratchpad_offset = 0,
+        .byte_size = 16,
+        .scratchpad_bytes = 16,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 1,
+        .system_offset = 0x0100,
+        .scratchpad_offset = 16,
+        .byte_size = 4,
+        .scratchpad_bytes = 4,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 2,
+        .system_offset = 0x0200,
+        .scratchpad_offset = 32,
+        .byte_size = 36,
+        .scratchpad_bytes = 36,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 3,
+        .system_offset = 0x0300,
+        .scratchpad_offset = 80,
+        .byte_size = 36,
+        .scratchpad_bytes = 36,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 4,
+        .system_offset = 0x0400,
+        .scratchpad_offset = 128,
+        .byte_size = 36,
+        .scratchpad_bytes = 36,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 5,
+        .system_offset = 0x0500,
+        .scratchpad_offset = 176,
+        .byte_size = 12,
+        .scratchpad_bytes = 12,
+    });
+
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{.tensor_index = 0, .max_tensor_bytes = 16});
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{.tensor_index = 2, .max_tensor_bytes = 36});
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{.tensor_index = 3, .max_tensor_bytes = 36});
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{.tensor_index = 4, .max_tensor_bytes = 36});
+    package.dynamic_tensors.push_back(AiDynamicTensorMetadata{.tensor_index = 5, .max_tensor_bytes = 12});
+    return package;
+}
+
+AiGraphPackage make_static_softmax_package() {
+    AiGraphPackage package;
+    package.scratchpad_budget_bytes = 128;
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Fp32,
+        .role = AiTensorRole::Input,
+        .rank = 2,
+        .dims = {2, 3, 0, 0},
+        .tile_dims = {2, 3, 0, 0},
+    });
+    package.tensors.push_back(AiTensorMetadata{
+        .dtype = AiDataType::Fp32,
+        .role = AiTensorRole::Output,
+        .rank = 2,
+        .dims = {2, 3, 0, 0},
+        .tile_dims = {2, 3, 0, 0},
+    });
+    package.ops.push_back(AiOpDescriptor{
+        .opcode = AiOpCode::Softmax,
+        .input_dtype = AiDataType::Fp32,
+        .accum_dtype = AiDataType::Fp32,
+        .input0 = 0,
+        .input1 = kAiInvalidTensorIndex,
+        .input2 = kAiInvalidTensorIndex,
+        .output = 1,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 0,
+        .system_offset = 0x0000,
+        .scratchpad_offset = 0,
+        .byte_size = 24,
+        .scratchpad_bytes = 24,
+    });
+    package.memory_plan.push_back(AiMemoryPlanEntry{
+        .tensor_index = 1,
+        .system_offset = 0x0100,
+        .scratchpad_offset = 32,
+        .byte_size = 24,
+        .scratchpad_bytes = 24,
+    });
+    return package;
+}
+
+std::vector<AiRuntimeShapeEntry> make_dynamic_cnn_runtime_shapes() {
+    return std::vector<AiRuntimeShapeEntry>{
+        AiRuntimeShapeEntry{
+            .tensor_index = 0,
+            .rank = 2,
+            .dims = {3, 3, 0, 0},
+        },
+        AiRuntimeShapeEntry{
+            .tensor_index = 2,
+            .rank = 2,
+            .dims = {2, 2, 0, 0},
+        },
+        AiRuntimeShapeEntry{
+            .tensor_index = 3,
+            .rank = 2,
+            .dims = {2, 2, 0, 0},
+        },
+        AiRuntimeShapeEntry{
+            .tensor_index = 4,
+            .rank = 2,
+            .dims = {2, 2, 0, 0},
+        },
+        AiRuntimeShapeEntry{
+            .tensor_index = 5,
+            .rank = 1,
+            .dims = {2, 0, 0, 0},
+        },
+    };
 }
 
 }  // namespace
@@ -230,13 +441,13 @@ int main() {
         const std::vector<AiRuntimeShapeEntry> valid_runtime_shapes{
             AiRuntimeShapeEntry{
                 .tensor_index = 0,
-                .rank = 4,
-                .dims = {1, 4, 4, 1},
+                .rank = 2,
+                .dims = {4, 4, 0, 0},
             },
             AiRuntimeShapeEntry{
                 .tensor_index = 3,
-                .rank = 4,
-                .dims = {1, 2, 2, 2},
+                .rank = 2,
+                .dims = {3, 3, 0, 0},
             },
         };
         if (!expect(validate_ai_runtime_shape_table(parsed, valid_runtime_shapes, error),
@@ -280,16 +491,23 @@ int main() {
             return 1;
         }
 
+        AiGraphPackage invalid_dynamic_memory_plan = dynamic_package;
+        invalid_dynamic_memory_plan.memory_plan[3].byte_size = 32;
+        if (!expect(expect_parse_failure(invalid_dynamic_memory_plan, "memory plan byte size"),
+                    "expected dynamic tensor memory-plan byte mismatch rejection")) {
+            return 1;
+        }
+
         const std::vector<AiRuntimeShapeEntry> invalid_runtime_rank{
             AiRuntimeShapeEntry{
                 .tensor_index = 0,
                 .rank = 5,
-                .dims = {1, 4, 4, 1},
+                .dims = {4, 4, 0, 0},
             },
             AiRuntimeShapeEntry{
                 .tensor_index = 3,
-                .rank = 4,
-                .dims = {1, 2, 2, 2},
+                .rank = 2,
+                .dims = {3, 3, 0, 0},
             },
         };
         if (!expect(!validate_ai_runtime_shape_table(parsed, invalid_runtime_rank, error) &&
@@ -301,13 +519,13 @@ int main() {
         const std::vector<AiRuntimeShapeEntry> invalid_runtime_dims{
             AiRuntimeShapeEntry{
                 .tensor_index = 0,
-                .rank = 4,
-                .dims = {1, 5, 4, 1},
+                .rank = 2,
+                .dims = {5, 4, 0, 0},
             },
             AiRuntimeShapeEntry{
                 .tensor_index = 3,
-                .rank = 4,
-                .dims = {1, 2, 2, 2},
+                .rank = 2,
+                .dims = {3, 3, 0, 0},
             },
         };
         if (!expect(!validate_ai_runtime_shape_table(parsed, invalid_runtime_dims, error) &&
@@ -316,10 +534,100 @@ int main() {
             return 1;
         }
 
+        const AiGraphPackage softmax_package = make_static_softmax_package();
+        bytes.clear();
+        if (!expect(serialize_ai_graph_package(softmax_package, bytes, error),
+                    "expected static fp32 Softmax package to serialize")) {
+            return 1;
+        }
+        parsed = {};
+        if (!expect(parse_ai_graph_package(bytes, parsed, error),
+                    "expected static fp32 Softmax package to parse") ||
+            !expect(parsed.ops.size() == 1 && parsed.ops[0].opcode == AiOpCode::Softmax,
+                    "expected Softmax opcode roundtrip")) {
+            return 1;
+        }
+
+        AiGraphPackage softmax_invalid_dtype = softmax_package;
+        softmax_invalid_dtype.tensors[0].dtype = AiDataType::Fp16;
+        softmax_invalid_dtype.ops[0].input_dtype = AiDataType::Fp16;
+        if (!expect(expect_parse_failure(softmax_invalid_dtype, "Softmax"),
+                    "expected non-fp32 Softmax dtype rejection")) {
+            return 1;
+        }
+
+        AiGraphPackage softmax_invalid_rank = softmax_package;
+        softmax_invalid_rank.tensors[1].rank = 1;
+        softmax_invalid_rank.tensors[1].dims = {6, 0, 0, 0};
+        softmax_invalid_rank.tensors[1].tile_dims = {6, 0, 0, 0};
+        if (!expect(expect_parse_failure(softmax_invalid_rank, "Softmax"),
+                    "expected Softmax rank rejection")) {
+            return 1;
+        }
+
         AiGraphPackage training_reserved = dynamic_package;
         training_reserved.training_mode = AiTrainingMode::TrainingReserved;
         if (!expect(expect_parse_failure(training_reserved, "training mode"),
                     "expected reserved training mode rejection")) {
+            return 1;
+        }
+
+        AiGraphPackage dynamic_cnn = make_dynamic_cnn_chain_package();
+        const std::vector<AiRuntimeShapeEntry> dynamic_cnn_runtime_shapes =
+            make_dynamic_cnn_runtime_shapes();
+        AiGraphPackage resolved_dynamic_cnn{};
+        if (!expect(resolve_ai_runtime_shape_package(dynamic_cnn,
+                                                     dynamic_cnn_runtime_shapes,
+                                                     resolved_dynamic_cnn,
+                                                     error),
+                    "expected dynamic CNN-family runtime shape resolve") ||
+            !expect(resolved_dynamic_cnn.shape_mode == AiShapeMode::Static,
+                    "expected resolved dynamic CNN package to become static") ||
+            !expect(resolved_dynamic_cnn.tensors[0].dims[0] == 3 &&
+                        resolved_dynamic_cnn.tensors[2].dims[0] == 2 &&
+                        resolved_dynamic_cnn.tensors[5].dims[0] == 2,
+                    "expected resolved dynamic CNN tensor dims") ||
+            !expect(resolved_dynamic_cnn.memory_plan[0].byte_size == 9 &&
+                        resolved_dynamic_cnn.memory_plan[2].byte_size == 16 &&
+                        resolved_dynamic_cnn.memory_plan[5].byte_size == 8,
+                    "expected resolved dynamic CNN memory plan byte sizes")) {
+            return 1;
+        }
+
+        AiGraphPackage missing_dynamic_op_tensor = dynamic_cnn;
+        missing_dynamic_op_tensor.dynamic_tensors.erase(
+            missing_dynamic_op_tensor.dynamic_tensors.begin() + 2,
+            missing_dynamic_op_tensor.dynamic_tensors.end());
+        const std::vector<AiRuntimeShapeEntry> missing_op_tensor_shapes{
+            dynamic_cnn_runtime_shapes[0],
+            dynamic_cnn_runtime_shapes[1],
+        };
+        AiGraphPackage resolved_missing_dynamic_op_tensor{};
+        if (!expect(!resolve_ai_runtime_shape_package(missing_dynamic_op_tensor,
+                                                      missing_op_tensor_shapes,
+                                                      resolved_missing_dynamic_op_tensor,
+                                                      error) &&
+                        error.find("shape") != std::string::npos,
+                    "expected missing dynamic op tensor metadata to fail closed")) {
+            return 1;
+        }
+
+        AiGraphPackage runtime_scratchpad_bound = dynamic_cnn;
+        runtime_scratchpad_bound.scratchpad_budget_bytes = 16;
+        runtime_scratchpad_bound.memory_plan[0].scratchpad_offset = 12;
+        runtime_scratchpad_bound.memory_plan[0].scratchpad_bytes = 4;
+        std::vector<AiRuntimeShapeEntry> scratchpad_bound_shapes = dynamic_cnn_runtime_shapes;
+        scratchpad_bound_shapes[0].dims = {4, 4, 0, 0};
+        scratchpad_bound_shapes[1].dims = {3, 3, 0, 0};
+        scratchpad_bound_shapes[2].dims = {3, 3, 0, 0};
+        scratchpad_bound_shapes[3].dims = {3, 3, 0, 0};
+        scratchpad_bound_shapes[4].dims = {3, 0, 0, 0};
+        if (!expect(!resolve_ai_runtime_shape_package(runtime_scratchpad_bound,
+                                                      scratchpad_bound_shapes,
+                                                      resolved_dynamic_cnn,
+                                                      error) &&
+                        error.find("scratchpad") != std::string::npos,
+                    "expected runtime scratchpad bound rejection")) {
             return 1;
         }
 
