@@ -15,6 +15,10 @@ struct ExecutionRetireObservation {
     uint32_t raw{0};
     bool trap{false};
     bool redirect{false};
+    bool cycle_valid{false};
+    uint64_t cycle{0};
+    bool target_pc_valid{false};
+    uint64_t target_pc{0};
 };
 
 struct ExecutionTrapObservation {
@@ -27,6 +31,9 @@ struct ExecutionTrapObservation {
 
 struct ExecutionMemoryObservation {
     bool valid{false};
+    bool pc_valid{false};
+    uint64_t pc{0};
+    uint32_t raw{0};
     PhysicalRegionInfo region{};
     bool write{false};
     bool fault{false};
@@ -45,6 +52,14 @@ struct ExecutionHotPathEntry {
 struct ExecutionBranchEntry {
     uint64_t pc{0};
     uint32_t raw{0};
+    uint64_t executions{0};
+    uint64_t redirects{0};
+};
+
+struct ExecutionBranchTargetEntry {
+    uint64_t pc{0};
+    uint32_t raw{0};
+    uint64_t target_pc{0};
     uint64_t executions{0};
     uint64_t redirects{0};
 };
@@ -83,6 +98,18 @@ struct ExecutionMemoryRegionEntry {
     uint64_t shadow_cache_bypasses{0};
 };
 
+struct ExecutionPcCostEntry {
+    uint64_t pc{0};
+    uint32_t raw{0};
+    uint64_t retirements{0};
+    uint64_t cycles{0};
+    uint64_t memory_observations{0};
+    uint64_t memory_reads{0};
+    uint64_t memory_writes{0};
+    uint64_t memory_faults{0};
+    uint64_t memory_bytes{0};
+};
+
 struct ExecutionShadowCacheSnapshot {
     uint64_t line_size_bytes{0};
     uint64_t capacity_lines{0};
@@ -100,10 +127,12 @@ struct ExecutionProfileSnapshot {
     uint64_t total_memory_observations{0};
     std::vector<ExecutionHotPathEntry> hot_paths{};
     std::vector<ExecutionBranchEntry> branches{};
+    std::vector<ExecutionBranchTargetEntry> branch_targets{};
     std::vector<ExecutionSyscallEntry> syscalls{};
     std::vector<ExecutionTrapEntry> traps{};
     ExecutionShadowCacheSnapshot shadow_cache{};
     std::vector<ExecutionMemoryRegionEntry> memory_regions{};
+    std::vector<ExecutionPcCostEntry> pc_costs{};
 };
 
 class ExecutionProfile {
@@ -133,6 +162,24 @@ private:
     };
 
     struct BranchStats {
+        uint32_t raw{0};
+        uint64_t executions{0};
+        uint64_t redirects{0};
+    };
+
+    struct BranchTargetKey {
+        uint64_t pc{0};
+        uint64_t target_pc{0};
+
+        bool operator<(const BranchTargetKey& other) const {
+            if (pc != other.pc) {
+                return pc < other.pc;
+            }
+            return target_pc < other.target_pc;
+        }
+    };
+
+    struct BranchTargetStats {
         uint32_t raw{0};
         uint64_t executions{0};
         uint64_t redirects{0};
@@ -203,6 +250,17 @@ private:
         uint64_t bytes{0};
     };
 
+    struct PcCostStats {
+        uint32_t raw{0};
+        uint64_t retirements{0};
+        uint64_t cycles{0};
+        uint64_t memory_observations{0};
+        uint64_t memory_reads{0};
+        uint64_t memory_writes{0};
+        uint64_t memory_faults{0};
+        uint64_t memory_bytes{0};
+    };
+
     struct ShadowCacheStats {
         uint64_t line_accesses{0};
         uint64_t hits{0};
@@ -225,6 +283,8 @@ private:
 
     void start_path(uint64_t pc);
     void finalize_path();
+    void record_pc_retire_cost(const ExecutionRetireObservation& observation);
+    void record_branch_target(const ExecutionRetireObservation& observation);
     void record_shadow_cache(const MemoryKey& key, const ExecutionMemoryObservation& observation);
     void shadow_cache_touch_line(const MemoryKey& key, uint64_t line_addr);
     void shadow_cache_evict_lru();
@@ -236,12 +296,16 @@ private:
     uint64_t total_retirements_{0};
     uint64_t total_traps_{0};
     uint64_t total_memory_observations_{0};
+    bool last_retire_cycle_valid_{false};
+    uint64_t last_retire_cycle_{0};
     ActivePath active_path_{};
     std::map<HotPathKey, HotPathStats> hot_paths_{};
     std::map<uint64_t, BranchStats> branches_{};
+    std::map<BranchTargetKey, BranchTargetStats> branch_targets_{};
     std::map<uint64_t, SyscallStats> syscalls_{};
     std::map<TrapKey, uint64_t> traps_{};
     std::map<MemoryKey, MemoryStats> memory_regions_{};
+    std::map<uint64_t, PcCostStats> pc_costs_{};
     std::map<MemoryKey, ShadowCacheStats> shadow_cache_regions_{};
     std::list<uint64_t> shadow_cache_lru_{};
     std::unordered_map<uint64_t, ShadowCacheLineState> shadow_cache_lines_{};

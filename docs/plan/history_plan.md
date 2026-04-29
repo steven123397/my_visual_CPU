@@ -23,6 +23,27 @@
 
 ### 2026-04-29
 
+#### mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan
+
+- 原文件：`mainline_wave6_jit_dbt_prototype_guardrail_slice_d_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 `Slice D / prototype guardrail expansion`。本轮给 `interpreter_dbt_prototype` 增加 `InterpreterDbtPrototypePlan` 与 `plan_interpreter_dbt_prototype_block()`，把 block preflight 结果暴露给 host smoke；`run_interpreter_dbt_prototype_block()` 现在只有在整块都可证明为 pure straight-line inlineable 时才执行。
+- 实现过程摘要：这一轮按 `TDD` 先补 `addi + lw`、`addi + jal` 的红灯 smoke，再实现最小 preflight / lifecycle guardrail。含 helper-required 或 control-flow boundary 的候选块会在执行前整体拒绝，不提交前缀指令，也不推进 PC、`instret` 或 `cycle`。本轮不执行 helper，不做 fallback replay，不接入默认 backend，不创建长期 block cache，不生成 host code，也不改变 guest 可见语义。验证覆盖 `make test-host-interpreter_dbt_prototype_smoke`、`make test-host-execution_profile_smoke test-host-run_debug_cli_probe test-host-debug_cli_smoke`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave6-jit-dbt-observation-and-slice-c-plan
+
+- 原文件：`mainline_wave6_jit_dbt_observation_and_slice_c_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 `observation + Slice C`。本轮先补齐 per-PC memory cost、branch target heat 与 cycle cost 的窄观察合同：`ExecutionProfile` 新增 `pc_costs` 和 `branch_targets`，debug JSON 暴露这两个只读数组，`run_debug_cli_probe.py` 新增 `pc-cost:` 与 `branch-target:` 摘要。
+- 实现过程摘要：这一轮按 `TDD` 先补 profile/probe/prototype 红灯，再实现 host-smoke-only 的 `interpreter_dbt_prototype`。prototype 只执行 pure straight-line inlineable block，复用 `InstructionSemantics + apply_commit_boundary`，并用 smoke 证明简单整数块与 functional backend 的 GPR / PC / `instret` / `cycle` 结果等价；memory 指令明确 fallback 为 `helper-required`。本轮不生成 host code，不接入默认 backend，不创建长期 block cache，不启动 multicore / coherence，也不改变 guest 可见语义。验证覆盖 `make test-host-execution_profile_smoke test-host-run_debug_cli_probe test-host-interpreter_dbt_prototype_smoke`、`make test-host-debug_cli_smoke`、`make test`、`make test-pipeline` 与 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave6-jit-dbt-translation-contract-slice-b-plan
+
+- 原文件：`mainline_wave6_jit_dbt_translation_contract_slice_b_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 `Slice B / translation contract design`。本轮把未来 translator 的输入限定为既有 `ExecutionProfile.hot_paths` 候选证据、guest PC / raw instruction / decode 后 `Insn`、privilege / CSR / translation 上下文和必要的 `SemanticInputs`；输出只固定为 `inlineable`、`helper-required`、`fallback-required` 三类，不定义 IR 或 host code 形态。
+- 实现过程摘要：这一轮只做文档 contract，不改 simulator 行为。`Slice B` 明确 helper 只能复用 `InstructionSemantics`、`AddressSpace -> Bus -> Ram/Device`、trap / commit boundary 和现有 profile；memory、CSR、trap、atomic、fence、MMIO、page walk 和 invalidation 均采用保守 helper / fallback 口径。本轮不实现 JIT engine、DBT translator、IR、block cache、host code emission、multicore 或 coherence，也不改变 guest 可见语义。验证覆盖 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan
 
 - 原文件：`mainline_wave6_jit_dbt_hot_path_evidence_slice_a_plan.md`

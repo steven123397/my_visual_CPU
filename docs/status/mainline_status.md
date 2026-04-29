@@ -31,6 +31,9 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 6` 下一刀前先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
@@ -65,9 +68,19 @@ instruction 已启动。
 `Slice A / JIT DBT hot-path evidence` 已完成：probe 文本层新增
 `translation-candidate:` 只读摘要，候选输入复用既有 `ExecutionProfile.hot_paths`，
 排序口径为 `executions -> retired_instructions -> start_pc -> end_pc`；无重复
-hot path 或证据不足时输出 `none` fallback。本轮不实现 JIT engine、DBT
-translator、IR、block cache、host code emission、multicore、coherence 或新的
-memory consistency 模型。
+hot path 或证据不足时输出 `none` fallback。`Slice B / translation contract
+design` 也已完成：translator 输入、输出分类、helper 边界、fault / trap 回退、
+memory / CSR / atomic / MMIO / page-walk 保守口径和 invalidation 触发来源已经写入
+`wave6_jit_dbt_readiness_design.md`。当前仍不实现 JIT engine、DBT translator、IR、
+block cache、host code emission、multicore、coherence 或新的 memory consistency
+模型。`Slice C / observation + interpreter-assisted DBT prototype` 已完成：profile
+新增 `pc_costs` 与 `branch_targets` 只读观察合同；probe 输出 `pc-cost:` 与
+`branch-target:` 摘要；新增 host-smoke-only 的 `interpreter_dbt_prototype`，只执行
+pure straight-line inlineable block，并把 memory / CSR / trap / atomic / vector /
+control-flow 统一 fallback。`Slice D / prototype guardrail expansion` 已完成：
+prototype 新增 block preflight / lifecycle guardrail，候选块必须先整体证明为
+inlineable 才会执行；含 helper-required 或 control-flow boundary 的 block 会在执行前
+整体拒绝，不提交前缀指令。
 
 ## 当前状态
 
@@ -141,14 +154,26 @@ memory consistency 模型。
   hot-path evidence。
 - 主线 `Wave 6` 的 `Slice A / JIT DBT hot-path evidence` 已完成：现有 profile 已有
   PC range、branch、trap、syscall、memory-region 和 `shadow_cache` 统计入口；probe
-  现在输出 `translation-candidate:` 候选摘要或 `none` fallback。当前没有主线活跃计划。
+  现在输出 `translation-candidate:` 候选摘要或 `none` fallback。
+- 主线 `Wave 6` 的 `Slice B / translation contract design` 已完成：translator 输入、
+  输出分类、helper / fallback、fault / trap、memory / CSR / atomic / MMIO /
+  page-walk 和 invalidation 口径已经固定为文档 contract；当前没有主线活跃计划。
+- 主线 `Wave 6` 的 `Slice C / observation + interpreter-assisted DBT prototype` 已完成：
+  `ExecutionProfile` 新增 `pc_costs` / `branch_targets`，probe 文本新增 `pc-cost:` /
+  `branch-target:`；`interpreter_dbt_prototype` host smoke 证明纯直线整数块与
+  functional backend 结果等价，memory 指令明确 fallback。当前没有主线活跃计划。
+- 主线 `Wave 6` 的 `Slice D / prototype guardrail expansion` 已完成：
+  `interpreter_dbt_prototype` 新增 `InterpreterDbtPrototypePlan` 和 preflight API；
+  `run_interpreter_dbt_prototype_block()` 会先整体检查候选块，helper-required 或
+  control-flow boundary 会在执行前拒绝整块，且不提交前缀指令。当前没有主线活跃计划。
 
 ## 当前优先级
 
-1. 当前 `Wave 6` 已激活，`Slice A / JIT DBT hot-path evidence` 已完成并归档；
-   继续推进下一刀前先新建活跃计划，不得直接实现 JIT engine、DBT translator、
-   IR、block cache、host code emission、multicore、coherence 或新的 memory
-   consistency 模型。
+1. 当前 `Wave 6` 已激活，`Slice A / JIT DBT hot-path evidence`、`Slice B /
+   translation contract design`、`Slice C / observation + interpreter-assisted
+   DBT prototype` 与 `Slice D / prototype guardrail expansion` 均已完成并归档；继续推进
+   下一刀前先新建活跃计划，不得直接进入 host code emission、长期 block cache、
+   multicore、coherence 或新的 memory consistency 模型。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
@@ -230,6 +255,26 @@ memory consistency 模型。
     这一刀确认现有 profile / debug / probe 已有足够 PC、branch、trap、syscall 和
     memory-region 统计入口；probe 新增 `translation-candidate:` 摘要，直接复用
     `profile.hot_paths` 排序，不扩 debug JSON schema，也不启用 JIT 或 DBT 执行路径。
+  - 同日完成主线 `Wave 6` `Slice B / translation contract design` 并归档：
+    [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)。
+    这一刀只做文档 contract：translator 输入以 `InstructionSemantics`、
+    `SemanticInputs`、`AddressSpace`、trap / commit boundary 和既有 profile 为
+    事实来源；输出只分类为 `inlineable`、`helper-required`、`fallback-required`；
+    memory、CSR、trap、atomic、fence、MMIO、page walk 和 invalidation 均采用保守
+    helper / fallback 口径，不实现 JIT engine、IR、block cache 或 host code。
+  - 同日完成主线 `Wave 6` `Slice C / observation + interpreter-assisted DBT prototype`
+    并归档：
+    [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)。
+    这一刀先补 `pc_costs` 和 `branch_targets` 窄观察合同，再新增
+    host-smoke-only 的 `interpreter_dbt_prototype`：只执行 pure straight-line
+    inlineable block，复用 `InstructionSemantics + apply_commit_boundary`，并用
+    smoke 证明简单整数块与 functional backend 的 GPR / PC / `instret` / `cycle`
+    结果等价；memory 指令明确 fallback 为 `helper-required`。
+  - 同日完成主线 `Wave 6` `Slice D / prototype guardrail expansion` 并归档：
+    [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)。
+    这一刀给 `interpreter_dbt_prototype` 增加 block preflight / lifecycle guardrail：
+    候选块必须先整体证明为 inlineable 才能执行；含 helper-required 或 control-flow
+    boundary 的 block 会在执行前整体拒绝，不提交前缀指令。
   - 这次收口把 `xv6 / Linux` pipeline-side memory signal 明确降级为
     `Wave 5 / cache` 前置证据，而不是阻塞 `Wave 4` 的硬门槛；当前 `Wave 4`
     依赖的观测证据来自 pipeline vector CNN、functional `xv6`、functional
@@ -283,12 +328,16 @@ memory consistency 模型。
   只落地默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，
   显式 opt-in 的 L1D debug/probe 观察面、frontend 只读展示，以及若干 L1D 边界和
   lifecycle hardening 合同。
-- `Wave 6` `Slice A` 只固定了 probe 级 hot-path / translation candidate 观察合同；
-  这不是 JIT / DBT engine。当前仍不生成宿主代码，不引入 block cache，不改变 guest
-  可见语义。
-- 当前 candidate 第一版没有 per-PC memory 代价、branch target 热度、cycle cost 或
-  invalidation / translation contract；这些缺口不阻塞 Slice A，但必须留到后续
-  `Wave 6` 设计和计划中处理。
+- `Wave 6` `Slice A / B / C / D` 只固定了 probe 级 hot-path / translation candidate
+  观察合同、文档级 translation contract、窄 per-PC / branch-target 观察合同、
+  host-smoke-only interpreter-assisted prototype，以及 prototype preflight guardrail；
+  这不是完整 JIT / DBT engine。当前仍不生成宿主代码，不引入长期 block cache，不改变
+  guest 可见语义。
+- 当前 `pc_costs.cycles` 只是 retire-side 观察成本，不是稳定性能模型或 benchmark
+  结论。`interpreter_dbt_prototype` 仍只覆盖 pure straight-line inlineable block；
+  memory、CSR、trap、atomic、vector、control-flow、system boundary 都还是 helper /
+  fallback；当前已有 preflight 拒绝整块的 lifecycle guardrail，但尚未有 helper replay、
+  fallback replay、persistent block lifecycle 或 workload-level opt-in runtime。
 - multicore / coherence 虽然属于 `Wave 6` 长期目标，但当前仍未启动；它必须等待
   atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
@@ -302,22 +351,25 @@ memory consistency 模型。
 1. 当前暂无主线活跃计划；继续推进 `Wave 6` 下一刀前，先基于
    [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
    新建 `docs/plan/` 计划。
-2. 如果下一刀进入 translation contract，只能先定义 translator 输入、helper 边界、
-   fault / trap 回退和 invalidation 口径；不得直接实现 JIT engine、host code
-   emission 或 block cache。
-3. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
+2. 如果下一刀继续推进 `Wave 6`，优先补 `Slice E / prototype helper-equivalence or
+   opt-in harness` 活跃计划，只允许扩 helper/fallback 等价性、preflight 兼容的
+   workload-level opt-in harness 或更窄 block lifecycle 观察；不得直接进入 host code
+   emission 或长期 block cache。
+3. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
+   如需调整排序或字段，必须先补 probe / host smoke 兼容门禁。
+4. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 `Wave 6`
    hot-path evidence 的前置 guardrail。
-4. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+5. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
    driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan，并
    明确不占用主线 `Wave 6`。
-5. Wave 4 AI accelerator 的完成记录统一见
+6. Wave 4 AI accelerator 的完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
-6. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
+7. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
    guardrail；未提供 `Image` 时，不把该项写成默认已证明。
-7. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
+8. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
    `make test` 和 `make test-pipeline` 这些稳定 guardrail。
-8. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
+9. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
    暴露新 blocker，再按 blocker 驱动回补最窄 Linux guardrail。
 
 ## 验证基线

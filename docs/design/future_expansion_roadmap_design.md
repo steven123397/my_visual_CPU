@@ -43,6 +43,9 @@
 - 当前计划：
   - 暂无主线活跃计划；继续推进 `Wave 6` 下一刀前先新建 `docs/plan/` 计划。
 - 已完成计划归档：
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
@@ -143,7 +146,7 @@
   -> Wave 3：已收口的 Linux 更后 userland checkpoint + observation/pipeline gap 判断
   -> Wave 4：已完成，AI accelerator 下一轮扩展 + 向量/observation 继续深化
   -> Wave 5：已完成首轮收口，cache / memory-system 第一刀（以 workload 证据触发）
-  -> Wave 6：当前 active wave，JIT / DBT 第一刀 hot-path evidence
+  -> Wave 6：当前 active wave，JIT / DBT hot-path evidence、translation contract、opt-in prototype 与 preflight guardrail
   -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
 ```
 
@@ -276,8 +279,9 @@ Wave 5 的激活门槛：
 
 ### Wave 6：JIT / DBT 与 multicore / coherence
 
-Wave 6 也是主线内排期，当前已激活，且第一刀 `JIT / DBT hot-path evidence`
-已经完成。目标是：
+Wave 6 也是主线内排期，当前已激活，且 `JIT / DBT hot-path evidence`、
+`translation contract design`、`observation + interpreter-assisted DBT prototype` 与
+`prototype guardrail expansion` 均已完成。目标是：
 
 - 基于 Linux / workload / profile 证据决定 `JIT / DBT` 是否值得正式启动
 - 基于 cache 路线与 memory-order 验证进展决定 multicore / coherence 是否可启动
@@ -288,6 +292,24 @@ Wave 6 也是主线内排期，当前已激活，且第一刀 `JIT / DBT hot-pat
 JIT engine、DBT translator、IR、block cache、host code emission、multicore、
 coherence 或新的 memory consistency 模型。multicore / coherence 仍属于后续高门槛
 切片，必须另开设计和计划。
+
+`Slice B` 已由
+[../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
+收口：当前只固定 translator 输入、输出分类、helper / fallback、fault / trap、
+memory / CSR / atomic / MMIO / page-walk 和 invalidation 设计合同；仍不实现
+JIT engine、DBT translator、IR、host code emission 或 block cache。
+
+`Slice C` 已由
+[../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
+收口：当前补齐 `pc_costs` / `branch_targets` 窄观察合同，并新增 host-smoke-only 的
+interpreter-assisted DBT prototype；它只执行 pure straight-line inlineable block，
+不生成 host code，不接入默认 backend，也不创建长期 block cache。
+
+`Slice D` 已由
+[../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
+收口：当前只新增 prototype preflight / lifecycle guardrail，让候选 block 必须先整体
+证明为 inlineable 才能执行；含 helper-required 或 control-flow boundary 的 block 会在
+执行前整体拒绝，不提交前缀指令。
 
 Wave 6 第一刀的激活门槛：
 
@@ -356,9 +378,10 @@ Wave 7 的完成定义：
 ### F：JIT / DBT / multicore / coherence
 
 - 当前已进入主线 `Wave 6`。
-- 第一刀 `JIT / DBT hot-path evidence` 已完成，为未来 translation contract 提供
-  probe 级候选证据；multicore / coherence 仍等待 atomic、memory-order、DMA /
-  cache 交界和验证矩阵另行收口。
+- `JIT / DBT hot-path evidence`、`translation contract design` 与最小 opt-in
+  prototype、preflight guardrail 已完成，为未来 helper/fallback 等价性和 block
+  lifecycle 观察提供入口；multicore / coherence 仍等待 atomic、memory-order、
+  DMA / cache 交界和验证矩阵另行收口。
 
 ### G：产品化展示 / 在线调试平台 / 部署
 
@@ -371,7 +394,8 @@ Wave 7 的完成定义：
 - 把所有方向都纳入主线排期，能避免“未来候选”歧义，但也更要求严格的波次门槛；否则容易重新回到所有方向同时抢跑。
 - Linux 当前 checkpoint 线如果继续无限细分，会拖住后续 wave；因此 Wave 2 完成定义必须强调“自然停顿点”，而不是追求无限 marker。
 - AI accelerator 被纳入主线后，不代表它立刻变成近端 blocker；它当前仍应服从 Linux 波次让路。
-- `cache / JIT / multicore` 都已被明确排期；当前 `Wave 6` 只激活 JIT / DBT evidence，
+- `cache / JIT / multicore` 都已被明确排期；当前 `Wave 6` 只完成 JIT / DBT
+  evidence、translation contract、host-smoke-only prototype 与 preflight guardrail，
   不代表 JIT engine 或 multicore / coherence 已经可以直接实现。
 - Wave 7 如果过早启动，容易把尚未稳定的工程能力包装成产品界面；因此必须先收口已完成功能展示和 session / 安全边界，再把部署服务器作为最后一步。
 

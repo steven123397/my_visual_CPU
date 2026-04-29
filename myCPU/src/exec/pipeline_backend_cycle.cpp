@@ -29,9 +29,17 @@ PhysicalRegionInfo observed_region(const Bus& bus, uint64_t paddr, uint64_t byte
     return bus.describe_region(paddr, 1);
 }
 
-ExecutionMemoryObservation fault_memory_observation(bool write, uint64_t bytes) {
+bool is_control_flow_raw(uint32_t raw) {
+    const uint32_t opcode = raw & 0x7FU;
+    return opcode == 0x63U || opcode == 0x67U || opcode == 0x6FU;
+}
+
+ExecutionMemoryObservation fault_memory_observation(uint64_t pc, uint32_t raw, bool write, uint64_t bytes) {
     return ExecutionMemoryObservation{
         .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
         .region = make_unmapped_region_info(),
         .write = write,
         .fault = true,
@@ -44,6 +52,8 @@ ExecutionMemoryObservation fault_memory_observation(bool write, uint64_t bytes) 
 std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cpu,
                                                                          Bus& bus,
                                                                          const LsqEntry& entry,
+                                                                         uint64_t pc,
+                                                                         uint32_t raw,
                                                                          bool fault) {
     const AddressSpace::TranslateResult translated =
         cpu.address_space().translate_result(bus,
@@ -53,7 +63,9 @@ std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cp
                                              false);
     if (!translated.ok) {
         if (fault) {
-            return fault_memory_observation(entry.kind == LsqEntryKind::Store,
+            return fault_memory_observation(pc,
+                                            raw,
+                                            entry.kind == LsqEntryKind::Store,
                                             static_cast<uint64_t>(entry.size));
         }
         return std::nullopt;
@@ -61,6 +73,9 @@ std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cp
 
     return ExecutionMemoryObservation{
         .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
         .region = observed_region(bus, translated.paddr, static_cast<uint64_t>(entry.size)),
         .write = entry.kind == LsqEntryKind::Store,
         .fault = fault,
@@ -73,6 +88,8 @@ std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cp
 std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cpu,
                                                                          Bus& bus,
                                                                          const VectorRequest& request,
+                                                                         uint64_t pc,
+                                                                         uint32_t raw,
                                                                          bool fault) {
     if (request.kind != VectorRequest::Kind::Load && request.kind != VectorRequest::Kind::Store) {
         return std::nullopt;
@@ -92,7 +109,9 @@ std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cp
                                              false);
     if (!translated.ok) {
         if (fault) {
-            return fault_memory_observation(request.kind == VectorRequest::Kind::Store,
+            return fault_memory_observation(pc,
+                                            raw,
+                                            request.kind == VectorRequest::Kind::Store,
                                             bytes);
         }
         return std::nullopt;
@@ -100,6 +119,9 @@ std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cp
 
     return ExecutionMemoryObservation{
         .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
         .region = observed_region(bus, translated.paddr, bytes),
         .write = request.kind == VectorRequest::Kind::Store,
         .fault = fault,
@@ -209,7 +231,12 @@ bool PipelineBackend::step_wb() {
         apply_commit_boundary(cpu_, bus_, commit_input);
     if (lsq_entry.has_value()) {
         const std::optional<ExecutionMemoryObservation> observation =
-            make_scalar_memory_observation(cpu_, bus_, *lsq_entry, result.trap_taken);
+            make_scalar_memory_observation(cpu_,
+                                           bus_,
+                                           *lsq_entry,
+                                           rob_head->pc,
+                                           rob_head->raw,
+                                           result.trap_taken);
         if (observation.has_value()) {
             state_.record_memory(*observation);
         }
@@ -217,6 +244,8 @@ bool PipelineBackend::step_wb() {
                    make_vector_memory_observation(cpu_,
                                                   bus_,
                                                   rob_head->effects.vector,
+                                                  rob_head->pc,
+                                                  rob_head->raw,
                                                   result.trap_taken);
                observation.has_value()) {
         state_.record_memory(*observation);
@@ -242,6 +271,10 @@ bool PipelineBackend::step_wb() {
             .trap = result.trap_taken,
             .redirect = rob_head->effects.control.redirect_pc ||
                         rob_head->effects.control.trap_return != TrapReturnKind::None,
+            .cycle_valid = true,
+            .cycle = cpu_.core().cycle(),
+            .target_pc_valid = is_control_flow_raw(rob_head->raw),
+            .target_pc = result.next_pc,
         });
     }
     if (result.retired) {

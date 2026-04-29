@@ -21,6 +21,11 @@ uint8_t instruction_size(const Insn& insn) {
     return insn.size != 0 ? insn.size : 4;
 }
 
+bool is_control_flow_raw(uint32_t raw) {
+    const uint32_t opcode = raw & 0x7FU;
+    return opcode == 0x63U || opcode == 0x67U || opcode == 0x6FU;
+}
+
 uint64_t active_trap_cause(const CPU& cpu) {
     switch (cpu.core().privilege_mode()) {
     case PrivilegeMode::Supervisor:
@@ -41,9 +46,12 @@ PhysicalRegionInfo observed_region(const Bus& bus, uint64_t paddr, uint64_t byte
     return bus.describe_region(paddr, 1);
 }
 
-ExecutionMemoryObservation fault_memory_observation(bool write, uint64_t bytes) {
+ExecutionMemoryObservation fault_memory_observation(uint64_t pc, uint32_t raw, bool write, uint64_t bytes) {
     return ExecutionMemoryObservation{
         .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
         .region = make_unmapped_region_info(),
         .write = write,
         .fault = true,
@@ -56,6 +64,8 @@ ExecutionMemoryObservation fault_memory_observation(bool write, uint64_t bytes) 
 std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cpu,
                                                                          Bus& bus,
                                                                          const MemoryRequest& request,
+                                                                         uint64_t pc,
+                                                                         uint32_t raw,
                                                                          bool fault) {
     if (request.kind != MemoryRequest::Kind::Load && request.kind != MemoryRequest::Kind::Store) {
         return std::nullopt;
@@ -69,7 +79,9 @@ std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cp
                                              false);
     if (!translated.ok) {
         if (fault) {
-            return fault_memory_observation(request.kind == MemoryRequest::Kind::Store,
+            return fault_memory_observation(pc,
+                                            raw,
+                                            request.kind == MemoryRequest::Kind::Store,
                                             static_cast<uint64_t>(request.size));
         }
         return std::nullopt;
@@ -77,6 +89,9 @@ std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cp
 
     return ExecutionMemoryObservation{
         .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
         .region = observed_region(bus, translated.paddr, static_cast<uint64_t>(request.size)),
         .write = request.kind == MemoryRequest::Kind::Store,
         .fault = fault,
@@ -89,6 +104,8 @@ std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cp
 std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cpu,
                                                                          Bus& bus,
                                                                          const VectorRequest& request,
+                                                                         uint64_t pc,
+                                                                         uint32_t raw,
                                                                          bool fault) {
     if (request.kind != VectorRequest::Kind::Load && request.kind != VectorRequest::Kind::Store) {
         return std::nullopt;
@@ -109,13 +126,19 @@ std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cp
                                              false);
     if (!translated.ok) {
         if (fault) {
-            return fault_memory_observation(request.kind == VectorRequest::Kind::Store, bytes);
+            return fault_memory_observation(pc,
+                                            raw,
+                                            request.kind == VectorRequest::Kind::Store,
+                                            bytes);
         }
         return std::nullopt;
     }
 
     return ExecutionMemoryObservation{
         .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
         .region = observed_region(bus, translated.paddr, bytes),
         .write = request.kind == VectorRequest::Kind::Store,
         .fault = fault,
@@ -127,6 +150,8 @@ std::optional<ExecutionMemoryObservation> make_vector_memory_observation(CPU& cp
 
 std::optional<ExecutionMemoryObservation> make_atomic_memory_observation(const Bus& bus,
                                                                          const AtomicRequest& request,
+                                                                         uint64_t pc,
+                                                                         uint32_t raw,
                                                                          const CommitBoundaryResult& result) {
     if (request.kind == AtomicRequest::Kind::None) {
         return std::nullopt;
@@ -141,6 +166,9 @@ std::optional<ExecutionMemoryObservation> make_atomic_memory_observation(const B
     if (result.atomic_memory_observed && result.atomic_paddr_valid) {
         return ExecutionMemoryObservation{
             .valid = true,
+            .pc_valid = true,
+            .pc = pc,
+            .raw = raw,
             .region = observed_region(bus, result.atomic_paddr, bytes),
             .write = result.atomic_write_observed,
             .fault = false,
@@ -155,11 +183,14 @@ std::optional<ExecutionMemoryObservation> make_atomic_memory_observation(const B
     }
 
     if (!result.atomic_paddr_valid) {
-        return fault_memory_observation(write, bytes);
+        return fault_memory_observation(pc, raw, write, bytes);
     }
 
     return ExecutionMemoryObservation{
         .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
         .region = observed_region(bus, result.atomic_paddr, bytes),
         .write = write,
         .fault = true,
@@ -259,15 +290,15 @@ void FunctionalBackend::step() {
         });
 
     if (const std::optional<ExecutionMemoryObservation> memory =
-            make_atomic_memory_observation(bus_, effects.atomic, result);
+            make_atomic_memory_observation(bus_, effects.atomic, pc, raw, result);
         memory.has_value()) {
         profile_.record_memory(*memory);
     } else if (const std::optional<ExecutionMemoryObservation> memory =
-            make_scalar_memory_observation(cpu_, bus_, effects.mem, result.trap_taken);
+            make_scalar_memory_observation(cpu_, bus_, effects.mem, pc, raw, result.trap_taken);
         memory.has_value()) {
         profile_.record_memory(*memory);
     } else if (const std::optional<ExecutionMemoryObservation> memory =
-                   make_vector_memory_observation(cpu_, bus_, effects.vector, result.trap_taken);
+                   make_vector_memory_observation(cpu_, bus_, effects.vector, pc, raw, result.trap_taken);
                memory.has_value()) {
         profile_.record_memory(*memory);
     }
@@ -281,6 +312,10 @@ void FunctionalBackend::step() {
             .raw = raw,
             .trap = false,
             .redirect = effects.control.redirect_pc || effects.control.trap_return != TrapReturnKind::None,
+            .cycle_valid = true,
+            .cycle = cpu_.core().cycle(),
+            .target_pc_valid = is_control_flow_raw(raw),
+            .target_pc = result.next_pc,
         });
     }
 

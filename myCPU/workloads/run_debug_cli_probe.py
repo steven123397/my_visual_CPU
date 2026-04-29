@@ -247,6 +247,34 @@ def emit_top_profile_entries(profile) -> None:
             f"bytes={top.get('bytes', 0)}",
         )
 
+    pc_costs = profile.get("pc_costs", [])
+    if pc_costs:
+        top = pc_costs[0]
+        print(
+            "pc-cost:",
+            f"pc={profile_hex(top.get('pc', '0x0'))}",
+            f"raw={profile_hex(top.get('raw', '0x0'))}",
+            f"retirements={profile_int(top.get('retirements', 0))}",
+            f"cycles={profile_int(top.get('cycles', 0))}",
+            f"memory={profile_int(top.get('memory_observations', 0))}",
+            f"reads={profile_int(top.get('memory_reads', 0))}",
+            f"writes={profile_int(top.get('memory_writes', 0))}",
+            f"faults={profile_int(top.get('memory_faults', 0))}",
+            f"bytes={profile_int(top.get('memory_bytes', 0))}",
+        )
+
+    branch_targets = profile.get("branch_targets", [])
+    if branch_targets:
+        top = branch_targets[0]
+        print(
+            "branch-target:",
+            f"pc={profile_hex(top.get('pc', '0x0'))}",
+            f"raw={profile_hex(top.get('raw', '0x0'))}",
+            f"target={profile_hex(top.get('target_pc', '0x0'))}",
+            f"executions={profile_int(top.get('executions', 0))}",
+            f"redirects={profile_int(top.get('redirects', 0))}",
+        )
+
 
 def profile_int(value, default=0) -> int:
     try:

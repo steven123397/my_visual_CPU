@@ -103,6 +103,26 @@ const ExecutionMemoryRegionEntry* find_memory_region(const ExecutionProfileSnaps
     return nullptr;
 }
 
+const ExecutionPcCostEntry* find_pc_cost(const ExecutionProfileSnapshot& profile, uint64_t pc) {
+    for (const ExecutionPcCostEntry& entry : profile.pc_costs) {
+        if (entry.pc == pc) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+const ExecutionBranchTargetEntry* find_branch_target(const ExecutionProfileSnapshot& profile,
+                                                     uint64_t pc,
+                                                     uint64_t target_pc) {
+    for (const ExecutionBranchTargetEntry& entry : profile.branch_targets) {
+        if (entry.pc == pc && entry.target_pc == target_pc) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
 bool test_debug_snapshot_json_exposes_profile_contract() {
     DebugSnapshot snapshot{};
     snapshot.summary.backend = "pipeline";
@@ -113,6 +133,10 @@ bool test_debug_snapshot_json_exposes_profile_contract() {
                            "debug snapshot JSON should expose hot-path observations") &&
            expect_contains(output, "\"memory_regions\":[",
                            "debug snapshot JSON should expose memory-region observations") &&
+           expect_contains(output, "\"pc_costs\":[",
+                           "debug snapshot JSON should expose per-PC cost observations") &&
+           expect_contains(output, "\"branch_targets\":[",
+                           "debug snapshot JSON should expose branch-target heat observations") &&
            expect_contains(output, "\"traps\":[",
                            "debug snapshot JSON should expose trap observations") &&
            expect_contains(output,
@@ -291,6 +315,58 @@ bool test_functional_profile_counts_reused_ram_line() {
                   "functional shadow-cache profile smoke should export the RAM-region miss count");
 }
 
+bool test_functional_profile_exposes_pc_cost_and_branch_target_heat() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    write32(ram, kEntry + 0, kAuipcX10);
+    write32(ram, kEntry + 4, kAddiX10Plus64);
+    write32(ram, kEntry + 8, kLwX6FromX10);
+    write32(ram, kEntry + 12, kJalX0Skip8);
+    write32(ram, kEntry + 16, kAddiX1WrongPath);
+    write32(ram, kEntry + 20, kLwX6FromX10Again);
+    write32(ram, kEntry + 24, kAddiA7Exit);
+    write32(ram, kEntry + 28, kEcall);
+    ram.write_bytes(kDataAddr, std::array<uint8_t, 4>{1, 0, 0, 0}.data(), 4);
+
+    FunctionalBackend backend(cpu, bus);
+    for (int step = 0; step < 16 && !cpu.core().halted(); ++step) {
+        backend.step();
+    }
+
+    const ExecutionProfileSnapshot profile = backend.debug_snapshot().profile;
+    const ExecutionPcCostEntry* first_load = find_pc_cost(profile, kEntry + 8);
+    const ExecutionPcCostEntry* second_load = find_pc_cost(profile, kEntry + 20);
+    const ExecutionBranchTargetEntry* jump_target =
+        find_branch_target(profile, kEntry + 12, kEntry + 20);
+
+    return expect(cpu.core().halted(), "pc-cost profile smoke should halt via ecall") &&
+           expect(first_load != nullptr,
+                  "pc-cost profile smoke should expose the first load PC") &&
+           expect(first_load->memory_observations == 1,
+                  "pc-cost profile smoke should count first-load memory observations") &&
+           expect(first_load->memory_reads == 1,
+                  "pc-cost profile smoke should count first-load reads") &&
+           expect(first_load->memory_writes == 0,
+                  "pc-cost profile smoke should not count first-load writes") &&
+           expect(first_load->memory_bytes == 4,
+                  "pc-cost profile smoke should preserve first-load byte cost") &&
+           expect(first_load->cycles == 1,
+                  "pc-cost profile smoke should count functional cycle cost per retired PC") &&
+           expect(second_load != nullptr,
+                  "pc-cost profile smoke should expose the second load PC") &&
+           expect(second_load->memory_observations == 1,
+                  "pc-cost profile smoke should count second-load memory observations") &&
+           expect(jump_target != nullptr,
+                  "branch-target profile smoke should expose the actual jump target") &&
+           expect(jump_target->executions == 1,
+                  "branch-target profile smoke should count actual target heat") &&
+           expect(jump_target->redirects == 1,
+                  "branch-target profile smoke should count taken redirects");
+}
+
 bool test_functional_profile_counts_atomic_lr_sc_observations() {
     Ram ram;
     Bus bus(ram);
@@ -350,6 +426,9 @@ int main() {
         return 1;
     }
     if (!test_functional_profile_counts_reused_ram_line()) {
+        return 1;
+    }
+    if (!test_functional_profile_exposes_pc_cost_and_branch_target_heat()) {
         return 1;
     }
     if (!test_functional_profile_counts_atomic_lr_sc_observations()) {

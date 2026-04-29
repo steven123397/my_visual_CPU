@@ -492,7 +492,7 @@ int main() {
     }
     if (!expect_contains(
             store_queue_output,
-            "\"profile\":{\"total_retirements\":2,\"total_traps\":0,\"total_memory_observations\":0,\"hot_paths\":[{\"start_pc\":\"0x80000078\",\"end_pc\":\"0x8000007c\",\"executions\":1,\"retired_instructions\":2}],\"branches\":[],\"syscalls\":[],\"traps\":[],\"shadow_cache\":{\"line_size_bytes\":64,\"capacity_lines\":64,\"resident_lines\":0,\"line_accesses\":0,\"hits\":0,\"misses\":0,\"evictions\":0,\"bypasses\":0},\"memory_regions\":[]}",
+            "\"profile\":{\"total_retirements\":2,\"total_traps\":0,\"total_memory_observations\":0,\"hot_paths\":[{\"start_pc\":\"0x80000078\",\"end_pc\":\"0x8000007c\",\"executions\":1,\"retired_instructions\":2}],\"branches\":[],\"branch_targets\":[],\"syscalls\":[],\"traps\":[],\"shadow_cache\":{\"line_size_bytes\":64,\"capacity_lines\":64,\"resident_lines\":0,\"line_accesses\":0,\"hits\":0,\"misses\":0,\"evictions\":0,\"bypasses\":0},\"memory_regions\":[],\"pc_costs\":[{\"pc\":\"0x80000078\",\"raw\":\"0x7a00293\",\"retirements\":1,\"cycles\":4,\"memory_observations\":0,\"memory_reads\":0,\"memory_writes\":0,\"memory_faults\":0,\"memory_bytes\":0},{\"pc\":\"0x8000007c\",\"raw\":\"0x80001537\",\"retirements\":1,\"cycles\":1,\"memory_observations\":0,\"memory_reads\":0,\"memory_writes\":0,\"memory_faults\":0,\"memory_bytes\":0}]}",
             "pre-commit store queue snapshot should lock the zero-memory-observation profile shape")) {
         return 1;
     }

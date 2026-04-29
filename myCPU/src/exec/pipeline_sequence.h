@@ -16,6 +16,10 @@ struct RetireTraceEntry {
     uint32_t raw{0};
     bool trap{false};
     bool redirect{false};
+    bool cycle_valid{false};
+    uint64_t cycle{0};
+    bool target_pc_valid{false};
+    uint64_t target_pc{0};
 };
 
 class PipelineSequenceState {

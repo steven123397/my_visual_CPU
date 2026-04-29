@@ -30,6 +30,10 @@ void PipelineSequenceState::record(const RetireTraceEntry& entry) {
         .raw = entry.raw,
         .trap = entry.trap,
         .redirect = entry.redirect,
+        .cycle_valid = entry.cycle_valid,
+        .cycle = entry.cycle,
+        .target_pc_valid = entry.target_pc_valid,
+        .target_pc = entry.target_pc,
     });
 }
 

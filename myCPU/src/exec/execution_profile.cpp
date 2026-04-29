@@ -45,12 +45,16 @@ void ExecutionProfile::clear() {
     total_retirements_ = 0;
     total_traps_ = 0;
     total_memory_observations_ = 0;
+    last_retire_cycle_valid_ = false;
+    last_retire_cycle_ = 0;
     active_path_ = {};
     hot_paths_.clear();
     branches_.clear();
+    branch_targets_.clear();
     syscalls_.clear();
     traps_.clear();
     memory_regions_.clear();
+    pc_costs_.clear();
     shadow_cache_regions_.clear();
     shadow_cache_lru_.clear();
     shadow_cache_lines_.clear();
@@ -63,6 +67,7 @@ void ExecutionProfile::record_retire(const ExecutionRetireObservation& observati
     }
 
     ++total_retirements_;
+    record_pc_retire_cost(observation);
 
     if (!active_path_.open) {
         start_path(observation.pc);
@@ -81,6 +86,7 @@ void ExecutionProfile::record_retire(const ExecutionRetireObservation& observati
         if (observation.redirect) {
             branch.redirects += 1;
         }
+        record_branch_target(observation);
     }
 
     if (is_syscall_raw(observation.raw)) {
@@ -132,6 +138,21 @@ void ExecutionProfile::record_memory(const ExecutionMemoryObservation& observati
     }
     if (observation.fault) {
         stats.faults += 1;
+    }
+
+    if (observation.pc_valid) {
+        PcCostStats& pc_cost = pc_costs_[observation.pc];
+        pc_cost.raw = observation.raw;
+        pc_cost.memory_observations += 1;
+        pc_cost.memory_bytes += observation.bytes;
+        if (observation.write) {
+            pc_cost.memory_writes += 1;
+        } else {
+            pc_cost.memory_reads += 1;
+        }
+        if (observation.fault) {
+            pc_cost.memory_faults += 1;
+        }
     }
 
     record_shadow_cache(key, observation);
@@ -209,6 +230,33 @@ ExecutionProfileSnapshot ExecutionProfile::snapshot() const {
                 return lhs.redirects > rhs.redirects;
             }
             return lhs.pc < rhs.pc;
+        },
+        kSnapshotEntryLimit);
+
+    std::vector<ExecutionBranchTargetEntry> branch_targets;
+    branch_targets.reserve(branch_targets_.size());
+    for (const auto& [key, stats] : branch_targets_) {
+        branch_targets.push_back(ExecutionBranchTargetEntry{
+            .pc = key.pc,
+            .raw = stats.raw,
+            .target_pc = key.target_pc,
+            .executions = stats.executions,
+            .redirects = stats.redirects,
+        });
+    }
+    snapshot.branch_targets = top_entries(
+        std::move(branch_targets),
+        [](const ExecutionBranchTargetEntry& lhs, const ExecutionBranchTargetEntry& rhs) {
+            if (lhs.executions != rhs.executions) {
+                return lhs.executions > rhs.executions;
+            }
+            if (lhs.redirects != rhs.redirects) {
+                return lhs.redirects > rhs.redirects;
+            }
+            if (lhs.pc != rhs.pc) {
+                return lhs.pc < rhs.pc;
+            }
+            return lhs.target_pc < rhs.target_pc;
         },
         kSnapshotEntryLimit);
 
@@ -298,7 +346,75 @@ ExecutionProfileSnapshot ExecutionProfile::snapshot() const {
         },
         kSnapshotEntryLimit);
 
+    std::vector<ExecutionPcCostEntry> pc_costs;
+    pc_costs.reserve(pc_costs_.size());
+    for (const auto& [pc, stats] : pc_costs_) {
+        pc_costs.push_back(ExecutionPcCostEntry{
+            .pc = pc,
+            .raw = stats.raw,
+            .retirements = stats.retirements,
+            .cycles = stats.cycles,
+            .memory_observations = stats.memory_observations,
+            .memory_reads = stats.memory_reads,
+            .memory_writes = stats.memory_writes,
+            .memory_faults = stats.memory_faults,
+            .memory_bytes = stats.memory_bytes,
+        });
+    }
+    snapshot.pc_costs = top_entries(
+        std::move(pc_costs),
+        [](const ExecutionPcCostEntry& lhs, const ExecutionPcCostEntry& rhs) {
+            if (lhs.cycles != rhs.cycles) {
+                return lhs.cycles > rhs.cycles;
+            }
+            if (lhs.memory_bytes != rhs.memory_bytes) {
+                return lhs.memory_bytes > rhs.memory_bytes;
+            }
+            if (lhs.memory_observations != rhs.memory_observations) {
+                return lhs.memory_observations > rhs.memory_observations;
+            }
+            if (lhs.retirements != rhs.retirements) {
+                return lhs.retirements > rhs.retirements;
+            }
+            return lhs.pc < rhs.pc;
+        },
+        kSnapshotEntryLimit);
+
     return snapshot;
+}
+
+void ExecutionProfile::record_pc_retire_cost(const ExecutionRetireObservation& observation) {
+    PcCostStats& stats = pc_costs_[observation.pc];
+    stats.raw = observation.raw;
+    stats.retirements += 1;
+    uint64_t cycles = 1;
+    if (observation.cycle_valid) {
+        if (last_retire_cycle_valid_) {
+            cycles = observation.cycle > last_retire_cycle_
+                         ? observation.cycle - last_retire_cycle_
+                         : 1;
+        } else {
+            cycles = observation.cycle + 1;
+        }
+        last_retire_cycle_valid_ = true;
+        last_retire_cycle_ = observation.cycle;
+    }
+    stats.cycles += cycles;
+}
+
+void ExecutionProfile::record_branch_target(const ExecutionRetireObservation& observation) {
+    if (!observation.target_pc_valid) {
+        return;
+    }
+    BranchTargetStats& stats = branch_targets_[BranchTargetKey{
+        .pc = observation.pc,
+        .target_pc = observation.target_pc,
+    }];
+    stats.raw = observation.raw;
+    stats.executions += 1;
+    if (observation.redirect) {
+        stats.redirects += 1;
+    }
 }
 
 void ExecutionProfile::record_shadow_cache(const MemoryKey& key,

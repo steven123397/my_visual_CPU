@@ -692,6 +692,28 @@ class RunDebugCliProbeTest(unittest.TestCase):
                             "bytes": 20,
                         }
                     ],
+                    "pc_costs": [
+                        {
+                            "pc": "0x80200010",
+                            "raw": "0x28303",
+                            "retirements": 4,
+                            "cycles": 7,
+                            "memory_observations": 3,
+                            "memory_reads": 2,
+                            "memory_writes": 1,
+                            "memory_faults": 0,
+                            "memory_bytes": 12,
+                        }
+                    ],
+                    "branch_targets": [
+                        {
+                            "pc": "0x80200020",
+                            "raw": "0xfe000ee3",
+                            "target_pc": "0x80200000",
+                            "executions": 3,
+                            "redirects": 3,
+                        }
+                    ],
                 },
                 "devices": {
                     "uart": {
@@ -739,6 +761,14 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
         self.assertIn(
             "memory-top: label=ram kind=ram accesses=5 reads=3 writes=2 faults=0 bytes=20",
+            stdout.getvalue(),
+        )
+        self.assertIn(
+            "pc-cost: pc=0x80200010 raw=0x28303 retirements=4 cycles=7 memory=3 reads=2 writes=1 faults=0 bytes=12",
+            stdout.getvalue(),
+        )
+        self.assertIn(
+            "branch-target: pc=0x80200020 raw=0xfe000ee3 target=0x80200000 executions=3 redirects=3",
             stdout.getvalue(),
         )
         self.assertIn('uart-tail: bytes=14 recent="Booting Linux\\n"', stdout.getvalue())

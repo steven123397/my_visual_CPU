@@ -15,6 +15,9 @@
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
+  - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
   - [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)
   - [../plan/history_plan.md](../plan/history_plan.md)
@@ -147,6 +150,14 @@
 - 当前有效：自 `2026-04-21` 起，本文档作为“当前已激活的 `xv6 / Linux / JIT` 主线切换设计”。
 - 当前结果以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 - 当前执行计划已归档到 [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)。
-- 当前 `Wave 6` 已激活，第一刀 `JIT / DBT hot-path evidence` 已归档到
+- 当前 `Wave 6` 已激活，`JIT / DBT hot-path evidence` 已归档到
   [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)；
-  该切片只固定候选观察合同，不实现 JIT engine 或改变 guest 可见语义。
+  `translation contract design` 已归档到
+  [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)。
+  `observation + interpreter-assisted DBT prototype` 已归档到
+  [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)。
+  `prototype guardrail expansion` 已归档到
+  [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)。
+  这几刀只固定候选观察合同、helper / fallback 设计边界和 host-smoke-only prototype；
+  当前新增的 preflight guardrail 也只证明候选块执行前会整体拒绝 helper / control-flow
+  边界，不实现 host code emission、长期 block cache 或改变 guest 可见语义。

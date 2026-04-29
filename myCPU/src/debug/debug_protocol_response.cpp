@@ -149,6 +149,22 @@ void append_execution_profile(std::ostringstream& out, const ExecutionProfileSna
             << ",\"redirects\":" << profile.branches[i].redirects
             << "}";
     }
+    out << "],\"branch_targets\":[";
+    for (size_t i = 0; i < profile.branch_targets.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "{"
+            << "\"pc\":";
+        append_json_string(out, hex_u64(profile.branch_targets[i].pc));
+        out << ",\"raw\":";
+        append_json_string(out, hex_u64(profile.branch_targets[i].raw));
+        out << ",\"target_pc\":";
+        append_json_string(out, hex_u64(profile.branch_targets[i].target_pc));
+        out << ",\"executions\":" << profile.branch_targets[i].executions
+            << ",\"redirects\":" << profile.branch_targets[i].redirects
+            << "}";
+    }
     out << "],\"syscalls\":[";
     for (size_t i = 0; i < profile.syscalls.size(); ++i) {
         if (i != 0) {
@@ -213,6 +229,25 @@ void append_execution_profile(std::ostringstream& out, const ExecutionProfileSna
             << ",\"shadow_cache_misses\":" << profile.memory_regions[i].shadow_cache_misses
             << ",\"shadow_cache_evictions\":" << profile.memory_regions[i].shadow_cache_evictions
             << ",\"shadow_cache_bypasses\":" << profile.memory_regions[i].shadow_cache_bypasses
+            << "}";
+    }
+    out << "],\"pc_costs\":[";
+    for (size_t i = 0; i < profile.pc_costs.size(); ++i) {
+        if (i != 0) {
+            out << ",";
+        }
+        out << "{"
+            << "\"pc\":";
+        append_json_string(out, hex_u64(profile.pc_costs[i].pc));
+        out << ",\"raw\":";
+        append_json_string(out, hex_u64(profile.pc_costs[i].raw));
+        out << ",\"retirements\":" << profile.pc_costs[i].retirements
+            << ",\"cycles\":" << profile.pc_costs[i].cycles
+            << ",\"memory_observations\":" << profile.pc_costs[i].memory_observations
+            << ",\"memory_reads\":" << profile.pc_costs[i].memory_reads
+            << ",\"memory_writes\":" << profile.pc_costs[i].memory_writes
+            << ",\"memory_faults\":" << profile.pc_costs[i].memory_faults
+            << ",\"memory_bytes\":" << profile.pc_costs[i].memory_bytes
             << "}";
     }
     out << "]}";
