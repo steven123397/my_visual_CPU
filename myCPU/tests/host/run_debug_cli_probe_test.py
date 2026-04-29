@@ -957,6 +957,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
                 "inlineable_instructions": 1,
                 "fallback_pc": "0x80200004",
                 "reason": "helper-required",
+                "boundary_kind": "memory-load",
             },
             {
                 "type": "snapshot",
@@ -1005,7 +1006,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertIn(
-            "translation-plan: fallback start=0x80200000 end=0x80200008 executions=3 retired=6 inlineable=1 fallback_pc=0x80200004 reason=helper-required",
+            "translation-plan: fallback start=0x80200000 end=0x80200008 executions=3 retired=6 inlineable=1 fallback_pc=0x80200004 reason=helper-required boundary=memory-load",
             stdout.getvalue(),
         )
 
@@ -1206,6 +1207,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("translation-plan: fallback", proc.stdout)
         self.assertIn("inlineable=1", proc.stdout)
         self.assertIn("reason=helper-required", proc.stdout)
+        self.assertIn("boundary=memory-load", proc.stdout)
 
     def test_payload_actions_follow_primary_load_command(self) -> None:
         args = PROBE.parse_args(

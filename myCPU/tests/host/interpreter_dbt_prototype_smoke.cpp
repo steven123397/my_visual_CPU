@@ -16,6 +16,7 @@ constexpr uint32_t kAddiX2X1Two = 0x00208113U;    // addi x2, x1, 2
 constexpr uint32_t kAddX3X1X2 = 0x002081b3U;      // add x3, x1, x2
 constexpr uint32_t kLwX1FromX0 = 0x00002083U;     // lw x1, 0(x0)
 constexpr uint32_t kLwX2FromX4 = 0x00022103U;     // lw x2, 0(x4)
+constexpr uint32_t kSwX1ToX4 = 0x00122023U;       // sw x1, 0(x4)
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;     // jal x0, 8
 constexpr uint64_t kData = MEM_BASE + 0x100;
 constexpr uint32_t kDataWord = 0x11223344U;
@@ -102,6 +103,8 @@ bool test_memory_instruction_requires_helper_fallback() {
                   "interpreter DBT prototype plan should report memory fallback PC") &&
            expect(plan.fallback_reason == "helper-required",
                   "interpreter DBT prototype plan should report helper-required fallback") &&
+           expect(plan.boundary_kind == "memory-load",
+                  "interpreter DBT prototype plan should classify load helper boundary") &&
            expect(!result.ok, "interpreter DBT prototype should fallback on memory instruction") &&
            expect(result.retired_instructions == 0,
                   "interpreter DBT prototype should not retire helper-required instruction") &&
@@ -115,6 +118,29 @@ bool test_memory_instruction_requires_helper_fallback() {
                   "interpreter DBT prototype should not advance instret after fallback") &&
            expect(cpu.core().cycle() == 0,
                   "interpreter DBT prototype should not advance cycles after fallback");
+}
+
+bool test_store_instruction_reports_memory_store_boundary() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    cpu.core().write_gpr(1, 0x55);
+    cpu.core().write_gpr(4, kData);
+    write32(ram, kEntry, kSwX1ToX4);
+
+    const InterpreterDbtPrototypePlan plan =
+        plan_interpreter_dbt_prototype_block(cpu, bus, kEntry, kEntry);
+
+    return expect(!plan.ok, "interpreter DBT prototype should reject store instruction during preflight") &&
+           expect(plan.fallback_reason == "helper-required",
+                  "interpreter DBT prototype plan should report helper-required store fallback") &&
+           expect(plan.boundary_kind == "memory-store",
+                  "interpreter DBT prototype plan should classify store helper boundary") &&
+           expect(plan.fallback_pc == kEntry,
+                  "interpreter DBT prototype plan should report store boundary PC") &&
+           expect(cpu.core().instret() == 0,
+                  "store boundary planning should not advance instret");
 }
 
 bool test_helper_boundary_block_is_rejected_before_prefix_commit() {
@@ -137,6 +163,8 @@ bool test_helper_boundary_block_is_rejected_before_prefix_commit() {
                   "interpreter DBT prototype plan should report first helper boundary PC") &&
            expect(plan.fallback_reason == "helper-required",
                   "interpreter DBT prototype plan should report helper-required boundary") &&
+           expect(plan.boundary_kind == "memory-load",
+                  "interpreter DBT prototype plan should classify helper boundary") &&
            expect(!result.ok, "interpreter DBT prototype should not execute mixed helper block") &&
            expect(result.retired_instructions == 0,
                   "interpreter DBT prototype should reject helper block before retiring prefix") &&
@@ -174,6 +202,8 @@ bool test_control_flow_boundary_block_is_rejected_before_prefix_commit() {
                   "interpreter DBT prototype plan should report control-flow boundary PC") &&
            expect(plan.fallback_reason == "fallback-required",
                   "interpreter DBT prototype plan should report fallback-required control-flow boundary") &&
+           expect(plan.boundary_kind == "control-flow",
+                  "interpreter DBT prototype plan should classify control-flow boundary") &&
            expect(!result.ok, "interpreter DBT prototype should not execute control-flow block") &&
            expect(result.retired_instructions == 0,
                   "interpreter DBT prototype should reject control-flow block before retiring prefix") &&
@@ -286,6 +316,8 @@ bool test_hot_path_candidate_helper_boundary_does_not_commit_prefix() {
                   "hot path prototype plan should report first helper boundary PC") &&
            expect(plan.fallback_reason == "helper-required",
                   "hot path prototype plan should report helper-required boundary") &&
+           expect(plan.boundary_kind == "memory-load",
+                  "hot path prototype plan should classify helper boundary") &&
            expect(cpu.core().read_gpr(1) == 0,
                   "hot path prototype plan should not commit inlineable prefix") &&
            expect(cpu.core().pc() == kEntry,
@@ -420,6 +452,9 @@ int main() {
         return 1;
     }
     if (!test_memory_instruction_requires_helper_fallback()) {
+        return 1;
+    }
+    if (!test_store_instruction_reports_memory_store_boundary()) {
         return 1;
     }
     if (!test_helper_boundary_block_is_rejected_before_prefix_commit()) {

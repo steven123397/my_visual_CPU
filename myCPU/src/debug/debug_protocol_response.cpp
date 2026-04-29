@@ -517,6 +517,10 @@ std::string debug_protocol_translation_plan_json(const DebugSession::Translation
         append_json_string(out, hex_u64(plan.fallback_pc));
         out << ",\"reason\":";
         append_json_string(out, plan.reason);
+        if (!plan.boundary_kind.empty()) {
+            out << ",\"boundary_kind\":";
+            append_json_string(out, plan.boundary_kind);
+        }
     }
     out << "}";
     return out.str();

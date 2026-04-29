@@ -152,20 +152,10 @@
 - 当前有效：自 `2026-04-21` 起，本文档作为“当前已激活的 `xv6 / Linux / JIT` 主线切换设计”。
 - 当前结果以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 - 当前执行计划已归档到 [../plan/history_plan.md#xv6-linux-jit-wave1-plan](../plan/history_plan.md#xv6-linux-jit-wave1-plan)。
-- 当前 `Wave 6` 已激活，`JIT / DBT hot-path evidence` 已归档到
-  [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)；
-  `translation contract design` 已归档到
-  [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)。
-  `observation + interpreter-assisted DBT prototype` 已归档到
-  [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)。
-  `prototype guardrail expansion` 已归档到
-  [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)。
-  `translation plan dry-run` 已归档到
-  [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-plan-slice-e-plan)。
-  `fallback equivalence` 已归档到
-  [../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-fallback-equivalence-slice-f-plan)。
-  这几刀只固定候选观察合同、helper / fallback 设计边界和 host-smoke-only prototype；
-  当前新增的 preflight guardrail、opt-in translation-plan dry-run 和 fallback replay
-  等价性也只证明候选块执行前会整体拒绝 helper / control-flow 边界，能报告 top
-  candidate 的 first boundary，并能从 block start 回到 functional reference 执行到
-  first boundary；不实现 host code emission、长期 block cache 或改变 guest 可见语义。
+- 当前 `Wave 6` 已激活，JIT / DBT 证据链和原型边界首轮已完成。当前结果只固定
+  hot-path candidate、translation contract、host-smoke-only prototype、preflight
+  guardrail、opt-in translation-plan dry-run、functional fallback replay 等价性和
+  first-boundary taxonomy；不实现 host code emission、长期 block cache 或改变 guest
+  可见语义。后续同类窄观察和原型边界补洞不再单独创建 plan 文档；只有进入真正
+  JIT engine、host code、persistent block cache、runtime scheduler 或 multicore /
+  coherence 等整块任务时，才重新启用独立计划文档。

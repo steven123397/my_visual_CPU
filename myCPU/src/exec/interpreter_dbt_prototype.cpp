@@ -45,6 +45,47 @@ bool is_control_flow_instruction(const Insn& insn) {
     return insn.opcode == 0x63U || insn.opcode == 0x67U || insn.opcode == 0x6FU;
 }
 
+const char* memory_boundary_kind(MemoryRequest::Kind kind) {
+    switch (kind) {
+    case MemoryRequest::Kind::Load:
+        return "memory-load";
+    case MemoryRequest::Kind::Store:
+        return "memory-store";
+    case MemoryRequest::Kind::None:
+        return "";
+    }
+    return "";
+}
+
+const char* helper_boundary_kind(const InsnEffects& effects) {
+    if (effects.mem.kind != MemoryRequest::Kind::None) {
+        return memory_boundary_kind(effects.mem.kind);
+    }
+    if (effects.atomic.kind != AtomicRequest::Kind::None) {
+        return "atomic";
+    }
+    if (effects.vector.kind != VectorRequest::Kind::None) {
+        return "vector";
+    }
+    if (effects.csr_write.enable) {
+        return "csr-write";
+    }
+    return "helper";
+}
+
+const char* fallback_boundary_kind(const InsnEffects& effects) {
+    if (effects.trap.valid) {
+        return "trap";
+    }
+    if (requires_fallback(effects)) {
+        return "control-flow";
+    }
+    if (!effects.retired) {
+        return "not-retired";
+    }
+    return "fallback";
+}
+
 FetchDecodeResult fetch_decode(CPU& cpu, Bus& bus, uint64_t pc) {
     const AddressSpace::AccessResult first_half = cpu.address_space().fetch16_result(bus, pc);
     if (!first_half.ok) {
@@ -92,7 +133,8 @@ InterpreterDbtPrototypePlan plan_fallback(uint64_t start_pc,
                                           uint64_t end_pc,
                                           uint64_t inlineable,
                                           uint64_t pc,
-                                          std::string reason) {
+                                          std::string reason,
+                                          std::string boundary_kind = {}) {
     return InterpreterDbtPrototypePlan{
         .ok = false,
         .start_pc = start_pc,
@@ -100,6 +142,7 @@ InterpreterDbtPrototypePlan plan_fallback(uint64_t start_pc,
         .inlineable_instructions = inlineable,
         .fallback_pc = pc,
         .fallback_reason = std::move(reason),
+        .boundary_kind = std::move(boundary_kind),
     };
 }
 
@@ -127,24 +170,24 @@ InterpreterDbtPrototypePlan plan_interpreter_dbt_prototype_block(CPU& cpu,
     for (uint64_t pc = start_pc; pc <= end_pc;) {
         const FetchDecodeResult fetched = fetch_decode(cpu, bus, pc);
         if (!fetched.ok) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, fetched.fallback_reason);
+            return plan_fallback(start_pc, end_pc, inlineable, pc, fetched.fallback_reason, "fetch-fault");
         }
 
         const Insn& insn = fetched.insn;
         if (!InstructionSemantics::supports(insn)) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required");
+            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required", "unsupported");
         }
         if (is_control_flow_instruction(insn)) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required");
+            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required", "control-flow");
         }
 
         ExecutionContext ctx(cpu, bus);
         const InsnEffects effects = InstructionSemantics::execute(insn, ctx);
         if (effects.trap.valid || !effects.retired || requires_fallback(effects)) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required");
+            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required", fallback_boundary_kind(effects));
         }
         if (requires_helper(effects)) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, "helper-required");
+            return plan_fallback(start_pc, end_pc, inlineable, pc, "helper-required", helper_boundary_kind(effects));
         }
 
         inlineable += 1;

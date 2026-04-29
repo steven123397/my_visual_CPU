@@ -41,12 +41,12 @@
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
 - 当前计划：
-  - 暂无主线活跃计划；继续推进 `Wave 6` 下一刀前先新建 `docs/plan/` 计划。
+  - 暂无主线活跃计划。
+  - `Wave 6` 证据链和原型边界阶段的后续窄任务不再单独创建计划文档；只有进入真正
+    JIT engine、host code、persistent block cache 或 multicore / coherence 等整块任务时，
+    才重新启用独立计划。
 - 已完成计划归档：
-  - [../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
-  - [../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
-  - [../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
-  - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
+  - [../plan/history_plan.md](../plan/history_plan.md)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
@@ -146,7 +146,7 @@
   -> Wave 3：已收口的 Linux 更后 userland checkpoint + observation/pipeline gap 判断
   -> Wave 4：已完成，AI accelerator 下一轮扩展 + 向量/observation 继续深化
   -> Wave 5：已完成首轮收口，cache / memory-system 第一刀（以 workload 证据触发）
-  -> Wave 6：当前 active wave，JIT / DBT hot-path evidence、translation contract、opt-in prototype、preflight guardrail、translation-plan dry-run 与 fallback replay 等价性
+  -> Wave 6：当前 active wave，JIT / DBT 证据链和原型边界已完成首轮收口
   -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
 ```
 
@@ -279,37 +279,20 @@ Wave 5 的激活门槛：
 
 ### Wave 6：JIT / DBT 与 multicore / coherence
 
-Wave 6 也是主线内排期，当前已激活，且 `JIT / DBT hot-path evidence`、
-`translation contract design`、`observation + interpreter-assisted DBT prototype` 与
-`prototype guardrail expansion` 均已完成。目标是：
+Wave 6 也是主线内排期，当前已激活并完成 JIT / DBT 证据链和原型边界首轮收口。目标是：
 
 - 基于 Linux / workload / profile 证据决定 `JIT / DBT` 是否值得正式启动
 - 基于 cache 路线与 memory-order 验证进展决定 multicore / coherence 是否可启动
 
-`Slice A` 已由
-[../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
-收口：当前只固定 probe 级 hot-path / translation candidate 观察合同，不实现
-JIT engine、DBT translator、IR、block cache、host code emission、multicore、
-coherence 或新的 memory consistency 模型。multicore / coherence 仍属于后续高门槛
-切片，必须另开设计和计划。
+当前完成态只固定 probe 级 hot-path / translation candidate、`pc_costs` /
+`branch_targets`、translation contract、host-smoke-only interpreter-assisted prototype、
+preflight 整块拒绝、opt-in translation-plan dry-run、functional fallback replay 等价性和
+first-boundary taxonomy。它不实现 JIT engine、DBT translator、IR、block cache、
+host code emission、multicore、coherence 或新的 memory consistency 模型。
 
-`Slice B` 已由
-[../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-translation-contract-slice-b-plan)
-收口：当前只固定 translator 输入、输出分类、helper / fallback、fault / trap、
-memory / CSR / atomic / MMIO / page-walk 和 invalidation 设计合同；仍不实现
-JIT engine、DBT translator、IR、host code emission 或 block cache。
-
-`Slice C` 已由
-[../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-observation-and-slice-c-plan)
-收口：当前补齐 `pc_costs` / `branch_targets` 窄观察合同，并新增 host-smoke-only 的
-interpreter-assisted DBT prototype；它只执行 pure straight-line inlineable block，
-不生成 host code，不接入默认 backend，也不创建长期 block cache。
-
-`Slice D` 已由
-[../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-prototype-guardrail-slice-d-plan)
-收口：当前只新增 prototype preflight / lifecycle guardrail，让候选 block 必须先整体
-证明为 inlineable 才能执行；含 helper-required 或 control-flow boundary 的 block 会在
-执行前整体拒绝，不提交前缀指令。
+证据链和原型边界阶段的后续窄任务不再按每个小补丁单开计划文档；只有进入真正
+JIT engine、host code、persistent block cache、runtime scheduler 或 multicore /
+coherence 这类整块任务时，才重新启用独立设计 / 计划。
 
 Wave 6 第一刀的激活门槛：
 
@@ -378,10 +361,9 @@ Wave 7 的完成定义：
 ### F：JIT / DBT / multicore / coherence
 
 - 当前已进入主线 `Wave 6`。
-- `JIT / DBT hot-path evidence`、`translation contract design` 与最小 opt-in
-  prototype、preflight guardrail、translation-plan dry-run、fallback replay 等价性已完成，
-  为未来 helper boundary 分类和 block lifecycle 观察提供入口；multicore / coherence 仍等待 atomic、memory-order、
-  DMA / cache 交界和验证矩阵另行收口。
+- JIT / DBT 证据链和原型边界首轮已完成，为后续 block lifecycle 观察、
+  workload-level opt-in 观察和真正 JIT engine 评估提供入口；multicore / coherence
+  仍等待 atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
 
 ### G：产品化展示 / 在线调试平台 / 部署
 
@@ -396,7 +378,8 @@ Wave 7 的完成定义：
 - AI accelerator 被纳入主线后，不代表它立刻变成近端 blocker；它当前仍应服从 Linux 波次让路。
 - `cache / JIT / multicore` 都已被明确排期；当前 `Wave 6` 只完成 JIT / DBT
   evidence、translation contract、host-smoke-only prototype 与 preflight guardrail，
-  以及 opt-in translation-plan dry-run 和 host-smoke-only fallback replay 等价性，不代表
+  以及 opt-in translation-plan dry-run、host-smoke-only fallback replay 等价性和
+  first-boundary taxonomy，不代表
   JIT engine 或 multicore / coherence 已经可以直接实现。
 - Wave 7 如果过早启动，容易把尚未稳定的工程能力包装成产品界面；因此必须先收口已完成功能展示和 session / 安全边界，再把部署服务器作为最后一步。
 

@@ -240,6 +240,7 @@ DebugSession::TranslationPlanSnapshot DebugSession::translation_plan() {
         .inlineable_instructions = plan.inlineable_instructions,
         .fallback_pc = plan.fallback_pc,
         .reason = plan.fallback_reason,
+        .boundary_kind = plan.boundary_kind,
     };
 }
 

@@ -355,6 +355,9 @@ def emit_translation_plan_summary(plan) -> None:
     if status == "fallback":
         fields.append(f"fallback_pc={profile_hex(plan.get('fallback_pc', '0x0'))}")
         fields.append(f"reason={plan.get('reason', 'unknown')}")
+        boundary_kind = plan.get("boundary_kind", "")
+        if boundary_kind:
+            fields.append(f"boundary={boundary_kind}")
     print("translation-plan:", status, *fields)
 
 

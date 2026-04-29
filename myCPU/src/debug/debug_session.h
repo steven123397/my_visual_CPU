@@ -29,6 +29,7 @@ public:
         uint64_t inlineable_instructions{0};
         uint64_t fallback_pc{0};
         std::string reason{};
+        std::string boundary_kind{};
     };
 
     void load_elf(const std::string& path,

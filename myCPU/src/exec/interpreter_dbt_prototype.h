@@ -26,6 +26,7 @@ struct InterpreterDbtPrototypePlan {
     uint64_t inlineable_instructions{0};
     uint64_t fallback_pc{0};
     std::string fallback_reason{};
+    std::string boundary_kind{};
 };
 
 InterpreterDbtPrototypePlan plan_interpreter_dbt_prototype_block(CPU& cpu,
