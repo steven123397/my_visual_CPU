@@ -18,6 +18,7 @@ constexpr uint32_t kRawJal = 0x0080006fU;
 constexpr uint32_t kRawLoad = 0x00002083U;
 constexpr uint32_t kLwX5FromX6 = 0x00032283U;  // lw x5, 0(x6)
 constexpr uint32_t kAddiX1One = 0x00100093U;   // addi x1, x0, 1
+constexpr uint32_t kEbreak = 0x00100073U;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -244,6 +245,41 @@ bool test_reference_fallback_execution_runs_jit_miss_and_differential_mismatch_r
                   "differential mismatch fallback should execute one reference step");
 }
 
+bool test_reference_fallback_execution_runs_trap_placeholder_reference_step() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kPc);
+    write32(ram, kPc, kEbreak);
+
+    DbtReferenceFallbackExecutionRequest request =
+        plan_dbt_reference_fallback_execution(
+            plain_plan("trap", DbtRejectKind::Trap));
+    request.pc = kPc;
+    request.end_pc = kPc;
+
+    const DbtReferenceFallbackExecutionResult result =
+        execute_dbt_reference_fallback(cpu, bus, request);
+    const std::string line = format_dbt_reference_fallback_execution_result(result);
+
+    return expect(request.ok &&
+                      request.kind == DbtReferenceFallbackExecutionKind::TrapOrFaultReferenceStep &&
+                      request.trap_or_fault_placeholder,
+                  "trap fallback request should preserve trap placeholder classification") &&
+           expect(result.ok && result.trap_or_fault_placeholder &&
+                      result.executed_reference_step && result.executed_guest_code,
+                  "trap placeholder fallback should execute a reference step") &&
+           expect(result.reference_steps_executed == 1 &&
+                      cpu.core().pc() != kPc &&
+                      cpu.core().instret() == 0,
+                  "trap placeholder fallback should let reference backend take trap without retiring") &&
+           expect(line.find("fallback-exec-result: kind=trap-or-fault-reference-step ok=true") !=
+                      std::string::npos,
+                  "trap placeholder result should expose stable kind and status") &&
+           expect(line.find("trap-or-fault=true") != std::string::npos,
+                  "trap placeholder result should expose trap-or-fault flag");
+}
+
 }  // namespace
 
 int main() {
@@ -263,6 +299,9 @@ int main() {
         return 1;
     }
     if (!test_reference_fallback_execution_runs_jit_miss_and_differential_mismatch_reasons()) {
+        return 1;
+    }
+    if (!test_reference_fallback_execution_runs_trap_placeholder_reference_step()) {
         return 1;
     }
     std::puts("dbt_reference_fallback_execution_smoke: PASS");

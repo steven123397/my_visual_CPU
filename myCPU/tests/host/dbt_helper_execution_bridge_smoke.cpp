@@ -291,6 +291,36 @@ bool test_helper_execution_bridge_rejects_faulting_scalar_memory_load_without_co
                   "faulting load helper should preserve rd and pc for reference fallback");
 }
 
+bool test_helper_execution_bridge_rejects_faulting_scalar_memory_store_without_commit() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kPc);
+    cpu.core().write_gpr(2, 0x55);
+
+    const DbtHelperExecutionRequest request =
+        plan_dbt_helper_execution_bridge(scalar_store_replay(0x1000, 4, 0x11223344));
+    const DbtHelperExecutionResult result =
+        execute_dbt_helper_request(cpu, bus, request);
+    const std::string line = format_dbt_helper_execution_result(result);
+
+    return expect(request.ok, "faulting store helper request should still be valid") &&
+           expect(!result.ok && result.trap_taken && result.fallback_to_reference_on_trap,
+                  "faulting store helper should report trap and reference fallback boundary") &&
+           expect(result.executed_helper && !result.mutated_cpu_state && !result.retired,
+                  "faulting store helper should execute but avoid helper state commit") &&
+           expect(cpu.core().read_gpr(2) == 0x55 && cpu.core().pc() == kPc &&
+                      cpu.core().instret() == 0,
+                  "faulting store helper should preserve GPR, PC, and instret") &&
+           expect(result.trap_tval == 0x1000,
+                  "faulting store helper should preserve trap tval") &&
+           expect(line.find("helper-exec-result: kind=scalar-memory-store ok=false") !=
+                      std::string::npos,
+                  "faulting store helper formatter should expose stable kind and status") &&
+           expect(line.find("trap=true") != std::string::npos,
+                  "faulting store helper formatter should expose trap state");
+}
+
 }  // namespace
 
 int main() {
@@ -310,6 +340,9 @@ int main() {
         return 1;
     }
     if (!test_helper_execution_bridge_rejects_faulting_scalar_memory_load_without_commit()) {
+        return 1;
+    }
+    if (!test_helper_execution_bridge_rejects_faulting_scalar_memory_store_without_commit()) {
         return 1;
     }
     std::puts("dbt_helper_execution_bridge_smoke: PASS");

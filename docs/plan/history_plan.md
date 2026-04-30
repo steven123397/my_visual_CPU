@@ -23,6 +23,21 @@
 
 ### 2026-04-30
 
+#### mainline-wave6-closeout-runtime-guardrail-plan
+
+- 原文件：`mainline_wave6_closeout_runtime_guardrail_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 closeout runtime guardrail 第一刀。
+  本轮新增 host-smoke-only opt-in runtime loop v1，把 executable cache miss / hit、
+  scalar memory helper execution、reference fallback execution、guest-store invalidation
+  和 stale dispatch prevention 串成连续闭环；同时补齐 helper store fault/no-commit、
+  trap/fault fallback placeholder 和 closeout stats 断言。
+- 实现过程摘要：整体保持默认 backend 不变。runtime loop 只按当前 PC 单步推进，不做
+  block stitching 或 workload-level scheduler；pure integer 走 executable cache，
+  scalar memory load / store 走 helper execution，其余 fallback 复用 functional reference
+  step。默认 `--backend jit`、persistent cache、CSR / atomic / vector helper runtime、
+  multicore、coherence 和新的 memory consistency 模型继续后移。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave6-runtime-execution-sequence-plan
 
 - 原文件：`mainline_wave6_runtime_execution_sequence_plan.md`

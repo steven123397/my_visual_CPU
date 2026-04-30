@@ -42,8 +42,10 @@ fault / trap 语义和未来代码缓存串起来；multicore / coherence 则会
 atomic、DMA、memory-order 和平台状态空间。如果第一刀直接改执行语义，风险会明显高于当前证据能支撑的范围。
 
 因此 `Wave 6` 当前仍保持 `reference-first`：先固定可重复的 hot-path /
-translation candidate 证据、helper / fallback 边界和最小 prototype guardrail，不生成
-宿主机器码，不引入长期 block cache，不改变 guest 可见语义。
+translation candidate 证据、helper / fallback 边界、最小 prototype guardrail 和
+host-smoke-only opt-in executable path。当前允许在显式 host smoke 中生成并执行宿主代码，
+但默认执行路径不生成、不调度、不执行宿主代码，不引入长期 block cache，也不改变 guest
+可见语义。
 
 ## 目标
 
@@ -53,6 +55,8 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 - 固定未来 translator 的输入、输出分类、helper 边界、fault / trap 回退和 invalidation
   口径。
 - 用 host-smoke-only prototype 证明共享语义和 commit boundary 可以被 DBT 形态复用。
+- 用 host-smoke-only runtime loop 证明 executable cache、helper execution、reference
+  fallback、runtime invalidation 和 stats 可以在 opt-in 边界内串成连续闭环。
 - 为后续是否实现 JIT / DBT engine 提供证据，而不是用“预期会快”作为动机。
 - 保持 `functional` reference path、`pipeline` 和当前 workload guardrail 的行为不变。
 
@@ -61,13 +65,14 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 - 当前已完成 `DBT translator + IR v0 dry-run`、metadata-only block cache、
   executable memory policy、host code emission v0、executable cache runtime hookup、
   scalar memory helper execution opt-in、reference fallback execution opt-in 和 dispatch
-  harness v1 子阶段，但仍不实现默认 JIT backend、persistent cache 或 workload-level
-  scheduler。
+  harness v1 / runtime loop v1 子阶段，但仍不实现默认 JIT backend、persistent cache 或
+  workload-level scheduler。
 - 不在默认执行路径申请可执行内存，不把宿主平台相关代码生成接入默认 backend。
 - 不改变 `InstructionSemantics` 的 ISA 真值来源定位。
 - 不改变 guest 可见 fault / trap / CSR / memory 语义。
 - 不接入默认 backend 调度，不创建长期 block lifecycle，也不把 helper-required 指令伪装成
-  inlineable。
+  inlineable；当前 scalar memory helper execution 只属于 host-smoke-only opt-in runtime
+  guardrail。
 - 不启动 multicore、coherence、memory consistency 新模型、write-back cache、I-cache 或
   cache maintenance instruction。
 - 不把 AI accelerator 后续专项并入 `Wave 6`。
@@ -168,6 +173,13 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
   通过 block plan、translator、IR eval、lowering、host emitter 和 executable memory policy，
   并在提交 CPU state 前与 IR eval differential 对齐。helper / fallback / trap-risk block
   必须拒绝并回到 reference fallback，默认 backend 不启用 JIT。
+- opt-in runtime loop v1 已完成 closeout guardrail：`dbt_runtime_harness` 可以在 host smoke
+  中连续处理单步 dispatch，pure integer 指令通过 executable cache miss / hit 执行，
+  scalar memory load / store 通过 helper execution 执行，control-flow / trap-placeholder
+  等路径通过 reference fallback execution 执行；helper store 可以调用 runtime invalidation
+  hook，释放 resident executable 并阻止 stale dispatch。loop summary / stats 暴露 host、
+  helper、fallback、invalidate、stale-prevented、hit / miss、emit / exec 和 differential
+  mismatch 计数。该 loop 仍不是默认 backend，也不是 workload-level scheduler。
 - translator 可以重新 decode `DbtBlockPlan::dry_run_ir[].raw` 来恢复寄存器、立即数和
   opcode 分类，但不得重新取指，不得提交 CPU state，也不得绕过 `InstructionSemantics`
   的 preflight 结论。
@@ -184,9 +196,10 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 
 本阶段完成后，项目可以声称“已有最小 DBT translator / IR dry-run 前端、host code
 emission v0、host-smoke-only opt-in executable JIT block、opt-in runtime executable
-cache hookup、scalar memory helper opt-in execution、reference fallback opt-in execution
-和 dispatch harness v1”。它仍不能声称已有默认 JIT backend、persistent cache、
-workload-level scheduler 或完整 helper inline / replay runtime。
+cache hookup、scalar memory helper opt-in execution、reference fallback opt-in execution、
+dispatch harness v1 和 opt-in runtime loop v1 closeout guardrail”。它仍不能声称已有默认
+JIT backend、persistent cache、workload-level scheduler、multicore / coherence 或完整
+CSR / atomic / vector helper runtime。
 
 ## 当前合同
 
@@ -255,12 +268,14 @@ XLEN / word width 和 word sign-extension；它本身不绑定 x86 / ARM host IS
 guest 指令 PC，而不是 block entry PC。unsupported lowered op、rejected lowering 或缺失
 fallthrough 必须整体 reject，不返回可执行前缀 code。
 
-`opt-in runtime harness` 只允许执行单个已完整通过 block plan、translator、IR eval、
-lowering、host emitter 和 executable memory policy 的 pure integer block。它可以把生成的
-host code 作用于 GPR snapshot，并在 differential guardrail 成功后提交 GPR、PC 和
-retired instruction count；任何 helper-required、fallback-required、trap-risk、
-invalidation-risk 或 differential mismatch 都必须拒绝并保留 CPU state 不变。该 harness
-只用于 host smoke，不是默认 backend，也不是 workload-level runtime scheduler。
+`opt-in runtime harness` 只允许执行已完整通过 block plan、translator、IR eval、
+lowering、host emitter 和 executable memory policy 的 pure integer block。单 block API 可以
+把生成的 host code 作用于 GPR snapshot，并在 differential guardrail 成功后提交 GPR、PC 和
+retired instruction count；helper-required、fallback-required、trap-risk 或 differential
+mismatch 必须拒绝 host commit。runtime loop v1 可以把单步 host dispatch、scalar memory
+helper execution、reference fallback execution 和 runtime invalidation hook 串成连续 host
+smoke，但仍只按当前 PC 单步推进，不做 block stitching、workload-level scheduling 或默认
+backend 调度。
 
 `JIT engine skeleton dry-run` 只允许做调度决策编排：先查 metadata-only cache，未命中时
 走 `DbtBlockPlan -> DbtTranslationUnit -> DbtIrLoweringResult`，helper-required unit
@@ -334,6 +349,9 @@ Helper 只能复用已有 simulator 事实来源：
 - 当前 dispatch harness v1 只存在于 opt-in runtime harness：cache miss 才 emit 并插入，
   cache hit 才执行 resident executable，invalidation 后必须重新 miss / emit；summary /
   stats 只读暴露 hit、miss、emit、exec、fallback、invalidate 和 differential mismatch 计数。
+- 当前 runtime loop v1 只存在于 opt-in runtime harness：它可以连续触发 miss / hit、helper
+  execution、reference fallback 和 guest-store invalidation，但仍只执行 scalar memory helper；
+  CSR / atomic / vector helper 保持 request-only 或 reference fallback，不进入 runtime 执行。
 - load / store / fetch / page walk 走 `AddressSpace -> Bus -> Ram/Device` 现有边界。
 - trap / interrupt / exception 走既有 trap controller 和 commit boundary。
 - debug / profile 继续由现有 backend 记录；translator 不能自行制造 guest 可见状态。
@@ -511,4 +529,8 @@ block cache 或 workload-level JIT harness，需要再开新的设计 / 计划�
 - 当前仍未启动默认 JIT backend、persistent cache、完整 helper runtime execution、
   workload-level scheduler、multicore / coherence、write-back cache、I-cache 和 cache
   maintenance instruction。
+- Wave 6 closeout 的当前判定是 opt-in executable path 与 runtime guardrail 收口；默认
+  `--backend jit`、persistent cache、workload-level scheduler、CSR / atomic / vector helper
+  runtime、multicore / coherence 和新的 memory consistency model 都必须作为后续独立设计 /
+  计划评估。
 - 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。

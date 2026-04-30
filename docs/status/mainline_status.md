@@ -322,6 +322,12 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
   `lui` / `auipc`、word ops、逻辑、shift 和 compare；runtime harness stats 暴露
   hit / miss、emit、exec、fallback、invalidate 和 differential mismatch。默认 backend
   评估结论仍是不接入。
+- 主线 `Wave 6` 已完成 `closeout runtime guardrail` 第一刀：`dbt_runtime_harness`
+  新增 host-smoke-only opt-in runtime loop v1，可以连续串起 executable cache
+  miss / hit、scalar memory helper execution、reference fallback execution 和 guest-store
+  invalidation；helper store 会触发 runtime invalidation hook 并阻止 stale resident
+  executable dispatch。helper store fault/no-commit 与 trap/fault fallback placeholder 也已
+  由 host smoke 固定。该 loop 仍不是默认 backend，也不是 workload-level scheduler。
 - 主线 `Wave 6` 已完成 `metadata-only block cache` 第一刀：新增
   `src/exec/dbt_block_cache.{h,cpp}`，只缓存成功翻译的 `DbtTranslationUnit`
   metadata，并用 `tests/host/dbt_block_cache_smoke.cpp` 固定 key / hit / miss /
@@ -344,17 +350,18 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
    opt-in runtime harness + differential guardrail，
    executable cache runtime hookup，
    helper execution opt-in、runtime fallback opt-in execution、JIT dispatch harness v1、
-   runtime harness summary / stats，
+   runtime loop v1 closeout guardrail、runtime harness summary / stats，
    以及 metadata-only block cache / invalidation matrix hardening
    第一刀已作为补充合同落地。
    当前执行计划已完成并归档：
+   [Wave 6 closeout runtime guardrail 计划](../plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan)、
    [Wave 6 runtime execution sequence 计划](../plan/history_plan.md#mainline-wave6-runtime-execution-sequence-plan)、
    [Wave 6 executable cache runtime hookup 计划](../plan/history_plan.md#mainline-wave6-executable-cache-runtime-hookup-plan)、
    [Wave 6 JIT Execution Layer 实现计划](../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)。
-   下一刀如继续推进，应优先补 host-smoke-only runtime guardrail 和更窄 helper 类别；
-   默认 backend 接入当前评估结论仍是“不新增 `--backend jit`，不替换 functional 或
-   pipeline”。persistent cache、workload-level scheduler、multicore、coherence 或新的
-   memory consistency 模型仍不启动。
+   当前 closeout 判定是 opt-in executable path 与 runtime guardrail 收口；默认 backend 接入
+   当前评估结论仍是“不新增 `--backend jit`，不替换 functional 或 pipeline”。persistent
+   cache、workload-level scheduler、CSR / atomic / vector helper runtime、multicore、
+   coherence 或新的 memory consistency 模型仍不启动。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
@@ -574,6 +581,7 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
   helper execution opt-in、
   runtime fallback opt-in execution、
   JIT dispatch harness v1、
+  runtime loop v1 closeout guardrail、
   runtime harness summary / stats、
   `dbt_ir_eval`
   semantic differential dry-run 的更宽整数覆盖，
@@ -600,11 +608,12 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
   helper execution opt-in、
   runtime fallback opt-in execution、
   JIT dispatch harness v1、
+  runtime loop v1 closeout guardrail、
   IR semantic differential dry-run 更宽整数覆盖和
   metadata-only block cache / invalidation matrix hardening。当前已有 host-smoke-only
-  executable lowering / host code emission / runtime harness / executable cache hookup，但尚未有
-  完整 runtime helper execution、
-  persistent block lifecycle、默认 host-code dispatch 或 workload-level runtime execution harness。
+  executable lowering / host code emission / runtime harness / executable cache hookup 和 opt-in
+  runtime loop，但尚未有 CSR / atomic / vector helper runtime、persistent block lifecycle、
+  默认 host-code dispatch 或 workload-level runtime scheduler。
 - multicore / coherence 虽然属于 `Wave 6` 长期目标，但当前仍未启动；它必须等待
   atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
@@ -615,34 +624,40 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
 
 ## 下一步
 
-1. `Wave 6 runtime execution sequence 计划` 已完成并归档：
+1. `Wave 6 closeout runtime guardrail 计划` 已完成并归档：
+   [history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan](../plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan)。
+   当前已有 host-smoke-only opt-in runtime loop v1，可连续覆盖 executable cache miss / hit、
+   scalar memory helper execution、reference fallback execution、guest-store invalidation 和
+   stale dispatch prevention；默认 backend 接入评估结论仍是暂不新增 `--backend jit`，
+   不替换 `functional` 或 `pipeline`。
+2. `Wave 6 runtime execution sequence 计划` 已完成并归档：
    [history_plan.md#mainline-wave6-runtime-execution-sequence-plan](../plan/history_plan.md#mainline-wave6-runtime-execution-sequence-plan)。
    当前已有 scalar memory helper opt-in execution、reference fallback opt-in execution、
    JIT dispatch harness v1、expanded executable integer matrix 和 runtime summary / stats；
    默认 backend 接入评估结论仍是暂不新增 `--backend jit`，不替换 `functional` 或 `pipeline`。
-2. `Wave 6 executable cache runtime hookup 计划` 已完成并归档：
+3. `Wave 6 executable cache runtime hookup 计划` 已完成并归档：
    [history_plan.md#mainline-wave6-executable-cache-runtime-hookup-plan](../plan/history_plan.md#mainline-wave6-executable-cache-runtime-hookup-plan)。
    当前已有 host-smoke-only 的 opt-in runtime executable cache，可以持有、复用并按
    invalidation 合同释放 resident host executable；默认仍不启用 JIT backend，不做
    persistent cache，不改变 guest 可见语义。
-3. `Wave 6 JIT Execution Layer 实现计划` 已完成并归档：
+4. `Wave 6 JIT Execution Layer 实现计划` 已完成并归档：
    [history_plan.md#mainline-wave6-jit-execution-layer-plan](../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)。
    当前已有 host-smoke-only 的 opt-in executable JIT block，但默认仍不启用 JIT backend，
    不在默认执行路径生成或执行 host code，不改变 guest 可见语义。
-4. 下一刀如继续推进，优先加固 host-smoke-only runtime guardrail 或选择更窄 helper
-   类别；默认 backend、persistent cache、workload-level scheduler、multicore、
-   coherence 和新的 memory consistency 模型仍不启动。
-5. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
+5. 下一刀如继续推进，优先做 Wave 6 closeout review / branch 收尾，或另开默认 JIT backend
+   readiness 评估；默认 backend、persistent cache、workload-level scheduler、CSR / atomic /
+   vector helper runtime、multicore、coherence 和新的 memory consistency 模型仍不启动。
+6. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
    如需调整排序或字段，必须先补 probe / host smoke 兼容门禁。
-6. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
+7. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 `Wave 6`
    hot-path evidence 的前置 guardrail。
-6. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+8. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
    driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan，并
    明确不占用主线 `Wave 6`。
-7. Wave 4 AI accelerator 的完成记录统一见
+9. Wave 4 AI accelerator 的完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
-8. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
+10. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
    guardrail；未提供 `Image` 时，不把该项写成默认已证明。
 9. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
    `make test` 和 `make test-pipeline` 这些稳定 guardrail。

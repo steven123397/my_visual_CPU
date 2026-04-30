@@ -6,9 +6,13 @@
 
 #include "dbt_block_plan.h"
 #include "dbt_host_emitter.h"
+#include "dbt_helper_execution_bridge.h"
+#include "dbt_helper_replay.h"
 #include "dbt_ir_eval.h"
 #include "dbt_ir_lowering.h"
 #include "dbt_jit_engine.h"
+#include "dbt_reference_fallback.h"
+#include "dbt_reference_fallback_execution.h"
 #include "dbt_runtime_dispatch.h"
 #include "dbt_translator.h"
 
@@ -103,6 +107,15 @@ DbtRuntimeHarnessResult reject_from_cache_contract(const DbtRuntimeDispatchContr
         .reject_reason = reject_reason_or_default(contract.reject_reason,
                                                   "executable-cache-contract-rejected"),
         .fallback_required = true,
+    };
+}
+
+DbtRuntimeLoopStepResult make_loop_error(uint64_t pc, const std::string& reason) {
+    return DbtRuntimeLoopStepResult{
+        .ok = false,
+        .pc = pc,
+        .next_pc = pc,
+        .reason = reason,
     };
 }
 
@@ -322,6 +335,156 @@ bool dbt_runtime_harness_is_default_enabled() {
     return false;
 }
 
+DbtRuntimeLoopResult run_dbt_runtime_harness_loop(
+    CPU& cpu,
+    Bus& bus,
+    DbtExecutableCacheRuntime& cache,
+    const DbtRuntimeLoopRequest& request) {
+    DbtRuntimeLoopResult loop{};
+    loop.steps_requested = request.max_steps;
+    loop.default_backend_enabled = dbt_runtime_harness_is_default_enabled();
+
+    for (uint64_t step = 0; step < request.max_steps; ++step) {
+        const uint64_t pc = cpu.core().pc();
+        const uint64_t block_end = pc;
+        DbtJitEngineDryRun engine;
+        const DbtJitDryRunResult dry_run = engine.dry_run_block(cpu, bus, pc, block_end);
+        const DbtRuntimeDispatchContract contract =
+            plan_dbt_runtime_dispatch_contract(dry_run);
+
+        if (contract.ok && contract.kind == DbtRuntimeDispatchKind::LoweredBlock &&
+            request.enable_executable_cache) {
+            const DbtRuntimeHarnessResult dispatch =
+                run_dbt_runtime_harness_block_with_cache(cpu, bus, cache, pc, block_end);
+            record_dbt_runtime_harness_result(loop.stats, dispatch);
+            loop.steps.push_back(DbtRuntimeLoopStepResult{
+                .ok = dispatch.ok,
+                .kind = DbtRuntimeLoopStepKind::HostExecutable,
+                .pc = pc,
+                .next_pc = dispatch.next_pc,
+                .cache_hit = dispatch.cache_hit,
+                .cache_miss = dispatch.cache_miss,
+                .emitted_on_miss = dispatch.emitted_on_miss,
+                .reason = dispatch.reject_reason.empty() ? "none" : dispatch.reject_reason,
+            });
+            if (!dispatch.ok) {
+                loop.stopped_on_error = true;
+                loop.stop_reason = dispatch.reject_reason.empty()
+                                       ? "host-dispatch-failed"
+                                       : dispatch.reject_reason;
+                break;
+            }
+            loop.steps_executed += 1;
+            loop.host_executions += 1;
+            continue;
+        }
+
+        if (contract.ok &&
+            contract.kind == DbtRuntimeDispatchKind::HelperBridgeToReference &&
+            request.enable_helper_execution) {
+            DbtHelperExecutionRequest helper_request =
+                plan_dbt_helper_execution_bridge(dry_run.helper_replay);
+            const DbtHelperExecutionResult helper =
+                execute_dbt_helper_request(cpu, bus, helper_request);
+
+            DbtRuntimeLoopStepResult step_result{
+                .ok = helper.ok,
+                .kind = DbtRuntimeLoopStepKind::HelperExecution,
+                .pc = pc,
+                .next_pc = helper.next_pc,
+                .reason = helper.reject_reason.empty() ? "none" : helper.reject_reason,
+            };
+
+            if (helper.ok) {
+                loop.steps_executed += 1;
+                loop.helper_executions += 1;
+                loop.stats.helper_executions += 1;
+                if (request.apply_guest_store_invalidation &&
+                    helper.kind == DbtHelperExecutionKind::ScalarMemoryStore) {
+                    const DbtRuntimeInvalidationHookResult invalidation =
+                        apply_dbt_runtime_invalidation_hook(
+                            cache,
+                            DbtRuntimeInvalidationEvent{
+                                .kind = DbtInvalidationEventKind::GuestStore,
+                                .addr = helper.addr,
+                                .size = helper.size,
+                            });
+                    record_dbt_runtime_invalidation_result(loop.stats, invalidation);
+                    step_result.invalidated_after_store = invalidation.invalidated;
+                    step_result.stale_dispatch_prevented =
+                        invalidation.stale_dispatch_prevented;
+                    if (invalidation.invalidated) {
+                        loop.invalidations += 1;
+                    }
+                    if (invalidation.stale_dispatch_prevented) {
+                        loop.stale_dispatches_prevented += 1;
+                    }
+                }
+                loop.steps.push_back(step_result);
+                continue;
+            }
+
+            if (helper.trap_taken || helper.fallback_to_reference_on_trap) {
+                if (!request.enable_reference_fallback) {
+                    loop.steps.push_back(step_result);
+                    loop.stopped_on_error = true;
+                    loop.stop_reason = "helper-reference-fallback-disabled";
+                    break;
+                }
+            } else {
+                loop.steps.push_back(step_result);
+                loop.stopped_on_error = true;
+                loop.stop_reason = helper.reject_reason.empty()
+                                       ? "helper-execution-failed"
+                                       : helper.reject_reason;
+                break;
+            }
+        }
+
+        if (request.enable_reference_fallback &&
+            (contract.ok &&
+             (contract.kind == DbtRuntimeDispatchKind::ReferenceStep ||
+              contract.kind == DbtRuntimeDispatchKind::HelperBridgeToReference))) {
+            const DbtReferenceFallbackPlan fallback_plan =
+                plan_dbt_reference_fallback_step(contract);
+            const DbtReferenceFallbackExecutionRequest fallback_request =
+                plan_dbt_reference_fallback_execution(fallback_plan);
+            const DbtReferenceFallbackExecutionResult fallback =
+                execute_dbt_reference_fallback(cpu, bus, fallback_request);
+            loop.steps.push_back(DbtRuntimeLoopStepResult{
+                .ok = fallback.ok,
+                .kind = DbtRuntimeLoopStepKind::ReferenceFallback,
+                .pc = pc,
+                .next_pc = fallback.next_pc,
+                .reason = fallback.reject_reason.empty() ? "none" : fallback.reject_reason,
+            });
+            if (!fallback.ok) {
+                loop.stopped_on_error = true;
+                loop.stop_reason = fallback.reject_reason.empty()
+                                       ? "reference-fallback-failed"
+                                       : fallback.reject_reason;
+                break;
+            }
+            loop.steps_executed += fallback.reference_steps_executed;
+            loop.reference_fallbacks += 1;
+            loop.stats.reference_fallback_executions += 1;
+            loop.stats.fallbacks += 1;
+            continue;
+        }
+
+        loop.steps.push_back(make_loop_error(pc, "unsupported-runtime-loop-dispatch"));
+        loop.stopped_on_error = true;
+        loop.stop_reason = "unsupported-runtime-loop-dispatch";
+        break;
+    }
+
+    loop.ok = !loop.stopped_on_error && loop.steps_executed == request.max_steps;
+    if (loop.stop_reason.empty()) {
+        loop.stop_reason = loop.ok ? "completed" : "max-steps-not-reached";
+    }
+    return loop;
+}
+
 std::string format_dbt_runtime_harness_result(const DbtRuntimeHarnessResult& result) {
     std::ostringstream out;
     out << "runtime-harness:"
@@ -395,6 +558,40 @@ std::string format_dbt_runtime_harness_stats(const DbtRuntimeHarnessStats& stats
         << " invalidate=" << stats.invalidations
         << " stale-prevented=" << stats.stale_dispatches_prevented
         << " differential-checks=" << stats.differential_checks
-        << " differential-mismatch=" << stats.differential_mismatches;
+        << " differential-mismatch=" << stats.differential_mismatches
+        << " helper-exec=" << stats.helper_executions
+        << " reference-fallback-exec=" << stats.reference_fallback_executions;
+    return out.str();
+}
+
+const char* dbt_runtime_loop_step_kind_name(DbtRuntimeLoopStepKind kind) {
+    switch (kind) {
+    case DbtRuntimeLoopStepKind::None:
+        return "none";
+    case DbtRuntimeLoopStepKind::HostExecutable:
+        return "host-executable";
+    case DbtRuntimeLoopStepKind::HelperExecution:
+        return "helper-execution";
+    case DbtRuntimeLoopStepKind::ReferenceFallback:
+        return "reference-fallback";
+    }
+    return "unknown";
+}
+
+std::string format_dbt_runtime_loop_result(const DbtRuntimeLoopResult& result) {
+    std::ostringstream out;
+    out << "runtime-loop:"
+        << " ok=" << bool_name(result.ok)
+        << " requested=" << result.steps_requested
+        << " executed=" << result.steps_executed
+        << " host=" << result.host_executions
+        << " helper=" << result.helper_executions
+        << " fallback=" << result.reference_fallbacks
+        << " invalidate=" << result.invalidations
+        << " stale-prevented=" << result.stale_dispatches_prevented
+        << " stopped=" << bool_name(result.stopped_on_error)
+        << " reason=" << (result.stop_reason.empty() ? "none" : result.stop_reason)
+        << " backend-default=" << bool_name(result.default_backend_enabled)
+        << " stats={" << format_dbt_runtime_harness_stats(result.stats) << "}";
     return out.str();
 }

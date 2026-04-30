@@ -49,6 +49,21 @@ constexpr uint32_t encode_r(uint8_t funct7,
            static_cast<uint32_t>(opcode);
 }
 
+constexpr uint32_t encode_b(int32_t imm,
+                            uint8_t rs2,
+                            uint8_t rs1,
+                            uint8_t funct3) {
+    const uint32_t uimm = static_cast<uint32_t>(imm);
+    return ((uimm >> 12) & 0x1U) << 31 |
+           ((uimm >> 5) & 0x3fU) << 25 |
+           (static_cast<uint32_t>(rs2) << 20) |
+           (static_cast<uint32_t>(rs1) << 15) |
+           (static_cast<uint32_t>(funct3) << 12) |
+           ((uimm >> 1) & 0xfU) << 8 |
+           ((uimm >> 11) & 0x1U) << 7 |
+           0x63U;
+}
+
 constexpr uint32_t addi(uint8_t rd, uint8_t rs1, int32_t imm) {
     return encode_i(static_cast<uint32_t>(imm), rs1, 0, rd, 0x13);
 }
@@ -173,6 +188,10 @@ constexpr uint32_t srlw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
 
 constexpr uint32_t sraw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return encode_r(0x20, rs2, rs1, 5, rd, 0x3B);
+}
+
+constexpr uint32_t bne(uint8_t rs1, uint8_t rs2, int32_t imm) {
+    return encode_b(imm, rs2, rs1, 1);
 }
 
 void write_program(Ram& ram, const std::vector<uint32_t>& program) {
@@ -514,6 +533,65 @@ bool test_runtime_harness_summary_stats_expose_opt_in_executable_path() {
                   "runtime stats formatter should expose mismatch counter");
 }
 
+bool test_runtime_loop_v1_runs_mixed_opt_in_sequence_without_default_backend() {
+    Ram ram;
+    Bus bus(ram);
+    DbtExecutableCacheRuntime cache;
+
+    constexpr uint64_t kStoreTarget = kEntry;
+    constexpr uint32_t kLwX3FromX1 = 0x0000a183U;  // lw x3, 0(x1)
+    constexpr uint32_t kSwX3ToX1 = 0x0030a023U;    // sw x3, 0(x1)
+    constexpr uint32_t kBeqX0X0 = 0x00000063U;     // beq x0, x0, 0
+
+    write_program(ram, {
+                           addi(5, 5, 1),
+                           slti(6, 5, 2),
+                           bne(6, 0, -8),
+                           kLwX3FromX1,
+                           kSwX3ToX1,
+                           kBeqX0X0,
+                       });
+
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    cpu.core().write_gpr(1, kStoreTarget);
+    DbtRuntimeLoopRequest request{};
+    request.max_steps = 9;
+    request.apply_guest_store_invalidation = true;
+
+    const DbtRuntimeLoopResult result =
+        run_dbt_runtime_harness_loop(cpu, bus, cache, request);
+    const std::string line = format_dbt_runtime_loop_result(result);
+    const uint32_t stored = static_cast<uint32_t>(ram.load(kStoreTarget, 4));
+
+    return expect(result.ok, "runtime loop v1 should finish mixed opt-in sequence") &&
+           expect(result.steps_executed == 9,
+                  "runtime loop v1 should account for every requested step") &&
+           expect(result.host_executions >= 4 && result.helper_executions == 2 &&
+                      result.reference_fallbacks >= 3,
+                  "runtime loop v1 should record host, helper, and reference fallback steps") &&
+           expect(result.stats.cache_misses >= 2 && result.stats.cache_hits >= 1 &&
+                      result.stats.host_emits >= 2 && result.stats.host_executes >= 2,
+                  "runtime loop v1 stats should record miss/hit/emit/execute") &&
+           expect(result.stats.helper_executions == 2 &&
+                      result.stats.reference_fallback_executions >= 3,
+                  "runtime loop v1 stats should record helper and reference fallback executions") &&
+           expect(result.stats.invalidations >= 1 &&
+                      result.stats.stale_dispatches_prevented >= 1,
+                  "runtime loop v1 should invalidate resident host code after helper store") &&
+           expect(stored == addi(5, 5, 1),
+                  "runtime loop helper store should write through to the cached code address") &&
+           expect(cpu.core().instret() == 9,
+                  "runtime loop v1 should retire host/helper/fallback steps") &&
+           expect(line.find("runtime-loop: ok=true") != std::string::npos,
+                  "runtime loop formatter should expose stable prefix") &&
+           expect(line.find("helper-exec=2") != std::string::npos &&
+                      line.find("reference-fallback-exec=") != std::string::npos,
+                  "runtime loop formatter should expose closeout helper/fallback stats") &&
+           expect(line.find("backend-default=false") != std::string::npos,
+                  "runtime loop formatter should report opt-in default backend boundary");
+}
+
 bool test_default_machine_backend_does_not_enable_jit() {
     const Machine machine;
 
@@ -542,6 +620,9 @@ int main() {
         return 1;
     }
     if (!test_runtime_harness_summary_stats_expose_opt_in_executable_path()) {
+        return 1;
+    }
+    if (!test_runtime_loop_v1_runs_mixed_opt_in_sequence_without_default_backend()) {
         return 1;
     }
     if (!test_default_machine_backend_does_not_enable_jit()) {
