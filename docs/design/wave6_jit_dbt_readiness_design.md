@@ -90,11 +90,15 @@ block cache 或 multicore / coherence 仍需要新的设计和计划。
 证据链和原型边界首轮收口后，当前已经完成正式 `DBT translator + IR v0 dry-run`，
 范围限定为“非执行 translator 前端”：
 
-- 已新增 `dbt_ir`，只表达最小纯直线整数 IR：立即数写寄存器、寄存器加立即数、
-  寄存器加寄存器、寄存器减寄存器，以及 block fallthrough。
+- 已新增 `dbt_ir`，表达最小纯直线整数 IR：立即数写寄存器、寄存器加立即数、
+  寄存器加/减寄存器、逻辑立即数 / 寄存器运算、shift immediate / register、
+  signed / unsigned set-less-than，以及 block fallthrough。
 - 已新增 `dbt_translator`，输入只能来自共享 `DbtBlockPlan`；`DbtBlockPlan` 不通过、
   或 IR v0 不支持其中某条 inlineable 指令时，translator 只返回稳定 reject metadata，
   不翻译可内联前缀。
+- translator reject metadata 已收口为 typed `DbtRejectKind`，并保留
+  `reject_reason` / `boundary_kind` 字符串兼容字段；rejected unit 还记录 reject PC、
+  raw instruction 和 typed boundary，供 cache / eval / 后续 helper planning 使用。
 - translator 可以重新 decode `DbtBlockPlan::dry_run_ir[].raw` 来恢复寄存器、立即数和
   opcode 分类，但不得重新取指，不得提交 CPU state，也不得绕过 `InstructionSemantics`
   的 preflight 结论。
@@ -157,12 +161,13 @@ inline / replay runtime。
   translated block。
 
 `IR v0 dry-run` 只允许覆盖已经由 `DbtBlockPlan` 判定为完整 inlineable 的 pure
-straight-line integer 子集。memory、CSR、trap、atomic、vector、control-flow、fence /
-TLB flush 或 unsupported instruction 都必须保持 reject，不允许翻译前缀。
+straight-line integer 子集。当前覆盖 `addi/add/sub`、逻辑运算、shift 和
+signed / unsigned set-less-than。memory、CSR、trap、atomic、vector、control-flow、
+fence / TLB flush 或 unsupported instruction 都必须保持 reject，不允许翻译前缀。
 
 `IR semantic differential dry-run` 只允许解释已成功翻译的 IR v0，并把结果同
-`InstructionSemantics` / reference 执行对齐。当前比较范围限于 GPR、fallthrough PC 和
-retired instruction count；它不是 IR lowering，也不是 helper replay。
+`InstructionSemantics` / reference 执行对齐。当前比较范围限于更宽 pure integer 子集的
+GPR、fallthrough PC 和 retired instruction count；它不是 IR lowering，也不是 helper replay。
 
 第一版 block 终止条件包括控制流转移、system boundary、decode / fetch / execute fault
 风险、跨 page / 权限 / MMIO / side-effect region / self-modifying-code 风险边界，以及
@@ -312,8 +317,9 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
 - 当前已经完成 hot-path candidate、per-PC / branch-target 观察、translation contract、
   host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-run、functional
   fallback replay 等价性、first-boundary taxonomy、共享 `DbtBlockPlan` analyzer，以及
-  非执行 `dbt_ir` / `dbt_translator` v0 dry-run、`dbt_ir_eval` semantic differential
-  dry-run，以及 metadata-only `dbt_block_cache` dry-run / invalidation matrix hardening。
+  非执行 `dbt_ir` / `dbt_translator` v0 dry-run、translator reject taxonomy、
+  `dbt_ir_eval` semantic differential dry-run 的更宽整数覆盖，以及 metadata-only
+  `dbt_block_cache` dry-run / invalidation matrix hardening。
 - 当前仍未启动 JIT engine、host code emission、persistent / executable block cache、multicore /
   coherence、write-back cache、I-cache 和 cache maintenance instruction。
 - 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。

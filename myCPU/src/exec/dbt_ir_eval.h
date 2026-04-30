@@ -13,6 +13,7 @@ struct DbtIrEvaluationInput {
 
 struct DbtIrEvaluationResult {
     bool ok{false};
+    DbtRejectKind reject_kind{DbtRejectKind::None};
     std::string reject_reason{};
     std::array<uint64_t, 32> gpr{};
     uint64_t next_pc{0};

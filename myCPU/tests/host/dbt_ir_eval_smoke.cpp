@@ -43,12 +43,76 @@ constexpr uint32_t addi(uint8_t rd, uint8_t rs1, int32_t imm) {
     return encode_i(static_cast<uint32_t>(imm), rs1, 0, rd, 0x13);
 }
 
+constexpr uint32_t slti(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 2, rd, 0x13);
+}
+
+constexpr uint32_t sltiu(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 3, rd, 0x13);
+}
+
+constexpr uint32_t xori(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 4, rd, 0x13);
+}
+
+constexpr uint32_t ori(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 6, rd, 0x13);
+}
+
+constexpr uint32_t andi(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 7, rd, 0x13);
+}
+
+constexpr uint32_t slli(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i(shamt, rs1, 1, rd, 0x13);
+}
+
+constexpr uint32_t srli(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i(shamt, rs1, 5, rd, 0x13);
+}
+
+constexpr uint32_t srai(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i((0x20U << 5) | shamt, rs1, 5, rd, 0x13);
+}
+
 constexpr uint32_t add(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return encode_r(0x00, rs2, rs1, 0, rd, 0x33);
 }
 
 constexpr uint32_t sub(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return encode_r(0x20, rs2, rs1, 0, rd, 0x33);
+}
+
+constexpr uint32_t sll(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 1, rd, 0x33);
+}
+
+constexpr uint32_t slt(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 2, rd, 0x33);
+}
+
+constexpr uint32_t sltu(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 3, rd, 0x33);
+}
+
+constexpr uint32_t bit_xor(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 4, rd, 0x33);
+}
+
+constexpr uint32_t srl(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 5, rd, 0x33);
+}
+
+constexpr uint32_t sra(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x20, rs2, rs1, 5, rd, 0x33);
+}
+
+constexpr uint32_t bit_or(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 6, rd, 0x33);
+}
+
+constexpr uint32_t bit_and(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 7, rd, 0x33);
 }
 
 void write_program(Ram& ram, const std::vector<uint32_t>& program) {
@@ -138,9 +202,63 @@ bool test_ir_eval_matches_reference_for_integer_block() {
                   "IR evaluation should not mutate source CPU instret");
 }
 
+bool test_ir_eval_matches_reference_for_wider_integer_ir_v0() {
+    const std::vector<uint32_t> program{
+        addi(1, 0, -8),
+        xori(2, 1, 0x7f),
+        ori(3, 2, 0x30),
+        andi(4, 3, 0x7f),
+        slti(5, 1, -1),
+        sltiu(6, 1, 1),
+        addi(7, 0, 1),
+        slli(8, 7, 5),
+        srli(9, 8, 2),
+        srai(10, 1, 2),
+        bit_xor(11, 2, 4),
+        bit_or(12, 11, 8),
+        bit_and(13, 12, 3),
+        slt(14, 1, 7),
+        sltu(15, 1, 7),
+        sll(16, 7, 5),
+        srl(17, 8, 5),
+        sra(18, 1, 5),
+    };
+
+    Ram plan_ram;
+    Bus plan_bus(plan_ram);
+    CPU plan_cpu;
+    cpu_init(plan_cpu, kEntry);
+    write_program(plan_ram, program);
+
+    Ram ref_ram;
+    Bus ref_bus(ref_ram);
+    CPU ref_cpu;
+    cpu_init(ref_cpu, kEntry);
+    write_program(ref_ram, program);
+
+    const uint64_t block_end = kEntry + static_cast<uint64_t>((program.size() - 1) * sizeof(uint32_t));
+    const DbtBlockPlan plan = plan_dbt_block(plan_cpu, plan_bus, kEntry, block_end);
+    const DbtTranslationUnit unit = translate_dbt_block(plan);
+    const DbtIrEvaluationResult evaluated = evaluate_dbt_ir_unit(unit, make_ir_input(plan_cpu));
+
+    for (size_t i = 0; i < program.size(); ++i) {
+        cpu_step(ref_cpu, ref_bus);
+    }
+
+    return expect(plan.ok, "DBT block plan should accept wider integer IR v0 program") &&
+           expect(unit.ok, "translator should accept wider integer IR v0 program") &&
+           expect(evaluated.ok, "IR evaluator should accept wider integer IR v0 unit") &&
+           expect(evaluated.retired_instructions == program.size(),
+                  "IR evaluator should count wider integer IR v0 instructions") &&
+           expect(evaluated.next_pc == ref_cpu.core().pc(),
+                  "wider IR evaluator next PC should match reference PC") &&
+           expect_gprs_equal(evaluated.gpr, ref_cpu);
+}
+
 bool test_ir_eval_rejects_non_ok_translation_unit() {
     DbtTranslationUnit unit;
     unit.ok = false;
+    unit.reject_kind = DbtRejectKind::MemoryLoad;
     unit.reject_reason = "helper-required";
 
     CPU cpu;
@@ -148,6 +266,8 @@ bool test_ir_eval_rejects_non_ok_translation_unit() {
     const DbtIrEvaluationResult evaluated = evaluate_dbt_ir_unit(unit, make_ir_input(cpu));
 
     return expect(!evaluated.ok, "IR evaluator should reject failed translation units") &&
+           expect(evaluated.reject_kind == DbtRejectKind::MemoryLoad,
+                  "IR evaluator should preserve translation reject kind") &&
            expect(evaluated.reject_reason == "helper-required",
                   "IR evaluator should preserve translation reject reason");
 }
@@ -156,6 +276,9 @@ bool test_ir_eval_rejects_non_ok_translation_unit() {
 
 int main() {
     if (!test_ir_eval_matches_reference_for_integer_block()) {
+        return 1;
+    }
+    if (!test_ir_eval_matches_reference_for_wider_integer_ir_v0()) {
         return 1;
     }
     if (!test_ir_eval_rejects_non_ok_translation_unit()) {

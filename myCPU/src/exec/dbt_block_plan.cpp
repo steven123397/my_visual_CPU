@@ -176,6 +176,7 @@ DbtBlockPlan plan_fallback(uint64_t start_pc,
                            uint64_t end_pc,
                            uint64_t inlineable,
                            uint64_t pc,
+                           uint32_t raw,
                            std::string reason,
                            std::string boundary_kind = {},
                            DbtBoundaryKind boundary = DbtBoundaryKind::None,
@@ -186,6 +187,7 @@ DbtBlockPlan plan_fallback(uint64_t start_pc,
         .end_pc = end_pc,
         .inlineable_instructions = inlineable,
         .fallback_pc = pc,
+        .fallback_raw = raw,
         .fallback_reason = std::move(reason),
         .boundary_kind = std::move(boundary_kind),
         .boundary = boundary,
@@ -243,6 +245,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  end_pc,
                                  inlineable,
                                  pc,
+                                 0,
                                  fetched.fallback_reason,
                                  "fetch-fault",
                                  DbtBoundaryKind::FetchFault,
@@ -255,6 +258,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  end_pc,
                                  inlineable,
                                  pc,
+                                 insn.raw,
                                  "fallback-required",
                                  "unsupported",
                                  DbtBoundaryKind::Unsupported,
@@ -265,6 +269,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  end_pc,
                                  inlineable,
                                  pc,
+                                 insn.raw,
                                  "fallback-required",
                                  "control-flow",
                                  DbtBoundaryKind::ControlFlow,
@@ -278,6 +283,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  end_pc,
                                  inlineable,
                                  pc,
+                                 insn.raw,
                                  "fallback-required",
                                  fallback_boundary_kind(effects),
                                  fallback_boundary_enum(effects),
@@ -288,6 +294,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  end_pc,
                                  inlineable,
                                  pc,
+                                 insn.raw,
                                  "helper-required",
                                  helper_boundary_kind(effects),
                                  helper_boundary_enum(effects),
@@ -312,7 +319,7 @@ DbtBlockPlan plan_dbt_hot_path(CPU& cpu,
                                Bus& bus,
                                const ExecutionProfileSnapshot& profile) {
     if (profile.hot_paths.empty()) {
-        return plan_fallback(0, 0, 0, 0, "no-hot-paths");
+        return plan_fallback(0, 0, 0, 0, 0, "no-hot-paths");
     }
 
     const auto top_it = std::min_element(
@@ -324,14 +331,14 @@ DbtBlockPlan plan_dbt_hot_path(CPU& cpu,
     const ExecutionHotPathEntry& candidate = *top_it;
     if (candidate.executions < 2) {
         DbtBlockPlan plan =
-            plan_fallback(candidate.start_pc, candidate.end_pc, 0, candidate.start_pc, "insufficient-repetition");
+            plan_fallback(candidate.start_pc, candidate.end_pc, 0, candidate.start_pc, 0, "insufficient-repetition");
         plan.candidate_executions = candidate.executions;
         plan.candidate_retired_instructions = candidate.retired_instructions;
         return plan;
     }
     if (candidate.retired_instructions == 0) {
         DbtBlockPlan plan =
-            plan_fallback(candidate.start_pc, candidate.end_pc, 0, candidate.start_pc, "empty-hot-path");
+            plan_fallback(candidate.start_pc, candidate.end_pc, 0, candidate.start_pc, 0, "empty-hot-path");
         plan.candidate_executions = candidate.executions;
         plan.candidate_retired_instructions = candidate.retired_instructions;
         return plan;

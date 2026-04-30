@@ -48,6 +48,7 @@ struct DbtBlockPlan {
     uint64_t candidate_retired_instructions{0};
     uint64_t inlineable_instructions{0};
     uint64_t fallback_pc{0};
+    uint32_t fallback_raw{0};
     std::string fallback_reason{};
     std::string boundary_kind{};
     DbtBoundaryKind boundary{DbtBoundaryKind::None};

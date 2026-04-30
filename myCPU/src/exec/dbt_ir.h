@@ -9,9 +9,46 @@
 enum class DbtIrOpcode : uint8_t {
     WriteRegImm,
     AddRegImm,
+    XorRegImm,
+    OrRegImm,
+    AndRegImm,
+    ShiftLeftRegImm,
+    ShiftRightLogicalRegImm,
+    ShiftRightArithmeticRegImm,
+    SetLessThanRegImm,
+    SetLessThanUnsignedRegImm,
     AddRegReg,
     SubRegReg,
+    XorRegReg,
+    OrRegReg,
+    AndRegReg,
+    ShiftLeftRegReg,
+    ShiftRightLogicalRegReg,
+    ShiftRightArithmeticRegReg,
+    SetLessThanRegReg,
+    SetLessThanUnsignedRegReg,
     Fallthrough,
+};
+
+enum class DbtRejectKind : uint8_t {
+    None,
+    PlanRejected,
+    HelperRequired,
+    FallbackRequired,
+    FetchFault,
+    UnsupportedInstruction,
+    UnsupportedIr,
+    ControlFlow,
+    MemoryLoad,
+    MemoryStore,
+    CsrWrite,
+    Trap,
+    Atomic,
+    Vector,
+    TlbFlush,
+    TrapReturn,
+    Halt,
+    NotRetired,
 };
 
 struct DbtIrInstruction {
@@ -30,6 +67,9 @@ struct DbtTranslationUnit {
     bool ok{false};
     uint64_t start_pc{0};
     uint64_t end_pc{0};
+    DbtRejectKind reject_kind{DbtRejectKind::None};
+    uint64_t reject_pc{0};
+    uint32_t reject_raw{0};
     std::string reject_reason{};
     std::string boundary_kind{};
     DbtBoundaryKind boundary{DbtBoundaryKind::None};
@@ -37,3 +77,4 @@ struct DbtTranslationUnit {
 };
 
 const char* dbt_ir_opcode_name(DbtIrOpcode opcode);
+const char* dbt_reject_kind_name(DbtRejectKind kind);
