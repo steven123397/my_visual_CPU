@@ -134,6 +134,11 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                     << '\n';
                 continue;
             }
+            if (command.kind == DebugCliCommandKind::JitDispatch) {
+                out << debug_protocol_jit_dispatch_json(session.jit_dispatch())
+                    << '\n';
+                continue;
+            }
             if (command.kind == DebugCliCommandKind::Quit) {
                 out << debug_protocol_ok_json("quit") << '\n';
                 return 0;

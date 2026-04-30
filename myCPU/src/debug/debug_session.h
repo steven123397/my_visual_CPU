@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "debug_snapshot.h"
+#include "../exec/dbt_jit_engine.h"
 #include "../platform/address_map.h"
 #include "../platform/machine.h"
 
@@ -60,6 +61,7 @@ public:
     void uart_input(std::string_view text);
     UartOutputChunk uart_output(size_t offset) const;
     TranslationPlanSnapshot translation_plan();
+    DbtJitDryRunSummary jit_dispatch();
     DebugSnapshot snapshot() const;
 
 private:

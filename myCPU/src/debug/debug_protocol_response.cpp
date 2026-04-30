@@ -526,6 +526,41 @@ std::string debug_protocol_translation_plan_json(const DebugSession::Translation
     return out.str();
 }
 
+std::string debug_protocol_jit_dispatch_json(const DbtJitDryRunSummary& summary) {
+    std::ostringstream out;
+    out << "{"
+        << "\"type\":\"jit_dispatch\""
+        << ",\"ok\":" << (summary.ok ? "true" : "false")
+        << ",\"source\":";
+    append_json_string(out, summary.source);
+    out << ",\"action\":";
+    append_json_string(out, summary.action);
+    out << ",\"start_pc\":";
+    append_json_string(out, summary.start_pc);
+    out << ",\"end_pc\":";
+    append_json_string(out, summary.end_pc);
+    out << ",\"cache_state\":";
+    append_json_string(out, summary.cache_state);
+    out << ",\"planned\":" << (summary.planned ? "true" : "false")
+        << ",\"translated\":" << (summary.translated ? "true" : "false")
+        << ",\"lowered\":" << (summary.lowered ? "true" : "false")
+        << ",\"fallback_to_reference\":" << (summary.fallback_to_reference ? "true" : "false")
+        << ",\"lowered_instruction_count\":" << summary.lowered_instruction_count
+        << ",\"candidate_executions\":" << summary.candidate_executions
+        << ",\"candidate_retired_instructions\":" << summary.candidate_retired_instructions;
+    out << ",\"reject_kind\":";
+    append_json_string(out, summary.reject_kind);
+    out << ",\"reject_reason\":";
+    append_json_string(out, summary.reject_reason);
+    out << ",\"helper_replay_kind\":";
+    append_json_string(out, summary.helper_replay_kind);
+    out << ",\"host_code\":" << (summary.generated_host_code ? "true" : "false")
+        << ",\"executable_memory\":" << (summary.requested_executable_memory ? "true" : "false")
+        << ",\"guest_execution\":" << (summary.executed_guest_code ? "true" : "false")
+        << "}";
+    return out.str();
+}
+
 std::string debug_protocol_error_json(const std::string& message) {
     std::ostringstream out;
     out << "{\"type\":\"error\",\"message\":";

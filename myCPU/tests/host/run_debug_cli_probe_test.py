@@ -425,6 +425,44 @@ class RunDebugCliProbeTest(unittest.TestCase):
             ],
         )
 
+    def test_jit_dispatch_probe_command_is_explicit_opt_in(self) -> None:
+        default_args = PROBE.parse_args(
+            [
+                "--target",
+                "./mycpu",
+                "--image",
+                "kernel.elf",
+                "--step-cycles",
+                "64",
+            ]
+        )
+        opt_in_args = PROBE.parse_args(
+            [
+                "--target",
+                "./mycpu",
+                "--image",
+                "kernel.elf",
+                "--jit-dispatch",
+                "--step-cycles",
+                "64",
+            ]
+        )
+
+        self.assertFalse(default_args.jit_dispatch)
+        self.assertTrue(opt_in_args.jit_dispatch)
+        self.assertNotIn({"cmd": "jit_dispatch"}, PROBE.build_commands(default_args))
+        self.assertEqual(
+            PROBE.build_commands(opt_in_args),
+            [
+                {"cmd": "load", "image": "kernel.elf", "backend": "functional"},
+                {"cmd": "step_cycle", "count": 64},
+                {"cmd": "jit_dispatch"},
+                {"cmd": "snapshot"},
+                {"cmd": "uart_output", "offset": 0},
+                {"cmd": "quit"},
+            ],
+        )
+
     def test_uart_wait_and_input_actions_preserve_cli_order(self) -> None:
         args = PROBE.parse_args(
             [
@@ -1069,6 +1107,85 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn(
             "translation-plan: none reason=no-hot-paths",
+            stdout.getvalue(),
+        )
+
+    def test_emit_probe_summary_reports_opt_in_jit_dispatch(self) -> None:
+        args = PROBE.parse_args(
+            [
+                "--target",
+                "./mycpu",
+                "--image",
+                "Image",
+                "--jit-dispatch",
+                "--step-cycles",
+                "16",
+            ]
+        )
+        lines = [
+            {
+                "type": "jit_dispatch",
+                "ok": False,
+                "source": "hot-path-profile",
+                "action": "reference-fallback",
+                "start_pc": "0x80200000",
+                "end_pc": "0x80200008",
+                "cache_state": "miss",
+                "planned": True,
+                "translated": True,
+                "lowered": False,
+                "fallback_to_reference": True,
+                "lowered_instruction_count": 0,
+                "candidate_executions": 3,
+                "candidate_retired_instructions": 6,
+                "reject_kind": "control-flow",
+                "reject_reason": "fallback-required",
+                "helper_replay_kind": "none",
+                "host_code": False,
+                "executable_memory": False,
+                "guest_execution": False,
+            },
+            {
+                "type": "snapshot",
+                "summary": {
+                    "cycle": 16,
+                    "instret": 16,
+                    "pc": "0x80200010",
+                    "privilege": "M",
+                    "backend": "functional",
+                },
+                "csrs": {
+                    "mcause": "0x0",
+                    "mepc": "0x0",
+                    "mtval": "0x0",
+                    "scause": "0x0",
+                    "sepc": "0x0",
+                    "stval": "0x0",
+                    "stvec": "0x0",
+                    "satp": "0x0",
+                },
+                "profile": {
+                    "total_retirements": 16,
+                    "total_traps": 0,
+                    "total_memory_observations": 0,
+                    "hot_paths": [],
+                },
+                "devices": {
+                    "uart": {
+                        "output_size": 0,
+                        "recent_output": "",
+                    }
+                },
+            },
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            rc = PROBE.emit_probe_summary(args, lines)
+
+        self.assertEqual(rc, 0)
+        self.assertIn(
+            "jit-dispatch: source=hot-path-profile action=reference-fallback ok=false start=0x80200000 end=0x80200008 cache=miss planned=true translated=true lowered=false fallback=true lowered_ops=0 executions=3 retired=6 reject=control-flow reason=fallback-required helper=none host_code=false executable_memory=false guest_execution=false",
             stdout.getvalue(),
         )
 

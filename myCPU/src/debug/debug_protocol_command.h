@@ -19,6 +19,7 @@ enum class DebugCliCommandKind {
     UartInput,
     UartOutput,
     TranslationPlan,
+    JitDispatch,
     Quit,
 };
 

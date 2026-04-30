@@ -144,8 +144,14 @@
   -> Wave 5：已完成首轮收口，cache / memory-system 第一刀（以 workload 证据触发）
   -> Wave 6：当前 active wave，已完成 JIT / DBT 证据链、原型边界首轮收口、
      `DBT translator + IR v0 dry-run`、translator reject taxonomy、helper planning
-     dry-run、更宽 IR semantic coverage 和 metadata-only block cache / invalidation matrix
-     hardening 第一刀
+     dry-run / matrix 扩展、helper replay contract dry-run、IR lowering contract dry-run、
+     JIT engine skeleton dry-run / runtime fallback bridge、profile hot-path dispatch dry-run、
+     dispatch result serialization / debug-probe visibility bridge、
+     runtime dispatch contract dry-run、
+     executable-cache invalidation enforcement dry-run、
+     reference fallback step bridge dry-run、
+     更宽 IR semantic coverage 和
+     metadata-only block cache / invalidation matrix hardening 第一刀
   -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
 ```
 
@@ -279,8 +285,15 @@ Wave 5 的激活门槛：
 ### Wave 6：JIT / DBT 与 multicore / coherence
 
 Wave 6 也是主线内排期，当前已激活并完成 JIT / DBT 证据链、原型边界首轮收口、
-`DBT translator + IR v0 dry-run`、translator reject taxonomy、helper planning dry-run、
-更宽 IR semantic coverage 和 metadata-only block cache / invalidation matrix hardening 第一刀。目标是：
+`DBT translator + IR v0 dry-run`、translator reject taxonomy、helper planning dry-run /
+matrix 扩展、helper replay contract dry-run、IR lowering contract dry-run、
+JIT engine skeleton dry-run / runtime fallback bridge、profile hot-path dispatch dry-run、
+dispatch result serialization / debug-probe visibility bridge、
+runtime dispatch contract dry-run、
+executable-cache invalidation enforcement dry-run、
+reference fallback step bridge dry-run、
+更宽 IR semantic coverage 和
+metadata-only block cache / invalidation matrix hardening 第一刀。目标是：
 
 - 基于 Linux / workload / profile 证据决定 `JIT / DBT` 是否值得正式启动
 - 基于 cache 路线与 memory-order 验证进展决定 multicore / coherence 是否可启动
@@ -289,11 +302,19 @@ Wave 6 也是主线内排期，当前已激活并完成 JIT / DBT 证据链、�
 `branch_targets`、translation contract、host-smoke-only interpreter-assisted prototype、
 preflight 整块拒绝、opt-in translation-plan dry-run、functional fallback replay 等价性、
 first-boundary taxonomy、共享 `DbtBlockPlan` analyzer、非执行 `dbt_ir` /
-`dbt_translator` v0 dry-run、typed reject taxonomy、helper planning dry-run、只解释寄存器语义的
-`dbt_ir_eval` differential dry-run 更宽整数覆盖（含 `lui` / `auipc` 与 RV64 word ops），
+`dbt_translator` v0 dry-run、typed reject taxonomy、helper planning dry-run /
+matrix 扩展、helper replay contract dry-run、IR lowering contract dry-run、
+JIT engine skeleton dry-run / runtime fallback bridge、profile hot-path dispatch dry-run、
+dispatch result serialization / debug-probe visibility bridge、
+runtime dispatch contract dry-run、
+executable-cache invalidation enforcement dry-run、
+reference fallback step bridge dry-run、
+只解释寄存器语义的
+`dbt_ir_eval` differential dry-run 更宽整数覆盖
+（含 `lui` / `auipc` 与 RV64 word ops），
 以及只缓存 `DbtTranslationUnit` metadata 的 `dbt_block_cache` dry-run /
 invalidation matrix hardening；
-它仍不实现 JIT engine、host code emission、
+它仍不实现 executable JIT engine、host code emission、
 persistent / executable block cache、runtime scheduler、multicore、coherence 或新的 memory consistency
 模型。
 
@@ -369,8 +390,14 @@ Wave 7 的完成定义：
 
 - 当前已进入主线 `Wave 6`。
 - JIT / DBT 证据链、原型边界首轮、非执行 `DBT translator + IR v0 dry-run`、
-  translator reject taxonomy、helper planning dry-run、更宽 IR semantic coverage 和
-  metadata-only block cache / invalidation matrix hardening 第一刀已完成；
+  translator reject taxonomy、helper planning dry-run / matrix 扩展、helper replay contract
+  dry-run、IR lowering contract dry-run、JIT engine skeleton dry-run / runtime fallback bridge、
+  profile hot-path dispatch dry-run、dispatch result serialization / debug-probe visibility bridge、
+  runtime dispatch contract dry-run、
+  executable-cache invalidation enforcement dry-run、
+  reference fallback step bridge dry-run、
+  更宽 IR semantic coverage 和 metadata-only block cache /
+  invalidation matrix hardening 第一刀已完成；
   multicore / coherence 仍等待 atomic、memory-order、
   DMA / cache 交界和验证矩阵另行收口。
 

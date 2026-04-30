@@ -39,6 +39,32 @@ enum class DbtHelperKind : uint8_t {
     Vector,
 };
 
+enum class DbtAtomicHelperOp : uint8_t {
+    None,
+    LoadReserved,
+    StoreConditional,
+    Swap,
+    Add,
+    Xor,
+    And,
+    Or,
+    Min,
+    Max,
+    MinUnsigned,
+    MaxUnsigned,
+};
+
+enum class DbtVectorHelperOp : uint8_t {
+    None,
+    SetConfig,
+    Load,
+    Store,
+    Add,
+    Mul,
+    Max,
+    Dot,
+};
+
 struct DbtDryRunIrOp {
     DbtDryRunIrKind kind{DbtDryRunIrKind::ArchitectedEffect};
     uint64_t pc{0};
@@ -62,6 +88,14 @@ struct DbtHelperPlan {
     bool non_speculative{false};
     uint32_t csr_addr{0};
     uint64_t value{0};
+    DbtAtomicHelperOp atomic_op{DbtAtomicHelperOp::None};
+    bool atomic_aq{false};
+    bool atomic_rl{false};
+    DbtVectorHelperOp vector_op{DbtVectorHelperOp::None};
+    uint8_t vector_vs1{0};
+    uint8_t vector_vs2{0};
+    uint8_t vector_sew_bytes{0};
+    uint8_t vector_vl{0};
 };
 
 struct DbtBlockPlan {
@@ -108,3 +142,5 @@ DbtInvalidationPlan plan_dbt_block_invalidation_event(DbtInvalidationEventKind k
                                                       uint64_t block_end_pc);
 
 const char* dbt_helper_kind_name(DbtHelperKind kind);
+const char* dbt_atomic_helper_op_name(DbtAtomicHelperOp op);
+const char* dbt_vector_helper_op_name(DbtVectorHelperOp op);

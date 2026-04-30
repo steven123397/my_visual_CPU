@@ -244,6 +244,16 @@ DebugSession::TranslationPlanSnapshot DebugSession::translation_plan() {
     };
 }
 
+DbtJitDryRunSummary DebugSession::jit_dispatch() {
+    ensure_loaded();
+    const BackendDebugSnapshot backend_snapshot = machine().backend().debug_snapshot();
+
+    DbtJitEngineDryRun engine;
+    const DbtJitDryRunResult result =
+        engine.dry_run_hot_path(machine().cpu(), machine().bus(), backend_snapshot.profile);
+    return summarize_dbt_jit_dry_run(result);
+}
+
 DebugSnapshot DebugSession::snapshot() const {
     ensure_loaded();
     DebugSnapshot snapshot = collect_snapshot();

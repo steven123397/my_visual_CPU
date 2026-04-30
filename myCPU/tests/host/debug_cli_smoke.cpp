@@ -63,6 +63,12 @@ constexpr std::array<uint32_t, 5> kStoreQueueProgram = {
     0x00000073U,
 };
 
+constexpr std::array<uint32_t, 3> kJitDispatchLoopProgram = {
+    0x00108093U,
+    0x00208113U,
+    0xfe000ce3U,
+};
+
 bool expect_contains(const std::string& haystack, const char* needle, const char* message) {
     if (haystack.find(needle) == std::string::npos) {
         std::fprintf(stderr, "%s\n", message);
@@ -193,6 +199,8 @@ int main() {
     const TempBinary predictor_binary{write_temp_binary("predictor", kPredictorProgram)};
     const TempBinary mmio_fault_binary{write_temp_binary("mmio_fault", kMmioFaultProgram)};
     const TempBinary store_queue_binary{write_temp_binary("store_queue", kStoreQueueProgram)};
+    const TempBinary jit_dispatch_loop_binary{
+        write_temp_binary("jit_dispatch_loop", kJitDispatchLoopProgram)};
 
     const std::string external_pending_output =
         run_cli_script(build_flat_load_command(external_binary.path) +
@@ -228,6 +236,36 @@ int main() {
                 "\"scause\":\"0x8000000000000009\"",
             },
             "external interrupt pending snapshot should expose delegated supervisor interrupt state")) {
+        return 1;
+    }
+
+    const std::string jit_dispatch_output =
+        run_cli_script(build_flat_load_command(jit_dispatch_loop_binary.path, "functional") +
+                       repeat_command("{\"cmd\":\"step_cycle\"}", 12) +
+                       "{\"cmd\":\"jit_dispatch\"}\n{\"cmd\":\"quit\"}\n");
+    if (!expect_contains(jit_dispatch_output,
+                         "\"type\":\"jit_dispatch\"",
+                         "jit dispatch response should be emitted")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"source\":\"hot-path-profile\"",
+                         "jit dispatch response should expose hot-path source")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"action\":\"reference-fallback\"",
+                         "jit dispatch response should expose reference fallback action")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"reject_kind\":\"control-flow\"",
+                         "jit dispatch response should expose typed reject kind")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"host_code\":false",
+                         "jit dispatch response should preserve no-host-code flag")) {
         return 1;
     }
 

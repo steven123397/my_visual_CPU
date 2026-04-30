@@ -24,6 +24,7 @@ constexpr uint32_t kSllwX7X6X1 = 0x001313bbU;   // sllw x7, x6, x1
 constexpr uint32_t kFence = 0x0000000fU;         // fence
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;   // jal x0, 8
 constexpr uint32_t kSfenceVma = 0x12000073U;    // sfence.vma x0, x0
+constexpr uint64_t kHelperData = MEM_BASE + 0x100;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -35,6 +36,41 @@ bool expect(bool condition, const char* message) {
 
 void write32(Ram& ram, uint64_t addr, uint32_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
+}
+
+constexpr uint32_t encode_amo(uint32_t funct5,
+                              bool aq,
+                              bool rl,
+                              uint32_t rs2,
+                              uint32_t rs1,
+                              uint32_t funct3,
+                              uint32_t rd) {
+    return (funct5 << 27) |
+           (static_cast<uint32_t>(aq) << 26) |
+           (static_cast<uint32_t>(rl) << 25) |
+           (rs2 << 20) |
+           (rs1 << 15) |
+           (funct3 << 12) |
+           (rd << 7) |
+           0x2fU;
+}
+
+constexpr uint32_t encode_rtype(uint8_t opcode,
+                                uint8_t funct3,
+                                uint8_t funct7,
+                                uint8_t rd,
+                                uint8_t rs1,
+                                uint8_t rs2) {
+    return (static_cast<uint32_t>(funct7) << 25) |
+           (static_cast<uint32_t>(rs2) << 20) |
+           (static_cast<uint32_t>(rs1) << 15) |
+           (static_cast<uint32_t>(funct3) << 12) |
+           (static_cast<uint32_t>(rd) << 7) |
+           static_cast<uint32_t>(opcode);
+}
+
+uint32_t encode_vdot(uint8_t vd, uint8_t vs1, uint8_t vs2) {
+    return encode_rtype(0x57, 0, 0x22, vd, vs1, vs2);
 }
 
 bool test_translates_inlineable_integer_block_to_ir_v0() {
@@ -219,6 +255,60 @@ bool test_rejects_supported_non_ir_v0_integer_ops_without_prefix_ir() {
                   "translator should not emit prefix IR for supported non-IR-v0 rejects");
 }
 
+bool test_preserves_atomic_and_vector_helper_metadata() {
+    const uint32_t kAmoAddW =
+        encode_amo(0x00, true, false, 6, 10, 0x2, 5);  // amoadd.w.aq x5, x6, (x10)
+    Ram atomic_ram;
+    Bus atomic_bus(atomic_ram);
+    CPU atomic_cpu;
+    cpu_init(atomic_cpu, kEntry);
+    atomic_cpu.core().write_gpr(10, kHelperData);
+    atomic_cpu.core().write_gpr(6, 0x12345678U);
+    write32(atomic_ram, kEntry + 0, kAmoAddW);
+    const DbtTranslationUnit atomic_unit =
+        translate_dbt_block(plan_dbt_block(atomic_cpu, atomic_bus, kEntry, kEntry));
+
+    const uint32_t kVdot = encode_vdot(5, 1, 2);
+    Ram vector_ram;
+    Bus vector_bus(vector_ram);
+    CPU vector_cpu;
+    cpu_init(vector_cpu, kEntry);
+    write32(vector_ram, kEntry + 0, kVdot);
+    const DbtTranslationUnit vector_unit =
+        translate_dbt_block(plan_dbt_block(vector_cpu, vector_bus, kEntry, kEntry));
+
+    return expect(!atomic_unit.ok, "translator should reject atomic helper plan") &&
+           expect(atomic_unit.reject_kind == DbtRejectKind::Atomic,
+                  "translator should classify atomic helper reject") &&
+           expect(atomic_unit.helper_plan.required,
+                  "translator should preserve atomic helper metadata") &&
+           expect(atomic_unit.helper_plan.kind == DbtHelperKind::Atomic,
+                  "translator should preserve atomic helper kind") &&
+           expect(atomic_unit.helper_plan.atomic_op == DbtAtomicHelperOp::Add,
+                  "translator should preserve atomic operation") &&
+           expect(atomic_unit.helper_plan.addr == kHelperData &&
+                      atomic_unit.helper_plan.size == 4 &&
+                      atomic_unit.helper_plan.value == 0x12345678U,
+                  "translator should preserve atomic address, width, and value") &&
+           expect(atomic_unit.helper_plan.atomic_aq && !atomic_unit.helper_plan.atomic_rl,
+                  "translator should preserve atomic ordering bits") &&
+           expect(atomic_unit.instructions.empty(),
+                  "translator should not emit prefix IR for atomic helper plan") &&
+           expect(!vector_unit.ok, "translator should reject vector helper plan") &&
+           expect(vector_unit.reject_kind == DbtRejectKind::Vector,
+                  "translator should classify vector helper reject") &&
+           expect(vector_unit.helper_plan.required,
+                  "translator should preserve vector helper metadata") &&
+           expect(vector_unit.helper_plan.vector_op == DbtVectorHelperOp::Dot,
+                  "translator should preserve vector operation") &&
+           expect(vector_unit.helper_plan.rd == 5 &&
+                      vector_unit.helper_plan.vector_vs1 == 1 &&
+                      vector_unit.helper_plan.vector_vs2 == 2,
+                  "translator should preserve vector register operands") &&
+           expect(vector_unit.instructions.empty(),
+                  "translator should not emit prefix IR for vector helper plan");
+}
+
 bool test_reject_taxonomy_classifies_fallback_boundaries() {
     Ram control_ram;
     Bus control_bus(control_ram);
@@ -289,6 +379,9 @@ int main() {
         return 1;
     }
     if (!test_rejects_supported_non_ir_v0_integer_ops_without_prefix_ir()) {
+        return 1;
+    }
+    if (!test_preserves_atomic_and_vector_helper_metadata()) {
         return 1;
     }
     if (!test_reject_taxonomy_classifies_fallback_boundaries()) {

@@ -369,6 +369,10 @@ DebugCliCommand parse_debug_cli_command(const std::string& line) {
         parsed.kind = DebugCliCommandKind::TranslationPlan;
         return parsed;
     }
+    if (command == "jit_dispatch") {
+        parsed.kind = DebugCliCommandKind::JitDispatch;
+        return parsed;
+    }
     if (command == "quit") {
         parsed.kind = DebugCliCommandKind::Quit;
         return parsed;

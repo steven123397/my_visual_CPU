@@ -110,6 +110,13 @@ int main() {
         return 1;
     }
 
+    const DebugCliCommand jit_dispatch =
+        parse_debug_cli_command("{\"cmd\":\"jit_dispatch\"}");
+    if (!expect(jit_dispatch.kind == DebugCliCommandKind::JitDispatch,
+                "jit_dispatch command kind mismatch")) {
+        return 1;
+    }
+
     if (!expect_parse_error("{\"cmd\":\"bogus\"}")) {
         return 1;
     }

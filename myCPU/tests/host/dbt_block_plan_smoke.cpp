@@ -17,6 +17,7 @@ constexpr uint32_t kLwX1FromX0 = 0x00002083U;   // lw x1, 0(x0)
 constexpr uint32_t kSwX2To8FromX0 = 0x00202423U;  // sw x2, 8(x0)
 constexpr uint32_t kCsrrwX1MstatusX2 = 0x300110f3U;  // csrrw x1, mstatus, x2
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;   // jal x0, 8
+constexpr uint64_t kHelperData = MEM_BASE + 0x100;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -28,6 +29,78 @@ bool expect(bool condition, const char* message) {
 
 void write32(Ram& ram, uint64_t addr, uint32_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
+}
+
+constexpr uint32_t encode_amo(uint32_t funct5,
+                              bool aq,
+                              bool rl,
+                              uint32_t rs2,
+                              uint32_t rs1,
+                              uint32_t funct3,
+                              uint32_t rd) {
+    return (funct5 << 27) |
+           (static_cast<uint32_t>(aq) << 26) |
+           (static_cast<uint32_t>(rl) << 25) |
+           (rs2 << 20) |
+           (rs1 << 15) |
+           (funct3 << 12) |
+           (rd << 7) |
+           0x2fU;
+}
+
+constexpr uint32_t encode_rtype(uint8_t opcode,
+                                uint8_t funct3,
+                                uint8_t funct7,
+                                uint8_t rd,
+                                uint8_t rs1,
+                                uint8_t rs2) {
+    return (static_cast<uint32_t>(funct7) << 25) |
+           (static_cast<uint32_t>(rs2) << 20) |
+           (static_cast<uint32_t>(rs1) << 15) |
+           (static_cast<uint32_t>(funct3) << 12) |
+           (static_cast<uint32_t>(rd) << 7) |
+           static_cast<uint32_t>(opcode);
+}
+
+constexpr uint32_t encode_itype(uint8_t opcode,
+                                uint8_t funct3,
+                                uint8_t rd,
+                                uint8_t rs1,
+                                int32_t imm12) {
+    const uint32_t imm = static_cast<uint32_t>(imm12) & 0xfffU;
+    return (imm << 20) |
+           (static_cast<uint32_t>(rs1) << 15) |
+           (static_cast<uint32_t>(funct3) << 12) |
+           (static_cast<uint32_t>(rd) << 7) |
+           static_cast<uint32_t>(opcode);
+}
+
+uint8_t sew_code_from_bytes(uint8_t sew_bytes) {
+    switch (sew_bytes) {
+    case 1:
+        return 0;
+    case 2:
+        return 1;
+    case 4:
+        return 3;
+    case 8:
+        return 7;
+    default:
+        return 2;
+    }
+}
+
+uint32_t encode_vsetcfg(uint8_t sew_bytes, uint8_t vl) {
+    const uint8_t funct7 = static_cast<uint8_t>(0x40U | sew_code_from_bytes(sew_bytes));
+    return encode_rtype(0x57, 7, funct7, 0, 0, static_cast<uint8_t>(vl - 1));
+}
+
+uint32_t encode_vle(uint8_t vd, uint8_t base, int32_t imm12) {
+    return encode_itype(0x07, 0, vd, base, imm12);
+}
+
+uint32_t encode_vdot(uint8_t vd, uint8_t vs1, uint8_t vs2) {
+    return encode_rtype(0x57, 0, 0x22, vd, vs1, vs2);
 }
 
 bool test_shared_block_analyzer_plans_inlineable_ir() {
@@ -166,6 +239,89 @@ bool test_shared_block_analyzer_builds_helper_plans() {
                   "helper kind name should expose csr-write");
 }
 
+bool test_shared_block_analyzer_builds_atomic_and_vector_helper_plans() {
+    const uint32_t kAmoSwapD =
+        encode_amo(0x01, true, true, 6, 10, 0x3, 5);  // amoswap.d.aqrl x5, x6, (x10)
+    Ram atomic_ram;
+    Bus atomic_bus(atomic_ram);
+    CPU atomic_cpu;
+    cpu_init(atomic_cpu, kEntry);
+    atomic_cpu.core().write_gpr(10, kHelperData);
+    atomic_cpu.core().write_gpr(6, 0x8877665544332211ULL);
+    write32(atomic_ram, kEntry + 0, kAmoSwapD);
+    const DbtBlockPlan atomic_plan = plan_dbt_block(atomic_cpu, atomic_bus, kEntry, kEntry);
+
+    const uint32_t kVset = encode_vsetcfg(4, 4);
+    Ram vset_ram;
+    Bus vset_bus(vset_ram);
+    CPU vset_cpu;
+    cpu_init(vset_cpu, kEntry);
+    write32(vset_ram, kEntry + 0, kVset);
+    const DbtBlockPlan vset_plan = plan_dbt_block(vset_cpu, vset_bus, kEntry, kEntry);
+
+    const uint32_t kVle = encode_vle(3, 10, 12);
+    Ram vle_ram;
+    Bus vle_bus(vle_ram);
+    CPU vle_cpu;
+    cpu_init(vle_cpu, kEntry);
+    vle_cpu.core().write_gpr(10, kHelperData);
+    write32(vle_ram, kEntry + 0, kVle);
+    const DbtBlockPlan vle_plan = plan_dbt_block(vle_cpu, vle_bus, kEntry, kEntry);
+
+    const uint32_t kVdot = encode_vdot(5, 1, 2);
+    Ram vdot_ram;
+    Bus vdot_bus(vdot_ram);
+    CPU vdot_cpu;
+    cpu_init(vdot_cpu, kEntry);
+    write32(vdot_ram, kEntry + 0, kVdot);
+    const DbtBlockPlan vdot_plan = plan_dbt_block(vdot_cpu, vdot_bus, kEntry, kEntry);
+
+    return expect(!atomic_plan.ok, "atomic helper setup should reject block") &&
+           expect(atomic_plan.helper_plan.required,
+                  "atomic helper-required plan should expose helper metadata") &&
+           expect(atomic_plan.helper_plan.kind == DbtHelperKind::Atomic,
+                  "atomic helper plan should classify atomic helper") &&
+           expect(atomic_plan.helper_plan.atomic_op == DbtAtomicHelperOp::Swap,
+                  "atomic helper plan should preserve AMO operation") &&
+           expect(atomic_plan.helper_plan.addr == kHelperData &&
+                      atomic_plan.helper_plan.size == 8 &&
+                      atomic_plan.helper_plan.rd == 5,
+                  "atomic helper plan should preserve address, width, and rd") &&
+           expect(atomic_plan.helper_plan.value == 0x8877665544332211ULL,
+                  "atomic helper plan should preserve rs2 value") &&
+           expect(atomic_plan.helper_plan.atomic_aq && atomic_plan.helper_plan.atomic_rl,
+                  "atomic helper plan should preserve aq/rl ordering bits") &&
+           expect(atomic_plan.helper_plan.commit_at_boundary &&
+                      atomic_plan.helper_plan.non_speculative,
+                  "atomic helper plan should stay ordered and non-speculative") &&
+           expect(!vset_plan.ok, "vector set-config setup should reject block") &&
+           expect(vset_plan.helper_plan.required &&
+                      vset_plan.helper_plan.kind == DbtHelperKind::Vector,
+                  "vector set-config plan should expose vector helper metadata") &&
+           expect(vset_plan.helper_plan.vector_op == DbtVectorHelperOp::SetConfig,
+                  "vector set-config helper should preserve vector op") &&
+           expect(vset_plan.helper_plan.vector_sew_bytes == 4 &&
+                      vset_plan.helper_plan.vector_vl == 4,
+                  "vector set-config helper should preserve sew and vl") &&
+           expect(!vle_plan.ok, "vector load setup should reject block") &&
+           expect(vle_plan.helper_plan.vector_op == DbtVectorHelperOp::Load,
+                  "vector load helper should preserve vector op") &&
+           expect(vle_plan.helper_plan.rd == 3 &&
+                      vle_plan.helper_plan.addr == kHelperData + 12,
+                  "vector load helper should preserve vd and effective address") &&
+           expect(!vdot_plan.ok, "vector dot setup should reject block") &&
+           expect(vdot_plan.helper_plan.vector_op == DbtVectorHelperOp::Dot,
+                  "vector dot helper should preserve vector op") &&
+           expect(vdot_plan.helper_plan.rd == 5 &&
+                      vdot_plan.helper_plan.vector_vs1 == 1 &&
+                      vdot_plan.helper_plan.vector_vs2 == 2,
+                  "vector dot helper should preserve vd, vs1, and vs2") &&
+           expect(dbt_atomic_helper_op_name(DbtAtomicHelperOp::Swap) == std::string("swap"),
+                  "atomic helper op name should expose swap") &&
+           expect(dbt_vector_helper_op_name(DbtVectorHelperOp::Dot) == std::string("dot"),
+                  "vector helper op name should expose dot");
+}
+
 bool test_shared_hot_path_and_invalidation_contracts() {
     Ram ram;
     Bus bus(ram);
@@ -230,6 +386,9 @@ int main() {
         return 1;
     }
     if (!test_shared_block_analyzer_builds_helper_plans()) {
+        return 1;
+    }
+    if (!test_shared_block_analyzer_builds_atomic_and_vector_helper_plans()) {
         return 1;
     }
     if (!test_shared_hot_path_and_invalidation_contracts()) {

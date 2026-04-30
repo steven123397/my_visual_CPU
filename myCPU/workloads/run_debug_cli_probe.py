@@ -62,6 +62,11 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="emit an opt-in dry-run translation plan for the top hot path candidate",
     )
+    parser.add_argument(
+        "--jit-dispatch",
+        action="store_true",
+        help="emit an opt-in non-executable JIT dispatch dry-run summary",
+    )
     parser.add_argument("--flat", action="store_true")
     parser.add_argument(
         "--addr",
@@ -135,6 +140,8 @@ def build_commands(args):
 
     if args.translation_plan:
         commands.append({"cmd": "translation_plan"})
+    if args.jit_dispatch:
+        commands.append({"cmd": "jit_dispatch"})
 
     commands.extend(
         [
@@ -361,6 +368,35 @@ def emit_translation_plan_summary(plan) -> None:
     print("translation-plan:", status, *fields)
 
 
+def emit_jit_dispatch_summary(dispatch) -> None:
+    if not dispatch:
+        print("jit-dispatch:", "none reason=missing-jit-dispatch")
+        return
+
+    print(
+        "jit-dispatch:",
+        f"source={dispatch.get('source', 'none')}",
+        f"action={dispatch.get('action', 'none')}",
+        f"ok={'true' if dispatch.get('ok', False) else 'false'}",
+        f"start={profile_hex(dispatch.get('start_pc', '0x0'))}",
+        f"end={profile_hex(dispatch.get('end_pc', '0x0'))}",
+        f"cache={dispatch.get('cache_state', 'unknown')}",
+        f"planned={'true' if dispatch.get('planned', False) else 'false'}",
+        f"translated={'true' if dispatch.get('translated', False) else 'false'}",
+        f"lowered={'true' if dispatch.get('lowered', False) else 'false'}",
+        f"fallback={'true' if dispatch.get('fallback_to_reference', False) else 'false'}",
+        f"lowered_ops={profile_int(dispatch.get('lowered_instruction_count', 0))}",
+        f"executions={profile_int(dispatch.get('candidate_executions', 0))}",
+        f"retired={profile_int(dispatch.get('candidate_retired_instructions', 0))}",
+        f"reject={dispatch.get('reject_kind', 'none')}",
+        f"reason={dispatch.get('reject_reason', 'none')}",
+        f"helper={dispatch.get('helper_replay_kind', 'none')}",
+        f"host_code={'true' if dispatch.get('host_code', False) else 'false'}",
+        f"executable_memory={'true' if dispatch.get('executable_memory', False) else 'false'}",
+        f"guest_execution={'true' if dispatch.get('guest_execution', False) else 'false'}",
+    )
+
+
 def emit_l1d_cache_summary(snapshot) -> None:
     cache = snapshot.get("l1_data_cache", {})
     if not cache or not cache.get("enabled", False):
@@ -401,6 +437,10 @@ def emit_probe_summary(args, lines) -> int:
         (line for line in reversed(lines) if line.get("type") == "translation_plan"),
         None,
     )
+    jit_dispatch = next(
+        (line for line in reversed(lines) if line.get("type") == "jit_dispatch"),
+        None,
+    )
     uart = next((line for line in reversed(lines) if line.get("type") == "uart_output"), None)
     if snapshot is None:
         sys.stderr.write("debug-cli probe did not return a snapshot\n")
@@ -436,6 +476,8 @@ def emit_probe_summary(args, lines) -> int:
     emit_top_profile_entries(snapshot.get("profile", {}))
     if args.translation_plan:
         emit_translation_plan_summary(translation_plan)
+    if args.jit_dispatch:
+        emit_jit_dispatch_summary(jit_dispatch)
     emit_l1d_cache_summary(snapshot)
     uart_snapshot = snapshot.get("devices", {}).get("uart", {})
     print(

@@ -119,6 +119,58 @@ DbtHelperKind helper_kind_from_effects(const InsnEffects& effects) {
     return DbtHelperKind::None;
 }
 
+DbtAtomicHelperOp atomic_helper_op_from_effect(const AtomicRequest& request) {
+    switch (request.kind) {
+    case AtomicRequest::Kind::None:
+        return DbtAtomicHelperOp::None;
+    case AtomicRequest::Kind::LoadReserved:
+        return DbtAtomicHelperOp::LoadReserved;
+    case AtomicRequest::Kind::StoreConditional:
+        return DbtAtomicHelperOp::StoreConditional;
+    case AtomicRequest::Kind::Swap:
+        return DbtAtomicHelperOp::Swap;
+    case AtomicRequest::Kind::Add:
+        return DbtAtomicHelperOp::Add;
+    case AtomicRequest::Kind::Xor:
+        return DbtAtomicHelperOp::Xor;
+    case AtomicRequest::Kind::And:
+        return DbtAtomicHelperOp::And;
+    case AtomicRequest::Kind::Or:
+        return DbtAtomicHelperOp::Or;
+    case AtomicRequest::Kind::Min:
+        return DbtAtomicHelperOp::Min;
+    case AtomicRequest::Kind::Max:
+        return DbtAtomicHelperOp::Max;
+    case AtomicRequest::Kind::MinUnsigned:
+        return DbtAtomicHelperOp::MinUnsigned;
+    case AtomicRequest::Kind::MaxUnsigned:
+        return DbtAtomicHelperOp::MaxUnsigned;
+    }
+    return DbtAtomicHelperOp::None;
+}
+
+DbtVectorHelperOp vector_helper_op_from_effect(const VectorRequest& request) {
+    switch (request.kind) {
+    case VectorRequest::Kind::None:
+        return DbtVectorHelperOp::None;
+    case VectorRequest::Kind::SetConfig:
+        return DbtVectorHelperOp::SetConfig;
+    case VectorRequest::Kind::Load:
+        return DbtVectorHelperOp::Load;
+    case VectorRequest::Kind::Store:
+        return DbtVectorHelperOp::Store;
+    case VectorRequest::Kind::Add:
+        return DbtVectorHelperOp::Add;
+    case VectorRequest::Kind::Mul:
+        return DbtVectorHelperOp::Mul;
+    case VectorRequest::Kind::Max:
+        return DbtVectorHelperOp::Max;
+    case VectorRequest::Kind::Dot:
+        return DbtVectorHelperOp::Dot;
+    }
+    return DbtVectorHelperOp::None;
+}
+
 const char* fallback_boundary_kind(const InsnEffects& effects) {
     if (effects.trap.valid) {
         return "trap";
@@ -222,12 +274,20 @@ DbtHelperPlan make_helper_plan(uint64_t pc, const Insn& insn, const InsnEffects&
         helper.commit_at_boundary = effects.atomic.commit_at_boundary;
         helper.non_speculative = effects.atomic.non_speculative;
         helper.value = effects.atomic.store_value;
+        helper.atomic_op = atomic_helper_op_from_effect(effects.atomic);
+        helper.atomic_aq = effects.atomic.aq;
+        helper.atomic_rl = effects.atomic.rl;
         return helper;
     }
     if (effects.vector.kind != VectorRequest::Kind::None) {
         helper.rd = effects.vector.vd;
         helper.addr = effects.vector.addr;
         helper.size = effects.vector.sew_bytes;
+        helper.vector_op = vector_helper_op_from_effect(effects.vector);
+        helper.vector_vs1 = effects.vector.vs1;
+        helper.vector_vs2 = effects.vector.vs2;
+        helper.vector_sew_bytes = effects.vector.sew_bytes;
+        helper.vector_vl = effects.vector.vl;
         return helper;
     }
 
@@ -389,7 +449,14 @@ DbtBlockPlan plan_dbt_hot_path(CPU& cpu,
                                Bus& bus,
                                const ExecutionProfileSnapshot& profile) {
     if (profile.hot_paths.empty()) {
-        return plan_fallback(0, 0, 0, 0, 0, "no-hot-paths");
+        return plan_fallback(0,
+                             0,
+                             0,
+                             0,
+                             0,
+                             "no-hot-paths",
+                             "profile-candidate",
+                             DbtBoundaryKind::Fallback);
     }
 
     const auto top_it = std::min_element(
@@ -401,14 +468,28 @@ DbtBlockPlan plan_dbt_hot_path(CPU& cpu,
     const ExecutionHotPathEntry& candidate = *top_it;
     if (candidate.executions < 2) {
         DbtBlockPlan plan =
-            plan_fallback(candidate.start_pc, candidate.end_pc, 0, candidate.start_pc, 0, "insufficient-repetition");
+            plan_fallback(candidate.start_pc,
+                          candidate.end_pc,
+                          0,
+                          candidate.start_pc,
+                          0,
+                          "insufficient-repetition",
+                          "profile-candidate",
+                          DbtBoundaryKind::Fallback);
         plan.candidate_executions = candidate.executions;
         plan.candidate_retired_instructions = candidate.retired_instructions;
         return plan;
     }
     if (candidate.retired_instructions == 0) {
         DbtBlockPlan plan =
-            plan_fallback(candidate.start_pc, candidate.end_pc, 0, candidate.start_pc, 0, "empty-hot-path");
+            plan_fallback(candidate.start_pc,
+                          candidate.end_pc,
+                          0,
+                          candidate.start_pc,
+                          0,
+                          "empty-hot-path",
+                          "profile-candidate",
+                          DbtBoundaryKind::Fallback);
         plan.candidate_executions = candidate.executions;
         plan.candidate_retired_instructions = candidate.retired_instructions;
         return plan;
@@ -464,6 +545,58 @@ const char* dbt_helper_kind_name(DbtHelperKind kind) {
         return "atomic";
     case DbtHelperKind::Vector:
         return "vector";
+    }
+    return "unknown";
+}
+
+const char* dbt_atomic_helper_op_name(DbtAtomicHelperOp op) {
+    switch (op) {
+    case DbtAtomicHelperOp::None:
+        return "none";
+    case DbtAtomicHelperOp::LoadReserved:
+        return "load-reserved";
+    case DbtAtomicHelperOp::StoreConditional:
+        return "store-conditional";
+    case DbtAtomicHelperOp::Swap:
+        return "swap";
+    case DbtAtomicHelperOp::Add:
+        return "add";
+    case DbtAtomicHelperOp::Xor:
+        return "xor";
+    case DbtAtomicHelperOp::And:
+        return "and";
+    case DbtAtomicHelperOp::Or:
+        return "or";
+    case DbtAtomicHelperOp::Min:
+        return "min";
+    case DbtAtomicHelperOp::Max:
+        return "max";
+    case DbtAtomicHelperOp::MinUnsigned:
+        return "min-unsigned";
+    case DbtAtomicHelperOp::MaxUnsigned:
+        return "max-unsigned";
+    }
+    return "unknown";
+}
+
+const char* dbt_vector_helper_op_name(DbtVectorHelperOp op) {
+    switch (op) {
+    case DbtVectorHelperOp::None:
+        return "none";
+    case DbtVectorHelperOp::SetConfig:
+        return "set-config";
+    case DbtVectorHelperOp::Load:
+        return "load";
+    case DbtVectorHelperOp::Store:
+        return "store";
+    case DbtVectorHelperOp::Add:
+        return "add";
+    case DbtVectorHelperOp::Mul:
+        return "mul";
+    case DbtVectorHelperOp::Max:
+        return "max";
+    case DbtVectorHelperOp::Dot:
+        return "dot";
     }
     return "unknown";
 }
