@@ -27,7 +27,8 @@
 11. [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
     主线 `Wave 5 / cache / memory-system` 当前设计入口。
 12. [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
-    主线 `Wave 6 / JIT / DBT` 当前 readiness、证据链、translation contract 和原型边界设计入口。
+    主线 `Wave 6 / JIT / DBT` 当前 readiness、证据链、translation contract、原型边界和
+    `DBT translator + IR v0 dry-run` 完成态设计入口。
 13. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     向量扩展与 ML workload 的统一设计边界。
 14. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
@@ -72,6 +73,7 @@
   - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
 - `Wave 6 / JIT / DBT`
   - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
+  - [plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
   - [plan/history_plan.md](plan/history_plan.md)
 - `kernel_alpha`
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)

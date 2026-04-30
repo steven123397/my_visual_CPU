@@ -40,13 +40,9 @@
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
-- 当前计划：
-  - 暂无主线活跃计划。
-  - `Wave 6` 证据链和原型边界阶段的后续窄任务不再单独创建计划文档；只有进入真正
-    JIT engine、host code、persistent block cache 或 multicore / coherence 等整块任务时，
-    才重新启用独立计划。
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
@@ -146,7 +142,8 @@
   -> Wave 3：已收口的 Linux 更后 userland checkpoint + observation/pipeline gap 判断
   -> Wave 4：已完成，AI accelerator 下一轮扩展 + 向量/observation 继续深化
   -> Wave 5：已完成首轮收口，cache / memory-system 第一刀（以 workload 证据触发）
-  -> Wave 6：当前 active wave，JIT / DBT 证据链和原型边界已完成首轮收口
+  -> Wave 6：当前 active wave，已完成 JIT / DBT 证据链、原型边界首轮收口和
+     `DBT translator + IR v0 dry-run`
   -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
 ```
 
@@ -279,20 +276,23 @@ Wave 5 的激活门槛：
 
 ### Wave 6：JIT / DBT 与 multicore / coherence
 
-Wave 6 也是主线内排期，当前已激活并完成 JIT / DBT 证据链和原型边界首轮收口。目标是：
+Wave 6 也是主线内排期，当前已激活并完成 JIT / DBT 证据链、原型边界首轮收口和
+`DBT translator + IR v0 dry-run`。目标是：
 
 - 基于 Linux / workload / profile 证据决定 `JIT / DBT` 是否值得正式启动
 - 基于 cache 路线与 memory-order 验证进展决定 multicore / coherence 是否可启动
 
-当前完成态只固定 probe 级 hot-path / translation candidate、`pc_costs` /
+当前已完成态固定 probe 级 hot-path / translation candidate、`pc_costs` /
 `branch_targets`、translation contract、host-smoke-only interpreter-assisted prototype、
-preflight 整块拒绝、opt-in translation-plan dry-run、functional fallback replay 等价性和
-first-boundary taxonomy。它不实现 JIT engine、DBT translator、IR、block cache、
-host code emission、multicore、coherence 或新的 memory consistency 模型。
+preflight 整块拒绝、opt-in translation-plan dry-run、functional fallback replay 等价性、
+first-boundary taxonomy、共享 `DbtBlockPlan` analyzer，以及非执行 `dbt_ir` /
+`dbt_translator` v0 dry-run；它仍不实现 JIT engine、host code emission、
+persistent block cache、runtime scheduler、multicore、coherence 或新的 memory consistency
+模型。
 
-证据链和原型边界阶段的后续窄任务不再按每个小补丁单开计划文档；只有进入真正
-JIT engine、host code、persistent block cache、runtime scheduler 或 multicore /
-coherence 这类整块任务时，才重新启用独立设计 / 计划。
+证据链、原型边界和 `DBT translator + IR v0 dry-run` 的后续窄任务不再按每个小补丁单开
+计划文档。后续如果进入真正 JIT engine、host code、persistent block cache、
+runtime scheduler 或 multicore / coherence 这类整块任务时，还需要再开对应设计 / 计划。
 
 Wave 6 第一刀的激活门槛：
 
@@ -361,9 +361,9 @@ Wave 7 的完成定义：
 ### F：JIT / DBT / multicore / coherence
 
 - 当前已进入主线 `Wave 6`。
-- JIT / DBT 证据链和原型边界首轮已完成，为后续 block lifecycle 观察、
-  workload-level opt-in 观察和真正 JIT engine 评估提供入口；multicore / coherence
-  仍等待 atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
+- JIT / DBT 证据链、原型边界首轮和非执行 `DBT translator + IR v0 dry-run` 已完成；
+  multicore / coherence 仍等待 atomic、memory-order、
+  DMA / cache 交界和验证矩阵另行收口。
 
 ### G：产品化展示 / 在线调试平台 / 部署
 

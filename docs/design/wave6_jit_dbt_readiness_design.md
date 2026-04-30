@@ -20,12 +20,9 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-- 当前计划：
-  - 暂无主线活跃计划。
-  - `Wave 6` 证据链和原型边界阶段的后续窄任务不再单独创建计划文档；实现时直接补最窄
-    host / probe 验证，并同步更新 `mainline_status.md`。
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
 - 相关设计：
   - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
@@ -61,7 +58,8 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 
 ## 非目标
 
-- 当前阶段不实现 JIT engine、DBT translator、IR、block cache 或 host code emission。
+- 当前已完成 `DBT translator + IR v0 dry-run` 子阶段，但仍不实现 JIT engine、
+  executable IR lowering、block cache 或 host code emission。
 - 不申请可执行内存，不引入宿主平台相关代码生成。
 - 不改变 `InstructionSemantics` 的 ISA 真值来源定位。
 - 不改变 guest 可见 fault / trap / CSR / memory 语义。
@@ -85,6 +83,26 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 
 这些条件只支撑证据链和原型边界继续推进；后续 JIT engine、host code emission、长期
 block cache 或 multicore / coherence 仍需要新的设计和计划。
+
+## DBT translator + IR v0 dry-run 子阶段
+
+证据链和原型边界首轮收口后，当前已经完成正式 `DBT translator + IR v0 dry-run`，
+范围限定为“非执行 translator 前端”：
+
+- 已新增 `dbt_ir`，只表达最小纯直线整数 IR：立即数写寄存器、寄存器加立即数、
+  寄存器加寄存器、寄存器减寄存器，以及 block fallthrough。
+- 已新增 `dbt_translator`，输入只能来自共享 `DbtBlockPlan`；`DbtBlockPlan` 不通过、
+  或 IR v0 不支持其中某条 inlineable 指令时，translator 只返回稳定 reject metadata，
+  不翻译可内联前缀。
+- translator 可以重新 decode `DbtBlockPlan::dry_run_ir[].raw` 来恢复寄存器、立即数和
+  opcode 分类，但不得重新取指，不得提交 CPU state，也不得绕过 `InstructionSemantics`
+  的 preflight 结论。
+- v0 dry-run 的输出是 `DbtTranslationUnit`，只用于 host smoke 和后续 metadata /
+  differential 验证，不接入默认 backend 调度。
+
+本阶段完成后，项目可以声称“已有最小 DBT translator / IR dry-run 前端”，但仍不能声称
+已有 JIT engine、runtime JIT、host code emission、persistent block cache 或 helper
+inline / replay runtime。
 
 ## 当前合同
 
@@ -120,7 +138,7 @@ block cache 或 multicore / coherence 仍需要新的设计和计划。
 
 ### Translation 输出分类
 
-当前只固定输出分类，不定义 IR 或 host code 格式：
+当前固定输出分类，并允许 `IR v0 dry-run` 定义非执行 IR 格式；仍不定义 host code 格式：
 
 - `inlineable`：未来可在 prototype 或 translator 中内联模拟，但仍必须等价于共享
   `InstructionSemantics`。
@@ -128,6 +146,10 @@ block cache 或 multicore / coherence 仍需要新的设计和计划。
   CSR、trap-prone、atomic、fence、vector 或 device 相关行为。
 - `fallback-required`：必须回到 interpreter / functional reference path，不能进入
   translated block。
+
+`IR v0 dry-run` 只允许覆盖已经由 `DbtBlockPlan` 判定为完整 inlineable 的 pure
+straight-line integer 子集。memory、CSR、trap、atomic、vector、control-flow、fence /
+TLB flush 或 unsupported instruction 都必须保持 reject，不允许翻译前缀。
 
 第一版 block 终止条件包括控制流转移、system boundary、decode / fetch / execute fault
 风险、跨 page / 权限 / MMIO / side-effect region / self-modifying-code 风险边界，以及
@@ -216,13 +238,17 @@ dry-run。`run_debug_cli_probe.py --translation-plan` 只在显式 opt-in 时输
 
 只有进入以下整块任务时，才重新考虑独立计划文档：
 
-- 真正 JIT engine 或 DBT translator。
-- IR 设计与 lowering。
+- 真正 JIT engine、runtime DBT translator 或 translator 执行路径接入。
+- IR 语义扩展、differential execution 或 lowering。
 - host code emission、executable memory policy 或宿主平台相关代码生成。
 - persistent block cache、block lifecycle 和 invalidation implementation。
 - workload-level runtime JIT harness 或 backend scheduler。
 - memory / CSR / trap / vector helper 的 runtime replay / inline 策略。
 - multicore、coherence 或新的 memory consistency 模型。
+
+`DBT translator + IR v0 dry-run` 已完成并归档；后续如果只是在该 v0 范围内补窄测试，
+可以直接更新状态并守住相应 host smoke。若进入 executable lowering、host code、
+runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划。
 
 ## 验证思路
 
@@ -233,6 +259,8 @@ dry-run。`run_debug_cli_probe.py --translation-plan` 只在显式 opt-in 时输
 触达 `src/exec/*`、`src/debug/*`、profile、probe 或 host smoke 时，优先补最窄门禁：
 
 - `cd myCPU && make test-host-interpreter_dbt_prototype_smoke`
+- `cd myCPU && make test-host-dbt_block_plan_smoke`
+- `cd myCPU && make test-host-dbt_translator_smoke`
 - `cd myCPU && make test-host-run_debug_cli_probe`
 - `cd myCPU && make test-host-execution_profile_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
@@ -257,10 +285,12 @@ dry-run。`run_debug_cli_probe.py --translation-plan` 只在显式 opt-in 时输
 
 ## 当前有效性说明
 
-- 当前有效：本文档作为主线 `Wave 6 / JIT / DBT` 的证据链、translation contract 和原型边界入口。
+- 当前有效：本文档作为主线 `Wave 6 / JIT / DBT` 的证据链、translation contract、
+  原型边界和 `DBT translator + IR v0 dry-run` 完成态入口。
 - 当前已经完成 hot-path candidate、per-PC / branch-target 观察、translation contract、
   host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-run、functional
-  fallback replay 等价性和 first-boundary taxonomy。
+  fallback replay 等价性、first-boundary taxonomy、共享 `DbtBlockPlan` analyzer，以及
+  非执行 `dbt_ir` / `dbt_translator` v0 dry-run。
 - 当前仍未启动 JIT engine、host code emission、长期 block cache、multicore /
   coherence、write-back cache、I-cache 和 cache maintenance instruction。
 - 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。

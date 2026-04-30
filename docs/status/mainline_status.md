@@ -28,12 +28,9 @@
   - [kernel_alpha_status.md](kernel_alpha_status.md)
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
-- 当前计划：
-  - 暂无主线活跃计划。
-  - `Wave 6` 证据链和原型边界阶段的后续窄任务不再单独创建计划文档；实现时直接补最窄
-    host / probe 验证，并同步更新本文档。
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
@@ -69,10 +66,13 @@ host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-ru
 functional fallback replay 等价性、first-boundary taxonomy、typed boundary、
 dry-run IR metadata、future block-cache invalidation dry-run 和共享 `dbt_block_plan`
 analyzer 入口都已有窄合同与验证。
+`DBT translator + IR v0 dry-run` 已完成，当前已有非执行 translator 前端和 typed IR
+形状验证。
 
-这些结果只说明“哪些 guest PC 区间值得观察、为什么当前不能翻译、回退是否等价、第一拒绝边界是什么”。
-当前仍不实现 JIT engine、DBT translator、IR lowering / executable IR、block cache、
-host code emission、multicore、coherence 或新的 memory consistency 模型，也不改变 guest 可见语义。
+这些结果只说明“哪些 guest PC 区间值得观察、哪些能进入 IR v0 dry-run、为什么剩余部分
+仍不能翻译、回退是否等价、第一拒绝边界是什么”。
+当前仍不实现 JIT engine、IR lowering / executable IR、block cache、host code emission、
+multicore、coherence 或新的 memory consistency 模型，也不改变 guest 可见语义。
 
 ## 当前状态
 
@@ -144,24 +144,26 @@ host code emission、multicore、coherence 或新的 memory consistency 模型�
 - 主线 `Wave 5 closeout / Wave 6 readiness` 已完成：`Wave 5` `Slice A ~ F` 作为
   首轮 cache / memory-system 收口；`Wave 6` 正式激活，但第一刀只做 `JIT / DBT`
   hot-path evidence。
-- 主线 `Wave 6` 当前停在证据链和原型边界阶段：`translation-candidate:`、
+- 主线 `Wave 6` 证据链和原型边界阶段已完成首轮收口：`translation-candidate:`、
   `pc-cost:`、`branch-target:`、opt-in `translation-plan:`、host-smoke-only
   `interpreter_dbt_prototype`、preflight 整块拒绝、functional fallback replay 和
   first-boundary `boundary_kind` 都已具备窄观察 / 验证合同；当前补充了代码级
   `InterpreterDbtBoundaryKind`、pure inlineable block 的 dry-run IR op，以及 future
   block-cache invalidation dry-run 分类；并已抽出 `src/exec/dbt_block_plan.{h,cpp}` 作为
-  prototype 和未来 translator 可共享的 block analyzer 入口。当前没有主线活跃计划。
-- 证据链和原型边界阶段的后续微任务不再单独创建 plan 文档；只要仍不进入真正 JIT engine、
-  host code、长期 block cache 或 runtime scheduler，就直接补最窄验证并更新本文档。
+  prototype 和未来 translator 可共享的 block analyzer 入口。
+- 主线 `Wave 6` 已完成 `DBT translator + IR v0 dry-run`：新增非执行 typed IR 和
+  translator dry-run，输入来自 `DbtBlockPlan`，输出 `DbtTranslationUnit`，仍不接入
+  默认 runtime。
 
 ## 当前优先级
 
 1. 当前 `Wave 6` 已激活并完成证据链 / 原型边界首轮收口；typed boundary、dry-run
-   IR metadata、future block-cache invalidation dry-run 和共享 `DbtBlockPlan` analyzer
-   入口已作为补充合同落地。后续同类窄观察、probe、preflight、fallback 等价性补洞不再
-   单独开 plan，直接补验证并同步本文档。
-   不得直接进入 host code emission、长期 block cache、multicore、coherence 或新的 memory
-   consistency 模型。
+   IR metadata、future block-cache invalidation dry-run、共享 `DbtBlockPlan` analyzer
+   入口，以及
+   [DBT translator + IR v0 dry-run](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
+   已作为补充合同落地。下一刀如继续推进，应优先选择 IR semantic differential dry-run
+   或 metadata-only block cache；不得直接进入 host code emission、长期 block cache、
+   runtime scheduler、multicore、coherence 或新的 memory consistency 模型。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
@@ -178,12 +180,18 @@ host code emission、multicore、coherence 或新的 memory consistency 模型�
 ## 关键历史节点
 
 - `2026-04-30`
+  - 主线 `Wave 6` 完成并归档 `DBT translator + IR v0 dry-run`：
+    [../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)。
+    本轮新增非执行 `dbt_ir` 与 `dbt_translator` 前端，translator 只消费共享
+    `DbtBlockPlan`，输出 `DbtTranslationUnit`；helper / fallback plan 和 IR v0 不支持的
+    inlineable 指令都会整体 reject，不返回可消费前缀 IR。默认 runtime、JIT engine、
+    host code emission、persistent block cache 和 multicore / coherence 仍不启动。
   - 主线 `Wave 6` 证据链和原型边界阶段继续做代码边界收口：新增
     `src/exec/dbt_block_plan.{h,cpp}`，把 hot-path block preflight、typed boundary、
     pure inlineable dry-run IR metadata 和 future block-cache invalidation dry-run 从
     `interpreter_dbt_prototype` 中抽成共享 analyzer 入口；prototype 通过兼容 wrapper 继续
-    消费该入口，新增 `tests/host/dbt_block_plan_smoke.cpp` 固定共享 API。当前仍不生成
-    host code，不实现 DBT translator / JIT engine / persistent block cache。
+    消费该入口，新增 `tests/host/dbt_block_plan_smoke.cpp` 固定共享 API。当时仍不生成
+    host code，也未实现 DBT translator / JIT engine / persistent block cache。
   - 主线 `Wave 6` 证据链和原型边界阶段补充代码级实现前置合同：`InterpreterDbtPrototypePlan`
     现在暴露 typed `InterpreterDbtBoundaryKind` 和 pure inlineable block 的 dry-run IR op；
     `sfence.vma` / TLB flush 不再只归为泛化 `control-flow`；新增 future block-cache
@@ -318,19 +326,21 @@ host code emission、multicore、coherence 或新的 memory consistency 模型�
   只落地默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，
   显式 opt-in 的 L1D debug/probe 观察面、frontend 只读展示，以及若干 L1D 边界和
   lifecycle hardening 合同。
-- `Wave 6` 当前只完成证据链和原型边界：probe 级 hot-path / translation candidate
+- `Wave 6` 当前完成证据链、原型边界和 `DBT translator + IR v0 dry-run`：probe 级 hot-path / translation candidate
   观察、translation contract、per-PC / branch-target 观察、host-smoke-only prototype、
   preflight guardrail、opt-in translation-plan dry-run、host-smoke-only fallback replay
-  等价性、first-boundary taxonomy、typed boundary、dry-run IR metadata 和 future
-  block-cache invalidation dry-run；当前也已有共享 `DbtBlockPlan` analyzer 入口。这不是完整
+  等价性、first-boundary taxonomy、typed boundary、dry-run IR metadata、future
+  block-cache invalidation dry-run、共享 `DbtBlockPlan` analyzer 入口，以及非执行
+  `dbt_ir` / `dbt_translator` v0 dry-run。这不是完整
   JIT / DBT engine；当前仍不生成宿主代码，不引入长期 block cache，不改变 guest 可见语义。
 - 当前 `pc_costs.cycles` 只是 retire-side 观察成本，不是稳定性能模型或 benchmark
   结论。`interpreter_dbt_prototype` 仍只覆盖 pure straight-line inlineable block；
   memory、CSR、trap、atomic、vector、control-flow、system boundary 都还是 helper /
   fallback；当前已有 preflight 拒绝整块的 lifecycle guardrail、opt-in translation-plan
   观察、host-smoke-only functional fallback replay、first-boundary taxonomy、dry-run IR
-  metadata、invalidation dry-run 和共享 block analyzer，但尚未有 IR lowering、helper replay、
-  persistent block lifecycle 或 workload-level runtime execution harness。
+  metadata、invalidation dry-run、共享 block analyzer 和非执行 translator / IR v0，但尚未有
+  IR lowering、helper replay、persistent block lifecycle 或 workload-level runtime execution
+  harness。
 - multicore / coherence 虽然属于 `Wave 6` 长期目标，但当前仍未启动；它必须等待
   atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
@@ -341,13 +351,12 @@ host code emission、multicore、coherence 或新的 memory consistency 模型�
 
 ## 下一步
 
-1. 当前暂无主线活跃计划；`Wave 6` 证据链和原型边界阶段的后续窄任务直接推进，
-   同步更新本文档即可，不再为每个小字段、小 smoke 或小 probe 输出单开 plan。
-2. 后续可以基于已有 typed boundary、dry-run IR metadata 和 invalidation dry-run 继续拆
-   更窄的 block analyzer / IR dry-run smoke、first-boundary 统计或 preflight 兼容的
-   workload-level opt-in 观察；只要不进入默认 runtime 调度、host code emission 或长期
-   block cache，就保持轻量流程。
-3. 只有准备启动真正 JIT engine、DBT translator、IR lowering、host code emission、persistent
+1. 当前暂无新的主线活跃计划；刚完成的
+   [DBT translator + IR v0 dry-run](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
+   只提供非执行 typed IR 和 translator dry-run，不接入 runtime。
+2. 后续如果继续 `Wave 6`，建议先做 IR semantic differential dry-run 或 metadata-only
+   block cache，继续保持不生成 host code、不申请 executable memory、不改变 guest 可见语义。
+3. 只有准备启动真正 JIT engine、IR lowering、host code emission、persistent
    block cache、runtime scheduler、helper replay 策略、multicore 或 coherence 时，才重新
    新建 `docs/plan/` 计划。
 4. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续

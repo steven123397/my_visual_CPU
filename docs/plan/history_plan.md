@@ -23,6 +23,23 @@
 
 ### 2026-04-30
 
+#### mainline-wave6-dbt-translator-ir-v0-plan
+
+- 原文件：`mainline_wave6_dbt_translator_ir_v0_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 `DBT translator + IR v0 dry-run`。
+  本轮新增非执行 `dbt_ir` 与 `dbt_translator` 前端，translator 只消费共享
+  `DbtBlockPlan`，把最小 pure straight-line integer 子集翻译成
+  `WriteRegImm / AddRegImm / AddRegReg / SubRegReg / Fallthrough` typed IR；helper /
+  fallback plan 和 IR v0 不支持的 inlineable 指令都会整体 reject，不返回可消费前缀 IR。
+- 实现过程摘要：这一轮按 `TDD` 先补 `dbt_translator_smoke` 红灯，再实现最小 IR /
+  translator dry-run，并额外固定 unsupported IR v0 reject 不修改 CPU state、不推进
+  `pc` / `instret`。本轮仍不接入默认 runtime，不实现 JIT engine、IR lowering、host code
+  emission、persistent block cache、runtime scheduler、helper replay、multicore 或 coherence。
+  验证覆盖 `make test-host-dbt_translator_smoke`、`make test-host-dbt_block_plan_smoke`、
+  `make test-host-interpreter_dbt_prototype_smoke`、`make test-host-run_debug_cli_probe`、
+  `make test-pipeline`、`make test` 与 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave6-jit-dbt-boundary-taxonomy-slice-g-plan
 
 - 原文件：`mainline_wave6_jit_dbt_boundary_taxonomy_slice_g_plan.md`

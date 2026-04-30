@@ -1,0 +1,39 @@
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "dbt_block_plan.h"
+
+enum class DbtIrOpcode : uint8_t {
+    WriteRegImm,
+    AddRegImm,
+    AddRegReg,
+    SubRegReg,
+    Fallthrough,
+};
+
+struct DbtIrInstruction {
+    DbtIrOpcode opcode{DbtIrOpcode::Fallthrough};
+    uint64_t pc{0};
+    uint32_t raw{0};
+    uint8_t size{0};
+    uint8_t rd{0};
+    uint8_t rs1{0};
+    uint8_t rs2{0};
+    int64_t imm{0};
+    uint64_t next_pc{0};
+};
+
+struct DbtTranslationUnit {
+    bool ok{false};
+    uint64_t start_pc{0};
+    uint64_t end_pc{0};
+    std::string reject_reason{};
+    std::string boundary_kind{};
+    DbtBoundaryKind boundary{DbtBoundaryKind::None};
+    std::vector<DbtIrInstruction> instructions{};
+};
+
+const char* dbt_ir_opcode_name(DbtIrOpcode opcode);
