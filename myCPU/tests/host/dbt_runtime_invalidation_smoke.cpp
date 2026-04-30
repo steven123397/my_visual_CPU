@@ -4,6 +4,7 @@
 
 #include "../../src/cpu.h"
 #include "../../src/exec/dbt_executable_cache.h"
+#include "../../src/exec/dbt_host_emitter.h"
 #include "../../src/exec/dbt_jit_engine.h"
 #include "../../src/exec/dbt_runtime_dispatch.h"
 #include "../../src/exec/dbt_runtime_invalidation.h"
@@ -42,6 +43,18 @@ bool populate_cache(DbtExecutableCacheDryRun& cache, uint64_t pc) {
     CPU cpu;
     cpu_init(cpu, kEntry);
     return cache.insert(lowered_contract(ram, bus, cpu, pc));
+}
+
+bool populate_runtime_cache(DbtExecutableCacheRuntime& cache, uint64_t pc) {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    write32(ram, pc, kAddiX1One);
+    DbtJitEngineDryRun engine;
+    const DbtJitDryRunResult dry_run = engine.dry_run_block(cpu, bus, pc, pc);
+    DbtHostExecutable executable = emit_dbt_host_block(dry_run.lowering);
+    return cache.insert(plan_dbt_runtime_dispatch_contract(dry_run), executable);
 }
 
 bool test_runtime_hook_enforces_guest_store_overlap() {
@@ -148,6 +161,30 @@ bool test_runtime_hook_formats_empty_cache_event() {
                   "runtime invalidation formatter should expose dry-run flag");
 }
 
+bool test_runtime_hook_releases_runtime_host_executable_on_overlap() {
+    DbtExecutableCacheRuntime cache;
+    const bool inserted = populate_runtime_cache(cache, kEntry);
+
+    const DbtRuntimeInvalidationHookResult result =
+        apply_dbt_runtime_invalidation_hook(cache, DbtRuntimeInvalidationEvent{
+                                                       .kind = DbtInvalidationEventKind::GuestStore,
+                                                       .addr = kEntry,
+                                                       .size = 4,
+                                                   });
+    const DbtExecutableCacheLookup lookup = cache.lookup(kEntry, kEntry);
+    const DbtExecutableCacheDryRunStats stats = cache.stats();
+
+    return expect(inserted, "runtime invalidation setup should cache host executable") &&
+           expect(result.ok && result.invalidated && result.entries_removed == 1 &&
+                      result.reason == "guest-store-overlaps-block" &&
+                      result.stale_dispatch_prevented,
+                  "runtime invalidation hook should invalidate resident host executable") &&
+           expect(!lookup.hit && cache.size() == 0,
+                  "runtime invalidation hook should remove host executable entry") &&
+           expect(stats.host_executables_released == 1,
+                  "runtime invalidation hook should release invalidated host executable");
+}
+
 }  // namespace
 
 int main() {
@@ -161,6 +198,9 @@ int main() {
         return 1;
     }
     if (!test_runtime_hook_formats_empty_cache_event()) {
+        return 1;
+    }
+    if (!test_runtime_hook_releases_runtime_host_executable_on_overlap()) {
         return 1;
     }
     std::puts("dbt_runtime_invalidation_smoke: PASS");

@@ -59,8 +59,9 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 ## 非目标
 
 - 当前已完成 `DBT translator + IR v0 dry-run`、metadata-only block cache、
-  executable memory policy 和 host code emission v0 子阶段，但仍不实现默认 JIT backend、
-  persistent / executable block cache 或 helper runtime execution。
+  executable memory policy、host code emission v0 和 executable cache runtime hookup
+  子阶段，但仍不实现默认 JIT backend、persistent cache、workload-level scheduler 或
+  helper runtime execution。
 - 不在默认执行路径申请可执行内存，不把宿主平台相关代码生成接入默认 backend。
 - 不改变 `InstructionSemantics` 的 ISA 真值来源定位。
 - 不改变 guest 可见 fault / trap / CSR / memory 语义。
@@ -126,6 +127,11 @@ helper runtime execution 或 multicore / coherence 仍需要新的设计和计�
   `DbtInvalidationPlan` 强制删除 overlapping guest store、primary image load、
   `sfence.vma` 等事件命中的 resident contract；它只证明 stale dispatch 会被阻止，
   不保存 host code，不申请 executable memory，也不执行 guest code。
+- executable cache runtime hookup 已完成第一刀：`DbtExecutableCacheRuntime` 在 host smoke
+  显式 opt-in 时可把已通过 differential guardrail 的 `DbtHostExecutable` 作为 resident
+  entry 挂到既有 executable-cache invalidation 合同上；lookup 命中可复用 resident host
+  executable，guest store / image / reset / `satp` / `sfence.vma` / region 事件会释放并删除
+  resident executable。它不做 persistent cache，不接默认 backend，也不执行 helper runtime。
 - reference fallback step bridge dry-run 已完成第一刀：`dbt_reference_fallback`
   只把 runtime dispatch contract 的 plain reference step 和 helper-bridge-to-reference
   路径转成未来 fallback 入口合同，保留 reject / helper metadata 和 no-execution flags；
@@ -170,8 +176,9 @@ helper runtime execution 或 multicore / coherence 仍需要新的设计和计�
   host code，不接入 backend，也不承担 persistent lifecycle。
 
 本阶段完成后，项目可以声称“已有最小 DBT translator / IR dry-run 前端、host code
-emission v0 和 host-smoke-only opt-in executable JIT block”。它仍不能声称已有默认
-JIT backend、persistent / executable block cache 或 helper inline / replay runtime。
+emission v0、host-smoke-only opt-in executable JIT block 和 opt-in runtime executable
+cache hookup”。它仍不能声称已有默认 JIT backend、persistent cache、workload-level
+scheduler 或 helper inline / replay runtime。
 
 ## 当前合同
 
@@ -273,6 +280,15 @@ image / reset / `satp` / `sfence.vma` / region 属性变化事件强制删除 re
 并显式计数 stale dispatch prevention；它不保存 host code，不申请 executable memory，
 也不得参与真实 dispatch。
 
+`executable cache runtime hookup` 只允许在 host smoke 显式 opt-in 时接收已经生成的
+`DbtHostExecutable`。resident entry 必须继续绑定 lowered-block
+`DbtRuntimeDispatchContract`，cache miss 路径必须先通过 IR eval differential guardrail
+再把 host executable 放入 cache；cache hit 路径仍需重新规划 / 翻译当前 guest block，并用
+IR eval differential 校验 resident host executable 的输出后才允许提交 CPU state。runtime
+cache 复用现有 invalidation matrix；命中 guest store、image / reset、`satp`、`sfence.vma`
+或 region 属性变化时必须释放 executable memory 并移除 entry。它不持久化 host code，不接
+默认 backend，不实现 workload-level scheduler，也不执行 helper runtime。
+
 第一版 block 终止条件包括控制流转移、system boundary、decode / fetch / execute fault
 风险、跨 page / 权限 / MMIO / side-effect region / self-modifying-code 风险边界，以及
 unsupported / illegal instruction。
@@ -302,6 +318,9 @@ Helper 只能复用已有 simulator 事实来源：
   它区分 JIT miss、helper bridge 和 trap/fault placeholder，但仍不执行 reference step。
 - 当前 executable memory policy 只管理宿主内存生命周期和权限切换；host emitter smoke
   和 opt-in runtime harness 可以真实调用生成函数，但默认 backend 仍不接入 JIT。
+- 当前 executable cache runtime hookup 只让 host smoke 显式持有 / 复用 / 释放已生成的
+  host executable；它仍拒绝 helper / reference contract 入 cache，也不把 cache hit 变成
+  默认 runtime dispatch 授权。
 - load / store / fetch / page walk 走 `AddressSpace -> Bus -> Ram/Device` 现有边界。
 - trap / interrupt / exception 走既有 trap controller 和 commit boundary。
 - debug / profile 继续由现有 backend 记录；translator 不能自行制造 guest 可见状态。
@@ -374,6 +393,12 @@ range、overlapping guest store、primary image load、debug reset、`satp` writ
 `sfence.vma` 和 region 属性变化等 metadata 删除合同。它仍不是 runtime cache，不持久化，
 不缓存 executable host code，也不承担 helper replay 或 scheduler 职责。
 
+当前 `DbtExecutableCacheRuntime` 只把同一 invalidation matrix 用于 host-smoke-only
+executable resident entry：成功缓存后拥有 `DbtHostExecutable` 的 executable memory，
+lookup 命中可供 opt-in runtime harness 复用；任何命中 invalidation 的事件都会释放该内存
+并删除 entry，阻止 stale dispatch。它不是 persistent cache，也不接默认 backend 或 helper
+runtime execution。
+
 ## 后续推进口径
 
 在证据链和原型边界阶段，后续窄任务不再单独创建 plan 文档。允许直接推进的任务包括：
@@ -389,7 +414,7 @@ range、overlapping guest store、primary image load、debug reset、`satp` writ
 
 - 真正 JIT engine、runtime DBT translator 或 translator 执行路径接入。
 - executable IR lowering、host-specific lowering 或 runtime lowering dispatch。
-- runtime JIT dispatch、host code cache 或 helper replay execution。
+- 默认 runtime JIT dispatch、persistent host code cache 或 helper replay execution。
 - IR 语义扩展或 differential execution。
 - 默认 runtime 中的 host code emission、executable memory policy 扩展或宿主平台相关代码生成。
 - persistent block cache、block lifecycle 和 invalidation implementation。
@@ -398,8 +423,8 @@ range、overlapping guest store、primary image load、debug reset、`satp` writ
 - multicore、coherence 或新的 memory consistency 模型。
 
 `DBT translator + IR v0 dry-run` 已完成并归档；后续如果只是在该 v0 范围内补窄测试，
-可以直接更新状态并守住相应 host smoke。若进入 executable lowering、host code、
-runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划。
+可以直接更新状态并守住相应 host smoke。若进入默认 runtime scheduler、persistent
+block cache 或 workload-level JIT harness，需要再开新的设计 / 计划。
 
 ## 验证思路
 
@@ -416,6 +441,9 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
 - `cd myCPU && make test-host-dbt_ir_lowering_smoke`
 - `cd myCPU && make test-host-dbt_host_emitter_smoke`
 - `cd myCPU && make test-host-dbt_block_cache_smoke`
+- `cd myCPU && make test-host-dbt_executable_cache_smoke`
+- `cd myCPU && make test-host-dbt_runtime_harness_smoke`
+- `cd myCPU && make test-host-dbt_runtime_invalidation_smoke`
 - `cd myCPU && make test-host-run_debug_cli_probe`
 - `cd myCPU && make test-host-execution_profile_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
@@ -458,8 +486,9 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
   executable memory policy、
   host code emission v0、
   opt-in runtime harness + differential guardrail、
+  executable cache runtime hookup、
   `dbt_ir_eval` semantic differential dry-run 的更宽整数覆盖，以及 metadata-only
   `dbt_block_cache` dry-run / invalidation matrix hardening。
-- 当前仍未启动默认 JIT backend、persistent / executable block cache、helper runtime execution、multicore /
+- 当前仍未启动默认 JIT backend、persistent cache、helper runtime execution、multicore /
   coherence、write-back cache、I-cache 和 cache maintenance instruction。
 - 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。

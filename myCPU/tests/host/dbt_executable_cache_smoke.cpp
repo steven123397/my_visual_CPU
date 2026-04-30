@@ -3,6 +3,7 @@
 
 #include "../../src/cpu.h"
 #include "../../src/exec/dbt_executable_cache.h"
+#include "../../src/exec/dbt_host_emitter.h"
 #include "../../src/exec/dbt_jit_engine.h"
 #include "../../src/exec/dbt_runtime_dispatch.h"
 #include "../../src/mem/bus.h"
@@ -42,6 +43,24 @@ DbtRuntimeDispatchContract helper_contract(Ram& ram,
     write32(ram, pc, kLwX1FromX0);
     DbtJitEngineDryRun engine;
     return plan_dbt_runtime_dispatch_contract(engine.dry_run_block(cpu, bus, pc, pc));
+}
+
+struct RuntimeExecutableFixture {
+    DbtRuntimeDispatchContract contract{};
+    DbtHostExecutable executable{};
+};
+
+RuntimeExecutableFixture runtime_executable_fixture(Ram& ram,
+                                                    Bus& bus,
+                                                    CPU& cpu,
+                                                    uint64_t pc) {
+    write32(ram, pc, kAddiX1One);
+    DbtJitEngineDryRun engine;
+    const DbtJitDryRunResult dry_run = engine.dry_run_block(cpu, bus, pc, pc);
+    return RuntimeExecutableFixture{
+        .contract = plan_dbt_runtime_dispatch_contract(dry_run),
+        .executable = emit_dbt_host_block(dry_run.lowering),
+    };
 }
 
 bool test_executable_cache_enforces_overlapping_store_invalidation() {
@@ -142,6 +161,53 @@ bool test_executable_cache_global_invalidation_enforcement_is_stable() {
                   "global executable cache invalidation should count removed entries");
 }
 
+bool test_executable_cache_runtime_entry_owns_host_executable_and_invalidates() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    RuntimeExecutableFixture fixture = runtime_executable_fixture(ram, bus, cpu, kEntry);
+    DbtExecutableCacheRuntime cache;
+    const bool inserted = cache.insert(fixture.contract, fixture.executable);
+    const DbtExecutableCacheLookup before = cache.lookup(kEntry, kEntry);
+
+    uint64_t gprs[32]{};
+    const uint64_t next_pc =
+        before.executable != nullptr
+            ? execute_dbt_host_block(*before.executable, gprs, kEntry)
+            : kEntry;
+
+    const DbtExecutableCacheInvalidationResult invalidation =
+        cache.enforce_invalidation(DbtInvalidationEventKind::GuestStore, kEntry, 4);
+    const DbtExecutableCacheLookup after = cache.lookup(kEntry, kEntry);
+    const DbtExecutableCacheDryRunStats stats = cache.stats();
+
+    return expect(fixture.contract.ok &&
+                      fixture.contract.kind == DbtRuntimeDispatchKind::LoweredBlock,
+                  "runtime executable cache setup should create lowered dispatch contract") &&
+           expect(fixture.executable.memory.data == nullptr,
+                  "runtime executable cache should take ownership of host executable") &&
+           expect(inserted, "runtime executable cache should accept host executable") &&
+           expect(before.hit && before.has_host_executable &&
+                      before.executable != nullptr && before.executable->ok &&
+                      before.executable->generated_host_code &&
+                      before.executable->requested_executable_memory,
+                  "runtime executable cache lookup should expose resident host executable") &&
+           expect(gprs[1] == 1 && next_pc == kEntry + 4,
+                  "resident host executable should remain callable through cache lookup") &&
+           expect(invalidation.invalidated && invalidation.entries_removed == 1 &&
+                      invalidation.reason == "guest-store-overlaps-block" &&
+                      invalidation.stale_dispatch_prevented,
+                  "runtime executable cache invalidation should remove resident host code") &&
+           expect(!after.hit && cache.size() == 0,
+                  "invalidated runtime executable cache entry should no longer be dispatchable") &&
+           expect(stats.host_executables_inserted == 1 &&
+                      stats.host_executables_released == 1 &&
+                      stats.stale_dispatches_prevented == 1,
+                  "runtime executable cache should count host executable lifecycle");
+}
+
 }  // namespace
 
 int main() {
@@ -152,6 +218,9 @@ int main() {
         return 1;
     }
     if (!test_executable_cache_global_invalidation_enforcement_is_stable()) {
+        return 1;
+    }
+    if (!test_executable_cache_runtime_entry_owns_host_executable_and_invalidates()) {
         return 1;
     }
     std::puts("dbt_executable_cache_smoke: PASS");

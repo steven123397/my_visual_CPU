@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../../src/cpu.h"
+#include "../../src/exec/dbt_executable_cache.h"
 #include "../../src/exec/dbt_runtime_harness.h"
 #include "../../src/mem/bus.h"
 #include "../../src/mem/ram.h"
@@ -155,6 +156,54 @@ bool test_opt_in_runtime_harness_rejects_helper_blocks_without_state_mutation() 
                   "helper rejection should leave CPU architectural state untouched");
 }
 
+bool test_opt_in_runtime_harness_reuses_runtime_executable_cache() {
+    const std::vector<uint32_t> program{
+        addi(1, 0, 3),
+        addi(2, 1, 4),
+    };
+
+    Ram ram;
+    Bus bus(ram);
+    write_program(ram, program);
+
+    CPU first_cpu;
+    cpu_init(first_cpu, kEntry);
+    CPU second_cpu;
+    cpu_init(second_cpu, kEntry);
+
+    DbtExecutableCacheRuntime cache;
+    const uint64_t block_end =
+        kEntry + static_cast<uint64_t>((program.size() - 1) * sizeof(uint32_t));
+
+    const DbtRuntimeHarnessResult first =
+        run_dbt_runtime_harness_block_with_cache(first_cpu, bus, cache, kEntry, block_end);
+    const DbtExecutableCacheDryRunStats after_first = cache.stats();
+    const DbtRuntimeHarnessResult second =
+        run_dbt_runtime_harness_block_with_cache(second_cpu, bus, cache, kEntry, block_end);
+    const DbtExecutableCacheDryRunStats after_second = cache.stats();
+
+    return expect(first.ok && !first.used_executable_cache &&
+                      first.inserted_executable_cache,
+                  "first opt-in runtime cache execution should emit and cache host code") &&
+           expect(second.ok && second.used_executable_cache &&
+                      !second.inserted_executable_cache,
+                  "second opt-in runtime cache execution should reuse resident host code") &&
+           expect(first.executed_host_code && second.executed_host_code &&
+                      first.used_executable_memory && second.used_executable_memory,
+                  "runtime cache harness should execute host code through executable memory") &&
+           expect(first_cpu.core().read_gpr(2) == 7 &&
+                      second_cpu.core().read_gpr(2) == 7 &&
+                      first_cpu.core().pc() == second_cpu.core().pc(),
+                  "runtime cache harness should commit the same architected result") &&
+           expect(after_first.host_executables_inserted == 1 &&
+                      after_first.host_executables_released == 0,
+                  "first runtime cache execution should make one host executable resident") &&
+           expect(after_second.host_executables_inserted == 1 &&
+                      after_second.host_executables_released == 0 &&
+                      after_second.hits == 1 && after_second.misses == 1,
+                  "runtime cache reuse should hit without emitting another resident executable");
+}
+
 bool test_default_machine_backend_does_not_enable_jit() {
     const Machine machine;
 
@@ -171,6 +220,9 @@ int main() {
         return 1;
     }
     if (!test_opt_in_runtime_harness_rejects_helper_blocks_without_state_mutation()) {
+        return 1;
+    }
+    if (!test_opt_in_runtime_harness_reuses_runtime_executable_cache()) {
         return 1;
     }
     if (!test_default_machine_backend_does_not_enable_jit()) {

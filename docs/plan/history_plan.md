@@ -23,6 +23,21 @@
 
 ### 2026-04-30
 
+#### mainline-wave6-executable-cache-runtime-hookup-plan
+
+- 原文件：`mainline_wave6_executable_cache_runtime_hookup_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 executable cache runtime hookup 第一刀。
+  本轮新增 `DbtExecutableCacheRuntime` opt-in API，把已生成并通过 differential guardrail 的
+  `DbtHostExecutable` 接入现有 executable-cache invalidation 合同；host smoke 固定
+  resident host executable lookup / reuse、guest store / global invalidation 释放与删除，
+  以及 runtime harness cache miss 生成 / cache hit 复用的 differential guardrail。
+- 实现过程摘要：整体保持 host-smoke-only 和显式 opt-in。cache miss 路径先执行并通过
+  IR eval differential 后才把 host executable 放入 runtime cache；cache hit 路径重新规划 /
+  翻译当前 guest block，并继续用 differential guardrail 校验 resident executable 输出后才提交
+  CPU state。默认 backend、persistent cache、workload-level scheduler、helper runtime
+  execution、multicore、coherence 和新的 memory consistency 模型仍不启动。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave6-jit-execution-layer-plan
 
 - 原文件：`wave6_jit_execution_layer_plan.md`

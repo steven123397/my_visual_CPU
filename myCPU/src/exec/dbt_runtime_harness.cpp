@@ -8,6 +8,8 @@
 #include "dbt_host_emitter.h"
 #include "dbt_ir_eval.h"
 #include "dbt_ir_lowering.h"
+#include "dbt_jit_engine.h"
+#include "dbt_runtime_dispatch.h"
 #include "dbt_translator.h"
 
 namespace {
@@ -88,27 +90,37 @@ DbtRuntimeHarnessResult reject_from_emitter(const DbtHostExecutable& executable,
     };
 }
 
+DbtRuntimeHarnessResult reject_from_cache_contract(const DbtRuntimeDispatchContract& contract,
+                                                   uint64_t start_pc,
+                                                   uint64_t end_pc) {
+    return DbtRuntimeHarnessResult{
+        .ok = false,
+        .start_pc = start_pc,
+        .end_pc = end_pc,
+        .reject_kind = contract.reject_kind,
+        .reject_pc = contract.reject_pc,
+        .reject_raw = contract.reject_raw,
+        .reject_reason = reject_reason_or_default(contract.reject_reason,
+                                                  "executable-cache-contract-rejected"),
+        .fallback_required = true,
+    };
+}
+
 std::string hex_u64(uint64_t value) {
     char buffer[32];
     std::snprintf(buffer, sizeof(buffer), "0x%llx", static_cast<unsigned long long>(value));
     return buffer;
 }
 
-}  // namespace
-
-DbtRuntimeHarnessResult run_dbt_runtime_harness_block(CPU& cpu,
-                                                      Bus& bus,
-                                                      uint64_t start_pc,
-                                                      uint64_t end_pc) {
-    const std::array<uint64_t, 32> input_gpr = snapshot_gprs(cpu);
-    const uint64_t input_pc = cpu.core().pc();
-
-    DbtBlockPlan plan = plan_dbt_block(cpu, bus, start_pc, end_pc);
-    DbtTranslationUnit unit = translate_dbt_block(plan);
-    if (!unit.ok) {
-        return reject_from_translation(unit, start_pc, end_pc);
-    }
-
+DbtRuntimeHarnessResult execute_with_guardrail(CPU& cpu,
+                                               const DbtTranslationUnit& unit,
+                                               const DbtHostExecutable& executable,
+                                               const std::array<uint64_t, 32>& input_gpr,
+                                               uint64_t input_pc,
+                                               uint64_t start_pc,
+                                               uint64_t end_pc,
+                                               bool used_cache,
+                                               bool inserted_cache) {
     const DbtIrEvaluationResult expected =
         evaluate_dbt_ir_unit(unit, DbtIrEvaluationInput{
                                        .gpr = input_gpr,
@@ -122,19 +134,9 @@ DbtRuntimeHarnessResult run_dbt_runtime_harness_block(CPU& cpu,
             .reject_kind = expected.reject_kind,
             .reject_reason = reject_reason_or_default(expected.reject_reason, "ir-eval-rejected"),
             .fallback_required = true,
+            .used_executable_cache = used_cache,
+            .inserted_executable_cache = inserted_cache,
         };
-    }
-
-    const DbtIrLoweringResult lowering = lower_dbt_ir_unit(unit);
-    if (!lowering.ok) {
-        return reject_from_lowering(lowering, start_pc, end_pc);
-    }
-
-    DbtHostExecutable executable = emit_dbt_host_block(lowering);
-    if (!executable.ok) {
-        DbtRuntimeHarnessResult rejected = reject_from_emitter(executable, start_pc, end_pc);
-        release_dbt_host_executable(executable);
-        return rejected;
     }
 
     std::array<uint64_t, 32> output_gpr = input_gpr;
@@ -153,6 +155,8 @@ DbtRuntimeHarnessResult run_dbt_runtime_harness_block(CPU& cpu,
         .fallback_required = !differential_matched,
         .executed_host_code = true,
         .used_executable_memory = executable.requested_executable_memory,
+        .used_executable_cache = used_cache,
+        .inserted_executable_cache = inserted_cache,
         .executed_guest_code = true,
         .mutated_cpu_state = differential_matched,
         .differential_checked = true,
@@ -170,7 +174,114 @@ DbtRuntimeHarnessResult run_dbt_runtime_harness_block(CPU& cpu,
         result.reject_reason = "differential-mismatch";
     }
 
+    return result;
+}
+
+}  // namespace
+
+DbtRuntimeHarnessResult run_dbt_runtime_harness_block(CPU& cpu,
+                                                      Bus& bus,
+                                                      uint64_t start_pc,
+                                                      uint64_t end_pc) {
+    const std::array<uint64_t, 32> input_gpr = snapshot_gprs(cpu);
+    const uint64_t input_pc = cpu.core().pc();
+
+    DbtBlockPlan plan = plan_dbt_block(cpu, bus, start_pc, end_pc);
+    DbtTranslationUnit unit = translate_dbt_block(plan);
+    if (!unit.ok) {
+        return reject_from_translation(unit, start_pc, end_pc);
+    }
+
+    const DbtIrLoweringResult lowering = lower_dbt_ir_unit(unit);
+    if (!lowering.ok) {
+        return reject_from_lowering(lowering, start_pc, end_pc);
+    }
+
+    DbtHostExecutable executable = emit_dbt_host_block(lowering);
+    if (!executable.ok) {
+        DbtRuntimeHarnessResult rejected = reject_from_emitter(executable, start_pc, end_pc);
+        release_dbt_host_executable(executable);
+        return rejected;
+    }
+
+    DbtRuntimeHarnessResult result = execute_with_guardrail(cpu,
+                                                            unit,
+                                                            executable,
+                                                            input_gpr,
+                                                            input_pc,
+                                                            start_pc,
+                                                            end_pc,
+                                                            false,
+                                                            false);
+
     release_dbt_host_executable(executable);
+    return result;
+}
+
+DbtRuntimeHarnessResult run_dbt_runtime_harness_block_with_cache(
+    CPU& cpu,
+    Bus& bus,
+    DbtExecutableCacheRuntime& cache,
+    uint64_t start_pc,
+    uint64_t end_pc) {
+    const std::array<uint64_t, 32> input_gpr = snapshot_gprs(cpu);
+    const uint64_t input_pc = cpu.core().pc();
+
+    DbtExecutableCacheLookup cached = cache.lookup(start_pc, end_pc);
+    if (cached.hit && cached.has_host_executable && cached.executable != nullptr) {
+        DbtJitEngineDryRun engine;
+        const DbtJitDryRunResult dry_run = engine.dry_run_block(cpu, bus, start_pc, end_pc);
+        const DbtRuntimeDispatchContract contract =
+            plan_dbt_runtime_dispatch_contract(dry_run);
+        if (!contract.ok || contract.kind != DbtRuntimeDispatchKind::LoweredBlock) {
+            return reject_from_cache_contract(contract, start_pc, end_pc);
+        }
+        return execute_with_guardrail(cpu,
+                                      dry_run.translation,
+                                      *cached.executable,
+                                      input_gpr,
+                                      input_pc,
+                                      start_pc,
+                                      end_pc,
+                                      true,
+                                      false);
+    }
+
+    DbtJitEngineDryRun engine;
+    const DbtJitDryRunResult dry_run = engine.dry_run_block(cpu, bus, start_pc, end_pc);
+    const DbtRuntimeDispatchContract contract =
+        plan_dbt_runtime_dispatch_contract(dry_run);
+    if (!contract.ok || contract.kind != DbtRuntimeDispatchKind::LoweredBlock) {
+        return reject_from_cache_contract(contract, start_pc, end_pc);
+    }
+
+    DbtHostExecutable executable = emit_dbt_host_block(dry_run.lowering);
+    if (!executable.ok) {
+        DbtRuntimeHarnessResult rejected = reject_from_emitter(executable, start_pc, end_pc);
+        release_dbt_host_executable(executable);
+        return rejected;
+    }
+
+    DbtRuntimeHarnessResult result = execute_with_guardrail(cpu,
+                                                            dry_run.translation,
+                                                            executable,
+                                                            input_gpr,
+                                                            input_pc,
+                                                            start_pc,
+                                                            end_pc,
+                                                            false,
+                                                            false);
+    if (!result.ok) {
+        release_dbt_host_executable(executable);
+        return result;
+    }
+
+    const bool inserted = cache.insert(contract, executable);
+    result.inserted_executable_cache = inserted;
+    if (!inserted) {
+        release_dbt_host_executable(executable);
+    }
+
     return result;
 }
 
@@ -193,6 +304,7 @@ std::string format_dbt_runtime_harness_result(const DbtRuntimeHarnessResult& res
         << " host-code=" << bool_name(result.executed_host_code)
         << " exec-mem=" << bool_name(result.used_executable_memory)
         << " guest-exec=" << bool_name(result.executed_guest_code)
+        << " exec-cache=" << (result.used_executable_cache ? "hit" : (result.inserted_executable_cache ? "inserted" : "none"))
         << " reject=" << dbt_reject_kind_name(result.reject_kind)
         << " reason=" << (result.reject_reason.empty() ? "none" : result.reject_reason);
     return out.str();
