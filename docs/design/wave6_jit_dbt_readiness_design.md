@@ -99,6 +99,9 @@ block cache 或 multicore / coherence 仍需要新的设计和计划。
   的 preflight 结论。
 - v0 dry-run 的输出是 `DbtTranslationUnit`，只用于 host smoke 和后续 metadata /
   differential 验证，不接入默认 backend 调度。
+- 已新增 `dbt_ir_eval`，只在 host smoke 中解释 IR v0 的寄存器语义，并与 reference
+  execution 对比 GPR、fallthrough PC 和 retired instruction count；它不读取 memory、
+  不提交 CPU state，也不作为 runtime 执行路径。
 
 本阶段完成后，项目可以声称“已有最小 DBT translator / IR dry-run 前端”，但仍不能声称
 已有 JIT engine、runtime JIT、host code emission、persistent block cache 或 helper
@@ -150,6 +153,10 @@ inline / replay runtime。
 `IR v0 dry-run` 只允许覆盖已经由 `DbtBlockPlan` 判定为完整 inlineable 的 pure
 straight-line integer 子集。memory、CSR、trap、atomic、vector、control-flow、fence /
 TLB flush 或 unsupported instruction 都必须保持 reject，不允许翻译前缀。
+
+`IR semantic differential dry-run` 只允许解释已成功翻译的 IR v0，并把结果同
+`InstructionSemantics` / reference 执行对齐。当前比较范围限于 GPR、fallthrough PC 和
+retired instruction count；它不是 IR lowering，也不是 helper replay。
 
 第一版 block 终止条件包括控制流转移、system boundary、decode / fetch / execute fault
 风险、跨 page / 权限 / MMIO / side-effect region / self-modifying-code 风险边界，以及
@@ -261,6 +268,7 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
 - `cd myCPU && make test-host-interpreter_dbt_prototype_smoke`
 - `cd myCPU && make test-host-dbt_block_plan_smoke`
 - `cd myCPU && make test-host-dbt_translator_smoke`
+- `cd myCPU && make test-host-dbt_ir_eval_smoke`
 - `cd myCPU && make test-host-run_debug_cli_probe`
 - `cd myCPU && make test-host-execution_profile_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
@@ -290,7 +298,8 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
 - 当前已经完成 hot-path candidate、per-PC / branch-target 观察、translation contract、
   host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-run、functional
   fallback replay 等价性、first-boundary taxonomy、共享 `DbtBlockPlan` analyzer，以及
-  非执行 `dbt_ir` / `dbt_translator` v0 dry-run。
+  非执行 `dbt_ir` / `dbt_translator` v0 dry-run 和 `dbt_ir_eval` semantic differential
+  dry-run。
 - 当前仍未启动 JIT engine、host code emission、长期 block cache、multicore /
   coherence、write-back cache、I-cache 和 cache maintenance instruction。
 - 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。
