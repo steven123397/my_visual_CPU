@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstdio>
+#include <string>
 
 #include "../../src/cpu.h"
 #include "../../src/exec/dbt_block_plan.h"
@@ -13,6 +14,8 @@ constexpr uint64_t kEntry = MEM_BASE;
 constexpr uint32_t kAddiX1One = 0x00100093U;    // addi x1, x0, 1
 constexpr uint32_t kAddiX2X1Two = 0x00208113U;  // addi x2, x1, 2
 constexpr uint32_t kLwX1FromX0 = 0x00002083U;   // lw x1, 0(x0)
+constexpr uint32_t kSwX2To8FromX0 = 0x00202423U;  // sw x2, 8(x0)
+constexpr uint32_t kCsrrwX1MstatusX2 = 0x300110f3U;  // csrrw x1, mstatus, x2
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;   // jal x0, 8
 
 bool expect(bool condition, const char* message) {
@@ -99,6 +102,70 @@ bool test_shared_block_analyzer_reports_helper_and_control_boundaries() {
                   "shared DBT block analyzer should preserve stable boundary string");
 }
 
+bool test_shared_block_analyzer_builds_helper_plans() {
+    Ram load_ram;
+    Bus load_bus(load_ram);
+    CPU load_cpu;
+    cpu_init(load_cpu, kEntry);
+    write32(load_ram, kEntry + 0, kLwX1FromX0);
+    const DbtBlockPlan load_plan = plan_dbt_block(load_cpu, load_bus, kEntry, kEntry);
+
+    Ram store_ram;
+    Bus store_bus(store_ram);
+    CPU store_cpu;
+    cpu_init(store_cpu, kEntry);
+    write32(store_ram, kEntry + 0, kSwX2To8FromX0);
+    const DbtBlockPlan store_plan = plan_dbt_block(store_cpu, store_bus, kEntry, kEntry);
+
+    Ram csr_ram;
+    Bus csr_bus(csr_ram);
+    CPU csr_cpu;
+    cpu_init(csr_cpu, kEntry);
+    write32(csr_ram, kEntry + 0, kCsrrwX1MstatusX2);
+    const DbtBlockPlan csr_plan = plan_dbt_block(csr_cpu, csr_bus, kEntry, kEntry);
+
+    Ram control_ram;
+    Bus control_bus(control_ram);
+    CPU control_cpu;
+    cpu_init(control_cpu, kEntry);
+    write32(control_ram, kEntry + 0, kJalX0Skip8);
+    const DbtBlockPlan control_plan = plan_dbt_block(control_cpu, control_bus, kEntry, kEntry);
+
+    return expect(!load_plan.ok, "load helper setup should reject block") &&
+           expect(load_plan.helper_plan.required,
+                  "load helper-required plan should expose helper metadata") &&
+           expect(load_plan.helper_plan.kind == DbtHelperKind::MemoryLoad,
+                  "load helper plan should classify memory load") &&
+           expect(load_plan.helper_plan.pc == kEntry && load_plan.helper_plan.raw == kLwX1FromX0,
+                  "load helper plan should preserve PC and raw instruction") &&
+           expect(load_plan.helper_plan.rd == 1 && load_plan.helper_plan.addr == 0 &&
+                      load_plan.helper_plan.size == 4 && load_plan.helper_plan.sign_extend,
+                  "load helper plan should preserve rd, address, size, and sign-extension") &&
+           expect(!store_plan.ok, "store helper setup should reject block") &&
+           expect(store_plan.helper_plan.required,
+                  "store helper-required plan should expose helper metadata") &&
+           expect(store_plan.helper_plan.kind == DbtHelperKind::MemoryStore,
+                  "store helper plan should classify memory store") &&
+           expect(store_plan.helper_plan.addr == 8 && store_plan.helper_plan.size == 4 &&
+                      store_plan.helper_plan.commit_at_boundary &&
+                      store_plan.helper_plan.non_speculative,
+                  "store helper plan should preserve address, size, and ordering flags") &&
+           expect(!csr_plan.ok, "CSR helper setup should reject block") &&
+           expect(csr_plan.helper_plan.required,
+                  "CSR helper-required plan should expose helper metadata") &&
+           expect(csr_plan.helper_plan.kind == DbtHelperKind::CsrWrite,
+                  "CSR helper plan should classify CSR write") &&
+           expect(csr_plan.helper_plan.rd == 1 && csr_plan.helper_plan.csr_addr == 0x300,
+                  "CSR helper plan should preserve rd and CSR address") &&
+           expect(!control_plan.ok, "control-flow setup should reject block") &&
+           expect(!control_plan.helper_plan.required,
+                  "fallback-required plan should not expose helper metadata") &&
+           expect(dbt_helper_kind_name(DbtHelperKind::MemoryLoad) == std::string("memory-load"),
+                  "helper kind name should expose memory-load") &&
+           expect(dbt_helper_kind_name(DbtHelperKind::CsrWrite) == std::string("csr-write"),
+                  "helper kind name should expose csr-write");
+}
+
 bool test_shared_hot_path_and_invalidation_contracts() {
     Ram ram;
     Bus bus(ram);
@@ -160,6 +227,9 @@ int main() {
         return 1;
     }
     if (!test_shared_block_analyzer_reports_helper_and_control_boundaries()) {
+        return 1;
+    }
+    if (!test_shared_block_analyzer_builds_helper_plans()) {
         return 1;
     }
     if (!test_shared_hot_path_and_invalidation_contracts()) {

@@ -39,6 +39,20 @@ constexpr uint32_t encode_r(uint8_t funct7, uint8_t rs2, uint8_t rs1, uint8_t fu
            static_cast<uint32_t>(opcode);
 }
 
+constexpr uint32_t encode_u(uint32_t imm, uint8_t rd, uint8_t opcode) {
+    return (imm & 0xfffff000U) |
+           (static_cast<uint32_t>(rd) << 7) |
+           static_cast<uint32_t>(opcode);
+}
+
+constexpr uint32_t lui(uint8_t rd, uint32_t imm) {
+    return encode_u(imm, rd, 0x37);
+}
+
+constexpr uint32_t auipc(uint8_t rd, uint32_t imm) {
+    return encode_u(imm, rd, 0x17);
+}
+
 constexpr uint32_t addi(uint8_t rd, uint8_t rs1, int32_t imm) {
     return encode_i(static_cast<uint32_t>(imm), rs1, 0, rd, 0x13);
 }
@@ -73,6 +87,22 @@ constexpr uint32_t srli(uint8_t rd, uint8_t rs1, uint8_t shamt) {
 
 constexpr uint32_t srai(uint8_t rd, uint8_t rs1, uint8_t shamt) {
     return encode_i((0x20U << 5) | shamt, rs1, 5, rd, 0x13);
+}
+
+constexpr uint32_t addiw(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 0, rd, 0x1B);
+}
+
+constexpr uint32_t slliw(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i(shamt, rs1, 1, rd, 0x1B);
+}
+
+constexpr uint32_t srliw(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i(shamt, rs1, 5, rd, 0x1B);
+}
+
+constexpr uint32_t sraiw(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i((0x20U << 5) | shamt, rs1, 5, rd, 0x1B);
 }
 
 constexpr uint32_t add(uint8_t rd, uint8_t rs1, uint8_t rs2) {
@@ -113,6 +143,26 @@ constexpr uint32_t bit_or(uint8_t rd, uint8_t rs1, uint8_t rs2) {
 
 constexpr uint32_t bit_and(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return encode_r(0x00, rs2, rs1, 7, rd, 0x33);
+}
+
+constexpr uint32_t addw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 0, rd, 0x3B);
+}
+
+constexpr uint32_t subw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x20, rs2, rs1, 0, rd, 0x3B);
+}
+
+constexpr uint32_t sllw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 1, rd, 0x3B);
+}
+
+constexpr uint32_t srlw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 5, rd, 0x3B);
+}
+
+constexpr uint32_t sraw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x20, rs2, rs1, 5, rd, 0x3B);
 }
 
 void write_program(Ram& ram, const std::vector<uint32_t>& program) {
@@ -255,6 +305,54 @@ bool test_ir_eval_matches_reference_for_wider_integer_ir_v0() {
            expect_gprs_equal(evaluated.gpr, ref_cpu);
 }
 
+bool test_ir_eval_matches_reference_for_u_type_and_word_ir_v0() {
+    const std::vector<uint32_t> program{
+        lui(1, 0x12345000),
+        auipc(2, 0x00012000),
+        addiw(3, 1, -1),
+        addiw(4, 0, -1),
+        slliw(5, 4, 4),
+        srliw(6, 5, 1),
+        sraiw(7, 5, 2),
+        addi(8, 0, 3),
+        addw(9, 5, 8),
+        subw(10, 5, 8),
+        sllw(11, 8, 8),
+        srlw(12, 5, 8),
+        sraw(13, 5, 8),
+    };
+
+    Ram plan_ram;
+    Bus plan_bus(plan_ram);
+    CPU plan_cpu;
+    cpu_init(plan_cpu, kEntry);
+    write_program(plan_ram, program);
+
+    Ram ref_ram;
+    Bus ref_bus(ref_ram);
+    CPU ref_cpu;
+    cpu_init(ref_cpu, kEntry);
+    write_program(ref_ram, program);
+
+    const uint64_t block_end = kEntry + static_cast<uint64_t>((program.size() - 1) * sizeof(uint32_t));
+    const DbtBlockPlan plan = plan_dbt_block(plan_cpu, plan_bus, kEntry, block_end);
+    const DbtTranslationUnit unit = translate_dbt_block(plan);
+    const DbtIrEvaluationResult evaluated = evaluate_dbt_ir_unit(unit, make_ir_input(plan_cpu));
+
+    for (size_t i = 0; i < program.size(); ++i) {
+        cpu_step(ref_cpu, ref_bus);
+    }
+
+    return expect(plan.ok, "DBT block plan should accept U-type and word IR v0 program") &&
+           expect(unit.ok, "translator should accept U-type and word IR v0 program") &&
+           expect(evaluated.ok, "IR evaluator should accept U-type and word IR v0 unit") &&
+           expect(evaluated.retired_instructions == program.size(),
+                  "IR evaluator should count U-type and word IR v0 instructions") &&
+           expect(evaluated.next_pc == ref_cpu.core().pc(),
+                  "U-type and word IR evaluator next PC should match reference PC") &&
+           expect_gprs_equal(evaluated.gpr, ref_cpu);
+}
+
 bool test_ir_eval_rejects_non_ok_translation_unit() {
     DbtTranslationUnit unit;
     unit.ok = false;
@@ -279,6 +377,9 @@ int main() {
         return 1;
     }
     if (!test_ir_eval_matches_reference_for_wider_integer_ir_v0()) {
+        return 1;
+    }
+    if (!test_ir_eval_matches_reference_for_u_type_and_word_ir_v0()) {
         return 1;
     }
     if (!test_ir_eval_rejects_non_ok_translation_unit()) {

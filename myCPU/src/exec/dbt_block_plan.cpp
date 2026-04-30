@@ -100,6 +100,25 @@ DbtBoundaryKind helper_boundary_enum(const InsnEffects& effects) {
     return DbtBoundaryKind::Fallback;
 }
 
+DbtHelperKind helper_kind_from_effects(const InsnEffects& effects) {
+    if (effects.mem.kind == MemoryRequest::Kind::Load) {
+        return DbtHelperKind::MemoryLoad;
+    }
+    if (effects.mem.kind == MemoryRequest::Kind::Store) {
+        return DbtHelperKind::MemoryStore;
+    }
+    if (effects.csr_write.enable) {
+        return DbtHelperKind::CsrWrite;
+    }
+    if (effects.atomic.kind != AtomicRequest::Kind::None) {
+        return DbtHelperKind::Atomic;
+    }
+    if (effects.vector.kind != VectorRequest::Kind::None) {
+        return DbtHelperKind::Vector;
+    }
+    return DbtHelperKind::None;
+}
+
 const char* fallback_boundary_kind(const InsnEffects& effects) {
     if (effects.trap.valid) {
         return "trap";
@@ -172,6 +191,50 @@ FetchDecodeResult fetch_decode(CPU& cpu, Bus& bus, uint64_t pc) {
     };
 }
 
+DbtHelperPlan make_helper_plan(uint64_t pc, const Insn& insn, const InsnEffects& effects) {
+    DbtHelperPlan helper{
+        .required = true,
+        .kind = helper_kind_from_effects(effects),
+        .pc = pc,
+        .raw = insn.raw,
+    };
+
+    if (effects.mem.kind != MemoryRequest::Kind::None) {
+        helper.rd = effects.mem.rd;
+        helper.addr = effects.mem.addr;
+        helper.size = static_cast<uint8_t>(effects.mem.size);
+        helper.sign_extend = effects.mem.sign_extend;
+        helper.commit_at_boundary = effects.mem.commit_at_boundary;
+        helper.non_speculative = effects.mem.non_speculative;
+        helper.value = effects.mem.store_value;
+        return helper;
+    }
+    if (effects.csr_write.enable) {
+        helper.rd = effects.rd_write.rd;
+        helper.csr_addr = effects.csr_write.addr;
+        helper.value = effects.csr_write.value;
+        return helper;
+    }
+    if (effects.atomic.kind != AtomicRequest::Kind::None) {
+        helper.rd = effects.atomic.rd;
+        helper.addr = effects.atomic.addr;
+        helper.size = static_cast<uint8_t>(effects.atomic.size);
+        helper.commit_at_boundary = effects.atomic.commit_at_boundary;
+        helper.non_speculative = effects.atomic.non_speculative;
+        helper.value = effects.atomic.store_value;
+        return helper;
+    }
+    if (effects.vector.kind != VectorRequest::Kind::None) {
+        helper.rd = effects.vector.vd;
+        helper.addr = effects.vector.addr;
+        helper.size = effects.vector.sew_bytes;
+        return helper;
+    }
+
+    helper.required = false;
+    return helper;
+}
+
 DbtBlockPlan plan_fallback(uint64_t start_pc,
                            uint64_t end_pc,
                            uint64_t inlineable,
@@ -180,6 +243,7 @@ DbtBlockPlan plan_fallback(uint64_t start_pc,
                            std::string reason,
                            std::string boundary_kind = {},
                            DbtBoundaryKind boundary = DbtBoundaryKind::None,
+                           DbtHelperPlan helper_plan = {},
                            std::vector<DbtDryRunIrOp> dry_run_ir = {}) {
     return DbtBlockPlan{
         .ok = false,
@@ -191,6 +255,7 @@ DbtBlockPlan plan_fallback(uint64_t start_pc,
         .fallback_reason = std::move(reason),
         .boundary_kind = std::move(boundary_kind),
         .boundary = boundary,
+        .helper_plan = helper_plan,
         .dry_run_ir = std::move(dry_run_ir),
     };
 }
@@ -249,6 +314,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  fetched.fallback_reason,
                                  "fetch-fault",
                                  DbtBoundaryKind::FetchFault,
+                                 {},
                                  std::move(dry_run_ir));
         }
 
@@ -262,6 +328,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  "fallback-required",
                                  "unsupported",
                                  DbtBoundaryKind::Unsupported,
+                                 {},
                                  std::move(dry_run_ir));
         }
         if (is_control_flow_instruction(insn)) {
@@ -273,6 +340,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  "fallback-required",
                                  "control-flow",
                                  DbtBoundaryKind::ControlFlow,
+                                 {},
                                  std::move(dry_run_ir));
         }
 
@@ -287,6 +355,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  "fallback-required",
                                  fallback_boundary_kind(effects),
                                  fallback_boundary_enum(effects),
+                                 {},
                                  std::move(dry_run_ir));
         }
         if (requires_helper(effects)) {
@@ -298,6 +367,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  "helper-required",
                                  helper_boundary_kind(effects),
                                  helper_boundary_enum(effects),
+                                 make_helper_plan(pc, insn, effects),
                                  std::move(dry_run_ir));
         }
 
@@ -378,4 +448,22 @@ DbtInvalidationPlan plan_dbt_block_invalidation_event(DbtInvalidationEventKind k
         return DbtInvalidationPlan{.reason = "range-disjoint"};
     }
     return DbtInvalidationPlan{.reason = "unknown-event"};
+}
+
+const char* dbt_helper_kind_name(DbtHelperKind kind) {
+    switch (kind) {
+    case DbtHelperKind::None:
+        return "none";
+    case DbtHelperKind::MemoryLoad:
+        return "memory-load";
+    case DbtHelperKind::MemoryStore:
+        return "memory-store";
+    case DbtHelperKind::CsrWrite:
+        return "csr-write";
+    case DbtHelperKind::Atomic:
+        return "atomic";
+    case DbtHelperKind::Vector:
+        return "vector";
+    }
+    return "unknown";
 }

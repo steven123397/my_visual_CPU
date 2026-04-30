@@ -30,6 +30,15 @@ enum class DbtDryRunIrKind : uint8_t {
     ArchitectedEffect,
 };
 
+enum class DbtHelperKind : uint8_t {
+    None,
+    MemoryLoad,
+    MemoryStore,
+    CsrWrite,
+    Atomic,
+    Vector,
+};
+
 struct DbtDryRunIrOp {
     DbtDryRunIrKind kind{DbtDryRunIrKind::ArchitectedEffect};
     uint64_t pc{0};
@@ -38,6 +47,21 @@ struct DbtDryRunIrOp {
     uint64_t next_pc{0};
     bool rd_write{false};
     uint8_t rd{0};
+};
+
+struct DbtHelperPlan {
+    bool required{false};
+    DbtHelperKind kind{DbtHelperKind::None};
+    uint64_t pc{0};
+    uint32_t raw{0};
+    uint8_t rd{0};
+    uint64_t addr{0};
+    uint8_t size{0};
+    bool sign_extend{false};
+    bool commit_at_boundary{false};
+    bool non_speculative{false};
+    uint32_t csr_addr{0};
+    uint64_t value{0};
 };
 
 struct DbtBlockPlan {
@@ -52,6 +76,7 @@ struct DbtBlockPlan {
     std::string fallback_reason{};
     std::string boundary_kind{};
     DbtBoundaryKind boundary{DbtBoundaryKind::None};
+    DbtHelperPlan helper_plan{};
     std::vector<DbtDryRunIrOp> dry_run_ir{};
 };
 
@@ -81,3 +106,5 @@ DbtInvalidationPlan plan_dbt_block_invalidation_event(DbtInvalidationEventKind k
                                                       uint64_t event_size,
                                                       uint64_t block_start_pc,
                                                       uint64_t block_end_pc);
+
+const char* dbt_helper_kind_name(DbtHelperKind kind);

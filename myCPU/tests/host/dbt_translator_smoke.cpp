@@ -18,6 +18,10 @@ constexpr uint32_t kSubX4X3X1 = 0x40118233U;    // sub x4, x3, x1
 constexpr uint32_t kDivX3X1X2 = 0x0220c1b3U;    // div x3, x1, x2
 constexpr uint32_t kLwX1FromX0 = 0x00002083U;   // lw x1, 0(x0)
 constexpr uint32_t kLuiX2One = 0x00001137U;     // lui x2, 0x1
+constexpr uint32_t kAuipcX5One = 0x00001297U;   // auipc x5, 0x1
+constexpr uint32_t kAddiwX6X2Minus1 = 0xfff1031bU;  // addiw x6, x2, -1
+constexpr uint32_t kSllwX7X6X1 = 0x001313bbU;   // sllw x7, x6, x1
+constexpr uint32_t kFence = 0x0000000fU;         // fence
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;   // jal x0, 8
 constexpr uint32_t kSfenceVma = 0x12000073U;    // sfence.vma x0, x0
 
@@ -104,6 +108,15 @@ bool test_rejects_non_inlineable_plan_without_prefix_ir() {
                   "translator should expose first helper reject PC") &&
            expect(unit.reject_raw == kLwX1FromX0,
                   "translator should expose first helper raw instruction") &&
+           expect(unit.helper_plan.required,
+                  "translator should preserve helper plan metadata") &&
+           expect(unit.helper_plan.kind == DbtHelperKind::MemoryLoad,
+                  "translator should preserve typed memory-load helper kind") &&
+           expect(unit.helper_plan.pc == kEntry + 4 && unit.helper_plan.raw == kLwX1FromX0,
+                  "translator should preserve helper PC and raw instruction") &&
+           expect(unit.helper_plan.rd == 1 && unit.helper_plan.addr == 0 &&
+                      unit.helper_plan.size == 4 && unit.helper_plan.sign_extend,
+                  "translator should preserve memory-load helper details") &&
            expect(unit.boundary == DbtBoundaryKind::MemoryLoad,
                   "translator should preserve typed reject boundary") &&
            expect(unit.boundary_kind == "memory-load",
@@ -122,7 +135,7 @@ bool test_rejects_unsupported_ir_v0_without_prefix_ir() {
     CPU cpu;
     cpu_init(cpu, kEntry);
     write32(ram, kEntry + 0, kAddiX1One);
-    write32(ram, kEntry + 4, kLuiX2One);
+    write32(ram, kEntry + 4, kFence);
 
     const DbtBlockPlan plan = plan_dbt_block(cpu, bus, kEntry, kEntry + 4);
     const DbtTranslationUnit unit = translate_dbt_block(plan);
@@ -135,7 +148,7 @@ bool test_rejects_unsupported_ir_v0_without_prefix_ir() {
                   "translator should expose unsupported IR typed reject kind") &&
            expect(unit.reject_pc == kEntry + 4,
                   "translator should expose unsupported IR reject PC") &&
-           expect(unit.reject_raw == kLuiX2One,
+           expect(unit.reject_raw == kFence,
                   "translator should expose unsupported IR raw instruction") &&
            expect(unit.boundary == DbtBoundaryKind::Unsupported,
                   "translator should expose unsupported IR typed boundary") &&
@@ -147,6 +160,39 @@ bool test_rejects_unsupported_ir_v0_without_prefix_ir() {
                   "unsupported translation should not advance architectural PC") &&
            expect(cpu.core().instret() == 0,
                   "unsupported translation should not advance instret");
+}
+
+bool test_translates_u_type_and_word_ops_to_ir_v0() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    write32(ram, kEntry + 0, kLuiX2One);
+    write32(ram, kEntry + 4, kAuipcX5One);
+    write32(ram, kEntry + 8, kAddiwX6X2Minus1);
+    write32(ram, kEntry + 12, kSllwX7X6X1);
+
+    const DbtBlockPlan plan = plan_dbt_block(cpu, bus, kEntry, kEntry + 12);
+    const DbtTranslationUnit unit = translate_dbt_block(plan);
+
+    return expect(plan.ok, "translator U-type setup should build inlineable DBT block plan") &&
+           expect(unit.ok, "translator should accept U-type and word ops") &&
+           expect(unit.instructions.size() == 5,
+                  "U-type and word translation should include four ops plus fallthrough") &&
+           expect(unit.instructions[0].opcode == DbtIrOpcode::WriteRegImm,
+                  "lui should translate to immediate register write") &&
+           expect(unit.instructions[0].rd == 2 && unit.instructions[0].imm == 0x1000,
+                  "lui should preserve rd and decoded upper immediate") &&
+           expect(unit.instructions[1].opcode == DbtIrOpcode::AddPcImm,
+                  "auipc should translate to PC-relative immediate write") &&
+           expect(unit.instructions[1].rd == 5 && unit.instructions[1].imm == 0x1000,
+                  "auipc should preserve rd and decoded upper immediate") &&
+           expect(unit.instructions[2].opcode == DbtIrOpcode::AddRegImmWord,
+                  "addiw should translate to word immediate add") &&
+           expect(unit.instructions[3].opcode == DbtIrOpcode::ShiftLeftRegRegWord,
+                  "sllw should translate to word register shift") &&
+           expect(unit.instructions[4].opcode == DbtIrOpcode::Fallthrough,
+                  "U-type and word translation should end with fallthrough");
 }
 
 bool test_rejects_supported_non_ir_v0_integer_ops_without_prefix_ir() {
@@ -200,6 +246,8 @@ bool test_reject_taxonomy_classifies_fallback_boundaries() {
                   "translator should expose control-flow reject PC") &&
            expect(control_unit.reject_raw == kJalX0Skip8,
                   "translator should expose control-flow raw instruction") &&
+           expect(!control_unit.helper_plan.required,
+                  "translator should not attach helper plan to control-flow fallback") &&
            expect(control_unit.instructions.empty(),
                   "translator should not emit prefix IR for control-flow rejects") &&
            expect(!tlb_unit.ok,
@@ -235,6 +283,9 @@ int main() {
         return 1;
     }
     if (!test_rejects_unsupported_ir_v0_without_prefix_ir()) {
+        return 1;
+    }
+    if (!test_translates_u_type_and_word_ops_to_ir_v0()) {
         return 1;
     }
     if (!test_rejects_supported_non_ir_v0_integer_ops_without_prefix_ir()) {

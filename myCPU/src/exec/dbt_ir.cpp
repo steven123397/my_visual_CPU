@@ -4,8 +4,12 @@ const char* dbt_ir_opcode_name(DbtIrOpcode opcode) {
     switch (opcode) {
     case DbtIrOpcode::WriteRegImm:
         return "write-reg-imm";
+    case DbtIrOpcode::AddPcImm:
+        return "add-pc-imm";
     case DbtIrOpcode::AddRegImm:
         return "add-reg-imm";
+    case DbtIrOpcode::AddRegImmWord:
+        return "add-reg-imm-word";
     case DbtIrOpcode::XorRegImm:
         return "xor-reg-imm";
     case DbtIrOpcode::OrRegImm:
@@ -18,6 +22,12 @@ const char* dbt_ir_opcode_name(DbtIrOpcode opcode) {
         return "shift-right-logical-reg-imm";
     case DbtIrOpcode::ShiftRightArithmeticRegImm:
         return "shift-right-arithmetic-reg-imm";
+    case DbtIrOpcode::ShiftLeftRegImmWord:
+        return "shift-left-reg-imm-word";
+    case DbtIrOpcode::ShiftRightLogicalRegImmWord:
+        return "shift-right-logical-reg-imm-word";
+    case DbtIrOpcode::ShiftRightArithmeticRegImmWord:
+        return "shift-right-arithmetic-reg-imm-word";
     case DbtIrOpcode::SetLessThanRegImm:
         return "set-less-than-reg-imm";
     case DbtIrOpcode::SetLessThanUnsignedRegImm:
@@ -26,6 +36,10 @@ const char* dbt_ir_opcode_name(DbtIrOpcode opcode) {
         return "add-reg-reg";
     case DbtIrOpcode::SubRegReg:
         return "sub-reg-reg";
+    case DbtIrOpcode::AddRegRegWord:
+        return "add-reg-reg-word";
+    case DbtIrOpcode::SubRegRegWord:
+        return "sub-reg-reg-word";
     case DbtIrOpcode::XorRegReg:
         return "xor-reg-reg";
     case DbtIrOpcode::OrRegReg:
@@ -38,6 +52,12 @@ const char* dbt_ir_opcode_name(DbtIrOpcode opcode) {
         return "shift-right-logical-reg-reg";
     case DbtIrOpcode::ShiftRightArithmeticRegReg:
         return "shift-right-arithmetic-reg-reg";
+    case DbtIrOpcode::ShiftLeftRegRegWord:
+        return "shift-left-reg-reg-word";
+    case DbtIrOpcode::ShiftRightLogicalRegRegWord:
+        return "shift-right-logical-reg-reg-word";
+    case DbtIrOpcode::ShiftRightArithmeticRegRegWord:
+        return "shift-right-arithmetic-reg-reg-word";
     case DbtIrOpcode::SetLessThanRegReg:
         return "set-less-than-reg-reg";
     case DbtIrOpcode::SetLessThanUnsignedRegReg:

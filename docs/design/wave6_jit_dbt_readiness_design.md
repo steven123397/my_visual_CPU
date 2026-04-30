@@ -92,13 +92,16 @@ block cache 或 multicore / coherence 仍需要新的设计和计划。
 
 - 已新增 `dbt_ir`，表达最小纯直线整数 IR：立即数写寄存器、寄存器加立即数、
   寄存器加/减寄存器、逻辑立即数 / 寄存器运算、shift immediate / register、
-  signed / unsigned set-less-than，以及 block fallthrough。
+  signed / unsigned set-less-than、`lui` / `auipc`、RV64 word ops，以及 block fallthrough。
 - 已新增 `dbt_translator`，输入只能来自共享 `DbtBlockPlan`；`DbtBlockPlan` 不通过、
   或 IR v0 不支持其中某条 inlineable 指令时，translator 只返回稳定 reject metadata，
   不翻译可内联前缀。
 - translator reject metadata 已收口为 typed `DbtRejectKind`，并保留
   `reject_reason` / `boundary_kind` 字符串兼容字段；rejected unit 还记录 reject PC、
   raw instruction 和 typed boundary，供 cache / eval / 后续 helper planning 使用。
+- helper planning dry-run 已收口第一刀：`DbtBlockPlan` 和 `DbtTranslationUnit` 暴露
+  typed `DbtHelperPlan`，当前固定 memory load / store 与 CSR write 的 helper kind、PC、
+  raw instruction 和最小参数；fallback-required 边界不附带 helper plan。
 - translator 可以重新 decode `DbtBlockPlan::dry_run_ir[].raw` 来恢复寄存器、立即数和
   opcode 分类，但不得重新取指，不得提交 CPU state，也不得绕过 `InstructionSemantics`
   的 preflight 结论。
@@ -161,9 +164,10 @@ inline / replay runtime。
   translated block。
 
 `IR v0 dry-run` 只允许覆盖已经由 `DbtBlockPlan` 判定为完整 inlineable 的 pure
-straight-line integer 子集。当前覆盖 `addi/add/sub`、逻辑运算、shift 和
-signed / unsigned set-less-than。memory、CSR、trap、atomic、vector、control-flow、
-fence / TLB flush 或 unsupported instruction 都必须保持 reject，不允许翻译前缀。
+straight-line integer 子集。当前覆盖 `addi/add/sub`、逻辑运算、shift、
+signed / unsigned set-less-than、`lui` / `auipc` 和 RV64 word ops。memory、CSR、
+trap、atomic、vector、control-flow、fence / TLB flush 或 unsupported instruction 都必须
+保持 reject，不允许翻译前缀。
 
 `IR semantic differential dry-run` 只允许解释已成功翻译的 IR v0，并把结果同
 `InstructionSemantics` / reference 执行对齐。当前比较范围限于更宽 pure integer 子集的
@@ -178,6 +182,11 @@ unsupported / illegal instruction。
 Helper 只能复用已有 simulator 事实来源：
 
 - ISA architected effect 走 `InstructionSemantics` 或由其拆出的共享语义 helper。
+- `DbtHelperPlan` 只描述未来 helper 调用合同，不执行 helper，不提交状态，也不允许
+  translator 生成 helper 前缀 IR。
+- 当前 helper plan 第一刀只固定 memory load / store 与 CSR write 的 typed metadata；
+  atomic、vector、trap-prone、fence / TLB flush 等边界仍保持 reject taxonomy，后续可以按
+  matrix 扩展 helper metadata。
 - load / store / fetch / page walk 走 `AddressSpace -> Bus -> Ram/Device` 现有边界。
 - trap / interrupt / exception 走既有 trap controller 和 commit boundary。
 - debug / profile 继续由现有 backend 记录；translator 不能自行制造 guest 可见状态。
@@ -318,8 +327,8 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
   host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-run、functional
   fallback replay 等价性、first-boundary taxonomy、共享 `DbtBlockPlan` analyzer，以及
   非执行 `dbt_ir` / `dbt_translator` v0 dry-run、translator reject taxonomy、
-  `dbt_ir_eval` semantic differential dry-run 的更宽整数覆盖，以及 metadata-only
-  `dbt_block_cache` dry-run / invalidation matrix hardening。
+  helper planning dry-run、`dbt_ir_eval` semantic differential dry-run 的更宽整数覆盖，
+  以及 metadata-only `dbt_block_cache` dry-run / invalidation matrix hardening。
 - 当前仍未启动 JIT engine、host code emission、persistent / executable block cache、multicore /
   coherence、write-back cache、I-cache 和 cache maintenance instruction。
 - 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。

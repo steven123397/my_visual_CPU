@@ -8,23 +8,33 @@
 
 enum class DbtIrOpcode : uint8_t {
     WriteRegImm,
+    AddPcImm,
     AddRegImm,
+    AddRegImmWord,
     XorRegImm,
     OrRegImm,
     AndRegImm,
     ShiftLeftRegImm,
     ShiftRightLogicalRegImm,
     ShiftRightArithmeticRegImm,
+    ShiftLeftRegImmWord,
+    ShiftRightLogicalRegImmWord,
+    ShiftRightArithmeticRegImmWord,
     SetLessThanRegImm,
     SetLessThanUnsignedRegImm,
     AddRegReg,
     SubRegReg,
+    AddRegRegWord,
+    SubRegRegWord,
     XorRegReg,
     OrRegReg,
     AndRegReg,
     ShiftLeftRegReg,
     ShiftRightLogicalRegReg,
     ShiftRightArithmeticRegReg,
+    ShiftLeftRegRegWord,
+    ShiftRightLogicalRegRegWord,
+    ShiftRightArithmeticRegRegWord,
     SetLessThanRegReg,
     SetLessThanUnsignedRegReg,
     Fallthrough,
@@ -73,6 +83,7 @@ struct DbtTranslationUnit {
     std::string reject_reason{};
     std::string boundary_kind{};
     DbtBoundaryKind boundary{DbtBoundaryKind::None};
+    DbtHelperPlan helper_plan{};
     std::vector<DbtIrInstruction> instructions{};
 };
 

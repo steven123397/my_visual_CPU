@@ -55,6 +55,7 @@ DbtTranslationUnit reject_from_plan(const DbtBlockPlan& plan) {
         .reject_reason = plan.fallback_reason,
         .boundary_kind = plan.boundary_kind,
         .boundary = plan.boundary,
+        .helper_plan = plan.helper_plan,
     };
 }
 
@@ -86,6 +87,14 @@ bool translate_integer_op(const DbtDryRunIrOp& op, DbtIrInstruction& out) {
     out.imm = insn.imm;
     out.next_pc = op.next_pc;
 
+    if (insn.opcode == 0x37U) {
+        out.opcode = DbtIrOpcode::WriteRegImm;
+        return true;
+    }
+    if (insn.opcode == 0x17U) {
+        out.opcode = DbtIrOpcode::AddPcImm;
+        return true;
+    }
     if (insn.opcode == 0x13U) {
         const uint8_t shamt = static_cast<uint8_t>(insn.rs2 | ((insn.funct7 & 1U) << 5));
         switch (insn.funct3) {
@@ -123,6 +132,33 @@ bool translate_integer_op(const DbtDryRunIrOp& op, DbtIrInstruction& out) {
             return true;
         case 7:
             out.opcode = DbtIrOpcode::AndRegImm;
+            return true;
+        default:
+            return false;
+        }
+    }
+    if (insn.opcode == 0x1BU) {
+        const uint8_t shamt = insn.rs2;
+        switch (insn.funct3) {
+        case 0:
+            out.opcode = DbtIrOpcode::AddRegImmWord;
+            return true;
+        case 1:
+            if (insn.funct7 != 0x00U) {
+                return false;
+            }
+            out.opcode = DbtIrOpcode::ShiftLeftRegImmWord;
+            out.imm = shamt;
+            return true;
+        case 5:
+            if (insn.funct7 == 0x00U) {
+                out.opcode = DbtIrOpcode::ShiftRightLogicalRegImmWord;
+            } else if (insn.funct7 == 0x20U) {
+                out.opcode = DbtIrOpcode::ShiftRightArithmeticRegImmWord;
+            } else {
+                return false;
+            }
+            out.imm = shamt;
             return true;
         default:
             return false;
@@ -184,6 +220,37 @@ bool translate_integer_op(const DbtDryRunIrOp& op, DbtIrInstruction& out) {
                 return false;
             }
             out.opcode = DbtIrOpcode::AndRegReg;
+            return true;
+        default:
+            return false;
+        }
+    }
+    if (insn.opcode == 0x3BU) {
+        switch (insn.funct3) {
+        case 0:
+            if (insn.funct7 == 0x00U) {
+                out.opcode = DbtIrOpcode::AddRegRegWord;
+                return true;
+            }
+            if (insn.funct7 == 0x20U) {
+                out.opcode = DbtIrOpcode::SubRegRegWord;
+                return true;
+            }
+            return false;
+        case 1:
+            if (insn.funct7 != 0x00U) {
+                return false;
+            }
+            out.opcode = DbtIrOpcode::ShiftLeftRegRegWord;
+            return true;
+        case 5:
+            if (insn.funct7 == 0x00U) {
+                out.opcode = DbtIrOpcode::ShiftRightLogicalRegRegWord;
+            } else if (insn.funct7 == 0x20U) {
+                out.opcode = DbtIrOpcode::ShiftRightArithmeticRegRegWord;
+            } else {
+                return false;
+            }
             return true;
         default:
             return false;

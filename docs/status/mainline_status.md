@@ -72,8 +72,12 @@ analyzer 入口都已有窄合同与验证。
 IR v0，并在 host smoke 中同 reference 执行对齐 GPR、fallthrough PC 和 retired count。
 `translator reject taxonomy` 已完成第一刀：`DbtTranslationUnit` 暴露 typed
 `DbtRejectKind`、reject PC、raw instruction 和 typed boundary，同时保留原字符串兼容字段。
+`helper planning dry-run` 已完成第一刀：`DbtBlockPlan` / `DbtTranslationUnit` 暴露
+typed `DbtHelperPlan`，当前固定 memory load / store 与 CSR write 的 helper metadata；
+fallback-required 边界不附带 helper plan。
 `IR semantic coverage` 已扩到更宽的 pure integer 子集：逻辑运算、shift immediate /
-register，以及 signed / unsigned set-less-than 都有 reference differential smoke。
+register、signed / unsigned set-less-than、`lui` / `auipc` 和 RV64 word ops 都有
+reference differential smoke。
 `metadata-only block cache` 已完成第一刀：`dbt_block_cache` 只缓存成功翻译的
 `DbtTranslationUnit` metadata，固定 exact-range lookup、hit / miss 计数、rejected unit
 不入 cache，以及复用 invalidation dry-run 合同删除 metadata 条目；当前也固定了
@@ -168,10 +172,13 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
   `src/exec/dbt_ir_eval.{h,cpp}`，只解释 IR v0 的寄存器语义，并用
   `tests/host/dbt_ir_eval_smoke.cpp` 对齐 reference 执行的 GPR、fallthrough PC 和
   retired instruction count；当前已扩到逻辑运算、shift immediate / register 和
-  signed / unsigned set-less-than。
+  signed / unsigned set-less-than、`lui` / `auipc` 与 RV64 word ops。
 - 主线 `Wave 6` 已完成 `translator reject taxonomy` 第一刀：`DbtTranslationUnit`
   新增 typed `DbtRejectKind`、reject PC 和 raw instruction，translator smoke 固定
   memory helper、control-flow、TLB flush 和 unsupported IR 的 reject metadata。
+- 主线 `Wave 6` 已完成 `helper planning dry-run` 第一刀：`DbtBlockPlan` 新增 typed
+  `DbtHelperPlan`，并由 `DbtTranslationUnit` 透传；host smoke 固定 memory load /
+  store、CSR write 的 helper kind、PC、raw instruction 和最小参数。
 - 主线 `Wave 6` 已完成 `metadata-only block cache` 第一刀：新增
   `src/exec/dbt_block_cache.{h,cpp}`，只缓存成功翻译的 `DbtTranslationUnit`
   metadata，并用 `tests/host/dbt_block_cache_smoke.cpp` 固定 key / hit / miss /
@@ -183,9 +190,10 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
    IR metadata、future block-cache invalidation dry-run、共享 `DbtBlockPlan` analyzer
    入口、
    [DBT translator + IR v0 dry-run](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)、
-   IR semantic differential dry-run、更宽 IR semantic coverage、translator reject taxonomy
-   和 metadata-only block cache / invalidation matrix hardening 第一刀已作为补充合同落地。
-   下一刀如继续推进，应优先选择 helper planning dry-run 或更窄的 IR coverage hardening；
+   IR semantic differential dry-run、更宽 IR semantic coverage、translator reject taxonomy、
+   helper planning dry-run 和 metadata-only block cache / invalidation matrix hardening
+   第一刀已作为补充合同落地。
+   下一刀如继续推进，应优先选择 helper plan matrix 扩展或更窄的 IR coverage hardening；
    不得直接进入
    host code emission、长期 block cache、runtime scheduler、multicore、coherence 或新的
    memory consistency 模型。
@@ -215,11 +223,16 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
     `dbt_ir_eval`，只解释 IR v0 的寄存器语义；host smoke 覆盖依赖链、`x0` 写丢弃、
     负立即数、wraparound add、fallthrough PC、retired instruction count，以及 reject unit
     的拒绝透传；当前进一步覆盖逻辑运算、shift immediate / register 和 signed / unsigned
-    set-less-than。默认 runtime、JIT engine、host code emission 和 block cache 仍不启动。
+    set-less-than、`lui` / `auipc` 与 RV64 word ops。默认 runtime、JIT engine、
+    host code emission 和 block cache 仍不启动。
   - 主线 `Wave 6` 完成 `translator reject taxonomy` 第一刀：`DbtTranslationUnit`
     新增 typed `DbtRejectKind`、reject PC 和 raw instruction；translator smoke 固定
     memory helper、control-flow、TLB flush、unsupported IR 和稳定 reject kind name。
     默认 runtime、JIT engine、host code emission 和 helper replay 仍不启动。
+  - 主线 `Wave 6` 完成 `helper planning dry-run` 第一刀：`DbtBlockPlan` / `DbtTranslationUnit`
+    新增 typed `DbtHelperPlan`，host smoke 固定 memory load / store 与 CSR write 的
+    helper metadata 透传；默认 runtime、JIT engine、host code emission、helper replay
+    和 helper inline 仍不启动。
   - 主线 `Wave 6` 完成 `metadata-only block cache` 第一刀：新增非执行
     `dbt_block_cache`，只缓存 ok `DbtTranslationUnit` metadata；host smoke 固定
     exact-range lookup、hit / miss 计数、同 key replacement、rejected unit 不入 cache、
@@ -372,8 +385,9 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
   preflight guardrail、opt-in translation-plan dry-run、host-smoke-only fallback replay
   等价性、first-boundary taxonomy、typed boundary、dry-run IR metadata、future
   block-cache invalidation dry-run、共享 `DbtBlockPlan` analyzer 入口、非执行
-  `dbt_ir` / `dbt_translator` v0 dry-run、translator reject taxonomy、`dbt_ir_eval`
-  semantic differential dry-run 的更宽整数覆盖，以及 metadata-only `dbt_block_cache`
+  `dbt_ir` / `dbt_translator` v0 dry-run、translator reject taxonomy、helper planning
+  dry-run、`dbt_ir_eval` semantic differential dry-run 的更宽整数覆盖，以及 metadata-only
+  `dbt_block_cache`
   dry-run / invalidation matrix hardening。这不是完整
   JIT / DBT engine；当前仍不生成宿主代码，不引入长期 block cache，不改变 guest 可见语义。
 - 当前 `pc_costs.cycles` 只是 retire-side 观察成本，不是稳定性能模型或 benchmark
@@ -382,7 +396,7 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
   fallback；当前已有 preflight 拒绝整块的 lifecycle guardrail、opt-in translation-plan
   观察、host-smoke-only functional fallback replay、first-boundary taxonomy、dry-run IR
   metadata、invalidation dry-run、共享 block analyzer、非执行 translator / IR v0、
-  translator reject taxonomy、IR semantic differential dry-run 更宽整数覆盖和
+  translator reject taxonomy、helper planning dry-run、IR semantic differential dry-run 更宽整数覆盖和
   metadata-only block cache / invalidation matrix hardening，但尚未有 IR lowering、
   helper replay、persistent block lifecycle 或 workload-level runtime execution harness。
 - multicore / coherence 虽然属于 `Wave 6` 长期目标，但当前仍未启动；它必须等待
@@ -398,7 +412,7 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
 1. 当前暂无新的主线活跃计划；刚完成的
    [DBT translator + IR v0 dry-run](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
    只提供非执行 typed IR 和 translator dry-run，不接入 runtime。
-2. 后续如果继续 `Wave 6`，建议先做 helper planning dry-run 或更窄的 IR coverage
+2. 后续如果继续 `Wave 6`，建议先做 helper plan matrix 扩展或更窄的 IR coverage
    hardening，继续保持不生成 host code、不申请 executable memory、不改变 guest 可见语义。
 3. 只有准备启动真正 JIT engine、IR lowering、host code emission、persistent
    block cache、runtime scheduler、helper replay 策略、multicore 或 coherence 时，才重新
