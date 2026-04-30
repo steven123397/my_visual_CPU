@@ -120,7 +120,9 @@ DbtRuntimeHarnessResult execute_with_guardrail(CPU& cpu,
                                                uint64_t start_pc,
                                                uint64_t end_pc,
                                                bool used_cache,
-                                               bool inserted_cache) {
+                                               bool inserted_cache,
+                                               bool emitted_on_miss = false,
+                                               bool executed_on_hit = false) {
     const DbtIrEvaluationResult expected =
         evaluate_dbt_ir_unit(unit, DbtIrEvaluationInput{
                                        .gpr = input_gpr,
@@ -136,6 +138,11 @@ DbtRuntimeHarnessResult execute_with_guardrail(CPU& cpu,
             .fallback_required = true,
             .used_executable_cache = used_cache,
             .inserted_executable_cache = inserted_cache,
+            .cache_lookup = false,
+            .cache_hit = used_cache,
+            .cache_miss = emitted_on_miss,
+            .emitted_on_miss = emitted_on_miss,
+            .executed_on_hit = executed_on_hit,
         };
     }
 
@@ -157,6 +164,11 @@ DbtRuntimeHarnessResult execute_with_guardrail(CPU& cpu,
         .used_executable_memory = executable.requested_executable_memory,
         .used_executable_cache = used_cache,
         .inserted_executable_cache = inserted_cache,
+        .cache_lookup = false,
+        .cache_hit = used_cache,
+        .cache_miss = emitted_on_miss,
+        .emitted_on_miss = emitted_on_miss,
+        .executed_on_hit = executed_on_hit,
         .executed_guest_code = true,
         .mutated_cpu_state = differential_matched,
         .differential_checked = true,
@@ -234,17 +246,27 @@ DbtRuntimeHarnessResult run_dbt_runtime_harness_block_with_cache(
         const DbtRuntimeDispatchContract contract =
             plan_dbt_runtime_dispatch_contract(dry_run);
         if (!contract.ok || contract.kind != DbtRuntimeDispatchKind::LoweredBlock) {
-            return reject_from_cache_contract(contract, start_pc, end_pc);
+            DbtRuntimeHarnessResult rejected =
+                reject_from_cache_contract(contract, start_pc, end_pc);
+            rejected.cache_lookup = true;
+            rejected.cache_hit = true;
+            return rejected;
         }
-        return execute_with_guardrail(cpu,
-                                      dry_run.translation,
-                                      *cached.executable,
-                                      input_gpr,
-                                      input_pc,
-                                      start_pc,
-                                      end_pc,
-                                      true,
-                                      false);
+        DbtRuntimeHarnessResult result =
+            execute_with_guardrail(cpu,
+                                   dry_run.translation,
+                                   *cached.executable,
+                                   input_gpr,
+                                   input_pc,
+                                   start_pc,
+                                   end_pc,
+                                   true,
+                                   false,
+                                   false,
+                                   true);
+        result.cache_lookup = true;
+        result.cache_hit = true;
+        return result;
     }
 
     DbtJitEngineDryRun engine;
@@ -252,13 +274,20 @@ DbtRuntimeHarnessResult run_dbt_runtime_harness_block_with_cache(
     const DbtRuntimeDispatchContract contract =
         plan_dbt_runtime_dispatch_contract(dry_run);
     if (!contract.ok || contract.kind != DbtRuntimeDispatchKind::LoweredBlock) {
-        return reject_from_cache_contract(contract, start_pc, end_pc);
+        DbtRuntimeHarnessResult rejected =
+            reject_from_cache_contract(contract, start_pc, end_pc);
+        rejected.cache_lookup = true;
+        rejected.cache_miss = true;
+        return rejected;
     }
 
     DbtHostExecutable executable = emit_dbt_host_block(dry_run.lowering);
     if (!executable.ok) {
         DbtRuntimeHarnessResult rejected = reject_from_emitter(executable, start_pc, end_pc);
         release_dbt_host_executable(executable);
+        rejected.cache_lookup = true;
+        rejected.cache_miss = true;
+        rejected.emitted_on_miss = true;
         return rejected;
     }
 
@@ -270,7 +299,11 @@ DbtRuntimeHarnessResult run_dbt_runtime_harness_block_with_cache(
                                                             start_pc,
                                                             end_pc,
                                                             false,
+                                                            false,
+                                                            true,
                                                             false);
+    result.cache_lookup = true;
+    result.cache_miss = true;
     if (!result.ok) {
         release_dbt_host_executable(executable);
         return result;
@@ -307,5 +340,61 @@ std::string format_dbt_runtime_harness_result(const DbtRuntimeHarnessResult& res
         << " exec-cache=" << (result.used_executable_cache ? "hit" : (result.inserted_executable_cache ? "inserted" : "none"))
         << " reject=" << dbt_reject_kind_name(result.reject_kind)
         << " reason=" << (result.reject_reason.empty() ? "none" : result.reject_reason);
+    return out.str();
+}
+
+void record_dbt_runtime_harness_result(DbtRuntimeHarnessStats& stats,
+                                       const DbtRuntimeHarnessResult& result) {
+    stats.dispatches += 1;
+    if (result.cache_lookup) {
+        stats.cache_lookups += 1;
+    }
+    if (result.cache_hit) {
+        stats.cache_hits += 1;
+    }
+    if (result.cache_miss) {
+        stats.cache_misses += 1;
+    }
+    if (result.emitted_on_miss) {
+        stats.host_emits += 1;
+    }
+    if (result.executed_host_code || result.executed_on_hit) {
+        stats.host_executes += 1;
+    }
+    if (result.fallback_required) {
+        stats.fallbacks += 1;
+    }
+    if (result.differential_checked) {
+        stats.differential_checks += 1;
+        if (!result.differential_matched) {
+            stats.differential_mismatches += 1;
+        }
+    }
+}
+
+void record_dbt_runtime_invalidation_result(DbtRuntimeHarnessStats& stats,
+                                            const DbtRuntimeInvalidationHookResult& result) {
+    if (result.invalidated) {
+        stats.invalidations += 1;
+    }
+    if (result.stale_dispatch_prevented) {
+        stats.stale_dispatches_prevented += 1;
+    }
+}
+
+std::string format_dbt_runtime_harness_stats(const DbtRuntimeHarnessStats& stats) {
+    std::ostringstream out;
+    out << "runtime-harness-stats:"
+        << " dispatches=" << stats.dispatches
+        << " lookups=" << stats.cache_lookups
+        << " hits=" << stats.cache_hits
+        << " misses=" << stats.cache_misses
+        << " emits=" << stats.host_emits
+        << " exec=" << stats.host_executes
+        << " fallback=" << stats.fallbacks
+        << " invalidate=" << stats.invalidations
+        << " stale-prevented=" << stats.stale_dispatches_prevented
+        << " differential-checks=" << stats.differential_checks
+        << " differential-mismatch=" << stats.differential_mismatches;
     return out.str();
 }

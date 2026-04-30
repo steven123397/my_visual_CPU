@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+#include "../cpu.h"
+#include "../mem/bus.h"
 #include "dbt_helper_replay.h"
 
 enum class DbtHelperExecutionKind : uint8_t {
@@ -56,9 +58,40 @@ struct DbtHelperExecutionRequest {
     bool mutates_cpu_state{false};
 };
 
+struct DbtHelperExecutionResult {
+    bool ok{false};
+    std::string reject_reason{};
+    DbtHelperExecutionKind kind{DbtHelperExecutionKind::None};
+    DbtHelperReplayKind replay_kind{DbtHelperReplayKind::None};
+    uint64_t pc{0};
+    uint64_t next_pc{0};
+    uint64_t addr{0};
+    uint8_t size{0};
+    uint8_t rd{0};
+    uint64_t value{0};
+    bool sign_extend{false};
+    bool dry_run_only{false};
+    bool executed_helper{false};
+    bool mutated_cpu_state{false};
+    bool retired{false};
+    bool trap_taken{false};
+    uint64_t trap_cause{0};
+    uint64_t trap_tval{0};
+    bool fallback_to_reference_on_trap{false};
+    bool platform_state_changed{false};
+    bool commit_boundary{false};
+    bool serializing{false};
+};
+
 DbtHelperExecutionRequest plan_dbt_helper_execution_bridge(
     const DbtHelperReplayPlan& replay);
+DbtHelperExecutionResult execute_dbt_helper_request(
+    CPU& cpu,
+    Bus& bus,
+    const DbtHelperExecutionRequest& request);
 
 const char* dbt_helper_execution_kind_name(DbtHelperExecutionKind kind);
 std::string format_dbt_helper_execution_request(
     const DbtHelperExecutionRequest& request);
+std::string format_dbt_helper_execution_result(
+    const DbtHelperExecutionResult& result);

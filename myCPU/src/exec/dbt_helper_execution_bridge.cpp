@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <sstream>
 
+#include "memory_ops.h"
+
 namespace {
 
 const char* bool_name(bool value) {
@@ -46,6 +48,56 @@ DbtHelperExecutionRequest reject_request(const char* reason) {
         .dry_run_only = true,
         .executed_helper = false,
         .mutates_cpu_state = false,
+    };
+}
+
+DbtHelperExecutionResult reject_result(const DbtHelperExecutionRequest& request,
+                                       const char* reason) {
+    return DbtHelperExecutionResult{
+        .ok = false,
+        .reject_reason = reason,
+        .kind = request.kind,
+        .replay_kind = request.replay_kind,
+        .pc = request.pc,
+        .next_pc = request.pc,
+        .addr = request.addr,
+        .size = request.size,
+        .rd = request.rd,
+        .value = request.value,
+        .sign_extend = request.sign_extend,
+        .dry_run_only = false,
+        .executed_helper = false,
+        .mutated_cpu_state = false,
+        .fallback_to_reference_on_trap = request.fallback_to_reference_on_trap,
+        .commit_boundary = request.requires_commit_boundary,
+        .serializing = request.serializing,
+    };
+}
+
+DbtHelperExecutionResult fault_result(const DbtHelperExecutionRequest& request,
+                                      const TrapRequest& fault) {
+    return DbtHelperExecutionResult{
+        .ok = false,
+        .reject_reason = "helper-trap-reference-fallback",
+        .kind = request.kind,
+        .replay_kind = request.replay_kind,
+        .pc = request.pc,
+        .next_pc = request.pc,
+        .addr = request.addr,
+        .size = request.size,
+        .rd = request.rd,
+        .value = request.value,
+        .sign_extend = request.sign_extend,
+        .dry_run_only = false,
+        .executed_helper = true,
+        .mutated_cpu_state = false,
+        .retired = false,
+        .trap_taken = true,
+        .trap_cause = fault.cause,
+        .trap_tval = fault.tval,
+        .fallback_to_reference_on_trap = true,
+        .commit_boundary = request.requires_commit_boundary,
+        .serializing = request.serializing,
     };
 }
 
@@ -101,6 +153,103 @@ DbtHelperExecutionRequest plan_dbt_helper_execution_bridge(
     };
 }
 
+DbtHelperExecutionResult execute_dbt_helper_request(
+    CPU& cpu,
+    Bus& bus,
+    const DbtHelperExecutionRequest& request) {
+    if (!request.ok) {
+        return reject_result(request, "invalid-helper-execution-request");
+    }
+
+    const uint64_t next_pc = request.pc + 4;
+    switch (request.kind) {
+    case DbtHelperExecutionKind::ScalarMemoryLoad: {
+        const AddressSpace::AccessResult access =
+            cpu.address_space().load_result(bus, request.addr, request.size);
+        if (!access.ok) {
+            return fault_result(request, access.fault);
+        }
+
+        const uint64_t loaded =
+            extend_loaded_value(access.value, request.size, request.sign_extend);
+        cpu.core().write_gpr(request.rd, loaded);
+        cpu.core().set_pc(next_pc);
+        cpu.core().advance_instret();
+        return DbtHelperExecutionResult{
+            .ok = true,
+            .kind = request.kind,
+            .replay_kind = request.replay_kind,
+            .pc = request.pc,
+            .next_pc = next_pc,
+            .addr = request.addr,
+            .size = request.size,
+            .rd = request.rd,
+            .value = loaded,
+            .sign_extend = request.sign_extend,
+            .dry_run_only = false,
+            .executed_helper = true,
+            .mutated_cpu_state = request.rd != 0,
+            .retired = true,
+            .fallback_to_reference_on_trap = request.fallback_to_reference_on_trap,
+            .platform_state_changed = false,
+            .commit_boundary = request.requires_commit_boundary,
+            .serializing = request.serializing,
+        };
+    }
+    case DbtHelperExecutionKind::ScalarMemoryStore: {
+        AddressSpace::TranslateResult translated{};
+        if (request.size > 0) {
+            translated =
+                cpu.address_space().translate_result(bus, request.addr, AccessType::Store, false);
+        }
+
+        const AddressSpace::AccessResult access =
+            cpu.address_space().store_result(bus, request.addr, request.value, request.size);
+        if (!access.ok) {
+            return fault_result(request, access.fault);
+        }
+
+        if (translated.ok) {
+            cpu.trap().invalidate_reservation(translated.paddr, request.size);
+        } else {
+            cpu.trap().clear_reservation();
+        }
+        cpu.core().set_pc(next_pc);
+        cpu.core().advance_instret();
+        return DbtHelperExecutionResult{
+            .ok = true,
+            .kind = request.kind,
+            .replay_kind = request.replay_kind,
+            .pc = request.pc,
+            .next_pc = next_pc,
+            .addr = request.addr,
+            .size = request.size,
+            .rd = request.rd,
+            .value = request.value,
+            .sign_extend = request.sign_extend,
+            .dry_run_only = false,
+            .executed_helper = true,
+            .mutated_cpu_state = true,
+            .retired = true,
+            .fallback_to_reference_on_trap = request.fallback_to_reference_on_trap,
+            .platform_state_changed = true,
+            .commit_boundary = request.requires_commit_boundary,
+            .serializing = request.serializing,
+        };
+    }
+    case DbtHelperExecutionKind::None:
+    case DbtHelperExecutionKind::CsrWrite:
+    case DbtHelperExecutionKind::AtomicMemory:
+    case DbtHelperExecutionKind::VectorConfig:
+    case DbtHelperExecutionKind::VectorMemoryLoad:
+    case DbtHelperExecutionKind::VectorMemoryStore:
+    case DbtHelperExecutionKind::VectorAlu:
+        return reject_result(request, "unsupported-helper-execution-kind");
+    }
+
+    return reject_result(request, "unknown-helper-execution-kind");
+}
+
 const char* dbt_helper_execution_kind_name(DbtHelperExecutionKind kind) {
     switch (kind) {
     case DbtHelperExecutionKind::None:
@@ -146,5 +295,33 @@ std::string format_dbt_helper_execution_request(
         << " dry-run-only=" << bool_name(request.dry_run_only)
         << " executed-helper=" << bool_name(request.executed_helper)
         << " mutates-state=" << bool_name(request.mutates_cpu_state);
+    return out.str();
+}
+
+std::string format_dbt_helper_execution_result(
+    const DbtHelperExecutionResult& result) {
+    std::ostringstream out;
+    out << "helper-exec-result:"
+        << " kind=" << dbt_helper_execution_kind_name(result.kind)
+        << " ok=" << bool_name(result.ok)
+        << " pc=" << hex_u64(result.pc)
+        << " next-pc=" << hex_u64(result.next_pc)
+        << " addr=" << hex_u64(result.addr)
+        << " size=" << static_cast<uint32_t>(result.size)
+        << " rd=" << static_cast<uint32_t>(result.rd)
+        << " value=" << hex_u64(result.value)
+        << " replay=" << dbt_helper_replay_kind_name(result.replay_kind)
+        << " reason=" << (result.reject_reason.empty() ? "none" : result.reject_reason)
+        << " dry-run-only=" << bool_name(result.dry_run_only)
+        << " executed-helper=" << bool_name(result.executed_helper)
+        << " mutates-state=" << bool_name(result.mutated_cpu_state)
+        << " retired=" << bool_name(result.retired)
+        << " trap=" << bool_name(result.trap_taken)
+        << " trap-cause=" << hex_u64(result.trap_cause)
+        << " trap-tval=" << hex_u64(result.trap_tval)
+        << " reference-on-trap=" << bool_name(result.fallback_to_reference_on_trap)
+        << " platform-state=" << bool_name(result.platform_state_changed)
+        << " commit-boundary=" << bool_name(result.commit_boundary)
+        << " serializing=" << bool_name(result.serializing);
     return out.str();
 }

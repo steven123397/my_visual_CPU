@@ -2,11 +2,15 @@
 #include <cstdio>
 #include <string>
 
+#include "../../src/cpu.h"
 #include "../../src/exec/dbt_helper_execution_bridge.h"
+#include "../../src/mem/bus.h"
+#include "../../src/mem/ram.h"
 
 namespace {
 
 constexpr uint64_t kPc = 0x80000000ULL;
+constexpr uint64_t kData = 0x80002000ULL;
 constexpr uint32_t kRawLoad = 0x0002a283U;   // lw x5, 0(x5)
 constexpr uint32_t kRawStore = 0x0062a023U;  // sw x6, 0(x5)
 constexpr uint32_t kRawCsr = 0x300312f3U;    // csrrw x5, mstatus, x6
@@ -55,6 +59,24 @@ DbtHelperReplayPlan scalar_store_replay() {
         .non_speculative = true,
         .serializing = true,
     };
+}
+
+DbtHelperReplayPlan scalar_load_replay(uint64_t addr, uint8_t rd, uint8_t size, bool sign_extend) {
+    DbtHelperReplayPlan replay = scalar_load_replay();
+    replay.addr = addr;
+    replay.rd = rd;
+    replay.size = size;
+    replay.sign_extend = sign_extend;
+    replay.writes_gpr = rd != 0;
+    return replay;
+}
+
+DbtHelperReplayPlan scalar_store_replay(uint64_t addr, uint8_t size, uint64_t value) {
+    DbtHelperReplayPlan replay = scalar_store_replay();
+    replay.addr = addr;
+    replay.size = size;
+    replay.value = value;
+    return replay;
 }
 
 DbtHelperReplayPlan csr_replay() {
@@ -196,6 +218,79 @@ bool test_helper_execution_bridge_plans_atomic_and_vector_helpers() {
                   "formatter should expose non-execution flag");
 }
 
+bool test_helper_execution_bridge_executes_scalar_memory_load_opt_in() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kPc);
+    cpu.core().write_gpr(5, 0xaaaaaaaaaaaaaaaaULL);
+    ram.store(kData, 0xffffffffffffff80ULL, 1);
+
+    const DbtHelperExecutionRequest request =
+        plan_dbt_helper_execution_bridge(scalar_load_replay(kData, 5, 1, true));
+    const DbtHelperExecutionResult result =
+        execute_dbt_helper_request(cpu, bus, request);
+    const std::string line = format_dbt_helper_execution_result(result);
+
+    return expect(request.ok, "load helper request should be valid") &&
+           expect(result.ok && result.executed_helper && result.mutated_cpu_state,
+                  "opt-in load helper execution should run and mutate CPU state") &&
+           expect(result.retired && !result.trap_taken && result.next_pc == kPc + 4,
+                  "load helper should retire exactly at the helper commit boundary") &&
+           expect(cpu.core().read_gpr(5) == 0xffffffffffffff80ULL,
+                  "load helper should sign-extend and commit loaded value to rd") &&
+           expect(cpu.core().pc() == kPc + 4 && cpu.core().instret() == 1,
+                  "load helper should commit next PC and instret") &&
+           expect(line.find("helper-exec-result: kind=scalar-memory-load") != std::string::npos,
+                  "helper execution result formatter should expose stable prefix") &&
+           expect(line.find("dry-run-only=false") != std::string::npos,
+                  "executed helper result should clear dry-run-only flag");
+}
+
+bool test_helper_execution_bridge_executes_scalar_memory_store_opt_in() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kPc);
+
+    const DbtHelperExecutionRequest request =
+        plan_dbt_helper_execution_bridge(scalar_store_replay(kData + 8, 4, 0x11223344));
+    const DbtHelperExecutionResult result =
+        execute_dbt_helper_request(cpu, bus, request);
+
+    return expect(request.ok, "store helper request should be valid") &&
+           expect(result.ok && result.executed_helper && result.mutated_cpu_state,
+                  "opt-in store helper execution should run and mutate machine state") &&
+           expect(result.retired && result.platform_state_changed &&
+                      result.next_pc == kPc + 4,
+                  "store helper should retire and report platform boundary change") &&
+           expect(ram.load(kData + 8, 4) == 0x11223344,
+                  "store helper should commit store value through the bus") &&
+           expect(cpu.core().pc() == kPc + 4 && cpu.core().instret() == 1,
+                  "store helper should commit next PC and instret");
+}
+
+bool test_helper_execution_bridge_rejects_faulting_scalar_memory_load_without_commit() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kPc);
+    cpu.core().write_gpr(5, 0x1234);
+
+    const DbtHelperExecutionRequest request =
+        plan_dbt_helper_execution_bridge(scalar_load_replay(0x1000, 5, 4, false));
+    const DbtHelperExecutionResult result =
+        execute_dbt_helper_request(cpu, bus, request);
+
+    return expect(request.ok, "faulting load helper request should still be valid") &&
+           expect(!result.ok && result.trap_taken && result.fallback_to_reference_on_trap,
+                  "faulting load helper should report trap and reference fallback boundary") &&
+           expect(result.executed_helper && !result.mutated_cpu_state && !result.retired,
+                  "faulting load helper should execute but avoid helper state commit") &&
+           expect(cpu.core().read_gpr(5) == 0x1234 && cpu.core().pc() == kPc,
+                  "faulting load helper should preserve rd and pc for reference fallback");
+}
+
 }  // namespace
 
 int main() {
@@ -206,6 +301,15 @@ int main() {
         return 1;
     }
     if (!test_helper_execution_bridge_plans_atomic_and_vector_helpers()) {
+        return 1;
+    }
+    if (!test_helper_execution_bridge_executes_scalar_memory_load_opt_in()) {
+        return 1;
+    }
+    if (!test_helper_execution_bridge_executes_scalar_memory_store_opt_in()) {
+        return 1;
+    }
+    if (!test_helper_execution_bridge_rejects_faulting_scalar_memory_load_without_commit()) {
         return 1;
     }
     std::puts("dbt_helper_execution_bridge_smoke: PASS");

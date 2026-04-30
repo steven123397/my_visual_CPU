@@ -23,6 +23,22 @@
 
 ### 2026-04-30
 
+#### mainline-wave6-runtime-execution-sequence-plan
+
+- 原文件：`mainline_wave6_runtime_execution_sequence_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 的 runtime execution sequence 第一刀。
+  本轮新增 scalar memory helper opt-in execution、reference fallback opt-in execution、
+  JIT dispatch harness v1、expanded executable integer smoke matrix 和 runtime harness
+  summary / stats。默认 backend 接入评估结论仍是不新增 `--backend jit`，不替换
+  `functional` 或 `pipeline`。
+- 实现过程摘要：整体保持 host-smoke-only 和显式 opt-in。helper execution 只执行
+  scalar memory load / store，CSR / atomic / vector 仍是 request-only；fallback execution
+  复用 `FunctionalBackend::step()` 单步覆盖 JIT miss / reject / helper-required /
+  differential mismatch；dispatch harness v1 固定 cache lookup、emit-on-miss、
+  execute-on-hit 和 invalidation 后禁止 stale dispatch。persistent cache、workload-level
+  scheduler、multicore、coherence 和新的 memory consistency 模型仍不启动。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave6-executable-cache-runtime-hookup-plan
 
 - 原文件：`mainline_wave6_executable_cache_runtime_hookup_plan.md`

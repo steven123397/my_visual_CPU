@@ -69,12 +69,52 @@ constexpr uint32_t addi(uint8_t rd, uint8_t rs1, int32_t imm) {
     return encode_i(static_cast<uint32_t>(imm), rs1, 0, rd, 0x13);
 }
 
+constexpr uint32_t slti(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 2, rd, 0x13);
+}
+
+constexpr uint32_t sltiu(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 3, rd, 0x13);
+}
+
 constexpr uint32_t xori(uint8_t rd, uint8_t rs1, int32_t imm) {
     return encode_i(static_cast<uint32_t>(imm), rs1, 4, rd, 0x13);
 }
 
+constexpr uint32_t ori(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 6, rd, 0x13);
+}
+
+constexpr uint32_t andi(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 7, rd, 0x13);
+}
+
 constexpr uint32_t slli(uint8_t rd, uint8_t rs1, uint8_t shamt) {
     return encode_i(shamt, rs1, 1, rd, 0x13);
+}
+
+constexpr uint32_t srli(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i(shamt, rs1, 5, rd, 0x13);
+}
+
+constexpr uint32_t srai(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i((0x20U << 5) | shamt, rs1, 5, rd, 0x13);
+}
+
+constexpr uint32_t addiw(uint8_t rd, uint8_t rs1, int32_t imm) {
+    return encode_i(static_cast<uint32_t>(imm), rs1, 0, rd, 0x1B);
+}
+
+constexpr uint32_t slliw(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i(shamt, rs1, 1, rd, 0x1B);
+}
+
+constexpr uint32_t srliw(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i(shamt, rs1, 5, rd, 0x1B);
+}
+
+constexpr uint32_t sraiw(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return encode_i((0x20U << 5) | shamt, rs1, 5, rd, 0x1B);
 }
 
 constexpr uint32_t add(uint8_t rd, uint8_t rs1, uint8_t rs2) {
@@ -83,6 +123,58 @@ constexpr uint32_t add(uint8_t rd, uint8_t rs1, uint8_t rs2) {
 
 constexpr uint32_t sub(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return encode_r(0x20, rs2, rs1, 0, rd, 0x33);
+}
+
+constexpr uint32_t sll(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 1, rd, 0x33);
+}
+
+constexpr uint32_t slt(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 2, rd, 0x33);
+}
+
+constexpr uint32_t sltu(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 3, rd, 0x33);
+}
+
+constexpr uint32_t bit_xor(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 4, rd, 0x33);
+}
+
+constexpr uint32_t srl(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 5, rd, 0x33);
+}
+
+constexpr uint32_t sra(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x20, rs2, rs1, 5, rd, 0x33);
+}
+
+constexpr uint32_t bit_or(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 6, rd, 0x33);
+}
+
+constexpr uint32_t bit_and(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 7, rd, 0x33);
+}
+
+constexpr uint32_t addw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 0, rd, 0x3B);
+}
+
+constexpr uint32_t subw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x20, rs2, rs1, 0, rd, 0x3B);
+}
+
+constexpr uint32_t sllw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 1, rd, 0x3B);
+}
+
+constexpr uint32_t srlw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x00, rs2, rs1, 5, rd, 0x3B);
+}
+
+constexpr uint32_t sraw(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return encode_r(0x20, rs2, rs1, 5, rd, 0x3B);
 }
 
 void write_program(Ram& ram, const std::vector<uint32_t>& program) {
@@ -132,6 +224,41 @@ bool expect_gprs_equal(const std::array<uint64_t, 32>& lhs,
         }
     }
     return true;
+}
+
+bool expect_emitted_program_matches_reference(const std::vector<uint32_t>& program,
+                                              const char* label) {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    DbtTranslationUnit unit;
+    const DbtIrLoweringResult lowered = lower_program(program, cpu, bus, ram, &unit);
+    const std::array<uint64_t, 32> input_gprs = snapshot_gprs(cpu);
+    DbtHostExecutable emitted = emit_dbt_host_block(lowered);
+
+    std::array<uint64_t, 32> emitted_gprs = input_gprs;
+    const uint64_t next_pc = execute_dbt_host_block(emitted, emitted_gprs.data(), cpu.core().pc());
+
+    Ram ref_ram;
+    Bus ref_bus(ref_ram);
+    CPU ref_cpu;
+    cpu_init(ref_cpu, kEntry);
+    write_program(ref_ram, program);
+    for (size_t i = 0; i < program.size(); ++i) {
+        cpu_step(ref_cpu, ref_bus);
+    }
+    const std::array<uint64_t, 32> expected_gprs = snapshot_gprs(ref_cpu);
+
+    release_dbt_host_executable(emitted);
+
+    return expect(lowered.ok, label) &&
+           expect(unit.ok, "translator should accept executable matrix program") &&
+           expect(emitted.ok, "host emitter should accept executable matrix program") &&
+           expect(next_pc == ref_cpu.core().pc(),
+                  "emitted matrix program should return reference next PC") &&
+           expect_gprs_equal(emitted_gprs, expected_gprs, label);
 }
 
 bool test_host_emitter_executes_pure_integer_lowered_block() {
@@ -189,6 +316,51 @@ bool test_host_emitter_executes_pure_integer_lowered_block() {
                   "host emitter formatter should expose stable prefix") &&
            expect(line.find("backend=x86_64-sysv") != std::string::npos,
                   "host emitter formatter should expose backend name");
+}
+
+bool test_host_emitter_executes_logic_shift_compare_matrix() {
+    return expect_emitted_program_matches_reference(
+        {
+            addi(1, 0, -8),
+            addi(2, 0, 7),
+            xori(3, 1, 0x7f),
+            ori(4, 3, 0x30),
+            andi(5, 4, 0x7f),
+            slti(6, 1, -1),
+            sltiu(7, 1, 1),
+            slli(8, 2, 5),
+            srli(9, 8, 2),
+            srai(10, 1, 2),
+            bit_xor(11, 3, 5),
+            bit_or(12, 11, 8),
+            bit_and(13, 12, 4),
+            slt(14, 1, 2),
+            sltu(15, 1, 2),
+            sll(16, 2, 6),
+            srl(17, 8, 2),
+            sra(18, 1, 2),
+        },
+        "host-emitter-logic-shift-compare");
+}
+
+bool test_host_emitter_executes_u_type_and_word_matrix() {
+    return expect_emitted_program_matches_reference(
+        {
+            lui(1, 0x12345000),
+            auipc(2, 0x00012000),
+            addiw(3, 1, -1),
+            addiw(4, 0, -1),
+            slliw(5, 4, 4),
+            srliw(6, 5, 1),
+            sraiw(7, 5, 2),
+            addi(8, 0, 3),
+            addw(9, 5, 8),
+            subw(10, 5, 8),
+            sllw(11, 8, 8),
+            srlw(12, 5, 8),
+            sraw(13, 5, 8),
+        },
+        "host-emitter-u-type-word");
 }
 
 bool test_host_emitter_rejects_unsupported_lowered_ops_without_prefix_code() {
@@ -260,6 +432,12 @@ bool test_host_emitter_rejects_rejected_lowering_and_stable_names() {
 
 int main() {
     if (!test_host_emitter_executes_pure_integer_lowered_block()) {
+        return 1;
+    }
+    if (!test_host_emitter_executes_logic_shift_compare_matrix()) {
+        return 1;
+    }
+    if (!test_host_emitter_executes_u_type_and_word_matrix()) {
         return 1;
     }
     if (!test_host_emitter_rejects_unsupported_lowered_ops_without_prefix_code()) {
