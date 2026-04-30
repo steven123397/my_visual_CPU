@@ -58,8 +58,9 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 
 ## 非目标
 
-- 当前已完成 `DBT translator + IR v0 dry-run` 子阶段，但仍不实现 JIT engine、
-  executable IR lowering、block cache 或 host code emission。
+- 当前已完成 `DBT translator + IR v0 dry-run` 和 metadata-only block cache 子阶段，
+  但仍不实现 JIT engine、executable IR lowering、persistent / executable block cache
+  或 host code emission。
 - 不申请可执行内存，不引入宿主平台相关代码生成。
 - 不改变 `InstructionSemantics` 的 ISA 真值来源定位。
 - 不改变 guest 可见 fault / trap / CSR / memory 语义。
@@ -102,9 +103,14 @@ block cache 或 multicore / coherence 仍需要新的设计和计划。
 - 已新增 `dbt_ir_eval`，只在 host smoke 中解释 IR v0 的寄存器语义，并与 reference
   execution 对比 GPR、fallthrough PC 和 retired instruction count；它不读取 memory、
   不提交 CPU state，也不作为 runtime 执行路径。
+- 已新增 `dbt_block_cache`，只缓存 `DbtTranslationUnit` metadata，固定 exact-range
+  lookup、hit / miss 计数、rejected unit 不入 cache，以及复用现有 invalidation dry-run
+  合同删除 metadata；当前也固定了 invalidation check / examined entries /
+  non-invalidating event 计数，以及空 cache 上全局 invalidation 事件的稳定分类。它不保存
+  host code，不接入 backend，也不承担 persistent lifecycle。
 
 本阶段完成后，项目可以声称“已有最小 DBT translator / IR dry-run 前端”，但仍不能声称
-已有 JIT engine、runtime JIT、host code emission、persistent block cache 或 helper
+已有 JIT engine、runtime JIT、host code emission、persistent / executable block cache 或 helper
 inline / replay runtime。
 
 ## 当前合同
@@ -232,6 +238,13 @@ dry-run。`run_debug_cli_probe.py --translation-plan` 只在显式 opt-in 时输
 
 在真正存在 block cache 之前，以上只是合同：默认执行路径不做 invalidation 动作，也不产生可执行 host code。
 
+当前 `dbt_block_cache` 只把这些合同用于 host-smoke-only metadata cache dry-run：缓存
+成功翻译的 `DbtTranslationUnit`，按 guest block range lookup，并在 dry-run invalidation
+事件命中时删除 metadata 条目。invalidation matrix 已覆盖 empty cache 分类、disjoint
+range、overlapping guest store、primary image load、debug reset、`satp` write、
+`sfence.vma` 和 region 属性变化等 metadata 删除合同。它仍不是 runtime cache，不持久化，
+不缓存 executable host code，也不承担 helper replay 或 scheduler 职责。
+
 ## 后续推进口径
 
 在证据链和原型边界阶段，后续窄任务不再单独创建 plan 文档。允许直接推进的任务包括：
@@ -269,6 +282,7 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
 - `cd myCPU && make test-host-dbt_block_plan_smoke`
 - `cd myCPU && make test-host-dbt_translator_smoke`
 - `cd myCPU && make test-host-dbt_ir_eval_smoke`
+- `cd myCPU && make test-host-dbt_block_cache_smoke`
 - `cd myCPU && make test-host-run_debug_cli_probe`
 - `cd myCPU && make test-host-execution_profile_smoke`
 - `cd myCPU && make test-host-debug_cli_smoke`
@@ -298,8 +312,8 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
 - 当前已经完成 hot-path candidate、per-PC / branch-target 观察、translation contract、
   host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-run、functional
   fallback replay 等价性、first-boundary taxonomy、共享 `DbtBlockPlan` analyzer，以及
-  非执行 `dbt_ir` / `dbt_translator` v0 dry-run 和 `dbt_ir_eval` semantic differential
-  dry-run。
-- 当前仍未启动 JIT engine、host code emission、长期 block cache、multicore /
+  非执行 `dbt_ir` / `dbt_translator` v0 dry-run、`dbt_ir_eval` semantic differential
+  dry-run，以及 metadata-only `dbt_block_cache` dry-run / invalidation matrix hardening。
+- 当前仍未启动 JIT engine、host code emission、persistent / executable block cache、multicore /
   coherence、write-back cache、I-cache 和 cache maintenance instruction。
 - 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。

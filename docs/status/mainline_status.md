@@ -70,10 +70,14 @@ analyzer 入口都已有窄合同与验证。
 形状验证。
 `IR semantic differential dry-run` 已完成第一刀：`dbt_ir_eval` 只解释已成功翻译的
 IR v0，并在 host smoke 中同 reference 执行对齐 GPR、fallthrough PC 和 retired count。
+`metadata-only block cache` 已完成第一刀：`dbt_block_cache` 只缓存成功翻译的
+`DbtTranslationUnit` metadata，固定 exact-range lookup、hit / miss 计数、rejected unit
+不入 cache，以及复用 invalidation dry-run 合同删除 metadata 条目；当前也固定了
+invalidation check / examined entries / non-invalidating event 计数和空 cache 全局事件分类。
 
 这些结果只说明“哪些 guest PC 区间值得观察、哪些能进入 IR v0 dry-run、为什么剩余部分
 仍不能翻译、回退是否等价、第一拒绝边界是什么”。
-当前仍不实现 JIT engine、IR lowering / executable IR、block cache、host code emission、
+当前仍不实现 JIT engine、IR lowering / executable IR、persistent / executable block cache、host code emission、
 multicore、coherence 或新的 memory consistency 模型，也不改变 guest 可见语义。
 
 ## 当前状态
@@ -160,6 +164,10 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
   `src/exec/dbt_ir_eval.{h,cpp}`，只解释 IR v0 的寄存器语义，并用
   `tests/host/dbt_ir_eval_smoke.cpp` 对齐 reference 执行的 GPR、fallthrough PC 和
   retired instruction count。
+- 主线 `Wave 6` 已完成 `metadata-only block cache` 第一刀：新增
+  `src/exec/dbt_block_cache.{h,cpp}`，只缓存成功翻译的 `DbtTranslationUnit`
+  metadata，并用 `tests/host/dbt_block_cache_smoke.cpp` 固定 key / hit / miss /
+  rejected insert / invalidation dry-run / invalidation matrix hardening 合同。
 
 ## 当前优先级
 
@@ -167,8 +175,9 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
    IR metadata、future block-cache invalidation dry-run、共享 `DbtBlockPlan` analyzer
    入口、
    [DBT translator + IR v0 dry-run](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
-   和 IR semantic differential dry-run 第一刀已作为补充合同落地。下一刀如继续推进，
-   应优先选择 metadata-only block cache 或更窄的 IR semantic coverage；不得直接进入
+   IR semantic differential dry-run 第一刀和 metadata-only block cache / invalidation
+   matrix hardening 第一刀已作为补充合同落地。下一刀如继续推进，应优先选择更窄的
+   IR semantic coverage 或 translator reject taxonomy；不得直接进入
    host code emission、长期 block cache、runtime scheduler、multicore、coherence 或新的
    memory consistency 模型。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
@@ -197,6 +206,13 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
     `dbt_ir_eval`，只解释 IR v0 的寄存器语义；host smoke 覆盖依赖链、`x0` 写丢弃、
     负立即数、wraparound add、fallthrough PC、retired instruction count，以及 reject unit
     的拒绝透传。默认 runtime、JIT engine、host code emission 和 block cache 仍不启动。
+  - 主线 `Wave 6` 完成 `metadata-only block cache` 第一刀：新增非执行
+    `dbt_block_cache`，只缓存 ok `DbtTranslationUnit` metadata；host smoke 固定
+    exact-range lookup、hit / miss 计数、同 key replacement、rejected unit 不入 cache、
+    invalidation check / examined entries / non-invalidating event 计数、empty cache 全局事件
+    分类、overlapping guest store 局部删除和 `sfence.vma` / primary image load / debug reset /
+    `satp` write / region 属性变化全局删除。默认 runtime、JIT engine、host code emission
+    和 persistent / executable block cache 仍不启动。
   - 主线 `Wave 6` 证据链和原型边界阶段继续做代码边界收口：新增
     `src/exec/dbt_block_plan.{h,cpp}`，把 hot-path block preflight、typed boundary、
     pure inlineable dry-run IR metadata 和 future block-cache invalidation dry-run 从
@@ -342,17 +358,18 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
   preflight guardrail、opt-in translation-plan dry-run、host-smoke-only fallback replay
   等价性、first-boundary taxonomy、typed boundary、dry-run IR metadata、future
   block-cache invalidation dry-run、共享 `DbtBlockPlan` analyzer 入口、非执行
-  `dbt_ir` / `dbt_translator` v0 dry-run，以及 `dbt_ir_eval` semantic differential
-  dry-run。这不是完整
+  `dbt_ir` / `dbt_translator` v0 dry-run、`dbt_ir_eval` semantic differential
+  dry-run，以及 metadata-only `dbt_block_cache` dry-run / invalidation matrix hardening。这不是完整
   JIT / DBT engine；当前仍不生成宿主代码，不引入长期 block cache，不改变 guest 可见语义。
 - 当前 `pc_costs.cycles` 只是 retire-side 观察成本，不是稳定性能模型或 benchmark
   结论。`interpreter_dbt_prototype` 仍只覆盖 pure straight-line inlineable block；
   memory、CSR、trap、atomic、vector、control-flow、system boundary 都还是 helper /
   fallback；当前已有 preflight 拒绝整块的 lifecycle guardrail、opt-in translation-plan
   观察、host-smoke-only functional fallback replay、first-boundary taxonomy、dry-run IR
-  metadata、invalidation dry-run、共享 block analyzer、非执行 translator / IR v0 和
-  IR semantic differential dry-run，但尚未有 IR lowering、helper replay、persistent block
-  lifecycle 或 workload-level runtime execution harness。
+  metadata、invalidation dry-run、共享 block analyzer、非执行 translator / IR v0、
+  IR semantic differential dry-run 和 metadata-only block cache / invalidation matrix
+  hardening，但尚未有 IR lowering、
+  helper replay、persistent block lifecycle 或 workload-level runtime execution harness。
 - multicore / coherence 虽然属于 `Wave 6` 长期目标，但当前仍未启动；它必须等待
   atomic、memory-order、DMA / cache 交界和验证矩阵另行收口。
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
@@ -366,8 +383,8 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
 1. 当前暂无新的主线活跃计划；刚完成的
    [DBT translator + IR v0 dry-run](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
    只提供非执行 typed IR 和 translator dry-run，不接入 runtime。
-2. 后续如果继续 `Wave 6`，建议先做 metadata-only block cache 或更窄的 IR semantic
-   coverage，继续保持不生成 host code、不申请 executable memory、不改变 guest 可见语义。
+2. 后续如果继续 `Wave 6`，建议先做更窄的 IR semantic coverage 或 translator reject
+   taxonomy，继续保持不生成 host code、不申请 executable memory、不改变 guest 可见语义。
 3. 只有准备启动真正 JIT engine、IR lowering、host code emission、persistent
    block cache、runtime scheduler、helper replay 策略、multicore 或 coherence 时，才重新
    新建 `docs/plan/` 计划。
