@@ -103,6 +103,33 @@ resident contract；它不保存 host code、不申请 executable memory、不�
 `dbt_reference_fallback` 只把 runtime dispatch contract 的 plain reference step 和
 helper-bridge-to-reference 路径收成未来 fallback 入口合同，保留 reject / helper metadata
 与 no-execution flags；它不调用 functional backend step、不执行 helper、不提交 CPU state。
+`helper execution bridge contract dry-run` 已完成第一刀：
+`dbt_helper_execution_bridge` 只把 helper replay plan 转成 future helper execution request，
+保留 memory / CSR / atomic / vector operands、effect flags、trap fallback 和 commit-boundary
+合同；它不执行 helper、不提交 CPU state，也不生成 host code。
+`runtime invalidation hook contract` 已完成第一刀：
+`dbt_runtime_invalidation` 把 guest store、payload load、primary image load、debug reset、
+`satp`、`sfence.vma` 和 region 属性变化映射到 executable-cache dry-run enforcement；
+它只阻止 stale dispatch metadata，不提交 CPU state、不生成 host code。
+`reference fallback execution bridge` 已完成第一刀：
+`dbt_reference_fallback_execution` 把 fallback plan 分类成 plain reference step、
+helper-bridge reference step、JIT miss 和 trap/fault placeholder execution request；
+它只描述 future reference backend 调用，不执行 reference step、不提交 CPU state。
+`executable memory policy` 已完成第一刀：
+`dbt_executable_memory` 提供 POSIX allocation / write / seal RX / release 合同，拒绝
+zero-size、越界写、seal 后写入和重复释放；当前只管理内存生命周期，不执行宿主代码。
+`host code emission v0` 已完成第一刀：
+`dbt_host_emitter` 只接受成功 lowered 的 pure integer straight-line block，生成
+x86-64 SysV `uint64_t (*)(uint64_t* gpr, uint64_t pc)` 形态的宿主代码，并通过
+executable memory policy 完成 W->RX 生命周期；host smoke 用 IR eval differential
+验证 GPR / fallthrough PC。unsupported lowered op、rejected lowering 或缺失
+fallthrough 都整体拒绝，不返回可执行前缀 code。
+`opt-in runtime harness + differential guardrail` 已完成第一刀：
+`dbt_runtime_harness` 只在 host smoke 显式调用时执行一个 pure integer straight-line
+block，路径必须通过 `DbtBlockPlan -> translator -> IR eval -> lowering -> host emitter ->
+executable memory policy`，并在提交 CPU state 前与 IR eval differential 对齐。helper /
+fallback / trap-risk block 会拒绝并要求 reference fallback，不执行 host code、不提交状态；
+默认 `Machine` backend 仍是 `functional`。
 `IR semantic coverage` 已扩到更宽的 pure integer 子集：逻辑运算、shift immediate /
 register、signed / unsigned set-less-than、`lui` / `auipc` 和 RV64 word ops 都有
 reference differential smoke。
@@ -113,7 +140,7 @@ invalidation check / examined entries / non-invalidating event 计数和空 cach
 
 这些结果只说明“哪些 guest PC 区间值得观察、哪些能进入 IR v0 dry-run、为什么剩余部分
 仍不能翻译、回退是否等价、第一拒绝边界是什么”。
-当前仍不实现 executable JIT engine、executable IR lowering、persistent / executable block cache、host code emission、
+当前仍不实现默认 JIT backend、persistent / executable block cache、helper runtime execution、
 multicore、coherence 或新的 memory consistency 模型，也不改变 guest 可见语义。
 
 ## 当前状态
@@ -240,6 +267,29 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
   `src/exec/dbt_reference_fallback.{h,cpp}`，只把 runtime dispatch contract 转成
   future reference fallback plan，并用 host smoke 固定 plain reference step、
   helper-bridge-to-reference、lowered-block rejection 和 no-execution 边界。
+- 主线 `Wave 6` 已完成 `helper execution bridge contract dry-run` 第一刀：新增
+  `src/exec/dbt_helper_execution_bridge.{h,cpp}`，只把 helper replay plan 转成
+  future helper execution request，并用 host smoke 固定 scalar memory、CSR、atomic、
+  vector request metadata 和 no-execution 边界。
+- 主线 `Wave 6` 已完成 `runtime invalidation hook contract` 第一刀：新增
+  `src/exec/dbt_runtime_invalidation.{h,cpp}`，只把 runtime invalidation event 转接到
+  executable-cache dry-run enforcement，并用 host smoke 固定 guest store、payload load、
+  image/reset/`satp`/`sfence.vma`/region 事件。
+- 主线 `Wave 6` 已完成 `reference fallback execution bridge` 第一刀：新增
+  `src/exec/dbt_reference_fallback_execution.{h,cpp}`，只把 fallback plan 转成 future
+  reference backend execution request，并用 host smoke 固定 JIT miss、helper bridge、
+  trap/fault placeholder 和 no-execution 边界。
+- 主线 `Wave 6` 已完成 `executable memory policy` 第一刀：新增
+  `src/exec/dbt_executable_memory.{h,cpp}`，用 POSIX `mmap/mprotect/munmap`
+  固定 allocation / write / seal RX / release 生命周期，并用 host smoke 固定错误回退合同。
+- 主线 `Wave 6` 已完成 `host code emission v0` 第一刀：新增
+  `src/exec/dbt_host_emitter.{h,cpp}`，只把 pure integer straight-line lowered block
+  发射成 x86-64 SysV 小函数；host smoke 通过真实调用该函数并与 `dbt_ir_eval`
+  对齐 GPR / fallthrough PC，同时固定 unsupported lowered op 不暴露前缀 code。
+- 主线 `Wave 6` 已完成 `opt-in runtime harness + differential guardrail` 第一刀：
+  新增 `src/exec/dbt_runtime_harness.{h,cpp}`，只在 host smoke 中显式执行单个 pure
+  integer block；提交 CPU state 前必须和 IR eval differential 对齐，helper block
+  保守拒绝并保持状态不变，默认 `Machine` backend 仍是 `functional`。
 - 主线 `Wave 6` 已完成 `metadata-only block cache` 第一刀：新增
   `src/exec/dbt_block_cache.{h,cpp}`，只缓存成功翻译的 `DbtTranslationUnit`
   metadata，并用 `tests/host/dbt_block_cache_smoke.cpp` 固定 key / hit / miss /
@@ -256,12 +306,17 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
    IR lowering contract dry-run、JIT engine skeleton dry-run / runtime fallback bridge、
    profile hot-path dispatch dry-run、dispatch result serialization / debug-probe visibility bridge、
    runtime dispatch contract dry-run、executable-cache invalidation enforcement dry-run、
-   reference fallback step bridge dry-run，
+   reference fallback step bridge dry-run、helper execution bridge contract dry-run、
+   runtime invalidation hook contract、reference fallback execution bridge、
+   executable memory policy、host code emission v0、
+   opt-in runtime harness + differential guardrail，
    以及 metadata-only block cache / invalidation matrix hardening
    第一刀已作为补充合同落地。
-   下一刀如继续推进，应优先选择 helper execution bridge contract dry-run；不得直接进入
-   host code emission、长期 block cache、runtime scheduler、multicore、coherence 或新的
-   memory consistency 模型。
+   当前执行计划已完成并归档：
+   [Wave 6 JIT Execution Layer 实现计划](../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)。
+   下一刀如继续推进，应优先选择 executable cache runtime hookup 或更窄的 helper
+   execution opt-in 设计；不得直接进入默认 JIT backend、长期 block cache、multicore、
+   coherence 或新的 memory consistency 模型。
 2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
@@ -471,6 +526,10 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
   dry-run / matrix 扩展、helper replay contract dry-run、IR lowering contract dry-run、
   JIT engine skeleton dry-run / runtime fallback bridge、runtime dispatch contract dry-run、
   executable-cache invalidation enforcement dry-run、reference fallback step bridge dry-run、
+  helper execution bridge contract dry-run、
+  runtime invalidation hook contract、
+  reference fallback execution bridge、
+  executable memory policy、
   `dbt_ir_eval`
   semantic differential dry-run 的更宽整数覆盖，
   以及 metadata-only `dbt_block_cache` dry-run / invalidation matrix hardening。这不是完整
@@ -484,7 +543,11 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
   translator reject taxonomy、helper planning dry-run / matrix 扩展、helper replay contract dry-run、
   IR lowering contract dry-run、JIT engine skeleton dry-run / runtime fallback bridge、
   runtime dispatch contract dry-run、executable-cache invalidation enforcement dry-run、
-  reference fallback step bridge dry-run、IR semantic differential dry-run 更宽整数覆盖和
+  reference fallback step bridge dry-run、helper execution bridge contract dry-run、
+  runtime invalidation hook contract、
+  reference fallback execution bridge、
+  executable memory policy、
+  IR semantic differential dry-run 更宽整数覆盖和
   metadata-only block cache / invalidation matrix hardening，但尚未有 executable lowering、
   runtime helper execution、
   persistent block lifecycle、host-code dispatch 或 workload-level runtime execution harness。
@@ -498,15 +561,14 @@ multicore、coherence 或新的 memory consistency 模型，也不改变 guest �
 
 ## 下一步
 
-1. 当前暂无新的主线活跃计划；刚完成的
-   [DBT translator + IR v0 dry-run](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
-   只提供非执行 typed IR 和 translator dry-run，不接入 runtime。
-2. 后续如果继续 `Wave 6`，建议先做 helper execution bridge contract dry-run，
-   继续保持不生成 host code、不申请 executable memory、不改变 guest 可见语义。
-3. 只有准备启动真正 JIT engine、executable lowering、host code emission、persistent
-   block cache、runtime scheduler、helper replay 策略、multicore 或 coherence 时，才重新
-   新建 `docs/plan/` 计划。
-4. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
+1. `Wave 6 JIT Execution Layer 实现计划` 已完成并归档：
+   [history_plan.md#mainline-wave6-jit-execution-layer-plan](../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)。
+   当前已有 host-smoke-only 的 opt-in executable JIT block，但默认仍不启用 JIT backend，
+   不在默认执行路径生成或执行 host code，不改变 guest 可见语义。
+2. 下一刀如继续推进，优先做 executable cache runtime hookup 或 helper execution opt-in
+   设计；默认 backend、persistent / executable block cache、multicore、coherence 和新的
+   memory consistency 模型仍不启动。
+3. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
    如需调整排序或字段，必须先补 probe / host smoke 兼容门禁。
 5. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 `Wave 6`

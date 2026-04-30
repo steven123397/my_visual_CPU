@@ -73,6 +73,7 @@
   - [plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
 - `Wave 6 / JIT / DBT`
   - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
+  - [plan/history_plan.md#mainline-wave6-jit-execution-layer-plan](plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)
   - [plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
   - [plan/history_plan.md](plan/history_plan.md)
 - `kernel_alpha`

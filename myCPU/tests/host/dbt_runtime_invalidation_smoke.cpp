@@ -1,0 +1,168 @@
+#include <cstdint>
+#include <cstdio>
+#include <string>
+
+#include "../../src/cpu.h"
+#include "../../src/exec/dbt_executable_cache.h"
+#include "../../src/exec/dbt_jit_engine.h"
+#include "../../src/exec/dbt_runtime_dispatch.h"
+#include "../../src/exec/dbt_runtime_invalidation.h"
+#include "../../src/mem/bus.h"
+#include "../../src/mem/ram.h"
+
+namespace {
+
+constexpr uint64_t kEntry = MEM_BASE;
+constexpr uint32_t kAddiX1One = 0x00100093U;  // addi x1, x0, 1
+
+bool expect(bool condition, const char* message) {
+    if (!condition) {
+        std::fprintf(stderr, "%s\n", message);
+        return false;
+    }
+    return true;
+}
+
+void write32(Ram& ram, uint64_t addr, uint32_t value) {
+    ram.write_bytes(addr, &value, sizeof(value));
+}
+
+DbtRuntimeDispatchContract lowered_contract(Ram& ram,
+                                             Bus& bus,
+                                             CPU& cpu,
+                                             uint64_t pc) {
+    write32(ram, pc, kAddiX1One);
+    DbtJitEngineDryRun engine;
+    return plan_dbt_runtime_dispatch_contract(engine.dry_run_block(cpu, bus, pc, pc));
+}
+
+bool populate_cache(DbtExecutableCacheDryRun& cache, uint64_t pc) {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    return cache.insert(lowered_contract(ram, bus, cpu, pc));
+}
+
+bool test_runtime_hook_enforces_guest_store_overlap() {
+    DbtExecutableCacheDryRun cache;
+    const bool inserted = populate_cache(cache, kEntry);
+
+    const DbtRuntimeInvalidationEvent event{
+        .kind = DbtInvalidationEventKind::GuestStore,
+        .addr = kEntry,
+        .size = 4,
+    };
+    const DbtRuntimeInvalidationHookResult result =
+        apply_dbt_runtime_invalidation_hook(cache, event);
+    const DbtExecutableCacheLookup lookup = cache.lookup(kEntry, kEntry);
+
+    return expect(inserted, "runtime invalidation setup should cache lowered block") &&
+           expect(result.ok && result.enforced,
+                  "runtime invalidation hook should enforce guest store events") &&
+           expect(result.event_kind == DbtInvalidationEventKind::GuestStore,
+                  "runtime invalidation hook should preserve event kind") &&
+           expect(result.invalidated && result.entries_removed == 1 &&
+                      result.entries_examined == 1 &&
+                      result.reason == "guest-store-overlaps-block" &&
+                      result.stale_dispatch_prevented,
+                  "overlapping guest store should prevent stale executable dispatch") &&
+           expect(result.dry_run_only && !result.mutates_cpu_state &&
+                      !result.generated_host_code && !result.executed_guest_code,
+                  "runtime invalidation hook should remain non-executing") &&
+           expect(!lookup.hit, "runtime invalidation should remove resident block");
+}
+
+bool test_runtime_hook_keeps_disjoint_payload_load() {
+    DbtExecutableCacheDryRun cache;
+    populate_cache(cache, kEntry);
+
+    const DbtRuntimeInvalidationEvent event{
+        .kind = DbtInvalidationEventKind::PayloadLoad,
+        .addr = kEntry + 0x100,
+        .size = 16,
+    };
+    const DbtRuntimeInvalidationHookResult result =
+        apply_dbt_runtime_invalidation_hook(cache, event);
+    const DbtExecutableCacheLookup lookup = cache.lookup(kEntry, kEntry);
+
+    return expect(result.ok && result.enforced,
+                  "runtime invalidation hook should enforce payload load events") &&
+           expect(!result.invalidated && result.entries_removed == 0 &&
+                      result.entries_examined == 1 && result.reason == "range-disjoint",
+                  "disjoint payload load should not invalidate resident block") &&
+           expect(lookup.hit, "disjoint payload load should keep resident block dispatchable");
+}
+
+bool test_runtime_hook_enforces_global_events() {
+    const DbtInvalidationEventKind events[] = {
+        DbtInvalidationEventKind::PrimaryImageLoad,
+        DbtInvalidationEventKind::DebugReset,
+        DbtInvalidationEventKind::SatpWrite,
+        DbtInvalidationEventKind::SfenceVma,
+        DbtInvalidationEventKind::RegionAttributesChanged,
+    };
+    const char* reasons[] = {
+        "primary-image-load",
+        "debug-reset",
+        "satp-write",
+        "sfence-vma",
+        "region-attributes-changed",
+    };
+
+    for (size_t i = 0; i < sizeof(events) / sizeof(events[0]); ++i) {
+        DbtExecutableCacheDryRun cache;
+        populate_cache(cache, kEntry);
+        const DbtRuntimeInvalidationHookResult result =
+            apply_dbt_runtime_invalidation_hook(cache, DbtRuntimeInvalidationEvent{
+                                                           .kind = events[i],
+                                                       });
+        if (!expect(result.ok && result.invalidated,
+                    "global runtime invalidation event should invalidate resident block") ||
+            !expect(result.entries_removed == 1 && result.reason == reasons[i],
+                    "global runtime invalidation event should preserve stable reason") ||
+            !expect(cache.size() == 0,
+                    "global runtime invalidation event should clear resident block")) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool test_runtime_hook_formats_empty_cache_event() {
+    DbtExecutableCacheDryRun cache;
+    const DbtRuntimeInvalidationHookResult result =
+        apply_dbt_runtime_invalidation_hook(cache, DbtRuntimeInvalidationEvent{
+                                                       .kind = DbtInvalidationEventKind::PrimaryImageLoad,
+                                                   });
+    const std::string line = format_dbt_runtime_invalidation_hook_result(result);
+
+    return expect(result.ok && result.enforced && !result.invalidated &&
+                      result.reason == "primary-image-load",
+                  "empty cache global event should still expose event reason") &&
+           expect(line.find("runtime-invalidation: kind=primary-image-load") !=
+                      std::string::npos,
+                  "runtime invalidation formatter should expose stable kind") &&
+           expect(line.find("dry-run-only=true") != std::string::npos,
+                  "runtime invalidation formatter should expose dry-run flag");
+}
+
+}  // namespace
+
+int main() {
+    if (!test_runtime_hook_enforces_guest_store_overlap()) {
+        return 1;
+    }
+    if (!test_runtime_hook_keeps_disjoint_payload_load()) {
+        return 1;
+    }
+    if (!test_runtime_hook_enforces_global_events()) {
+        return 1;
+    }
+    if (!test_runtime_hook_formats_empty_cache_event()) {
+        return 1;
+    }
+    std::puts("dbt_runtime_invalidation_smoke: PASS");
+    return 0;
+}

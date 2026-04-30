@@ -58,10 +58,10 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 
 ## 非目标
 
-- 当前已完成 `DBT translator + IR v0 dry-run` 和 metadata-only block cache 子阶段，
-  但仍不实现 JIT engine、executable IR lowering、persistent / executable block cache
-  或 host code emission。
-- 不申请可执行内存，不引入宿主平台相关代码生成。
+- 当前已完成 `DBT translator + IR v0 dry-run`、metadata-only block cache、
+  executable memory policy 和 host code emission v0 子阶段，但仍不实现默认 JIT backend、
+  persistent / executable block cache 或 helper runtime execution。
+- 不在默认执行路径申请可执行内存，不把宿主平台相关代码生成接入默认 backend。
 - 不改变 `InstructionSemantics` 的 ISA 真值来源定位。
 - 不改变 guest 可见 fault / trap / CSR / memory 语义。
 - 不接入默认 backend 调度，不创建长期 block lifecycle，也不把 helper-required 指令伪装成
@@ -82,8 +82,8 @@ translation candidate 证据、helper / fallback 边界和最小 prototype guard
 - 现有 profile / debug / probe 基础足以承载不改语义的 hot-path evidence、
   translation dry-run 和 prototype preflight。
 
-这些条件只支撑证据链和原型边界继续推进；后续 JIT engine、host code emission、长期
-block cache 或 multicore / coherence 仍需要新的设计和计划。
+这些条件只支撑证据链和原型边界继续推进；后续默认 JIT backend、长期 block cache、
+helper runtime execution 或 multicore / coherence 仍需要新的设计和计划。
 
 ## DBT translator + IR v0 dry-run 子阶段
 
@@ -130,6 +130,31 @@ block cache 或 multicore / coherence 仍需要新的设计和计划。
   只把 runtime dispatch contract 的 plain reference step 和 helper-bridge-to-reference
   路径转成未来 fallback 入口合同，保留 reject / helper metadata 和 no-execution flags；
   它不调用 functional backend step，不执行 helper，也不提交 CPU state。
+- helper execution bridge contract dry-run 已完成第一刀：`dbt_helper_execution_bridge`
+  只把 helper replay plan 转成 future helper execution request，保留 memory / CSR /
+  atomic / vector operands、effect flags、trap fallback 和 commit-boundary 合同；它不执行
+  helper，不提交 CPU state，也不生成 host code。
+- runtime invalidation hook contract 已完成第一刀：`dbt_runtime_invalidation`
+  只把 runtime invalidation event 转接到 executable-cache dry-run enforcement，覆盖
+  guest store、payload load、primary image load、debug reset、`satp`、`sfence.vma` 和
+  region 属性变化；它只阻止 stale dispatch metadata，不提交 CPU state，不生成 host code。
+- reference fallback execution bridge 已完成第一刀：`dbt_reference_fallback_execution`
+  只把 fallback plan 分类成 future reference backend execution request，覆盖 plain
+  reference step、helper-bridge reference step、JIT miss 和 trap/fault placeholder；它不调用
+  reference backend，不提交 CPU state。
+- executable memory policy 已完成第一刀：`dbt_executable_memory` 用 POSIX
+  `mmap/mprotect/munmap` 固定 allocation / write / seal RX / release 生命周期，拒绝
+  zero-size、越界写、seal 后写入和重复释放；它不执行宿主代码。
+- host code emission v0 已完成第一刀：`dbt_host_emitter` 只接受成功 lowered 的
+  pure integer straight-line block，生成 x86-64 SysV 小函数，并通过 executable memory
+  policy 完成 W->RX 生命周期；host smoke 真实调用该函数并与 `dbt_ir_eval` 对齐
+  GPR / fallthrough PC。unsupported lowered op、rejected lowering 或缺失 fallthrough
+  必须整体拒绝，不暴露可执行前缀 code。
+- opt-in runtime harness + differential guardrail 已完成第一刀：`dbt_runtime_harness`
+  只在 host smoke 中显式执行一个 pure integer straight-line block；执行路径必须通过
+  block plan、translator、IR eval、lowering、host emitter 和 executable memory policy，
+  并在提交 CPU state 前与 IR eval differential 对齐。helper / fallback / trap-risk block
+  必须拒绝并回到 reference fallback，默认 backend 不启用 JIT。
 - translator 可以重新 decode `DbtBlockPlan::dry_run_ir[].raw` 来恢复寄存器、立即数和
   opcode 分类，但不得重新取指，不得提交 CPU state，也不得绕过 `InstructionSemantics`
   的 preflight 结论。
@@ -144,9 +169,9 @@ block cache 或 multicore / coherence 仍需要新的设计和计划。
   non-invalidating event 计数，以及空 cache 上全局 invalidation 事件的稳定分类。它不保存
   host code，不接入 backend，也不承担 persistent lifecycle。
 
-本阶段完成后，项目可以声称“已有最小 DBT translator / IR dry-run 前端”，但仍不能声称
-已有 JIT engine、runtime JIT、host code emission、persistent / executable block cache 或 helper
-inline / replay runtime。
+本阶段完成后，项目可以声称“已有最小 DBT translator / IR dry-run 前端、host code
+emission v0 和 host-smoke-only opt-in executable JIT block”。它仍不能声称已有默认
+JIT backend、persistent / executable block cache 或 helper inline / replay runtime。
 
 ## 当前合同
 
@@ -202,10 +227,25 @@ trap、atomic、vector、control-flow、fence / TLB flush 或 unsupported instru
 GPR、fallthrough PC 和 retired instruction count；它不是 IR lowering，也不是 helper replay。
 
 `IR lowering contract dry-run` 只允许消费已成功翻译的 IR v0，并输出后端无关的 lowered
-ops。当前 lowered ops 只描述 `Compute` / `Fallthrough`、operand kind、ALU op、
-XLEN / word width 和 word sign-extension；它不是 executable lowering，不绑定 x86 / ARM
-host ISA，也不能读取或修改 CPU state。遇到 rejected unit 或 unknown IR opcode 时必须整体
-reject，并且不得暴露可消费前缀 lowering。
+ops。当前 lowered ops 描述 `Compute` / `Fallthrough`、operand kind、ALU op、
+XLEN / word width 和 word sign-extension；它本身不绑定 x86 / ARM host ISA，也不能读取
+或修改 CPU state。遇到 rejected unit 或 unknown IR opcode 时必须整体 reject，并且不得暴露
+可消费前缀 lowering。
+
+`host code emission v0` 只允许消费成功 lowered 的 pure integer straight-line block。
+当前唯一支持的宿主 ABI 是 x86-64 SysV：
+`uint64_t (*)(uint64_t* gpr, uint64_t pc)`。emitter 可以写入传入的 GPR snapshot，
+返回 fallthrough PC，但不能访问 simulator `CPU`、`Bus`、memory、CSR、trap controller
+或设备状态，也不能成为默认 runtime scheduler。`auipc` / PC operand 必须使用对应
+guest 指令 PC，而不是 block entry PC。unsupported lowered op、rejected lowering 或缺失
+fallthrough 必须整体 reject，不返回可执行前缀 code。
+
+`opt-in runtime harness` 只允许执行单个已完整通过 block plan、translator、IR eval、
+lowering、host emitter 和 executable memory policy 的 pure integer block。它可以把生成的
+host code 作用于 GPR snapshot，并在 differential guardrail 成功后提交 GPR、PC 和
+retired instruction count；任何 helper-required、fallback-required、trap-risk、
+invalidation-risk 或 differential mismatch 都必须拒绝并保留 CPU state 不变。该 harness
+只用于 host smoke，不是默认 backend，也不是 workload-level runtime scheduler。
 
 `JIT engine skeleton dry-run` 只允许做调度决策编排：先查 metadata-only cache，未命中时
 走 `DbtBlockPlan -> DbtTranslationUnit -> DbtIrLoweringResult`，helper-required unit
@@ -250,9 +290,18 @@ Helper 只能复用已有 simulator 事实来源：
 - 当前 helper replay contract 只把 helper metadata 转成非执行 replay effect flags；
   memory / CSR / atomic / vector 的真实 replay、异常处理、MMIO 观察、reservation 更新和
   vector state 提交仍必须留给未来 runtime helper 设计。
+- 当前 helper execution bridge 只把 helper replay plan 转成 future execution request；
+  它固定参数、effect flags、trap fallback 与 commit-boundary 合同，但不实际调用
+  memory / CSR / atomic / vector helper。
+- 当前 runtime invalidation hook 只把 runtime event 映射到 executable-cache dry-run
+  enforcement；它不直接挂接 RAM / CSR / loader 写路径，也不实现 persistent lifecycle。
 - 当前 reference fallback bridge 只把 runtime dispatch contract 转成 future reference
   fallback plan；plain reference step 和 helper-bridge-to-reference 都不实际调用 backend，
   不执行 helper，不提交 CPU state。
+- 当前 reference fallback execution bridge 只生成 future reference backend request；
+  它区分 JIT miss、helper bridge 和 trap/fault placeholder，但仍不执行 reference step。
+- 当前 executable memory policy 只管理宿主内存生命周期和权限切换；host emitter smoke
+  和 opt-in runtime harness 可以真实调用生成函数，但默认 backend 仍不接入 JIT。
 - load / store / fetch / page walk 走 `AddressSpace -> Bus -> Ram/Device` 现有边界。
 - trap / interrupt / exception 走既有 trap controller 和 commit boundary。
 - debug / profile 继续由现有 backend 记录；translator 不能自行制造 guest 可见状态。
@@ -342,7 +391,7 @@ range、overlapping guest store、primary image load、debug reset、`satp` writ
 - executable IR lowering、host-specific lowering 或 runtime lowering dispatch。
 - runtime JIT dispatch、host code cache 或 helper replay execution。
 - IR 语义扩展或 differential execution。
-- host code emission、executable memory policy 或宿主平台相关代码生成。
+- 默认 runtime 中的 host code emission、executable memory policy 扩展或宿主平台相关代码生成。
 - persistent block cache、block lifecycle 和 invalidation implementation。
 - workload-level runtime JIT harness 或 backend scheduler。
 - memory / CSR / trap / vector helper 的 runtime replay / inline 策略。
@@ -364,6 +413,8 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
 - `cd myCPU && make test-host-dbt_block_plan_smoke`
 - `cd myCPU && make test-host-dbt_translator_smoke`
 - `cd myCPU && make test-host-dbt_ir_eval_smoke`
+- `cd myCPU && make test-host-dbt_ir_lowering_smoke`
+- `cd myCPU && make test-host-dbt_host_emitter_smoke`
 - `cd myCPU && make test-host-dbt_block_cache_smoke`
 - `cd myCPU && make test-host-run_debug_cli_probe`
 - `cd myCPU && make test-host-execution_profile_smoke`
@@ -392,6 +443,7 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
 
 - 当前有效：本文档作为主线 `Wave 6 / JIT / DBT` 的证据链、translation contract、
   原型边界和 `DBT translator + IR v0 dry-run` 完成态入口。
+- 已完成计划：[../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan](../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)
 - 当前已经完成 hot-path candidate、per-PC / branch-target 观察、translation contract、
   host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-run、functional
   fallback replay 等价性、first-boundary taxonomy、共享 `DbtBlockPlan` analyzer，以及
@@ -400,9 +452,14 @@ runtime scheduler 或 persistent block cache，需要再开新的设计 / 计划
   IR lowering contract dry-run、JIT engine skeleton dry-run / runtime fallback bridge、
   profile hot-path dispatch dry-run、dispatch result serialization / debug-probe visibility bridge、
   runtime dispatch contract dry-run、executable-cache invalidation enforcement dry-run、
-  reference fallback step bridge dry-run、
+  reference fallback step bridge dry-run、helper execution bridge contract dry-run、
+  runtime invalidation hook contract、
+  reference fallback execution bridge、
+  executable memory policy、
+  host code emission v0、
+  opt-in runtime harness + differential guardrail、
   `dbt_ir_eval` semantic differential dry-run 的更宽整数覆盖，以及 metadata-only
   `dbt_block_cache` dry-run / invalidation matrix hardening。
-- 当前仍未启动 executable JIT engine、host code emission、persistent / executable block cache、multicore /
+- 当前仍未启动默认 JIT backend、persistent / executable block cache、helper runtime execution、multicore /
   coherence、write-back cache、I-cache 和 cache maintenance instruction。
 - 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。

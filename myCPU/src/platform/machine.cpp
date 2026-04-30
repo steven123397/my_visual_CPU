@@ -324,6 +324,10 @@ void Machine::set_backend_kind(BackendKind kind) {
     rebuild_backend();
 }
 
+BackendKind Machine::backend_kind() const {
+    return backend_kind_;
+}
+
 void Machine::set_l1_data_cache_enabled(bool enabled) {
     cpu_.l1_data_cache().clear();
     cpu_.l1_data_cache().set_enabled(enabled);

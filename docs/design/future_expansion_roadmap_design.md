@@ -150,6 +150,10 @@
      runtime dispatch contract dry-run、
      executable-cache invalidation enforcement dry-run、
      reference fallback step bridge dry-run、
+     helper execution bridge contract dry-run、
+     runtime invalidation hook contract、
+     reference fallback execution bridge、
+     executable memory policy、
      更宽 IR semantic coverage 和
      metadata-only block cache / invalidation matrix hardening 第一刀
   -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
@@ -292,6 +296,12 @@ dispatch result serialization / debug-probe visibility bridge、
 runtime dispatch contract dry-run、
 executable-cache invalidation enforcement dry-run、
 reference fallback step bridge dry-run、
+helper execution bridge contract dry-run、
+runtime invalidation hook contract、
+reference fallback execution bridge、
+executable memory policy、
+host code emission v0、
+opt-in runtime harness + differential guardrail、
 更宽 IR semantic coverage 和
 metadata-only block cache / invalidation matrix hardening 第一刀。目标是：
 
@@ -309,18 +319,25 @@ dispatch result serialization / debug-probe visibility bridge、
 runtime dispatch contract dry-run、
 executable-cache invalidation enforcement dry-run、
 reference fallback step bridge dry-run、
+helper execution bridge contract dry-run、
+runtime invalidation hook contract、
+reference fallback execution bridge、
+executable memory policy、
+host code emission v0、
+opt-in runtime harness + differential guardrail、
 只解释寄存器语义的
 `dbt_ir_eval` differential dry-run 更宽整数覆盖
 （含 `lui` / `auipc` 与 RV64 word ops），
 以及只缓存 `DbtTranslationUnit` metadata 的 `dbt_block_cache` dry-run /
 invalidation matrix hardening；
-它仍不实现 executable JIT engine、host code emission、
-persistent / executable block cache、runtime scheduler、multicore、coherence 或新的 memory consistency
+它已经具备 host-smoke-only 的 opt-in executable JIT block，但仍不实现默认 JIT backend、
+persistent / executable block cache、helper runtime execution、workload-level runtime scheduler、
+multicore、coherence 或新的 memory consistency
 模型。
 
 证据链、原型边界和 `DBT translator + IR v0 dry-run` 的后续窄任务不再按每个小补丁单开
-计划文档。后续如果进入真正 JIT engine、host code、persistent block cache、
-runtime scheduler 或 multicore / coherence 这类整块任务时，还需要再开对应设计 / 计划。
+计划文档。后续如果进入默认 JIT backend、persistent block cache、runtime scheduler、
+helper runtime execution 或 multicore / coherence 这类整块任务时，还需要再开对应设计 / 计划。
 
 Wave 6 第一刀的激活门槛：
 
@@ -396,6 +413,10 @@ Wave 7 的完成定义：
   runtime dispatch contract dry-run、
   executable-cache invalidation enforcement dry-run、
   reference fallback step bridge dry-run、
+  helper execution bridge contract dry-run、
+  runtime invalidation hook contract、
+  reference fallback execution bridge、
+  executable memory policy、
   更宽 IR semantic coverage 和 metadata-only block cache /
   invalidation matrix hardening 第一刀已完成；
   multicore / coherence 仍等待 atomic、memory-order、

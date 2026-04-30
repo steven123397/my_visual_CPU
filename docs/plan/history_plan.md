@@ -23,6 +23,23 @@
 
 ### 2026-04-30
 
+#### mainline-wave6-jit-execution-layer-plan
+
+- 原文件：`wave6_jit_execution_layer_plan.md`
+- 完成内容：完成主线 `Wave 6 / JIT / DBT` 从 dry-run runtime 合同到极窄
+  host-smoke-only executable JIT block 的 1-7 顺序推进。当前新增 helper execution
+  bridge contract、runtime invalidation hook、reference fallback execution bridge、
+  executable memory policy、host code emission v0，以及 opt-in runtime harness +
+  differential guardrail。
+- 实现过程摘要：整体保持 `reference-first` 和默认 backend 不变。host emitter 只接受
+  pure integer straight-line lowered block，生成 x86-64 SysV 小函数；runtime harness
+  只在 host smoke 显式执行单 block，并在提交 GPR / PC / retired count 前和 IR eval
+  differential 对齐。helper / fallback / trap-risk block 仍拒绝并要求 reference fallback。
+  本轮仍不启用默认 JIT backend，不实现 persistent / executable block cache、helper runtime
+  execution、multicore、coherence 或新的 memory consistency 模型。验证覆盖 DBT/JIT
+  窄门禁、`make test-pipeline`、`make test` 与 `git diff --check`。
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave6-dbt-translator-ir-v0-plan
 
 - 原文件：`mainline_wave6_dbt_translator_ir_v0_plan.md`

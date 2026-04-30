@@ -65,6 +65,7 @@ public:
     Machine();
 
     void set_backend_kind(BackendKind kind);
+    BackendKind backend_kind() const;
     void set_l1_data_cache_enabled(bool enabled);
     bool l1_data_cache_enabled() const;
     void set_block_transport(BlockTransport transport);
