@@ -18,6 +18,7 @@ constexpr uint32_t kLwX1FromX0 = 0x00002083U;     // lw x1, 0(x0)
 constexpr uint32_t kLwX2FromX4 = 0x00022103U;     // lw x2, 0(x4)
 constexpr uint32_t kSwX1ToX4 = 0x00122023U;       // sw x1, 0(x4)
 constexpr uint32_t kJalX0Skip8 = 0x0080006fU;     // jal x0, 8
+constexpr uint32_t kSfenceVma = 0x12000073U;      // sfence.vma x0, x0
 constexpr uint64_t kData = MEM_BASE + 0x100;
 constexpr uint32_t kDataWord = 0x11223344U;
 
@@ -105,6 +106,8 @@ bool test_memory_instruction_requires_helper_fallback() {
                   "interpreter DBT prototype plan should report helper-required fallback") &&
            expect(plan.boundary_kind == "memory-load",
                   "interpreter DBT prototype plan should classify load helper boundary") &&
+           expect(plan.boundary == InterpreterDbtBoundaryKind::MemoryLoad,
+                  "interpreter DBT prototype plan should expose typed load helper boundary") &&
            expect(!result.ok, "interpreter DBT prototype should fallback on memory instruction") &&
            expect(result.retired_instructions == 0,
                   "interpreter DBT prototype should not retire helper-required instruction") &&
@@ -137,6 +140,8 @@ bool test_store_instruction_reports_memory_store_boundary() {
                   "interpreter DBT prototype plan should report helper-required store fallback") &&
            expect(plan.boundary_kind == "memory-store",
                   "interpreter DBT prototype plan should classify store helper boundary") &&
+           expect(plan.boundary == InterpreterDbtBoundaryKind::MemoryStore,
+                  "interpreter DBT prototype plan should expose typed store helper boundary") &&
            expect(plan.fallback_pc == kEntry,
                   "interpreter DBT prototype plan should report store boundary PC") &&
            expect(cpu.core().instret() == 0,
@@ -204,6 +209,8 @@ bool test_control_flow_boundary_block_is_rejected_before_prefix_commit() {
                   "interpreter DBT prototype plan should report fallback-required control-flow boundary") &&
            expect(plan.boundary_kind == "control-flow",
                   "interpreter DBT prototype plan should classify control-flow boundary") &&
+           expect(plan.boundary == InterpreterDbtBoundaryKind::ControlFlow,
+                  "interpreter DBT prototype plan should expose typed control-flow boundary") &&
            expect(!result.ok, "interpreter DBT prototype should not execute control-flow block") &&
            expect(result.retired_instructions == 0,
                   "interpreter DBT prototype should reject control-flow block before retiring prefix") &&
@@ -219,6 +226,122 @@ bool test_control_flow_boundary_block_is_rejected_before_prefix_commit() {
                   "interpreter DBT prototype should keep instret unchanged after control-flow rejection") &&
            expect(cpu.core().cycle() == 0,
                   "interpreter DBT prototype should keep cycle unchanged after control-flow rejection");
+}
+
+bool test_tlb_flush_boundary_block_is_rejected_before_prefix_commit() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    write32(ram, kEntry + 0, kAddiX1One);
+    write32(ram, kEntry + 4, kSfenceVma);
+
+    const InterpreterDbtPrototypePlan plan =
+        plan_interpreter_dbt_prototype_block(cpu, bus, kEntry, kEntry + 4);
+    const InterpreterDbtPrototypeResult result =
+        run_interpreter_dbt_prototype_block(cpu, bus, kEntry, kEntry + 4);
+
+    return expect(!plan.ok, "interpreter DBT prototype should reject TLB-flush block") &&
+           expect(plan.inlineable_instructions == 1,
+                  "interpreter DBT prototype plan should report inlineable prefix before TLB flush") &&
+           expect(plan.fallback_pc == kEntry + 4,
+                  "interpreter DBT prototype plan should report TLB-flush boundary PC") &&
+           expect(plan.fallback_reason == "fallback-required",
+                  "interpreter DBT prototype plan should report fallback-required TLB-flush boundary") &&
+           expect(plan.boundary_kind == "tlb-flush",
+                  "interpreter DBT prototype plan should classify TLB flush separately") &&
+           expect(plan.boundary == InterpreterDbtBoundaryKind::TlbFlush,
+                  "interpreter DBT prototype plan should expose typed TLB-flush boundary") &&
+           expect(!result.ok, "interpreter DBT prototype should not execute TLB-flush block") &&
+           expect(result.retired_instructions == 0,
+                  "interpreter DBT prototype should reject TLB-flush block before retiring prefix") &&
+           expect(cpu.core().read_gpr(1) == 0,
+                  "interpreter DBT prototype should not commit inlineable prefix before TLB flush") &&
+           expect(cpu.core().pc() == kEntry,
+                  "interpreter DBT prototype should keep PC at block start after TLB-flush rejection") &&
+           expect(cpu.core().instret() == 0,
+                  "interpreter DBT prototype should keep instret unchanged after TLB-flush rejection") &&
+           expect(cpu.core().cycle() == 0,
+                  "interpreter DBT prototype should keep cycle unchanged after TLB-flush rejection");
+}
+
+bool test_inline_block_plan_exposes_dry_run_ir_ops() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+    write32(ram, kEntry + 0, kAddiX1One);
+    write32(ram, kEntry + 4, kAddiX2X1Two);
+    write32(ram, kEntry + 8, kAddX3X1X2);
+
+    const InterpreterDbtPrototypePlan plan =
+        plan_interpreter_dbt_prototype_block(cpu, bus, kEntry, kEntry + 8);
+
+    return expect(plan.ok, "dry-run IR plan should accept pure inlineable block") &&
+           expect(plan.dry_run_ir.size() == 3,
+                  "dry-run IR plan should expose one op per inlineable instruction") &&
+           expect(plan.dry_run_ir[0].pc == kEntry,
+                  "dry-run IR op should preserve guest PC") &&
+           expect(plan.dry_run_ir[0].raw == kAddiX1One,
+                  "dry-run IR op should preserve raw instruction") &&
+           expect(plan.dry_run_ir[0].size == 4,
+                  "dry-run IR op should preserve instruction size") &&
+           expect(plan.dry_run_ir[0].kind == InterpreterDbtDryRunIrKind::ArchitectedEffect,
+                  "dry-run IR op should use shared architected-effect semantics") &&
+           expect(plan.dry_run_ir[0].rd_write,
+                  "dry-run IR op should expose register write metadata") &&
+           expect(plan.dry_run_ir[0].rd == 1,
+                  "dry-run IR op should expose target rd metadata") &&
+           expect(plan.dry_run_ir[0].next_pc == kEntry + 4,
+                  "dry-run IR op should preserve fallthrough next PC") &&
+           expect(cpu.core().pc() == kEntry,
+                  "dry-run IR planning should not advance architectural PC") &&
+           expect(cpu.core().instret() == 0,
+                  "dry-run IR planning should not advance instret");
+}
+
+bool test_invalidation_dry_run_classifies_global_and_overlap_events() {
+    const InterpreterDbtInvalidationPlan primary =
+        plan_interpreter_dbt_invalidation_event(InterpreterDbtInvalidationEventKind::PrimaryImageLoad,
+                                                0,
+                                                0,
+                                                kEntry,
+                                                kEntry + 8);
+    const InterpreterDbtInvalidationPlan disjoint_payload =
+        plan_interpreter_dbt_invalidation_event(InterpreterDbtInvalidationEventKind::PayloadLoad,
+                                                kEntry + 0x1000,
+                                                4,
+                                                kEntry,
+                                                kEntry + 8);
+    const InterpreterDbtInvalidationPlan overlapping_store =
+        plan_interpreter_dbt_invalidation_event(InterpreterDbtInvalidationEventKind::GuestStore,
+                                                kEntry + 4,
+                                                4,
+                                                kEntry,
+                                                kEntry + 8);
+    const InterpreterDbtInvalidationPlan sfence =
+        plan_interpreter_dbt_invalidation_event(InterpreterDbtInvalidationEventKind::SfenceVma,
+                                                0,
+                                                0,
+                                                kEntry,
+                                                kEntry + 8);
+
+    return expect(primary.invalidates,
+                  "primary image load should invalidate future translated blocks") &&
+           expect(primary.reason == "primary-image-load",
+                  "primary image load dry-run should report a stable reason") &&
+           expect(!disjoint_payload.invalidates,
+                  "disjoint payload load should not invalidate an unrelated future translated block") &&
+           expect(disjoint_payload.reason == "range-disjoint",
+                  "disjoint payload load dry-run should report range-disjoint") &&
+           expect(overlapping_store.invalidates,
+                  "guest store overlapping translated code should invalidate future translated blocks") &&
+           expect(overlapping_store.reason == "guest-store-overlaps-block",
+                  "guest store overlap dry-run should report a stable reason") &&
+           expect(sfence.invalidates,
+                  "sfence.vma should invalidate future translated blocks") &&
+           expect(sfence.reason == "sfence-vma",
+                  "sfence.vma dry-run should report a stable reason");
 }
 
 bool test_hot_path_candidate_plan_uses_profile_ranking() {
@@ -461,6 +584,15 @@ int main() {
         return 1;
     }
     if (!test_control_flow_boundary_block_is_rejected_before_prefix_commit()) {
+        return 1;
+    }
+    if (!test_tlb_flush_boundary_block_is_rejected_before_prefix_commit()) {
+        return 1;
+    }
+    if (!test_inline_block_plan_exposes_dry_run_ir_ops()) {
+        return 1;
+    }
+    if (!test_invalidation_dry_run_classifies_global_and_overlap_events()) {
         return 1;
     }
     if (!test_hot_path_candidate_plan_uses_profile_ranking()) {

@@ -1,14 +1,12 @@
 #include "interpreter_dbt_prototype.h"
 
-#include <algorithm>
 #include <utility>
 
 #include "../cpu.h"
-#include "execution_profile.h"
-#include "functional_backend.h"
 #include "../isa/execution_context.h"
 #include "../isa/instruction_semantics.h"
 #include "../mem/bus.h"
+#include "functional_backend.h"
 #include "pipeline_commit_boundary.h"
 
 extern "C" {
@@ -43,47 +41,6 @@ bool requires_fallback(const InsnEffects& effects) {
 
 bool is_control_flow_instruction(const Insn& insn) {
     return insn.opcode == 0x63U || insn.opcode == 0x67U || insn.opcode == 0x6FU;
-}
-
-const char* memory_boundary_kind(MemoryRequest::Kind kind) {
-    switch (kind) {
-    case MemoryRequest::Kind::Load:
-        return "memory-load";
-    case MemoryRequest::Kind::Store:
-        return "memory-store";
-    case MemoryRequest::Kind::None:
-        return "";
-    }
-    return "";
-}
-
-const char* helper_boundary_kind(const InsnEffects& effects) {
-    if (effects.mem.kind != MemoryRequest::Kind::None) {
-        return memory_boundary_kind(effects.mem.kind);
-    }
-    if (effects.atomic.kind != AtomicRequest::Kind::None) {
-        return "atomic";
-    }
-    if (effects.vector.kind != VectorRequest::Kind::None) {
-        return "vector";
-    }
-    if (effects.csr_write.enable) {
-        return "csr-write";
-    }
-    return "helper";
-}
-
-const char* fallback_boundary_kind(const InsnEffects& effects) {
-    if (effects.trap.valid) {
-        return "trap";
-    }
-    if (requires_fallback(effects)) {
-        return "control-flow";
-    }
-    if (!effects.retired) {
-        return "not-retired";
-    }
-    return "fallback";
 }
 
 FetchDecodeResult fetch_decode(CPU& cpu, Bus& bus, uint64_t pc) {
@@ -129,114 +86,20 @@ InterpreterDbtPrototypeResult fallback(uint64_t start_pc,
     };
 }
 
-InterpreterDbtPrototypePlan plan_fallback(uint64_t start_pc,
-                                          uint64_t end_pc,
-                                          uint64_t inlineable,
-                                          uint64_t pc,
-                                          std::string reason,
-                                          std::string boundary_kind = {}) {
-    return InterpreterDbtPrototypePlan{
-        .ok = false,
-        .start_pc = start_pc,
-        .end_pc = end_pc,
-        .inlineable_instructions = inlineable,
-        .fallback_pc = pc,
-        .fallback_reason = std::move(reason),
-        .boundary_kind = std::move(boundary_kind),
-    };
-}
-
-bool hotter_translation_candidate(const ExecutionHotPathEntry& lhs,
-                                  const ExecutionHotPathEntry& rhs) {
-    if (lhs.executions != rhs.executions) {
-        return lhs.executions > rhs.executions;
-    }
-    if (lhs.retired_instructions != rhs.retired_instructions) {
-        return lhs.retired_instructions > rhs.retired_instructions;
-    }
-    if (lhs.start_pc != rhs.start_pc) {
-        return lhs.start_pc < rhs.start_pc;
-    }
-    return lhs.end_pc < rhs.end_pc;
-}
-
 }  // namespace
 
 InterpreterDbtPrototypePlan plan_interpreter_dbt_prototype_block(CPU& cpu,
                                                                  Bus& bus,
                                                                  uint64_t start_pc,
                                                                  uint64_t end_pc) {
-    uint64_t inlineable = 0;
-    for (uint64_t pc = start_pc; pc <= end_pc;) {
-        const FetchDecodeResult fetched = fetch_decode(cpu, bus, pc);
-        if (!fetched.ok) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, fetched.fallback_reason, "fetch-fault");
-        }
-
-        const Insn& insn = fetched.insn;
-        if (!InstructionSemantics::supports(insn)) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required", "unsupported");
-        }
-        if (is_control_flow_instruction(insn)) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required", "control-flow");
-        }
-
-        ExecutionContext ctx(cpu, bus);
-        const InsnEffects effects = InstructionSemantics::execute(insn, ctx);
-        if (effects.trap.valid || !effects.retired || requires_fallback(effects)) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, "fallback-required", fallback_boundary_kind(effects));
-        }
-        if (requires_helper(effects)) {
-            return plan_fallback(start_pc, end_pc, inlineable, pc, "helper-required", helper_boundary_kind(effects));
-        }
-
-        inlineable += 1;
-        pc += instruction_size(insn);
-    }
-
-    return InterpreterDbtPrototypePlan{
-        .ok = true,
-        .start_pc = start_pc,
-        .end_pc = end_pc,
-        .inlineable_instructions = inlineable,
-    };
+    return plan_dbt_block(cpu, bus, start_pc, end_pc);
 }
 
 InterpreterDbtPrototypePlan plan_interpreter_dbt_prototype_hot_path(
     CPU& cpu,
     Bus& bus,
     const ExecutionProfileSnapshot& profile) {
-    if (profile.hot_paths.empty()) {
-        return plan_fallback(0, 0, 0, 0, "no-hot-paths");
-    }
-
-    const auto top_it = std::min_element(
-        profile.hot_paths.begin(),
-        profile.hot_paths.end(),
-        [](const ExecutionHotPathEntry& lhs, const ExecutionHotPathEntry& rhs) {
-            return hotter_translation_candidate(lhs, rhs);
-        });
-    const ExecutionHotPathEntry& candidate = *top_it;
-    if (candidate.executions < 2) {
-        InterpreterDbtPrototypePlan plan =
-            plan_fallback(candidate.start_pc, candidate.end_pc, 0, candidate.start_pc, "insufficient-repetition");
-        plan.candidate_executions = candidate.executions;
-        plan.candidate_retired_instructions = candidate.retired_instructions;
-        return plan;
-    }
-    if (candidate.retired_instructions == 0) {
-        InterpreterDbtPrototypePlan plan =
-            plan_fallback(candidate.start_pc, candidate.end_pc, 0, candidate.start_pc, "empty-hot-path");
-        plan.candidate_executions = candidate.executions;
-        plan.candidate_retired_instructions = candidate.retired_instructions;
-        return plan;
-    }
-
-    InterpreterDbtPrototypePlan plan =
-        plan_interpreter_dbt_prototype_block(cpu, bus, candidate.start_pc, candidate.end_pc);
-    plan.candidate_executions = candidate.executions;
-    plan.candidate_retired_instructions = candidate.retired_instructions;
-    return plan;
+    return plan_dbt_hot_path(cpu, bus, profile);
 }
 
 InterpreterDbtPrototypeResult run_interpreter_dbt_prototype_block(CPU& cpu,
@@ -261,7 +124,7 @@ InterpreterDbtPrototypeResult run_interpreter_dbt_prototype_block(CPU& cpu,
         }
 
         const Insn& insn = fetched.insn;
-        if (!InstructionSemantics::supports(insn)) {
+        if (!InstructionSemantics::supports(insn) || is_control_flow_instruction(insn)) {
             return fallback(start_pc, end_pc, retired, pc, "fallback-required");
         }
 
@@ -330,4 +193,17 @@ InterpreterDbtPrototypeResult run_interpreter_dbt_prototype_with_functional_fall
         .fallback_pc = plan.fallback_pc,
         .fallback_reason = plan.fallback_reason,
     };
+}
+
+InterpreterDbtInvalidationPlan plan_interpreter_dbt_invalidation_event(
+    InterpreterDbtInvalidationEventKind kind,
+    uint64_t event_addr,
+    uint64_t event_size,
+    uint64_t block_start_pc,
+    uint64_t block_end_pc) {
+    return plan_dbt_block_invalidation_event(kind,
+                                             event_addr,
+                                             event_size,
+                                             block_start_pc,
+                                             block_end_pc);
 }
