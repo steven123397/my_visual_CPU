@@ -14,6 +14,8 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const frontendRoot = path.join(repoRoot, 'frontend');
 const appRoot = path.join(repoRoot, 'frontend', 'app');
 const sharedRoot = path.join(repoRoot, 'frontend', 'shared');
+const docsRoot = path.join(repoRoot, 'docs');
+const showcaseRoot = path.join(repoRoot, 'docs', 'showcase');
 
 function json(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
@@ -41,17 +43,76 @@ function contentTypeFor(filePath) {
   if (filePath.endsWith('.json')) {
     return 'application/json; charset=utf-8';
   }
+  if (filePath.endsWith('.png')) {
+    return 'image/png';
+  }
+  if (filePath.endsWith('.md')) {
+    return 'text/markdown; charset=utf-8';
+  }
   return 'text/plain; charset=utf-8';
 }
 
+function staticRouteFor(pathname) {
+  if (pathname === '/') {
+    return '/home.html';
+  }
+  if (pathname === '/console') {
+    return '/index.html';
+  }
+  if (pathname === '/docs') {
+    return '/docs.html';
+  }
+  return pathname;
+}
+
 async function serveStatic(response, pathname) {
-  const relative = pathname === '/' ? '/index.html' : pathname;
+  const relative = staticRouteFor(pathname);
+  if (relative.startsWith('/source/docs/')) {
+    await serveSourceDoc(response, relative);
+    return;
+  }
+  if (relative.startsWith('/source/showcase/')) {
+    await serveShowcaseAsset(response, relative);
+    return;
+  }
   const root = relative.startsWith('/shared/') ? sharedRoot : appRoot;
   const trimmed = relative.startsWith('/shared/')
     ? relative.replace(/^\/shared\/+/, '')
     : relative.replace(/^\/+/, '');
   const filePath = path.join(root, trimmed);
   if (!filePath.startsWith(root) || !filePath.startsWith(frontendRoot)) {
+    json(response, 403, { error: 'forbidden' });
+    return;
+  }
+  try {
+    const content = await fs.readFile(filePath);
+    response.writeHead(200, { 'content-type': contentTypeFor(filePath) });
+    response.end(content);
+  } catch {
+    json(response, 404, { error: 'not found' });
+  }
+}
+
+async function serveSourceDoc(response, pathname) {
+  const trimmed = pathname.replace(/^\/source\/docs\/+/, '');
+  const filePath = path.join(docsRoot, trimmed);
+  if (!filePath.startsWith(docsRoot) || !filePath.endsWith('.md')) {
+    json(response, 403, { error: 'forbidden' });
+    return;
+  }
+  try {
+    const content = await fs.readFile(filePath);
+    response.writeHead(200, { 'content-type': contentTypeFor(filePath) });
+    response.end(content);
+  } catch {
+    json(response, 404, { error: 'not found' });
+  }
+}
+
+async function serveShowcaseAsset(response, pathname) {
+  const trimmed = pathname.replace(/^\/source\/showcase\/+/, '');
+  const filePath = path.join(showcaseRoot, trimmed);
+  if (!filePath.startsWith(showcaseRoot) || !filePath.endsWith('.png')) {
     json(response, 403, { error: 'forbidden' });
     return;
   }

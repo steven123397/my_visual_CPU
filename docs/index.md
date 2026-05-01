@@ -29,15 +29,17 @@
 12. [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
     主线 `Wave 6 / JIT / DBT` 当前 readiness、证据链、translation contract、原型边界和
     `DBT translator + IR v0 dry-run` 完成态设计入口。
-13. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+13. [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
+    主线 `Wave 7 / 产品化展示与在线控制台` 的产品官网、控制台和产品文档设计入口。
+14. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     向量扩展与 ML workload 的统一设计边界。
-14. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+15. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 方向设计。
-15. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+16. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
     `debug_session / protocol + frontend` 设计边界。
-16. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+17. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
     Spike 外部差分验证边界。
-17. [plan/history_plan.md](plan/history_plan.md)
+18. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -47,6 +49,7 @@
   - [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
   - [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
   - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
+  - [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
 - `pipeline`
   - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
@@ -76,10 +79,14 @@
   - [plan/history_plan.md#mainline-wave6-jit-execution-layer-plan](plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)
   - [plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
   - [plan/history_plan.md](plan/history_plan.md)
+- `Wave 7 / 产品化展示`
+  - [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
+  - [plan/history_plan.md#mainline-wave7-product-website-shell-plan](plan/history_plan.md#mainline-wave7-product-website-shell-plan)
 - `kernel_alpha`
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)
 - `debug / frontend`
+  - [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
   - [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
   - [showcase/README.md](showcase/README.md)

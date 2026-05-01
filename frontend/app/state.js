@@ -49,6 +49,18 @@ export function setTests(state, tests) {
   }
 }
 
+export function selectDemo(state, testName, backend = state.backend) {
+  if (!state.tests.some((item) => item.name === testName)) {
+    return false;
+  }
+
+  state.selectedTest = testName;
+  if (typeof backend === 'string' && backend.length > 0) {
+    state.backend = backend;
+  }
+  return true;
+}
+
 export function setLoadedSession(state, session) {
   if (!session || typeof session.test !== 'string' || session.test.length === 0) {
     state.loadedSession = null;

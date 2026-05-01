@@ -1299,3 +1299,80 @@ test('renderApp shows AI accelerator workload guide and aggregate counters', () 
   assert.match(elements.devices.innerHTML, /<span>stall_cycles<\/span><strong>1<\/strong>/);
   assert.match(elements.devices.innerHTML, /<span>utilization<\/span><strong>10<\/strong>/);
 });
+
+test('renderApp shows a demo-first workspace with selectable workloads and future labs', () => {
+  const state = createAppState();
+  state.runState = 'idle';
+  state.backend = 'pipeline';
+  state.selectedTest = 'guest_interactive_os_demo';
+  state.tests = [
+    {
+      name: 'guest_interactive_os_demo',
+      menuLabel: 'guest_interactive_os_demo',
+      title: 'interactive_os Monitor',
+      badge: 'OS Bring-up',
+      summary: '输入 help、regs、disk 和 pagewalk 观察 guest monitor。',
+      workload: {
+        category: 'os-bringup',
+        expectedMarker: 'monitor> ',
+        ops: ['UART input', 'monitor commands'],
+      },
+    },
+    {
+      name: 'guest_ai_accel_demo',
+      menuLabel: 'guest_ai_accel_demo · AI accel MMIO',
+      title: 'AI Accelerator Demo',
+      badge: 'AI Accelerator',
+      summary: '通过 MMIO 提交一个最小 graph package。',
+      workload: {
+        category: 'ai-accelerator-demo',
+        expectedMarker: 'KMVAI',
+        ops: ['MMIO doorbell', 'DMA load/store'],
+      },
+    },
+    {
+      name: 'guest_vector_cnn_demo',
+      menuLabel: 'guest_vector_cnn_demo · conv->relu',
+      title: 'Minimal CNN Demo',
+      badge: 'Vector + NN',
+      summary: '固定输入与固定卷积核的 conv -> relu 样本。',
+      workload: {
+        category: 'vector-cnn-demo',
+        expectedMarker: 'V3OK',
+        ops: ['vsetcfg', 'vdot.vv', 'vmax.vv'],
+      },
+    },
+  ];
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Demo workspace/);
+  assert.match(elements.demoWorkspace.innerHTML, /OS Bring-up/);
+  assert.match(elements.demoWorkspace.innerHTML, /interactive_os Monitor/);
+  assert.match(elements.demoWorkspace.innerHTML, /AI Accelerator/);
+  assert.match(elements.demoWorkspace.innerHTML, /AI Accelerator Demo/);
+  assert.match(elements.demoWorkspace.innerHTML, /Vector CNN/);
+  assert.match(elements.demoWorkspace.innerHTML, /Minimal CNN Demo/);
+  assert.match(elements.demoWorkspace.innerHTML, /JIT \/ DBT Runtime Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /Coming soon/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-demo-test="guest_ai_accel_demo"/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-demo-backend="pipeline"/);
+  assert.match(elements.demoWorkspace.innerHTML, /is-selected/);
+});

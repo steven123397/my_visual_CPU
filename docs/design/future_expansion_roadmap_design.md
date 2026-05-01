@@ -10,6 +10,7 @@
 - 明确各条 workstream 的依赖关系和激活门槛
 - 给出从已完成基线到更后续 `Linux / observation / AI accelerator / cache / JIT / multicore` 的统一波次安排
 - 把展示、产品化体验和服务器部署作为远期收口 wave 纳入主线，而不是把公网部署当成单点目标
+- 在 `Wave 7` 阶段性收口之后，重新打开两条新主线：标准 Linux 发行版级平台，以及支持用户 AI 任务并逼近商用 NPU 性能模型的 AI accelerator 方向
 
 与当前 design / status 体系的分工如下：
 
@@ -37,6 +38,7 @@
   - [phase4_preparation_design.md](phase4_preparation_design.md)
   - [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md)
   - [wave6_jit_dbt_readiness_design.md](wave6_jit_dbt_readiness_design.md)
+  - [wave7_productization_and_showcase_design.md](wave7_productization_and_showcase_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
@@ -65,6 +67,7 @@
 - 当前 active wave 的完成定义是什么
 - 哪些后续波次只能在前一波次给出稳定证据后再激活
 - 已完成能力最终如何被整理成可展示、可体验、可部署的产品化形态
+- `Wave 7` 之后，哪些当前刻意保守的边界应被重新打开为新主线
 
 当前主线已经完成或基本完成的基线包括：
 
@@ -161,6 +164,8 @@
      更宽 IR semantic coverage 和
      metadata-only block cache / invalidation matrix hardening 第一刀
   -> Wave 7：产品化展示与在线调试平台收口（最后一步部署服务器）
+  -> Post-Wave 7 主线 A：标准 Debian / Alpine / RISC-V 发行版镜像级平台
+  -> Post-Wave 7 主线 B：用户自定义 AI 任务 + 更接近商用 NPU 的性能模型
 ```
 
 重点不是所有线同时推进，而是所有线都已经被排入主线，只是按依赖顺序逐波激活。
@@ -362,8 +367,13 @@ Wave 7 不是“把当前前端直接放到公网”，而是在 Wave 6 基本�
 Wave 7 的目标包括：
 
 - 把已完成能力整理成稳定展示面：`kernel_alpha`、向量 workload、`NPU / TPU-like`、`xv6 / Linux` bring-up、pipeline/profile/observation 等都要有清晰入口、说明和可复现 demo
+- 把 `Linux` 从当前 checkpoint / probe guardrail 整理成一条可交互展示切片：浏览器 terminal 通过 Node debug server 连接本机 `myCPU` simulator，再桥接到 guest Linux UART；目标效果是网页里可见 boot log、shell prompt，并能输入 `echo`、`ls`、`cat /proc/mounts` 等白名单 demo 命令
+- 把 AI accelerator 从当前固定 demo 展示整理成“白名单 demo + 参数化小模型”体验：允许用户在受控模板内选择 `gemm / relu / pool / softmax` 等已支持 op、调整小尺寸 tensor / runtime shape / 输入值，并观察输出、DMA、scratchpad、timing 和 profile counters；不在 `Wave 7` 开放任意模型上传或通用 graph 编译
 - 把前端调试页从“开发辅助页面”推进到“产品化体验”：统一导航、预置 workload、运行状态、日志裁剪、错误解释、profile 可视化和学习路径
+- 对外首页采用面向用户的产品叙事：先展示可以体验的系统、机器观察、AI accelerator 和 runtime lab，不把边界、未完成项或评审口径作为主导航和卖点
 - 把后端调试服务收口成可控 session 模型：每个用户会话独立 simulator 进程，限制 CPU、内存、step 数、日志大小、运行时间和临时文件生命周期
+- 固定 Linux interactive console 的展示边界：它是串口 shell，不是浏览器内运行 Linux、不提供图形桌面、不默认开放网络、不允许用户上传任意 kernel / rootfs；公网版本只能运行白名单 `Image` / rootfs / bootargs
+- 固定 AI accelerator 参数化体验边界：它只接受白名单模板、尺寸上限、dtype / op 组合白名单和服务器侧重新校验；它不是 PyTorch / ONNX / TensorFlow 运行时，也不允许用户提交任意 graph package
 - 完成发布形态设计：只读 demo 资产、版本标识、构建脚本、服务配置、健康检查、崩溃恢复和部署文档
 - 最后再部署到 Ubuntu 云服务器，通过域名、HTTPS、Nginx 反代和 WebSocket / HTTP API 暴露受控调试入口
 
@@ -372,13 +382,28 @@ Wave 7 的激活门槛：
 - Wave 6 的主要能力已经接近稳定，不再频繁重写公开展示所依赖的核心 contract
 - 已完成能力的 demo corpus 和观测输出足够稳定，可以被长期展示，而不是每次演示都依赖临时命令
 - 前端、debug server 和 simulator 之间已经有清晰 API / session 边界
+- Linux interactive console 先在本地 CLI / debug server 链路证明可启动、可等待 prompt、可注入 UART 输入、可裁剪输出、可 reset / terminate；前端只消费这条已验证 session contract
+- AI accelerator 参数化小模型先在 host profile / guest demo 证明模板生成、shape / dtype / memory-plan 校验、profile 输出和 fail-closed 行为；前端只能提交受限参数，不能绕过服务器端 graph 校验
 - 公网部署前已经确定安全边界：默认白名单 demo、资源限额、认证或访问控制、限流、日志脱敏和进程隔离
 
 Wave 7 的完成定义：
 
 - 本地产品化展示链路可一键启动，用户不需要理解内部构建细节即可体验主要已完成功能
+- Linux shell demo 在前端作为明确的 `experimental Linux console` 入口展示：启动日志、shell prompt、UART 输入输出、最小命令 smoke、超时 / reset / terminate 都有稳定行为和回归验证
+- AI accelerator demo 在前端支持白名单 workload 与参数化小模型：用户可在固定模板内调整小规模输入 / shape，看到输出、`KMVAI` 或等价成功 marker、aggregate counters 和 profile 摘要；任意模型导入、任意 graph authoring 和 Linux-facing NPU driver 不属于 `Wave 7`
 - showcase / README / 前端页面对同一批能力使用一致口径，不再各自维护一套演示说法
 - 服务器部署完成，域名可访问前端调试页面，并且公网入口只暴露受控 session 与白名单 workload
+
+### Post-Wave 7：阶段性收口后的两条新主线
+
+`Wave 7` 是当前项目的阶段性产品化收口，不是技术路线的终点。`Wave 7` 完成后，新的主线应从展示收敛重新切回更重的系统能力推进，优先定为下面两条：
+
+1. **标准 Linux 发行版级平台**
+   目标是从当前 Linux checkpoint / experimental serial shell，推进到更接近 QEMU 使用体验的 Debian / Alpine / RISC-V 标准发行版镜像：能启动标准 kernel + rootfs，进入长期交互 shell，运行动态链接用户态程序、包管理或常用系统工具，并补齐发行版所需的 ISA、设备、MMU、signal、timer、TTY、virtio、文件系统和长期运行稳定性缺口。
+2. **用户自定义 AI 任务与商用 NPU-like 性能模型**
+   目标是从白名单 demo / 参数化小模型，推进到用户可提交自己的受限 AI 任务：公开 graph schema、模型 importer 或 DSL、graph compiler / lowering、自动 memory plan、更多 op / dtype / quantization、Linux-facing driver，以及更接近商用 NPU 的 tile scheduler、DMA + compute overlap、multi outstanding queue、buffer ownership、per-op timeline、带宽 / 延迟 / 利用率模型和更可信的 simulated performance comparison。
+
+这两条新主线会主动打破当前为了 `Wave 4 ~ Wave 7` 收口而设下的多项边界，但必须通过新的 design / plan 重新定义合同，而不是在 `Wave 7` 收尾阶段顺手扩大范围。
 
 ## 各方向当前安排
 
@@ -440,6 +465,8 @@ Wave 7 的完成定义：
 
 - 当前已纳入 Wave 7，而不是当前 Wave 4 的近端任务。
 - 这条线的核心不是“公网部署”，而是先把所有已完成能力整理成稳定、统一、可复现、可解释的产品化展示。
+- Wave 7 的优先展示切片应是 `Linux interactive frontend console`：先把现有 Linux checkpoint/probe 能力整理成本地可交互串口 shell，再接入前端 terminal 和 session 管理；这比继续扩默认 JIT backend 更直接提升阶段性展示完整度。
+- AI accelerator 在 Wave 7 的优先展示形态是白名单 demo + 参数化小模型，而不是任意用户模型上传；任意模型导入、graph compiler、Linux-facing NPU driver 和商用 NPU-like 性能模型进入 Post-Wave 7 新主线。
 - 服务器部署是 Wave 7 的最终验收项；在此之前必须先完成 demo corpus、前端体验、session 管理、安全边界和发布形态收口。
 
 ## 风险与取舍
@@ -452,6 +479,10 @@ Wave 7 的完成定义：
   以及 opt-in translation-plan dry-run、host-smoke-only fallback replay 等价性和
   first-boundary taxonomy，不代表
   JIT engine 或 multicore / coherence 已经可以直接实现。
+- Linux interactive frontend console 的用户感知很强，但它不能被写成“Linux 在浏览器里运行”；
+  正确边界是浏览器控制一个受限 simulator session，并通过 UART 观察 / 输入 guest Linux。
+- AI accelerator 参数化小模型的用户感知也很强，但 `Wave 7` 仍必须用白名单模板和资源上限守住安全边界；真正支持用户自己的 AI 任务和更激进 NPU 性能模型，应作为 Post-Wave 7 新主线。
+- Post-Wave 7 新主线会打破当前多个保守边界，例如标准发行版镜像、任意 AI 任务入口、真实 DMA / compute overlap、multi outstanding queue、Linux-facing NPU driver 和更接近商用 NPU 的性能模型；这些边界只能在新的设计和计划中逐项打开。
 - Wave 7 如果过早启动，容易把尚未稳定的工程能力包装成产品界面；因此必须先收口已完成功能展示和 session / 安全边界，再把部署服务器作为最后一步。
 
 ## 当前有效性说明

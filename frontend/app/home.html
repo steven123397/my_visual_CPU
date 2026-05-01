@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>myCPU — RISC-V 系统模拟器工作台</title>
+    <link rel="stylesheet" href="/home.css">
+  </head>
+  <body>
+    <header class="product-nav" aria-label="产品导航">
+      <a class="product-brand" href="#top" aria-label="myCPU 首页">
+        <span class="brand-glyph">rv</span>
+        <span>myCPU</span>
+      </a>
+      <nav class="product-links">
+        <a href="#systems">Systems</a>
+        <a href="#inspect">Machine</a>
+        <a href="#accelerate">Accelerator</a>
+        <a href="#evidence">Verification</a>
+        <a href="#start">Start</a>
+      </nav>
+      <a class="nav-cta" href="/console">打开控制台</a>
+    </header>
+
+    <main id="top" class="site-shell">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy" data-reveal="rise">
+          <p class="eyebrow">RISC-V System Simulator</p>
+          <h1 id="hero-title">myCPU</h1>
+          <p class="hero-subtitle">在浏览器里启动一颗 CPU。</p>
+          <div class="hero-actions" aria-label="产品入口">
+            <a class="button button--primary" href="/console">打开控制台</a>
+            <a class="button button--secondary" href="/docs">阅读产品文档</a>
+          </div>
+        </div>
+
+        <div class="hero-stage" data-reveal="from-right">
+          <figure class="hero-screen hero-screen--main" data-parallax="0.08">
+            <img src="/source/showcase/frontend_overview.png" alt="myCPU 浏览器控制台总览截图">
+          </figure>
+          <figure class="hero-screen hero-screen--side" data-parallax="-0.05">
+            <img src="/source/showcase/pipeline_timeline.png" alt="pipeline timeline 观察截图">
+          </figure>
+          <div class="hero-terminal" data-parallax="0.12" aria-label="真实 workload marker 摘要">
+            <div class="terminal-bar">
+              <span>debug-cli / pipeline</span>
+              <span>ready</span>
+            </div>
+            <pre>$ guest_interactive_os_demo
+KMV
+interactive monitor
+monitor&gt; help
+$ xv6-riscv
+init: starting sh
+$ linux_proto
+stage=timerfd-one-shot-readback-ok<span class="cursor"></span></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter chapter--pin" aria-labelledby="capabilities-title">
+        <div class="chapter-head chapter-head--center" data-reveal="rise">
+          <p class="section-kicker">Capabilities</p>
+          <h2 id="capabilities-title">一张工作台，<br>六项能力。</h2>
+        </div>
+        <div class="motion-track" data-motion-track aria-label="核心能力横向展示">
+          <article class="feature-panel">
+            <span>01</span>
+            <h3>Run real systems</h3>
+            <p>xv6 shell 在 virtio-blk board path 上稳定运行；Linux block-rootfs 已推进到 timerfd 边界。</p>
+          </article>
+          <article class="feature-panel feature-panel--dark">
+            <span>02</span>
+            <h3>Inspect the machine</h3>
+            <p>functional 作为 reference 真值来源，pipeline 暴露五级流水线、rename、ROB、LSQ 与寄存器 diff。</p>
+          </article>
+          <article class="feature-panel">
+            <span>03</span>
+            <h3>Accelerate workloads</h3>
+            <p>AI accelerator 覆盖 graph package、MMIO doorbell、DMA 与 timed-simple profile；Vector CNN 展示 conv-relu 路径。</p>
+          </article>
+          <article class="feature-panel feature-panel--dark">
+            <span>04</span>
+            <h3>Runtime labs</h3>
+            <p>JIT / DBT opt-in 原型展示 translation、host executable、cache hit / miss 与 fallback 运行数据。</p>
+          </article>
+          <article class="feature-panel">
+            <span>05</span>
+            <h3>Memory & OS</h3>
+            <p>Sv39、trap、CLINT、PLIC、UART 与 virtio-blk 组成系统 bring-up 所需的最小平台。</p>
+          </article>
+          <article class="feature-panel feature-panel--dark">
+            <span>06</span>
+            <h3>Differential verification</h3>
+            <p>Spike oracle、functional replay、commit trace 与 host smoke 让每条展示路径都有回归支撑。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="chapter foundation-section" aria-labelledby="foundation-title">
+        <div class="chapter-head chapter-head--stack chapter-head--wide" data-reveal="rise">
+          <p class="section-kicker">Core architecture</p>
+          <h2 id="foundation-title">上层 demo 之下，<br>是一套可观察的系统骨架。</h2>
+          <p>myCPU 不只是终端输出。它把指令语义、地址空间、设备总线、系统 bring-up 和差分验证拆成可组合的基础设施，再通过控制台展示出来。</p>
+        </div>
+        <div class="foundation-grid">
+          <article class="foundation-card foundation-card--wide" data-reveal="from-left">
+            <span>Core architecture</span>
+            <h3>InstructionSemantics → backend → snapshot</h3>
+            <p>
+              InstructionSemantics 是共享 ISA 语义入口，functional backend 提供 reference
+              执行路径，pipeline backend 消费同一套语义并输出 timeline、stall、register diff
+              和 profile snapshot。
+            </p>
+            <div class="foundation-flow" aria-label="核心架构数据流">
+              <b>InstructionSemantics</b>
+              <b>functional replay</b>
+              <b>pipeline observation</b>
+              <b>debug snapshot</b>
+            </div>
+          </article>
+          <article class="foundation-card" data-reveal="rise">
+            <span>Memory & OS</span>
+            <h3>Sv39、Bus 与设备一起支撑系统启动。</h3>
+            <p>
+              AddressSpace、Sv39 page table、trap runtime、CLINT timer、PLIC interrupt、UART
+              console 和 virtio-blk storage 组成 xv6 / Linux bring-up 的底层路径。
+            </p>
+          </article>
+          <article class="foundation-card foundation-card--dark" data-reveal="from-right">
+            <span>Differential verification</span>
+            <h3>Spike oracle 不是口号，是回归链路。</h3>
+            <p>
+              Spike differential、commit trace、host smoke、Makefile gates 和 runtime marker
+              一起校验 CPU 状态、内存副作用、trap 边界和 workload 输出。
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="systems" class="chapter systems-grid" aria-labelledby="systems-title">
+        <div class="chapter-head chapter-head--stack" data-reveal="rise">
+          <p class="section-kicker">Systems</p>
+          <h2 id="systems-title">从 xv6 到 Linux，<br>真实系统可启动。</h2>
+        </div>
+        <figure class="evidence-shot evidence-shot--terminal" data-reveal="from-left">
+          <img src="/source/showcase/interactive_terminal.png" alt="interactive_os 终端截图">
+        </figure>
+        <div class="systems-list" data-reveal="from-right">
+          <article>
+            <b>xv6 shell</b>
+            <strong>virtio-blk board path</strong>
+            <p>在真实 virtio-blk 板级路径上稳定运行到 shell，作为 workload guardrail 持续维护。</p>
+          </article>
+          <article>
+            <b>Linux serial console</b>
+            <strong>timerfd-one-shot-readback-ok</strong>
+            <p>从 boot log 到 userland marker，Linux bring-up 进度可在浏览器终端中观察。</p>
+          </article>
+          <article>
+            <b>interactive_os</b>
+            <strong>browser terminal</strong>
+            <p>输入 monitor 命令，查看寄存器、磁盘、page walk 与运行状态。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="inspect" class="chapter inspect-section" aria-labelledby="inspect-title">
+        <div class="chapter-head chapter-head--stack chapter-head--wide" data-reveal="rise">
+          <p class="section-kicker">Machine</p>
+          <h2 id="inspect-title">双后端，<br>同一颗芯片。</h2>
+          <p>functional reference 与 pipeline observation 并行，五级流水线、rename、ROB、LSQ、寄存器变化与内存观测尽收眼底。</p>
+        </div>
+        <figure class="architecture-shot" data-reveal="rise">
+          <img src="/source/showcase/auto-code-image-905.png" alt="myCPU 系统整体架构图">
+        </figure>
+      </section>
+
+      <section id="accelerate" class="chapter accelerator-section" aria-labelledby="accelerate-title">
+        <div class="chapter-head chapter-head--stack" data-reveal="rise">
+          <p class="section-kicker">Accelerator</p>
+          <h2 id="accelerate-title">AI 加速器<br>与向量运算。</h2>
+        </div>
+        <div class="accelerator-layout">
+          <div class="accelerator-copy" data-reveal="from-left">
+            <p>从预置 workload 到参数化小模型，调整小规模输入，观察 DMA、scratchpad、compute 与 profile counters 的完整数据流。</p>
+            <div class="chip-flow" aria-label="AI accelerator 数据流">
+              <span>graph package</span>
+              <span>MMIO doorbell</span>
+              <span>DMA load/store</span>
+              <span>timed-simple profile</span>
+              <span>KMVAI marker</span>
+            </div>
+          </div>
+          <figure class="evidence-shot" data-reveal="from-right">
+            <img src="/source/showcase/vector_panel.png" alt="Vector CNN 与向量寄存器面板截图">
+          </figure>
+        </div>
+      </section>
+
+      <section class="chapter prototype-section" aria-labelledby="prototype-title">
+        <div class="chapter-head chapter-head--stack chapter-head--wide" data-reveal="rise">
+          <p class="section-kicker">Labs</p>
+          <h2 id="prototype-title">运行时<br>实验台。</h2>
+          <p>translation、cache、profile、fallback 与 memory observation 的运行时数据，全部回到控制台。</p>
+        </div>
+        <div class="prototype-grid">
+          <article data-reveal="rise">
+            <span>JIT / DBT opt-in</span>
+            <h3>Executable runtime view</h3>
+            <p>IR lowering、host code emission、runtime harness、executable cache hookup 与 invalidation counters。</p>
+          </article>
+          <article data-reveal="rise">
+            <span>L1D / shadow cache</span>
+            <h3>Memory-system observation</h3>
+            <p>load / store、shadow cache、L1D counters 与 workload profile 在同一组观察面中呈现。</p>
+          </article>
+          <article data-reveal="rise">
+            <span>Post-Wave 7</span>
+            <h3>两条新主线</h3>
+            <p>标准 Debian / Alpine / RISC-V 发行版镜像级平台，以及用户自定义 AI 任务与商用 NPU-like 性能模型。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="evidence" class="chapter evidence-section" aria-labelledby="evidence-title">
+        <div class="chapter-head chapter-head--stack" data-reveal="rise">
+          <p class="section-kicker">Verification</p>
+          <h2 id="evidence-title">验证<br>驱动开发。</h2>
+        </div>
+        <div class="evidence-metrics">
+          <div class="metric-card" data-reveal="rise">
+            <strong data-count="75">75</strong>
+            <span>frontend Node tests</span>
+            <p>覆盖 debug server、真实 debug CLI e2e、terminal、render 与 UI state。</p>
+          </div>
+          <div class="metric-card" data-reveal="rise">
+            <strong data-count="10">10</strong>
+            <span>kernel_alpha baselines</span>
+            <p>覆盖 supervisor runtime、storage、PLIC、timer 与 boot path 组合。</p>
+          </div>
+          <div class="metric-card" data-reveal="rise">
+            <strong data-count="2">2</strong>
+            <span>default backend families</span>
+            <p>functional / pipeline 支撑系统运行、机器观察与 profile 展示。</p>
+          </div>
+          <div class="metric-card metric-card--zero" data-reveal="rise">
+            <strong data-count="1">1</strong>
+            <span>Spike differential chain</span>
+            <p>Spike differential、host smoke 与 Makefile 门禁共同支撑页面里的 marker。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="start" class="chapter boundary-section" aria-labelledby="start-title">
+        <div class="boundary-copy" data-reveal="from-left">
+          <p class="section-kicker">Start</p>
+          <h2 id="start-title">选择系统，<br>观察机器。</h2>
+          <p>打开控制台，启动 interactive_os、xv6、Linux 或 AI demo。在终端、pipeline、profile 与 counters 之间切换视角。</p>
+        </div>
+        <div class="boundary-stack" data-reveal="from-right">
+          <div>打开控制台，选择 interactive_os、xv6、Linux 或 AI demo。</div>
+          <div>在终端、pipeline、profile 与 counters 之间切换视角。</div>
+          <div>使用产品文档了解每条 demo 路线的运行方式。</div>
+          <div>继续向下进入 roadmap，看下一阶段的大方向。</div>
+        </div>
+      </section>
+
+      <section class="final-cta" aria-label="Final call to action" data-reveal="rise">
+        <p class="section-kicker">Get Started</p>
+        <h2>打开控制台，<br>开始体验。</h2>
+        <div class="hero-actions">
+          <a class="button button--primary" href="/console">打开控制台</a>
+          <a class="button button--secondary" href="/docs">阅读产品文档</a>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/home.js"></script>
+  </body>
+</html>

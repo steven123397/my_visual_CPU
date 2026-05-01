@@ -5,6 +5,7 @@ import {
   buildTimelineRows,
   classifyEventTone,
   classifyInstructionFlavor,
+  selectDemo,
   diffRegisters,
   diffVectorRegisters,
   shouldAutoScrollToBottom,
@@ -83,4 +84,20 @@ test('shouldAutoScrollToBottom only sticks when user is near the latest event', 
   assert.equal(shouldAutoScrollToBottom(null), true);
   assert.equal(shouldAutoScrollToBottom({ scrollTop: 360, clientHeight: 240, scrollHeight: 600 }), true);
   assert.equal(shouldAutoScrollToBottom({ scrollTop: 100, clientHeight: 240, scrollHeight: 600 }), false);
+});
+
+test('selectDemo updates the workload and backend only for manifest-backed demos', () => {
+  const state = {
+    tests: [{ name: 'guest_ai_accel_demo' }],
+    selectedTest: 'hello',
+    backend: 'functional',
+  };
+
+  assert.equal(selectDemo(state, 'guest_ai_accel_demo', 'pipeline'), true);
+  assert.equal(state.selectedTest, 'guest_ai_accel_demo');
+  assert.equal(state.backend, 'pipeline');
+
+  assert.equal(selectDemo(state, 'linux_shell_demo', 'pipeline'), false);
+  assert.equal(state.selectedTest, 'guest_ai_accel_demo');
+  assert.equal(state.backend, 'pipeline');
 });

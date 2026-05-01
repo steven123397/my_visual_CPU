@@ -23,13 +23,18 @@
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)
   - [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
+  - [../design/wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)
   - [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)
 - 相关状态：
   - [kernel_alpha_status.md](kernel_alpha_status.md)
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
+- 当前活跃计划：
+  - 无
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan](../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan)
+  - [../plan/history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)
   - [../plan/history_plan.md#mainline-wave6-executable-cache-runtime-hookup-plan](../plan/history_plan.md#mainline-wave6-executable-cache-runtime-hookup-plan)
   - [../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
@@ -61,7 +66,7 @@ instruction fetch、load / reset / payload lifecycle 等边界也已经 hardenin
 write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance
 instruction 已启动。
 
-当前 active wave 是 `Wave 6 / JIT / DBT`。它已经完成证据链和原型边界阶段的首轮收口：
+`Wave 6 / JIT / DBT` 已完成证据链和原型边界阶段的首轮收口：
 hot-path candidate、per-PC / branch-target 观察、translation contract、
 host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-run、
 functional fallback replay 等价性、first-boundary taxonomy、typed boundary、
@@ -162,6 +167,12 @@ invalidation check / examined entries / non-invalidating event 计数和空 cach
 当前仍不实现默认 JIT backend、persistent cache、helper runtime execution、workload-level
 scheduler、multicore、coherence 或新的 memory consistency 模型，也不改变 guest 可见语义。
 
+当前 active wave 是 `Wave 7 / 产品化展示与在线调试平台收口`。产品官网壳层、首页
+和控制台 demo workspace v1 已完成：本地前端服务具备 `/`、`/console`、`/docs`
+三入口，首页采用面向用户的产品叙事展示已完成能力，`/console` 顶层已按
+`OS Bring-up`、`Machine Inspector`、`AI Accelerator`、`Runtime Labs` 组织体验入口，
+产品文档入口先作为 curated 壳层。
+
 ## 当前状态
 
 - 当前仓库已经是一个已可运行的模拟器原型，不是纯设计稿。
@@ -187,6 +198,10 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
   build/string/probe 合同锁住，真实 `Image + rootfs.ext4` runtime 仍是 opt-in
   验证项。后续如果要把它作为发布级 runtime 断言，必须显式提供 `Image`
   重新跑对应 runtime guardrail。
+- 当前 Linux 接入仍是 checkpoint / probe 形态，不是可交互 shell：`linux_proto`
+  主要自动运行 `/init` smoke 并等待 UART marker；仓库前端 terminal 目前服务
+  `interactive_os`，不是 Linux 串口控制台。若要做到“像 QEMU 一样启动后输入命令”，
+  应作为 `Wave 7` 的 `Linux interactive frontend console` 切片推进。
 - `P4-prep-1` 和 `C1 / P4-prep-2 memory observation / shadow cache` 已完成。
   当前稳定的观测 guardrail 主要是：
   - pipeline vector CNN 的 `shadow_cache` RAM baseline
@@ -194,8 +209,9 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
   - functional `linux_proto` dummy-payload observation baseline
 - `debug/frontend`、`kernel_alpha` 十条基线、`make test` / `make test-pipeline`
   和现有 workload smoke 都已进入维护态。
-- 当前 active wave 是 `Wave 6 / JIT / DBT`，不是继续深挖 Linux checkpoint 的
-  `Wave 3`，也不是 AI accelerator 后续专项或完整 multicore / coherence 专项。
+- 当前 active wave 是 `Wave 7 / 产品化展示与在线调试平台收口`，不是继续深挖 Linux
+  checkpoint 的 `Wave 3`，也不是默认 JIT backend、AI accelerator 后续专项或完整
+  multicore / coherence 专项。
 - 主线 `Wave 4` 的 AI accelerator 切片 A 已完成：`bounded dynamic shape`
   已从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，
   并新增 `dynamic_tiny_model` 动态小模型 workload。
@@ -362,17 +378,27 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
    当前评估结论仍是“不新增 `--backend jit`，不替换 functional 或 pipeline”。persistent
    cache、workload-level scheduler、CSR / atomic / vector helper runtime、multicore、
    coherence 或新的 memory consistency 模型仍不启动。
-2. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
+2. `Wave 7` 已完成产品官网壳层 / 首页第一刀和控制台 demo workspace v1：
+   [Wave 7 产品化展示与在线控制台设计](../design/wave7_productization_and_showcase_design.md)
+   已固定真正产品官网、Apple-style 首页滚动叙事、demo-first 控制台、产品文档和部署边界；
+   对外首页改为面向用户展示“能做什么”，不再把技术评审、招聘面试官、边界或未完成项作为主叙事。
+   第一刀已落地 `/`、`/console`、`/docs` 三入口：`/` 是产品首页，`/console`
+   现在先展示 demo workspace，再复用现有浏览器控制台会话控制；`/docs` 是 curated
+   产品文档壳层，并可通过本地 `/source/docs/...` 链接回 design / status 证据文档。
+   完成计划已归档到 [Wave 7 产品官网壳层与首页第一刀计划](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)
+   和 [Wave 7 控制台 demo workspace v1 计划](../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan)。
+   本轮仍不做 Linux interactive console、AI 参数化小模型、公网部署或底层 session API 重构。
+3. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
-3. Linux `timerfd-one-shot-readback-ok` 作为 `Wave 3` 冻结边界进入守成；除非真实
+4. Linux `timerfd-one-shot-readback-ok` 作为 `Wave 3` 冻结边界进入守成；除非真实
    runtime 重新暴露新 blocker，不再继续向当前 fourth-stage smoke 追加同类
    `open-fd / mmap / pipe / futex / socketpair / openat2 / pidfd / signalfd /
    renameat2 / eventfd / epoll / sendmsg / recvmsg / SCM_RIGHTS / copy_file_range /
    splice / statx / inotify / timerfd` 微分支。
-4. 把 `xv6` shell、Linux probe、`kernel_alpha`、`pipeline`、debug CLI 和
+5. 把 `xv6` shell、Linux probe、`kernel_alpha`、`pipeline`、debug CLI 和
    现有回归矩阵守成稳定 guardrail。
-5. 继续积累 `shadow_cache / observation / representative workload` 证据；后续
+6. 继续积累 `shadow_cache / observation / representative workload` 证据；后续
    cache / DMA / multicore / coherence 或 JIT engine 都必须另开设计/计划并补足验证。
 
 ## 关键历史节点
@@ -556,6 +582,10 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
 - 仓库默认位置仍不携带真实 Linux `Image`；因此 `timerfd` 冻结点的发布级 runtime
   断言仍需要开发者显式提供 `Image` 后重新运行 opt-in guardrail。默认门禁只能证明
   harness、构建、marker 和 dummy-payload observation 没有回退。
+- 当前 Linux runtime 没有正式交互入口：没有默认 BusyBox shell rootfs、没有前端
+  Linux workload manifest、没有长期 session 资源限制，也没有前端层 Linux 命令输入
+  smoke。已有 `uart_input` / terminal pump 可以复用，但必须先通过本地 CLI /
+  debug server 链路证明 prompt、输入、输出裁剪、reset / terminate 和最小命令回显。
 - pipeline-side `xv6` memory observation 已有稳定 guardrail，但它只是
   `shadow_cache` / memory profile 信号，不是 pipeline 完整 boot `xv6` 的支持声明。
 - `Wave 5` `Slice B / C / D / E / F` 完成不代表完整 cache / DMA / multicore 已完成；当前
@@ -619,6 +649,13 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
 - `Softmax + tiny static attention` 已作为 `Wave 4` 后段 stretch 完成，但它只覆盖
   最小静态 `fp32` row-wise softmax 和极小 attention-like profile 闭环；不要把它
   写成完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
+- AI accelerator 在 `Wave 7` 的展示形态应保持为白名单 demo + 参数化小模型：
+  允许用户在固定模板内调整小规模输入、runtime shape 或 op 组合并观察输出与 profile，
+  但不开放任意模型上传、任意 graph package、通用 AI compiler 或 Linux-facing NPU driver。
+  `Wave 7` 之后的新主线可以重新打开“用户自己的 AI 任务”和更接近商用 NPU 的性能模型。
+- `Wave 7` 产品官网壳层、首页第一刀和控制台 demo workspace v1 已完成，但产品文档
+  仍是 curated 壳层，不是完整产品文档系统；部署、安全、session 配额、
+  Linux interactive console、AI 参数化小模型和更深的 demo-specific 控制台页面仍未实现。
 - `debug/frontend`、`pipeline` 和 guest runtime 都已形成可维护边界，但后续
   仍要避免真实 bug 修复把职责重新揉回大文件。
 
@@ -644,24 +681,48 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
    [history_plan.md#mainline-wave6-jit-execution-layer-plan](../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)。
    当前已有 host-smoke-only 的 opt-in executable JIT block，但默认仍不启用 JIT backend，
    不在默认执行路径生成或执行 host code，不改变 guest 可见语义。
-5. 下一刀如继续推进，优先做 Wave 6 closeout review / branch 收尾，或另开默认 JIT backend
-   readiness 评估；默认 backend、persistent cache、workload-level scheduler、CSR / atomic /
-   vector helper runtime、multicore、coherence 和新的 memory consistency 模型仍不启动。
-6. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
+5. `Wave 7 产品官网壳层与首页第一刀计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)。
+   当前本地前端服务已有 `/` 产品首页、`/console` 控制台入口和 `/docs`
+   产品文档壳层；首页已覆盖 hero、控制台浮现、系统运行、机器观察、AI workload、
+   JIT / DBT / L1D 未来原型和 guardrail 展示。
+6. `Wave 7 控制台 demo workspace v1 计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-console-demo-workspace-v1-plan](../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan)。
+   `/console` 顶层现在按 `OS Bring-up`、`Machine Inspector`、`AI Accelerator`、
+   `Runtime Labs` 组织体验入口；可运行 demo 卡片可同步 workload / backend 选择并复用
+   现有 `Load / Run / Pause / Reset` 控制，future-only 路线只显示 `Coming soon`。
+7. 下一刀如继续推进 `Wave 7`，优先做 `Linux interactive frontend console` 设计 / 计划：
+   先固定 BusyBox 或最小 shell rootfs、Linux bootargs、CLI / debug server UART bridge、
+   frontend workload manifest、session 资源限制、terminal 输出裁剪、reset / terminate
+   和最小命令 smoke；这条路径只提供串口 shell 展示，不声明浏览器内运行 Linux、图形桌面、
+   网络或任意用户镜像支持。
+8. Wave 7 的 AI accelerator 展示切片同步采用白名单 demo + 参数化小模型：
+   前端只允许提交受限模板参数，例如小尺寸 `gemm / relu / pool / softmax` 输入、
+   runtime shape 或已支持 op 组合；服务器端必须重新生成 / 校验 graph package、
+   memory plan、dtype、shape 和资源上限，并固定输出、profile 和 fail-closed smoke。
+9. Wave 7 之后的新主线定为两条：一是像 QEMU 那样跑通标准 Debian / Alpine /
+   RISC-V 发行版镜像；二是 AI accelerator 支持用户自己的 AI 任务，并逐步逼近商用
+   NPU 的 tile scheduler、DMA / compute overlap、multi outstanding queue、Linux-facing
+   driver 和性能模型。这两条都需要另开 design / plan，不并入 Wave 7 收尾。
+10. 默认 JIT backend 仍只做后续 readiness 评估；默认 backend、persistent cache、
+   workload-level scheduler、CSR / atomic / vector helper runtime、multicore、coherence 和
+   新的 memory consistency 模型仍不启动。
+11. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
    如需调整排序或字段，必须先补 probe / host smoke 兼容门禁。
-7. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
+12. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 `Wave 6`
    hot-path evidence 的前置 guardrail。
-8. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
-   driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan，并
-   明确不占用主线 `Wave 6`。
-9. Wave 4 AI accelerator 的完成记录统一见
+13. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+   driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan；其中
+   用户自定义 AI 任务和商用 NPU-like 性能模型已经提升为 Post-Wave 7 新主线，但不改写
+   当前 `Wave 6 / Wave 7` 收口边界。
+14. Wave 4 AI accelerator 的完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
-10. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
+15. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
    guardrail；未提供 `Image` 时，不把该项写成默认已证明。
-9. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
+16. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
    `make test` 和 `make test-pipeline` 这些稳定 guardrail。
-10. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
+17. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
    暴露新 blocker，再按 blocker 驱动回补最窄 Linux guardrail。
 
 ## 验证基线

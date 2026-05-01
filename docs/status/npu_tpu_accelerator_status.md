@@ -254,15 +254,26 @@
   `fp32` row-wise softmax 和极小 attention-like workload；`INT4`、`GELU /
   Sigmoid`、MobileNet、训练前向 / 反向和 Linux-facing NPU driver 都后移到 AI
   accelerator 后续专项阶段。
+- `Wave 7` 的 AI accelerator 产品化展示不开放任意用户模型。推荐边界是白名单 demo +
+  参数化小模型：用户只能在固定模板内调整小尺寸输入、bounded runtime shape 或已支持
+  op 组合，服务器端重新生成 / 校验 graph package、dtype、shape、memory plan 和资源上限。
+- `Wave 7` 之后，AI accelerator 新主线可以主动打破当前保守边界：支持用户自己的 AI
+  任务，提供公开 graph schema、DSL / importer、graph lowering / compiler、自动 memory
+  plan、更多 op / dtype / quantization、Linux-facing driver，并把 timing 从当前
+  `timed-simple no-overlap` 推向更接近商用 NPU 的 tile scheduler、DMA + compute overlap、
+  multi outstanding queue、buffer ownership、per-op timeline、带宽 / 延迟 / 利用率模型。
 - 如果把这条线和当前 `xv6 / Linux` 主线混在同一轮里推进，很容易打散已有回归与 ownership 边界。
 
 ## 下一步
 
 1. 本方向的主线 Wave 4 AI accelerator 切片完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
-2. 后续如果继续推进 `INT4 / training / MobileNet / Linux-facing NPU driver / real DMA
-   overlap / multi outstanding queue`，应另开 AI accelerator 专项计划；不要把这些内容
-   写成主线 `Wave 5`。
+2. `Wave 7` 展示优先做白名单 demo + 参数化小模型，而不是任意模型上传；前端参数必须经
+   host 侧 graph package 生成 / 校验和资源限制后再运行。
+3. `Wave 7` 之后的新主线可以继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+   driver / real DMA overlap / multi outstanding queue`，并把“用户自己的 AI 任务”和
+   “更接近商用 NPU 的性能模型”作为正式目标；这需要另开 AI accelerator 专项 design /
+   plan，不再沿用 `Wave 4 ~ Wave 7` 的保守完成定义。
 
 ## 验证基线
 

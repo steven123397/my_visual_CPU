@@ -23,6 +23,7 @@ import {
   setLoadedSession,
   setTerminalPendingInput,
   setTests,
+  selectDemo,
 } from './state.js';
 import { createTerminalInputPump } from './terminal_input_pump.js';
 import { renderApp, updateControls } from './render.js';
@@ -35,6 +36,7 @@ const elements = {
   statusBadge: document.querySelector('#status-badge'),
   desktop: document.querySelector('#desktop-shell'),
   debugInspector: document.querySelector('#debug-inspector'),
+  demoWorkspace: document.querySelector('#demo-workspace-slot'),
   terminal: document.querySelector('#terminal-slot'),
   summary: document.querySelector('#summary-slot'),
   workload: document.querySelector('#workload-slot'),
@@ -151,6 +153,16 @@ async function init() {
       needsPaint = true;
     }
 
+    const demoCard = event.target.closest?.('.demo-card[data-demo-test]');
+    if (demoCard) {
+      event.preventDefault();
+      const didSelect = selectDemo(state, demoCard.dataset.demoTest, demoCard.dataset.demoBackend);
+      if (didSelect) {
+        showNotice(`已选择 ${state.selectedTest}，点击 Load 启动。`, 'success');
+        needsPaint = true;
+      }
+    }
+
     const terminalToggle = event.target.closest?.('[data-action="toggle-terminal-collapsed"]');
     if (terminalToggle) {
       event.preventDefault();
@@ -177,6 +189,17 @@ async function init() {
   });
 
   document.addEventListener('keydown', async (event) => {
+    const demoCard = event.target.closest?.('.demo-card[data-demo-test]');
+    if (demoCard && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      const didSelect = selectDemo(state, demoCard.dataset.demoTest, demoCard.dataset.demoBackend);
+      if (didSelect) {
+        showNotice(`已选择 ${state.selectedTest}，点击 Load 启动。`, 'success');
+        paint();
+      }
+      return;
+    }
+
     if (!state.terminal.focused) {
       return;
     }

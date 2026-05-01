@@ -1,0 +1,138 @@
+:root {
+  --paper: #f4efe5;
+  --ink: #172027;
+  --muted: #63717b;
+  --copper: #b75d32;
+  --teal: #1f7478;
+  --line: rgba(23, 32, 39, 0.14);
+  --panel: rgba(255, 251, 242, 0.78);
+  --sans: "Avenir Next", "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", "Consolas", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--sans);
+  background:
+    linear-gradient(rgba(23, 32, 39, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 32, 39, 0.035) 1px, transparent 1px),
+    var(--paper);
+  background-size: 32px 32px;
+}
+
+a {
+  color: inherit;
+}
+
+.docs-shell {
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 48px 0 72px;
+}
+
+.docs-hero {
+  display: grid;
+  gap: 18px;
+  min-height: 420px;
+  align-content: center;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--copper);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(48px, 10vw, 112px);
+  line-height: 0.9;
+}
+
+.docs-hero p {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1.55;
+}
+
+nav,
+.docs-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+nav a,
+.docs-grid a {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-decoration: none;
+  background: rgba(255, 251, 242, 0.72);
+}
+
+.docs-grid {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.docs-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+article,
+.references {
+  min-height: 170px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 251, 242, 0.72);
+}
+
+article h2,
+.references h2 {
+  margin-bottom: 12px;
+  color: var(--teal);
+}
+
+article p,
+.references li {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+code {
+  font-family: var(--mono);
+}
+
+.references {
+  margin-top: 22px;
+}
+
+@media (max-width: 760px) {
+  .docs-sections {
+    grid-template-columns: 1fr;
+  }
+}

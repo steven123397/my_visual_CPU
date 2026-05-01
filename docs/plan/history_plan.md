@@ -21,6 +21,36 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-05-01
+
+#### mainline-wave7-console-demo-workspace-v1-plan
+
+- 原文件：`wave7_console_demo_workspace_v1_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的控制台 demo workspace v1。
+  `/console` 顶层现在按 `OS Bring-up`、`Machine Inspector`、`AI Accelerator`、
+  `Runtime Labs` 组织体验入口；可运行卡片会同步现有 workload 与 backend 下拉，
+  然后复用原有 `Load / Run / Pause / Reset` 会话控制；future-only 路线只显示
+  `Coming soon`，不会触发虚假 session。
+- 实现过程摘要：这一轮按 TDD 先为 `/console` HTML、render 层 demo workspace 和
+  `selectDemo` 状态选择补红灯测试，再实现最小 workspace 容器、demo group / card
+  渲染、鼠标 / 键盘选择逻辑和响应式样式。底层 debug server、session API、Linux
+  interactive console、AI 参数化小模型、公网部署和新的 simulator runtime 合同均未改变。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave7-product-website-shell-plan
+
+- 原文件：`wave7_product_website_shell_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的产品官网壳层和首页第一刀。
+  本轮建立 `/`、`/console`、`/docs` 三入口：`/` 返回产品首页，`/console` 继续服务
+  现有浏览器控制台，`/docs` 返回 curated 产品文档壳层；首页包含极简 hero、控制台浮现、
+  real systems、machine inspection、AI workload、future prototype 和 guardrails 滚动叙事。
+- 实现过程摘要：这一轮按 TDD 先为三条路由、首页叙事 hook、CSS reduced-motion fallback
+  和产品文档证据链接补红灯测试，再实现最小路由、`home.html` / `home.css`、`docs.html` /
+  `docs.css`，并允许本地 `/source/docs/...` 只读访问 Markdown 证据文档。本轮不重构控制台
+  demo workspace，不实现 Linux interactive console、AI 参数化小模型、公网部署、任意镜像上传
+  或正式 `--backend jit`。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
 ### 2026-04-30
 
 #### mainline-wave6-closeout-runtime-guardrail-plan

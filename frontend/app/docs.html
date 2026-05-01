@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>myCPU — 产品文档</title>
+    <link rel="stylesheet" href="/docs.css">
+  </head>
+  <body>
+    <main class="docs-shell">
+      <header class="docs-hero">
+        <p class="eyebrow">Product Docs</p>
+        <h1>myCPU 产品文档</h1>
+        <p>从系统启动、机器观察、AI accelerator 到运行时实验，按体验路线理解 myCPU 能做什么、怎么运行、在哪里继续深入。</p>
+        <nav>
+          <a href="/">首页</a>
+          <a href="/console">打开控制台</a>
+        </nav>
+      </header>
+
+      <section class="docs-grid" aria-label="文档目录">
+        <a href="#overview">Overview</a>
+        <a href="#try-console">Try the Console</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#execution-backends">Execution Backends</a>
+        <a href="#os-bring-up">OS Bring-up</a>
+        <a href="#ai-accelerator">AI Accelerator</a>
+        <a href="#vector-ml">Vector and ML Workloads</a>
+        <a href="#jit-dbt">JIT / DBT Prototype</a>
+        <a href="#verification">Verification</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#references">Design References</a>
+      </section>
+
+      <section class="docs-sections">
+        <article id="overview">
+          <h2>Overview</h2>
+          <p>myCPU 是一个可在浏览器中体验的 RISC-V 系统模拟器工作台，把 OS demo、CPU 观察、AI accelerator 和 runtime labs 放在同一个入口。</p>
+        </article>
+        <article id="try-console">
+          <h2>Try the Console</h2>
+          <p>打开控制台后选择 workload，运行 demo，并在 terminal、pipeline、register、memory、profile 和 device counters 之间切换视角。</p>
+        </article>
+        <article id="architecture">
+          <h2>Architecture</h2>
+          <p>核心链路由 CPU、AddressSpace、Bus、RAM / Device、debug snapshot 和浏览器控制台组成，页面展示来自这些真实运行数据。</p>
+        </article>
+        <article id="os-bring-up">
+          <h2>OS Bring-up</h2>
+          <p>xv6 shell、Linux serial console 和 interactive_os 组成系统运行路线，展示 boot log、shell marker、monitor 命令和 UART 交互。</p>
+        </article>
+        <article id="ai-accelerator">
+          <h2>AI Accelerator</h2>
+          <p>AI accelerator 路线展示 graph package、MMIO doorbell、DMA、scratchpad、compute、completion、KMVAI marker 和 profile counters。</p>
+        </article>
+        <article id="jit-dbt">
+          <h2>JIT / DBT Prototype</h2>
+          <p>JIT / DBT runtime lab 展示 translation、host executable、cache hit / miss、fallback、invalidation 和 summary stats。</p>
+        </article>
+        <article id="verification">
+          <h2>Verification</h2>
+          <p>默认门禁包括 <code>cd frontend && node --test</code>、<code>cd myCPU && make test</code> 和 <code>make test-pipeline</code>。</p>
+        </article>
+        <article id="roadmap">
+          <h2>Roadmap</h2>
+          <p>Post-Wave 7 新主线是标准 Debian / Alpine 镜像级平台，以及用户自定义 AI 任务和更接近商用 NPU 的性能模型。</p>
+        </article>
+      </section>
+
+      <section id="references" class="references">
+        <h2>Design References</h2>
+        <ul>
+          <li><a href="/source/docs/design/wave7_productization_and_showcase_design.md">wave7_productization_and_showcase_design.md</a></li>
+          <li><a href="/source/docs/design/debug_frontend_integration.md">debug_frontend_integration.md</a></li>
+          <li><a href="/source/docs/design/future_expansion_roadmap_design.md">future_expansion_roadmap_design.md</a></li>
+          <li><a href="/source/docs/status/mainline_status.md">mainline_status.md</a></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

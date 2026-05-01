@@ -438,6 +438,243 @@ test('GET /api/tests returns built-in test manifest', async () => {
   }
 });
 
+test('GET / returns the Wave 7 product homepage instead of the console app', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\/html/);
+    assert.match(body, /myCPU/);
+    assert.match(body, /在浏览器里启动一颗 CPU/);
+    assert.match(body, /打开控制台/);
+    assert.match(body, /阅读产品文档/);
+    assert.doesNotMatch(body, /id="test-select"/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /console keeps serving the existing browser console app', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/console`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\/html/);
+    assert.match(body, /交互式终端调试台/);
+    assert.match(body, /id="demo-workspace-slot"/);
+    assert.match(body, /Demo workspace/);
+    assert.match(body, /id="test-select"/);
+    assert.match(body, /src="\/app\.js"/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /docs returns the curated product documentation shell', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/docs`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\/html/);
+    for (const label of [
+      'Overview',
+      'Try the Console',
+      'Architecture',
+      'OS Bring-up',
+      'AI Accelerator',
+      'JIT / DBT Prototype',
+      'Verification',
+      'Roadmap',
+      'Design References',
+    ]) {
+      assert.match(body, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+    assert.doesNotMatch(body, /面向技术评审 \/ 招聘面试官/);
+    assert.doesNotMatch(body, /<a href="#boundaries">Boundaries<\/a>/);
+    assert.doesNotMatch(body, /<h2>Boundaries<\/h2>/);
+    assert.match(body, /wave7_productization_and_showcase_design\.md/);
+    assert.match(body, /mainline_status\.md/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET / exposes scroll storytelling sections with progressive reveal hooks', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    for (const label of [
+      'Run real systems',
+      'Inspect the machine',
+      'Accelerate workloads',
+      'Core architecture',
+      'Memory & OS',
+      'Differential verification',
+      'Runtime labs',
+      'Verification',
+      '验证',
+      'Start',
+    ]) {
+      assert.match(body, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+    assert.match(body, /class="product-nav"/);
+    assert.match(body, /data-reveal="rise"/);
+    assert.match(body, /data-reveal="from-right"/);
+    assert.match(body, /data-motion-track/);
+    assert.match(body, /data-count="75"/);
+    assert.match(body, /data-count="1"/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET / presents project-specific evidence instead of a generic landing page', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    for (const label of [
+      'functional / pipeline',
+      'xv6 shell',
+      'timerfd-one-shot-readback-ok',
+      'AI accelerator',
+      'Vector CNN',
+      'L1D / shadow cache',
+      'JIT / DBT opt-in',
+      'Spike differential',
+      'Linux serial console',
+      '参数化小模型',
+      'InstructionSemantics',
+      'AddressSpace',
+      'Sv39',
+      'CLINT',
+      'PLIC',
+      'virtio-blk',
+      'Spike oracle',
+      'functional replay',
+      'commit trace',
+    ]) {
+      assert.match(body, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+    assert.doesNotMatch(body, /<a href="#boundaries">Boundaries<\/a>/);
+    assert.doesNotMatch(body, /Know the boundaries/);
+    assert.doesNotMatch(body, /不开放任意 Linux 镜像上传/);
+    assert.doesNotMatch(body, /不开放任意 AI 模型上传/);
+    assert.doesNotMatch(body, /技术评审/);
+    assert.doesNotMatch(body, /招聘面试官/);
+    assert.match(body, /\/source\/showcase\/frontend_overview\.png/);
+    assert.match(body, /\/source\/showcase\/pipeline_timeline\.png/);
+    assert.match(body, /\/source\/showcase\/interactive_terminal\.png/);
+    assert.match(body, /\/source\/showcase\/auto-code-image-905\.png/);
+    assert.match(body, /\/source\/showcase\/vector_panel\.png/);
+    assert.match(body, /src="\/home\.js"/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /home.css provides product-page motion with a reduced-motion fallback', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/home.css`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\/css/);
+    assert.match(body, /@keyframes reveal-up/);
+    assert.match(body, /\[data-reveal="from-right"\]/);
+    assert.match(body, /position: sticky/);
+    assert.match(body, /scroll-snap-type: x mandatory/);
+    assert.match(body, /font-family: var\(--display\)/);
+    assert.match(body, /prefers-reduced-motion: reduce/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /home.js wires scroll reveal, parallax, and count-up interactions', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/home.js`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\/javascript/);
+    assert.match(body, /IntersectionObserver/);
+    assert.match(body, /requestAnimationFrame/);
+    assert.match(body, /data-motion-track/);
+    assert.match(body, /prefers-reduced-motion/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /source/docs serves curated evidence documents referenced by product docs', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/source/docs/design/wave7_productization_and_showcase_design.md`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\/markdown|text\/plain/);
+    assert.match(body, /Wave 7 产品化展示与在线控制台设计/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /source/showcase serves homepage screenshot assets', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/source/showcase/frontend_overview.png`);
+    const body = await response.arrayBuffer();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /image\/png/);
+    assert.ok(body.byteLength > 1024);
+  } finally {
+    await server.close();
+  }
+});
+
 test('GET /shared/terminal_projection.mjs serves the browser-shared terminal projection module', async () => {
   const server = await startServer({
     port: 0,
