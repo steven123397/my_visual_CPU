@@ -169,6 +169,41 @@ function linuxConsoleDiagnosticLabel(status) {
   }
 }
 
+function isLinuxLoadPending(state) {
+  return state.runState === 'loading' && state.loadProgress?.test === 'linux_proto_console';
+}
+
+function loadProgressElapsedSeconds(progress) {
+  const startedAt =
+    typeof progress?.startedAt === 'number' && Number.isFinite(progress.startedAt)
+      ? progress.startedAt
+      : Date.now();
+  const now =
+    typeof progress?.now === 'number' && Number.isFinite(progress.now)
+      ? progress.now
+      : Date.now();
+  return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
+function renderLinuxLoadProgress(state) {
+  if (!isLinuxLoadPending(state)) {
+    return '';
+  }
+
+  const progress = state.loadProgress;
+  const backend = progress.backend ?? state.backend ?? 'functional';
+  const waitingFor = progress.waitingFor ?? 'mycpu-linux# ';
+  const elapsed = loadProgressElapsedSeconds(progress);
+  return `
+    <div class="demo-workspace__boot-progress" role="status">
+      <span>Linux boot in progress</span>
+      <strong>${elapsed}s</strong>
+      <em>${escapeHtml(backend)}</em>
+      <code>waiting for ${escapeHtml(waitingFor)}</code>
+    </div>
+  `;
+}
+
 function renderLinuxConsoleDiagnostic(diagnostic) {
   if (!diagnostic || diagnostic.ready) {
     return '';
@@ -265,6 +300,7 @@ function renderDemoWorkspace(state) {
       <strong>${escapeHtml(selected?.title ?? selected?.menuLabel ?? state.selectedTest)}</strong>
       <em>${escapeHtml(state.backend)}</em>
     </div>
+    ${renderLinuxLoadProgress(state)}
     <div class="demo-workspace__grid">
       ${DEMO_GROUPS.map((group) => `
         <section class="demo-group">

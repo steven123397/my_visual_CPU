@@ -683,6 +683,114 @@ test('renderApp lets the Linux serial console route select a configured linux_pr
   assert.doesNotMatch(elements.demoWorkspace.innerHTML, /Not configured/);
 });
 
+test('renderApp shows a Linux boot progress strip while linux_proto_console is loading', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'linux_proto_console',
+      menuLabel: 'linux_proto_console · Linux serial',
+      kind: 'linux',
+      backend: 'functional',
+      title: 'Linux Serial Console',
+      badge: 'Linux runtime',
+      summary: '启动受控 linux_proto runtime，进入 UART 串口 console。',
+      workload: {
+        stage: 'Wave 7',
+        category: 'linux-serial-console',
+        expectedMarker: 'mycpu-linux# ',
+        ops: ['flat SBI shim', 'Linux Image payload', 'DTB', 'virtio-blk rootfs'],
+      },
+    },
+  ];
+  state.selectedTest = 'linux_proto_console';
+  state.backend = 'functional';
+  state.runState = 'loading';
+  state.loadProgress = {
+    test: 'linux_proto_console',
+    backend: 'functional',
+    startedAt: 1700000000000,
+    now: 1700000038000,
+    waitingFor: 'mycpu-linux# ',
+    label: 'Booting Linux',
+  };
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Linux boot in progress/);
+  assert.match(elements.demoWorkspace.innerHTML, /waiting for mycpu-linux# /);
+  assert.match(elements.demoWorkspace.innerHTML, /functional/);
+  assert.match(elements.demoWorkspace.innerHTML, /38s/);
+  assert.match(elements.terminal.innerHTML, /Linux boot in progress/);
+  assert.match(elements.terminal.innerHTML, /42s|38s/);
+});
+
+test('renderApp keeps normal demo loading free of Linux boot copy', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'guest_interactive_os_demo',
+      menuLabel: 'guest_interactive_os_demo',
+      title: 'interactive_os Monitor',
+      badge: 'OS Bring-up',
+      summary: '输入 help 观察 guest monitor。',
+      workload: {
+        expectedMarker: 'monitor> ',
+        ops: ['UART input'],
+      },
+    },
+  ];
+  state.selectedTest = 'guest_interactive_os_demo';
+  state.backend = 'pipeline';
+  state.runState = 'loading';
+  state.loadProgress = {
+    test: 'guest_interactive_os_demo',
+    backend: 'pipeline',
+    startedAt: 1700000000000,
+    now: 1700000003000,
+    waitingFor: 'monitor> ',
+    label: 'Loading demo',
+  };
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /Linux boot in progress/);
+  assert.doesNotMatch(elements.terminal.innerHTML, /Linux boot in progress/);
+});
+
 test('renderApp shows Linux console workload asset note for a loaded Linux session', () => {
   const state = createAppState();
   state.runState = 'paused';

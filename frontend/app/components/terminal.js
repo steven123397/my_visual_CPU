@@ -27,25 +27,68 @@ function terminalPresentation(activeTest) {
   };
 }
 
+function isLinuxLoadProgress(state) {
+  return state.runState === 'loading' && state.loadProgress?.test === 'linux_proto_console';
+}
+
+function progressElapsedSeconds(progress) {
+  const startedAt =
+    typeof progress?.startedAt === 'number' && Number.isFinite(progress.startedAt)
+      ? progress.startedAt
+      : Date.now();
+  const now =
+    typeof progress?.now === 'number' && Number.isFinite(progress.now)
+      ? progress.now
+      : Date.now();
+  return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
+function renderLinuxBootProgress(progress) {
+  if (!progress) {
+    return '';
+  }
+
+  const backend = progress.backend ?? 'functional';
+  const waitingFor = progress.waitingFor ?? 'mycpu-linux# ';
+  const elapsed = progressElapsedSeconds(progress);
+  return `
+    <div class="linux-boot-progress" role="status">
+      <span>Linux boot in progress</span>
+      <strong>${elapsed}s</strong>
+      <em>${escapeHtml(backend)}</em>
+      <code>waiting for ${escapeHtml(waitingFor)}</code>
+    </div>
+  `;
+}
+
 export function renderTerminal(state) {
   const terminal = state.terminal;
   const summary = state.currentSnapshot?.summary ?? {};
   const collapsed = state.layout?.terminalCollapsed === true;
   const loadedSession = state.loadedSession ?? null;
+  const loadProgress = isLinuxLoadProgress(state) ? state.loadProgress : null;
   const activeTest = typeof loadedSession?.test === 'string' && loadedSession.test.length > 0
     ? loadedSession.test
-    : null;
+    : loadProgress?.test ?? null;
   const activeBackend =
     typeof summary.backend === 'string' && summary.backend.length > 0
       ? summary.backend
-      : (typeof loadedSession?.backend === 'string' && loadedSession.backend.length > 0 ? loadedSession.backend : '-');
+      : (typeof loadedSession?.backend === 'string' && loadedSession.backend.length > 0
+        ? loadedSession.backend
+        : (typeof loadProgress?.backend === 'string' && loadProgress.backend.length > 0 ? loadProgress.backend : '-'));
   const sessionLabel = activeTest ? `${activeTest} · ${activeBackend}` : `未加载会话 · ${activeBackend}`;
   const presentation = terminalPresentation(activeTest);
   let hint = '点击终端开始输入。';
   if (!terminal.connected) {
-    hint = collapsed
-      ? 'terminal 已收起；先加载一个会话，然后再展开输入。'
-      : '先加载一个会话，然后点击终端开始输入。';
+    if (loadProgress) {
+      hint = collapsed
+        ? 'terminal 已收起；Linux runtime 仍在启动。'
+        : 'Linux runtime 仍在启动，等待串口 prompt 后即可输入。';
+    } else {
+      hint = collapsed
+        ? 'terminal 已收起；先加载一个会话，然后再展开输入。'
+        : '先加载一个会话，然后点击终端开始输入。';
+    }
   } else if (terminal.pendingInput) {
     hint = collapsed
       ? `terminal 已收起，正在把按键送入 ${presentation.target}...`
@@ -85,6 +128,7 @@ export function renderTerminal(state) {
       </header>
 
       <div class="terminal-window__screen">
+        ${renderLinuxBootProgress(loadProgress)}
         <div class="terminal-scrollport">
           <pre class="terminal-buffer">${buffer}${terminal.focused && !collapsed ? '<span class="terminal-caret" aria-hidden="true"></span>' : ''}</pre>
         </div>

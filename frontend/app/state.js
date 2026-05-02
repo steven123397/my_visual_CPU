@@ -30,6 +30,7 @@ export function createAppState() {
     selectedTest: 'hello',
     backend: 'pipeline',
     loadedSession: null,
+    loadProgress: null,
     runState: 'idle',
     currentSnapshot: null,
     history: [],
@@ -85,6 +86,41 @@ export function setLoadedSession(state, session) {
   };
 }
 
+export function setLoadProgress(state, progress) {
+  if (!progress || typeof progress.test !== 'string' || progress.test.length === 0) {
+    state.loadProgress = null;
+    return;
+  }
+
+  state.loadProgress = {
+    test: progress.test,
+    backend:
+      typeof progress.backend === 'string' && progress.backend.length > 0
+        ? progress.backend
+        : null,
+    startedAt:
+      typeof progress.startedAt === 'number' && Number.isFinite(progress.startedAt)
+        ? progress.startedAt
+        : Date.now(),
+    waitingFor:
+      typeof progress.waitingFor === 'string' && progress.waitingFor.length > 0
+        ? progress.waitingFor
+        : null,
+    label:
+      typeof progress.label === 'string' && progress.label.length > 0
+        ? progress.label
+        : 'Loading',
+  };
+
+  if (typeof progress.now === 'number' && Number.isFinite(progress.now)) {
+    state.loadProgress.now = progress.now;
+  }
+}
+
+export function clearLoadProgress(state) {
+  state.loadProgress = null;
+}
+
 export function pushSnapshot(state, snapshot) {
   state.currentSnapshot = snapshot;
   state.history = [...state.history, snapshot].slice(-MAX_HISTORY);
@@ -102,6 +138,7 @@ export function resetTerminalState(state) {
 
 export function clearLoadedSession(state) {
   state.loadedSession = null;
+  clearLoadProgress(state);
   state.runState = 'idle';
   resetHistory(state);
   resetTerminalState(state);

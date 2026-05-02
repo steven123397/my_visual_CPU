@@ -188,3 +188,36 @@ test('renderTerminal labels a loaded Linux serial console session without intera
   assert.doesNotMatch(html, /interactive_os terminal/);
   assert.doesNotMatch(html, /guest monitor/);
 });
+
+test('renderTerminal shows Linux boot progress while the load request is pending', () => {
+  const html = renderTerminal({
+    selectedTest: 'linux_proto_console',
+    backend: 'functional',
+    loadedSession: null,
+    runState: 'loading',
+    loadProgress: {
+      test: 'linux_proto_console',
+      backend: 'functional',
+      startedAt: 1700000000000,
+      now: 1700000042000,
+      waitingFor: 'mycpu-linux# ',
+      label: 'Booting Linux',
+    },
+    currentSnapshot: null,
+    layout: {
+      terminalCollapsed: false,
+    },
+    terminal: {
+      connected: false,
+      pendingInput: false,
+      focused: false,
+      buffer: '',
+    },
+  });
+
+  assert.match(html, /Linux boot in progress/);
+  assert.match(html, /waiting for mycpu-linux# /);
+  assert.match(html, /functional/);
+  assert.match(html, /42s/);
+  assert.match(html, /Linux serial terminal/);
+});

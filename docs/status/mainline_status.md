@@ -33,6 +33,7 @@
   - 无
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#mainline-wave7-linux-console-loading-experience-plan](../plan/history_plan.md#mainline-wave7-linux-console-loading-experience-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan](../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-load-contract-plan](../plan/history_plan.md#mainline-wave7-linux-console-load-contract-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-config-ux-plan](../plan/history_plan.md#mainline-wave7-linux-console-config-ux-plan)
@@ -191,7 +192,11 @@ Roadmap 和 Design References。`Linux Serial Console` 也已作为 gated runtim
 SBI shim、Linux `Image`、DTB 和 `virtio-blk` rootfs，并等待 `mycpu-linux# ` 提示符。
 真实 Linux console route 当前固定使用 existing runtime guardrail 已证明的
 `functional` backend 合同；boot marker wait 使用 Linux 专用 debug CLI request timeout，
-不再复用普通 1500 ms 单请求预算。前端输入的换行命令也改为等待当前 offset 之后的新
+不再复用普通 1500 ms 单请求预算。点击 Linux route 的 `Load` 后，`/console`
+会在 workspace 和 terminal 中显示 Linux boot progress、已等待秒数、当前 backend
+和等待中的 `mycpu-linux# ` prompt；如果 boot wait 超时，notice 会转成面向用户的
+Image / prompt / backend 指引，而不是直接暴露 debug CLI 内部文本。普通 demo 的
+loading 状态不显示 Linux 专属文案。前端输入的换行命令也改为等待当前 offset 之后的新
 UART prompt，避免旧 prompt 让 command settling 提前返回。
 本轮 hardening 已让 terminal title / pending hint 随 loaded workload 切到
 `Linux serial terminal` / `Linux serial console`，并用 runtime characterization 固定
@@ -249,7 +254,10 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
   Linux card 未配置时显示 `Not configured` 和 `Runtime Image required`，并根据
   `diagnostics.linuxConsole` 说明 env 未设置、路径不存在、路径不是文件或不可读；
   未 ready 时不会创建 session，manifest 暴露后显示 `Ready`。显式 Terminate 会结束
-  当前 debug session 并清空浏览器 session / terminal 状态。
+  当前 debug session 并清空浏览器 session / terminal 状态。Load 期间 UI 会明确显示
+  `Linux boot in progress`、backend、等待中的 `mycpu-linux# ` prompt 和已等待秒数；
+  Linux boot timeout notice 会提示检查 `MYCPU_LINUX_PROTO_CONSOLE_IMAGE`，普通 demo
+  不显示 Linux 专属 loading 文案。
   这不是浏览器内 Linux，也不开放任意用户镜像。
 - `P4-prep-1` 和 `C1 / P4-prep-2 memory observation / shadow cache` 已完成。
   当前稳定的观测 guardrail 主要是：

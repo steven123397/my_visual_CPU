@@ -350,6 +350,43 @@ button:hover {
   font-size: 12px;
 }
 
+.demo-workspace__boot-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: -4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(240, 180, 90, 0.32);
+  border-radius: 12px;
+  background: rgba(240, 180, 90, 0.1);
+}
+
+.demo-workspace__boot-progress span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.demo-workspace__boot-progress strong {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-workspace__boot-progress em,
+.demo-workspace__boot-progress code {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.demo-workspace__boot-progress code {
+  grid-column: 1 / -1;
+}
+
 .demo-workspace__grid {
   display: grid;
   gap: 16px;
@@ -677,9 +714,46 @@ button:hover {
 
 .terminal-window__screen {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
   min-height: 0;
   padding: 18px;
+}
+
+.linux-boot-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(240, 180, 90, 0.28);
+  border-radius: 14px;
+  background: rgba(240, 180, 90, 0.1);
+}
+
+.linux-boot-progress span {
+  color: var(--terminal-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.linux-boot-progress strong {
+  color: var(--terminal-accent);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.linux-boot-progress em,
+.linux-boot-progress code {
+  color: var(--terminal-muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.linux-boot-progress code {
+  grid-column: 1 / -1;
 }
 
 .terminal-scrollport {

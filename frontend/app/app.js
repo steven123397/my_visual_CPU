@@ -13,6 +13,7 @@ import {
 } from './api.js';
 import {
   appendTerminalOutput,
+  clearLoadProgress,
   clearLoadedSession,
   createAppState,
   normalizeTerminalInput,
@@ -21,10 +22,12 @@ import {
   setTerminalFocus,
   setInspectorGroupOpen,
   setLoadedSession,
+  setLoadProgress,
   setTerminalPendingInput,
   setTests,
   selectDemo,
 } from './state.js';
+import { formatLoadErrorMessage } from './load_error_message.js';
 import { createTerminalInputPump } from './terminal_input_pump.js';
 import { renderApp, updateControls } from './render.js';
 
@@ -83,8 +86,16 @@ async function handleLoad() {
   state.runState = 'loading';
   clearLoadedSession(state);
   state.runState = 'loading';
+  setLoadProgress(state, {
+    test: requestedTest,
+    backend: requestedBackend,
+    startedAt: Date.now(),
+    waitingFor: requestedTest === 'linux_proto_console' ? 'mycpu-linux# ' : null,
+    label: requestedTest === 'linux_proto_console' ? 'Booting Linux' : 'Loading demo',
+  });
   paint();
   const response = await loadSession(requestedTest, requestedBackend);
+  clearLoadProgress(state);
   setLoadedSession(state, {
     test: requestedTest,
     backend: response?.snapshot?.summary?.backend ?? requestedBackend,
@@ -229,9 +240,14 @@ async function init() {
       terminalInputPump.reset();
       await handleLoad();
     } catch (error) {
+      const loadContext = state.loadProgress ?? {
+        test: state.selectedTest,
+        backend: state.backend,
+      };
       state.runState = 'error';
+      clearLoadProgress(state);
       paint();
-      showNotice(error.message, 'error');
+      showNotice(formatLoadErrorMessage(error, loadContext), 'error');
     }
   });
 

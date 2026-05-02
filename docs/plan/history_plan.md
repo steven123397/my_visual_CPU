@@ -23,6 +23,21 @@
 
 ### 2026-05-02
 
+#### mainline-wave7-linux-console-loading-experience-plan
+
+- 原文件：`wave7_linux_console_loading_experience_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux Serial Console
+  Load 等待体验收口。点击 Linux route 的 `Load` 后，`/console` 会在 demo workspace
+  和 terminal 中显示 `Linux boot in progress`、已等待秒数、当前 backend 和等待中的
+  `mycpu-linux# ` prompt；普通 demo loading 不显示 Linux 专属文案。Linux boot wait
+  超时 notice 会转成面向用户的 Image / prompt / backend 指引，不再只暴露 debug CLI
+  内部 `run_until_uart_contains` timeout 文本。
+- 实现过程摘要：这一轮按 TDD 先补 state、render、terminal 和 load error message
+  红灯，再实现最小 `loadProgress` 状态、Linux pending UI、样式和 load error
+  转换函数。底层 Linux runtime、debug CLI boot wait 合同、普通 demo Load / Run /
+  Pause / Reset 语义均未改变。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave7-linux-console-load-contract-plan
 
 - 原文件：`wave7_linux_console_load_contract_plan.md`

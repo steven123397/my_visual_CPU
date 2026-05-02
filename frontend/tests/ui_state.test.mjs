@@ -9,9 +9,11 @@ import {
   createAppState,
   appendTerminalOutput,
   selectDemo,
+  setLoadProgress,
   setDiagnostics,
   setLoadedSession,
   setTests,
+  clearLoadProgress,
   diffRegisters,
   diffVectorRegisters,
   pushSnapshot,
@@ -135,6 +137,31 @@ test('setDiagnostics ignores malformed diagnostics payloads', () => {
   assert.deepEqual(state.diagnostics, {});
 });
 
+test('load progress records Linux boot wait metadata and can be cleared', () => {
+  const state = createAppState();
+  const startedAt = 1700000000000;
+
+  setLoadProgress(state, {
+    test: 'linux_proto_console',
+    backend: 'functional',
+    startedAt,
+    waitingFor: 'mycpu-linux# ',
+    label: 'Booting Linux',
+  });
+
+  assert.deepEqual(state.loadProgress, {
+    test: 'linux_proto_console',
+    backend: 'functional',
+    startedAt,
+    waitingFor: 'mycpu-linux# ',
+    label: 'Booting Linux',
+  });
+
+  clearLoadProgress(state);
+
+  assert.equal(state.loadProgress, null);
+});
+
 test('clearLoadedSession resets snapshot history, terminal state, and active session identity', () => {
   const state = createAppState();
   setLoadedSession(state, {
@@ -154,6 +181,13 @@ test('clearLoadedSession resets snapshot history, terminal state, and active ses
   });
   state.terminal.focused = true;
   state.terminal.pendingInput = true;
+  state.loadProgress = {
+    test: 'linux_proto_console',
+    backend: 'functional',
+    startedAt: 1700000000000,
+    waitingFor: 'mycpu-linux# ',
+    label: 'Booting Linux',
+  };
   state.runState = 'running';
 
   clearLoadedSession(state);
@@ -166,5 +200,6 @@ test('clearLoadedSession resets snapshot history, terminal state, and active ses
   assert.equal(state.terminal.nextOffset, 0);
   assert.equal(state.terminal.focused, false);
   assert.equal(state.terminal.pendingInput, false);
+  assert.equal(state.loadProgress, null);
   assert.equal(state.runState, 'idle');
 });
