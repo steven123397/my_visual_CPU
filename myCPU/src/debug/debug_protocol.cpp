@@ -109,6 +109,15 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                 out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;
             }
+            if (command.kind == DebugCliCommandKind::RunUntilNewUartContains) {
+                out << debug_protocol_uart_output_json(
+                           session.run_until_new_uart_contains(
+                               command.offset,
+                               command.text,
+                               command.max_steps))
+                    << '\n';
+                continue;
+            }
             if (command.kind == DebugCliCommandKind::RunUntilHalt) {
                 session.run_until_halt(command.max_steps);
                 out << debug_snapshot_json(session.snapshot()) << '\n';

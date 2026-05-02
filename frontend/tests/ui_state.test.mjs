@@ -5,9 +5,16 @@ import {
   buildTimelineRows,
   classifyEventTone,
   classifyInstructionFlavor,
+  clearLoadedSession,
+  createAppState,
+  appendTerminalOutput,
   selectDemo,
+  setDiagnostics,
+  setLoadedSession,
+  setTests,
   diffRegisters,
   diffVectorRegisters,
+  pushSnapshot,
   shouldAutoScrollToBottom,
 } from '../app/state.js';
 
@@ -100,4 +107,64 @@ test('selectDemo updates the workload and backend only for manifest-backed demos
   assert.equal(selectDemo(state, 'linux_shell_demo', 'pipeline'), false);
   assert.equal(state.selectedTest, 'guest_ai_accel_demo');
   assert.equal(state.backend, 'pipeline');
+});
+
+test('setTests stores read-only diagnostics alongside the workload manifest', () => {
+  const state = createAppState();
+  const diagnostics = {
+    linuxConsole: {
+      status: 'not-found',
+      ready: false,
+      envVar: 'MYCPU_LINUX_PROTO_CONSOLE_IMAGE',
+      path: '/missing/Image',
+      message: 'Image path does not exist: /missing/Image',
+    },
+  };
+
+  setTests(state, [{ name: 'hello' }], diagnostics);
+
+  assert.deepEqual(state.diagnostics.linuxConsole, diagnostics.linuxConsole);
+  assert.equal(state.selectedTest, 'hello');
+});
+
+test('setDiagnostics ignores malformed diagnostics payloads', () => {
+  const state = createAppState();
+
+  setDiagnostics(state, null);
+
+  assert.deepEqual(state.diagnostics, {});
+});
+
+test('clearLoadedSession resets snapshot history, terminal state, and active session identity', () => {
+  const state = createAppState();
+  setLoadedSession(state, {
+    test: 'linux_proto_console',
+    backend: 'pipeline',
+  });
+  pushSnapshot(state, {
+    summary: {
+      cycle: 9,
+      halted: false,
+    },
+  });
+  appendTerminalOutput(state, {
+    text: 'mycpu-linux# ',
+    nextOffset: 'mycpu-linux# '.length,
+    reset: true,
+  });
+  state.terminal.focused = true;
+  state.terminal.pendingInput = true;
+  state.runState = 'running';
+
+  clearLoadedSession(state);
+
+  assert.equal(state.loadedSession, null);
+  assert.equal(state.currentSnapshot, null);
+  assert.deepEqual(state.history, []);
+  assert.equal(state.terminal.connected, false);
+  assert.equal(state.terminal.buffer, '');
+  assert.equal(state.terminal.nextOffset, 0);
+  assert.equal(state.terminal.focused, false);
+  assert.equal(state.terminal.pendingInput, false);
+  assert.equal(state.runState, 'idle');
 });

@@ -154,10 +154,29 @@ export class DebugCliSession {
     return this.request({
       cmd: 'load',
       image: testEntry.image,
+      flat: testEntry.imageFormat === 'flat',
+      addr: testEntry.loadAddr ?? undefined,
       disk: testEntry.disk ?? undefined,
+      block_transport: testEntry.blockTransport ?? undefined,
       disk_ready: testEntry.diskReady ?? true,
       disk_magic_valid: testEntry.diskMagicValid ?? true,
       backend,
+    });
+  }
+
+  async loadPayload(image, addr) {
+    return this.request({
+      cmd: 'load_payload',
+      image,
+      addr,
+    });
+  }
+
+  async setGpr(reg, value) {
+    return this.request({
+      cmd: 'set_gpr',
+      reg,
+      value,
     });
   }
 
@@ -165,12 +184,21 @@ export class DebugCliSession {
     return this.request({ cmd: 'snapshot' });
   }
 
-  async runUntilUartContains(text, maxSteps) {
+  async runUntilUartContains(text, maxSteps, options) {
     return this.request({
       cmd: 'run_until_uart_contains',
       text,
       max_steps: maxSteps,
-    });
+    }, options);
+  }
+
+  async runUntilNewUartContains(offset, text, maxSteps, options) {
+    return this.request({
+      cmd: 'run_until_new_uart_contains',
+      offset,
+      text,
+      max_steps: maxSteps,
+    }, options);
   }
 
   async stepCycle() {

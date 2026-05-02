@@ -26,6 +26,7 @@ function createTerminalState() {
 export function createAppState() {
   return {
     tests: [],
+    diagnostics: {},
     selectedTest: 'hello',
     backend: 'pipeline',
     loadedSession: null,
@@ -42,8 +43,16 @@ export function createAppState() {
   };
 }
 
-export function setTests(state, tests) {
+export function setDiagnostics(state, diagnostics) {
+  state.diagnostics =
+    diagnostics && typeof diagnostics === 'object'
+      ? diagnostics
+      : {};
+}
+
+export function setTests(state, tests, diagnostics = state.diagnostics) {
   state.tests = tests;
+  setDiagnostics(state, diagnostics);
   if (!tests.some((item) => item.name === state.selectedTest) && tests[0]) {
     state.selectedTest = tests[0].name;
   }
@@ -89,6 +98,13 @@ export function resetHistory(state) {
 
 export function resetTerminalState(state) {
   state.terminal = createTerminalState();
+}
+
+export function clearLoadedSession(state) {
+  state.loadedSession = null;
+  state.runState = 'idle';
+  resetHistory(state);
+  resetTerminalState(state);
 }
 
 export function appendTerminalOutput(state, payload = {}) {

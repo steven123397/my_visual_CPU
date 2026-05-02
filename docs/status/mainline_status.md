@@ -33,6 +33,15 @@
   - 无
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan](../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan)
+  - [../plan/history_plan.md#mainline-wave7-linux-console-load-contract-plan](../plan/history_plan.md#mainline-wave7-linux-console-load-contract-plan)
+  - [../plan/history_plan.md#mainline-wave7-linux-console-config-ux-plan](../plan/history_plan.md#mainline-wave7-linux-console-config-ux-plan)
+  - [../plan/history_plan.md#mainline-wave7-linux-console-reset-rearm-plan](../plan/history_plan.md#mainline-wave7-linux-console-reset-rearm-plan)
+  - [../plan/history_plan.md#mainline-wave7-linux-console-real-image-e2e-plan](../plan/history_plan.md#mainline-wave7-linux-console-real-image-e2e-plan)
+  - [../plan/history_plan.md#mainline-wave7-linux-console-terminate-plan](../plan/history_plan.md#mainline-wave7-linux-console-terminate-plan)
+  - [../plan/history_plan.md#mainline-wave7-linux-console-hardening-plan](../plan/history_plan.md#mainline-wave7-linux-console-hardening-plan)
+  - [../plan/history_plan.md#mainline-wave7-linux-interactive-frontend-console-plan](../plan/history_plan.md#mainline-wave7-linux-interactive-frontend-console-plan)
+  - [../plan/history_plan.md#mainline-wave7-product-docs-v1-plan](../plan/history_plan.md#mainline-wave7-product-docs-v1-plan)
   - [../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan](../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan)
   - [../plan/history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)
   - [../plan/history_plan.md#mainline-wave6-executable-cache-runtime-hookup-plan](../plan/history_plan.md#mainline-wave6-executable-cache-runtime-hookup-plan)
@@ -171,7 +180,34 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
 和控制台 demo workspace v1 已完成：本地前端服务具备 `/`、`/console`、`/docs`
 三入口，首页采用面向用户的产品叙事展示已完成能力，`/console` 顶层已按
 `OS Bring-up`、`Machine Inspector`、`AI Accelerator`、`Runtime Labs` 组织体验入口，
-产品文档入口先作为 curated 壳层。
+`/docs` 已推进到产品文档 v1，按用户体验路线说明 Overview、Try the Console、
+Demo Routes、Architecture、OS Bring-up、AI Accelerator、Runtime Labs、Verification、
+Roadmap 和 Design References。`Linux Serial Console` 也已作为 gated runtime demo
+接入 `/console`：配置 `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 后，manifest
+会暴露 `linux_proto_console`，卡片从 `Not configured` / `Runtime Image required`
+切换为 `Ready`；未配置前不会创建 session。`/api/tests` 同步返回只读
+`diagnostics.linuxConsole`，用于在卡片上说明 env 未设置、路径不存在、路径不是文件、
+不可读或 ready 等状态。配置后可通过现有 debug CLI / browser terminal 启动 flat
+SBI shim、Linux `Image`、DTB 和 `virtio-blk` rootfs，并等待 `mycpu-linux# ` 提示符。
+真实 Linux console route 当前固定使用 existing runtime guardrail 已证明的
+`functional` backend 合同；boot marker wait 使用 Linux 专用 debug CLI request timeout，
+不再复用普通 1500 ms 单请求预算。前端输入的换行命令也改为等待当前 offset 之后的新
+UART prompt，避免旧 prompt 让 command settling 提前返回。
+本轮 hardening 已让 terminal title / pending hint 随 loaded workload 切到
+`Linux serial terminal` / `Linux serial console`，并用 runtime characterization 固定
+`help\r` 会等待 `commands: help uptime exit` 与新的 `mycpu-linux# ` 提示符后再返回。
+本轮 terminate 收口新增显式 `Terminate` 主操作和 `POST /api/session/terminate`，
+可停止 run loop、关闭当前 debug CLI session、清空 snapshot / terminal tracking，
+并向浏览器广播空 terminal reset。
+真实 Linux serial console e2e 现在也有显式 opt-in guardrail：默认 `frontend`
+Node 测试只记录跳过条件；设置 `MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1` 和
+`MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 后，会通过真实 debug server +
+debug CLI 加载 `linux_proto_console`，输入 `help`，校验 `commands: help uptime exit`
+和新的 `mycpu-linux# ` prompt，然后 terminate。
+Linux console reset re-arm 也已完成：`/api/session/reset` 对带 payload / GPR seed /
+boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB，重设
+`a0/a1/a2`，并再次等待 `mycpu-linux# ` prompt；普通 demo reset 仍保持原有裸 reset
+语义。
 
 ## 当前状态
 
@@ -198,10 +234,23 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
   build/string/probe 合同锁住，真实 `Image + rootfs.ext4` runtime 仍是 opt-in
   验证项。后续如果要把它作为发布级 runtime 断言，必须显式提供 `Image`
   重新跑对应 runtime guardrail。
-- 当前 Linux 接入仍是 checkpoint / probe 形态，不是可交互 shell：`linux_proto`
-  主要自动运行 `/init` smoke 并等待 UART marker；仓库前端 terminal 目前服务
-  `interactive_os`，不是 Linux 串口控制台。若要做到“像 QEMU 一样启动后输入命令”，
-  应作为 `Wave 7` 的 `Linux interactive frontend console` 切片推进。
+- Linux interactive frontend console 第一刀已完成：仓库默认仍不携带真实 Linux
+  `Image`，但配置 `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 后，`/console`
+  可选择 gated `linux_proto_console` 路线，经现有 Load / Run / Pause / Reset 和
+  Terminate / browser terminal 进入 `mycpu-linux# ` 串口提示符。该提示符来自
+  `linux_postinit_cleanup_smoke` 的最小用户态 shell，支持 `help`、`uptime`、
+  `exit` 和未知命令回显；前端 terminal 已能按 loaded workload 显示 Linux serial
+  title / hint，并通过 runtime characterization 覆盖 `help\r` 的 prompt settling。
+  2026-05-02 本机真实 Image 验证已通过：
+  `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/tmp/mycpu-linux-build-riscv64-linux-gnu/arch/riscv/boot/Image`
+  启动 frontend 后，`POST /api/session/load` 以 `backend=functional` 到达
+  `mycpu-linux# `；随后 `POST /api/session/terminal-input` 输入 `help\r`
+  返回 `commands: help uptime exit` 和新的 `mycpu-linux# ` prompt。
+  Linux card 未配置时显示 `Not configured` 和 `Runtime Image required`，并根据
+  `diagnostics.linuxConsole` 说明 env 未设置、路径不存在、路径不是文件或不可读；
+  未 ready 时不会创建 session，manifest 暴露后显示 `Ready`。显式 Terminate 会结束
+  当前 debug session 并清空浏览器 session / terminal 状态。
+  这不是浏览器内 Linux，也不开放任意用户镜像。
 - `P4-prep-1` 和 `C1 / P4-prep-2 memory observation / shadow cache` 已完成。
   当前稳定的观测 guardrail 主要是：
   - pipeline vector CNN 的 `shadow_cache` RAM baseline
@@ -378,16 +427,36 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
    当前评估结论仍是“不新增 `--backend jit`，不替换 functional 或 pipeline”。persistent
    cache、workload-level scheduler、CSR / atomic / vector helper runtime、multicore、
    coherence 或新的 memory consistency 模型仍不启动。
-2. `Wave 7` 已完成产品官网壳层 / 首页第一刀和控制台 demo workspace v1：
+2. `Wave 7` 已完成产品官网壳层 / 首页第一刀、控制台 demo workspace v1、产品文档 v1、
+   Linux interactive frontend console 第一刀、Linux console hardening 第一刀、
+   Linux console terminate 收口、真实 Image opt-in e2e guardrail、reset re-arm、
+   配置状态 UX 和配置诊断 health check：
    [Wave 7 产品化展示与在线控制台设计](../design/wave7_productization_and_showcase_design.md)
    已固定真正产品官网、Apple-style 首页滚动叙事、demo-first 控制台、产品文档和部署边界；
    对外首页改为面向用户展示“能做什么”，不再把技术评审、招聘面试官、边界或未完成项作为主叙事。
    第一刀已落地 `/`、`/console`、`/docs` 三入口：`/` 是产品首页，`/console`
-   现在先展示 demo workspace，再复用现有浏览器控制台会话控制；`/docs` 是 curated
-   产品文档壳层，并可通过本地 `/source/docs/...` 链接回 design / status 证据文档。
+   现在先展示 demo workspace，再复用现有浏览器控制台会话控制；`/docs` 已从 curated
+   壳层推进到可阅读的产品文档入口，覆盖 Overview、Try the Console、Demo Routes、
+   Architecture、OS Bring-up、AI Accelerator、Runtime Labs、Verification、Roadmap 和
+   Design References，并可通过本地 `/source/docs/...` 链接回 design / status 证据文档。
    完成计划已归档到 [Wave 7 产品官网壳层与首页第一刀计划](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)
-   和 [Wave 7 控制台 demo workspace v1 计划](../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan)。
-   本轮仍不做 Linux interactive console、AI 参数化小模型、公网部署或底层 session API 重构。
+   、[Wave 7 控制台 demo workspace v1 计划](../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan)
+   、[Wave 7 产品文档 v1 计划](../plan/history_plan.md#mainline-wave7-product-docs-v1-plan)
+   和 [Wave 7 Linux interactive frontend console 计划](../plan/history_plan.md#mainline-wave7-linux-interactive-frontend-console-plan)。
+   Linux console hardening 已归档到
+   [Wave 7 Linux console hardening 计划](../plan/history_plan.md#mainline-wave7-linux-console-hardening-plan)。
+   Linux console terminate 收口已归档到
+   [Wave 7 Linux console terminate 计划](../plan/history_plan.md#mainline-wave7-linux-console-terminate-plan)。
+   真实 Image opt-in e2e guardrail 已归档到
+   [Wave 7 Linux console real Image e2e 计划](../plan/history_plan.md#mainline-wave7-linux-console-real-image-e2e-plan)。
+   Reset re-arm 已归档到
+   [Wave 7 Linux console reset re-arm 计划](../plan/history_plan.md#mainline-wave7-linux-console-reset-rearm-plan)。
+   配置状态 UX 已归档到
+   [Wave 7 Linux console config UX 计划](../plan/history_plan.md#mainline-wave7-linux-console-config-ux-plan)。
+   配置诊断 health check 已归档到
+   [Wave 7 Linux console health check 计划](../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan)。
+   本轮仍不做 AI 参数化小模型、公网部署、底层 session API 重构、标准发行版镜像支持或
+   任意用户镜像上传。
 3. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
@@ -402,6 +471,56 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
    cache / DMA / multicore / coherence 或 JIT engine 都必须另开设计/计划并补足验证。
 
 ## 关键历史节点
+
+- `2026-05-02`
+  - 主线 `Wave 7` 完成 Linux console 配置诊断 health check：
+    [../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan](../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan)。
+    `/api/tests` 返回只读 `diagnostics.linuxConsole`，覆盖 env 未设置、路径不存在、
+    路径不是普通文件、路径不可读和 ready；`/console` 卡片展示这些诊断，未 ready 时
+    仍不暴露可点击 `linux_proto_console` session。
+  - 主线 `Wave 7` 完成 Linux console 配置状态 UX：
+    [../plan/history_plan.md#mainline-wave7-linux-console-config-ux-plan](../plan/history_plan.md#mainline-wave7-linux-console-config-ux-plan)。
+    `/console` 的 Linux Serial Console 卡片在未配置 runtime Image 时显示
+    `Not configured` / `Runtime Image required`，配置后显示 `Ready`，并保持未 ready
+    时不创建 session 的 gating 语义。
+  - 主线 `Wave 7` 完成 Linux console reset re-arm：
+    [../plan/history_plan.md#mainline-wave7-linux-console-reset-rearm-plan](../plan/history_plan.md#mainline-wave7-linux-console-reset-rearm-plan)。
+    `/api/session/reset` 对 `linux_proto_console` 会在 reset 后重新执行 Linux `Image`
+    payload / DTB load、`a0/a1/a2` seed 和 `mycpu-linux# ` boot marker wait；普通 demo
+    reset 继续保持原有 session reset 语义。
+  - 主线 `Wave 7` 完成 Linux console 真实 Image opt-in e2e guardrail：
+    [../plan/history_plan.md#mainline-wave7-linux-console-real-image-e2e-plan](../plan/history_plan.md#mainline-wave7-linux-console-real-image-e2e-plan)。
+    默认 `cd frontend && node --test` 只记录跳过条件；设置
+    `MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1` 和
+    `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 后，frontend e2e 会经真实 debug
+    server + debug CLI 加载 `linux_proto_console`，输入 `help`，校验命令列表和
+    `mycpu-linux# ` prompt，并执行 terminate 收口。
+  - 主线 `Wave 7` 完成 Linux console terminate 收口：
+    [../plan/history_plan.md#mainline-wave7-linux-console-terminate-plan](../plan/history_plan.md#mainline-wave7-linux-console-terminate-plan)。
+    `/console` 新增显式 `Terminate` 主操作；`POST /api/session/terminate` 会停止 run loop、
+    关闭当前 debug CLI session、清空 runtime snapshot / terminal tracking，并广播空
+    terminal reset，前端同步清理 loaded session、snapshot history 和 terminal state。
+  - 主线 `Wave 7` 完成 Linux console hardening 第一刀：
+    [../plan/history_plan.md#mainline-wave7-linux-console-hardening-plan](../plan/history_plan.md#mainline-wave7-linux-console-hardening-plan)。
+    `/console` 的 terminal title / pending hint 现在随 loaded workload 区分
+    `interactive_os terminal` 和 `Linux serial terminal`；runtime characterization
+    固定 `linux_proto_console` 下 `help\r` 会等待 `commands: help uptime exit` 与新的
+    `mycpu-linux# ` prompt 后返回并只广播一次 terminal response。
+
+- `2026-05-01`
+  - 主线 `Wave 7` 完成 Linux interactive frontend console 第一刀：
+    [../plan/history_plan.md#mainline-wave7-linux-interactive-frontend-console-plan](../plan/history_plan.md#mainline-wave7-linux-interactive-frontend-console-plan)。
+    `/console` 新增 gated `Linux Serial Console` 路线；配置
+    `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 后可经 flat SBI shim、Linux
+    `Image`、DTB、`virtio-blk` rootfs 和 browser terminal 进入 `mycpu-linux# `
+    提示符。该入口仍是受控串口 console，不声明浏览器内 Linux、图形桌面、网络或任意
+    用户镜像支持。
+  - 主线 `Wave 7` 完成产品文档 v1：
+    [../plan/history_plan.md#mainline-wave7-product-docs-v1-plan](../plan/history_plan.md#mainline-wave7-product-docs-v1-plan)。
+    `/docs` 现在是可阅读的产品文档入口，按 Overview、Try the Console、Demo Routes、
+    Architecture、OS Bring-up、AI Accelerator、Runtime Labs、Verification、Roadmap 和
+    Design References 组织内容；主叙事面向用户说明“能做什么、怎么体验”，工程边界继续通过
+    design / status 证据链承接。验证覆盖 `cd frontend && node --test` 和 `git diff --check`。
 
 - `2026-04-30`
   - 主线 `Wave 6` 完成并归档 `DBT translator + IR v0 dry-run`：
@@ -653,9 +772,11 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
   允许用户在固定模板内调整小规模输入、runtime shape 或 op 组合并观察输出与 profile，
   但不开放任意模型上传、任意 graph package、通用 AI compiler 或 Linux-facing NPU driver。
   `Wave 7` 之后的新主线可以重新打开“用户自己的 AI 任务”和更接近商用 NPU 的性能模型。
-- `Wave 7` 产品官网壳层、首页第一刀和控制台 demo workspace v1 已完成，但产品文档
-  仍是 curated 壳层，不是完整产品文档系统；部署、安全、session 配额、
-  Linux interactive console、AI 参数化小模型和更深的 demo-specific 控制台页面仍未实现。
+- `Wave 7` 产品官网壳层、首页第一刀、控制台 demo workspace v1、产品文档 v1、
+  Linux interactive frontend console 第一刀、Linux console terminate 收口、真实 Image
+  opt-in e2e guardrail 和 reset re-arm 已完成；但部署、安全、session 配额、
+  AI 参数化小模型、标准发行版镜像支持、任意用户镜像上传和更深的 demo-specific
+  控制台页面仍未实现。
 - `debug/frontend`、`pipeline` 和 guest runtime 都已形成可维护边界，但后续
   仍要避免真实 bug 修复把职责重新揉回大文件。
 
@@ -690,39 +811,62 @@ scheduler、multicore、coherence 或新的 memory consistency 模型，也不�
    [history_plan.md#mainline-wave7-console-demo-workspace-v1-plan](../plan/history_plan.md#mainline-wave7-console-demo-workspace-v1-plan)。
    `/console` 顶层现在按 `OS Bring-up`、`Machine Inspector`、`AI Accelerator`、
    `Runtime Labs` 组织体验入口；可运行 demo 卡片可同步 workload / backend 选择并复用
-   现有 `Load / Run / Pause / Reset` 控制，future-only 路线只显示 `Coming soon`。
-7. 下一刀如继续推进 `Wave 7`，优先做 `Linux interactive frontend console` 设计 / 计划：
-   先固定 BusyBox 或最小 shell rootfs、Linux bootargs、CLI / debug server UART bridge、
-   frontend workload manifest、session 资源限制、terminal 输出裁剪、reset / terminate
-   和最小命令 smoke；这条路径只提供串口 shell 展示，不声明浏览器内运行 Linux、图形桌面、
-   网络或任意用户镜像支持。
-8. Wave 7 的 AI accelerator 展示切片同步采用白名单 demo + 参数化小模型：
+   现有 `Load / Run / Pause / Reset / Terminate` 控制，future-only 路线只显示 `Coming soon`。
+7. `Wave 7 产品文档 v1 计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-product-docs-v1-plan](../plan/history_plan.md#mainline-wave7-product-docs-v1-plan)。
+   `/docs` 现在按用户体验路线说明 Overview、Try the Console、Demo Routes、
+   Architecture、OS Bring-up、AI Accelerator、Runtime Labs、Verification、Roadmap 和
+   Design References，并链接回设计 / 状态证据文档。
+8. `Wave 7 Linux interactive frontend console 计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-linux-interactive-frontend-console-plan](../plan/history_plan.md#mainline-wave7-linux-interactive-frontend-console-plan)。
+   当前 `/console` 已有 gated `Linux Serial Console` 路线；配置
+   `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 后，可经 flat SBI shim、DTB、
+   `virtio-blk` rootfs 和 browser terminal 进入 `mycpu-linux# ` 提示符。
+9. `Wave 7 Linux console hardening 计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-linux-console-hardening-plan](../plan/history_plan.md#mainline-wave7-linux-console-hardening-plan)。
+   当前 terminal title / pending hint 已随 loaded workload 区分 Linux serial console；
+   `help\r` 的 prompt settling 已进入 frontend runtime characterization。
+10. `Wave 7 Linux console terminate 计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-linux-console-terminate-plan](../plan/history_plan.md#mainline-wave7-linux-console-terminate-plan)。
+   当前 `/console` 已有显式 `Terminate` 主操作，server runtime 能关闭当前 debug session、
+   清空 terminal tracking 并广播 terminal reset。下一步如继续做 Linux 展示，应优先补真实
+   Image 下最小命令 runtime smoke，而不是声明浏览器内 Linux、图形桌面、网络或任意用户镜像支持。
+11. `Wave 7 Linux console real Image e2e 计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-linux-console-real-image-e2e-plan](../plan/history_plan.md#mainline-wave7-linux-console-real-image-e2e-plan)。
+   当前真实 Linux serial console e2e 是显式 opt-in：默认测试记录跳过条件；提供真实
+   `Image` 并设置 `MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1` 后，frontend e2e 可验证
+   Load -> `help` -> prompt settling -> Terminate 的完整链路。
+12. `Wave 7 Linux console reset re-arm 计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-linux-console-reset-rearm-plan](../plan/history_plan.md#mainline-wave7-linux-console-reset-rearm-plan)。
+   当前 `linux_proto_console` Reset 会重新应用 Linux payload / DTB、`a0/a1/a2` seed
+   和 boot prompt wait，避免 Reset 后落回未装载 payload 的裸 machine 状态。
+13. Wave 7 的 AI accelerator 展示切片同步采用白名单 demo + 参数化小模型：
    前端只允许提交受限模板参数，例如小尺寸 `gemm / relu / pool / softmax` 输入、
    runtime shape 或已支持 op 组合；服务器端必须重新生成 / 校验 graph package、
    memory plan、dtype、shape 和资源上限，并固定输出、profile 和 fail-closed smoke。
-9. Wave 7 之后的新主线定为两条：一是像 QEMU 那样跑通标准 Debian / Alpine /
+14. Wave 7 之后的新主线定为两条：一是像 QEMU 那样跑通标准 Debian / Alpine /
    RISC-V 发行版镜像；二是 AI accelerator 支持用户自己的 AI 任务，并逐步逼近商用
    NPU 的 tile scheduler、DMA / compute overlap、multi outstanding queue、Linux-facing
    driver 和性能模型。这两条都需要另开 design / plan，不并入 Wave 7 收尾。
-10. 默认 JIT backend 仍只做后续 readiness 评估；默认 backend、persistent cache、
+15. 默认 JIT backend 仍只做后续 readiness 评估；默认 backend、persistent cache、
    workload-level scheduler、CSR / atomic / vector helper runtime、multicore、coherence 和
    新的 memory consistency 模型仍不启动。
-11. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
+16. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
    如需调整排序或字段，必须先补 probe / host smoke 兼容门禁。
-12. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
+17. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 `Wave 6`
    hot-path evidence 的前置 guardrail。
-13. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+18. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
    driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan；其中
    用户自定义 AI 任务和商用 NPU-like 性能模型已经提升为 Post-Wave 7 新主线，但不改写
    当前 `Wave 6 / Wave 7` 收口边界。
-14. Wave 4 AI accelerator 的完成记录统一见
+19. Wave 4 AI accelerator 的完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
-15. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
+20. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
    guardrail；未提供 `Image` 时，不把该项写成默认已证明。
-16. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
+21. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
    `make test` 和 `make test-pipeline` 这些稳定 guardrail。
-17. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
+22. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
    暴露新 blocker，再按 blocker 驱动回补最窄 Linux guardrail。
 
 ## 验证基线

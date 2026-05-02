@@ -11,69 +11,228 @@
       <header class="docs-hero">
         <p class="eyebrow">Product Docs</p>
         <h1>myCPU 产品文档</h1>
-        <p>从系统启动、机器观察、AI accelerator 到运行时实验，按体验路线理解 myCPU 能做什么、怎么运行、在哪里继续深入。</p>
-        <nav>
+        <p>
+          从这里开始体验一个已可运行的 RISC-V 模拟器原型：进入控制台，启动系统 demo，
+          观察机器状态，运行 AI accelerator workload，并沿 Runtime Labs 查看后续原型。
+        </p>
+        <nav class="docs-actions" aria-label="产品入口">
           <a href="/">首页</a>
           <a href="/console">打开控制台</a>
+          <a href="#demo-routes">查看 demo 路线</a>
         </nav>
       </header>
 
-      <section class="docs-grid" aria-label="文档目录">
+      <section class="quick-start" aria-label="快速入口">
+        <div>
+          <span class="step">/</span>
+          <h2>产品首页</h2>
+          <p>了解 myCPU 能体验什么：OS bring-up、机器观察、AI accelerator 和 runtime labs。</p>
+        </div>
+        <div>
+          <span class="step">/console</span>
+          <h2>在线控制台</h2>
+          <p>选择 demo，复用 Load / Run / Pause / Reset / Terminate，查看 terminal、pipeline 和 device counters。</p>
+        </div>
+        <div>
+          <span class="step">/docs</span>
+          <h2>产品文档</h2>
+          <p>按体验路线阅读功能说明，再进入设计和状态证据链了解工程细节。</p>
+        </div>
+      </section>
+
+      <aside class="toc" aria-label="文档目录">
         <a href="#overview">Overview</a>
         <a href="#try-console">Try the Console</a>
+        <a href="#demo-routes">Demo Routes</a>
         <a href="#architecture">Architecture</a>
-        <a href="#execution-backends">Execution Backends</a>
         <a href="#os-bring-up">OS Bring-up</a>
         <a href="#ai-accelerator">AI Accelerator</a>
-        <a href="#vector-ml">Vector and ML Workloads</a>
-        <a href="#jit-dbt">JIT / DBT Prototype</a>
+        <a href="#runtime-labs">Runtime Labs</a>
         <a href="#verification">Verification</a>
         <a href="#roadmap">Roadmap</a>
         <a href="#references">Design References</a>
-      </section>
+      </aside>
 
-      <section class="docs-sections">
-        <article id="overview">
-          <h2>Overview</h2>
-          <p>myCPU 是一个可在浏览器中体验的 RISC-V 系统模拟器工作台，把 OS demo、CPU 观察、AI accelerator 和 runtime labs 放在同一个入口。</p>
+      <section class="docs-content">
+        <article id="overview" class="doc-section doc-section--lead">
+          <p class="section-kicker">Overview</p>
+          <h2>一个浏览器里的 RISC-V 系统工作台</h2>
+          <p>
+            myCPU 把 CPU 执行、平台设备、guest 系统启动、AI accelerator 和运行时原型放进同一个体验面。
+            用户不需要先读 Makefile 或内部状态文档，可以从控制台选择一条路线，运行已有 demo，
+            再用 terminal、pipeline timeline、寄存器、CSR、memory observation 和 profile counters 看见机器正在做什么。
+          </p>
+          <p>
+            当前最适合的体验顺序是：先从 OS Bring-up 看到系统能启动，再进入 Machine Inspector
+            理解 CPU 和平台状态，然后运行 AI Accelerator，最后到 Runtime Labs 查看 L1D / shadow cache
+            与 JIT / DBT opt-in 原型。
+          </p>
         </article>
-        <article id="try-console">
-          <h2>Try the Console</h2>
-          <p>打开控制台后选择 workload，运行 demo，并在 terminal、pipeline、register、memory、profile 和 device counters 之间切换视角。</p>
+
+        <article id="try-console" class="doc-section">
+          <p class="section-kicker">Try the Console</p>
+          <h2>打开控制台后怎么体验</h2>
+          <ol class="reading-steps">
+            <li>
+              <strong>选择 demo。</strong>
+              `/console` 会先展示 demo workspace，而不是把用户直接丢进底层调试面板。
+            </li>
+            <li>
+              <strong>启动 session。</strong>
+              可运行 demo 会同步现有 workload 和 backend 下拉，然后复用 Load / Run / Pause / Reset / Terminate。
+            </li>
+            <li>
+              <strong>观察结果。</strong>
+              terminal 看 UART 输出和 marker，inspector 看 pipeline、register / CSR diff、platform I/O、
+              vector state、AI accelerator counters 和 memory / profile 摘要。
+            </li>
+            <li>
+              <strong>识别路线状态。</strong>
+              future-only 路线会显示 Coming soon；Linux Serial Console 在未配置 Image 时显示
+              Not configured / Runtime Image required，并提示 env 未设置、路径不存在、路径不是文件
+              或不可读等具体原因；配置后显示 Ready。
+            </li>
+          </ol>
         </article>
-        <article id="architecture">
-          <h2>Architecture</h2>
-          <p>核心链路由 CPU、AddressSpace、Bus、RAM / Device、debug snapshot 和浏览器控制台组成，页面展示来自这些真实运行数据。</p>
+
+        <article id="demo-routes" class="doc-section">
+          <p class="section-kicker">Demo Routes</p>
+          <h2>四条主体验路线</h2>
+          <div class="route-list">
+            <section>
+              <span>OS Bring-up</span>
+              <h3>启动系统，看见终端</h3>
+              <p>
+                从 interactive_os 开始验证 UART 输入输出，再查看 xv6 shell 和 Linux Serial Console
+                路线。Linux 入口复用 linux_proto 的 flat SBI shim、DTB 和 rootfs，
+                在配置 <code>MYCPU_LINUX_PROTO_CONSOLE_IMAGE</code> 后可以启动受控串口会话并进入
+                <code>mycpu-linux# </code> mini shell。
+              </p>
+            </section>
+            <section>
+              <span>Machine Inspector</span>
+              <h3>观察 CPU 和平台</h3>
+              <p>
+                使用 functional / pipeline backend，对照 pipeline stage、stall reason、GPR / CSR、
+                bus access、CLINT、PLIC、virtio-blk 和 memory observation。
+              </p>
+            </section>
+            <section>
+              <span>AI Accelerator</span>
+              <h3>运行设备级 AI workload</h3>
+              <p>
+                选择 guest_ai_accel_demo，观察 graph package、MMIO doorbell、DMA load/store、
+                scratchpad、completion、KMVAI marker 和 timed-simple profile counters。
+              </p>
+            </section>
+            <section>
+              <span>Runtime Labs</span>
+              <h3>探索运行时原型</h3>
+              <p>
+                查看 Vector CNN、L1D / shadow cache、JIT / DBT opt-in 和 host-smoke-only runtime
+                guardrail 的展示入口。这里说明未来方向，也标注 Coming soon 的交互范围。
+              </p>
+            </section>
+          </div>
         </article>
-        <article id="os-bring-up">
-          <h2>OS Bring-up</h2>
-          <p>xv6 shell、Linux serial console 和 interactive_os 组成系统运行路线，展示 boot log、shell marker、monitor 命令和 UART 交互。</p>
+
+        <article id="architecture" class="doc-section">
+          <p class="section-kicker">Architecture</p>
+          <h2>页面看到的数据来自真实模拟器链路</h2>
+          <p>
+            控制台通过本地 Node debug server 连接 `mycpu --debug-cli`。浏览器端只消费 workload manifest、
+            terminal session 和 debug snapshot；CPU 执行仍由 simulator backend 提供，设备状态来自
+            Machine、AddressSpace、Bus、RAM 和 MMIO device 的只读快照。
+          </p>
+          <div class="signal-strip" aria-label="架构链路">
+            <span>Browser</span>
+            <span>Debug Server</span>
+            <span>Debug CLI</span>
+            <span>Machine</span>
+            <span>CPU / Bus / Device</span>
+          </div>
         </article>
-        <article id="ai-accelerator">
-          <h2>AI Accelerator</h2>
-          <p>AI accelerator 路线展示 graph package、MMIO doorbell、DMA、scratchpad、compute、completion、KMVAI marker 和 profile counters。</p>
+
+        <article id="os-bring-up" class="doc-section">
+          <p class="section-kicker">OS Bring-up</p>
+          <h2>从 monitor 到 xv6，再到 Linux 路线</h2>
+          <p>
+            interactive_os 是最直接的交互入口：加载后可以在 terminal 里看到 monitor prompt，
+            输入命令并观察 UART 回显。xv6 shell 展示真实 `virtio-blk` board path 的系统 bring-up
+            成果。
+          </p>
+          <p>
+            Linux Serial Console 是更重的系统路线：启动 frontend server 前设置
+            <code>MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image</code>，`/console` 会新增
+            <code>linux_proto_console</code> demo。未配置时，卡片会保持 Not configured，不会触发
+            Load session；如果路径不存在、不是普通文件或不可读，卡片会直接显示对应诊断。配置后，
+            卡片显示 Ready，Load 会加载 flat SBI shim、Linux Image payload、DTB 和 virtio-blk
+            rootfs，并等待 <code>mycpu-linux# </code> prompt；Run / Pause / Reset / Terminate
+            仍复用现有 session 控制和 UART 增量投影。
+          </p>
         </article>
-        <article id="jit-dbt">
-          <h2>JIT / DBT Prototype</h2>
-          <p>JIT / DBT runtime lab 展示 translation、host executable、cache hit / miss、fallback、invalidation 和 summary stats。</p>
+
+        <article id="ai-accelerator" class="doc-section">
+          <p class="section-kicker">AI Accelerator</p>
+          <h2>看见一个独立 MMIO AI 设备如何完成推理</h2>
+          <p>
+            AI Accelerator 路线展示的是设备级体验：guest 提交 graph package，写 MMIO doorbell，
+            设备通过 DMA 和 scratchpad 推进 compute，完成后返回 completion 并输出 KMVAI marker。
+            控制台展示 aggregate counters，例如 queue depth、DMA bytes、device / compute / stall cycles
+            和 utilization，帮助用户理解一次 workload 的执行过程。
+          </p>
         </article>
-        <article id="verification">
-          <h2>Verification</h2>
-          <p>默认门禁包括 <code>cd frontend && node --test</code>、<code>cd myCPU && make test</code> 和 <code>make test-pipeline</code>。</p>
+
+        <article id="runtime-labs" class="doc-section">
+          <p class="section-kicker">Runtime Labs</p>
+          <h2>把 cache、vector 和 JIT 原型放在可观察的入口里</h2>
+          <p>
+            Runtime Labs 收纳已经完成但仍偏实验性质的体验：Vector CNN 展示向量寄存器和小型 NN
+            workload；L1D / shadow cache 展示 memory observation；JIT / DBT opt-in 展示 translation、
+            executable cache hit / miss、fallback、invalidation 和 summary stats。它们帮助用户理解
+            myCPU 正在从 reference-first 模拟器扩展到更丰富的运行时实验。
+          </p>
         </article>
-        <article id="roadmap">
-          <h2>Roadmap</h2>
-          <p>Post-Wave 7 新主线是标准 Debian / Alpine 镜像级平台，以及用户自定义 AI 任务和更接近商用 NPU 的性能模型。</p>
+
+        <article id="verification" class="doc-section">
+          <p class="section-kicker">Verification</p>
+          <h2>体验入口背后有回归门禁</h2>
+          <p>
+            Wave 7 前端改动至少守住 `cd frontend && node --test` 和 `git diff --check`。
+            触达 simulator、debug session、guest runtime 或 workload 时，会按对应范围补充
+            `cd myCPU && make test`、`make test-pipeline` 或更窄的 host / guest smoke。
+            真实 Linux serial console e2e 是显式 opt-in：默认测试只记录跳过条件；设置
+            <code>MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1</code> 和
+            <code>MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image</code> 后，frontend e2e
+            会通过真实 debug server + debug CLI 加载 <code>linux_proto_console</code>，
+            输入 <code>help</code>，校验命令列表与新的 <code>mycpu-linux# </code> prompt，
+            然后 Terminate。
+          </p>
+        </article>
+
+        <article id="roadmap" class="doc-section">
+          <p class="section-kicker">Roadmap</p>
+          <h2>Wave 7 先把已有能力整理成可体验产品</h2>
+          <p>
+            当前主线是产品化展示与在线调试平台收口。Wave 7 之后，路线会重新打开两条更重的主线：
+            标准 Debian / Alpine / RISC-V 发行版镜像级平台，以及用户自定义 AI 任务和更接近商用
+            NPU 的性能模型。
+          </p>
         </article>
       </section>
 
       <section id="references" class="references">
-        <h2>Design References</h2>
+        <p class="section-kicker">Design References</p>
+        <h2>继续深入的证据链</h2>
+        <p>
+          产品文档先讲体验；需要核对工程边界、当前状态和长期路线时，再进入这些设计与状态文档。
+        </p>
         <ul>
           <li><a href="/source/docs/design/wave7_productization_and_showcase_design.md">wave7_productization_and_showcase_design.md</a></li>
           <li><a href="/source/docs/design/debug_frontend_integration.md">debug_frontend_integration.md</a></li>
           <li><a href="/source/docs/design/future_expansion_roadmap_design.md">future_expansion_roadmap_design.md</a></li>
           <li><a href="/source/docs/status/mainline_status.md">mainline_status.md</a></li>
+          <li><a href="/source/docs/status/npu_tpu_accelerator_status.md">npu_tpu_accelerator_status.md</a></li>
         </ul>
       </section>
     </main>

@@ -10,6 +10,15 @@ export const INTERACTIVE_OS_BOOT_BUDGET = Object.freeze({
   prompt: 'monitor> ',
 });
 
+export const LINUX_CONSOLE_BOOT_BUDGET = Object.freeze({
+  requestTimeoutMs: 120000,
+});
+
+export const LINUX_CONSOLE_COMMAND_BUDGET = Object.freeze({
+  maxSteps: 50000000,
+  requestTimeoutMs: 30000,
+});
+
 export const TERMINAL_ACTIVITY_BUDGET = Object.freeze({
   defaultMaxCommits: 4096,
   defaultSettleCommits: 256,

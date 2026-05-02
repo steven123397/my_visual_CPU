@@ -346,6 +346,13 @@ DebugCliCommand parse_debug_cli_command(const std::string& line) {
         parsed.max_steps = try_extract_u64(object, "max_steps", 0);
         return parsed;
     }
+    if (command == "run_until_new_uart_contains") {
+        parsed.kind = DebugCliCommandKind::RunUntilNewUartContains;
+        parsed.offset = static_cast<size_t>(try_extract_u64(object, "offset", 0));
+        parsed.text = extract_string(object, "text");
+        parsed.max_steps = try_extract_u64(object, "max_steps", 0);
+        return parsed;
+    }
     if (command == "run_until_halt") {
         parsed.kind = DebugCliCommandKind::RunUntilHalt;
         parsed.max_steps = try_extract_u64(object, "max_steps", 0);

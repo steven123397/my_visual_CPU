@@ -1926,6 +1926,12 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("mycpu linux userland: fourth-stage inotify smoke failed", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: fourth-stage timerfd smoke failed", fourth_stage_strings_proc.stdout)
         self.assertIn("mycpu linux userland: post-init reached", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu linux userland: interactive console ready", fourth_stage_strings_proc.stdout)
+        self.assertIn("mycpu-linux# ", fourth_stage_strings_proc.stdout)
+        self.assertIn("commands: help uptime exit", fourth_stage_strings_proc.stdout)
+        self.assertIn("uptime: post-init smoke complete", fourth_stage_strings_proc.stdout)
+        self.assertIn("unknown command", fourth_stage_strings_proc.stdout)
+        self.assertIn("mini_shell_exit", fourth_stage_strings_proc.stdout)
 
     def test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested(self) -> None:
         if os.environ.get("MYCPU_RUN_LINUX_PROTO_RUNTIME") != "1":

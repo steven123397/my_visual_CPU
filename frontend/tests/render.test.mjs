@@ -542,6 +542,197 @@ test('renderApp marks the desktop layout when terminal is collapsed', () => {
   assert.match(elements.terminal.innerHTML, /展开 terminal/);
 });
 
+test('renderApp presents Linux serial console as a gated route until runtime assets are configured', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'guest_interactive_os_demo',
+      menuLabel: 'guest_interactive_os_demo',
+      kind: 'guest',
+      title: 'interactive_os Monitor',
+      summary: 'interactive monitor',
+    },
+  ];
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Linux Serial Console/);
+  assert.match(elements.demoWorkspace.innerHTML, /Not configured/);
+  assert.match(elements.demoWorkspace.innerHTML, /Runtime Image required/);
+  assert.match(elements.demoWorkspace.innerHTML, /MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
+  assert.match(elements.demoWorkspace.innerHTML, /No session will be created until the Image is configured/);
+  assert.match(elements.demoWorkspace.innerHTML, /aria-disabled="true"/);
+  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /data-demo-test="linux_proto_console"/);
+});
+
+test('renderApp explains the Linux serial console Image path diagnostic without enabling the route', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'guest_interactive_os_demo',
+      menuLabel: 'guest_interactive_os_demo',
+      kind: 'guest',
+      title: 'interactive_os Monitor',
+      summary: 'interactive monitor',
+    },
+  ];
+  state.diagnostics = {
+    linuxConsole: {
+      status: 'not-found',
+      ready: false,
+      envVar: 'MYCPU_LINUX_PROTO_CONSOLE_IMAGE',
+      path: '/tmp/missing/Image',
+      message: 'Image path does not exist: /tmp/missing/Image',
+    },
+  };
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Image path missing/);
+  assert.match(elements.demoWorkspace.innerHTML, /\/tmp\/missing\/Image/);
+  assert.match(elements.demoWorkspace.innerHTML, /Image path does not exist/);
+  assert.match(elements.demoWorkspace.innerHTML, /aria-disabled="true"/);
+  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /data-demo-test="linux_proto_console"/);
+});
+
+test('renderApp lets the Linux serial console route select a configured linux_proto_console workload', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'linux_proto_console',
+      menuLabel: 'linux_proto_console · Linux serial',
+      kind: 'linux',
+      backend: 'functional',
+      title: 'Linux Serial Console',
+      badge: 'Linux runtime',
+      summary: '启动受控 linux_proto runtime，进入 UART 串口 console。',
+      workload: {
+        stage: 'Wave 7',
+        category: 'linux-serial-console',
+        expectedMarker: 'mycpu-linux# ',
+        ops: ['flat SBI shim', 'Linux Image payload', 'DTB', 'virtio-blk rootfs'],
+        pipelineNote: '配置本机 Linux Image 后才可运行；前端只桥接 UART 与现有 debug session。',
+        assetNote: 'Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image before starting the frontend server.',
+      },
+    },
+  ];
+  state.selectedTest = 'linux_proto_console';
+  state.backend = 'pipeline';
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /data-demo-test="linux_proto_console"/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-demo-backend="functional"/);
+  assert.match(elements.demoWorkspace.innerHTML, /Ready/);
+  assert.match(elements.demoWorkspace.innerHTML, /Linux runtime/);
+  assert.match(elements.demoWorkspace.innerHTML, /mycpu-linux# /);
+  assert.match(elements.demoWorkspace.innerHTML, /virtio-blk rootfs/);
+  assert.match(elements.demoWorkspace.innerHTML, /is-selected/);
+  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /Runtime Image required/);
+  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /Not configured/);
+});
+
+test('renderApp shows Linux console workload asset note for a loaded Linux session', () => {
+  const state = createAppState();
+  state.runState = 'paused';
+  state.selectedTest = 'linux_proto_console';
+  state.loadedSession = {
+    test: 'linux_proto_console',
+    backend: 'pipeline',
+  };
+  state.tests = [
+    {
+      name: 'linux_proto_console',
+      menuLabel: 'linux_proto_console · Linux serial',
+      kind: 'linux',
+      title: 'Linux Serial Console',
+      badge: 'Linux runtime',
+      summary: '启动受控 linux_proto runtime，进入 UART 串口 console。',
+      workload: {
+        stage: 'Wave 7',
+        expectedMarker: 'mycpu-linux# ',
+        ops: ['flat SBI shim', 'Linux Image payload', 'DTB', 'virtio-blk rootfs'],
+        pipelineNote: '配置本机 Linux Image 后才可运行；前端只桥接 UART 与现有 debug session。',
+        assetNote: 'Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image before starting the frontend server.',
+      },
+    },
+  ];
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.workload.innerHTML, /Linux Serial Console/);
+  assert.match(elements.workload.innerHTML, /MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
+  assert.match(elements.workload.innerHTML, /mycpu-linux# /);
+  assert.match(elements.workload.innerHTML, /virtio-blk rootfs/);
+});
+
 
 test('renderApp does not let stale closed DOM state override requested group expansion', () => {
   const state = createAppState();

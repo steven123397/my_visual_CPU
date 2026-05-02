@@ -228,6 +228,11 @@ select {
   background: linear-gradient(180deg, rgba(24, 33, 39, 0.98), rgba(35, 48, 56, 0.94));
 }
 
+.button-row-primary button:nth-child(5) {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+}
+
 .button-row-secondary button {
   background: rgba(255, 255, 255, 0.9);
   color: var(--ink);
@@ -451,6 +456,16 @@ button:hover {
   color: var(--accent);
 }
 
+.demo-card.is-ready .demo-card__topline strong {
+  background: rgba(31, 111, 120, 0.12);
+  color: var(--teal);
+}
+
+.demo-card.is-gated .demo-card__topline strong {
+  background: rgba(198, 132, 30, 0.14);
+  color: #6d4a11;
+}
+
 .demo-card h4 {
   margin: 0;
   font-size: 20px;
@@ -471,6 +486,22 @@ button:hover {
 .demo-card__chips span {
   background: var(--teal-soft);
   color: var(--teal);
+}
+
+.demo-card__gate {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(198, 132, 30, 0.12);
+  color: #6d4a11;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.demo-card__gate code,
+.workload-callout code {
+  font-family: var(--mono);
 }
 
 .desktop-shell {
@@ -993,6 +1024,14 @@ button:hover {
 .workload-callout strong,
 .vector-alert {
   color: var(--accent);
+}
+
+.workload-callout-secondary {
+  background: rgba(198, 132, 30, 0.1);
+}
+
+.workload-callout p {
+  margin: 8px 0 0;
 }
 
 .workload-active {

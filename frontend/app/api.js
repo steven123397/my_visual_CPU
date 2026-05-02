@@ -35,6 +35,10 @@ export async function resetSession() {
   return postJson('/api/session/reset');
 }
 
+export async function terminateSession() {
+  return postJson('/api/session/terminate');
+}
+
 export async function runSession(rateHz = 8) {
   return postJson('/api/session/run', { rateHz });
 }

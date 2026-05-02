@@ -421,6 +421,33 @@ stage_fourth_stage_reached_msg_end:
 post_init_reached_msg:
     .asciz "mycpu linux userland: post-init reached\n"
 post_init_reached_msg_end:
+mini_shell_prompt:
+    .asciz "mycpu-linux# "
+mini_shell_prompt_end:
+mini_shell_banner:
+    .asciz "mycpu linux userland: interactive console ready\n"
+mini_shell_banner_end:
+mini_shell_newline:
+    .asciz "\n"
+mini_shell_newline_end:
+mini_shell_help_cmd:
+    .asciz "help"
+mini_shell_uptime_cmd:
+    .asciz "uptime"
+mini_shell_exit_cmd:
+    .asciz "exit"
+mini_shell_help_msg:
+    .asciz "commands: help uptime exit\n"
+mini_shell_help_msg_end:
+mini_shell_uptime_msg:
+    .asciz "uptime: post-init smoke complete\n"
+mini_shell_uptime_msg_end:
+mini_shell_unknown_msg:
+    .asciz "unknown command\n"
+mini_shell_unknown_msg_end:
+mini_shell_exit_msg:
+    .asciz "bye\n"
+mini_shell_exit_msg_end:
 fourth_stage_reused_dir_cleanup_fail_msg:
     .asciz "mycpu linux userland: fourth-stage reused dir cleanup failed\n"
 fourth_stage_reused_dir_cleanup_fail_msg_end:
@@ -845,6 +872,21 @@ fourth_stage_write_short_msg_end:
 .set stage_fourth_stage_reached_msg_len, stage_fourth_stage_reached_msg_len - 1
 .set post_init_reached_msg_len, post_init_reached_msg_end - post_init_reached_msg
 .set post_init_reached_msg_len, post_init_reached_msg_len - 1
+.set mini_shell_prompt_len, mini_shell_prompt_end - mini_shell_prompt
+.set mini_shell_prompt_len, mini_shell_prompt_len - 1
+.set mini_shell_banner_len, mini_shell_banner_end - mini_shell_banner
+.set mini_shell_banner_len, mini_shell_banner_len - 1
+.set mini_shell_newline_len, mini_shell_newline_end - mini_shell_newline
+.set mini_shell_newline_len, mini_shell_newline_len - 1
+.set mini_shell_help_msg_len, mini_shell_help_msg_end - mini_shell_help_msg
+.set mini_shell_help_msg_len, mini_shell_help_msg_len - 1
+.set mini_shell_uptime_msg_len, mini_shell_uptime_msg_end - mini_shell_uptime_msg
+.set mini_shell_uptime_msg_len, mini_shell_uptime_msg_len - 1
+.set mini_shell_unknown_msg_len, mini_shell_unknown_msg_end - mini_shell_unknown_msg
+.set mini_shell_unknown_msg_len, mini_shell_unknown_msg_len - 1
+.set mini_shell_exit_msg_len, mini_shell_exit_msg_end - mini_shell_exit_msg
+.set mini_shell_exit_msg_len, mini_shell_exit_msg_len - 1
+.set mini_shell_line_buf_len, 64
 .set fourth_stage_reused_dir_cleanup_fail_msg_len, fourth_stage_reused_dir_cleanup_fail_msg_end - fourth_stage_reused_dir_cleanup_fail_msg
 .set fourth_stage_reused_dir_cleanup_fail_msg_len, fourth_stage_reused_dir_cleanup_fail_msg_len - 1
 .set fourth_stage_reused_dir_dirent_smoke_fail_msg_len, fourth_stage_reused_dir_dirent_smoke_fail_msg_end - fourth_stage_reused_dir_dirent_smoke_fail_msg
@@ -1056,6 +1098,8 @@ fourth_stage_scm_cmsg_buf:
     .space fourth_stage_scm_cmsg_buf_len
 fourth_stage_scm_data_byte:
     .space fourth_stage_scm_data_len
+mini_shell_line_buf:
+    .space mini_shell_line_buf_len
 
     .section .text
     .globl _start
@@ -4249,7 +4293,7 @@ futex_shared_parent_wait_done:
     jal ra, write_exact
     bltz a0, write_failed
     or s1, s1, a1
-    beqz s1, sleep_forever
+    beqz s1, mini_shell_loop
 
     mv a0, s0
     la a1, fourth_stage_write_short_msg
@@ -5933,6 +5977,118 @@ write_exact_zero:
     li a0, -1
     li a1, 0
     ret
+
+mini_shell_loop:
+    mv a0, s0
+    la a1, mini_shell_banner
+    li a2, mini_shell_banner_len
+    jal ra, write_exact
+    bltz a0, write_failed
+
+mini_shell_prompt_loop:
+    mv a0, s0
+    la a1, mini_shell_prompt
+    li a2, mini_shell_prompt_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    li t3, 0
+    la t4, mini_shell_line_buf
+
+mini_shell_read_loop:
+    mv a0, s0
+    add a1, t4, t3
+    li a2, 1
+    li a7, SYS_READ
+    ecall
+    bltz a0, mini_shell_read_error
+    beqz a0, mini_shell_prompt_loop
+    add t5, t4, t3
+    lbu t0, 0(t5)
+    li t1, 13
+    beq t0, t1, mini_shell_line_done
+    li t1, 10
+    beq t0, t1, mini_shell_line_done
+    li t1, 8
+    beq t0, t1, mini_shell_backspace
+    li t1, 127
+    beq t0, t1, mini_shell_backspace
+    li t1, 32
+    bltu t0, t1, mini_shell_read_loop
+    li t1, 126
+    bltu t1, t0, mini_shell_read_loop
+    li t1, mini_shell_line_buf_len - 1
+    bge t3, t1, mini_shell_read_loop
+    mv a0, s0
+    add a1, t4, t3
+    li a2, 1
+    jal ra, write_exact
+    bltz a0, write_failed
+    addi t3, t3, 1
+    j mini_shell_read_loop
+
+mini_shell_backspace:
+    beqz t3, mini_shell_read_loop
+    addi t3, t3, -1
+    j mini_shell_read_loop
+
+mini_shell_line_done:
+    add t5, t4, t3
+    sb zero, 0(t5)
+    mv a0, s0
+    la a1, mini_shell_newline
+    li a2, mini_shell_newline_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    beqz t3, mini_shell_prompt_loop
+
+    la a0, mini_shell_line_buf
+    la a1, mini_shell_help_cmd
+    jal ra, compare_cstr
+    beqz a0, mini_shell_help
+
+    la a0, mini_shell_line_buf
+    la a1, mini_shell_uptime_cmd
+    jal ra, compare_cstr
+    beqz a0, mini_shell_uptime
+
+    la a0, mini_shell_line_buf
+    la a1, mini_shell_exit_cmd
+    jal ra, compare_cstr
+    beqz a0, mini_shell_exit
+
+    mv a0, s0
+    la a1, mini_shell_unknown_msg
+    li a2, mini_shell_unknown_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    j mini_shell_prompt_loop
+
+mini_shell_help:
+    mv a0, s0
+    la a1, mini_shell_help_msg
+    li a2, mini_shell_help_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    j mini_shell_prompt_loop
+
+mini_shell_uptime:
+    mv a0, s0
+    la a1, mini_shell_uptime_msg
+    li a2, mini_shell_uptime_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    j mini_shell_prompt_loop
+
+mini_shell_exit:
+    mv a0, s0
+    la a1, mini_shell_exit_msg
+    li a2, mini_shell_exit_msg_len
+    jal ra, write_exact
+    bltz a0, write_failed
+    j sleep_forever
+
+mini_shell_read_error:
+    j sleep_forever
 
 compare_bytes:
     beqz a2, compare_bytes_equal

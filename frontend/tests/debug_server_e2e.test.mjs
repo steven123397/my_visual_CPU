@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +10,7 @@ import { listTests } from '../server/tests_manifest.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
+const linuxConsoleE2eEnabled = process.env.MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E === '1';
 
 async function postJson(baseUrl, pathname, payload) {
   const response = await fetch(`${baseUrl}${pathname}`, {
@@ -98,6 +100,50 @@ test('real debug server + debug CLI can keep guest_interactive_os_demo responsiv
     assert.equal(snapshotResponse.status, 200);
     assert.equal(snapshotResponse.body.snapshot.summary.backend, 'pipeline');
     assert.ok(snapshotResponse.body.snapshot.summary.cycle >= pauseResponse.body.snapshot.summary.cycle);
+  } finally {
+    await server.close();
+  }
+});
+
+test('real debug server + debug CLI can drive linux_proto_console help when explicitly enabled', {
+  skip: linuxConsoleE2eEnabled ? false : 'set MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1 to run the real Linux console e2e guardrail',
+}, async () => {
+  const imagePath = process.env.MYCPU_LINUX_PROTO_CONSOLE_IMAGE
+    ?? process.env.MYCPU_LINUX_PROTO_RUNTIME_IMAGE
+    ?? null;
+  assert.ok(imagePath, 'set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image');
+  assert.ok(fs.existsSync(imagePath), `missing Linux console Image: ${imagePath}`);
+
+  const tests = listTests(repoRoot);
+  const linuxConsole = tests.find((item) => item.name === 'linux_proto_console');
+  assert.ok(linuxConsole, 'linux_proto_console should be part of the manifest when a real Image is configured');
+  assert.equal(linuxConsole.backend, 'functional');
+
+  const server = await startServer({ port: 0 });
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: linuxConsole.name,
+      backend: linuxConsole.backend,
+    });
+    assert.equal(loadResponse.status, 200);
+    assert.match(loadResponse.body.terminal.text, /mycpu-linux# /);
+
+    const helpResponse = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'help\r',
+    });
+    assert.equal(helpResponse.status, 200);
+    assert.match(helpResponse.body.text, /commands: help uptime exit/);
+    assert.match(helpResponse.body.text, /mycpu-linux# $/);
+
+    const terminateResponse = await postJson(server.baseUrl, '/api/session/terminate', {});
+    assert.equal(terminateResponse.status, 200);
+    assert.equal(terminateResponse.body.ok, true);
+    assert.deepEqual(terminateResponse.body.terminal, {
+      type: 'terminal',
+      text: '',
+      nextOffset: 0,
+      reset: true,
+    });
   } finally {
     await server.close();
   }

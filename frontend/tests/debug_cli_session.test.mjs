@@ -89,3 +89,39 @@ test('DebugCliSession close tears down pending queue and rejects later requests'
     /debug cli.*(closed|shutdown|unavailable|exit)/i,
   );
 });
+
+test('DebugCliSession can wait for new UART output from an offset with a custom timeout', { timeout: 1000 }, async () => {
+  const child = createMockChild();
+  const session = new DebugCliSession({
+    binaryPath: '/tmp/fake-mycpu',
+    spawnImpl: () => child,
+    requestTimeoutMs: 20,
+  });
+
+  const pending = session.runUntilNewUartContains(17, 'mycpu-linux# ', 50000000, {
+    timeoutMs: 30000,
+  });
+
+  assert.deepEqual(JSON.parse(child.stdin.writes.at(-1)), {
+    cmd: 'run_until_new_uart_contains',
+    offset: 17,
+    text: 'mycpu-linux# ',
+    max_steps: 50000000,
+  });
+
+  child.stdout.write(`${JSON.stringify({
+    type: 'uart_output',
+    offset: 17,
+    next_offset: 48,
+    text: 'help\r\ncommands: help uptime exit\r\nmycpu-linux# ',
+  })}\n`);
+
+  assert.deepEqual(await pending, {
+    type: 'uart_output',
+    offset: 17,
+    next_offset: 48,
+    text: 'help\r\ncommands: help uptime exit\r\nmycpu-linux# ',
+  });
+
+  await session.close();
+});

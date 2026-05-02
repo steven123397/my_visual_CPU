@@ -13,6 +13,20 @@ export function projectTerminalBuffer(text = '') {
   return projectTerminalText(text);
 }
 
+function terminalPresentation(activeTest) {
+  if (activeTest === 'linux_proto_console') {
+    return {
+      title: 'Linux serial terminal',
+      target: 'Linux serial console',
+    };
+  }
+
+  return {
+    title: 'interactive_os terminal',
+    target: 'guest monitor',
+  };
+}
+
 export function renderTerminal(state) {
   const terminal = state.terminal;
   const summary = state.currentSnapshot?.summary ?? {};
@@ -26,6 +40,7 @@ export function renderTerminal(state) {
       ? summary.backend
       : (typeof loadedSession?.backend === 'string' && loadedSession.backend.length > 0 ? loadedSession.backend : '-');
   const sessionLabel = activeTest ? `${activeTest} · ${activeBackend}` : `未加载会话 · ${activeBackend}`;
+  const presentation = terminalPresentation(activeTest);
   let hint = '点击终端开始输入。';
   if (!terminal.connected) {
     hint = collapsed
@@ -33,8 +48,8 @@ export function renderTerminal(state) {
       : '先加载一个会话，然后点击终端开始输入。';
   } else if (terminal.pendingInput) {
     hint = collapsed
-      ? 'terminal 已收起，正在把按键送入 guest monitor...'
-      : '正在把按键送入 guest monitor...';
+      ? `terminal 已收起，正在把按键送入 ${presentation.target}...`
+      : `正在把按键送入 ${presentation.target}...`;
   } else if (collapsed) {
     hint = 'terminal 已收起，展开后继续交互。';
   } else if (terminal.focused) {
@@ -57,7 +72,7 @@ export function renderTerminal(state) {
           <span></span><span></span><span></span>
         </div>
         <div class="terminal-window__title">
-          <strong>interactive_os terminal</strong>
+          <strong>${presentation.title}</strong>
           <span>${sessionLabel}</span>
         </div>
         <div class="terminal-window__actions">

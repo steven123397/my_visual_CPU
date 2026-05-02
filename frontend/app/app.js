@@ -4,6 +4,7 @@ import {
   stepCycle,
   stepCommit,
   resetSession,
+  terminateSession,
   runSession,
   pauseSession,
   terminalInput,
@@ -12,11 +13,10 @@ import {
 } from './api.js';
 import {
   appendTerminalOutput,
+  clearLoadedSession,
   createAppState,
   normalizeTerminalInput,
   pushSnapshot,
-  resetHistory,
-  resetTerminalState,
   setTerminalCollapsed,
   setTerminalFocus,
   setInspectorGroupOpen,
@@ -81,9 +81,8 @@ async function handleLoad() {
   const requestedTest = state.selectedTest;
   const requestedBackend = state.backend;
   state.runState = 'loading';
-  setLoadedSession(state, null);
-  resetHistory(state);
-  resetTerminalState(state);
+  clearLoadedSession(state);
+  state.runState = 'loading';
   paint();
   const response = await loadSession(requestedTest, requestedBackend);
   setLoadedSession(state, {
@@ -98,6 +97,13 @@ async function handleLoad() {
   state.runState = 'paused';
   paint();
   showNotice(`已加载 ${requestedTest}`, 'success');
+}
+
+async function handleTerminate() {
+  await terminateSession();
+  clearLoadedSession(state);
+  paint();
+  showNotice('已结束当前会话。', 'success');
 }
 
 async function handleAction(action, label) {
@@ -132,7 +138,7 @@ const terminalInputPump = createTerminalInputPump({
 
 async function init() {
   const testsResponse = await listTests();
-  setTests(state, testsResponse.tests);
+  setTests(state, testsResponse.tests, testsResponse.diagnostics);
   paint();
   showNotice('本地调试服务已连接，先选择测试并点击 Load。');
 
@@ -254,6 +260,15 @@ async function init() {
     }
   });
 
+  document.querySelector('#terminate-button').addEventListener('click', async () => {
+    try {
+      terminalInputPump.reset();
+      await handleTerminate();
+    } catch (error) {
+      showNotice(error.message, 'error');
+    }
+  });
+
   document.querySelector('#run-button').addEventListener('click', async () => {
     try {
       await runSession(8);
@@ -288,6 +303,16 @@ async function init() {
     },
     (message) => showNotice(message, 'error'),
     (terminal) => {
+      if (
+        !state.loadedSession &&
+        terminal?.reset === true &&
+        (terminal.text ?? '').length === 0 &&
+        (terminal.nextOffset ?? terminal.next_offset ?? 0) === 0
+      ) {
+        clearLoadedSession(state);
+        paint();
+        return;
+      }
       mergeTerminal(terminal);
       paint();
     },

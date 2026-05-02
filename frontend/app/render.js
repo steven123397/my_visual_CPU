@@ -34,10 +34,13 @@ const DEMO_GROUPS = [
       },
       {
         title: 'Linux Serial Console',
-        status: 'soon',
-        fallbackSummary: 'Wave 7 后续会接入受控 Linux 串口 shell；当前首页和文档先展示 bring-up 路线。',
-        marker: 'timerfd-one-shot-readback-ok',
-        panels: ['terminal', 'session limits'],
+        test: 'linux_proto_console',
+        backend: 'functional',
+        gated: true,
+        gatedLabel: 'Runtime Image required',
+        fallbackSummary: '配置 MYCPU_LINUX_PROTO_CONSOLE_IMAGE 后，可用受控 linux_proto runtime 打开 UART 串口 console。',
+        marker: 'post-init reached',
+        panels: ['terminal', 'Linux Image', 'DTB', 'virtio-blk'],
       },
     ],
   },
@@ -138,6 +141,74 @@ function findManifestEntry(state, testName) {
   return state.tests.find((item) => item.name === testName) ?? null;
 }
 
+function isLinuxConsoleDemo(demo) {
+  return demo.test === 'linux_proto_console';
+}
+
+function demoCardStatusLabel(demo, available, selected) {
+  if (isLinuxConsoleDemo(demo)) {
+    return available ? 'Ready' : 'Not configured';
+  }
+  if (available) {
+    return selected ? 'Selected' : 'Open demo';
+  }
+  return demo.gatedLabel ?? 'Coming soon';
+}
+
+function linuxConsoleDiagnosticLabel(status) {
+  switch (status) {
+    case 'not-found':
+      return 'Image path missing';
+    case 'not-file':
+      return 'Image path is not a file';
+    case 'not-readable':
+      return 'Image path is not readable';
+    case 'missing-env':
+    default:
+      return 'Runtime Image required';
+  }
+}
+
+function renderLinuxConsoleDiagnostic(diagnostic) {
+  if (!diagnostic || diagnostic.ready) {
+    return '';
+  }
+
+  const label = linuxConsoleDiagnosticLabel(diagnostic.status);
+  const detail = diagnostic.message ?? 'No session will be created until the Image is configured.';
+  const pathLine = diagnostic.path
+    ? `<span>Path: <code>${escapeHtml(diagnostic.path)}</code></span>`
+    : '';
+  return `
+    <strong>${escapeHtml(label)}</strong>
+    <span>${escapeHtml(detail)}</span>
+    ${pathLine}
+  `;
+}
+
+function renderDemoGateNote(demo, available, state) {
+  if (!demo.gated || available) {
+    return '';
+  }
+  if (isLinuxConsoleDemo(demo)) {
+    const diagnostic = state.diagnostics?.linuxConsole ?? null;
+    const diagnosticBody = renderLinuxConsoleDiagnostic(diagnostic);
+    return `
+      <div class="demo-card__gate">
+        <strong>${escapeHtml(demo.gatedLabel ?? 'Runtime Image required')}</strong>
+        ${diagnosticBody}
+        <span>Set <code>MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image</code> before starting the frontend server.</span>
+        <span>No session will be created until the Image is configured.</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="demo-card__gate">
+      <strong>${escapeHtml(demo.gatedLabel ?? 'Coming soon')}</strong>
+    </div>
+  `;
+}
+
 function renderDemoCard(demo, state) {
   const entry = demo.test ? findManifestEntry(state, demo.test) : null;
   const available = Boolean(entry);
@@ -146,16 +217,20 @@ function renderDemoCard(demo, state) {
   const title = entry?.title ?? demo.title;
   const summary = entry?.summary ?? demo.fallbackSummary ?? '';
   const marker = entry?.workload?.expectedMarker ?? demo.marker ?? '';
+  const badge = entry?.badge ?? demo.badge ?? null;
   const ops = entry?.workload?.ops ?? demo.panels ?? [];
   const classes = [
     'demo-card',
     selected ? 'is-selected' : '',
     available ? 'is-available' : 'is-soon',
+    demo.gated && !available ? 'is-gated' : '',
+    isLinuxConsoleDemo(demo) && available ? 'is-ready' : '',
   ].filter(Boolean).join(' ');
   const attrs = available
     ? `data-demo-test="${escapeHtml(demo.test)}" data-demo-backend="${escapeHtml(demo.backend ?? state.backend)}" role="button" tabindex="0"`
     : 'aria-disabled="true"';
-  const statusLabel = available ? (selected ? 'Selected' : 'Open demo') : 'Coming soon';
+  const statusLabel = demoCardStatusLabel(demo, available, selected);
+  const gateNote = renderDemoGateNote(demo, available, state);
 
   return `
     <article class="${classes}" ${attrs}>
@@ -166,12 +241,14 @@ function renderDemoCard(demo, state) {
       <h4>${escapeHtml(title)}</h4>
       <p>${escapeHtml(summary)}</p>
       <div class="demo-card__meta">
+        ${badge ? `<span>${escapeHtml(badge)}</span>` : ''}
         <span>${escapeHtml(demo.backend ?? 'planned')}</span>
         <span>${escapeHtml(marker)}</span>
       </div>
       <div class="demo-card__chips">
         ${ops.slice(0, 4).map((item) => `<span>${escapeHtml(item)}</span>`).join('')}
       </div>
+      ${gateNote}
     </article>
   `;
 }

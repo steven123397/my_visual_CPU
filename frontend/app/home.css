@@ -441,18 +441,19 @@ pre {
   min-height: 390px;
   display: grid;
   align-content: end;
-  gap: 14px;
-  padding: 26px;
+  gap: 18px;
+  padding: 30px;
   border: 1px solid var(--line);
   border-radius: 30px;
   background:
     radial-gradient(circle at 86% 10%, rgba(29, 116, 123, 0.13), transparent 42%),
     var(--panel);
   box-shadow: 0 18px 70px rgba(47, 39, 30, 0.1);
+  overflow-wrap: break-word;
 }
 
 .foundation-card--wide {
-  min-height: 470px;
+  min-height: 520px;
 }
 
 .foundation-card--dark {
@@ -479,7 +480,7 @@ pre {
   margin: 0;
   font-family: var(--display);
   font-size: clamp(30px, 3.6vw, 46px);
-  line-height: 1.08;
+  line-height: 1.18;
 }
 
 .foundation-card p {
@@ -495,17 +496,17 @@ pre {
 .foundation-flow {
   display: flex;
   flex-wrap: wrap;
-  gap: 9px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .foundation-flow b {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--teal-dark);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11px;
   background: rgba(255, 250, 239, 0.64);
 }
 

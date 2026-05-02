@@ -1,9 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { interactiveOsBudgets } from './debug_budget.mjs';
+import {
+  interactiveOsBudgets,
+  LINUX_CONSOLE_BOOT_BUDGET,
+  LINUX_CONSOLE_COMMAND_BUDGET,
+} from './debug_budget.mjs';
 
 const asmTestsCache = new Map();
+const linuxConsoleBoot = Object.freeze({
+  loadAddr: '0x80000000',
+  kernelAddr: '0x80200000',
+  dtbAddr: '0x87f00000',
+  marker: 'mycpu-linux# ',
+  bootMaxSteps: 300000000,
+  prompt: 'mycpu-linux# ',
+});
+const linuxConsolePrimaryEnv = 'MYCPU_LINUX_PROTO_CONSOLE_IMAGE';
+const linuxConsoleFallbackEnv = 'MYCPU_LINUX_PROTO_RUNTIME_IMAGE';
 
 function parseAsmTestsFromMakefile(myCpuRoot) {
   const cacheKey = myCpuRoot;
@@ -51,8 +65,135 @@ function withPresentation(entry, presentation = {}) {
   };
 }
 
+function resolveLinuxConsoleConfig() {
+  if (process.env[linuxConsolePrimaryEnv]) {
+    return {
+      envVar: linuxConsolePrimaryEnv,
+      path: path.resolve(process.env[linuxConsolePrimaryEnv]),
+    };
+  }
+  if (process.env[linuxConsoleFallbackEnv]) {
+    return {
+      envVar: linuxConsoleFallbackEnv,
+      path: path.resolve(process.env[linuxConsoleFallbackEnv]),
+    };
+  }
+  return null;
+}
+
+export function linuxConsoleDiagnostic() {
+  const config = resolveLinuxConsoleConfig();
+  if (!config) {
+    return {
+      status: 'missing-env',
+      ready: false,
+      envVar: linuxConsolePrimaryEnv,
+      message: 'Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image before starting the frontend server.',
+    };
+  }
+
+  let stat = null;
+  try {
+    stat = fs.statSync(config.path);
+  } catch {
+    return {
+      status: 'not-found',
+      ready: false,
+      envVar: config.envVar,
+      path: config.path,
+      message: `Image path does not exist: ${config.path}`,
+    };
+  }
+
+  if (!stat.isFile()) {
+    return {
+      status: 'not-file',
+      ready: false,
+      envVar: config.envVar,
+      path: config.path,
+      message: `Image path is not a file: ${config.path}`,
+    };
+  }
+
+  try {
+    fs.accessSync(config.path, fs.constants.R_OK);
+  } catch {
+    return {
+      status: 'not-readable',
+      ready: false,
+      envVar: config.envVar,
+      path: config.path,
+      message: `Image path is not readable: ${config.path}`,
+    };
+  }
+
+  return {
+    status: 'ready',
+    ready: true,
+    envVar: config.envVar,
+    path: config.path,
+    message: 'Linux serial console Image is configured.',
+  };
+}
+
+function linuxConsoleEntry(myCpuRoot, diagnostic) {
+  if (!diagnostic.ready) {
+    return null;
+  }
+
+  const linuxImage = diagnostic.path;
+  const linuxProtoRoot = path.join(myCpuRoot, 'workloads', 'linux_proto');
+  return {
+    name: 'linux_proto_console',
+    menuLabel: 'linux_proto_console · Linux serial',
+    backend: 'functional',
+    image: path.join(linuxProtoRoot, 'linux_sbi_shim.bin'),
+    imageFormat: 'flat',
+    loadAddr: linuxConsoleBoot.loadAddr,
+    disk: path.join(linuxProtoRoot, 'rootfs.ext4'),
+    diskReady: true,
+    diskMagicValid: true,
+    blockTransport: 'virtio-blk',
+    kind: 'linux',
+    payloads: [
+      { image: linuxImage, addr: linuxConsoleBoot.kernelAddr },
+      { image: path.join(linuxProtoRoot, 'mycpu_virt.dtb'), addr: linuxConsoleBoot.dtbAddr },
+    ],
+    gprSeeds: [
+      { reg: 'a0', value: '0x0' },
+      { reg: 'a1', value: linuxConsoleBoot.dtbAddr },
+      { reg: 'a2', value: linuxConsoleBoot.kernelAddr },
+    ],
+    bootUntilUartText: linuxConsoleBoot.marker,
+    bootMaxSteps: linuxConsoleBoot.bootMaxSteps,
+    bootRequestTimeoutMs: LINUX_CONSOLE_BOOT_BUDGET.requestTimeoutMs,
+    commandUntilUartText: linuxConsoleBoot.prompt,
+    commandMaxSteps: LINUX_CONSOLE_COMMAND_BUDGET.maxSteps,
+    commandRequestTimeoutMs: LINUX_CONSOLE_COMMAND_BUDGET.requestTimeoutMs,
+    terminalPrompt: linuxConsoleBoot.prompt,
+    title: 'Linux Serial Console',
+    badge: 'Linux runtime',
+    summary: '启动受控 linux_proto runtime，进入 UART 串口 console，观察 Linux userland smoke marker。',
+    workload: {
+      stage: 'Wave 7',
+      category: 'linux-serial-console',
+      expectedMarker: linuxConsoleBoot.prompt,
+      ops: ['flat SBI shim', 'Linux Image payload', 'DTB', 'virtio-blk rootfs'],
+      pipelineNote: '配置本机 Linux Image 后才可运行；前端桥接 UART 与现有 debug session，并进入 linux_proto mini shell prompt；不在浏览器内运行 Linux。',
+      assetNote: 'Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image before starting the frontend server.',
+      progress: [
+        ['Boot', 'flat SBI shim 加载 Linux Image、DTB 和 rootfs'],
+        ['UART', 'serial console 输出通过 debug server 增量投影到浏览器'],
+        ['Control', 'Load / Run / Pause / Reset 复用现有 session 控制'],
+        ['Guardrail', '缺少 runtime Image 时不创建虚假 Linux session'],
+      ],
+    },
+  };
+}
+
 export function listTests(repoRoot) {
   const myCpuRoot = path.join(repoRoot, 'myCPU');
+  const linuxConsole = linuxConsoleDiagnostic();
   const asmTests = parseAsmTestsFromMakefile(myCpuRoot);
   const manifest = asmTests.map((name) => ({
     name,
@@ -75,6 +216,10 @@ export function listTests(repoRoot) {
     terminalPrompt: interactiveOsBudgets.prompt,
     commandMaxSteps: interactiveOsBudgets.commandMaxSteps,
   });
+  const linuxConsoleTest = linuxConsoleEntry(myCpuRoot, linuxConsole);
+  if (linuxConsoleTest) {
+    manifest.push(linuxConsoleTest);
+  }
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_demo', 'ready'));
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_fault_demo'));
   manifest.push(guestEntry(myCpuRoot, 'guest_kernel_alpha_storage_no_media_demo'));
@@ -150,5 +295,8 @@ export function listTests(repoRoot) {
     },
   ));
 
+  manifest.diagnostics = {
+    linuxConsole,
+  };
   return manifest;
 }

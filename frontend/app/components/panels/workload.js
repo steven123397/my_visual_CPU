@@ -88,6 +88,12 @@ export function renderWorkloadPanel(testEntry, snapshot) {
           <strong>当前边界</strong>
           <p>${workload.pipelineNote ?? '当前 demo 只展示仓库里已经稳定落地的 workload 与执行边界。'}</p>
         </div>
+        ${workload.assetNote ? `
+          <div class="workload-callout workload-callout-secondary">
+            <strong>运行资产</strong>
+            <p><code>${workload.assetNote}</code></p>
+          </div>
+        ` : ''}
         ${activeStages.length > 0 ? `
           <div class="workload-active">
             <span>当前可见的向量 stage</span>

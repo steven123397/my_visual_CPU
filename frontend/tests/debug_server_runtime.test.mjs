@@ -39,6 +39,7 @@ function createFakeSession({
   stepCycleTerminalPrefix = '',
   blockFirstStepCycle = null,
   echoInputChunkSize = null,
+  linuxPromptMode = false,
   loadError = null,
   snapshotError = null,
 } = {}) {
@@ -47,14 +48,32 @@ function createFakeSession({
   let closed = false;
   let pendingEcho = '';
   let stepCycleCount = 0;
+  const loadCalls = [];
+  const payloadLoads = [];
+  const gprSeeds = [];
+  const runUntilCalls = [];
+  const runUntilNewCalls = [];
+  const callLog = [];
   return {
-    async load() {
+    async load(entry, backend) {
       if (loadError) {
         throw loadError;
       }
+      callLog.push('load');
+      loadCalls.push({ entry, backend });
       cycle = 0;
       stepCycleCount = 0;
-      terminal = `boot:${label}\r\n> `;
+      terminal = linuxPromptMode ? `boot:${label}\r\nmycpu-linux# ` : `boot:${label}\r\n> `;
+      return { ok: true };
+    },
+    async loadPayload(image, addr) {
+      callLog.push(`loadPayload:${addr}`);
+      payloadLoads.push({ image, addr });
+      return { ok: true };
+    },
+    async setGpr(reg, value) {
+      callLog.push(`setGpr:${reg}`);
+      gprSeeds.push({ reg, value });
       return { ok: true };
     },
     async snapshot() {
@@ -80,22 +99,43 @@ function createFakeSession({
       if (echoInputChunkSize && pendingEcho.length > 0) {
         terminal += pendingEcho.slice(0, echoInputChunkSize);
         pendingEcho = pendingEcho.slice(echoInputChunkSize);
+      } else if (linuxPromptMode && pendingEcho === 'help\r') {
+        terminal += 'help\r\ncommands: help uptime exit\r\nmycpu-linux# ';
+        pendingEcho = '';
       }
       return makeSnapshot(cycle, label);
     },
     async reset() {
+      callLog.push('reset');
       cycle = 0;
       stepCycleCount = 0;
       terminal = 'reset\r\n> ';
       return makeSnapshot(cycle, label);
     },
-    async runUntilUartContains() {
+    async runUntilUartContains(text, maxSteps, options = {}) {
+      callLog.push('runUntilUartContains');
+      runUntilCalls.push({ text, maxSteps, timeoutMs: options.timeoutMs });
       cycle = 4;
-      terminal = `boot:${label}\r\nready\r\n> `;
+      terminal = linuxPromptMode ? `boot:${label}\r\nready\r\nmycpu-linux# ` : `boot:${label}\r\nready\r\n> `;
       return makeSnapshot(cycle, label);
     },
+    async runUntilNewUartContains(offset, text, maxSteps, options = {}) {
+      callLog.push('runUntilNewUartContains');
+      runUntilNewCalls.push({ offset, text, maxSteps, timeoutMs: options.timeoutMs });
+      cycle += 2;
+      if (linuxPromptMode && pendingEcho === 'help\r') {
+        terminal += 'help\r\ncommands: help uptime exit\r\nmycpu-linux# ';
+        pendingEcho = '';
+      }
+      return {
+        type: 'uart_output',
+        offset,
+        next_offset: terminal.length,
+        text: terminal.slice(offset),
+      };
+    },
     async uartInput(text) {
-      if (echoInputChunkSize) {
+      if (echoInputChunkSize || linuxPromptMode) {
         pendingEcho += text;
       } else {
         terminal += text;
@@ -116,6 +156,24 @@ function createFakeSession({
     },
     get stepCycleCount() {
       return stepCycleCount;
+    },
+    get loadCalls() {
+      return loadCalls;
+    },
+    get payloadLoads() {
+      return payloadLoads;
+    },
+    get gprSeeds() {
+      return gprSeeds;
+    },
+    get runUntilCalls() {
+      return runUntilCalls;
+    },
+    get runUntilNewCalls() {
+      return runUntilNewCalls;
+    },
+    get callLog() {
+      return callLog;
     },
   };
 }
@@ -156,6 +214,156 @@ test('createDebugServerRuntime load resets terminal tracking and broadcasts init
 
   await runtime.close();
   assert.equal(session.closed, true);
+});
+
+test('createDebugServerRuntime terminate closes the session, clears terminal tracking, and rejects later steps', async () => {
+  const session = createFakeSession();
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => session,
+    wsHub,
+  });
+
+  await runtime.load({
+    name: 'linux_proto_console',
+    image: 'workloads/linux_proto/linux_sbi_shim.bin',
+    terminalPrompt: 'mycpu-linux# ',
+  }, 'pipeline');
+  wsHub.messages.length = 0;
+
+  const result = await runtime.terminate();
+
+  assert.equal(result.ok, true);
+  assert.equal(session.closed, true);
+  assert.equal(result.snapshot, null);
+  assert.deepEqual(result.terminal, {
+    type: 'terminal',
+    text: '',
+    nextOffset: 0,
+    reset: true,
+  });
+  assert.deepEqual(wsHub.messages, [result.terminal]);
+  await assert.rejects(runtime.stepCycle(), /session not loaded/);
+
+  await runtime.close();
+});
+
+test('createDebugServerRuntime applies Linux boot payloads and register seeds before boot marker wait', async () => {
+  const session = createFakeSession({ label: 'linux-session' });
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => session,
+    wsHub,
+  });
+
+  const result = await runtime.load({
+    name: 'linux_proto_console',
+    image: 'workloads/linux_proto/linux_sbi_shim.bin',
+    imageFormat: 'flat',
+    loadAddr: '0x80000000',
+    blockTransport: 'virtio-blk',
+    disk: 'workloads/linux_proto/rootfs.ext4',
+    payloads: [
+      { image: 'external/linux-riscv/arch/riscv/boot/Image', addr: '0x80200000' },
+      { image: 'workloads/linux_proto/mycpu_virt.dtb', addr: '0x87f00000' },
+    ],
+    gprSeeds: [
+      { reg: 'a0', value: '0x0' },
+      { reg: 'a1', value: '0x87f00000' },
+      { reg: 'a2', value: '0x80200000' },
+    ],
+    bootUntilUartText: 'mycpu-linux# ',
+    bootMaxSteps: 300000000,
+    bootRequestTimeoutMs: 120000,
+    terminalPrompt: 'mycpu-linux# ',
+  }, 'pipeline');
+
+  assert.equal(result.ok, true);
+  assert.equal(session.loadCalls.length, 1);
+  assert.equal(session.loadCalls[0].backend, 'pipeline');
+  assert.equal(session.loadCalls[0].entry.imageFormat, 'flat');
+  assert.deepEqual(session.payloadLoads, [
+    { image: 'external/linux-riscv/arch/riscv/boot/Image', addr: '0x80200000' },
+    { image: 'workloads/linux_proto/mycpu_virt.dtb', addr: '0x87f00000' },
+  ]);
+  assert.deepEqual(session.gprSeeds, [
+    { reg: 'a0', value: '0x0' },
+    { reg: 'a1', value: '0x87f00000' },
+    { reg: 'a2', value: '0x80200000' },
+  ]);
+  assert.deepEqual(session.runUntilCalls, [
+    { text: 'mycpu-linux# ', maxSteps: 300000000, timeoutMs: 120000 },
+  ]);
+  assert.equal(result.snapshot.summary.cycle, 4);
+  assert.match(result.terminal.text, /ready/);
+
+  await runtime.close();
+});
+
+test('createDebugServerRuntime reset re-arms Linux payloads and register seeds before waiting for prompt', async () => {
+  const session = createFakeSession({ label: 'linux-reset', linuxPromptMode: true });
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => session,
+    wsHub,
+  });
+  const entry = {
+    name: 'linux_proto_console',
+    image: 'workloads/linux_proto/linux_sbi_shim.bin',
+    imageFormat: 'flat',
+    loadAddr: '0x80000000',
+    blockTransport: 'virtio-blk',
+    disk: 'workloads/linux_proto/rootfs.ext4',
+    payloads: [
+      { image: 'external/linux-riscv/arch/riscv/boot/Image', addr: '0x80200000' },
+      { image: 'workloads/linux_proto/mycpu_virt.dtb', addr: '0x87f00000' },
+    ],
+    gprSeeds: [
+      { reg: 'a0', value: '0x0' },
+      { reg: 'a1', value: '0x87f00000' },
+      { reg: 'a2', value: '0x80200000' },
+    ],
+    bootUntilUartText: 'mycpu-linux# ',
+    bootMaxSteps: 300000000,
+    bootRequestTimeoutMs: 120000,
+    terminalPrompt: 'mycpu-linux# ',
+  };
+
+  await runtime.load(entry, 'pipeline');
+  wsHub.messages.length = 0;
+  session.callLog.length = 0;
+
+  const result = await runtime.reset();
+
+  assert.equal(result.snapshot.summary.cycle, 4);
+  assert.match(result.terminal.text, /mycpu-linux# /);
+  assert.deepEqual(session.callLog, [
+    'reset',
+    'loadPayload:0x80200000',
+    'loadPayload:0x87f00000',
+    'setGpr:a0',
+    'setGpr:a1',
+    'setGpr:a2',
+    'runUntilUartContains',
+  ]);
+  assert.deepEqual(session.payloadLoads.slice(-2), [
+    { image: 'external/linux-riscv/arch/riscv/boot/Image', addr: '0x80200000' },
+    { image: 'workloads/linux_proto/mycpu_virt.dtb', addr: '0x87f00000' },
+  ]);
+  assert.deepEqual(session.gprSeeds.slice(-3), [
+    { reg: 'a0', value: '0x0' },
+    { reg: 'a1', value: '0x87f00000' },
+    { reg: 'a2', value: '0x80200000' },
+  ]);
+  assert.deepEqual(session.runUntilCalls.slice(-1), [
+    { text: 'mycpu-linux# ', maxSteps: 300000000, timeoutMs: 120000 },
+  ]);
+  assert.deepEqual(
+    wsHub.messages.map((message) => message.type),
+    ['snapshot', 'terminal'],
+  );
+
+  await runtime.close();
 });
 
 test('createDebugServerRuntime run keeps broadcasting snapshots and terminal deltas until pause', async () => {
@@ -324,6 +532,47 @@ test('createDebugServerRuntime terminalInput coalesces a larger echoed batch int
   assert.equal(snapshotMessages.length, 1);
   assert.equal(terminalMessages.length, 1);
   assert.equal(terminalMessages[0].text, burst);
+
+  await runtime.close();
+});
+
+test('createDebugServerRuntime terminalInput waits for Linux prompt command output to settle', async () => {
+  const session = createFakeSession({
+    label: 'linux-console',
+    linuxPromptMode: true,
+  });
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => session,
+    wsHub,
+  });
+
+  await runtime.load({
+    name: 'linux_proto_console',
+    image: 'workloads/linux_proto/linux_sbi_shim.bin',
+    bootUntilUartText: 'mycpu-linux# ',
+    bootMaxSteps: 300000000,
+    commandUntilUartText: 'mycpu-linux# ',
+    commandMaxSteps: 50000000,
+    commandRequestTimeoutMs: 30000,
+    terminalPrompt: 'mycpu-linux# ',
+  }, 'pipeline');
+  wsHub.messages.length = 0;
+
+  const response = await runtime.terminalInput('help\r');
+  const terminalMessages = wsHub.messages.filter((message) => message.type === 'terminal');
+
+  assert.equal(response.ok, true);
+  assert.match(response.text, /commands: help uptime exit/);
+  assert.match(response.text, /mycpu-linux# $/);
+  assert.equal(session.runUntilNewCalls.length, 1);
+  assert.ok(session.runUntilNewCalls[0].offset > 0);
+  assert.equal(session.runUntilNewCalls[0].text, 'mycpu-linux# ');
+  assert.equal(session.runUntilNewCalls[0].maxSteps, 50000000);
+  assert.equal(session.runUntilNewCalls[0].timeoutMs, 30000);
+  assert.equal(terminalMessages.length, 1);
+  assert.match(terminalMessages[0].text, /commands: help uptime exit/);
+  assert.match(terminalMessages[0].text, /mycpu-linux# $/);
 
   await runtime.close();
 });

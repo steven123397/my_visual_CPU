@@ -21,7 +21,146 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-05-02
+
+#### mainline-wave7-linux-console-load-contract-plan
+
+- 原文件：`wave7_linux_console_load_contract_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux Serial Console
+  真实 Image load 合同收口。`linux_proto_console` manifest / `/console` demo card
+  当前固定使用 `functional` backend；Linux boot marker wait 使用 120000 ms 专用
+  debug CLI request timeout，不再复用普通 1500 ms 单请求预算；普通 demo 的默认
+  backend / timeout 行为保持不变。
+- 实现过程摘要：这一轮按 TDD 先补 frontend manifest、runtime boot wait、render
+  backend 和 e2e backend 红灯，再实现最小 frontend 合同。真实 API 验证时进一步发现
+  Linux `help\r` 输入会因旧 prompt / 短 commit 推进提前返回空文本，因此补充暴露
+  既有 C++ `DebugSession::run_until_new_uart_contains` 到 debug CLI 协议，并让
+  Linux newline command 等待当前 terminal offset 之后的新 `mycpu-linux# ` prompt。
+  本机外部 Image 验证结果：`POST /api/session/load` 以 `backend=functional` 到达
+  `mycpu-linux# `；`POST /api/session/terminal-input` 输入 `help\r` 返回
+  `commands: help uptime exit` 和新的 prompt。未重新生成或提交 Linux `Image`，也不声明
+  `pipeline` backend 已能跑通真实 Linux interactive console。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave7-linux-console-health-check-plan
+
+- 原文件：`wave7_linux_console_health_check_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux console 配置诊断
+  UX 收口。`/api/tests` 现在返回只读 `diagnostics.linuxConsole`，可区分 env 未设置、
+  Image 路径不存在、路径不是普通文件、路径不可读和 ready；`/console` 的 Linux
+  Serial Console 卡片会展示这些诊断，未 ready 时仍不暴露可点击
+  `linux_proto_console` session。
+- 实现过程摘要：这一轮按 TDD 先补 server manifest / API 诊断红灯，再补 state 和
+  render 层诊断展示红灯。实现保持现有 manifest gating，不新增 session API，不自动下载
+  或验证真实 Linux `Image` 的运行正确性；配置 ready 后继续沿现有 Load / Run / Pause /
+  Reset / Terminate 控制进入受控串口 console。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave7-linux-console-config-ux-plan
+
+- 原文件：`wave7_linux_console_config_ux_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux console 配置状态 UX
+  收口。`/console` 的 Linux Serial Console 卡片在未配置
+  `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 时显示 `Not configured` 和
+  `Runtime Image required`，并明确不会创建 session；manifest 暴露
+  `linux_proto_console` 后，卡片显示 `Ready`，继续复用现有 Load / Run / Pause /
+  Reset / Terminate 控制。
+- 实现过程摘要：这一轮按 TDD 先补 render 层未配置 / 已配置两种卡片状态红灯，再把
+  Linux route 的 UI 状态绑定到现有 manifest gating 事实，不新增 debug server、
+  session API 或 simulator 行为。`/docs` 同步说明未配置不会触发 session、配置后
+  Load 才启动受控串口 console。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave7-linux-console-reset-rearm-plan
+
+- 原文件：`wave7_linux_console_reset_rearm_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux console reset re-arm
+  收口。`/api/session/reset` 对 `linux_proto_console` 会在 reset 后重新执行 Linux
+  `Image` payload / DTB load、`a0/a1/a2` GPR seed 和 `mycpu-linux# ` boot marker wait；
+  普通 asm / guest demo 继续保持原有 reset 语义。
+- 实现过程摘要：这一轮按 TDD 先用 runtime fake Linux session 暴露 reset 后没有重新
+  re-arm payload / register seed / boot wait 的问题，再让 runtime 保存当前 entry / backend，
+  只对带 payload、GPR seed 或 boot marker 的 entry 走 re-arm reset 路径。HTTP 层同步覆盖
+  `linux_proto_console` reset 返回 Linux prompt，并确认旧 terminal offset 不再读到旧输出。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave7-linux-console-real-image-e2e-plan
+
+- 原文件：`wave7_linux_console_real_image_e2e_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux console 真实 Image
+  opt-in e2e guardrail。默认 `frontend` Node 测试只记录跳过条件；设置
+  `MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1` 和
+  `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 后，frontend e2e 会经真实 debug
+  server + debug CLI 加载 `linux_proto_console`，输入 `help`，校验
+  `commands: help uptime exit` 与 `mycpu-linux# ` prompt，并执行 terminate。
+- 实现过程摘要：这一轮按 TDD 先补 `debug_server_e2e` 的 opt-in 测试与 `/docs`
+  文案红灯，再实现默认 skip / 显式启用合同和产品文档说明。默认仓库仍不携带外部
+  Linux `Image`，不把默认测试通过写成真实 Linux runtime 已证明，也不声明浏览器内 Linux、
+  图形桌面、网络、标准发行版镜像或任意用户镜像支持。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave7-linux-console-terminate-plan
+
+- 原文件：`wave7_linux_console_terminate_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux console terminate
+  交互收口。`/console` 现在有显式 `Terminate` 主操作；调用
+  `POST /api/session/terminate` 会停止 run loop、关闭当前 debug CLI session、清空
+  runtime snapshot / terminal tracking，并向浏览器广播空 terminal reset。前端同步清理
+  loaded session、snapshot history、terminal buffer 和 pending input。
+- 实现过程摘要：这一轮按 TDD 先补 runtime、HTTP API 和前端状态红灯，再实现
+  `runtime.terminate()`、server endpoint、browser API client、控制区按钮和 `/docs`
+  操作说明。默认仓库仍不携带外部 Linux `Image`，不声明浏览器内 Linux、图形桌面、网络、
+  标准发行版镜像或任意用户镜像支持。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave7-linux-console-hardening-plan
+
+- 原文件：`wave7_linux_console_hardening_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux console hardening 第一刀。
+  `/console` 的 terminal title / pending hint 现在会随 loaded workload 区分
+  `interactive_os terminal` 和 `Linux serial terminal`；`linux_proto_console` 下的
+  `help\r` prompt settling 已有 frontend runtime characterization，等待
+  `commands: help uptime exit` 和新的 `mycpu-linux# ` 提示符后再返回，并保持单次
+  terminal response / broadcast。
+- 实现过程摘要：这一轮先补 terminal render 红灯，暴露此前标题和 pending 文案写死为
+  `interactive_os` / `guest monitor` 的问题，再做最小 workload-aware 文案修复；runtime
+  用 fake Linux prompt session 固定现有 prompt-based settling 行为，不改 debug session API。
+  默认仓库仍不携带外部 Linux `Image`，不声明浏览器内 Linux、图形桌面、网络、标准发行版镜像或
+  任意用户镜像支持。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
 ### 2026-05-01
+
+#### mainline-wave7-linux-interactive-frontend-console-plan
+
+- 原文件：`wave7_linux_interactive_frontend_console_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 Linux interactive frontend
+  console 第一刀。`/console` 现在包含 gated `Linux Serial Console` 路线；配置
+  `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image` 后，manifest 会暴露
+  `linux_proto_console`，经 flat SBI shim、Linux `Image`、DTB、`virtio-blk`
+  rootfs 和现有 browser terminal 进入 `mycpu-linux# ` 提示符。
+- 实现过程摘要：这一轮按 TDD 先补前端 manifest、runtime payload / GPR seed、
+  `/console` demo route 和 workload panel 的测试，再实现 debug CLI payload / register
+  seed 转发、Linux console workload gating 和文档入口；同时把 `linux_postinit_cleanup_smoke`
+  从 fourth-stage marker 后的 sleep 推进为最小串口 shell，支持 `help`、`uptime`、
+  `exit` 和未知命令回显。默认仓库仍不携带外部 Linux `Image`，不声明浏览器内 Linux、
+  图形桌面、网络、标准发行版镜像或任意用户镜像支持。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### mainline-wave7-product-docs-v1-plan
+
+- 原文件：`wave7_product_docs_v1_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的产品文档 v1。
+  `/docs` 已从 curated 壳层推进成可阅读的产品文档入口，覆盖 `Overview`、
+  `Try the Console`、`Demo Routes`、`Architecture`、`OS Bring-up`、`AI Accelerator`、
+  `Runtime Labs`、`Verification`、`Roadmap` 和 `Design References`；页面按用户体验路线说明
+  `/`、`/console`、`/docs` 三入口和 `OS Bring-up`、`Machine Inspector`、
+  `AI Accelerator`、`Runtime Labs` 四组 demo 路线，并继续链接回 design / status 证据文档。
+- 实现过程摘要：这一轮按 TDD 先为 `/docs` v1 的章节、demo routes、控制台体验文案、
+  future-only `Coming soon` 语义和证据链接补红灯测试，再重写 `docs.html` / `docs.css`。
+  本轮不改 debug server、session API、底层 simulator、Linux interactive console、
+  AI 参数化小模型或公网部署边界。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave7-console-demo-workspace-v1-plan
 

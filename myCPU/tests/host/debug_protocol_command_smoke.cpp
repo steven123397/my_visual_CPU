@@ -110,6 +110,26 @@ int main() {
         return 1;
     }
 
+    const DebugCliCommand run_until_new =
+        parse_debug_cli_command("{\"cmd\":\"run_until_new_uart_contains\","
+                                "\"offset\":\"17\",\"text\":\"mycpu-linux# \","
+                                "\"max_steps\":\"0x2faf080\"}");
+    if (!expect(run_until_new.kind == DebugCliCommandKind::RunUntilNewUartContains,
+                "run_until_new_uart_contains kind mismatch")) {
+        return 1;
+    }
+    if (!expect(run_until_new.offset == 17, "run_until_new_uart_contains offset mismatch")) {
+        return 1;
+    }
+    if (!expect(run_until_new.text == "mycpu-linux# ",
+                "run_until_new_uart_contains text mismatch")) {
+        return 1;
+    }
+    if (!expect(run_until_new.max_steps == 50000000ULL,
+                "run_until_new_uart_contains max_steps mismatch")) {
+        return 1;
+    }
+
     const DebugCliCommand jit_dispatch =
         parse_debug_cli_command("{\"cmd\":\"jit_dispatch\"}");
     if (!expect(jit_dispatch.kind == DebugCliCommandKind::JitDispatch,

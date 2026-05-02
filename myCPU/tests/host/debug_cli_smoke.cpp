@@ -383,8 +383,8 @@ int main() {
 
     const std::string terminal_io_output =
         run_cli_script(build_flat_load_command(external_binary.path) +
-                       "{\"cmd\":\"step_commit\",\"count\":64}\n" +
-                       "{\"cmd\":\"uart_output\",\"offset\":0}\n"
+                       "{\"cmd\":\"run_until_new_uart_contains\","
+                       "\"offset\":0,\"text\":\"PE\",\"max_steps\":4096}\n"
                        "{\"cmd\":\"uart_output\",\"offset\":2}\n"
                        "{\"cmd\":\"uart_input\",\"text\":\"abc\"}\n"
                        "{\"cmd\":\"quit\"}\n");

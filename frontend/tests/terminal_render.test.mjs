@@ -153,3 +153,38 @@ test('renderTerminal keeps the active session identity separate from pending sel
   assert.match(html, /guest_vector_cnn_demo · pipeline/);
   assert.doesNotMatch(html, /hello · functional/);
 });
+
+test('renderTerminal labels a loaded Linux serial console session without interactive_os wording', () => {
+  const html = renderTerminal({
+    selectedTest: 'guest_interactive_os_demo',
+    backend: 'functional',
+    loadedSession: {
+      test: 'linux_proto_console',
+      backend: 'pipeline',
+    },
+    runState: 'paused',
+    currentSnapshot: {
+      summary: {
+        pc: '0x80200000',
+        privilege: 'S',
+        cycle: 300000004,
+        backend: 'pipeline',
+      },
+    },
+    layout: {
+      terminalCollapsed: false,
+    },
+    terminal: {
+      connected: true,
+      pendingInput: true,
+      focused: false,
+      buffer: 'mycpu-linux# help\r\ncommands: help uptime exit\r\nmycpu-linux# ',
+    },
+  });
+
+  assert.match(html, /Linux serial terminal/);
+  assert.match(html, /linux_proto_console · pipeline/);
+  assert.match(html, /正在把按键送入 Linux serial console/);
+  assert.doesNotMatch(html, /interactive_os terminal/);
+  assert.doesNotMatch(html, /guest monitor/);
+});

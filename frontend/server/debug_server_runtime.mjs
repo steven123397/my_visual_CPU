@@ -30,6 +30,8 @@ export function createDebugServerRuntime({
   wsHub,
 } = {}) {
   let currentSession = null;
+  let currentEntry = null;
+  let currentBackend = 'pipeline';
   let currentSnapshot = null;
   let currentTerminalPrompt = null;
   let runTimer = null;
@@ -77,6 +79,15 @@ export function createDebugServerRuntime({
     currentTerminalOffset = 0;
   }
 
+  function buildTerminalResetMessage() {
+    return {
+      type: 'terminal',
+      text: '',
+      nextOffset: 0,
+      reset: true,
+    };
+  }
+
   async function readTerminalOutput(offset = currentTerminalOffset, generation = currentGeneration) {
     requireSessionLoaded();
     const chunk = normalizeCliResponse(await currentSession.uartOutput(offset), 'session uartOutput');
@@ -97,7 +108,7 @@ export function createDebugServerRuntime({
     const normalized = {
       type: 'terminal',
       text: chunk.text ?? '',
-      nextOffset: chunk.nextOffset ?? currentTerminalOffset,
+      nextOffset: chunk.nextOffset ?? chunk.next_offset ?? currentTerminalOffset,
       reset,
     };
 
@@ -239,6 +250,20 @@ export function createDebugServerRuntime({
     }
   }
 
+  function buildTerminalCommandWaitPlan(text) {
+    if (!currentEntry?.commandUntilUartText) {
+      return null;
+    }
+    if (!text.includes('\r') && !text.includes('\n')) {
+      return null;
+    }
+    return {
+      text: currentEntry.commandUntilUartText,
+      maxSteps: currentEntry.commandMaxSteps ?? 0,
+      timeoutMs: currentEntry.commandRequestTimeoutMs,
+    };
+  }
+
   function startRunLoop(intervalMs, generation) {
     stopRunLoop();
     const token = runLoopToken;
@@ -290,11 +315,24 @@ export function createDebugServerRuntime({
   async function initializeSessionState(session, entry, backend) {
     const terminalPrompt = entry.terminalPrompt ?? null;
     await normalizeCliResponse(await session.load(entry, backend), 'session load');
+    for (const payload of entry.payloads ?? []) {
+      await normalizeCliResponse(
+        await session.loadPayload(payload.image, payload.addr),
+        'session loadPayload',
+      );
+    }
+    for (const seed of entry.gprSeeds ?? []) {
+      await normalizeCliResponse(
+        await session.setGpr(seed.reg, seed.value),
+        'session setGpr',
+      );
+    }
     const snapshot = entry.bootUntilUartText
       ? normalizeCliResponse(
           await session.runUntilUartContains(
             entry.bootUntilUartText,
             entry.bootMaxSteps ?? 0,
+            { timeoutMs: entry.bootRequestTimeoutMs },
           ),
           'session runUntilUartContains',
         )
@@ -326,6 +364,52 @@ export function createDebugServerRuntime({
     };
   }
 
+  async function rearmSessionStateAfterReset(session, entry) {
+    for (const payload of entry.payloads ?? []) {
+      await normalizeCliResponse(
+        await session.loadPayload(payload.image, payload.addr),
+        'session loadPayload',
+      );
+    }
+    for (const seed of entry.gprSeeds ?? []) {
+      await normalizeCliResponse(
+        await session.setGpr(seed.reg, seed.value),
+        'session setGpr',
+      );
+    }
+    const snapshot = entry.bootUntilUartText
+      ? normalizeCliResponse(
+          await session.runUntilUartContains(
+            entry.bootUntilUartText,
+            entry.bootMaxSteps ?? 0,
+            { timeoutMs: entry.bootRequestTimeoutMs },
+          ),
+          'session runUntilUartContains',
+        )
+      : normalizeCliResponse(await session.snapshot(), 'session snapshot');
+    const terminalChunk = normalizeCliResponse(
+      await session.uartOutput(0),
+      'session uartOutput',
+    );
+    const terminal = {
+      type: 'terminal',
+      text: terminalChunk.text ?? '',
+      nextOffset: terminalChunk.nextOffset ?? terminalChunk.next_offset ?? 0,
+      reset: true,
+    };
+    return {
+      snapshot,
+      terminal,
+      terminalOffset: terminal.nextOffset,
+    };
+  }
+
+  function shouldRearmSessionOnReset(entry) {
+    return (entry?.payloads?.length ?? 0) > 0
+      || (entry?.gprSeeds?.length ?? 0) > 0
+      || Boolean(entry?.bootUntilUartText);
+  }
+
   return {
     async load(entry, backend = 'pipeline') {
       const generation = beginSessionGeneration();
@@ -350,6 +434,8 @@ export function createDebugServerRuntime({
         }
 
         currentSession = nextState.session;
+        currentEntry = entry;
+        currentBackend = backend;
         currentSnapshot = nextState.snapshot;
         currentTerminalPrompt = nextState.terminalPrompt;
         currentTerminalProjection = nextState.terminalProjection;
@@ -415,6 +501,17 @@ export function createDebugServerRuntime({
         currentSnapshot = await callSession('reset');
         assertGeneration(generation);
         resetTerminalTracking();
+        if (shouldRearmSessionOnReset(currentEntry)) {
+          const nextState = await rearmSessionStateAfterReset(currentSession, currentEntry, currentBackend);
+          assertGeneration(generation);
+          currentSnapshot = nextState.snapshot;
+          currentTerminalOffset = nextState.terminalOffset;
+          resetTerminalProjectionState(currentTerminalProjection);
+          applyTerminalChunk(currentTerminalProjection, nextState.terminal.text);
+          wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+          wsHub.broadcast(nextState.terminal);
+          return { snapshot: currentSnapshot, terminal: nextState.terminal };
+        }
         wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
         const terminal = await syncTerminalDelta({
           offset: 0,
@@ -423,6 +520,29 @@ export function createDebugServerRuntime({
           generation,
         });
         return { snapshot: currentSnapshot, terminal };
+      });
+    },
+
+    async terminate() {
+      const generation = beginSessionGeneration();
+      stopRunLoop();
+      return runQueued(async () => {
+        const session = currentSession;
+        assertGeneration(generation);
+        requireSessionLoaded();
+        currentSession = null;
+        currentEntry = null;
+        currentBackend = 'pipeline';
+        currentSnapshot = null;
+        currentTerminalPrompt = null;
+        resetTerminalTracking();
+        const terminal = buildTerminalResetMessage();
+        wsHub.broadcast(terminal);
+        try {
+          await session.close();
+        } catch {}
+        assertGeneration(generation);
+        return { ok: true, snapshot: null, terminal };
       });
     },
 
@@ -445,10 +565,25 @@ export function createDebugServerRuntime({
         await callSession('uartInput', text);
         assertGeneration(generation);
         const advancePlan = buildTerminalAdvancePlan(text);
+        const commandWaitPlan = buildTerminalCommandWaitPlan(text);
         let terminal;
         let shouldBroadcastSnapshot = false;
         if (runTimer) {
           terminal = await syncTerminalDelta({ broadcast: true, generation });
+        } else if (commandWaitPlan) {
+          const waitedTerminal = await callSession(
+            'runUntilNewUartContains',
+            currentTerminalOffset,
+            commandWaitPlan.text,
+            commandWaitPlan.maxSteps,
+            { timeoutMs: commandWaitPlan.timeoutMs },
+          );
+          terminal = trackTerminalChunk(waitedTerminal, { reset: false });
+          currentSnapshot = await callSession('snapshot');
+          wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+          if (terminal.text.length > 0) {
+            wsHub.broadcast(terminal);
+          }
         } else if (advancePlan) {
           const result = await advanceUntilTerminalActivity({
             ...advancePlan,
@@ -493,6 +628,8 @@ export function createDebugServerRuntime({
         await currentSession.close();
         currentSession = null;
       }
+      currentEntry = null;
+      currentBackend = 'pipeline';
     },
   };
 }

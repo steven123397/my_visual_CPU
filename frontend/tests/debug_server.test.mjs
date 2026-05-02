@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,6 +77,7 @@ function createFakeSession(sessionLabel = 'session-1') {
   let interactiveLine = '';
   let interactiveOutputCooldown = 0;
   let stepCommitCount = 0;
+  let currentPrompt = '> ';
   const interactiveDripInterval = 24;
   return {
     async load(entry) {
@@ -84,10 +86,17 @@ function createFakeSession(sessionLabel = 'session-1') {
       pendingTerminalOutput = '';
       interactiveLine = '';
       interactiveOutputCooldown = 0;
+      currentPrompt = currentTest === 'linux_proto_console' ? 'mycpu-linux# ' : '> ';
       terminal =
         currentTest === 'guest_interactive_os_demo'
           ? ''
-          : `boot:${sessionLabel}\r\n> `;
+          : `boot:${sessionLabel}\r\n${currentPrompt}`;
+      return { ok: true };
+    },
+    async loadPayload() {
+      return { ok: true };
+    },
+    async setGpr() {
       return { ok: true };
     },
     async snapshot() {
@@ -97,6 +106,9 @@ function createFakeSession(sessionLabel = 'session-1') {
       if (currentTest === 'guest_interactive_os_demo' && text === 'monitor> ') {
         cycle = 42;
         terminal = 'KMV\r\ninteractive monitor\r\nmonitor> ';
+      } else if (currentTest === 'linux_proto_console' && text === 'mycpu-linux# ') {
+        cycle = 44;
+        terminal = `boot:${sessionLabel}\r\nready\r\nmycpu-linux# `;
       }
       return this.snapshot();
     },
@@ -182,6 +194,30 @@ function createFakeSessionFactory() {
     sessionId += 1;
     return createFakeSession(`session-${sessionId}`);
   };
+}
+
+function withEnv(updates, callback) {
+  const previous = new Map();
+  for (const key of Object.keys(updates)) {
+    previous.set(key, process.env[key]);
+    if (updates[key] == null) {
+      delete process.env[key];
+    } else {
+      process.env[key] = updates[key];
+    }
+  }
+
+  try {
+    return callback();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
 }
 
 async function postJson(baseUrl, pathname, payload) {
@@ -433,8 +469,186 @@ test('GET /api/tests returns built-in test manifest', async () => {
     assert.equal(vectorDemo.workload.expectedMarker, 'V2OK');
     assert.equal(vectorCnnDemo.badge, 'Vector + NN');
     assert.deepEqual(vectorCnnDemo.workload.cnn.relu, [7, 0, 7]);
+    assert.ok(
+      !body.tests.some((item) => item.name === 'linux_proto_console'),
+      'Linux console should stay gated until a runtime Image is configured',
+    );
+    assert.deepEqual(body.diagnostics.linuxConsole, {
+      status: 'missing-env',
+      ready: false,
+      envVar: 'MYCPU_LINUX_PROTO_CONSOLE_IMAGE',
+      message: 'Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image before starting the frontend server.',
+    });
   } finally {
     await server.close();
+  }
+});
+
+test('GET /api/tests reports a Linux console diagnostic when the configured Image is missing', async () => {
+  const missingImage = path.join(os.tmpdir(), `mycpu-missing-linux-image-${Date.now()}`, 'Image');
+  const server = await withEnv({
+    MYCPU_LINUX_PROTO_CONSOLE_IMAGE: missingImage,
+  }, () => startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  }));
+
+  try {
+    const response = await fetch(`${server.baseUrl}/api/tests`);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.ok(!body.tests.some((item) => item.name === 'linux_proto_console'));
+    assert.equal(body.diagnostics.linuxConsole.status, 'not-found');
+    assert.equal(body.diagnostics.linuxConsole.ready, false);
+    assert.equal(body.diagnostics.linuxConsole.path, missingImage);
+    assert.match(body.diagnostics.linuxConsole.message, /Image path does not exist/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('GET /api/tests reports a Linux console diagnostic when the configured Image path is not a file', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-linux-console-dir-'));
+  try {
+    const server = await withEnv({
+      MYCPU_LINUX_PROTO_CONSOLE_IMAGE: tempDir,
+    }, () => startServer({
+      port: 0,
+      createSession: createFakeSessionFactory(),
+    }));
+
+    try {
+      const response = await fetch(`${server.baseUrl}/api/tests`);
+      const body = await response.json();
+      assert.equal(response.status, 200);
+      assert.ok(!body.tests.some((item) => item.name === 'linux_proto_console'));
+      assert.equal(body.diagnostics.linuxConsole.status, 'not-file');
+      assert.equal(body.diagnostics.linuxConsole.ready, false);
+      assert.equal(body.diagnostics.linuxConsole.path, tempDir);
+      assert.match(body.diagnostics.linuxConsole.message, /Image path is not a file/);
+    } finally {
+      await server.close();
+    }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('GET /api/tests reports a Linux console diagnostic when the configured Image path is not readable', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-linux-console-unreadable-'));
+  const imagePath = path.join(tempDir, 'Image');
+  try {
+    fs.writeFileSync(imagePath, 'fake linux image');
+    fs.chmodSync(imagePath, 0o000);
+
+    const server = await withEnv({
+      MYCPU_LINUX_PROTO_CONSOLE_IMAGE: imagePath,
+    }, () => startServer({
+      port: 0,
+      createSession: createFakeSessionFactory(),
+    }));
+
+    try {
+      const response = await fetch(`${server.baseUrl}/api/tests`);
+      const body = await response.json();
+      assert.equal(response.status, 200);
+      assert.ok(!body.tests.some((item) => item.name === 'linux_proto_console'));
+      assert.equal(body.diagnostics.linuxConsole.status, 'not-readable');
+      assert.equal(body.diagnostics.linuxConsole.ready, false);
+      assert.equal(body.diagnostics.linuxConsole.path, imagePath);
+      assert.match(body.diagnostics.linuxConsole.message, /Image path is not readable/);
+    } finally {
+      await server.close();
+    }
+  } finally {
+    fs.chmodSync(imagePath, 0o600);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('listTests adds linux_proto_console when a local Linux runtime Image is configured', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-linux-console-'));
+  try {
+    const imagePath = path.join(tempDir, 'Image');
+    fs.writeFileSync(imagePath, 'fake linux image');
+
+    const tests = withEnv({
+      MYCPU_LINUX_PROTO_CONSOLE_IMAGE: imagePath,
+    }, () => listTests(repoRoot));
+
+    const linuxConsole = tests.find((item) => item.name === 'linux_proto_console');
+    assert.ok(linuxConsole);
+    assert.equal(linuxConsole.menuLabel, 'linux_proto_console · Linux serial');
+    assert.equal(linuxConsole.kind, 'linux');
+    assert.equal(linuxConsole.backend, 'functional');
+    assert.equal(linuxConsole.image, path.join(repoRoot, 'myCPU', 'workloads', 'linux_proto', 'linux_sbi_shim.bin'));
+    assert.equal(linuxConsole.imageFormat, 'flat');
+    assert.equal(linuxConsole.loadAddr, '0x80000000');
+    assert.equal(linuxConsole.blockTransport, 'virtio-blk');
+    assert.equal(linuxConsole.bootUntilUartText, 'mycpu-linux# ');
+    assert.equal(linuxConsole.terminalPrompt, 'mycpu-linux# ');
+    assert.equal(linuxConsole.bootRequestTimeoutMs, 120000);
+    assert.equal(linuxConsole.commandUntilUartText, 'mycpu-linux# ');
+    assert.equal(linuxConsole.commandMaxSteps, 50000000);
+    assert.equal(linuxConsole.commandRequestTimeoutMs, 30000);
+    assert.deepEqual(linuxConsole.payloads, [
+      { image: imagePath, addr: '0x80200000' },
+      { image: path.join(repoRoot, 'myCPU', 'workloads', 'linux_proto', 'mycpu_virt.dtb'), addr: '0x87f00000' },
+    ]);
+    assert.deepEqual(linuxConsole.gprSeeds, [
+      { reg: 'a0', value: '0x0' },
+      { reg: 'a1', value: '0x87f00000' },
+      { reg: 'a2', value: '0x80200000' },
+    ]);
+    assert.equal(linuxConsole.disk, path.join(repoRoot, 'myCPU', 'workloads', 'linux_proto', 'rootfs.ext4'));
+    assert.equal(linuxConsole.workload.category, 'linux-serial-console');
+    assert.equal(linuxConsole.workload.expectedMarker, 'mycpu-linux# ');
+    assert.ok(linuxConsole.workload.assetNote.includes('MYCPU_LINUX_PROTO_CONSOLE_IMAGE'));
+    assert.deepEqual(tests.diagnostics.linuxConsole, {
+      status: 'ready',
+      ready: true,
+      envVar: 'MYCPU_LINUX_PROTO_CONSOLE_IMAGE',
+      path: imagePath,
+      message: 'Linux serial console Image is configured.',
+    });
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('GET /api/tests exposes the Linux console workload only when configured', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-linux-console-'));
+  try {
+    const imagePath = path.join(tempDir, 'Image');
+    fs.writeFileSync(imagePath, 'fake linux image');
+
+    const server = await withEnv({
+      MYCPU_LINUX_PROTO_CONSOLE_IMAGE: imagePath,
+    }, () => startServer({
+      port: 0,
+      createSession: createFakeSessionFactory(),
+    }));
+
+    try {
+      const response = await fetch(`${server.baseUrl}/api/tests`);
+      const body = await response.json();
+      assert.equal(response.status, 200);
+      const linuxConsole = body.tests.find((item) => item.name === 'linux_proto_console');
+      assert.ok(linuxConsole);
+      assert.equal(linuxConsole.kind, 'linux');
+      assert.equal(linuxConsole.backend, 'functional');
+      assert.equal(linuxConsole.title, 'Linux Serial Console');
+      assert.equal(linuxConsole.badge, 'Linux runtime');
+      assert.equal(linuxConsole.workload.expectedMarker, 'mycpu-linux# ');
+      assert.ok(linuxConsole.workload.assetNote.includes('MYCPU_LINUX_PROTO_CONSOLE_IMAGE'));
+      assert.equal(body.diagnostics.linuxConsole.status, 'ready');
+      assert.equal(body.diagnostics.linuxConsole.ready, true);
+      assert.equal(body.diagnostics.linuxConsole.path, imagePath);
+    } finally {
+      await server.close();
+    }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
 
@@ -473,14 +687,18 @@ test('GET /console keeps serving the existing browser console app', async () => 
     assert.match(body, /交互式终端调试台/);
     assert.match(body, /id="demo-workspace-slot"/);
     assert.match(body, /Demo workspace/);
+    assert.match(body, /Linux serial console/);
+    assert.match(body, /MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
     assert.match(body, /id="test-select"/);
+    assert.match(body, /id="terminate-button"/);
+    assert.match(body, />Terminate</);
     assert.match(body, /src="\/app\.js"/);
   } finally {
     await server.close();
   }
 });
 
-test('GET /docs returns the curated product documentation shell', async () => {
+test('GET /docs returns the readable Wave 7 product documentation v1 entry', async () => {
   const server = await startServer({
     port: 0,
     createSession: createFakeSessionFactory(),
@@ -494,13 +712,43 @@ test('GET /docs returns the curated product documentation shell', async () => {
     for (const label of [
       'Overview',
       'Try the Console',
+      'Demo Routes',
       'Architecture',
       'OS Bring-up',
       'AI Accelerator',
-      'JIT / DBT Prototype',
+      'Runtime Labs',
       'Verification',
       'Roadmap',
       'Design References',
+    ]) {
+      assert.match(body, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+    for (const label of [
+      '/',
+      '/console',
+      '/docs',
+      'OS Bring-up',
+      'Machine Inspector',
+      'AI Accelerator',
+      'Runtime Labs',
+      'Load',
+      'Run',
+      'Pause',
+      'Reset',
+      'Terminate',
+      'Coming soon',
+      'xv6 shell',
+      'Linux Serial Console',
+      'MYCPU_LINUX_PROTO_CONSOLE_IMAGE',
+      'MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E',
+      'mycpu-linux# ',
+      'interactive_os',
+      'guest_ai_accel_demo',
+      'Vector CNN',
+      'L1D / shadow cache',
+      'JIT / DBT opt-in',
+      'cd frontend && node --test',
+      'git diff --check',
     ]) {
       assert.match(body, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
@@ -508,6 +756,9 @@ test('GET /docs returns the curated product documentation shell', async () => {
     assert.doesNotMatch(body, /<a href="#boundaries">Boundaries<\/a>/);
     assert.doesNotMatch(body, /<h2>Boundaries<\/h2>/);
     assert.match(body, /wave7_productization_and_showcase_design\.md/);
+    assert.match(body, /debug_frontend_integration\.md/);
+    assert.match(body, /future_expansion_roadmap_design\.md/);
+    assert.match(body, /npu_tpu_accelerator_status\.md/);
     assert.match(body, /mainline_status\.md/);
   } finally {
     await server.close();
@@ -1202,6 +1453,87 @@ test('POST /api/session/reset broadcasts a terminal reset and restarts output tr
     assert.equal(staleOffsetOutput.status, 200);
     assert.equal(staleOffsetOutput.body.text, '');
     assert.equal(staleOffsetOutput.body.nextOffset, 0);
+  } finally {
+    socket.close();
+    await server.close();
+  }
+});
+
+test('POST /api/session/reset re-arms linux_proto_console payloads and returns to the Linux prompt', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-linux-console-'));
+  try {
+    const imagePath = path.join(tempDir, 'Image');
+    fs.writeFileSync(imagePath, 'fake linux image');
+
+    const server = await withEnv({
+      MYCPU_LINUX_PROTO_CONSOLE_IMAGE: imagePath,
+    }, () => startServer({
+      port: 0,
+      createSession: createFakeSessionFactory(),
+    }));
+
+    try {
+      const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+        test: 'linux_proto_console',
+        backend: 'pipeline',
+      });
+      assert.equal(loadResponse.status, 200);
+      assert.match(loadResponse.body.terminal.text, /mycpu-linux# /);
+
+      const resetResponse = await postJson(server.baseUrl, '/api/session/reset', {});
+      assert.equal(resetResponse.status, 200);
+      assert.equal(resetResponse.body.terminal.reset, true);
+      assert.match(resetResponse.body.terminal.text, /ready/);
+      assert.match(resetResponse.body.terminal.text, /mycpu-linux# $/);
+      assert.equal(resetResponse.body.snapshot.summary.cycle, 44);
+
+      const staleOutput = await postJson(server.baseUrl, '/api/session/terminal-output', {
+        offset: loadResponse.body.terminal.nextOffset,
+      });
+      assert.equal(staleOutput.status, 200);
+      assert.equal(staleOutput.body.text, '');
+      assert.equal(staleOutput.body.nextOffset, resetResponse.body.terminal.nextOffset);
+    } finally {
+      await server.close();
+    }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('POST /api/session/terminate closes the current session and broadcasts a terminal reset', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+  const socket = await openTestWebSocket(`${server.baseUrl.replace('http', 'ws')}/ws`);
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const resetTerminalMessage = waitForWebSocketPayload(
+      socket,
+      (payload) => payload.type === 'terminal' && payload.reset === true && payload.nextOffset === 0,
+    );
+    const terminateResponse = await postJson(server.baseUrl, '/api/session/terminate', {});
+    assert.equal(terminateResponse.status, 200);
+    assert.equal(terminateResponse.body.ok, true);
+    assert.equal(terminateResponse.body.snapshot, null);
+    assert.deepEqual(terminateResponse.body.terminal, {
+      type: 'terminal',
+      text: '',
+      nextOffset: 0,
+      reset: true,
+    });
+    assert.deepEqual(await resetTerminalMessage, terminateResponse.body.terminal);
+
+    const stepResponse = await postJson(server.baseUrl, '/api/session/step-cycle', {});
+    assert.equal(stepResponse.status, 400);
+    assert.equal(stepResponse.body.error, 'session not loaded');
   } finally {
     socket.close();
     await server.close();

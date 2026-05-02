@@ -140,6 +140,7 @@ export async function startServer({
   createSession = async () => new DebugCliSession({ binaryPath: path.join(repoRoot, 'myCPU', 'mycpu') }),
 } = {}) {
   const tests = listTests(repoRoot);
+  const diagnostics = tests.diagnostics ?? {};
 
   const server = http.createServer(async (request, response) => {
     try {
@@ -151,6 +152,7 @@ export async function startServer({
             disk,
             kind,
             menuLabel,
+            backend,
             title,
             badge,
             summary,
@@ -160,11 +162,13 @@ export async function startServer({
             hasDisk: Boolean(disk),
             kind,
             menuLabel,
+            backend,
             title,
             badge,
             summary,
             workload,
           })),
+          diagnostics,
         });
         return;
       }
@@ -197,6 +201,11 @@ export async function startServer({
 
       if (request.method === 'POST' && url.pathname === '/api/session/reset') {
         await respondWithAction(response, () => runtime.reset());
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/session/terminate') {
+        await respondWithAction(response, () => runtime.terminate());
         return;
       }
 

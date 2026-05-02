@@ -14,6 +14,7 @@ enum class DebugCliCommandKind {
     StepCycle,
     StepCommit,
     RunUntilUartContains,
+    RunUntilNewUartContains,
     RunUntilHalt,
     Reset,
     UartInput,
