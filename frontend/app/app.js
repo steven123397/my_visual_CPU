@@ -1,5 +1,7 @@
 import {
   listTests,
+  listAiTinyModelTemplates,
+  runAiTinyModel,
   loadSession,
   stepCycle,
   stepCommit,
@@ -23,6 +25,10 @@ import {
   setInspectorGroupOpen,
   setLoadedSession,
   setLoadProgress,
+  setAiTinyModelTemplates,
+  setAiTinyModelParameters,
+  setAiTinyModelRunState,
+  setAiTinyModelResult,
   setTerminalPendingInput,
   setTests,
   selectDemo,
@@ -132,6 +138,27 @@ async function handleTerminalInput(text) {
   terminalInputPump.enqueue(text);
 }
 
+async function loadAiTinyModelTemplates() {
+  const response = await listAiTinyModelTemplates();
+  setAiTinyModelTemplates(state, response.templates);
+  paint();
+}
+
+async function handleRunAiTinyModel() {
+  setAiTinyModelRunState(state, 'running', null);
+  paint();
+  try {
+    const result = await runAiTinyModel(state.aiTinyModel.parameters);
+    setAiTinyModelResult(state, result);
+    paint();
+    showNotice('AI tiny model profile 已完成。', 'success');
+  } catch (error) {
+    setAiTinyModelRunState(state, 'error', error.message);
+    paint();
+    showNotice(error.message, 'error');
+  }
+}
+
 const terminalInputPump = createTerminalInputPump({
   sendInput: terminalInput,
   onResponse: (response) => {
@@ -151,6 +178,7 @@ async function init() {
   const testsResponse = await listTests();
   setTests(state, testsResponse.tests, testsResponse.diagnostics);
   paint();
+  await loadAiTinyModelTemplates();
   showNotice('本地调试服务已连接，先选择测试并点击 Load。');
 
   elements.testSelect.addEventListener('change', (event) => {
@@ -160,7 +188,7 @@ async function init() {
     state.backend = event.target.value;
   });
 
-  document.addEventListener('click', (event) => {
+  document.addEventListener('click', async (event) => {
     let needsPaint = false;
     const summary = event.target.closest?.('.panel-group__summary[data-layout-key]');
     if (summary) {
@@ -178,6 +206,21 @@ async function init() {
         showNotice(`已选择 ${state.selectedTest}，点击 Load 启动。`, 'success');
         needsPaint = true;
       }
+    }
+
+    const aiToolCard = event.target.closest?.('.demo-card[data-demo-tool="ai_tiny_model"]');
+    if (aiToolCard) {
+      event.preventDefault();
+      showNotice('已打开 AI 参数化小模型面板，可直接运行 host profile。', 'success');
+      document.querySelector('.ai-tiny-model')?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      needsPaint = true;
+    }
+
+    const aiRunButton = event.target.closest?.('[data-action="run-ai-tiny-model"]');
+    if (aiRunButton) {
+      event.preventDefault();
+      await handleRunAiTinyModel();
+      return;
     }
 
     const terminalToggle = event.target.closest?.('[data-action="toggle-terminal-collapsed"]');
@@ -217,6 +260,14 @@ async function init() {
       return;
     }
 
+    const aiToolCard = event.target.closest?.('.demo-card[data-demo-tool="ai_tiny_model"]');
+    if (aiToolCard && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      showNotice('已打开 AI 参数化小模型面板，可直接运行 host profile。', 'success');
+      document.querySelector('.ai-tiny-model')?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     if (!state.terminal.focused) {
       return;
     }
@@ -233,6 +284,27 @@ async function init() {
     } catch (error) {
       showNotice(error.message, 'error');
     }
+  });
+
+  document.addEventListener('change', (event) => {
+    const param = event.target.dataset?.aiParam;
+    if (!param) {
+      return;
+    }
+    const template = state.aiTinyModel.templates.find(
+      (item) => item.id === state.aiTinyModel.parameters.template,
+    ) ?? state.aiTinyModel.templates[0] ?? null;
+    const definition =
+      param === 'template'
+        ? { choices: state.aiTinyModel.templates.map((item) => item.id), default: state.aiTinyModel.parameters.template }
+        : template?.parameters?.[param];
+    const numericChoices = Array.isArray(definition?.choices) && definition.choices.every((choice) => typeof choice === 'number');
+    const value = numericChoices ? Number(event.target.value) : event.target.value;
+    setAiTinyModelParameters(state, { [param]: value });
+    if (param === 'template') {
+      setAiTinyModelTemplates(state, state.aiTinyModel.templates);
+    }
+    paint();
   });
 
   document.querySelector('#load-button').addEventListener('click', async () => {

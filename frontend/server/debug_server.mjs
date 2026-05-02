@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { DebugCliSession } from './debug_cli_session.mjs';
 import { createDebugServerRuntime } from './debug_server_runtime.mjs';
+import { createAiTinyModelService } from './ai_tiny_model_service.mjs';
 import { listTests } from './tests_manifest.mjs';
 import { createWebSocketHub } from './ws.mjs';
 
@@ -138,6 +139,10 @@ export async function startServer({
   host = '127.0.0.1',
   port = 4173,
   createSession = async () => new DebugCliSession({ binaryPath: path.join(repoRoot, 'myCPU', 'mycpu') }),
+  aiTinyModelService = createAiTinyModelService({
+    repoRoot,
+    binaryPath: path.join(repoRoot, 'myCPU', 'mycpu'),
+  }),
 } = {}) {
   const tests = listTests(repoRoot);
   const diagnostics = tests.diagnostics ?? {};
@@ -170,6 +175,17 @@ export async function startServer({
           })),
           diagnostics,
         });
+        return;
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/ai/tiny-model/templates') {
+        await respondWithAction(response, () => aiTinyModelService.templates());
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/ai/tiny-model/run') {
+        const body = await readBody(request);
+        await respondWithAction(response, () => aiTinyModelService.run(body));
         return;
       }
 

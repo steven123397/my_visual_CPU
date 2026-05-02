@@ -80,10 +80,11 @@ const DEMO_GROUPS = [
       },
       {
         title: 'Parameterized Tiny Model',
-        status: 'soon',
-        fallbackSummary: 'Wave 7 后续加入白名单参数化小模型，用受限 shape 和 dtype 生成可运行 graph。',
-        marker: 'generated graph',
-        panels: ['shape controls', 'profile'],
+        status: 'ready',
+        localTool: 'ai_tiny_model',
+        fallbackSummary: '用服务器端白名单模板生成 bounded dynamic tiny model，观察输出和 timed-simple profile。',
+        marker: 'server-generated graph',
+        panels: ['shape controls', 'profile', 'op summary'],
       },
     ],
   },
@@ -146,6 +147,9 @@ function isLinuxConsoleDemo(demo) {
 }
 
 function demoCardStatusLabel(demo, available, selected) {
+  if (demo.localTool === 'ai_tiny_model') {
+    return 'Run profile';
+  }
   if (isLinuxConsoleDemo(demo)) {
     return available ? 'Ready' : 'Not configured';
   }
@@ -246,7 +250,8 @@ function renderDemoGateNote(demo, available, state) {
 
 function renderDemoCard(demo, state) {
   const entry = demo.test ? findManifestEntry(state, demo.test) : null;
-  const available = Boolean(entry);
+  const localToolAvailable = demo.localTool === 'ai_tiny_model';
+  const available = Boolean(entry) || localToolAvailable;
   const selected = available && state.selectedTest === demo.test;
   const routeLabel = demo.title;
   const title = entry?.title ?? demo.title;
@@ -258,11 +263,16 @@ function renderDemoCard(demo, state) {
     'demo-card',
     selected ? 'is-selected' : '',
     available ? 'is-available' : 'is-soon',
+    localToolAvailable ? 'is-local-tool' : '',
     demo.gated && !available ? 'is-gated' : '',
     isLinuxConsoleDemo(demo) && available ? 'is-ready' : '',
   ].filter(Boolean).join(' ');
   const attrs = available
-    ? `data-demo-test="${escapeHtml(demo.test)}" data-demo-backend="${escapeHtml(demo.backend ?? state.backend)}" role="button" tabindex="0"`
+    ? (
+        localToolAvailable
+          ? `data-demo-tool="${escapeHtml(demo.localTool)}" role="button" tabindex="0"`
+          : `data-demo-test="${escapeHtml(demo.test)}" data-demo-backend="${escapeHtml(demo.backend ?? state.backend)}" role="button" tabindex="0"`
+      )
     : 'aria-disabled="true"';
   const statusLabel = demoCardStatusLabel(demo, available, selected);
   const gateNote = renderDemoGateNote(demo, available, state);
@@ -285,6 +295,232 @@ function renderDemoCard(demo, state) {
       </div>
       ${gateNote}
     </article>
+  `;
+}
+
+function selectedAiTinyModelTemplate(state) {
+  return state.aiTinyModel.templates.find(
+    (item) => item.id === state.aiTinyModel.parameters.template,
+  ) ?? state.aiTinyModel.templates[0] ?? null;
+}
+
+function renderAiTinyModelSelect(name, label, choices = [], selectedValue, choiceLabels = {}) {
+  return `
+    <label class="ai-tiny-model__field">
+      <span>${escapeHtml(label)}</span>
+      <select data-ai-param="${escapeHtml(name)}">
+        ${choices.map((choice) => `
+          <option value="${escapeHtml(choice)}" ${String(choice) === String(selectedValue) ? 'selected' : ''}>
+            ${escapeHtml(choiceLabels?.[choice] ?? choice)}
+          </option>
+        `).join('')}
+      </select>
+    </label>
+  `;
+}
+
+function renderAiTinyModelParameterFields(state, template) {
+  const fields = [
+    renderAiTinyModelSelect(
+      'template',
+      'Template',
+      state.aiTinyModel.templates.map((item) => item.id),
+      state.aiTinyModel.parameters.template,
+      Object.fromEntries(
+        state.aiTinyModel.templates.map((item) => [item.id, item.title ?? item.id]),
+      ),
+    ),
+  ];
+  for (const [name, definition] of Object.entries(template.parameters ?? {})) {
+    fields.push(renderAiTinyModelSelect(
+      name,
+      definition.label ?? name,
+      definition.choices ?? [],
+      state.aiTinyModel.parameters[name],
+      definition.choiceLabels ?? {},
+    ));
+  }
+  return fields.join('');
+}
+
+function renderAiTinyModelResult(result) {
+  if (!result) {
+    return '';
+  }
+  const profile = result.profile ?? {};
+  const aggregate = result.aggregate ?? {};
+  const output = result.output ?? {};
+  const ops = Array.isArray(result.ops) ? result.ops : [];
+  const values = Array.isArray(output.values) ? output.values.join(', ') : '-';
+  const expected = Array.isArray(output.expected) ? output.expected.join(', ') : '-';
+  return `
+    <div class="ai-tiny-model__result">
+      <div class="ai-tiny-model__result-head">
+        <span>Profile result</span>
+        <strong>${escapeHtml(profile.progress ?? 'unknown')}</strong>
+      </div>
+      <div class="ai-tiny-model__metrics">
+        <span><em>shape</em><strong>${escapeHtml(profile.shapeMode ?? '-')}</strong></span>
+        <span><em>runtime</em><strong>${escapeHtml(profile.runtimeShapes ?? '-')}</strong></span>
+        <span><em>device cycles</em><strong>${escapeHtml(profile.deviceCycles ?? 0)}</strong></span>
+        <span><em>DMA cycles</em><strong>${escapeHtml(profile.dmaCycles ?? 0)}</strong></span>
+        <span><em>compute</em><strong>${escapeHtml(profile.computeCycles ?? 0)}</strong></span>
+        <span><em>stall</em><strong>${escapeHtml(profile.stallCycles ?? 0)}</strong></span>
+        <span><em>bytes</em><strong>${escapeHtml(profile.bytesMoved ?? 0)}</strong></span>
+        <span><em>util</em><strong>${escapeHtml(profile.utilization ?? 0)}</strong></span>
+      </div>
+      <div class="ai-tiny-model__output">
+        <span>Output <code>${escapeHtml(output.dtype ?? 'fp32')} ${escapeHtml((output.shape ?? []).join('x'))}</code></span>
+        <strong>${escapeHtml(values)}</strong>
+        <em>expected ${escapeHtml(expected)}</em>
+      </div>
+      <div class="ai-tiny-model__ops">
+        <span>op summary · ${escapeHtml(aggregate.opCount ?? ops.length)} ops</span>
+        ${ops.map((op) => `
+          <code>${escapeHtml(op.opIndex)}:${escapeHtml(op.opcode)} retired=${escapeHtml(op.retiredOps)} compute=${escapeHtml(op.computeCycles)} stall=${escapeHtml(op.stallCycles)}</code>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function valuesMatch(actual = [], expected = []) {
+  if (!Array.isArray(actual) || !Array.isArray(expected)) {
+    return false;
+  }
+  if (actual.length !== expected.length) {
+    return false;
+  }
+  return actual.every((value, index) => String(value) === String(expected[index]));
+}
+
+function aiTinyModelParameterEvidence(template, parameters = {}) {
+  return Object.entries(template?.parameters ?? {}).map(([name, definition]) => {
+    const rawValue = parameters[name];
+    const displayValue =
+      definition?.choiceLabels?.[rawValue] ?? rawValue ?? definition?.default ?? '-';
+    const label = definition?.label ?? name;
+    return `${label} ${displayValue}`;
+  });
+}
+
+function renderAiTinyModelObservedEvidence(state, template) {
+  const result = state.aiTinyModel.result;
+  const evidenceParameters = aiTinyModelParameterEvidence(template, state.aiTinyModel.parameters);
+  if (!result) {
+    return `
+      <article class="ai-tiny-model__guide-card ai-tiny-model__guide-card--evidence is-pending" data-ai-evidence="pending">
+        <span>Observed evidence</span>
+        <strong>Run profile to collect runtime evidence</strong>
+        <div class="ai-tiny-model__evidence-strip">
+          ${evidenceParameters.map((item) => `<code>${escapeHtml(item)}</code>`).join('')}
+        </div>
+      </article>
+    `;
+  }
+
+  const output = result.output ?? {};
+  const actual = Array.isArray(output.values) ? output.values : [];
+  const expected = Array.isArray(output.expected) ? output.expected : [];
+  const matched = valuesMatch(actual, expected);
+  const status = matched ? 'matched' : 'mismatch';
+  const statusLabel = matched
+    ? 'Matched expected output'
+    : 'Mismatch: actual output diverges from expected';
+  const runtimeShapes = result.profile?.runtimeShapes ?? 'none';
+  const actualText = actual.length > 0 ? actual.join(', ') : '-';
+  const expectedText = expected.length > 0 ? expected.join(', ') : '-';
+
+  return `
+    <article class="ai-tiny-model__guide-card ai-tiny-model__guide-card--evidence is-${status}" data-ai-evidence="${status}">
+      <span>Observed evidence</span>
+      <strong>${escapeHtml(statusLabel)}</strong>
+      <div class="ai-tiny-model__evidence-strip">
+        ${evidenceParameters.map((item) => `<code>${escapeHtml(item)}</code>`).join('')}
+      </div>
+      <div class="ai-tiny-model__evidence-lines">
+        <span>runtime ${escapeHtml(runtimeShapes)}</span>
+        <span>actual ${escapeHtml(actualText)}</span>
+        <span>expected ${escapeHtml(expectedText)}</span>
+      </div>
+    </article>
+  `;
+}
+
+function renderAiTinyModelDemoGuide(state, template) {
+  const demo = template?.demo ?? {};
+  const proves =
+    Array.isArray(demo.proves) && demo.proves.length > 0
+      ? demo.proves
+      : ['This whitelist template keeps the profile path observable without opening arbitrary graph authoring.'];
+  const boundaries =
+    Array.isArray(demo.boundaries) && demo.boundaries.length > 0
+      ? demo.boundaries
+      : ['Execution stays inside the server-generated whitelist contract.'];
+  const expectedMarker = demo.expectedMarker ?? 'Profile output and runtime shape should match the selected whitelist case.';
+  return `
+    <div class="ai-tiny-model__guide">
+      <article class="ai-tiny-model__guide-card">
+        <span>Expected marker</span>
+        <strong>${escapeHtml(expectedMarker)}</strong>
+      </article>
+      ${renderAiTinyModelObservedEvidence(state, template)}
+      <article class="ai-tiny-model__guide-card">
+        <span>What this proves</span>
+        <ul>
+          ${proves.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+        </ul>
+      </article>
+      <article class="ai-tiny-model__guide-card">
+        <span>Current boundary</span>
+        <ul>
+          ${boundaries.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+        </ul>
+      </article>
+    </div>
+  `;
+}
+
+function renderAiTinyModelPanel(state) {
+  const template = selectedAiTinyModelTemplate(state);
+  if (!template) {
+    return `
+      <section class="ai-tiny-model">
+        <div class="ai-tiny-model__intro">
+          <span>AI Accelerator</span>
+          <strong>Parameterized Tiny Model</strong>
+          <p>正在读取服务器端白名单模板。</p>
+        </div>
+      </section>
+    `;
+  }
+
+  const isRunning = state.aiTinyModel.runState === 'running';
+  const customGraphDisabled = template.boundary?.allowsCustomGraph === false
+    ? 'Custom graph upload is disabled; the server regenerates and validates the graph package.'
+    : 'Server-side validation is required before execution.';
+  return `
+    <section class="ai-tiny-model" data-ai-template="${escapeHtml(template.id)}">
+      <div class="ai-tiny-model__intro">
+        <span>AI Accelerator</span>
+        <strong>${escapeHtml(template.title ?? 'Parameterized Tiny Model')}</strong>
+        <p>${escapeHtml(template.summary ?? 'Server-generated bounded tiny model profile.')}</p>
+      </div>
+      <div class="ai-tiny-model__controls">
+        ${renderAiTinyModelParameterFields(state, template)}
+        <button data-action="run-ai-tiny-model" ${isRunning ? 'disabled' : ''}>
+          ${isRunning ? 'Running...' : 'Run profile'}
+        </button>
+      </div>
+      ${renderAiTinyModelDemoGuide(state, template)}
+      <div class="ai-tiny-model__chips">
+        ${(template.opChain ?? []).map((item) => `<span>${escapeHtml(item)}</span>`).join('')}
+        <span>${escapeHtml(template.shapeMode ?? 'dynamic_bounded')}</span>
+        <span>${escapeHtml(customGraphDisabled)}</span>
+      </div>
+      ${state.aiTinyModel.error ? `<div class="ai-tiny-model__error">${escapeHtml(state.aiTinyModel.error)}</div>` : ''}
+      ${renderAiTinyModelResult(state.aiTinyModel.result)}
+    </section>
   `;
 }
 
@@ -314,6 +550,7 @@ function renderDemoWorkspace(state) {
         </section>
       `).join('')}
     </div>
+    ${renderAiTinyModelPanel(state)}
   `;
 }
 

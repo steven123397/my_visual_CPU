@@ -19,6 +19,18 @@ export async function listTests() {
   return response.json();
 }
 
+export async function listAiTinyModelTemplates() {
+  const response = await fetch('/api/ai/tiny-model/templates');
+  if (!response.ok) {
+    throw new Error('failed to list AI tiny model templates');
+  }
+  return response.json();
+}
+
+export async function runAiTinyModel(parameters) {
+  return postJson('/api/ai/tiny-model/run', parameters);
+}
+
 export async function loadSession(test, backend) {
   return postJson('/api/session/load', { test, backend });
 }

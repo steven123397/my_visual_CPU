@@ -484,6 +484,73 @@ def build_dynamic_tiny_model(out_dir: pathlib.Path) -> None:
     )
 
 
+def build_dynamic_cnn(out_dir: pathlib.Path) -> None:
+    name = "dynamic_cnn"
+    tensors = [
+        Tensor("int8", "input", 2, (4, 4, 0, 0), (2, 4, 0, 0)),
+        Tensor("int8", "weight", 2, (2, 2, 0, 0), (2, 2, 0, 0)),
+        Tensor("int32", "intermediate", 2, (3, 3, 0, 0), (2, 3, 0, 0)),
+        Tensor("int32", "intermediate", 2, (3, 3, 0, 0), (2, 3, 0, 0)),
+        Tensor("int32", "intermediate", 2, (3, 3, 0, 0), (3, 2, 0, 0)),
+        Tensor("int32", "output", 1, (3, 0, 0, 0), (2, 0, 0, 0)),
+    ]
+    ops = [
+        Op("conv2d", "int8", "int32", 0, 1, 0xFFFF, 2),
+        Op("eltwise_relu", "int32", "int32", 2, 0xFFFF, 0xFFFF, 3),
+        Op("layout_transpose", "int32", "int32", 3, 0xFFFF, 0xFFFF, 4),
+        Op("reduce_sum", "int32", "int32", 4, 0xFFFF, 0xFFFF, 5),
+    ]
+    dependencies = [(0, 1), (1, 2), (2, 3)]
+    memory_plan = [
+        MemoryPlan(0, 0, 0, 16, 16),
+        MemoryPlan(1, 0, 16, 4, 4),
+        MemoryPlan(2, 0, 32, 36, 36),
+        MemoryPlan(3, 0, 80, 36, 36),
+        MemoryPlan(4, 0, 128, 36, 36),
+        MemoryPlan(5, 0, 176, 12, 12),
+    ]
+    graph = serialize_graph_package(
+        192,
+        tensors,
+        ops,
+        dependencies,
+        memory_plan,
+        shape_mode="dynamic_bounded",
+        dynamic_tensors=[
+            DynamicTensor(0, 16),
+            DynamicTensor(2, 36),
+            DynamicTensor(3, 36),
+            DynamicTensor(4, 36),
+            DynamicTensor(5, 12),
+        ],
+    )
+    runtime_shape_table = serialize_runtime_shape_table([
+        RuntimeShape(0, 2, (3, 3, 0, 0)),
+        RuntimeShape(2, 2, (2, 2, 0, 0)),
+        RuntimeShape(3, 2, (2, 2, 0, 0)),
+        RuntimeShape(4, 2, (2, 2, 0, 0)),
+        RuntimeShape(5, 1, (2, 0, 0, 0)),
+    ])
+    (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    (out_dir / f"{name}.runtime_shape.bin").write_bytes(runtime_shape_table)
+    (out_dir / f"{name}.input0.bin").write_bytes(
+        struct.pack("<9b", 1, -2, 3, -4, 5, -6, 7, -8, 9)
+    )
+    (out_dir / f"{name}.input1.bin").write_bytes(struct.pack("<4b", 1, 0, -1, 2))
+    (out_dir / f"{name}.output0.expected.bin").write_bytes(struct.pack("<2i", 15, 31))
+    write_manifest(
+        out_dir / f"{name}.manifest",
+        name=name,
+        graph_package=f"{name}.graph.bin",
+        runtime_shape_table=f"{name}.runtime_shape.bin",
+        inputs=[f"{name}.input0.bin", f"{name}.input1.bin"],
+        outputs=[f"{name}.output0.actual.bin"],
+        expected_outputs=[f"{name}.output0.expected.bin"],
+        max_ticks=128,
+        source_tag=67,
+    )
+
+
 def build_tiny_attention_static(out_dir: pathlib.Path) -> None:
     name = "tiny_attention_static"
     tensors = [
@@ -536,6 +603,7 @@ def create_parser() -> argparse.ArgumentParser:
             "tiny_model",
             "dynamic_gemm",
             "dynamic_tiny_model",
+            "dynamic_cnn",
             "tiny_attention_static",
             "all",
         ],
@@ -560,6 +628,8 @@ def main(argv: list[str] | None = None) -> int:
         build_dynamic_gemm(out_dir)
     if args.workload in ("dynamic_tiny_model", "all"):
         build_dynamic_tiny_model(out_dir)
+    if args.workload in ("dynamic_cnn", "all"):
+        build_dynamic_cnn(out_dir)
     if args.workload in ("tiny_attention_static", "all"):
         build_tiny_attention_static(out_dir)
 

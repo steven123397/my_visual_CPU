@@ -13,6 +13,10 @@ import {
   setDiagnostics,
   setLoadedSession,
   setTests,
+  setAiTinyModelTemplates,
+  setAiTinyModelParameters,
+  setAiTinyModelRunState,
+  setAiTinyModelResult,
   clearLoadProgress,
   diffRegisters,
   diffVectorRegisters,
@@ -135,6 +139,97 @@ test('setDiagnostics ignores malformed diagnostics payloads', () => {
   setDiagnostics(state, null);
 
   assert.deepEqual(state.diagnostics, {});
+});
+
+test('AI tiny model state stores whitelist templates, bounded parameters, and run result', () => {
+  const state = createAppState();
+
+  setAiTinyModelTemplates(state, [
+    {
+      id: 'dynamic_tiny_model',
+      title: 'Parameterized Tiny Model',
+      parameters: {
+        batch: { choices: [1, 2], default: 1 },
+        inputPreset: { choices: ['balanced', 'negative_clamp'], default: 'balanced' },
+      },
+    },
+  ]);
+  setAiTinyModelParameters(state, {
+    template: 'dynamic_tiny_model',
+    batch: 2,
+    inputPreset: 'negative_clamp',
+  });
+  setAiTinyModelRunState(state, 'running', null);
+  setAiTinyModelResult(state, {
+    output: {
+      values: [0, 2.5],
+      expected: [0, 2.5],
+    },
+    profile: {
+      deviceCycles: 31,
+    },
+  });
+
+  assert.equal(state.aiTinyModel.templates.length, 1);
+  assert.equal(state.aiTinyModel.parameters.template, 'dynamic_tiny_model');
+  assert.equal(state.aiTinyModel.parameters.batch, 2);
+  assert.equal(state.aiTinyModel.parameters.inputPreset, 'negative_clamp');
+  assert.equal(state.aiTinyModel.runState, 'completed');
+  assert.equal(state.aiTinyModel.error, null);
+  assert.deepEqual(state.aiTinyModel.result.output.values, [0, 2.5]);
+});
+
+test('AI tiny model state reselects template-specific defaults when switching to another whitelist template', () => {
+  const state = createAppState();
+
+  setAiTinyModelTemplates(state, [
+    {
+      id: 'dynamic_tiny_model',
+      title: 'Parameterized Tiny Model',
+      parameters: {
+        batch: { choices: [1, 2], default: 1 },
+        inputPreset: { choices: ['balanced', 'negative_clamp'], default: 'balanced' },
+      },
+    },
+    {
+      id: 'dynamic_gemm',
+      title: 'Dynamic GEMM Profile',
+      parameters: {
+        runtimeShape: { choices: ['two_rows_identity_tail', 'single_row_identity_head'], default: 'two_rows_identity_tail' },
+      },
+    },
+  ]);
+
+  setAiTinyModelParameters(state, {
+    template: 'dynamic_tiny_model',
+    batch: 2,
+    inputPreset: 'negative_clamp',
+  });
+  setAiTinyModelTemplates(state, state.aiTinyModel.templates);
+  setAiTinyModelParameters(state, {
+    template: 'dynamic_gemm',
+  });
+  setAiTinyModelTemplates(state, state.aiTinyModel.templates);
+
+  assert.equal(state.aiTinyModel.parameters.template, 'dynamic_gemm');
+  assert.equal(state.aiTinyModel.parameters.runtimeShape, 'two_rows_identity_tail');
+  assert.equal(state.aiTinyModel.parameters.batch, undefined);
+  assert.equal(state.aiTinyModel.parameters.inputPreset, undefined);
+});
+
+test('AI tiny model state records run errors without preserving stale results', () => {
+  const state = createAppState();
+
+  setAiTinyModelResult(state, {
+    output: {
+      values: [2.5],
+    },
+  });
+  setAiTinyModelRunState(state, 'error', 'batch must be one of: 1, 2');
+
+  assert.equal(state.aiTinyModel.runState, 'error');
+  assert.equal(state.aiTinyModel.error, 'batch must be one of: 1, 2');
+  assert.equal(state.aiTinyModel.result, null);
 });
 
 test('load progress records Linux boot wait metadata and can be cleared', () => {

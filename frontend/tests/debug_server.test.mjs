@@ -484,6 +484,364 @@ test('GET /api/tests returns built-in test manifest', async () => {
   }
 });
 
+test('GET /api/ai/tiny-model/templates returns the server-side whitelist', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await fetch(`${server.baseUrl}/api/ai/tiny-model/templates`);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.ok(Array.isArray(body.templates));
+    const tinyModel = body.templates.find((item) => item.id === 'dynamic_tiny_model');
+    const dynamicGemm = body.templates.find((item) => item.id === 'dynamic_gemm');
+    const dynamicCnn = body.templates.find((item) => item.id === 'dynamic_cnn');
+    const tinyAttention = body.templates.find((item) => item.id === 'tiny_attention_static');
+    assert.ok(tinyModel);
+    assert.ok(dynamicGemm);
+    assert.ok(dynamicCnn);
+    assert.ok(tinyAttention);
+    assert.equal(tinyModel.title, 'Parameterized Tiny Model');
+    assert.equal(tinyModel.shapeMode, 'dynamic_bounded');
+    assert.equal(tinyModel.parameters.batch.label, 'Batch');
+    assert.equal(tinyModel.parameters.inputPreset.label, 'Input preset');
+    assert.equal(tinyModel.parameters.inputPreset.choiceLabels.negative_clamp, 'ReLU clamp path');
+    assert.deepEqual(tinyModel.parameters.batch.choices, [1, 2]);
+    assert.deepEqual(tinyModel.parameters.inputPreset.choices, ['balanced', 'negative_clamp']);
+    assert.equal(tinyModel.boundary.allowsCustomGraph, false);
+    assert.match(tinyModel.demo.expectedMarker, /output matches expected fp32 values/i);
+    assert.ok(Array.isArray(tinyModel.demo.proves));
+    assert.ok(tinyModel.demo.proves.some((item) => /server regenerates/i.test(item)));
+    assert.ok(Array.isArray(tinyModel.demo.boundaries));
+    assert.ok(tinyModel.demo.boundaries.some((item) => /No custom graph upload/i.test(item)));
+    assert.equal(dynamicGemm.shapeMode, 'dynamic_bounded');
+    assert.equal(dynamicGemm.parameters.runtimeShape.label, 'Runtime shape');
+    assert.equal(dynamicGemm.parameters.runtimeShape.choiceLabels.single_row_identity_head, '1x8 -> 1x4 single-row slice');
+    assert.deepEqual(dynamicGemm.parameters.runtimeShape.choices, ['two_rows_identity_tail', 'single_row_identity_head']);
+    assert.match(dynamicGemm.demo.expectedMarker, /single_row_identity_head returns 1, 2, 3, 8/i);
+    assert.equal(dynamicCnn.shapeMode, 'dynamic_bounded');
+    assert.equal(dynamicCnn.parameters.runtimeShape.choiceLabels.compact_2x2, '3x3 -> 2x2 compact path');
+    assert.deepEqual(dynamicCnn.parameters.runtimeShape.choices, ['compact_2x2', 'full_3x3']);
+    assert.match(dynamicCnn.demo.expectedMarker, /compact_2x2 returns 15, 31/i);
+    assert.ok(dynamicCnn.demo.proves.some((item) => /conv2d -> relu -> transpose -> reduce/i.test(item)));
+    assert.equal(tinyAttention.shapeMode, 'static');
+    assert.equal(tinyAttention.parameters.inputPreset.choiceLabels.biased_query, 'Higher value mix');
+    assert.deepEqual(tinyAttention.parameters.inputPreset.choices, ['uniform_query', 'biased_query']);
+    assert.match(tinyAttention.demo.expectedMarker, /uniform_query returns 2/i);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/ai/tiny-model/run returns a bounded profile result from the AI tiny model service', async () => {
+  const calls = [];
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+    aiTinyModelService: {
+      templates() {
+        return {
+          templates: [
+            {
+              id: 'dynamic_tiny_model',
+              title: 'Parameterized Tiny Model',
+              shapeMode: 'dynamic_bounded',
+            },
+          ],
+        };
+      },
+      async run(payload) {
+        calls.push(payload);
+        return {
+          ok: true,
+          template: 'dynamic_tiny_model',
+          parameters: {
+            batch: 2,
+            inputPreset: 'balanced',
+          },
+          output: {
+            dtype: 'fp32',
+            shape: [2, 1],
+            values: [2.5, 5.5],
+            expected: [2.5, 5.5],
+          },
+          profile: {
+            progress: 'completed',
+            shapeMode: 'dynamic_bounded',
+            runtimeShapes: 't0:2x3,t2:2x2,t3:2x2,t4:2x1',
+            bytesMoved: 72,
+            retiredOps: 12,
+            deviceCycles: 33,
+            dmaCycles: 12,
+            computeCycles: 9,
+            stallCycles: 6,
+            utilization: 27,
+          },
+          aggregate: {
+            tileCount: 3,
+            scratchpadPeakBytes: 64,
+            opCount: 3,
+          },
+          ops: [
+            { opIndex: 0, opcode: 'gemm', retiredOps: 8, computeCycles: 4, stallCycles: 2, tileCount: 1 },
+            { opIndex: 1, opcode: 'eltwise_relu', retiredOps: 2, computeCycles: 2, stallCycles: 2, tileCount: 1 },
+            { opIndex: 2, opcode: 'pool_max', retiredOps: 2, computeCycles: 3, stallCycles: 2, tileCount: 1 },
+          ],
+        };
+      },
+    },
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/ai/tiny-model/run', {
+      template: 'dynamic_tiny_model',
+      batch: 2,
+      inputPreset: 'balanced',
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls, [
+      {
+        template: 'dynamic_tiny_model',
+        batch: 2,
+        inputPreset: 'balanced',
+      },
+    ]);
+    assert.equal(response.body.template, 'dynamic_tiny_model');
+    assert.deepEqual(response.body.output.values, [2.5, 5.5]);
+    assert.equal(response.body.profile.shapeMode, 'dynamic_bounded');
+    assert.equal(response.body.profile.runtimeShapes, 't0:2x3,t2:2x2,t3:2x2,t4:2x1');
+    assert.equal(response.body.aggregate.opCount, 3);
+    assert.deepEqual(response.body.ops.map((item) => item.opcode), ['gemm', 'eltwise_relu', 'pool_max']);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/ai/tiny-model/run forwards template-specific runtime-shape parameters for dynamic GEMM', async () => {
+  const calls = [];
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+    aiTinyModelService: {
+      templates() {
+        return {
+          templates: [
+            {
+              id: 'dynamic_gemm',
+              title: 'Dynamic GEMM Profile',
+              shapeMode: 'dynamic_bounded',
+            },
+          ],
+        };
+      },
+      async run(payload) {
+        calls.push(payload);
+        return {
+          ok: true,
+          template: 'dynamic_gemm',
+          parameters: {
+            runtimeShape: 'single_row_identity_head',
+          },
+          output: {
+            dtype: 'int32',
+            shape: [1, 4],
+            values: [1, 2, 3, 0],
+            expected: [1, 2, 3, 0],
+          },
+          profile: {
+            progress: 'completed',
+            shapeMode: 'dynamic_bounded',
+            runtimeShapes: 't0:1x8,t2:1x4',
+            bytesMoved: 52,
+            retiredOps: 32,
+            deviceCycles: 11,
+            dmaCycles: 7,
+            computeCycles: 2,
+            stallCycles: 2,
+            utilization: 14,
+          },
+          aggregate: {
+            tileCount: 1,
+            scratchpadPeakBytes: 64,
+            opCount: 1,
+          },
+          ops: [
+            { opIndex: 0, opcode: 'gemm', retiredOps: 32, computeCycles: 2, stallCycles: 2, tileCount: 1 },
+          ],
+        };
+      },
+    },
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/ai/tiny-model/run', {
+      template: 'dynamic_gemm',
+      runtimeShape: 'single_row_identity_head',
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls, [
+      {
+        template: 'dynamic_gemm',
+        runtimeShape: 'single_row_identity_head',
+      },
+    ]);
+    assert.equal(response.body.template, 'dynamic_gemm');
+    assert.equal(response.body.profile.runtimeShapes, 't0:1x8,t2:1x4');
+    assert.deepEqual(response.body.output.values, [1, 2, 3, 0]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/ai/tiny-model/run forwards template-specific runtime-shape parameters for dynamic CNN', async () => {
+  const calls = [];
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+    aiTinyModelService: {
+      templates() {
+        return {
+          templates: [
+            {
+              id: 'dynamic_cnn',
+              title: 'Dynamic CNN Profile',
+              shapeMode: 'dynamic_bounded',
+            },
+          ],
+        };
+      },
+      async run(payload) {
+        calls.push(payload);
+        return {
+          ok: true,
+          template: 'dynamic_cnn',
+          parameters: {
+            runtimeShape: 'compact_2x2',
+          },
+          output: {
+            dtype: 'int32',
+            shape: [2],
+            values: [15, 31],
+            expected: [15, 31],
+          },
+          profile: {
+            progress: 'completed',
+            shapeMode: 'dynamic_bounded',
+            runtimeShapes: 't0:3x3,t2:2x2,t3:2x2,t4:2x2,t5:2',
+            bytesMoved: 21,
+            retiredOps: 28,
+            deviceCycles: 17,
+            dmaCycles: 9,
+            computeCycles: 4,
+            stallCycles: 4,
+            utilization: 21,
+          },
+          aggregate: {
+            tileCount: 4,
+            scratchpadPeakBytes: 184,
+            opCount: 4,
+          },
+          ops: [
+            { opIndex: 0, opcode: 'conv2d', retiredOps: 16, computeCycles: 1, stallCycles: 1, tileCount: 1 },
+            { opIndex: 1, opcode: 'eltwise_relu', retiredOps: 4, computeCycles: 1, stallCycles: 1, tileCount: 1 },
+            { opIndex: 2, opcode: 'layout_transpose', retiredOps: 4, computeCycles: 1, stallCycles: 1, tileCount: 1 },
+            { opIndex: 3, opcode: 'reduce_sum', retiredOps: 4, computeCycles: 1, stallCycles: 1, tileCount: 1 },
+          ],
+        };
+      },
+    },
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/ai/tiny-model/run', {
+      template: 'dynamic_cnn',
+      runtimeShape: 'compact_2x2',
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls, [
+      {
+        template: 'dynamic_cnn',
+        runtimeShape: 'compact_2x2',
+      },
+    ]);
+    assert.equal(response.body.template, 'dynamic_cnn');
+    assert.equal(response.body.profile.runtimeShapes, 't0:3x3,t2:2x2,t3:2x2,t4:2x2,t5:2');
+    assert.deepEqual(response.body.output.values, [15, 31]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/ai/tiny-model/run maps service validation failures to 4xx JSON', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+    aiTinyModelService: {
+      templates() {
+        return { templates: [] };
+      },
+      async run() {
+        const error = new Error('batch must be one of: 1, 2');
+        error.statusCode = 400;
+        throw error;
+      },
+    },
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/ai/tiny-model/run', {
+      template: 'dynamic_tiny_model',
+      batch: 8,
+      inputPreset: 'balanced',
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error, 'batch must be one of: 1, 2');
+  } finally {
+    await server.close();
+  }
+});
+
+test('default AI tiny model service rejects custom graph payloads before running a profile', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/ai/tiny-model/run', {
+      template: 'dynamic_tiny_model',
+      batch: 1,
+      inputPreset: 'balanced',
+      graphPackage: 'browser-supplied.bin',
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error, 'unsupported AI tiny model parameter: graphPackage');
+  } finally {
+    await server.close();
+  }
+});
+
+test('default AI tiny model service rejects parameters that do not belong to the selected template', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/ai/tiny-model/run', {
+      template: 'tiny_attention_static',
+      batch: 2,
+      inputPreset: 'uniform_query',
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error, 'unsupported AI tiny model parameter for tiny_attention_static: batch');
+  } finally {
+    await server.close();
+  }
+});
+
 test('GET /api/tests reports a Linux console diagnostic when the configured Image is missing', async () => {
   const missingImage = path.join(os.tmpdir(), `mycpu-missing-linux-image-${Date.now()}`, 'Image');
   const server = await withEnv({

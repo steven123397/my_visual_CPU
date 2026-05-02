@@ -27,6 +27,17 @@ export function createAppState() {
   return {
     tests: [],
     diagnostics: {},
+    aiTinyModel: {
+      templates: [],
+      parameters: {
+        template: 'dynamic_tiny_model',
+        batch: 1,
+        inputPreset: 'balanced',
+      },
+      runState: 'idle',
+      error: null,
+      result: null,
+    },
     selectedTest: 'hello',
     backend: 'pipeline',
     loadedSession: null,
@@ -42,6 +53,51 @@ export function createAppState() {
       terminalCollapsed: false,
     },
   };
+}
+
+export function setAiTinyModelTemplates(state, templates) {
+  state.aiTinyModel.templates = Array.isArray(templates) ? templates : [];
+  const selected = state.aiTinyModel.templates.find(
+    (item) => item.id === state.aiTinyModel.parameters.template,
+  ) ?? state.aiTinyModel.templates[0] ?? null;
+  if (!selected) {
+    return;
+  }
+
+  const nextParameters = {
+    template: selected.id,
+  };
+  for (const [name, definition] of Object.entries(selected.parameters ?? {})) {
+    const choices = Array.isArray(definition?.choices) ? definition.choices : [];
+    const currentValue = state.aiTinyModel.parameters[name];
+    if (choices.some((choice) => String(choice) === String(currentValue))) {
+      nextParameters[name] = currentValue;
+      continue;
+    }
+    nextParameters[name] = definition?.default ?? choices[0];
+  }
+  state.aiTinyModel.parameters = nextParameters;
+}
+
+export function setAiTinyModelParameters(state, parameters = {}) {
+  state.aiTinyModel.parameters = {
+    ...state.aiTinyModel.parameters,
+    ...parameters,
+  };
+}
+
+export function setAiTinyModelRunState(state, runState, error = null) {
+  state.aiTinyModel.runState = runState;
+  state.aiTinyModel.error = error;
+  if (runState === 'running' || runState === 'error') {
+    state.aiTinyModel.result = null;
+  }
+}
+
+export function setAiTinyModelResult(state, result) {
+  state.aiTinyModel.result = result ?? null;
+  state.aiTinyModel.error = null;
+  state.aiTinyModel.runState = result ? 'completed' : 'idle';
 }
 
 export function setDiagnostics(state, diagnostics) {

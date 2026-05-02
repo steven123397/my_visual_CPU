@@ -122,7 +122,10 @@
               <h3>运行设备级 AI workload</h3>
               <p>
                 选择 guest_ai_accel_demo，观察 graph package、MMIO doorbell、DMA load/store、
-                scratchpad、completion、KMVAI marker 和 timed-simple profile counters。
+                scratchpad、completion、KMVAI marker 和 timed-simple profile counters。也可以直接
+                运行 Parameterized Tiny Model；浏览器只提交白名单模板允许的 batch、runtime shape
+                和 preset，服务器端重新生成并校验对应 graph，再返回输出、runtime shape、profile counters
+                和 op summary。
               </p>
             </section>
             <section>
@@ -181,6 +184,16 @@
             控制台展示 aggregate counters，例如 queue depth、DMA bytes、device / compute / stall cycles
             和 utilization，帮助用户理解一次 workload 的执行过程。
           </p>
+          <p>
+            Parameterized Tiny Model 是 Wave 7 的受控 host profile 体验：当前提供
+            <code>dynamic_tiny_model</code>、<code>dynamic_gemm</code> 和
+            <code>dynamic_cnn</code>、<code>tiny_attention_static</code> 四条白名单模板。浏览器只能选择模板允许的
+            batch、runtime shape 或输入 preset；服务器端重新生成 graph package、runtime shape table、
+            输入和 expected output，然后调用 <code>mycpu --ai-profile-manifest</code>。控制台面板会按模板直接说明
+            预期 marker、这条 demo 证明什么，以及当前仍未开放的边界。
+            它不是任意模型上传、任意 graph authoring、ONNX / PyTorch runtime，也不开放
+            Linux-facing NPU driver。
+          </p>
         </article>
 
         <article id="runtime-labs" class="doc-section">
@@ -201,6 +214,8 @@
             Wave 7 前端改动至少守住 `cd frontend && node --test` 和 `git diff --check`。
             触达 simulator、debug session、guest runtime 或 workload 时，会按对应范围补充
             `cd myCPU && make test`、`make test-pipeline` 或更窄的 host / guest smoke。
+            AI 参数化小模型还要守住参数生成、shape fail-closed 和
+            <code>make test-host-ai_accelerator_profile_smoke</code>。
             真实 Linux serial console e2e 是显式 opt-in：默认测试只记录跳过条件；设置
             <code>MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1</code> 和
             <code>MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image</code> 后，frontend e2e

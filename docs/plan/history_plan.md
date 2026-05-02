@@ -23,6 +23,24 @@
 
 ### 2026-05-02
 
+#### mainline-wave7-ai-parameterized-tiny-model-plan
+
+- 原文件：`wave7_ai_parameterized_tiny_model_plan.md`
+- 完成内容：完成主线 `Wave 7 / 产品化展示与在线控制台` 的 AI 参数化小模型体验。
+  `/api/ai/tiny-model/templates` 暴露服务器端白名单模板；`/api/ai/tiny-model/run`
+  当前已扩到 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn` 和
+  `tiny_attention_static` 四条白名单模板；服务端只接受每个模板声明过的 batch、
+  runtime shape 或输入 preset，
+  重新生成 graph package、runtime shape table、输入和 expected output，再调用现有
+  `mycpu --ai-profile-manifest`，返回输出、runtime shape、profile counters 和 op summary。
+  `/console` 已把 `Parameterized Tiny Model` 从 future-only 卡片推进成可运行 host profile
+  工具，并支持在白名单模板矩阵内切换不同 workload。
+- 实现过程摘要：这一轮按 TDD 先补 server API、state 和 render 红灯，再新增
+  `ai_tiny_model_service`、前端参数状态、运行控件和结果面板。服务端拒绝浏览器传入的
+  自定义 graph package 字段，保持 Wave 7 的白名单模板边界，不开放任意模型上传、
+  任意 graph authoring、通用 AI runtime 或 Linux-facing NPU driver。
+- 结果参考：[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### pipeline-lsq-blocked-load-observation-plan
 
 - 原文件：`pipeline_lsq_blocked_load_observation_plan.md`

@@ -24,13 +24,14 @@
   - [../design/wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)
   - [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
   - [../design/wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)
+  - [../design/wave7_remote_cloud_dev_environment_design.md](../design/wave7_remote_cloud_dev_environment_design.md)
   - [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)
 - 相关状态：
   - [kernel_alpha_status.md](kernel_alpha_status.md)
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
 - 当前活跃计划：
-  - 无
+  - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
   - [../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan](../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan)
@@ -286,6 +287,16 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
 - 主线 `Wave 4` 的 AI accelerator 切片 C stretch 已完成：新增静态 `fp32`
   row-wise `Softmax`，并新增 `tiny_attention_static` host workload，固定验证
   `gemm -> softmax -> gemm` 的最小 attention-like profile 闭环。
+- 主线 `Wave 7` 的 AI 参数化小模型体验在 2026-05-02 继续扩到白名单模板矩阵：
+  `/api/ai/tiny-model/templates` 当前暴露 `dynamic_tiny_model`、
+  `dynamic_gemm`、`dynamic_cnn` 和 `tiny_attention_static` 四条服务器端模板；浏览器只能选择
+  模板声明过的 batch、runtime shape 和输入 preset，服务端会重新生成 graph package、
+  runtime shape table、输入和 expected output，再调用 `mycpu --ai-profile-manifest`。
+  `/console` 已支持模板切换、模板专属参数控件，以及 `fp32 / int32` 输出、runtime shape、
+  aggregate counters 和 per-op summary 的统一展示；同一面板现在还会按当前模板明确解释
+  `Expected marker`、`What this proves` 和 `Current boundary`，把 demo 证据、证明点和
+  Wave 7 边界放在同一个观察面。它仍然不是任意 graph package 上传、
+  任意模型 authoring、ONNX / PyTorch runtime 或 Linux-facing NPU driver。
 - 主线 `Wave 5` 的 `Slice A / signal + contract` 已完成：pipeline-side memory
   signal 固定为 `run_debug_cli_probe` 的 `xv6 --backend pipeline` 5000-cycle
   probe；该 guardrail 只证明 memory observation / `shadow_cache` 输出合同，不证明
@@ -445,7 +456,7 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
 2. `Wave 7` 已完成产品官网壳层 / 首页第一刀、控制台 demo workspace v1、产品文档 v1、
    Linux interactive frontend console 第一刀、Linux console hardening 第一刀、
    Linux console terminate 收口、真实 Image opt-in e2e guardrail、reset re-arm、
-   配置状态 UX 和配置诊断 health check：
+   配置状态 UX、配置诊断 health check 和 AI 参数化小模型体验：
    [Wave 7 产品化展示与在线控制台设计](../design/wave7_productization_and_showcase_design.md)
    已固定真正产品官网、Apple-style 首页滚动叙事、demo-first 控制台、产品文档和部署边界；
    对外首页改为面向用户展示“能做什么”，不再把技术评审、招聘面试官、边界或未完成项作为主叙事。
@@ -470,8 +481,14 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    [Wave 7 Linux console config UX 计划](../plan/history_plan.md#mainline-wave7-linux-console-config-ux-plan)。
    配置诊断 health check 已归档到
    [Wave 7 Linux console health check 计划](../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan)。
-   本轮仍不做 AI 参数化小模型、公网部署、底层 session API 重构、标准发行版镜像支持或
-   任意用户镜像上传。
+   AI 参数化小模型体验已归档到
+   [Wave 7 AI 参数化小模型体验计划](../plan/history_plan.md#mainline-wave7-ai-parameterized-tiny-model-plan)。
+   `/console` 当前可以直接运行服务器端白名单 `dynamic_tiny_model` host profile：
+   浏览器只提交 batch 与 input preset，server 重新生成 graph package、runtime shape
+   table、输入和 expected output，再调用现有 `mycpu --ai-profile-manifest`，返回输出、
+   `runtime_shapes`、profile counters 与 op summary。该入口仍不接受任意 graph package、
+   任意模型上传或 Linux-facing NPU driver。
+   本轮仍不做公网部署、底层 session API 重构、标准发行版镜像支持或任意用户镜像上传。
 3. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
    定位。
@@ -488,6 +505,13 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
 ## 关键历史节点
 
 - `2026-05-02`
+  - 主线 `Wave 7` 完成 AI 参数化小模型体验：
+    [../plan/history_plan.md#mainline-wave7-ai-parameterized-tiny-model-plan](../plan/history_plan.md#mainline-wave7-ai-parameterized-tiny-model-plan)。
+    `/api/ai/tiny-model/templates` 暴露服务器端白名单模板；`/api/ai/tiny-model/run`
+    只接受 `dynamic_tiny_model`、batch `1 / 2` 和固定 input preset，服务器端重新生成
+    graph package / runtime shape table / 输入 / expected output 后调用现有
+    `mycpu --ai-profile-manifest`。`/console` 展示参数控件、输出、runtime shape、
+    profile counters 和 op summary；自定义 graph package 字段会 fail-closed。
   - 主线 `Wave 7` 完成 Linux console 配置诊断 health check：
     [../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan](../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan)。
     `/api/tests` 返回只读 `diagnostics.linuxConsole`，覆盖 env 未设置、路径不存在、
@@ -784,14 +808,23 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
   最小静态 `fp32` row-wise softmax 和极小 attention-like profile 闭环；不要把它
   写成完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
 - AI accelerator 在 `Wave 7` 的展示形态应保持为白名单 demo + 参数化小模型：
-  允许用户在固定模板内调整小规模输入、runtime shape 或 op 组合并观察输出与 profile，
-  但不开放任意模型上传、任意 graph package、通用 AI compiler 或 Linux-facing NPU driver。
+  当前已落地 `dynamic_tiny_model` 的受控 batch / preset 参数体验，并观察输出与 profile，
+  但仍不开放任意模型上传、任意 graph package、通用 AI compiler 或 Linux-facing NPU driver。
   `Wave 7` 之后的新主线可以重新打开“用户自己的 AI 任务”和更接近商用 NPU 的性能模型。
 - `Wave 7` 产品官网壳层、首页第一刀、控制台 demo workspace v1、产品文档 v1、
   Linux interactive frontend console 第一刀、Linux console terminate 收口、真实 Image
-  opt-in e2e guardrail 和 reset re-arm 已完成；但部署、安全、session 配额、
-  AI 参数化小模型、标准发行版镜像支持、任意用户镜像上传和更深的 demo-specific
+  opt-in e2e guardrail、reset re-arm 和 AI 参数化小模型体验已完成；但部署、安全、
+  session 配额、标准发行版镜像支持、任意用户镜像上传和更深的 demo-specific
   控制台页面仍未实现。
+- 用户已把 `Wave 7` 的部署目标明确为“另一台云服务器上的完整开发/验证环境”，而不是
+  “本机 dev server 的简单公网暴露”。当前 active 目标已收口为：在远端单机上复现
+  `myCPU` 构建、frontend/debug-cli、Linux `Image/rootfs`、AI 参数化小模型白名单 profile
+  和 `Spike` 差分联调，并为 `/`、`/console`、`/docs` 提供受控 service / reverse proxy /
+ 运行资产目录约定。后续与部署、运维、资产放置、service 启停和 smoke 直接相关的工作，
+ 也应默认在远端服务器上的仓库 checkout 中执行，而不是继续在本地开发环境里做 server-specific
+ 改动。对应设计与计划分别见
+  [../design/wave7_remote_cloud_dev_environment_design.md](../design/wave7_remote_cloud_dev_environment_design.md)
+  和 [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)。
 - `debug/frontend`、`pipeline` 和 guest runtime 都已形成可维护边界，但后续
   仍要避免真实 bug 修复把职责重新揉回大文件。
 
@@ -855,33 +888,40 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    [history_plan.md#mainline-wave7-linux-console-reset-rearm-plan](../plan/history_plan.md#mainline-wave7-linux-console-reset-rearm-plan)。
    当前 `linux_proto_console` Reset 会重新应用 Linux payload / DTB、`a0/a1/a2` seed
    和 boot prompt wait，避免 Reset 后落回未装载 payload 的裸 machine 状态。
-13. Wave 7 的 AI accelerator 展示切片同步采用白名单 demo + 参数化小模型：
-   前端只允许提交受限模板参数，例如小尺寸 `gemm / relu / pool / softmax` 输入、
-   runtime shape 或已支持 op 组合；服务器端必须重新生成 / 校验 graph package、
-   memory plan、dtype、shape 和资源上限，并固定输出、profile 和 fail-closed smoke。
-14. Wave 7 之后的新主线定为两条：一是像 QEMU 那样跑通标准 Debian / Alpine /
+13. `Wave 7 AI 参数化小模型体验计划` 已完成并归档：
+   [history_plan.md#mainline-wave7-ai-parameterized-tiny-model-plan](../plan/history_plan.md#mainline-wave7-ai-parameterized-tiny-model-plan)。
+   当前 AI accelerator 展示切片已经有白名单 `dynamic_tiny_model` 参数体验；前端只提交
+   batch / input preset，服务器端重新生成 / 校验 graph package、runtime shape table、
+   dtype、shape 和 expected output，并固定输出、profile 和 fail-closed smoke。后续若要
+   扩 op 组合或更多模板，仍必须保持 server-side whitelist，不开放任意 graph package。
+14. `Wave 7` 当前活跃计划已切到远端云服务器开发/验证环境：
+   [wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)。
+   当前目标不是在本机简单公网暴露 frontend，而是在另一台远端单机上复现完整开发/验证能力，
+   包括 `myCPU` 构建、frontend/debug-cli、Linux `Image/rootfs`、AI 参数化小模型白名单 profile、
+   `Spike` 差分联调，以及对应的 systemd / nginx / 运行资产目录约定和最小 smoke。
+15. Wave 7 之后的新主线定为两条：一是像 QEMU 那样跑通标准 Debian / Alpine /
    RISC-V 发行版镜像；二是 AI accelerator 支持用户自己的 AI 任务，并逐步逼近商用
    NPU 的 tile scheduler、DMA / compute overlap、multi outstanding queue、Linux-facing
    driver 和性能模型。这两条都需要另开 design / plan，不并入 Wave 7 收尾。
-15. 默认 JIT backend 仍只做后续 readiness 评估；默认 backend、persistent cache、
+16. 默认 JIT backend 仍只做后续 readiness 评估；默认 backend、persistent cache、
    workload-level scheduler、CSR / atomic / vector helper runtime、multicore、coherence 和
    新的 memory consistency 模型仍不启动。
-16. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
+17. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
    如需调整排序或字段，必须先补 probe / host smoke 兼容门禁。
-17. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
+18. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 `Wave 6`
    hot-path evidence 的前置 guardrail。
-18. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+19. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
    driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan；其中
    用户自定义 AI 任务和商用 NPU-like 性能模型已经提升为 Post-Wave 7 新主线，但不改写
    当前 `Wave 6 / Wave 7` 收口边界。
-19. Wave 4 AI accelerator 的完成记录统一见
+20. Wave 4 AI accelerator 的完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
-20. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
+21. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
    guardrail；未提供 `Image` 时，不把该项写成默认已证明。
-21. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
+22. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
    `make test` 和 `make test-pipeline` 这些稳定 guardrail。
-22. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
+23. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
    暴露新 blocker，再按 blocker 驱动回补最窄 Linux guardrail。
 
 ## 验证基线

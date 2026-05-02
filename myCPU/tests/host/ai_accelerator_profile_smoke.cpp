@@ -448,6 +448,89 @@ bool expect_pack_and_profile_dynamic_tiny_model(const std::filesystem::path& tem
                   "expected dynamic_tiny_model output to match packaged expectation");
 }
 
+bool expect_pack_and_profile_dynamic_cnn(const std::filesystem::path& temp_dir) {
+    const std::string pack_command =
+        "python3 workloads/ai_proto/pack_graph.py --workload dynamic_cnn --out-dir " +
+        temp_dir.string();
+    const CommandResult pack = run_command(pack_command);
+    if (!expect(pack.exit_code == 0, "expected dynamic_cnn pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+
+    const std::filesystem::path manifest = temp_dir / "dynamic_cnn.manifest";
+    const std::filesystem::path graph = temp_dir / "dynamic_cnn.graph.bin";
+    const std::filesystem::path runtime_shape = temp_dir / "dynamic_cnn.runtime_shape.bin";
+    const std::filesystem::path actual = temp_dir / "dynamic_cnn.output0.actual.bin";
+    const std::filesystem::path expected = temp_dir / "dynamic_cnn.output0.expected.bin";
+    if (!expect_file_exists(manifest, "expected dynamic_cnn manifest") ||
+        !expect_file_exists(graph, "expected dynamic_cnn graph package") ||
+        !expect_file_exists(runtime_shape, "expected dynamic_cnn runtime shape table") ||
+        !expect_file_exists(expected, "expected dynamic_cnn expected output")) {
+        return false;
+    }
+
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph), package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    if (!expect(package.shape_mode == AiShapeMode::DynamicBounded,
+                "expected dynamic_cnn packaged graph shape mode") ||
+        !expect(package.dynamic_tensors.size() == 5,
+                "expected dynamic_cnn packaged graph dynamic tensors")) {
+        return false;
+    }
+
+    const CommandResult profile =
+        run_command("./mycpu --ai-profile-manifest " + manifest.string());
+    if (!expect(profile.exit_code == 0, "expected dynamic_cnn ai profile command to succeed")) {
+        std::fprintf(stderr, "%s\n", profile.output.c_str());
+        return false;
+    }
+
+    if (!expect_contains(profile.output, "name=dynamic_cnn", "expected dynamic_cnn workload name") ||
+        !expect_contains(profile.output, "shape_mode=dynamic_bounded", "expected dynamic_cnn shape mode summary") ||
+        !expect_contains(profile.output,
+                         "runtime_shapes=t0:3x3,t2:2x2,t3:2x2,t4:2x2,t5:2",
+                         "expected dynamic_cnn runtime shape summary") ||
+        !expect_contains(profile.output, "device_cycles=17", "expected dynamic_cnn device cycle summary") ||
+        !expect_contains(profile.output, "dma_cycles=9", "expected dynamic_cnn DMA cycle summary") ||
+        !expect_contains(profile.output, "compute_cycles=4", "expected dynamic_cnn compute cycle summary") ||
+        !expect_contains(profile.output, "stall_cycles=4", "expected dynamic_cnn stall cycle summary") ||
+        !expect_contains(profile.output, "busy_cycles=19", "expected dynamic_cnn busy cycle summary") ||
+        !expect_contains(profile.output, "queue_cycles=1", "expected dynamic_cnn queue cycle summary") ||
+        !expect_contains(profile.output, "completion_cycles=1", "expected dynamic_cnn completion cycle summary") ||
+        !expect_contains(profile.output,
+                         "effective_ops_per_cycle=7",
+                         "expected dynamic_cnn op/cycle summary") ||
+        !expect_contains(profile.output, "utilization=21", "expected dynamic_cnn utilization summary") ||
+        !expect_contains(profile.output, "bytes_moved=21", "expected dynamic_cnn bytes moved summary") ||
+        !expect_contains(profile.output, "retired_ops=28", "expected dynamic_cnn retired op summary") ||
+        !expect_contains(profile.output,
+                         "ai_profile_aggregate tile_count=4 scratchpad_peak_bytes=184 op_count=4",
+                         "expected dynamic_cnn aggregate itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=0 opcode=conv2d retired_ops=16 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic_cnn conv itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic_cnn relu itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=2 opcode=layout_transpose retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic_cnn transpose itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=3 opcode=reduce_sum retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic_cnn reduce itemized profile output") ||
+        !expect_file_exists(actual, "expected dynamic_cnn actual output")) {
+        return false;
+    }
+
+    return expect(read_binary_file(actual) == read_binary_file(expected),
+                  "expected dynamic_cnn output to match packaged expectation");
+}
+
 }  // namespace
 
 int main() {
@@ -471,6 +554,8 @@ int main() {
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_gemm");
         const CommandResult dynamic_tiny_model_make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_tiny_model");
+        const CommandResult dynamic_cnn_make_run = run_command(
+            "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_cnn");
         const CommandResult tiny_attention_make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_attention_static");
         if (!expect(make_run.exit_code == 0, "expected ai workload make dry-run to succeed") ||
@@ -480,6 +565,8 @@ int main() {
                     "expected dynamic_gemm ai workload make dry-run to succeed") ||
             !expect(dynamic_tiny_model_make_run.exit_code == 0,
                     "expected dynamic_tiny_model ai workload make dry-run to succeed") ||
+            !expect(dynamic_cnn_make_run.exit_code == 0,
+                    "expected dynamic_cnn ai workload make dry-run to succeed") ||
             !expect(tiny_attention_make_run.exit_code == 0,
                     "expected tiny_attention_static ai workload make dry-run to succeed") ||
             !expect_contains(profile_text,
@@ -497,6 +584,9 @@ int main() {
             !expect_contains(dynamic_tiny_model_make_run.output,
                              "--ai-profile-manifest workloads/ai_proto/generated/dynamic_tiny_model.manifest",
                              "expected dynamic_tiny_model dry-run manifest argument") ||
+            !expect_contains(dynamic_cnn_make_run.output,
+                             "--ai-profile-manifest workloads/ai_proto/generated/dynamic_cnn.manifest",
+                             "expected dynamic_cnn dry-run manifest argument") ||
             !expect_contains(tiny_attention_make_run.output,
                              "--ai-profile-manifest workloads/ai_proto/generated/tiny_attention_static.manifest",
                              "expected tiny_attention_static dry-run manifest argument")) {
@@ -709,7 +799,8 @@ int main() {
                                         "ai_profile_op op_index=2 opcode=gemm retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
             expect_pack_and_profile_dynamic(temp_dir) &&
-            expect_pack_and_profile_dynamic_tiny_model(temp_dir);
+            expect_pack_and_profile_dynamic_tiny_model(temp_dir) &&
+            expect_pack_and_profile_dynamic_cnn(temp_dir);
 
         std::filesystem::remove_all(temp_dir);
         if (!ok) {

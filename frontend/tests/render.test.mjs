@@ -1675,3 +1675,357 @@ test('renderApp shows a demo-first workspace with selectable workloads and futur
   assert.match(elements.demoWorkspace.innerHTML, /data-demo-backend="pipeline"/);
   assert.match(elements.demoWorkspace.innerHTML, /is-selected/);
 });
+
+test('renderApp shows the AI parameterized tiny model controls and profile result', () => {
+  const state = createAppState();
+  state.aiTinyModel.templates = [
+    {
+      id: 'dynamic_tiny_model',
+      title: 'Parameterized Tiny Model',
+      summary: 'Server-generated dynamic tiny model profile.',
+      opChain: ['gemm', 'relu', 'pool_max'],
+      demo: {
+        expectedMarker: 'balanced returns 2.5, 5.5 and negative_clamp returns 0, 2.5',
+        proves: [
+          'Server regenerates bounded graph package, runtime shape table, inputs and expected output.',
+          'The profile path stays aligned with mycpu --ai-profile-manifest.',
+        ],
+        boundaries: [
+          'No custom graph upload or arbitrary model import.',
+          'Only approved batch and input preset values are allowed.',
+        ],
+      },
+      parameters: {
+        batch: { label: 'Batch', choices: [1, 2], default: 1 },
+        inputPreset: {
+          label: 'Input preset',
+          choices: ['balanced', 'negative_clamp'],
+          default: 'balanced',
+          choiceLabels: {
+            balanced: 'Balanced activations',
+            negative_clamp: 'ReLU clamp path',
+          },
+        },
+      },
+      boundary: {
+        allowsCustomGraph: false,
+      },
+    },
+  ];
+  state.aiTinyModel.parameters = {
+    template: 'dynamic_tiny_model',
+    batch: 2,
+    inputPreset: 'negative_clamp',
+  };
+  state.aiTinyModel.runState = 'completed';
+  state.aiTinyModel.result = {
+    output: {
+      dtype: 'fp32',
+      shape: [2, 1],
+      values: [0, 2.5],
+      expected: [0, 2.5],
+    },
+    profile: {
+      progress: 'completed',
+      shapeMode: 'dynamic_bounded',
+      runtimeShapes: 't0:2x3,t2:2x2,t3:2x2,t4:2x1',
+      bytesMoved: 72,
+      retiredOps: 12,
+      deviceCycles: 33,
+      dmaCycles: 12,
+      computeCycles: 9,
+      stallCycles: 6,
+      utilization: 27,
+    },
+    ops: [
+      { opIndex: 0, opcode: 'gemm', retiredOps: 8, computeCycles: 4, stallCycles: 2, tileCount: 1 },
+      { opIndex: 1, opcode: 'eltwise_relu', retiredOps: 2, computeCycles: 2, stallCycles: 2, tileCount: 1 },
+      { opIndex: 2, opcode: 'pool_max', retiredOps: 2, computeCycles: 3, stallCycles: 2, tileCount: 1 },
+    ],
+  };
+  state.tests = [
+    {
+      name: 'guest_ai_accel_demo',
+      menuLabel: 'guest_ai_accel_demo · AI accel MMIO',
+      title: 'AI Accelerator Demo',
+      badge: 'AI Accelerator',
+      summary: '通过 MMIO 提交一个最小 graph package。',
+      workload: {
+        category: 'ai-accelerator-demo',
+        expectedMarker: 'KMVAI',
+        ops: ['MMIO doorbell', 'DMA load/store'],
+      },
+    },
+  ];
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Parameterized Tiny Model/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-ai-template="dynamic_tiny_model"/);
+  assert.match(elements.demoWorkspace.innerHTML, /Expected marker/);
+  assert.match(elements.demoWorkspace.innerHTML, /What this proves/);
+  assert.match(elements.demoWorkspace.innerHTML, /Current boundary/);
+  assert.match(elements.demoWorkspace.innerHTML, /Observed evidence/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-ai-evidence="matched"/);
+  assert.match(elements.demoWorkspace.innerHTML, /Matched expected output/);
+  assert.match(elements.demoWorkspace.innerHTML, /Batch 2/);
+  assert.match(elements.demoWorkspace.innerHTML, /ReLU clamp path/);
+  assert.match(elements.demoWorkspace.innerHTML, /balanced returns 2\.5, 5\.5 and negative_clamp returns 0, 2\.5/);
+  assert.match(elements.demoWorkspace.innerHTML, /No custom graph upload or arbitrary model import/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-ai-param="batch"/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-ai-param="inputPreset"/);
+  assert.match(elements.demoWorkspace.innerHTML, /negative_clamp/);
+  assert.match(elements.demoWorkspace.innerHTML, /Run profile/);
+  assert.match(elements.demoWorkspace.innerHTML, /dynamic_bounded/);
+  assert.match(elements.demoWorkspace.innerHTML, /t0:2x3,t2:2x2,t3:2x2,t4:2x1/);
+  assert.match(elements.demoWorkspace.innerHTML, /0, 2\.5/);
+  assert.match(elements.demoWorkspace.innerHTML, /gemm/);
+  assert.match(elements.demoWorkspace.innerHTML, /pool_max/);
+  assert.match(elements.demoWorkspace.innerHTML, /Custom graph upload is disabled/);
+});
+
+test('renderApp shows the AI whitelist template selector and template-specific controls', () => {
+  const state = createAppState();
+  state.aiTinyModel.templates = [
+    {
+      id: 'dynamic_tiny_model',
+      title: 'Parameterized Tiny Model',
+      summary: 'Server-generated dynamic tiny model profile.',
+      opChain: ['gemm', 'relu', 'pool_max'],
+      demo: {
+        expectedMarker: 'dynamic tiny model marker',
+        proves: ['bounded dynamic tiny model contract'],
+        boundaries: ['no custom upload'],
+      },
+      parameters: {
+        batch: { choices: [1, 2], default: 1 },
+        inputPreset: { choices: ['balanced', 'negative_clamp'], default: 'balanced' },
+      },
+      boundary: {
+        allowsCustomGraph: false,
+      },
+    },
+    {
+      id: 'dynamic_gemm',
+      title: 'Dynamic GEMM Profile',
+      summary: 'Server-generated bounded dynamic GEMM profile.',
+      opChain: ['gemm'],
+      demo: {
+        expectedMarker: 'single_row_identity_head returns 1, 2, 3, 8',
+        proves: ['runtime shape gating proves bounded dynamic GEMM path'],
+        boundaries: ['no arbitrary matrix sizes outside whitelist'],
+      },
+      parameters: {
+        runtimeShape: { choices: ['two_rows_identity_tail', 'single_row_identity_head'], default: 'two_rows_identity_tail' },
+      },
+      boundary: {
+        allowsCustomGraph: false,
+      },
+    },
+    {
+      id: 'dynamic_cnn',
+      title: 'Dynamic CNN Profile',
+      summary: 'Bounded dynamic conv2d -> relu -> transpose -> reduce profile.',
+      opChain: ['conv2d', 'eltwise_relu', 'layout_transpose', 'reduce_sum'],
+      demo: {
+        expectedMarker: 'compact_2x2 returns 15, 31',
+        proves: ['conv2d -> relu -> transpose -> reduce stays observable under bounded runtime shapes'],
+        boundaries: ['no free-form CNN graph authoring'],
+      },
+      parameters: {
+        runtimeShape: { choices: ['compact_2x2', 'full_3x3'], default: 'compact_2x2' },
+      },
+      boundary: {
+        allowsCustomGraph: false,
+      },
+    },
+    {
+      id: 'tiny_attention_static',
+      title: 'Tiny Attention Static',
+      summary: 'Static attention-like profile with softmax in the middle.',
+      opChain: ['gemm', 'softmax', 'gemm'],
+      demo: {
+        expectedMarker: 'uniform_query returns 2',
+        proves: ['softmax stays visible as a fixed static graph profile'],
+        boundaries: ['not a general transformer runtime'],
+      },
+      parameters: {
+        inputPreset: { choices: ['uniform_query', 'biased_query'], default: 'uniform_query' },
+      },
+      boundary: {
+        allowsCustomGraph: false,
+      },
+    },
+  ];
+  state.aiTinyModel.parameters = {
+    template: 'dynamic_gemm',
+    runtimeShape: 'single_row_identity_head',
+  };
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /data-ai-param="template"/);
+  assert.match(elements.demoWorkspace.innerHTML, /dynamic_gemm/);
+  assert.match(elements.demoWorkspace.innerHTML, /dynamic_cnn/);
+  assert.match(elements.demoWorkspace.innerHTML, /tiny_attention_static/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-ai-param="runtimeShape"/);
+  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /data-ai-param="batch"/);
+  assert.match(elements.demoWorkspace.innerHTML, /single_row_identity_head/);
+  assert.match(elements.demoWorkspace.innerHTML, /Dynamic GEMM Profile/);
+  assert.match(elements.demoWorkspace.innerHTML, /gemm/);
+  assert.match(elements.demoWorkspace.innerHTML, /single_row_identity_head returns 1, 2, 3, 8/);
+  assert.match(elements.demoWorkspace.innerHTML, /runtime shape gating proves bounded dynamic GEMM path/);
+  assert.match(elements.demoWorkspace.innerHTML, /no arbitrary matrix sizes outside whitelist/);
+});
+
+test('renderApp shows AI tiny model validation errors without profile data', () => {
+  const state = createAppState();
+  state.aiTinyModel.templates = [
+    {
+      id: 'dynamic_tiny_model',
+      title: 'Parameterized Tiny Model',
+      parameters: {
+        batch: { choices: [1, 2], default: 1 },
+        inputPreset: { choices: ['balanced'], default: 'balanced' },
+      },
+      boundary: {
+        allowsCustomGraph: false,
+      },
+    },
+  ];
+  state.aiTinyModel.runState = 'error';
+  state.aiTinyModel.error = 'batch must be one of: 1, 2';
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /batch must be one of: 1, 2/);
+  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /ai-tiny-model__result/);
+});
+
+test('renderApp marks AI tiny model evidence as mismatch when actual output diverges from expected', () => {
+  const state = createAppState();
+  state.aiTinyModel.templates = [
+    {
+      id: 'dynamic_cnn',
+      title: 'Dynamic CNN Profile',
+      summary: 'Bounded dynamic conv2d profile.',
+      opChain: ['conv2d', 'eltwise_relu', 'layout_transpose', 'reduce_sum'],
+      demo: {
+        expectedMarker: 'compact_2x2 returns 15, 31',
+        proves: ['bounded runtime shape path'],
+        boundaries: ['no custom graph'],
+      },
+      parameters: {
+        runtimeShape: {
+          label: 'Runtime shape',
+          choices: ['compact_2x2', 'full_3x3'],
+          default: 'compact_2x2',
+          choiceLabels: {
+            compact_2x2: '3x3 -> 2x2 compact path',
+            full_3x3: '4x4 -> 3x3 full path',
+          },
+        },
+      },
+      boundary: {
+        allowsCustomGraph: false,
+      },
+    },
+  ];
+  state.aiTinyModel.parameters = {
+    template: 'dynamic_cnn',
+    runtimeShape: 'compact_2x2',
+  };
+  state.aiTinyModel.runState = 'completed';
+  state.aiTinyModel.result = {
+    output: {
+      dtype: 'int32',
+      shape: [2],
+      values: [15, 30],
+      expected: [15, 31],
+    },
+    profile: {
+      progress: 'completed',
+      shapeMode: 'dynamic_bounded',
+      runtimeShapes: 't0:3x3,t2:2x2,t3:2x2,t4:2x2,t5:2',
+      deviceCycles: 17,
+    },
+    ops: [],
+  };
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Observed evidence/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-ai-evidence="mismatch"/);
+  assert.match(elements.demoWorkspace.innerHTML, /Mismatch: actual output diverges from expected/);
+  assert.match(elements.demoWorkspace.innerHTML, /3x3 -&gt; 2x2 compact path/);
+  assert.match(elements.demoWorkspace.innerHTML, /15, 30/);
+  assert.match(elements.demoWorkspace.innerHTML, /expected 15, 31/);
+});
