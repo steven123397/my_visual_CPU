@@ -136,6 +136,9 @@ BackendDebugSnapshot PipelineBackend::debug_snapshot() const {
     if (visible_lsq_status.state == LsqLoadState::None) {
         visible_lsq_status = state_.lsq_observed_load_status;
     }
+    if (visible_lsq_status.state == LsqLoadState::None) {
+        visible_lsq_status = state_.lsq().oldest_load_status();
+    }
     snapshot.backend_name = name();
     snapshot.pipeline.if_stage = build_fetch_stage_snapshot();
     snapshot.pipeline.id_stage = build_stage_snapshot(state_.if_id.slot);

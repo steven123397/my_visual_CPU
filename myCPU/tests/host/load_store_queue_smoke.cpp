@@ -75,10 +75,41 @@ int main() {
                 "overlapping younger load should be released once the older store becomes order-ready")) {
         return 1;
     }
+    if (!expect(lsq.oldest_load_status().state == LsqLoadState::None,
+                "LSQ should clear the observable blocked load once the store is order-ready")) {
+        return 1;
+    }
 
     const auto released_store_entry = lsq.peek(older_store);
     if (!expect(released_store_entry.has_value() && released_store_entry->order_ready,
                 "LSQ should retain the store order-ready state for debugging and scheduling")) {
+        return 1;
+    }
+
+    LoadStoreQueue observed_block_lsq;
+    const LsqIndex observed_store = observed_block_lsq.enqueue_store({
+        .sequence_id = 1,
+        .size = 4,
+    });
+    const LsqIndex observed_load = observed_block_lsq.enqueue_load({
+        .sequence_id = 2,
+        .rd = 6,
+        .size = 4,
+    });
+    observed_block_lsq.mark_address_ready(observed_store, 0x80001000ULL);
+    observed_block_lsq.mark_address_ready(observed_load, 0x80001000ULL);
+    observed_block_lsq.mark_data_ready(observed_load, 0x11223344ULL);
+    observed_block_lsq.mark_order_ready(observed_load);
+    const LsqLoadStatus observed_block = observed_block_lsq.oldest_load_status();
+    if (!expect(observed_block.state == LsqLoadState::BlockedByOverlappingStore &&
+                    observed_block.load_sequence_id == 2 &&
+                    observed_block.store_sequence_id == 1,
+                "LSQ should expose the oldest blocked resident load status for debug observation")) {
+        return 1;
+    }
+    observed_block_lsq.mark_order_ready(observed_store);
+    if (!expect(observed_block_lsq.oldest_load_status().state == LsqLoadState::None,
+                "LSQ should clear the observable blocked load once the store is order-ready")) {
         return 1;
     }
 
@@ -181,6 +212,12 @@ int main() {
                     replay_required.store_sequence_id == 1 &&
                     replay_required.replay_required(),
                 "late overlap should mark the already-issued younger load as replay-required")) {
+        return 1;
+    }
+    if (!expect(replay_lsq.oldest_load_status().state == LsqLoadState::ReplayRequired &&
+                    replay_lsq.oldest_load_status().load_sequence_id == 2 &&
+                    replay_lsq.oldest_load_status().store_sequence_id == 1,
+                "oldest load status should prefer replay-required over ordinary blocked states")) {
         return 1;
     }
 

@@ -200,6 +200,34 @@ LsqLoadStatus LoadStoreQueue::active_replay() const {
     return {};
 }
 
+LsqLoadStatus LoadStoreQueue::oldest_load_status() const {
+    const LsqLoadStatus replay = active_replay();
+    if (replay.replay_required()) {
+        return replay;
+    }
+
+    for (const LsqEntry& load : entries_) {
+        if (load.kind != LsqEntryKind::Load || load.load_state == LsqLoadState::None) {
+            continue;
+        }
+        return make_load_status(load.load_state,
+                                load.sequence_id,
+                                load.violating_store_sequence_id);
+    }
+
+    for (const LsqEntry& load : entries_) {
+        if (load.kind != LsqEntryKind::Load || !load.address_ready) {
+            continue;
+        }
+        const LsqLoadStatus status = classify_load(load.sequence_id, load.address, load.size);
+        if (status.state != LsqLoadState::None) {
+            return status;
+        }
+    }
+
+    return {};
+}
+
 bool LoadStoreQueue::has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const {
     return classify_load(sequence_id, load_addr, load_size).blocks_issue();
 }

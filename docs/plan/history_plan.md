@@ -23,6 +23,19 @@
 
 ### 2026-05-02
 
+#### pipeline-lsq-blocked-load-observation-plan
+
+- 原文件：`pipeline_lsq_blocked_load_observation_plan.md`
+- 完成内容：完成一轮很窄的 `pipeline / LSQ` 计组观察合同硬化。
+  `LoadStoreQueue::oldest_load_status()` 现在可报告队列中最老的 blocked / replay load；
+  `PipelineBackend::debug_snapshot()` 在没有当周期 decode 观察记录时，也会从 LSQ 队列
+  fallback 暴露 blocked load 的 state、load sequence id 和 store sequence id。
+- 实现过程摘要：这一轮按 TDD 先补 `load_store_queue_smoke` 与
+  `pipeline_speculation_contracts_smoke` 红灯，再实现最小 LSQ 查询和 snapshot fallback。
+  本轮只增强只读 debug snapshot / frontend 可观察性，不改变 replay、forwarding、commit
+  boundary、JIT、cache、DMA、multicore 或 guest 可见语义。
+- 结果参考：[phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)、[pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### mainline-wave7-linux-console-loading-experience-plan
 
 - 原文件：`wave7_linux_console_loading_experience_plan.md`

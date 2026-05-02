@@ -33,6 +33,7 @@
   - 无
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan](../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-loading-experience-plan](../plan/history_plan.md#mainline-wave7-linux-console-loading-experience-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan](../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-load-contract-plan](../plan/history_plan.md#mainline-wave7-linux-console-load-contract-plan)
@@ -266,6 +267,12 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
   - functional `linux_proto` dummy-payload observation baseline
 - `debug/frontend`、`kernel_alpha` 十条基线、`make test` / `make test-pipeline`
   和现有 workload smoke 都已进入维护态。
+- `pipeline / LSQ` 观察合同在 2026-05-02 补上一条窄门禁：
+  `LoadStoreQueue::oldest_load_status()` 会报告队列中最老的 blocked / replay load，
+  `PipelineBackend::debug_snapshot()` 在没有当周期 decode 观察记录时，也会从 LSQ
+  队列暴露 blocked load 的 state、load sequence id 和 store sequence id。这只增强
+  debug snapshot / frontend 可观察性，不改变 replay、forwarding、commit boundary 或 guest
+  可见语义。
 - 当前 active wave 是 `Wave 7 / 产品化展示与在线调试平台收口`，不是继续深挖 Linux
   checkpoint 的 `Wave 3`，也不是默认 JIT backend、AI accelerator 后续专项或完整
   multicore / coherence 专项。

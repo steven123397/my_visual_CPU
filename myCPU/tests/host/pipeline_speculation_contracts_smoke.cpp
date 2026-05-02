@@ -434,6 +434,39 @@ int main() {
         cpu_init(cpu, kEntry);
 
         PipelineBackend backend(cpu, bus);
+        PipelineCoreState& state = backend.testing_state();
+        LoadStoreQueue& lsq = state.lsq();
+        const LsqIndex older_store = lsq.enqueue_store({
+            .sequence_id = 1,
+            .size = 4,
+        });
+        const LsqIndex younger_load = lsq.enqueue_load({
+            .sequence_id = 2,
+            .rd = 6,
+            .size = 4,
+        });
+        lsq.mark_address_ready(older_store, kDataAddr);
+        lsq.mark_address_ready(younger_load, kDataAddr);
+        lsq.mark_data_ready(younger_load, 0x11223344ULL);
+        lsq.mark_order_ready(younger_load);
+        state.lsq_observed_load_status = {};
+
+        const BackendDebugSnapshot snapshot = backend.debug_snapshot();
+        if (!expect(snapshot.pipeline.ooo.lsq_load_state == "blocked_by_overlapping_store" &&
+                        snapshot.pipeline.ooo.lsq_load_sequence_id == 2 &&
+                        snapshot.pipeline.ooo.lsq_store_sequence_id == 1,
+                    "pipeline snapshot should expose the oldest blocked load still resident in LSQ")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+
+        PipelineBackend backend(cpu, bus);
         LoadStoreQueue& lsq = backend.testing_state().lsq();
         const LsqIndex older_store = lsq.enqueue_store({
             .sequence_id = 1,

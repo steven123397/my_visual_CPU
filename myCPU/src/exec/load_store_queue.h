@@ -92,6 +92,7 @@ public:
                                                      uint64_t load_addr,
                                                      int load_size) const;
     LsqLoadStatus active_replay() const;
+    LsqLoadStatus oldest_load_status() const;
     bool has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
     std::optional<LsqEntry> retire_entry(LsqIndex index);
     void clear();
