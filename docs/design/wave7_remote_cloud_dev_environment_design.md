@@ -83,7 +83,7 @@
 
 ```text
 Remote Cloud Server
-  /srv/mycpu/
+  /srv/apps/my_visual_CPU/
     repo/                 # 仓库工作副本
     runtime-assets/       # Linux Image / dtb / rootfs / white-listed assets
     toolchains/           # 可选的本地工具链或指向系统工具链
@@ -149,21 +149,21 @@ Remote Cloud Server
 建议固定以下远端目录约定：
 
 ```text
-/srv/mycpu/repo
-/srv/mycpu/runtime-assets/linux/Image
-/srv/mycpu/runtime-assets/linux/rootfs.ext4
-/srv/mycpu/runtime-assets/linux/linux.dtb
-/srv/mycpu/runtime-assets/spike/bin/spike
-/srv/mycpu/logs/
-/srv/mycpu/tmp/
+/srv/apps/my_visual_CPU/repo
+/srv/apps/my_visual_CPU/runtime-assets/linux/Image
+/srv/apps/my_visual_CPU/runtime-assets/linux/rootfs.ext4
+/srv/apps/my_visual_CPU/runtime-assets/linux/linux.dtb
+/srv/apps/my_visual_CPU/runtime-assets/spike/bin/spike
+/srv/apps/my_visual_CPU/logs/
+/srv/apps/my_visual_CPU/tmp/
 ```
 
 对应环境变量建议固定为：
 
-- `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/srv/mycpu/runtime-assets/linux/Image`
-- `MYCPU_LINUX_PROTO_RUNTIME_IMAGE=/srv/mycpu/runtime-assets/linux/Image`
-- `SPIKE_PATH=/srv/mycpu/runtime-assets/spike/bin/spike`
-- `MYCPU_RUNTIME_TMPDIR=/srv/mycpu/tmp`
+- `MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/srv/apps/my_visual_CPU/runtime-assets/linux/Image`
+- `MYCPU_LINUX_PROTO_RUNTIME_IMAGE=/srv/apps/my_visual_CPU/runtime-assets/linux/Image`
+- `SPIKE_PATH=/srv/apps/my_visual_CPU/runtime-assets/spike/bin/spike`
+- `MYCPU_RUNTIME_TMPDIR=/srv/apps/my_visual_CPU/tmp`
 
 如果远端机器使用系统安装的 Spike，也可以不单独维护 `runtime-assets/spike/bin/spike`，但部署脚本和 smoke 必须仍支持显式 `SPIKE_PATH`，避免依赖 shell 环境的偶然配置。
 
