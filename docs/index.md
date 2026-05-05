@@ -33,17 +33,23 @@
     主线 `Wave 7 / 产品化展示与在线控制台` 的产品官网、控制台和产品文档设计入口。
 14. [design/wave7_remote_cloud_dev_environment_design.md](design/wave7_remote_cloud_dev_environment_design.md)
     主线 `Wave 7` 在另一台云服务器上承接完整开发/验证环境的设计入口。
-15. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+15. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
+    `Wave 7` 阶段性收口后的 `标准 Linux 发行版平台` 新主线设计入口。
+16. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
+    `标准 Linux 发行版平台` 新主线的当前状态、风险和下一步。
+17. [plan/post_wave7_linux_distribution_platform_plan.md](plan/post_wave7_linux_distribution_platform_plan.md)
+    `标准 Linux 发行版平台` 新主线的当前活跃计划。
+18. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     向量扩展与 ML workload 的统一设计边界。
-16. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+19. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 方向设计。
-17. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+20. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
     `debug_session / protocol + frontend` 设计边界。
-18. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+21. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
     Spike 外部差分验证边界。
-19. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
+22. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
     主线 `Wave 7` 远端云服务器开发/验证环境的当前活跃计划。
-20. [plan/history_plan.md](plan/history_plan.md)
+23. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -54,6 +60,10 @@
   - [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
   - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
   - [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
+- `Post-Wave 7 Linux`
+  - [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
+  - [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
+  - [plan/post_wave7_linux_distribution_platform_plan.md](plan/post_wave7_linux_distribution_platform_plan.md)
 - `pipeline`
   - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
