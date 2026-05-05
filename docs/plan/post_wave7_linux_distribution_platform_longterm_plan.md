@@ -32,6 +32,9 @@
 - 阶段 1 已完成第一刀正向收口：`tty_login_probe` 使用真实外部 Alpine rootfs 证明 BusyBox
   getty autologin 到等价 serial TTY prompt，并完成后续输入输出往返；当前仍不声明 init 管理的
   getty、密码 login 或多终端完整支持。
+- 阶段 2 已完成第一刀正向收口：`process_control` 使用真实外部 Alpine rootfs 证明 `sleep`、
+  后台子进程与 `wait` 返回码、`trap` / `kill` 和基础 shell 控制流；当前仍不声明完整
+  signal delivery、作业控制、多进程压力或长期 timer 稳定性。
 
 ## 总目标
 
@@ -136,6 +139,8 @@
 
 ## 阶段 2：signal / timer / process 控制矩阵
 
+> **阶段状态：** 已完成第一刀正向收口；阶段提交项见 checklist。
+
 ### 目标
 
 把 shell 从“能跑命令”推进到“能跑基本脚本控制流”。优先覆盖 `sleep`、子进程、`wait`、返回码、简单 signal / trap。
@@ -156,16 +161,22 @@
 
 ### Checklist
 
-- [ ] 新增 `process_control` profile。
-- [ ] 覆盖 `sleep 1; echo ok` 或更短可控 timer 合同。
-- [ ] 覆盖后台子进程和 `wait` 返回码。
-- [ ] 覆盖 `trap` / `kill` 的最小 shell 可见行为。
-- [ ] 覆盖简单脚本控制流：`&&`、`;`、退出码读回。
-- [ ] 对每个失败点区分 syscall、timer、signal delivery、wait、shell 内建或 prompt settling。
-- [ ] 只在真实发行版 smoke 需要时补最小诊断程序；不要回到 fourth-stage marker 扩展。
-- [ ] 回写 status 的 process / timer / signal 证据矩阵。
-- [ ] 阶段完成后运行通用验证基线。
-- [ ] 阶段完成后提交一次。
+- [x] 新增 `process_control` profile。
+- [x] 覆盖 `sleep 1; echo ok` 或更短可控 timer 合同。
+  本阶段使用 `sleep 1; printf 'sleep-ok'`。
+- [x] 覆盖后台子进程和 `wait` 返回码。
+  本阶段使用 `sh -c 'sleep 1; exit 7' & pid=$!; wait $pid` 并读回 `wait-status:7`。
+- [x] 覆盖 `trap` / `kill` 的最小 shell 可见行为。
+  本阶段使用 `trap 'printf trap-hit' TERM; kill -TERM $$`。
+- [x] 覆盖简单脚本控制流：`&&`、`;`、退出码读回。
+  本阶段覆盖 `false || ...; true && ...; false; printf "$?"`。
+- [x] 对每个失败点区分 syscall、timer、signal delivery、wait、shell 内建或 prompt settling。
+  本阶段走正向完成路径；若后续失败，profile 中每条命令已按能力面拆分。
+- [x] 只在真实发行版 smoke 需要时补最小诊断程序；不要回到 fourth-stage marker 扩展。
+  本阶段未新增 guest 诊断程序，也未回退到 fourth-stage marker。
+- [x] 回写 status 的 process / timer / signal 证据矩阵。
+- [x] 阶段完成后运行通用验证基线。
+- [x] 阶段完成后提交一次。
 
 ### 完成定义
 

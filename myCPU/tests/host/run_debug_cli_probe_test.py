@@ -78,6 +78,24 @@ LINUX_DISTRO_RUNTIME_PROFILES = {
         ),
         ('printf "getty-roundtrip-ok"', "getty-roundtrip-ok"),
     ],
+    "process_control": [
+        ("cat /etc/os-release", "ID=alpine"),
+        ("sleep 1; printf 'sleep-ok'", "sleep-ok"),
+        (
+            "sh -c 'sleep 1; exit 7' & pid=$!; wait $pid; "
+            'printf "wait-status:%s" "$?"',
+            "wait-status:7",
+        ),
+        (
+            "trap 'printf trap-hit' TERM; kill -TERM $$",
+            "trap-hit",
+        ),
+        (
+            "false || printf 'or-ok'; true && printf ':and-ok'; "
+            "false; printf ':status:%s' \"$?\"",
+            "or-ok:and-ok:status:1",
+        ),
+    ],
 }
 
 
@@ -507,6 +525,34 @@ class RunDebugCliProbeTest(unittest.TestCase):
                         "~ # ",
                     ),
                     ('printf "getty-roundtrip-ok"', "getty-roundtrip-ok"),
+                ],
+            )
+
+    def test_linux_distro_command_contracts_uses_process_control_profile(self) -> None:
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"MYCPU_LINUX_DISTRO_RUNTIME_PROFILE": "process_control"},
+            clear=True,
+        ):
+            self.assertEqual(
+                linux_distro_command_contracts("ignored", "ignored"),
+                [
+                    ("cat /etc/os-release", "ID=alpine"),
+                    ("sleep 1; printf 'sleep-ok'", "sleep-ok"),
+                    (
+                        "sh -c 'sleep 1; exit 7' & pid=$!; wait $pid; "
+                        'printf "wait-status:%s" "$?"',
+                        "wait-status:7",
+                    ),
+                    (
+                        "trap 'printf trap-hit' TERM; kill -TERM $$",
+                        "trap-hit",
+                    ),
+                    (
+                        "false || printf 'or-ok'; true && printf ':and-ok'; "
+                        "false; printf ':status:%s' \"$?\"",
+                        "or-ok:and-ok:status:1",
+                    ),
                 ],
             )
 
@@ -2062,6 +2108,50 @@ class RunDebugCliProbeTest(unittest.TestCase):
             [
                 "make",
                 "test-host-run_debug_cli_probe_linux_distribution_tty_login",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_process_control_target_requests_profile(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_process_control",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=process_control", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_process_control_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_process_control",
             ],
             cwd=MYCPU_DIR,
             stdout=subprocess.PIPE,

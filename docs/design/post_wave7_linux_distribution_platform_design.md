@@ -50,6 +50,9 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - 同一动态 BusyBox shell 会话已经通过 `tty_login_probe` profile，覆盖 TTY 工具盘点、
   `tty` / `stty` / `setsid` 往返，以及 BusyBox `getty -n -l /bin/sh -L 115200 ttyS0 vt100`
   到等价 serial TTY prompt 后的后续输入输出往返。
+- 同一动态 BusyBox shell 会话已经通过 `process_control` profile，覆盖 `sleep 1`、
+  后台子进程与 `wait` 返回码、`trap` / `kill -TERM $$` 最小 signal 处理，以及 `||` /
+  `&&` / `;` 和退出码读回的基础 shell 控制流。
 - 为越过 musl loader，当前已补 FPR raw state、标准 `flw/fld/fsw/fsd` load-store
   语义和 RVC `c.fld/c.fsd` / `c.fldsp/c.fsdsp` 解码。
 
@@ -120,17 +123,18 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - `MYCPU_LINUX_DISTRO_RUNTIME_COMMAND='...'`
 - `MYCPU_LINUX_DISTRO_RUNTIME_EXPECT='...'`
 - `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS='command=>expected\n...'`（可选）
-- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency | tty_login_probe`（可选）
+- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency | tty_login_probe | process_control`（可选）
 
 当前已存在的真实 opt-in 目标包括：
 
 - `test-host-run_debug_cli_probe_linux_distribution_runtime`
 - `test-host-run_debug_cli_probe_linux_distribution_filesystem`
 - `test-host-run_debug_cli_probe_linux_distribution_tty_login`
+- `test-host-run_debug_cli_probe_linux_distribution_process_control`
 
 这些 target 只能证明当前声明的 shell command / filesystem consistency / 等价 serial TTY
-prompt contract，不等同于完整发行版矩阵、init 管理的 getty、密码 login、完整 process
-control、跨 reboot 持久性或完整 F/D 浮点支持。
+prompt / process-control smoke contract，不等同于完整发行版矩阵、init 管理的 getty、
+密码 login、完整 process control、跨 reboot 持久性或完整 F/D 浮点支持。
 
 ## 能力分解
 
@@ -143,8 +147,9 @@ control、跨 reboot 持久性或完整 F/D 浮点支持。
    getty autologin 到等价 serial TTY prompt 的 opt-in 合同，但尚未声明 init 管理的 getty
    或密码 login 完整支持。
 2. **signal / timer / process 控制**
-   覆盖真实 shell 脚本控制流、`sleep`、子进程、`wait`、返回码和基础 signal 语义。当前还只证明
-   多命令 shell 与文件系统一致性 smoke。
+   覆盖真实 shell 脚本控制流、`sleep`、子进程、`wait`、返回码和基础 signal 语义。当前已声明
+   BusyBox shell 可见的最小 process / timer / signal profile，但尚未声明完整 signal
+   delivery、作业控制、多进程压力或长期 timer 稳定性。
 3. **文件系统与块设备耐久性**
    从 `/tmp` 会话内一致性扩到 ext4 / virtio-blk 的 sync、rename、目录遍历、较大文件和可选
    reset / reboot 后一致性。当前不声明跨 reboot 持久性。

@@ -74,9 +74,15 @@
     `getty` / `login` / `stty` / `setsid` / `tty` 工具盘点、`tty` / `stty` / `setsid`
     往返，以及 BusyBox `getty -n -l /bin/sh -L 115200 ttyS0 vt100` 到等价 serial TTY
     prompt 后的后续输入输出往返。
+  - 同一动态 BusyBox shell 会话的 process / timer / signal 第一阶段路线：
+    `test-host-run_debug_cli_probe_linux_distribution_process_control` 使用
+    `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=process_control`，覆盖 `sleep 1` timer 可见行为、
+    后台子进程与 `wait` 返回码、`trap` / `kill -TERM $$` 最小 signal 处理，以及
+    `||` / `&&` / `;` 和退出码读回的 shell 控制流。
   这份 rootfs 是本机临时运行资产，不纳入仓库默认资产；动态路线当前只声明最小
-  shell command / 文件系统一致性 / 等价 serial TTY prompt contract，不声明完整发行版矩阵、
-  init 管理的 getty、密码 login 或完整 F/D 浮点算术支持。
+  shell command / 文件系统一致性 / 等价 serial TTY prompt / process-control smoke contract，
+  不声明完整发行版矩阵、init 管理的 getty、密码 login、完整 signal 子系统或完整
+  F/D 浮点算术支持。
 
 ## 关键历史节点
 
@@ -114,6 +120,12 @@
     Alpine 动态 `/bin/sh` 下证明 `/dev/ttyS0` 可见、TTY 工具可用、`tty` / `stty` /
     `setsid` 路线可交互，以及 BusyBox `getty -n -l /bin/sh -L 115200 ttyS0 vt100`
     能到达等价 serial TTY prompt 并完成后续输入输出往返。
+  - 同日完成长线阶段 2 的 signal / timer / process 第一刀：新增
+    `make test-host-run_debug_cli_probe_linux_distribution_process_control`，保持缺外部 rootfs
+    fail-closed，并用 `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=process_control` 在真实外部
+    Alpine 动态 `/bin/sh` 下证明 `sleep 1`、后台 `sleep` 子进程 + `wait` 返回码、
+    `trap` / `kill -TERM $$` 和基础 shell 控制流均能在同一会话内观察到期望输出并回到
+    `~ # ` prompt。
 - `2026-05-02`
   - `Post-Wave 7 标准 Linux 发行版平台` 新主线正式启动，并新增：
     - [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md)
@@ -140,9 +152,13 @@
   RISC-V 发行版环境。
 - 当前 `linux_proto_console` 的外部资产合同仍不完整：前端只显式检查 kernel `Image`，
   而标准发行版所需的 rootfs、bootargs、prompt 和命令回显合同还没有被单独收口。
-- 发行版级平台所需的 signal / timer / process、virtio 稳定性和长期运行 contract
-  还没有被拆成完整验证矩阵；动态 BusyBox / musl loader 已有最小 shell command、
-  `/tmp` 文件系统一致性和等价 serial TTY prompt 正向证据，但这不等同于完整发行版级支持。
+- 发行版级平台所需的 virtio 稳定性和长期运行 contract 还没有被拆成完整验证矩阵；
+  动态 BusyBox / musl loader 已有最小 shell command、`/tmp` 文件系统一致性、等价
+  serial TTY prompt 和 process / timer / signal 最小矩阵正向证据，但这不等同于完整
+  发行版级支持。
+- 当前 process / timer / signal 第一阶段只证明 BusyBox shell 可见的 `sleep`、子进程
+  `wait`、`trap` / `kill` 和控制流；还不声明完整 signal delivery 语义、作业控制、
+  多进程压力或长期 timer 稳定性。
 - 当前 TTY / login 第一阶段只证明 BusyBox getty autologin 到 `/bin/sh` 的等价 serial
   TTY prompt；还不声明 init 管理的 `/etc/inittab` getty、密码 login、PAM / shadow
   登录流或多终端会话支持。
@@ -158,15 +174,15 @@
 [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 执行，长线拆成五个阶段：
 
-1. signal / timer / process 控制矩阵。
-2. 文件系统与块设备耐久性。
-3. curated 发行版矩阵。
-4. ISA / platform 合同补齐。
+1. 文件系统与块设备耐久性。
+2. curated 发行版矩阵。
+3. ISA / platform 合同补齐。
 
 执行期间继续保留 `external Alpine ext4 + static /init`、`external Alpine ext4 + dynamic /bin/sh`
-单命令、多命令 smoke、同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke，以及
-`tty_login_probe` 等价 serial TTY prompt smoke 作为正向基线；不要把它们扩大解释成完整
-发行版用户态支持。五个阶段都较大，每个阶段彻底完成后才提交一次；其他中间 slice 不自动提交。
+单命令、多命令 smoke、同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke、
+`tty_login_probe` 等价 serial TTY prompt smoke 和 `process_control` 最小矩阵 smoke 作为
+正向基线；不要把它们扩大解释成完整发行版用户态支持。五个阶段都较大，每个阶段彻底完成后
+才提交一次；其他中间 slice 不自动提交。
 
 ## 验证基线
 
@@ -175,6 +191,7 @@
 - `cd frontend && node --test`
 - `cd myCPU && make test-host-run_debug_cli_probe`
 - `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_tty_login`
+- `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_process_control`
 - `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_filesystem`
 - `cd myCPU && make test-host-xv6_boot_smoke`
 - `cd myCPU && make test-host-xv6_shell_smoke`
