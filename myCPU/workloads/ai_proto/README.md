@@ -2,6 +2,14 @@
 
 `ai_proto` 是 AI accelerator Wave 1 / Wave 2 的 host-side packaging/profile 入口。
 
+在 `Post-Wave 7` 新主线下，这里也开始承接第一批受限用户任务入口：
+
+- `pack_graph.py --task-spec <file> --out-dir <dir>`
+  当前支持 `ai_task_spec_v1 / bounded_dynamic_gemm_v1` 和
+  `ai_task_spec_v1 / bounded_dynamic_cnn_v1`。
+  它会在 host 侧完成校验、lower 到统一 graph package、生成 runtime shape table、
+  expected output、manifest，以及最小顺序 scratchpad memory plan。
+
 当前覆盖 6 条固定 workload：
 
 - `cnn`
@@ -32,6 +40,33 @@ python3 workloads/ai_proto/pack_graph.py --workload dynamic_cnn --out-dir worklo
 python3 workloads/ai_proto/pack_graph.py --workload tiny_attention_static --out-dir workloads/ai_proto/generated
 ```
 
+受限用户任务入口示例：
+
+```bash
+cat > workloads/ai_proto/generated/custom_dynamic_cnn.task_spec.json <<'EOF'
+{
+  "format": "ai_task_spec_v1",
+  "task_kind": "bounded_dynamic_cnn_v1",
+  "name": "custom_dynamic_cnn",
+  "source_tag": 79,
+  "max_ticks": 128,
+  "input0": [
+    [1, -2, 3],
+    [-4, 5, -6],
+    [7, -8, 9]
+  ],
+  "input1": [
+    [1, 0],
+    [-1, 2]
+  ]
+}
+EOF
+
+python3 workloads/ai_proto/pack_graph.py \
+  --task-spec workloads/ai_proto/generated/custom_dynamic_cnn.task_spec.json \
+  --out-dir workloads/ai_proto/generated
+```
+
 每个 workload 会生成：
 
 - `<name>.graph.bin`
@@ -44,6 +79,8 @@ python3 workloads/ai_proto/pack_graph.py --workload tiny_attention_static --out-
   预期输出。
 - `<name>.manifest`
   host profile 入口读取的 manifest。
+
+`task-spec` 当前也生成同样一组产物，只是名字由 `task_spec.name` 决定。
 
 ## 通过 workloads 体系运行
 

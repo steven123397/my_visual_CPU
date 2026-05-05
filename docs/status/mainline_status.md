@@ -216,11 +216,15 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
 `a0/a1/a2`，并再次等待 `mycpu-linux# ` prompt；普通 demo reset 仍保持原有裸 reset
 语义。
 `Wave 7` 的剩余部署 / 运维工作已经转移到远端服务器上的仓库 checkout 继续推进；本地工作区
-当前先合入 `Post-Wave 7` 标准 Linux 发行版平台新主线入口：
+现已正式打开两条 `Post-Wave 7` 新主线，并分别补齐独立文档入口：
+- 标准 Linux 发行版平台：
   [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md) /
   [linux_distribution_platform_status.md](linux_distribution_platform_status.md) /
-  [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)。
-用户自定义 AI 任务与 NPU 性能模型仍在独立分支收口，合并后再进入主线状态。
+  [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)
+- 用户自定义 AI 任务与更接近商用 NPU 的性能模型：
+  [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md) /
+  [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md) /
+  [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
 
 ## 当前状态
 
@@ -909,12 +913,20 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    RISC-V 发行版镜像；二是 AI accelerator 支持用户自己的 AI 任务，并逐步逼近商用
    NPU 的 tile scheduler、DMA / compute overlap、multi outstanding queue、Linux-facing
    driver 和性能模型。这两条都需要另开 design / plan，不并入 Wave 7 收尾。
-16. 当前 `Post-Wave 7` 标准 Linux 发行版平台新主线已经在本地工作区正式建档：
+16. 当前这两条 `Post-Wave 7` 新主线已经在本地工作区正式建档：
+   Linux 方向进入
    [linux_distribution_platform_status.md](linux_distribution_platform_status.md) /
    [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md) /
-   [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)。
-   当前已跑通 `external Alpine ext4 + static /init` 的 opt-in runtime smoke；
-   动态链接 BusyBox / musl loader 用户态仍是近端 blocker。
+   [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)；
+   AI 方向进入
+   [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md) /
+   [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md) /
+   [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)。
+   Linux 当前已跑通 `external Alpine ext4 + static /init` 的 opt-in runtime smoke；
+   动态链接 BusyBox / musl loader 用户态仍是近端 blocker。AI 当前第一刀采用
+   host-side 受限 `ai_task_spec_v1` importer，并已覆盖 `bounded_dynamic_gemm_v1`
+   与 `bounded_dynamic_cnn_v1` 到统一 graph package / runtime shape / manifest 路径；
+   尚未开放任意模型上传、完整 ONNX / PyTorch runtime 或 wall-clock 性能结论。
 17. 默认 JIT backend 仍只做后续 readiness 评估；默认 backend、persistent cache、
    workload-level scheduler、CSR / atomic / vector helper runtime、multicore、coherence 和
    新的 memory consistency 模型仍不启动。
