@@ -40,11 +40,11 @@
   - `docs/status/mainline_status.md`
   - `docs/index.md`
 
-- [ ] **步骤 1：** 把“用户自定义 AI 任务”和“更接近商用 NPU 的性能模型”从 `Wave 7`
+- [x] **步骤 1：** 把“用户自定义 AI 任务”和“更接近商用 NPU 的性能模型”从 `Wave 7`
   白名单展示形态中拆出来，形成正式新主线边界。
-- [ ] **步骤 2：** 明确这条线的非目标，例如任意浏览器上传、完整 ONNX / PyTorch runtime、
+- [x] **步骤 2：** 明确这条线的非目标，例如任意浏览器上传、完整 ONNX / PyTorch runtime、
   训练全栈和 wall-clock 性能承诺。
-- [ ] **步骤 3：** 在 AI 专项状态、主线状态和索引中建立正式入口。
+- [x] **步骤 3：** 在 AI 专项状态、主线状态和索引中建立正式入口。
 
 ### 任务 2：规划用户任务入口与 compile / memory plan 第一刀
 
@@ -76,11 +76,11 @@
   - `myCPU/workloads/ai_proto/README.md`
   - `myCPU/tests/host/ai_accelerator_profile_smoke.cpp`
 
-- [ ] **步骤 1：** 为 `pack_graph.py` 新增 `--task-spec` 入口，并固定 `ai_task_spec_v1 /
+- [x] **步骤 1：** 为 `pack_graph.py` 新增 `--task-spec` 入口，并固定 `ai_task_spec_v1 /
   bounded_dynamic_gemm_v1` contract。
-- [ ] **步骤 2：** 在 importer 内自动 lower 到现有 dynamic GEMM graph package、runtime shape
+- [x] **步骤 2：** 在 importer 内自动 lower 到现有 dynamic GEMM graph package、runtime shape
   table、expected output 和 manifest。
-- [ ] **步骤 3：** 在 importer 内新增最小 automatic memory plan helper，并用 host smoke 锁住
+- [x] **步骤 3：** 在 importer 内新增最小 automatic memory plan helper，并用 host smoke 锁住
   正向与 fail-closed 负向合同。
   当前已完成 `task_spec_lowering.py` 共享 host-side lower 模块抽离，`pack_graph.py`
   只保留 CLI 与固定 workload 入口，前端继续复用同一条 host 打包路径。

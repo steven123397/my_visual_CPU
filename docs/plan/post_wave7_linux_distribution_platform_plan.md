@@ -39,10 +39,10 @@
   - `docs/status/mainline_status.md`
   - `docs/index.md`
 
-- [ ] **步骤 1：** 以当前 `timerfd-one-shot-readback-ok` checkpoint、`linux_proto_console`
+- [x] **步骤 1：** 以当前 `timerfd-one-shot-readback-ok` checkpoint、`linux_proto_console`
   和 `Wave 7` 远端部署分工为基础，固定这条新主线的目标与非目标。
-- [ ] **步骤 2：** 把“标准发行版平台”与“继续追加 fourth-stage marker”明确区分开。
-- [ ] **步骤 3：** 在主线状态文档与索引中为这条新主线建立正式入口。
+- [x] **步骤 2：** 把“标准发行版平台”与“继续追加 fourth-stage marker”明确区分开。
+- [x] **步骤 3：** 在主线状态文档与索引中为这条新主线建立正式入口。
 
 ### 任务 2：盘点 guest 可见平台 gap 与第一阶段 contract
 
