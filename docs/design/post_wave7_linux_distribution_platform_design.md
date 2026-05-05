@@ -21,8 +21,8 @@
 - 状态文档：
   - [../status/linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)
   - [../status/mainline_status.md](../status/mainline_status.md)
-- 相关计划：
-  - [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)
+- 已完成计划：
+  - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
 - 相关设计：
   - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
   - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
@@ -159,6 +159,8 @@ RISC-V 发行版环境。继续沿 `timerfd` 线追加同类 syscall 微分支�
     - `MYCPU_LINUX_DISTRO_RUNTIME_PROMPT='...'`
     - `MYCPU_LINUX_DISTRO_RUNTIME_COMMAND='...'`
     - `MYCPU_LINUX_DISTRO_RUNTIME_EXPECT='...'`
+    - `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS='command=>expected\n...'`（可选）
+    - `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency`（可选）
   - 默认命令合同按 rootfs 来源分层：
     - repo 自带 `linux_proto/rootfs.ext4` 仍默认 `help -> commands: help uptime exit`
     - 显式外部 rootfs 默认切到 `cat /etc/os-release -> ID=`
@@ -171,6 +173,18 @@ RISC-V 发行版环境。继续沿 `timerfd` 线追加同类 syscall 微分支�
     `external Alpine ext4 + static /init + cat /etc/os-release -> ID=alpine`。
     该证据证明外部 block rootfs、ext4 mount、`virtio-blk` 和从 rootfs 执行 `/init`
     的路径可用，但不把动态链接发行版用户态声明为已支持。
+  - `2026-05-05` 的后续正向证据已经扩到
+    `external Alpine ext4 + init=/bin/sh + cat /etc/os-release -> ID=alpine`。
+    该证据证明动态 BusyBox / musl loader 的最小 shell command contract 已可用；它仍不等同于
+    完整发行版矩阵、完整 F/D 浮点算术、TTY/login 或长期交互稳定性。
+  - 同日该 opt-in runtime guardrail 已支持同一 shell 会话内的多命令序列，使用
+    `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS` 的逐行 `command=>expected` 合同。当前正向证据
+    已覆盖 `cat /etc/os-release`、`ls -l /bin/sh` 和 `/tmp` 写读回显。
+  - 同日继续新增 `filesystem_consistency` profile 和
+    `test-host-run_debug_cli_probe_linux_distribution_filesystem` opt-in target，仍显式消费外部
+    `Image/rootfs/bootargs/prompt`。当前正向证据覆盖同一动态 BusyBox shell 会话内的
+    `/tmp` 目录创建、文件写入、追加、读回、长度检查、删除、目录移除和后续 prompt 存活；
+    这比单条命令 smoke 更接近长期交互 / 文件系统一致性 guardrail，但仍不声明完整发行版矩阵。
 
 - **session / console 合同**
   - 成功标志从“到达最小 shell prompt”开始，但需要逐步扩展到动态链接用户态命令、
@@ -214,9 +228,11 @@ RISC-V 发行版环境。继续沿 `timerfd` 线追加同类 syscall 微分支�
   和“更完整用户态能力”之间的边界。
 - 如果在外部运行资产合同稳定前就先做 frontend distro route，会把 manifest、健康诊断、
   UI 文案和真实平台能力再次耦合起来，后续更难收口。
-- 当前外部 Alpine rootfs 已经能走到 kernel `Run /init` 并在静态 `/init` 下完成
-  smoke；动态 BusyBox / musl loader 路径仍是近端 blocker。后续设计讨论不应再把
-  这个问题归类为“缺少 rootfs 资产”或“kernel / virtio-blk 未挂载”。
+- 当前外部 Alpine rootfs 已经能分别在静态 `/init` 和动态 `init=/bin/sh` 路线完成
+  最小 shell command smoke，动态路线还已扩到同一 shell 会话的多命令 smoke 和
+  `/tmp` 文件系统一致性 smoke。后续设计讨论不应再把此前动态 BusyBox / musl loader
+  问题归类为“缺少 rootfs 资产”或“kernel / virtio-blk 未挂载”，也不应把该证据扩大解释成
+  完整发行版平台、TTY/login 或完整包管理生态。
 
 ## 当前有效性说明
 

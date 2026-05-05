@@ -2,6 +2,7 @@
 
 void CoreState::reset(uint64_t entry) {
     gpr_.fill(0);
+    fpr_.fill(0);
     pc_ = entry;
     cycle_ = 0;
     instret_ = 0;
@@ -18,6 +19,14 @@ void CoreState::write_gpr(uint32_t idx, uint64_t value) {
     if ((idx & 0x1F) != 0) {
         gpr_[idx & 0x1F] = value;
     }
+}
+
+uint64_t CoreState::read_fpr(uint32_t idx) const {
+    return fpr_[idx & 0x1F];
+}
+
+void CoreState::write_fpr(uint32_t idx, uint64_t value) {
+    fpr_[idx & 0x1F] = value;
 }
 
 uint64_t CoreState::pc() const {

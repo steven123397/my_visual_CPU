@@ -263,6 +263,9 @@ bool PipelineBackend::step_wb() {
         state_.rename_map().commit_dest(rob_head->arch_rd, rob_head->phys_rd);
         cpu_.core().write_gpr(rob_head->arch_rd, state_.phys_regs().read(rob_head->phys_rd));
     }
+    if (result.retired && rob_head->effects.fp_write.enable) {
+        cpu_.core().write_fpr(rob_head->effects.fp_write.rd, rob_head->effects.fp_write.value);
+    }
     if (rob_head->sequence_id != 0) {
         state_.record_retire({
             .sequence_id = rob_head->sequence_id,

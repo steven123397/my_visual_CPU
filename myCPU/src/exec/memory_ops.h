@@ -10,5 +10,7 @@ extern "C" {
 
 InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm);
 uint64_t extend_loaded_value(uint64_t value, int size, bool sign_extend);
+bool is_standard_fp_load(const Insn& insn);
+bool is_standard_fp_store(const Insn& insn);
 bool apply_memory_effects(CPU& cpu, Bus& bus, const InsnEffects& effects);
 bool execute_memory_instruction(CPU& cpu, Bus& bus, const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm);

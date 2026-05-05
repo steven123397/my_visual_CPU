@@ -5,8 +5,8 @@
 本文档只记录 `Post-Wave 7 标准 Linux 发行版平台` 这条新主线的当前基线、少量关键历史节点、当前仍有效的限制和下一步。
 
 它不维护逐条执行流水账；更细的实施过程统一回写到
-[../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)
-和 [../plan/history_plan.md](../plan/history_plan.md)。
+[../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
+和后续活跃计划。
 
 ## 关联文档
 
@@ -16,8 +16,8 @@
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
-- 当前活跃计划：
-  - [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)
+- 已完成计划：
+  - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
 
 ## 当前状态
 
@@ -55,12 +55,21 @@
     `MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS=/path/to/rootfs.ext4`
   - 没有外部 rootfs 时，target 与 host unittest 都不会回落到 repo 自带
     `linux_proto/rootfs.ext4`
-- `2026-05-05` 已拿到第一条真实外部 rootfs 正向证据：用外部 Alpine riscv64 ext4
-  rootfs、外部 Linux `Image` 和 `init=/init` 跑通
-  `make test-host-run_debug_cli_probe_linux_distribution_runtime`。该证据证明当前平台可以通过
-  `virtio-blk` 挂载外部 Alpine ext4，执行外部静态 `/init`，到达 `mycpu-distro# `，
-  输入 `cat /etc/os-release`，观察到 `ID=alpine`，并回到 prompt。
-  这份 rootfs 是本机临时运行资产，不纳入仓库默认资产。
+- `2026-05-05` 已拿到两条真实外部 Alpine rootfs 正向证据：
+  - `init=/init` 静态 `/init` 路线：`virtio-blk` 挂载外部 Alpine ext4，执行外部静态
+    `/init`，到达 `mycpu-distro# `，输入 `cat /etc/os-release`，观察到 `ID=alpine`，
+    并回到 prompt。
+  - `init=/bin/sh` 动态 BusyBox / musl 路线：经 debug CLI 等到真实 BusyBox `~ # `
+    prompt，输入 `cat /etc/os-release`，观察到 `ID=alpine`，并回到 prompt。
+  - 同一动态 BusyBox shell 会话的多命令路线：逐条执行
+    `cat /etc/os-release`、`ls -l /bin/sh` 和 `/tmp` 写读回显，并且每条命令后都回到
+    `~ # ` prompt。
+  - 同一动态 BusyBox shell 会话的文件系统一致性路线：
+    `test-host-run_debug_cli_probe_linux_distribution_filesystem` 使用
+    `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency`，覆盖 `/tmp` 目录创建、
+    文件写入、追加、读回、长度检查、删除、目录移除和后续 shell 存活。
+  这份 rootfs 是本机临时运行资产，不纳入仓库默认资产；动态路线当前只声明最小
+  shell command / 文件系统一致性 contract，不声明完整发行版矩阵或完整 F/D 浮点算术支持。
 
 ## 关键历史节点
 
@@ -71,13 +80,30 @@
   - 同轮诊断确认更早失败不是 kernel 启动、DTB、`virtio-blk` 或 ext4 mount 问题：
     UART 日志已到 `EXT4-fs (vda): mounted filesystem`、`VFS: Mounted root` 和
     `Run /init`。
-  - 当前 blocker 已收窄为动态链接 Alpine BusyBox / musl loader 用户态路径：
-    当 `/init` 依赖 `/bin/sh` / BusyBox 动态用户态时，当前预算内仍等不到
+  - 修复前 blocker 已收窄为动态链接 Alpine BusyBox / musl loader 用户态路径：
+    当 `/init` 依赖 `/bin/sh` / BusyBox 动态用户态时，当时预算内仍等不到
     `mycpu-distro# `。
+  - 同日继续定位确认该动态 blocker 的第一崩点不是 rootfs / ext4 / `virtio-blk`，
+    而是 musl loader `__setjmp` 中的 compressed `c.fsd` 原始 FPR 保存路径。已补
+    FPR raw state、标准 `flw/fld/fsw/fsd` load-store 语义和 RVC `c.fld/c.fsd` /
+    `c.fldsp/c.fsdsp` 解码，并保持既有自定义 vector `0x07/0x27` `funct3=0` 路径。
+  - 修复后已用外部 Alpine riscv64 ext4 rootfs、外部 Linux `Image` 和
+    `init=/bin/sh` 跑通真实动态 BusyBox shell：
+    `~ # -> cat /etc/os-release -> ID=alpine -> ~ #`。动态 BusyBox / musl loader
+    不再是当前近端 blocker。
+  - 同日把 `linux_distribution_runtime` opt-in guardrail 扩成可选多命令序列合同：
+    `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS` 可逐行声明 `command=>expected`，同一 shell
+    会话内每条命令都必须观察到期望输出并回到 prompt。外部 Alpine 动态 `/bin/sh`
+    已通过 `cat /etc/os-release`、`ls -l /bin/sh` 和 `/tmp` 写读三条命令。
+  - 同日继续把长期交互 / 文件系统一致性 smoke 收口成独立 opt-in target：
+    `make test-host-run_debug_cli_probe_linux_distribution_filesystem`。该 target 复用真实
+    外部 `Image/rootfs/bootargs/prompt` 合同，设置
+    `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency`，并已在外部 Alpine
+    动态 `/bin/sh` 下通过 `/tmp` 目录创建、文件写入、追加、读回、长度检查、删除、
+    目录移除和后续 shell 存活。
 - `2026-05-02`
   - `Post-Wave 7 标准 Linux 发行版平台` 新主线正式启动，并新增：
     - [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md)
-    - [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)
     - [linux_distribution_platform_status.md](linux_distribution_platform_status.md)
   - 同日已新增第一刀 opt-in shell command smoke 入口：
     `make test-host-run_debug_cli_probe_linux_distribution_runtime`。
@@ -101,22 +127,26 @@
   RISC-V 发行版环境。
 - 当前 `linux_proto_console` 的外部资产合同仍不完整：前端只显式检查 kernel `Image`，
   而标准发行版所需的 rootfs、bootargs、prompt 和命令回显合同还没有被单独收口。
-- 发行版级平台所需的动态链接用户态、长期交互 shell、TTY / signal / timer / 文件系统 /
-  virtio 稳定性和长期运行 contract 还没有被拆成独立验证矩阵；其中动态链接
-  Alpine BusyBox / musl loader 已经是当前最直接 blocker。
+- 发行版级平台所需的 TTY / signal / timer、virtio 稳定性和长期运行 contract
+  还没有被拆成完整验证矩阵；动态 BusyBox / musl loader 已有最小 shell command 与
+  `/tmp` 文件系统一致性正向证据，但这不等同于完整发行版级支持。
+- 当前新增的是 FPR 原始状态与 FP load/store 的最小合同，足以越过 musl loader 的
+  `c.fsd` 保存现场路径；它还不是完整 F/D arithmetic、FS dirty state、`fcsr` 或 DTB
+  ISA 字符串收口。
 - 当前前端展示和 debug CLI 路线可以复用，但它们不是 guest 可见平台语义的事实来源。
 - 如果把这条线退回成继续追加 `timerfd` 之后的同类 marker，会延后真正的平台 gap 盘点。
 
 ## 下一步
 
-1. 把 `external Alpine ext4 + static /init` 作为第一条发行版 runtime 正向基线保留，
-   不把它扩大解释成完整发行版用户态支持。
-2. 下一刀优先定位动态链接 Alpine BusyBox / musl loader 路径，先确认卡点落在 ELF
-   interpreter / PIE loader、用户态页故障、syscall、signal 还是串口交互。
-3. 动态用户态路径跑通后，再选下一条更强的发行版级命令合同，例如真实 `/bin/sh`
-   下的 `cat /etc/os-release` 或 `ls -l /bin/sh`。
-4. 在动态用户态 smoke 稳定前，不新开 frontend distro route；`linux_proto_console` 继续只声明
-   受控 mini shell guardrail。
+1. 把 `external Alpine ext4 + static /init`、`external Alpine ext4 + dynamic /bin/sh`
+   单命令、多命令 smoke，以及同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke
+   作为发行版 runtime 正向基线保留，不把它们扩大解释成完整发行版用户态支持。
+2. 下一刀优先评估 TTY/login、signal/timer 和更长运行预算，而不是继续追加
+   fourth-stage 同类 syscall marker。
+3. 继续评估是否需要补完整 F/D arithmetic、FS state / `fcsr` 和 DTB `riscv,isa`
+   广告合同；当前只因真实 musl loader 需要而补 FP load/store。
+4. 在动态用户态 smoke 仍处于最小命令合同阶段时，不新开 frontend distro route；
+   `linux_proto_console` 继续只声明受控 mini shell guardrail。
 5. 继续守住现有 `xv6`、Linux probe、`linux_proto_console`、`make test`、
    `make test-pipeline` 和 `frontend` Node tests 这些稳定 guardrail。
 
@@ -126,6 +156,7 @@
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`
 - `cd myCPU && make test-host-run_debug_cli_probe`
+- `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_filesystem`
 - `cd myCPU && make test-host-xv6_boot_smoke`
 - `cd myCPU && make test-host-xv6_shell_smoke`
 - `cd myCPU && python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`

@@ -3,8 +3,9 @@
 #include <optional>
 
 #include "../cpu.h"
-#include "vector_ops.h"
+#include "memory_ops.h"
 #include "pipeline_hazards.h"
+#include "vector_ops.h"
 
 namespace {
 
@@ -24,7 +25,7 @@ PipelineStallReason stall_reason_for_load_status(const LsqLoadStatus& status) {
 }
 
 std::optional<LsqLoadRequest> decode_load_lsq_request(const StageSlot& slot) {
-    if (slot.insn.opcode != 0x03) {
+    if (slot.insn.opcode != 0x03 && !is_standard_fp_load(slot.insn)) {
         return std::nullopt;
     }
 
@@ -32,6 +33,10 @@ std::optional<LsqLoadRequest> decode_load_lsq_request(const StageSlot& slot) {
         .sequence_id = slot.sequence_id.value,
         .rd = slot.insn.rd,
     };
+    if (is_standard_fp_load(slot.insn)) {
+        request.size = slot.insn.funct3 == 3 ? 8 : 4;
+        return request;
+    }
     switch (slot.insn.funct3) {
     case 0:
         request.size = 1;
@@ -63,7 +68,7 @@ std::optional<LsqLoadRequest> decode_load_lsq_request(const StageSlot& slot) {
 }
 
 std::optional<LsqStoreRequest> decode_store_lsq_request(const StageSlot& slot) {
-    if (slot.insn.opcode != 0x23) {
+    if (slot.insn.opcode != 0x23 && !is_standard_fp_store(slot.insn)) {
         return std::nullopt;
     }
 
@@ -71,6 +76,10 @@ std::optional<LsqStoreRequest> decode_store_lsq_request(const StageSlot& slot) {
         .sequence_id = slot.sequence_id.value,
         .non_speculative = true,
     };
+    if (is_standard_fp_store(slot.insn)) {
+        request.size = slot.insn.funct3 == 3 ? 8 : 4;
+        return request;
+    }
     switch (slot.insn.funct3) {
     case 0:
         request.size = 1;

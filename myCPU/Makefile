@@ -626,6 +626,20 @@ test-host-run_debug_cli_probe_linux_distribution_runtime: FORCE $(TARGET)
 	fi; \
 	printf '%s\n' "$$output"
 
+test-host-run_debug_cli_probe_linux_distribution_filesystem: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_filesystem ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
 build-workload: FORCE $(WORKLOAD_BUILD_DEPS)
 	$(WORKLOAD_BUILD_COMMAND)
 

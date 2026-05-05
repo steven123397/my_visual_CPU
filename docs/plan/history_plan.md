@@ -21,6 +21,27 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-05-05
+
+#### post-wave7-linux-distribution-platform-plan
+
+- 原文件：`post_wave7_linux_distribution_platform_plan.md`
+- 完成内容：完成 `Post-Wave 7 标准 Linux 发行版平台` 第一阶段收口。仓库已建立独立
+  design / status / index 入口；`linux_distribution_runtime` opt-in guardrail
+  现在 fail-closed 要求外部 `Image/rootfs`，并能用外部 Alpine riscv64 ext4 rootfs
+  跑通两条正向证据：`static /init -> mycpu-distro# -> cat /etc/os-release -> ID=alpine`
+  和 `dynamic /bin/sh -> ~ # -> cat /etc/os-release -> ID=alpine`。动态 `/bin/sh`
+  路线还支持同一 shell 会话内的多命令 `command=>expected` 合同，已覆盖
+  `cat /etc/os-release`、`ls -l /bin/sh` 和 `/tmp` 写读回显。
+- 实现过程摘要：这一轮先用真实外部 Alpine rootfs 证明 kernel、DTB、`virtio-blk`、
+  ext4 mount 和 `/init` 资产路径不是 blocker；随后把动态 BusyBox / musl loader
+  第一崩点定位到 musl `__setjmp` 里的 compressed `c.fsd` 原始 FPR 保存路径，并补齐
+  FPR raw state、标准 `flw/fld/fsw/fsd` load-store 语义、RVC `c.fld/c.fsd` /
+  `c.fldsp/c.fsdsp` 解码，以及 functional / pipeline 对 FP load-store 的最小一致性。
+  本轮仍只声明最小 shell command contract，不声明完整发行版矩阵、完整 F/D 算术、
+  TTY/login、网络、图形桌面或新的 frontend distro route。
+- 结果参考：[post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md)、[linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)、[mainline_status.md](../status/mainline_status.md)
+
 ### 2026-05-02
 
 #### mainline-wave7-ai-parameterized-tiny-model-plan

@@ -57,6 +57,14 @@ uint64_t extend_loaded_value(uint64_t value, int size, bool sign_extend) {
     }
 }
 
+bool is_standard_fp_load(const Insn& insn) {
+    return insn.opcode == 0x07 && (insn.funct3 == 2 || insn.funct3 == 3);
+}
+
+bool is_standard_fp_store(const Insn& insn) {
+    return insn.opcode == 0x27 && (insn.funct3 == 2 || insn.funct3 == 3);
+}
+
 InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm) {
     InsnEffects effects;
     effects.mem.addr = rs1v + static_cast<uint64_t>(imm);
@@ -93,6 +101,20 @@ InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v,
         default:
             return illegal_memory_effect(insn.raw);
         }
+    case 0x07:
+        effects.mem.kind = MemoryRequest::Kind::Load;
+        effects.mem.target = MemoryRequest::Target::Float;
+        effects.mem.rd = insn.rd;
+        switch (insn.funct3) {
+        case 2:
+            effects.mem.size = 4;
+            return effects;
+        case 3:
+            effects.mem.size = 8;
+            return effects;
+        default:
+            return illegal_memory_effect(insn.raw);
+        }
     case 0x23:
         effects.mem.kind = MemoryRequest::Kind::Store;
         effects.mem.store_value = rs2v;
@@ -105,6 +127,22 @@ InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v,
         case 1:
             effects.mem.size = 2;
             return effects;
+        case 2:
+            effects.mem.size = 4;
+            return effects;
+        case 3:
+            effects.mem.size = 8;
+            return effects;
+        default:
+            return illegal_memory_effect(insn.raw);
+        }
+    case 0x27:
+        effects.mem.kind = MemoryRequest::Kind::Store;
+        effects.mem.target = MemoryRequest::Target::Float;
+        effects.mem.store_value = rs2v;
+        effects.mem.commit_at_boundary = true;
+        effects.mem.non_speculative = true;
+        switch (insn.funct3) {
         case 2:
             effects.mem.size = 4;
             return effects;
@@ -131,7 +169,11 @@ bool apply_memory_effects(CPU& cpu, Bus& bus, const InsnEffects& effects) {
         if (!cpu.address_space().load(bus, effects.mem.addr, effects.mem.size, value)) {
             return false;
         }
-        cpu.core().write_gpr(effects.mem.rd, extend_loaded_value(value, effects.mem.size, effects.mem.sign_extend));
+        if (effects.mem.target == MemoryRequest::Target::Float) {
+            cpu.core().write_fpr(effects.mem.rd, value);
+        } else {
+            cpu.core().write_gpr(effects.mem.rd, extend_loaded_value(value, effects.mem.size, effects.mem.sign_extend));
+        }
         return effects.retired;
     }
     case MemoryRequest::Kind::Store: {
@@ -160,7 +202,9 @@ bool apply_memory_effects(CPU& cpu, Bus& bus, const InsnEffects& effects) {
 bool execute_memory_instruction(CPU& cpu, Bus& bus, const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm) {
     switch (insn.opcode) {
     case 0x03:
+    case 0x07:
     case 0x23:
+    case 0x27:
         return apply_memory_effects(cpu, bus, build_memory_effects(insn, rs1v, rs2v, imm));
     default:
         return false;

@@ -163,5 +163,62 @@ int main() {
         return 1;
     }
 
+    Insn fld{};
+    fld.raw = 0x0080b287U;
+    fld.opcode = 0x07;
+    fld.rd = 5;
+    fld.funct3 = 3;
+    fld.rs1 = 1;
+    fld.imm = 8;
+
+    if (!expect(InstructionSemantics::supports(fld), "fld should be supported by instruction semantics")) {
+        return 1;
+    }
+    const InsnEffects fld_effects = InstructionSemantics::execute(fld, ctx);
+    if (!expect(fld_effects.mem.kind == MemoryRequest::Kind::Load, "fld should produce a load memory request")) {
+        return 1;
+    }
+    if (!expect(fld_effects.mem.rd == 5, "fld should preserve destination f register")) {
+        return 1;
+    }
+    if (!expect(fld_effects.mem.size == 8, "fld should request 8 bytes")) {
+        return 1;
+    }
+    if (!expect(fld_effects.mem.target == MemoryRequest::Target::Float,
+                "fld should target the floating-point register file")) {
+        return 1;
+    }
+    if (!expect(!fld_effects.trap.valid, "legal fld should not raise a trap")) {
+        return 1;
+    }
+
+    Insn fsd{};
+    fsd.raw = 0x0050b427U;
+    fsd.opcode = 0x27;
+    fsd.funct3 = 3;
+    fsd.rs1 = 1;
+    fsd.rs2 = 5;
+    fsd.imm = 8;
+    cpu.core().write_fpr(5, 0x8877665544332211ULL);
+
+    const InsnEffects fsd_effects = InstructionSemantics::execute(fsd, ctx);
+    if (!expect(fsd_effects.mem.kind == MemoryRequest::Kind::Store, "fsd should produce a store memory request")) {
+        return 1;
+    }
+    if (!expect(fsd_effects.mem.size == 8, "fsd should request 8 bytes")) {
+        return 1;
+    }
+    if (!expect(fsd_effects.mem.store_value == 0x8877665544332211ULL,
+                "fsd should preserve the source f register bits")) {
+        return 1;
+    }
+    if (!expect(fsd_effects.mem.target == MemoryRequest::Target::Float,
+                "fsd should identify the floating-point register file")) {
+        return 1;
+    }
+    if (!expect(!fsd_effects.trap.valid, "legal fsd should not raise a trap")) {
+        return 1;
+    }
+
     return 0;
 }

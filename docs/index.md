@@ -37,8 +37,8 @@
     `Wave 7` 阶段性收口后的 `标准 Linux 发行版平台` 新主线设计入口。
 16. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
     `标准 Linux 发行版平台` 新主线的当前状态、风险和下一步。
-17. [plan/post_wave7_linux_distribution_platform_plan.md](plan/post_wave7_linux_distribution_platform_plan.md)
-    `标准 Linux 发行版平台` 新主线的当前活跃计划。
+17. [plan/history_plan.md#post-wave7-linux-distribution-platform-plan](plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
+    `标准 Linux 发行版平台` 第一阶段完成计划归档。
 18. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
     `Wave 7` 阶段性收口后的 `用户自定义 AI 任务 + NPU 性能模型` 新主线设计入口。
 19. [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
@@ -67,7 +67,7 @@
 - `Post-Wave 7 Linux`
   - [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
   - [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
-  - [plan/post_wave7_linux_distribution_platform_plan.md](plan/post_wave7_linux_distribution_platform_plan.md)
+  - [plan/history_plan.md#post-wave7-linux-distribution-platform-plan](plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
 - `pipeline`
   - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)

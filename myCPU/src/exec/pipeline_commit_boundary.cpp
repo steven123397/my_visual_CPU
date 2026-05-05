@@ -45,17 +45,25 @@ CommitBoundaryResult apply_commit_boundary(CPU& cpu,
         return enter_precise_trap(effects.trap);
     }
 
-    if (effects.mem.kind == MemoryRequest::Kind::Load && !effects.rd_write.enable) {
+    if (effects.mem.kind == MemoryRequest::Kind::Load &&
+        !effects.rd_write.enable &&
+        !effects.fp_write.enable) {
         const AddressSpace::AccessResult access =
             cpu.address_space().load_result(bus, effects.mem.addr, effects.mem.size);
         if (!access.ok) {
             return enter_precise_trap(access.fault);
         }
-        effects.rd_write.enable = true;
-        effects.rd_write.rd = effects.mem.rd;
-        effects.rd_write.value = extend_loaded_value(access.value,
-                                                     effects.mem.size,
-                                                     effects.mem.sign_extend);
+        if (effects.mem.target == MemoryRequest::Target::Float) {
+            effects.fp_write.enable = true;
+            effects.fp_write.rd = effects.mem.rd;
+            effects.fp_write.value = access.value;
+        } else {
+            effects.rd_write.enable = true;
+            effects.rd_write.rd = effects.mem.rd;
+            effects.rd_write.value = extend_loaded_value(access.value,
+                                                         effects.mem.size,
+                                                         effects.mem.sign_extend);
+        }
     } else if (effects.mem.kind == MemoryRequest::Kind::Store) {
         AddressSpace::TranslateResult translated{};
         if (!access_crosses_page(effects.mem.addr, effects.mem.size)) {
@@ -113,6 +121,9 @@ CommitBoundaryResult apply_commit_boundary(CPU& cpu,
     }
     if (effects.rd_write.enable) {
         cpu.core().write_gpr(effects.rd_write.rd, effects.rd_write.value);
+    }
+    if (effects.fp_write.enable) {
+        cpu.core().write_fpr(effects.fp_write.rd, effects.fp_write.value);
     }
     if (effects.control.flush_tlb) {
         cpu.address_space().flush_tlb();

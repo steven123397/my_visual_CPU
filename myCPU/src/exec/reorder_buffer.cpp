@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "memory_ops.h"
 #include "vector_ops.h"
 
 extern "C" {
@@ -11,8 +12,13 @@ extern "C" {
 namespace {
 
 bool is_vector_raw(uint32_t raw) {
-    const uint32_t opcode = raw & 0x7FU;
-    return opcode == 0x57 || opcode == 0x07 || opcode == 0x27;
+    Insn insn{};
+    decode(raw, &insn);
+    insn.raw = raw;
+    if (is_standard_fp_load(insn) || is_standard_fp_store(insn)) {
+        return false;
+    }
+    return is_vector_opcode(insn.opcode);
 }
 
 }  // namespace

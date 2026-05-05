@@ -25,6 +25,39 @@ DEFAULT_LINUX_PROTO_RUNTIME_IMAGE = (
 DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS = (
     MYCPU_DIR / "workloads" / "linux_proto" / "rootfs.ext4"
 )
+LINUX_DISTRO_RUNTIME_PROFILES = {
+    "filesystem_consistency": [
+        ("cat /etc/os-release", "ID=alpine"),
+        ('printf "cwd:"; pwd', "cwd:/"),
+        (
+            "mkdir -p /tmp/mycpu-smoke; test -d /tmp/mycpu-smoke; "
+            'printf "mkdir-status:"; printf "%s" "$?"',
+            "mkdir-status:0",
+        ),
+        (
+            "printf '\\150\\145\\154\\154\\157' >/tmp/mycpu-smoke/file; "
+            "cat /tmp/mycpu-smoke/file",
+            "hello",
+        ),
+        (
+            "printf '\\167\\157\\162\\154\\144' >>/tmp/mycpu-smoke/file; "
+            "cat /tmp/mycpu-smoke/file",
+            "helloworld",
+        ),
+        ("wc -c </tmp/mycpu-smoke/file", "10"),
+        (
+            "rm /tmp/mycpu-smoke/file; test ! -e /tmp/mycpu-smoke/file; "
+            'printf "delete-status:"; printf "%s" "$?"',
+            "delete-status:0",
+        ),
+        (
+            "rmdir /tmp/mycpu-smoke; test ! -e /tmp/mycpu-smoke; "
+            'printf "rmdir-status:"; printf "%s" "$?"',
+            "rmdir-status:0",
+        ),
+        ("printf '\\163\\164\\151\\154\\154\\055\\141\\154\\151\\166\\145'", "still-alive"),
+    ],
+}
 
 
 def build_linux_dummy_flat_image(temp_dir: pathlib.Path) -> pathlib.Path:
@@ -250,6 +283,33 @@ def normalize_next_offset(response: dict) -> int:
     raise AssertionError(f"missing next offset in response: {response}")
 
 
+def linux_distro_command_contracts(command: str, expected: str) -> list[tuple[str, str]]:
+    raw_sequence = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS", "")
+    if not raw_sequence:
+        profile = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_PROFILE", "")
+        if profile:
+            if profile not in LINUX_DISTRO_RUNTIME_PROFILES:
+                raise AssertionError(f"unknown linux distribution runtime profile: {profile}")
+            return list(LINUX_DISTRO_RUNTIME_PROFILES[profile])
+        return [(command, expected)]
+
+    contracts: list[tuple[str, str]] = []
+    for index, raw_entry in enumerate(raw_sequence.splitlines(), start=1):
+        if not raw_entry.strip():
+            continue
+        command_text, separator, expected_text = raw_entry.partition("=>")
+        if not separator:
+            raise AssertionError(
+                "MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS entry "
+                f"{index} must use 'command=>expected' format"
+            )
+        contracts.append((command_text, expected_text))
+
+    if not contracts:
+        raise AssertionError("MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS did not include any command contracts")
+    return contracts
+
+
 def resolve_linux_distro_shell_contract() -> dict:
     image_path = pathlib.Path(
         os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_IMAGE", str(DEFAULT_LINUX_PROTO_RUNTIME_IMAGE))
@@ -328,6 +388,98 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(contract["disk"], external_rootfs)
         self.assertEqual(contract["command"], "cat /etc/os-release")
         self.assertEqual(contract["expected"], "ID=alpine")
+
+    def test_linux_distro_command_contracts_defaults_to_single_command(self) -> None:
+        with unittest.mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                linux_distro_command_contracts("cat /etc/os-release", "ID=alpine"),
+                [("cat /etc/os-release", "ID=alpine")],
+            )
+
+    def test_linux_distro_command_contracts_parses_multiline_sequence(self) -> None:
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS": (
+                    "cat /etc/os-release=>ID=alpine\n"
+                    "ls -l /bin/sh=>busybox\n"
+                    "printf ok >/tmp/mycpu-smoke; cat /tmp/mycpu-smoke=>ok"
+                )
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                linux_distro_command_contracts("ignored", "ignored"),
+                [
+                    ("cat /etc/os-release", "ID=alpine"),
+                    ("ls -l /bin/sh", "busybox"),
+                    ("printf ok >/tmp/mycpu-smoke; cat /tmp/mycpu-smoke", "ok"),
+                ],
+            )
+
+    def test_linux_distro_command_contracts_uses_filesystem_consistency_profile(self) -> None:
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"MYCPU_LINUX_DISTRO_RUNTIME_PROFILE": "filesystem_consistency"},
+            clear=True,
+        ):
+            self.assertEqual(
+                linux_distro_command_contracts("ignored", "ignored"),
+                [
+                    ("cat /etc/os-release", "ID=alpine"),
+                    ('printf "cwd:"; pwd', "cwd:/"),
+                    (
+                        "mkdir -p /tmp/mycpu-smoke; test -d /tmp/mycpu-smoke; "
+                        'printf "mkdir-status:"; printf "%s" "$?"',
+                        "mkdir-status:0",
+                    ),
+                    (
+                        "printf '\\150\\145\\154\\154\\157' >/tmp/mycpu-smoke/file; "
+                        "cat /tmp/mycpu-smoke/file",
+                        "hello",
+                    ),
+                    (
+                        "printf '\\167\\157\\162\\154\\144' >>/tmp/mycpu-smoke/file; "
+                        "cat /tmp/mycpu-smoke/file",
+                        "helloworld",
+                    ),
+                    ("wc -c </tmp/mycpu-smoke/file", "10"),
+                    (
+                        "rm /tmp/mycpu-smoke/file; test ! -e /tmp/mycpu-smoke/file; "
+                        'printf "delete-status:"; printf "%s" "$?"',
+                        "delete-status:0",
+                    ),
+                    (
+                        "rmdir /tmp/mycpu-smoke; test ! -e /tmp/mycpu-smoke; "
+                        'printf "rmdir-status:"; printf "%s" "$?"',
+                        "rmdir-status:0",
+                    ),
+                    ("printf '\\163\\164\\151\\154\\154\\055\\141\\154\\151\\166\\145'", "still-alive"),
+                ],
+            )
+
+    def test_linux_distro_command_contracts_explicit_sequence_overrides_profile(self) -> None:
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "MYCPU_LINUX_DISTRO_RUNTIME_PROFILE": "filesystem_consistency",
+                "MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS": "cat /etc/os-release=>ID=alpine",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                linux_distro_command_contracts("ignored", "ignored"),
+                [("cat /etc/os-release", "ID=alpine")],
+            )
+
+    def test_linux_distro_command_contracts_rejects_unknown_profile(self) -> None:
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"MYCPU_LINUX_DISTRO_RUNTIME_PROFILE": "unknown"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(AssertionError, "unknown linux distribution runtime profile"):
+                linux_distro_command_contracts("ignored", "ignored")
 
     def test_missing_input_paths_reports_primary_image_and_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1807,6 +1959,29 @@ class RunDebugCliProbeTest(unittest.TestCase):
             proc.stdout,
         )
 
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_filesystem_target_requests_profile(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_filesystem",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested",
+            proc.stdout,
+        )
+
     def test_make_build_workload_linux_proto_block_mode_embeds_mininit_stage_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             proc = subprocess.run(
@@ -2213,6 +2388,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         command = str(contract["command"])
         expected = str(contract["expected"])
         bootargs = str(contract["bootargs"])
+        command_contracts = linux_distro_command_contracts(command, expected)
 
         if not image_path.is_file():
             self.fail(f"missing linux distribution runtime Image: {image_path}")
@@ -2243,7 +2419,6 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
         self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
 
-        command_text = command if command.endswith(("\r", "\n")) else f"{command}\r"
         with subprocess.Popen(
             ["./mycpu", "--debug-cli"],
             cwd=MYCPU_DIR,
@@ -2296,22 +2471,36 @@ class RunDebugCliProbeTest(unittest.TestCase):
             self.assertIn(prompt, boot_chunk.get("text", ""))
             offset = normalize_next_offset(boot_chunk)
 
-            debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": command_text})
-            command_chunk = debug_cli_roundtrip(
-                proc,
-                {
-                    "cmd": "run_until_new_uart_contains",
-                    "offset": offset,
-                    "text": prompt,
-                    "max_steps": 50000000,
-                },
-            )
-            command_text_output = command_chunk.get("text", "")
-            self.assertIn(expected, command_text_output)
-            self.assertTrue(
-                command_text_output.endswith(prompt),
-                msg=f"expected shell chunk to end with prompt {prompt!r}, got {command_text_output!r}",
-            )
+            for command_text, expected_text in command_contracts:
+                shell_input = command_text if command_text.endswith(("\r", "\n")) else f"{command_text}\r"
+                debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": shell_input})
+                try:
+                    command_chunk = debug_cli_roundtrip(
+                        proc,
+                        {
+                            "cmd": "run_until_new_uart_contains",
+                            "offset": offset,
+                            "text": prompt,
+                            "max_steps": 50000000,
+                        },
+                    )
+                except AssertionError as exc:
+                    recent_text = ""
+                    with contextlib.suppress(AssertionError):
+                        recent_output = debug_cli_roundtrip(proc, {"cmd": "uart_output", "offset": offset})
+                        recent_text = recent_output.get("text", "")
+                    self.fail(
+                        f"linux distribution command did not return to prompt: {command_text!r}\n"
+                        f"recent UART output:\n{recent_text}\n"
+                        f"error: {exc}"
+                    )
+                command_text_output = command_chunk.get("text", "")
+                self.assertIn(expected_text, command_text_output)
+                self.assertTrue(
+                    command_text_output.endswith(prompt),
+                    msg=f"expected shell chunk to end with prompt {prompt!r}, got {command_text_output!r}",
+                )
+                offset = normalize_next_offset(command_chunk)
 
             debug_cli_roundtrip(proc, {"cmd": "quit"})
             proc.wait(timeout=5)

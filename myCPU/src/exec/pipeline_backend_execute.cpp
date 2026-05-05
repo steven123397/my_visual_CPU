@@ -169,17 +169,24 @@ void PipelineBackend::step_mem() {
                                           effects.mem.addr,
                                           effects.mem.size);
         if (forwarded.has_value()) {
-            effects.rd_write.enable = true;
-            effects.rd_write.rd = effects.mem.rd;
-            effects.rd_write.value = extend_loaded_value(forwarded->value,
-                                                         effects.mem.size,
-                                                         effects.mem.sign_extend);
+            if (effects.mem.target == MemoryRequest::Target::Float) {
+                effects.fp_write.enable = true;
+                effects.fp_write.rd = effects.mem.rd;
+                effects.fp_write.value = forwarded->value;
+            } else {
+                effects.rd_write.enable = true;
+                effects.rd_write.rd = effects.mem.rd;
+                effects.rd_write.value = extend_loaded_value(forwarded->value,
+                                                             effects.mem.size,
+                                                             effects.mem.sign_extend);
+            }
         } else {
             const AddressSpace::AccessResult result =
                 cpu_.address_space().load_result(bus_, effects.mem.addr, effects.mem.size);
             if (!result.ok) {
                 effects.trap = result.fault;
                 effects.rd_write = {};
+                effects.fp_write = {};
                 state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
                     .has_fault = true,
                     .cause = result.fault.cause,
@@ -189,22 +196,32 @@ void PipelineBackend::step_mem() {
                 });
                 return;
             }
-            effects.rd_write.enable = true;
-            effects.rd_write.rd = effects.mem.rd;
-            effects.rd_write.value = extend_loaded_value(result.value,
-                                                         effects.mem.size,
-                                                         effects.mem.sign_extend);
+            if (effects.mem.target == MemoryRequest::Target::Float) {
+                effects.fp_write.enable = true;
+                effects.fp_write.rd = effects.mem.rd;
+                effects.fp_write.value = result.value;
+            } else {
+                effects.rd_write.enable = true;
+                effects.rd_write.rd = effects.mem.rd;
+                effects.rd_write.value = extend_loaded_value(result.value,
+                                                             effects.mem.size,
+                                                             effects.mem.sign_extend);
+            }
         }
         if (state_.next_mem_wb.slot.lsq_index.value != 0) {
-            state_.lsq().mark_data_ready(state_.next_mem_wb.slot.lsq_index, effects.rd_write.value);
+            state_.lsq().mark_data_ready(
+                state_.next_mem_wb.slot.lsq_index,
+                effects.mem.target == MemoryRequest::Target::Float ? effects.fp_write.value : effects.rd_write.value);
             state_.lsq().mark_order_ready(state_.next_mem_wb.slot.lsq_index);
         }
         effects.mem.kind = MemoryRequest::Kind::None;
-        if (state_.next_mem_wb.slot.rd_phys != 0) {
+        if (effects.mem.target == MemoryRequest::Target::Integer &&
+            state_.next_mem_wb.slot.rd_phys != 0) {
             state_.phys_regs().write(state_.next_mem_wb.slot.rd_phys, effects.rd_write.value);
         }
         state_.rob().mark_ready(state_.next_mem_wb.slot.rob_index, {
-            .value_ready = state_.next_mem_wb.slot.rd_phys != 0,
+            .value_ready = effects.mem.target == MemoryRequest::Target::Integer &&
+                           state_.next_mem_wb.slot.rd_phys != 0,
             .value = effects.rd_write.value,
             .redirect = effects.control.redirect_pc,
             .redirect_target = effects.control.target_pc,
@@ -270,6 +287,9 @@ void PipelineBackend::step_ex() {
     inputs.rs2v = pipeline_hazards::resolve_ex_operand(forwarding,
                                                        state_.id_ex.slot.rs2_phys,
                                                        state_.id_ex.slot.rs2v);
+    if (is_standard_fp_store(state_.id_ex.slot.insn)) {
+        inputs.rs2v = cpu_.core().read_fpr(state_.id_ex.slot.insn.rs2);
+    }
     if (state_.id_ex.slot.insn.opcode == 0x73 && state_.id_ex.slot.insn.funct3 != 0) {
         inputs.has_csrv = true;
         inputs.csrv = resolve_ex_csr_value(state_.id_ex.slot.insn);

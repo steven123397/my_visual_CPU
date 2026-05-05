@@ -44,6 +44,8 @@ constexpr uint32_t kLwX6FromX20 = 0x000a2303U;           // lw x6, 0(x20)
 constexpr uint32_t kSwX6ToX20 = 0x006a2023U;             // sw x6, 0(x20)
 constexpr uint32_t kInvalidStoreFunct3X6ToX20 = 0x006a7023U;
 constexpr uint32_t kSdX21ToX20 = 0x015a3023U;            // sd x21, 0(x20)
+constexpr uint32_t kFldF5FromX10 = 0x00053287U;          // fld f5, 0(x10)
+constexpr uint32_t kFsdF5ToX10Plus8 = 0x00553427U;       // fsd f5, 8(x10)
 constexpr uint32_t kCsrrcSipX5 = 0x1442b073U;            // csrrc x0, sip, x5
 constexpr uint32_t kCsrwSepcX7 = 0x14139073U;            // csrw sepc, x7
 constexpr uint32_t kSret = 0x10200073U;                  // sret
@@ -539,6 +541,40 @@ int main() {
         PipelineBackend reset_backend(cpu2, bus2);
         const int reset_redirects = run_until_halt_and_count_redirects(reset_backend, cpu2, 48);
         if (!expect(reset_redirects == 2, "new pipeline backend should start from a cold predictor state")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+
+        ram.store(kDataAddr, 0x8877665544332211ULL, 8);
+        cpu.core().write_gpr(10, kDataAddr);
+        write32(ram, kEntry + 0, kFldF5FromX10);
+        write32(ram, kEntry + 4, kFsdF5ToX10Plus8);
+        write32(ram, kEntry + 8, kAddiA7Exit);
+        write32(ram, kEntry + 12, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "pipeline fp load/store smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_fpr(5) == 0x8877665544332211ULL,
+                    "pipeline fld should write the floating-point register file")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(5) == 0,
+                    "pipeline fld should not allocate or commit an integer register destination")) {
+            return 1;
+        }
+        if (!expect(ram.load(kDataAddr + 8, 8) == 0x8877665544332211ULL,
+                    "pipeline fsd should store raw fpr bits")) {
             return 1;
         }
     }

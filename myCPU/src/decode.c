@@ -195,6 +195,13 @@ static void decode_compressed(uint16_t raw, Insn* insn) {
             }
             return;
         }
+        case 1: {
+            const uint64_t imm =
+                (((uint64_t)(raw >> 10) & 0x7U) << 3) |
+                (((uint64_t)(raw >> 5) & 0x3U) << 6);
+            set_i_insn(insn, raw, compressed_reg(raw, 2), 3, compressed_reg(raw, 7), (int64_t)imm, 0x07);
+            return;
+        }
         case 2: {
             const uint64_t imm =
                 (((uint64_t)(raw >> 10) & 0x7U) << 3) |
@@ -208,6 +215,13 @@ static void decode_compressed(uint16_t raw, Insn* insn) {
                 (((uint64_t)(raw >> 10) & 0x7U) << 3) |
                 (((uint64_t)(raw >> 5) & 0x3U) << 6);
             set_i_insn(insn, raw, compressed_reg(raw, 2), 3, compressed_reg(raw, 7), (int64_t)imm, 0x03);
+            return;
+        }
+        case 5: {
+            const uint64_t imm =
+                (((uint64_t)(raw >> 10) & 0x7U) << 3) |
+                (((uint64_t)(raw >> 5) & 0x3U) << 6);
+            set_s_insn(insn, raw, 3, compressed_reg(raw, 7), compressed_reg(raw, 2), (int64_t)imm, 0x27);
             return;
         }
         case 6: {
@@ -366,6 +380,17 @@ static void decode_compressed(uint16_t raw, Insn* insn) {
                              ci_shamt(raw),
                              (uint8_t)(ci_shamt(raw) >> 5));
             return;
+        case 1: {
+            if (rd_rs1 == 0) {
+                return;
+            }
+            const uint64_t imm =
+                (((uint64_t)(raw >> 5) & 0x3U) << 3) |
+                (((uint64_t)(raw >> 12) & 0x1U) << 5) |
+                (((uint64_t)(raw >> 2) & 0x7U) << 6);
+            set_i_insn(insn, raw, rd_rs1, 3, 2, (int64_t)imm, 0x07);
+            return;
+        }
         case 2: {
             if (rd_rs1 == 0) {
                 return;
@@ -409,6 +434,13 @@ static void decode_compressed(uint16_t raw, Insn* insn) {
                 set_r_insn(insn, raw, rd_rs1, 0, rd_rs1, rs2, 0x00, 0x33);
             }
             return;
+        case 5: {
+            const uint64_t imm =
+                (((uint64_t)(raw >> 10) & 0x7U) << 3) |
+                (((uint64_t)(raw >> 7) & 0x7U) << 6);
+            set_s_insn(insn, raw, 3, 2, rs2, (int64_t)imm, 0x27);
+            return;
+        }
         case 6: {
             const uint64_t imm =
                 (((uint64_t)(raw >> 9) & 0xFU) << 2) |

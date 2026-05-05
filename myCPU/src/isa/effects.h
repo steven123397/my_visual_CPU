@@ -15,6 +15,12 @@ struct RegWrite {
     uint64_t value{0};
 };
 
+struct FpRegWrite {
+    bool enable{false};
+    uint8_t rd{0};
+    uint64_t value{0};
+};
+
 struct CsrWrite {
     bool enable{false};
     uint32_t addr{0};
@@ -27,8 +33,13 @@ struct MemoryRequest {
         Load,
         Store,
     };
+    enum class Target : uint8_t {
+        Integer,
+        Float,
+    };
 
     Kind kind{Kind::None};
+    Target target{Target::Integer};
     uint64_t addr{0};
     uint64_t store_value{0};
     uint8_t rd{0};
@@ -104,6 +115,7 @@ struct ControlEffect {
 
 struct InsnEffects {
     RegWrite rd_write{};
+    FpRegWrite fp_write{};
     CsrWrite csr_write{};
     MemoryRequest mem{};
     AtomicRequest atomic{};

@@ -17,6 +17,8 @@ public:
 
     uint64_t read_gpr(uint32_t idx) const;
     void write_gpr(uint32_t idx, uint64_t value);
+    uint64_t read_fpr(uint32_t idx) const;
+    void write_fpr(uint32_t idx, uint64_t value);
 
     uint64_t pc() const;
     void set_pc(uint64_t value);
@@ -39,6 +41,7 @@ public:
 
 private:
     std::array<uint64_t, 32> gpr_{};
+    std::array<uint64_t, 32> fpr_{};
     uint64_t pc_{0};
     uint64_t cycle_{0};
     uint64_t instret_{0};

@@ -54,7 +54,7 @@ InsnEffects InstructionSemantics::execute(const Insn& insn, ExecutionContext& ct
     SemanticInputs inputs;
     inputs.pc = ctx.core().pc();
     inputs.rs1v = ctx.core().read_gpr(insn.rs1);
-    inputs.rs2v = ctx.core().read_gpr(insn.rs2);
+    inputs.rs2v = is_standard_fp_store(insn) ? ctx.core().read_fpr(insn.rs2) : ctx.core().read_gpr(insn.rs2);
     return execute(insn, ctx, inputs);
 }
 
@@ -79,6 +79,10 @@ InsnEffects InstructionSemantics::execute(const Insn& insn, ExecutionContext& ct
         return build_atomic_effects(insn, inputs.rs1v, inputs.rs2v);
     case 0x07:
     case 0x27:
+        if (is_standard_fp_load(insn) || is_standard_fp_store(insn)) {
+            return build_memory_effects(insn, inputs.rs1v, inputs.rs2v, insn.imm);
+        }
+        return build_vector_effects(insn, inputs.rs1v);
     case 0x57:
         return build_vector_effects(insn, inputs.rs1v);
     case 0x73:

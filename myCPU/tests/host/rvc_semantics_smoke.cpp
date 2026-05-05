@@ -100,12 +100,39 @@ bool test_cpu_step_handles_halfword_pc_progression() {
            expect(cpu.core().pc() == kEntry + 8, "compressed target instruction should still retire with pc + 2");
 }
 
+bool test_compressed_fsd_and_fld_use_fpr_bits() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    const uint64_t slot = kEntry + 0x100;
+    cpu.core().write_gpr(10, slot - 112);
+    cpu.core().write_fpr(8, 0x8877665544332211ULL);
+
+    write_halfword(ram, kEntry + 0, 0xb920U);  // c.fsd fs0, 112(a0)
+    cpu_step(cpu, bus);
+    if (!expect(ram.load(slot, 8) == 0x8877665544332211ULL, "c.fsd should store raw fpr bits to memory") ||
+        !expect(cpu.core().pc() == kEntry + 2, "c.fsd should advance pc by 2")) {
+        return false;
+    }
+
+    cpu.core().write_fpr(9, 0);
+    write_halfword(ram, kEntry + 2, 0x3c64U);  // c.fld fs1, 248(s0)
+    cpu.core().write_gpr(8, slot - 248);
+    cpu_step(cpu, bus);
+    return expect(cpu.core().read_fpr(9) == 0x8877665544332211ULL,
+                  "c.fld should load raw memory bits into the destination fpr") &&
+           expect(cpu.core().pc() == kEntry + 4, "c.fld should advance pc by 2");
+}
+
 }  // namespace
 
 int main() {
     return test_decode_examples() &&
                    test_compressed_jalr_link_uses_pc_plus_2() &&
-                   test_cpu_step_handles_halfword_pc_progression()
+                   test_cpu_step_handles_halfword_pc_progression() &&
+                   test_compressed_fsd_and_fld_use_fpr_bits()
                ? 0
                : 1;
 }

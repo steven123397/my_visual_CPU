@@ -1,5 +1,7 @@
 #include "pipeline_hazards.h"
 
+#include "memory_ops.h"
+
 namespace {
 
 bool forward_operand_from_slot(const StageSlot& slot, uint32_t phys, uint64_t& value) {
@@ -56,6 +58,9 @@ bool reads_rs1(const Insn& insn) {
 }
 
 bool reads_rs2(const Insn& insn) {
+    if (is_standard_fp_store(insn)) {
+        return false;
+    }
     switch (insn.opcode) {
     case 0x33:
     case 0x3B:
@@ -68,6 +73,9 @@ bool reads_rs2(const Insn& insn) {
 }
 
 bool writes_rd(const Insn& insn) {
+    if (is_standard_fp_load(insn)) {
+        return false;
+    }
     switch (insn.opcode) {
     case 0x03:
     case 0x13:
@@ -87,15 +95,18 @@ bool writes_rd(const Insn& insn) {
 }
 
 bool is_load_slot(const StageSlot& slot) {
-    return slot.valid && slot.insn.opcode == 0x03;
+    return slot.valid && (slot.insn.opcode == 0x03 || is_standard_fp_load(slot.insn));
 }
 
 bool is_store_slot(const StageSlot& slot) {
-    return slot.valid && slot.insn.opcode == 0x23;
+    return slot.valid && (slot.insn.opcode == 0x23 || is_standard_fp_store(slot.insn));
 }
 
 uint32_t inflight_dest_phys(const StageSlot& slot) {
     if (!slot.valid) {
+        return 0;
+    }
+    if (slot.effects.mem.target == MemoryRequest::Target::Float) {
         return 0;
     }
     if (slot.rd_phys != 0) {

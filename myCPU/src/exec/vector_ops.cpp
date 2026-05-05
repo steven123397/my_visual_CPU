@@ -2,6 +2,7 @@
 
 #include "../cpu.h"
 #include "../mem/bus.h"
+#include "memory_ops.h"
 
 namespace {
 
@@ -137,6 +138,9 @@ bool is_vector_opcode(uint8_t opcode) {
 
 bool is_serializing_vector_insn(const Insn& insn) {
     if (!is_vector_opcode(insn.opcode)) {
+        return false;
+    }
+    if (is_standard_fp_load(insn) || is_standard_fp_store(insn)) {
         return false;
     }
     if (insn.opcode == 0x07 || insn.opcode == 0x27) {

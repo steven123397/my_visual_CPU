@@ -34,6 +34,7 @@
   - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
   - [../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan](../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-loading-experience-plan](../plan/history_plan.md#mainline-wave7-linux-console-loading-experience-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan](../plan/history_plan.md#mainline-wave7-linux-console-health-check-plan)
@@ -220,7 +221,7 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
 - 标准 Linux 发行版平台：
   [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md) /
   [linux_distribution_platform_status.md](linux_distribution_platform_status.md) /
-  [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)
+  [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
 - 用户自定义 AI 任务与更接近商用 NPU 的性能模型：
   [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md) /
   [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md) /
@@ -917,13 +918,19 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    Linux 方向进入
    [linux_distribution_platform_status.md](linux_distribution_platform_status.md) /
    [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md) /
-   [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)；
+   [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)；
    AI 方向进入
    [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md) /
    [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md) /
    [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)。
-   Linux 当前已跑通 `external Alpine ext4 + static /init` 的 opt-in runtime smoke；
-   动态链接 BusyBox / musl loader 用户态仍是近端 blocker。AI 当前第一刀采用
+   Linux 当前已跑通 `external Alpine ext4 + static /init` 和
+   `external Alpine ext4 + dynamic /bin/sh` 两条 opt-in runtime smoke；动态 `/bin/sh`
+   路线已能在同一 shell 会话内执行 `cat /etc/os-release`、`ls -l /bin/sh` 和
+   `/tmp` 写读回显，每条命令都观察到期望输出后回到 `~ # ` prompt。当前还新增了
+   `test-host-run_debug_cli_probe_linux_distribution_filesystem`，在同一动态 BusyBox shell
+   会话内验证 `/tmp` 目录创建、文件写入、追加、读回、长度检查、删除、目录移除和后续
+   shell 存活。
+   这仍只是最小 shell command contract，不等同于完整发行版矩阵。AI 当前第一刀采用
    host-side 受限 `ai_task_spec_v1` importer，并已覆盖 `bounded_dynamic_gemm_v1`
    与 `bounded_dynamic_cnn_v1` 到统一 graph package / runtime shape / manifest 路径；
    尚未开放任意模型上传、完整 ONNX / PyTorch runtime 或 wall-clock 性能结论。
