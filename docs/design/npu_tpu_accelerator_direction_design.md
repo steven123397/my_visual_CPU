@@ -16,7 +16,6 @@
   - [../status/mainline_status.md](../status/mainline_status.md)
   - [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
 - 相关设计：
-  - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [phase4_preparation_design.md](phase4_preparation_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
@@ -376,14 +375,15 @@ Wave 1 已经把本设计从纯方案推进到可执行 foundation。当前有�
 
 ### 主线 Wave 4 中的 AI accelerator 切片边界
 
-当前主线 `Wave 4` 已由主线状态激活。这里的 `Wave 4` 指 [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md) 中的仓库主线 wave，不是 AI accelerator 局部历史里的 Wave 1 / 2 / 3 后再延续出的局部 Wave 4。为了避免把 AI accelerator 重新扩成无法收口的大版本，主线 Wave 4 中 AI accelerator 切片的边界补充如下：
+当前主线 `Wave 4` 已完成并归档。这里的 `Wave 4` 指仓库主线 wave，不是 AI accelerator 局部历史里的 Wave 1 / 2 / 3 后再延续出的局部 Wave 4。主线 Wave 4 中 AI accelerator 切片的完成边界如下：
 
-- 核心目标仍是 `bounded dynamic shape`、profile / timing attribution、代表性 workload 和最小前端观察面。
-- `bounded dynamic shape` 应从现有 `dynamic GEMM / FC-like` 第一刀扩到现有 op family 的正向或 fail-closed 合同，优先覆盖 `conv2d / relu / pool / reduce / layout_transpose` 的 runtime shape、memory plan mismatch 与 scratchpad 边界。
-- `ai_proto` 至少新增 1 条更像模型的动态 workload，例如 `dynamic_tiny_model`；如果不引入新 dtype / op 语义即可完成，再补 `dynamic_cnn_block`。
-- profile / timing 继续使用 `timed-simple simulated cycles`，可以细化 stall / tile / scratchpad / DMA attribution，但不在本 wave 承诺真实并行 DMA engine、cache coherence 或多 outstanding queue。
-- 前端只做 AI accelerator 观察面，不做 Wave 7 的产品化展示收口；它只能消费 debug snapshot / manifest 中已有或本轮明确冻结的只读字段。
-- `Softmax + tiny static attention` 可作为主线 Wave 4 后段 stretch goal：只有前述核心目标已经收口时才启动；第一刀固定为小规模静态 `fp32` softmax 与 `gemm -> softmax -> gemm` 代表性闭环，不承诺完整 attention、动态 sequence length、KV-cache 或 Transformer runtime。
+- `bounded dynamic shape` 已从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，覆盖 `conv2d / relu / pool / reduce / layout_transpose` 的 runtime shape、memory plan mismatch 与 scratchpad 边界。
+- `ai_proto` 已新增 `dynamic_tiny_model`，并通过现有算子面形成动态小模型闭环。
+- profile / timing 继续使用 `timed-simple simulated cycles`，并细化 stall / tile / scratchpad / DMA attribution；它不代表真实并行 DMA engine、cache coherence 或多 outstanding queue。
+- 前端只消费 AI accelerator 只读观察面，不成为设备 ABI 或 profile 事实来源。
+- `Softmax + tiny static attention` stretch 已固定为小规模静态 `fp32` softmax 与
+  `gemm -> softmax -> gemm` 代表性闭环；它不代表完整 attention、动态 sequence length、
+  KV-cache 或 Transformer runtime。
 
 剩余远期目标应拆到 AI accelerator 后续专项阶段，而不是塞进主线 `Wave 4`。这里的“AI accelerator 后续专项阶段”是本方向内部的后续排期，不等同于主线 `Wave 5：cache / memory-system 第一刀`：
 

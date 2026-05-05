@@ -5,17 +5,17 @@
 本文档只记录 `Post-Wave 7 标准 Linux 发行版平台` 这条新主线的当前基线、少量关键历史节点、当前仍有效的限制和下一步。
 
 它不维护逐条执行流水账；更细的实施过程统一回写到
-[../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
-和后续活跃计划。
+[../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+和 [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)。
 
 ## 关联文档
 
 - 相关设计：
   - [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md)
-  - [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)
-  - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
+- 当前活跃计划：
+  - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划：
   - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
 
@@ -138,17 +138,20 @@
 
 ## 下一步
 
-1. 把 `external Alpine ext4 + static /init`、`external Alpine ext4 + dynamic /bin/sh`
-   单命令、多命令 smoke，以及同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke
-   作为发行版 runtime 正向基线保留，不把它们扩大解释成完整发行版用户态支持。
-2. 下一刀优先评估 TTY/login、signal/timer 和更长运行预算，而不是继续追加
-   fourth-stage 同类 syscall marker。
-3. 继续评估是否需要补完整 F/D arithmetic、FS state / `fcsr` 和 DTB `riscv,isa`
-   广告合同；当前只因真实 musl loader 需要而补 FP load/store。
-4. 在动态用户态 smoke 仍处于最小命令合同阶段时，不新开 frontend distro route；
-   `linux_proto_console` 继续只声明受控 mini shell guardrail。
-5. 继续守住现有 `xv6`、Linux probe、`linux_proto_console`、`make test`、
-   `make test-pipeline` 和 `frontend` Node tests 这些稳定 guardrail。
+当前下一步按
+[../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+执行，长线拆成五个阶段：
+
+1. TTY / login / console 语义。
+2. signal / timer / process 控制矩阵。
+3. 文件系统与块设备耐久性。
+4. curated 发行版矩阵。
+5. ISA / platform 合同补齐。
+
+执行期间继续保留 `external Alpine ext4 + static /init`、`external Alpine ext4 + dynamic /bin/sh`
+单命令、多命令 smoke，以及同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke 作为正向基线；
+不要把它们扩大解释成完整发行版用户态支持。五个阶段都较大，每个阶段彻底完成后才提交一次；
+其他中间 slice 不自动提交。
 
 ## 验证基线
 

@@ -163,4 +163,4 @@
 ## 当前有效性说明
 
 - 当前有效：本文档作为当前 `pipeline / Phase 3` 微架构边界的统一设计来源。
-- 当前实时状态、近期风险和下一步，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前实时状态和近期风险，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。

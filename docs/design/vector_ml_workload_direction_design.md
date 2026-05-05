@@ -6,7 +6,7 @@
 
 它重点回答：
 
-- 这条线为什么是长期候选主线之一
+- 这条线已经沉淀出哪些长期有效合同
 - 当前 `V-lite` 的最小 ISA / 状态 / workload / pipeline 合同是什么
 - `debug/frontend` 目前如何只读观察这条线
 - 这条线与后续 `Phase 4` 的衔接边界在哪里
@@ -182,15 +182,15 @@
 
 阶段级执行过程和完成态，统一以 `status` 文档与 `history_plan` 为准。
 
-## 下一步与 `Phase 4` 的衔接
+## 与 `Phase 4` 的衔接
 
-当前更健康的下一步，仍然不是顺势扩到 `Pool / FC`、向量 load/store path 或完整 `Phase 4`，而是：
+当前向量主线并不替代 `Phase 4`。它已经提供 `V-lite` ISA、固定 workload、最小
+vector-aware `pipeline` 和只读观察面，用于为 memory hierarchy、DMA 或更重执行模型提供
+workload 信号。
 
-1. 继续围绕已落地的 `V4` 边界做 bug-driven hardening。
-2. 继续用现有 workload 做更窄的观察与回归补洞。
-3. 只有当 workload 真实暴露出 memory hierarchy 信号时，才把后续准备项转交给 [phase4_preparation_design.md](phase4_preparation_design.md) 中定义的 `P4-prep-*` 路线。
-
-换句话说：当前向量主线并不替代 `Phase 4`，而是为“未来到底该做哪一刀 `Phase 4`”提供更高信号的依据。
+`Pool / FC`、向量 load/store 独立 pipeline memory path、vector LSQ、完整 `Phase 4`
+等能力不属于本文档当前实现边界。若 workload 真实暴露出 memory hierarchy 信号，相关准备项
+以 [phase4_preparation_design.md](phase4_preparation_design.md) 的 `P4-prep-*` 合同承接。
 
 ## 验证思路
 

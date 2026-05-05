@@ -20,11 +20,10 @@
 - 状态文档：
   - [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
   - [../status/mainline_status.md](../status/mainline_status.md)
-- 相关计划：
+- 当前活跃计划：
   - [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
 - 相关设计：
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
-  - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [wave7_productization_and_showcase_design.md](wave7_productization_and_showcase_design.md)
 
@@ -96,27 +95,14 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
    - 在 host harness 和前端体验稳定后，再推进 guest runtime 更宽的 submission path、
      更后续 Linux-facing driver，以及更系统化的 workload 资产管理。
 
-### 第一刀决策
+### 当前用户任务入口合同
 
-当前第一刀明确选择：
+当前已打开的是受限 graph schema / importer / DSL 入口，而不是完整模型上传、
+完整编译器或性能模型大切片。现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`
+和 `tiny_attention_static` 继续作为功能与 profile guardrail；importer / lower 必须继续落到现有
+统一 graph package、runtime shape table 和 submission ABI，不能引入第二套设备行为。
 
-- `受限 graph schema / importer / DSL 入口`
-
-而不是优先做：
-
-- compile / lower 到统一 graph package 的更宽编译器面
-- automatic memory plan 的独立大切片
-- 或性能模型第一刀（tile scheduler / overlap / queue 深度观察）
-
-原因如下：
-
-1. 当前最缺的是“正式、受控、可验证的用户任务入口”，而不是再扩一层白名单模板参数。
-2. 现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`、`tiny_attention_static`
-   已经能继续守住功能与 profile guardrail，因此性能模型并不阻塞“第一批用户任务 contract”落地。
-3. 只要 importer / lower 仍然落到现有统一 graph package、runtime shape table 和
-   submission ABI，就不会改写当前独立 `MMIO NPU / TPU-like` 设备路线，也不会引入第二套设备行为。
-
-本轮第一刀的具体收口是：
+当前已经收口的用户任务入口是：
 
 - 先在 host-side `pack_graph.py` 打开一个受限 `task spec` 入口。
 - `task spec` 当前只支持 `bounded_dynamic_gemm_v1` 这一类最小 matmul-family 用户任务。
@@ -128,17 +114,17 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 - 当前这套 lower/serialize 逻辑已经抽成 host-side 共享模块 `task_spec_lowering.py`，
   `pack_graph.py` 保留 CLI / 固定 workload 入口，前端仍通过同一条 host 打包路径消费它。
 
-在第一刀最小 GEMM 入口落地后，当前已继续打开同一路线上的下一窄切片：
+同一路线还支持：
 
 - `task spec` 现在已额外支持 `bounded_dynamic_cnn_v1`。
 - 它固定映射到现有 `conv2d -> eltwise_relu -> layout_transpose -> reduce_sum`
   的 bounded dynamic CNN graph package，不新增第二套设备 ABI。
 - automatic memory plan 仍然只是 importer 内部 helper，但已经升级为
   `16B` 对齐顺序 scratchpad 分配，以匹配现有 `dynamic_cnn` contract。
-- 这一步的目标不是开放任意 CNN graph authoring，而是把“多 op + dependency +
-  runtime shape + profile”正式纳入受限用户任务入口。
+- 这一步不是开放任意 CNN graph authoring，而是把“多 op + dependency + runtime shape +
+  profile”正式纳入受限用户任务入口。
 
-这意味着第一刀已经真正打开了“用户定义任务 contract”，但仍明确不开放：
+这意味着当前已经真正打开了“用户定义任务 contract”，但仍明确不开放：
 
 - 任意模型上传
 - 完整 ONNX / PyTorch runtime
@@ -150,7 +136,7 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 
 - **用户任务合同**
   - 需要一套公开但受限的 graph schema / importer / DSL contract。
-  - 第一刀固定为 host-side `task spec` 文件入口，当前只接受
+  - 当前固定为 host-side `task spec` 文件入口，只接受
     `bounded_dynamic_gemm_v1` 与 `bounded_dynamic_cnn_v1`。
   - 用户输入先进入 host 侧校验、compile / lower 和资源预算，再转成统一 graph package。
 
@@ -166,7 +152,7 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
   - 新增 tile scheduler、overlap、queue depth 和 timeline 观察时，优先通过 host profile /
     manifest / debug 只读字段暴露，不随意扩大 guest ABI。
   - simulated cycles 仍是唯一正式性能口径，不引入“宿主机跑得更快就是设备更强”的表述。
-  - 当前第一刀不优先改动 `timed-simple no-overlap`；性能模型仍以后续切片继续推进。
+  - 当前不改动 `timed-simple no-overlap`；性能模型仍以后续切片继续推进。
 
 - **系统集成合同**
   - host harness、当前 guest demo、未来 Linux-facing driver 必须共享同一套设备语义。
@@ -191,13 +177,13 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 ## 风险与取舍
 
 - 如果直接开放任意模型上传而不先定义受限 contract，会把编译、资源限制、安全和验证一次性混在一起。
-- 如果过早把 Linux-facing driver 拉进第一刀，会把 host compile / performance 模型尚未收口的问题转移到系统集成层。
+- 如果过早把 Linux-facing driver 拉进当前用户任务入口，会把 host compile / performance 模型尚未收口的问题转移到系统集成层。
 - 如果性能模型改动直接侵入 guest 可见 ABI，会破坏当前已形成的 host/guest 共享合同。
 - 同时扩“用户任务入口”和“更真实性能模型”会显著放大工作面，因此必须通过计划文档把阶段切清楚。
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效。
-- 当前结果与下一步以
+- 当前结果以
   [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
   和 [../status/mainline_status.md](../status/mainline_status.md) 为准。

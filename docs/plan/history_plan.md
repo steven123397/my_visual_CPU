@@ -272,7 +272,7 @@
   scalar memory load / store 走 helper execution，其余 fallback 复用 functional reference
   step。默认 `--backend jit`、persistent cache、CSR / atomic / vector helper runtime、
   multicore、coherence 和新的 memory consistency 模型继续后移。
-- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave6-runtime-execution-sequence-plan
 
@@ -320,7 +320,7 @@
   本轮仍不启用默认 JIT backend，不实现 persistent / executable block cache、helper runtime
   execution、multicore、coherence 或新的 memory consistency 模型。验证覆盖 DBT/JIT
   窄门禁、`make test-pipeline`、`make test` 与 `git diff --check`。
-- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave6-dbt-translator-ir-v0-plan
 
@@ -337,7 +337,7 @@
   验证覆盖 `make test-host-dbt_translator_smoke`、`make test-host-dbt_block_plan_smoke`、
   `make test-host-interpreter_dbt_prototype_smoke`、`make test-host-run_debug_cli_probe`、
   `make test-pipeline`、`make test` 与 `git diff --check`。
-- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave6-jit-dbt-boundary-taxonomy-slice-g-plan
 
@@ -401,49 +401,49 @@
 - 原文件：`mainline_wave5_closeout_wave6_readiness_plan.md`
 - 完成内容：完成主线 `Wave 5 closeout / Wave 6 readiness`。本轮把 `Wave 5` `Slice A ~ F` 固定为首轮 cache / memory-system 收口：当前完成态是默认关闭、RAM-only、write-through、no dirty write-back 的最小 L1D 执行模型，加上显式 opt-in 观察面、frontend 只读展示、边界 hardening 和 lifecycle guardrail；它仍不代表 write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance instruction 已启动。
 - 实现过程摘要：这一轮只做 readiness 判断和文档状态切换，不改 simulator 行为。结论是 `Wave 6` 可以激活，但第一刀必须选择低风险的 `JIT / DBT hot-path evidence`，只固定 hot-path / translation candidate 观察合同，不实现 JIT engine、DBT translator、IR、block cache、host code emission、multicore 或 coherence。验证覆盖 `git diff --check`。
-- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)、[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_f_l1d_lifecycle_guardrail_plan.md`
 - 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice F / L1D lifecycle guardrail`。本轮固定 opt-in L1D 在 machine / debug load lifecycle 下的清理与失效合同：primary load / debug reset 继续清空 line state 和 counters，debug reset 保留显式 `enabled=true` 状态；`Machine::load_binary_payload()` 覆盖已缓存 RAM line 后会失效对应 L1D line，避免后续 data load 读到旧 payload bytes。
 - 实现过程摘要：这一轮按 `TDD` 先用 `machine_loader_reset` 暴露 payload 覆盖后的 stale-line 缺口，再让 `BinaryLoader::load()` 返回写入长度，并在 payload load 后按覆盖范围失效 L1D line；同时补 debug session reset 的 opt-in counters 清理断言。本轮仍不实现 write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance instruction。验证覆盖 `make test-unit-machine_loader_reset test-host-debug_cli_smoke`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_e_l1d_frontend_observation_plan.md`
 - 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice E / L1D frontend observation`。本轮把已有 debug snapshot 顶层 `l1_data_cache` counters 接入 frontend 平台组的只读 `L1 data cache` 面板，展示 enabled、line size、capacity、loads、stores、hits、misses、evictions、bypasses 和 write-through stores；缺失 counters 或默认关闭 snapshot 都有稳定 fallback。
 - 实现过程摘要：这一轮只消费现有 debug ABI，不扩 debug protocol、后端 L1D 功能或默认执行开关；`L1D` 仍只在显式 debug/probe opt-in 路径打开。验证覆盖 `frontend` Node 全量测试、`make test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_d_l1d_hardening_plan.md`
 - 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice D / L1D hardening`。本轮固定跨 cache line store 继续 bypass L1D 但会在成功写入 backing bus 后失效重叠 cached line，避免后续 load 读到陈旧 bytes；store miss 固定为 write-through + no-allocate 并作为 miss 进入 counters；non-cacheable、side-effect、unmapped 和 refill fault 路径不污染 cache state；atomic、page-walk 和 instruction fetch 继续 bypass L1D；默认 `make test` / `make test-pipeline` 仍不打开 L1D。
 - 实现过程摘要：这一轮按 `TDD` 先用 `simple_l1_cache` unit test 暴露跨 line bypass stale-line 缺口，再补最小 invalidation 与 store miss 统计合同，并加 host 断言固定默认门禁不携带 `--l1d`。本轮仍不实现 write-back、DMA coherence、multicore、JIT、I-cache 或 cache maintenance instruction。验证覆盖 `make test-unit-simple_l1_cache`、`make test-host-execution_profile_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_c_l1d_observation_guardrail_plan.md`
 - 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice C / L1D opt-in observation + guardrail`。本轮为默认关闭的 `SimpleL1DataCache` 增加顶层 `l1_data_cache` debug snapshot 只读 counters，并为 `run_debug_cli_probe.py` 增加显式 `--l1d` opt-in load/probe 路径；默认 CLI / debug / probe 路径仍不启用 L1D，既有 `shadow_cache` schema 与语义保持不变。
 - 实现过程摘要：这一轮按 `TDD` 先固定默认关闭 snapshot JSON 与 `--l1d` probe 摘要红灯，再接入 debug CLI load 显式 L1D 开关和最小 flat workload guardrail。opt-in workload 能稳定暴露 RAM line miss、reused-line hit 与 write-through store 计数，同时 guest 正常 halt；本轮仍不实现 write-back、I-cache、cache maintenance instruction、DMA coherence、multicore、JIT 或 AI accelerator 后续专项。验证覆盖 `make test-host-execution_profile_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_b_minimal_l1d_plan.md`
 - 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice B / minimal executable L1D`。本轮新增默认关闭、可显式启用的 `SimpleL1DataCache`，只覆盖 `cacheable && !has_side_effect` 的 RAM region；data load/store 在启用后可经由 L1D，instruction fetch、page walk、atomic、MMIO、unmapped、fault access 与 side-effect region 继续 bypass；store 采用 write-through，不引入 dirty line 或 write-back 生命周期。
 - 实现过程摘要：这一轮按 `TDD` 先固定 hit / miss / bypass / write-through / eviction 后 refill 的最小合同，再把 L1D 以可选绑定接入 `AddressSpace`，并由 `Machine` 提供显式开关，默认 CLI / debug CLI 路径不启用。验证覆盖 `make test-unit-simple_l1_cache`、`make test-host-execution_profile_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave5-cache-memory-system-slice-a-signal-contract-plan
 
 - 原文件：`mainline_wave5_cache_memory_system_slice_a_signal_contract_plan.md`
 - 完成内容：完成主线 `Wave 5 / cache / memory-system` 的 `Slice A / signal + contract`。本轮新增并固定 pipeline-side `xv6 --backend pipeline` 5000-cycle debug CLI probe，锁住 `profile.memory`、`shadow-cache` 和 RAM `memory-top` 摘要；默认仓库仍不携带真实 Linux `Image`，Linux runtime 继续保持 opt-in；最小 L1D 第一版合同收口为可关闭、RAM-only、write-through、no dirty write-back，MMIO / unmapped / side-effect / fault access bypass，atomic / fence 保守 serialize/bypass，DMA interaction 不承诺透明 coherence。
 - 实现过程摘要：这一轮只把 memory signal 与 cache contract 收口，不实现 full cache、write-back、coherence、JIT 或 AI accelerator 后续专项。`Slice A` 给出进入 `Slice B / minimal executable L1D` 的绿灯，但下一刀必须先补最窄 hit / miss / bypass / write-through 行为等价测试，并继续以 reference-first 与现有 `shadow_cache` 输出合同为前置 guardrail。验证覆盖 `make test-host-execution_profile_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe`、`make test-host-run_debug_cli_probe test-host-xv6_boot_smoke`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)、[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### mainline-wave4-ai-accelerator-slices-plan
 
@@ -453,30 +453,30 @@
   - `mainline_wave4_ai_accelerator_slice_c_softmax_attention_stretch_plan.md`
 - 完成内容：完成主线 `Wave 4` 中的 AI accelerator A/B/C 三段切片。切片 A 把 bounded dynamic shape 从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，并新增 `dynamic_tiny_model`；切片 B 把 `timed-simple` profile 的 tile setup 归到 `stall_cycles`，并把 `guest_ai_accel_demo` workload presentation 与 AI accelerator aggregate counters 接入 frontend；切片 C 作为 stretch 完成最小静态 `Softmax` 与 `tiny_attention_static`，固定为 `gemm -> softmax -> gemm` 小闭环。
 - 实现过程摘要：这一轮继续采用“先切片 A/B 核心目标，再按绿灯条件启动 stretch”的路径；debug snapshot 仍保持 aggregate-only schema，没有把 host-side itemized op summary 扩成 MMIO / debug ABI。`Softmax + tiny static attention` 只证明当前 graph package / scheduler / profile path 能表达最小 attention-like block，不代表完整 Transformer runtime、动态 sequence length、KV-cache、多 head attention、训练、`INT4`、MobileNet 或 Linux-facing NPU driver。
-- 结果参考：[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[mainline_status.md](../status/mainline_status.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
+- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[mainline_status.md](../status/mainline_status.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
 
 ### 2026-04-27
 
 #### mainline-roadmap-rewrite-and-linux-checkpoint-closure-plan
 
 - 原文件：`mainline_roadmap_rewrite_and_linux_checkpoint_closure_plan.md`
-- 完成内容：把 [future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md) 从“未来候选路线菜单”重写成主线长期排期设计，并把当前 active wave 明确切到 Wave 3；同时把 Linux block-rootfs fourth-stage runtime baseline 再往前冻结一刀，新增 `stage=unlinkat-open-fd-survives`，把最小 open-fd lifetime 合同并入既有 `symlink/readlink/hardlink/link metadata` checkpoint 线。
+- 完成内容：把 已退役的 `future_expansion_roadmap_design.md` 从“未来候选路线菜单”重写成主线长期排期设计，并把当前 active wave 明确切到 Wave 3；同时把 Linux block-rootfs fourth-stage runtime baseline 再往前冻结一刀，新增 `stage=unlinkat-open-fd-survives`，把最小 open-fd lifetime 合同并入既有 `symlink/readlink/hardlink/link metadata` checkpoint 线。
 - 实现过程摘要：这一轮继续沿“先补 strings/runtime 断言、再补最小实现、最后统一回写 status / AGENTS / index / design 并删除活跃 plan”的路径推进；repo-generated `rootfs` staging 也改成 `install -m`，避免 runtime guardrail 因 staging 目录已有目标文件而假失败。验证覆盖 `python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`、`MYCPU_RUN_LINUX_PROTO_RUNTIME=1 MYCPU_LINUX_PROTO_RUNTIME_IMAGE=/tmp/mycpu-linux-build-riscv64-linux-gnu/arch/riscv/boot/Image python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_proto_block_mode_runtime_reaches_fourth_stage_when_requested`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)
 
 #### phase4-prep2-memory-observation-shadow-cache-plan
 
 - 原文件：`phase4_prep2_memory_observation_shadow_cache_plan.md`
 - 完成内容：完成 `C1 / P4-prep-2 memory observation / shadow cache` 第一刀，把 `ExecutionMemoryObservation` 扩展为可携带物理地址的 memory observation，并在 `ExecutionProfile` 内新增只读 shadow-cache 统计；当前 debug JSON、`debug_cli_smoke` 与 `run_debug_cli_probe` 文本摘要都已能暴露 `profile.shadow_cache`，cacheable RAM 的重复 line access 会统计 `hits / misses / evictions / bypasses`，MMIO / fault / non-cacheable 场景继续作为 bypass 观测。
 - 实现过程摘要：这一轮继续沿“先补窄 host/probe 红灯，再接最小观测模型，最后统一回写 status / design / AGENTS 并删除活跃 plan”的路径推进；`shadow_cache` 只做 workload 证据收集，不参与执行提交语义，也不改变 guest 可见行为。验证覆盖 `make test-host-execution_profile_smoke`、`make test-host-debug_cli_smoke`、`make test-host-run_debug_cli_probe`、`make test`、`make test-pipeline` 与 `git diff --check`。
-- 结果参考：[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[phase4_preparation_design.md](../design/phase4_preparation_design.md)、[mainline_status.md](../status/mainline_status.md)
 
 #### xv6-linux-jit-wave1-plan
 
 - 原文件：`xv6_linux_jit_wave1_plan.md`
 - 完成内容：完成 `xv6 / Linux / JIT` Wave 1 收口，把 `RV64A + virtio + CSR / privilege + xv6-riscv` 主线基础、真实 `virtio-blk` board guardrail，以及 Linux block-rootfs 的 `console-opened -> rootfs-rw-ok -> proc-readable -> sys-readable -> /init reached -> file-readable -> rootfs-rw-roundtrip-ok -> fork-child-wrote -> parent-wait4-ok -> execve-third-stage -> mkdir-chdir-ok -> nested-file-roundtrip-ok -> getdents64-nested-visible -> fstatat-nested-stat-ok -> renameat2-syscall-ok -> renameat2-nested-ok -> renameat2-dirent-updated -> renameat2-cleanup-ok -> unlinkat-parent-dirent-gone -> mkdirat-dir-name-reusable -> mkdirat-reused-dir-empty -> mkdirat-reused-dir-dot-only -> mkdirat-reused-dir-parent-stat-ok -> third-stage-reached -> post-init reached` baseline 一起收口到主工作树；同时把当时并行维护的主线状态口径统一收口回 `mainline_status` 与 `docs/index.md`。
 - 实现过程摘要：这一轮继续沿“先补最窄 checkpoint、再回写状态与优先级、最后删除活跃计划文件”的收口路径；Wave 1 不再保留活跃 `plan`，后续 Linux 继续沿已冻结的 post-init userland baseline 推进更后的 checkpoint。
-- 结果参考：[xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)、[mainline_status.md](../status/mainline_status.md)
+- 结果参考：[mainline_status.md](../status/mainline_status.md)
 
 ### 2026-04-24
 
@@ -485,14 +485,14 @@
 - 原文件：`npu_tpu_accelerator_wave3_plan.md`
 - 完成内容：完成独立 `MMIO NPU / TPU-like` AI accelerator Wave 3，把 runtime-shape fail-closed matrix、host profile manifest 负向矩阵、`--ai-profile-manifest` 的 itemized profile 文本出口，以及 profile summary 的 success / fault / reset lifecycle 一起收口到主工作树；同时继续保持 AI accelerator 为独立 `MMIO` 设备路线，不把语义混入 CPU `InstructionSemantics` reference path。
 - 实现过程摘要：整体继续采用“先补红灯 smoke / malformed-input regression、再补最小 host-side 文本出口与设备侧显式 reject、最后统一回写 status 与归档”的克制路径；这一轮把 `runtime_shape_table_offset` 的 overlap / out-of-window 从“碰巧解析失败”收窄为显式 fail-closed 合同，同时只把 itemized profile 外推到 host text manifest，不顺势扩大 MMIO 或 debug snapshot ABI。
-- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
+- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
 
 #### npu-tpu-accelerator-wave2-plan
 
 - 原文件：`npu_tpu_accelerator_wave2_plan.md`
 - 完成内容：完成独立 `MMIO NPU / TPU-like` AI accelerator Wave 2，把 profile attribution、host-side per-op / per-tile summary、固定 `tiny_model` workload、bounded dynamic shape contract / reject matrix，以及 dynamic `GEMM / FC-like` 第一刀一起收口到主工作树；同时保持 completion entry ABI 不变，不把动态语义混进 CPU `InstructionSemantics` reference path。
 - 实现过程摘要：整体继续采用“先补红灯、再做最小 contract / workload / execute 落地、最后统一回写 status 与归档”的克制路径；其中 dynamic shape 先用 `runtime_shape_table_offset` + `dynamic_bounded` package 把 runtime dims resolve 成 concrete static package，只接到 matmul-family 第一刀，不顺势扩大到完整动态图、训练栈、`Softmax / attention`、`INT4` 或 frontend 可视化。
-- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
+- 结果参考：[npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
 
 ### 2026-04-23
 

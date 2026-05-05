@@ -14,59 +14,56 @@
    独立 `NPU / TPU-like` 方向的专项状态。
 5. [design/regression_completion_criteria.md](design/regression_completion_criteria.md)
    当前 Phase 1 / Phase 2 回归收口标准。
-6. [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
-   `xv6 / Linux` 主线切换设计边界。
-7. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
+6. [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
    当前 `pipeline / Phase 3` 边界和取舍判断。
-8. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+7. [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
    `pipeline` 投机执行和 side effect 可见性合同。
-9. [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
+8. [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
    `Phase 4` 当前准备性入口设计。
-10. [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
-    主线长期路线图和 wave 激活门槛。
-11. [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
+9. [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
     主线 `Wave 5 / cache / memory-system` 当前设计入口。
-12. [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
+10. [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
     主线 `Wave 6 / JIT / DBT` 当前 readiness、证据链、translation contract、原型边界和
     `DBT translator + IR v0 dry-run` 完成态设计入口。
-13. [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
+11. [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
     主线 `Wave 7 / 产品化展示与在线控制台` 的产品官网、控制台和产品文档设计入口。
-14. [design/wave7_remote_cloud_dev_environment_design.md](design/wave7_remote_cloud_dev_environment_design.md)
+12. [design/wave7_remote_cloud_dev_environment_design.md](design/wave7_remote_cloud_dev_environment_design.md)
     主线 `Wave 7` 在另一台云服务器上承接完整开发/验证环境的设计入口。
-15. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
+13. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
     `Wave 7` 阶段性收口后的 `标准 Linux 发行版平台` 新主线设计入口。
-16. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
+14. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
     `标准 Linux 发行版平台` 新主线的当前状态、风险和下一步。
-17. [plan/history_plan.md#post-wave7-linux-distribution-platform-plan](plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
+15. [plan/history_plan.md#post-wave7-linux-distribution-platform-plan](plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
     `标准 Linux 发行版平台` 第一阶段完成计划归档。
-18. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
+16. [plan/post_wave7_linux_distribution_platform_longterm_plan.md](plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+    `标准 Linux 发行版平台` 五阶段长线活跃计划。
+17. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
     `Wave 7` 阶段性收口后的 `用户自定义 AI 任务 + NPU 性能模型` 新主线设计入口。
-19. [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
+18. [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
     `用户自定义 AI 任务 + NPU 性能模型` 新主线的当前活跃计划。
-20. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+19. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     向量扩展与 ML workload 的统一设计边界。
-21. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+20. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 方向设计。
-22. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+21. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
     `debug_session / protocol + frontend` 设计边界。
-23. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+22. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
     Spike 外部差分验证边界。
-24. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
+23. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
     主线 `Wave 7` 远端云服务器开发/验证环境的当前活跃计划。
-25. [plan/history_plan.md](plan/history_plan.md)
+24. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
 
 - `主线状态`
   - [status/mainline_status.md](status/mainline_status.md)
-  - [design/future_expansion_roadmap_design.md](design/future_expansion_roadmap_design.md)
-  - [design/xv6_linux_jit_mainline_design.md](design/xv6_linux_jit_mainline_design.md)
   - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
   - [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
 - `Post-Wave 7 Linux`
   - [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
   - [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
+  - [plan/post_wave7_linux_distribution_platform_longterm_plan.md](plan/post_wave7_linux_distribution_platform_longterm_plan.md)
   - [plan/history_plan.md#post-wave7-linux-distribution-platform-plan](plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
 - `pipeline`
   - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)

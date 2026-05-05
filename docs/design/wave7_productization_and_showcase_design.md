@@ -22,7 +22,6 @@
 - 已完成计划归档：
   - [../plan/history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)
 - 相关设计：
-  - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
   - [wave6_jit_dbt_readiness_design.md](wave6_jit_dbt_readiness_design.md)

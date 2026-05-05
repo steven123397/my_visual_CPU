@@ -6,11 +6,9 @@
 
 它回答：
 
-- 为什么 `Wave 6` 可以在 `Wave 5` 首轮收口后激活。
-- 为什么当前阶段先做 hot-path evidence、translation contract 和 prototype guardrail，
-  而不是直接实现 JIT engine 或 multicore / coherence。
-- 当前已经固定了哪些观察、helper / fallback、preflight 和 first-boundary 合同。
-- 什么时候才需要重新启用独立 `plan` 文档。
+- `Wave 6` 已经沉淀出哪些 JIT / DBT 合同。
+- 当前 opt-in executable path 与 runtime guardrail 的功能边界是什么。
+- 哪些能力仍未进入默认 backend 或长期 runtime。
 
 本文档不记录执行 checklist。当前进度以
 [../status/mainline_status.md](../status/mainline_status.md) 为准；已完成历史只保留在
@@ -24,8 +22,6 @@
   - [../plan/history_plan.md](../plan/history_plan.md)
   - [../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
 - 相关设计：
-  - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
-  - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
   - [phase3_ooo_execution_model_design.md](phase3_ooo_execution_model_design.md)
   - [pipeline_speculation_contracts.md](pipeline_speculation_contracts.md)
   - [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md)
@@ -430,32 +426,20 @@ lookup 命中可供 opt-in runtime harness 复用；任何命中 invalidation �
 并删除 entry，阻止 stale dispatch。它不是 persistent cache，也不接默认 backend 或 helper
 runtime execution。
 
-## 后续推进口径
+## 未启用能力边界
 
-在证据链和原型边界阶段，后续窄任务不再单独创建 plan 文档。允许直接推进的任务包括：
+当前 `Wave 6` 已完成 opt-in executable path 与 runtime guardrail 收口，但仍明确没有启用：
 
-- 补充更窄的 profile / probe / debug 只读字段。
-- 扩展 first-boundary 分类或 translation-plan dry-run 摘要。
-- 增加 host smoke，证明 preflight、fallback replay 或默认路径不变。
-- 对代表性 workload 做 opt-in 观察，但不接入默认 backend 调度。
+- 默认 `--backend jit`
+- persistent host code cache
+- workload-level scheduler
+- CSR / atomic / vector helper runtime
+- block stitching
+- multicore / coherence
+- 新 memory consistency model
 
-这些任务完成后只需要同步 [../status/mainline_status.md](../status/mainline_status.md)，并跑相应验证。
-
-只有进入以下整块任务时，才重新考虑独立计划文档：
-
-- 真正 JIT engine、runtime DBT translator 或 translator 执行路径接入。
-- executable IR lowering、host-specific lowering 或 runtime lowering dispatch。
-- 默认 runtime JIT dispatch、persistent host code cache 或 helper replay execution。
-- IR 语义扩展或 differential execution。
-- 默认 runtime 中的 host code emission、executable memory policy 扩展或宿主平台相关代码生成。
-- persistent block cache、block lifecycle 和 invalidation implementation。
-- workload-level runtime JIT harness 或 backend scheduler。
-- memory / CSR / trap / vector helper 的 runtime replay / inline 策略。
-- multicore、coherence 或新的 memory consistency 模型。
-
-`DBT translator + IR v0 dry-run` 已完成并归档；后续如果只是在该 v0 范围内补窄测试，
-可以直接更新状态并守住相应 host smoke。若进入默认 runtime scheduler、persistent
-block cache 或 workload-level JIT harness，需要再开新的设计 / 计划。
+这些能力如果未来重新打开，必须作为新的设计 / 计划边界处理，不能从本文档中的
+host-smoke-only guardrail 直接外推成默认运行能力。
 
 ## 验证思路
 
@@ -529,8 +513,7 @@ block cache 或 workload-level JIT harness，需要再开新的设计 / 计划�
 - 当前仍未启动默认 JIT backend、persistent cache、完整 helper runtime execution、
   workload-level scheduler、multicore / coherence、write-back cache、I-cache 和 cache
   maintenance instruction。
-- Wave 6 closeout 的当前判定是 opt-in executable path 与 runtime guardrail 收口；默认
+- Wave 6 closeout 的完成态判定是 opt-in executable path 与 runtime guardrail 收口；默认
   `--backend jit`、persistent cache、workload-level scheduler、CSR / atomic / vector helper
   runtime、multicore / coherence 和新的 memory consistency model 都必须作为后续独立设计 /
   计划评估。
-- 当前阶段后续微任务不再单独创建 plan 文档；只有进入真正 JIT engine 或其他整块执行面时，才重新启用独立计划文档。

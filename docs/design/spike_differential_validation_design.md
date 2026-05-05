@@ -6,9 +6,9 @@
 
 - 为什么当前只做离线 `myCPU vs Spike` final-state differential
 - 当前实现的结构拆分、输入输出契约和用户入口
-- 哪些限制是 V1 的有意识收窄，哪些方向适合后续继续扩
+- 哪些限制是 V1 的有意识收窄
 
-本文档不承担实时进度更新。当前是否已经落地、跑通哪些门禁、下一步优先级如何变化，统一以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+本文档不承担实时进度更新。当前是否已经落地、跑通哪些门禁，统一以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 
 ## 关联文档
 
@@ -188,18 +188,17 @@ Spike runner 当前会显式拒绝以下 setup：
 - Spike 侧 first-trap checkpoint 当前仍限制为“单次运行里抓第一段 trap 入口 + 最终态”这一个最小形态，不扩成多 checkpoint / nested trap trace。
 - 当前虽已覆盖第一批 device-free `Sv39/page fault` final-state 子集和 returning trap handler checkpoint，但 `configure hook`、platform fixture、设备 side effect、更广 `Sv39` 语义面以及逐提交 trace 仍不在当前覆盖面内。
 
-## 后续扩展方向
+## 扩展边界
 
-如果未来要继续增强这条 oracle，最值得做的切片是：
+当前 Spike oracle 适合继续停留在 final-state / checkpoint 级验证。更广的
+`Sv39 / page fault` 子集、更细 privilege / CSR 合同、多 checkpoint / nested trap 变体可以在
+该模型内扩展，但仍不改变默认非依赖、非 trace-framework 的定位。
 
-1. 更广的 `Sv39 / page fault` final-state 子集，例如 `MPRV` 一类更细 privilege-memory 合同
-2. 不依赖设备 side effect 的更细 privilege / CSR 合同
-3. 必要时再把 returning trap handler 从“单 first-trap checkpoint”外推到更复杂的多 checkpoint / nested trap 变体
-
-只有当这些 final-state / checkpoint 级能力已经不足以定位问题时，才值得再评估 commit-level 或 trace-level differential。当前阶段不建议直接把 Spike 线扩成更大的统一框架。
+只有当 final-state / checkpoint 级能力不足以定位问题时，才应重新评估 commit-level 或
+trace-level differential。
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效。
-- 实时状态、已接入场景和下一步优先级，请看 [../status/mainline_status.md](../status/mainline_status.md)。
+- 实时状态和已接入场景，请看 [../status/mainline_status.md](../status/mainline_status.md)。
 - 相关完成态计划已归档到 [../plan/history_plan.md#spike-external-differential-validation-plan](../plan/history_plan.md#spike-external-differential-validation-plan)。

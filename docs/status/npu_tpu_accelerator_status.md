@@ -15,7 +15,6 @@
 - 相关设计：
   - [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)
   - [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
-  - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
 - 当前活跃计划：
   - [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)

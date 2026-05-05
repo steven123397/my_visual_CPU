@@ -6,7 +6,7 @@
 
 - 为什么当前仍不直接启动完整 `cache / DMA / multicore / coherence`
 - 已完成的 `P4-prep-1` 到底沉淀成了什么正式 contract
-- 如果未来继续往前走，`P4-prep-2 / P4-prep-3` 应如何理解
+- `P4-prep-2 / P4-prep-3` 当前沉淀成了哪些准备性合同
 
 本文档只保留当前仍然有效的准备性设计，不再把“某一轮要不要开做”写成过程性实施提案。
 
@@ -19,8 +19,6 @@
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
-- 当前计划：
-  - 暂无主线活跃计划；继续推进 `Wave 6` 下一刀前先新建 `docs/plan/` 计划。
 - 已完成计划归档：
   - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
   - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
@@ -59,7 +57,8 @@
 
 ### 1. 当前对 `Phase 4` 的正式理解
 
-当前仓库把 `Phase 4` 理解为“需要先做准备项，再决定是否值得继续展开”的远期阶段，而不是一个已经进入完整实施的活跃专项。
+当前仓库把 `Phase 4` 理解为“已经沉淀若干准备项，但尚未进入完整 cache / DMA /
+multicore / coherence 实施”的远期阶段。
 
 因此，当前正式保留的准备性切片只有 3 类：
 
@@ -121,11 +120,12 @@
 - `multicore / coherence`
   - 会显著放大同步、原子性、一致性和平台状态空间，不能在当前准备层不足时抢跑
 
-因此，当前最健康的顺序仍然是：先用准备项把结构边界收口清楚，再决定是否有必要继续往下展开。
+因此，当前正式设计只承认已经落地的准备项合同，不把完整 `cache / DMA / multicore`
+写成已启动能力。
 
 ### 5. `P4-prep-2 / P4-prep-3` 的正式定位
 
-当前这些方向的后续定位如下：
+当前这些方向的完成态定位如下：
 
 - `P4-prep-2`
   - 第一刀 `C1` 已经落地为 `execution_profile` 下的地址级 memory observation / shadow cache
@@ -137,9 +137,7 @@
   - 重点仍是收集 workload 证据，而不是立刻引入真实 cache 行为
 - `P4-prep-3`
   - 首个窄切片已经由 `NPU / TPU-like` AI accelerator Wave 1 落地，形成 `dma_transaction`、`Bus::dma_read()/dma_write()` 与设备侧 fail-closed DMA 语义
-  - 后续重点仍是继续定义更通用的 DMA / buffer ownership 边界，而不是把异步设备模型、cache coherence 或多设备 DMA 一次性做完
-
-后续这些方向仍不自动进入默认主线，是否值得继续，应以 `docs/status/` 中的即时判断和 workload 信号为准。
+  - 它不是完整异步设备模型、cache coherence 或多设备 DMA。
 
 ## 验证思路
 
@@ -198,6 +196,3 @@
 - `Wave 5 closeout / Wave 6 readiness` 已由
   [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   收口；`Wave 5` 首轮完成，主线 active wave 转入 `Wave 6`。
-- `Wave 6` `Slice A / JIT DBT hot-path evidence` 已由
-  [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
-  收口；当前暂无主线活跃计划。

@@ -11,7 +11,7 @@
 - 状态文档：
   - [status/mainline_status.md](../status/mainline_status.md)
   - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 相关计划：
+- 已完成计划：
   - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
 
 ## 当前有效性说明
@@ -206,18 +206,12 @@
 - `BLOCK_COUNT` 目前只支持 `1`，驱动需要按 block 循环提交。
 - 写入结果当前只更新模拟器内存中的 backing store，不回写宿主文件。
 
-## 驱动准备建议
+## Guest Driver 分层
 
-内核侧建议尽快抽象出两层：
+客体侧最小平台驱动接口已经从纯测试辅助代码提升成可复用的 guest 平台层，并按两层消费当前 MMIO 契约：
 
 1. `platform_mmio.h` 对应的裸寄存器访问层
-2. `plic` / `simple_storage` 的最小驱动层
-
-这样后续即使把 `SimpleStorage` 再升级成更像真实块设备，或者给它补中断完成路径，也只会改驱动层，不会污染更高层的块缓存或文件系统代码。
-
-## Guest Platform Layer
-
-客体侧最小平台驱动接口现在已经从纯测试辅助代码提升成了可复用的 guest 平台层：
+2. `plic` / `simple_storage` 等最小设备驱动层
 
 - 共享汇编驱动实现位于 [platform_drivers.inc](../../myCPU/guest/include/platform_drivers.inc)
 - C 侧声明位于 [platform.h](../../myCPU/guest/include/platform.h)

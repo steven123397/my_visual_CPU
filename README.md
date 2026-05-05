@@ -81,7 +81,7 @@ graph TD
 | Host 模拟器 C/C++ 代码 | ~41,000 行 |
 | Guest 运行时代码 | ~10,000 行 |
 | 前端 JavaScript 代码 | ~6,000 行 |
-| 设计与状态文档 | 26 篇 |
+| 设计与状态文档 | 21 篇 |
 | 测试文件 | 259 个 |
 | Git 提交 | 156 次 |
 
@@ -257,6 +257,5 @@ SPIKE_PATH=/path/to/spike make test-host-spike_differential
 - [docs/design/pipeline_speculation_contracts.md](docs/design/pipeline_speculation_contracts.md)
 - [docs/design/vector_ml_workload_direction_design.md](docs/design/vector_ml_workload_direction_design.md)
 - [docs/design/phase4_preparation_design.md](docs/design/phase4_preparation_design.md)
-- [docs/design/future_expansion_roadmap_design.md](docs/design/future_expansion_roadmap_design.md)
 
 完整展示材料见 [docs/showcase/README.md](docs/showcase/README.md)，HTML 预览页见 [docs/showcase/preview.html](docs/showcase/preview.html)。

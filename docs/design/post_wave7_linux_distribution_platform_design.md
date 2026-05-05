@@ -3,17 +3,18 @@
 ## 文档定位
 
 本文档记录 `Wave 7` 阶段性收口之后，本地工作区重新打开的
-`标准 Linux 发行版平台` 新主线的当前有效设计边界。
+`标准 Linux 发行版平台` 主线的当前有效设计边界。
 
 它回答：
 
-- 为什么当前 Linux 基线已经足以支撑“发行版级平台”这条新主线启动。
-- 这条线和 `Wave 7` 的 Linux console 展示、远端服务器部署之间如何分工。
-- 后续需要围绕哪些 guest 可见平台合同、runtime 资产合同和验证合同推进。
-- 哪些能力属于这条新主线，哪些仍不应被提前写成“已经支持标准发行版”。
+- 这条线为什么不再继续沿 `linux_proto` fourth-stage marker 横向扩展。
+- 当前已经具备哪些真实发行版运行证据。
+- 标准发行版平台按哪些能力层分解。
+- 哪些能力属于这条主线，哪些仍不能提前写成“已经支持标准发行版”。
 
-本文档不记录执行 checklist。具体实施步骤写入 `docs/plan/`，当前状态以
-[../status/linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)
+本文档不记录执行 checklist。执行步骤写入
+[../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)，
+当前状态以 [../status/linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)
 和 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 
 ## 关联文档
@@ -21,188 +22,144 @@
 - 状态文档：
   - [../status/linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)
   - [../status/mainline_status.md](../status/mainline_status.md)
+- 当前计划：
+  - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划：
   - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
 - 相关设计：
-  - [xv6_linux_jit_mainline_design.md](xv6_linux_jit_mainline_design.md)
-  - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
   - [wave7_productization_and_showcase_design.md](wave7_productization_and_showcase_design.md)
+  - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [wave7_remote_cloud_dev_environment_design.md](wave7_remote_cloud_dev_environment_design.md)
 
 ## 背景与问题
 
-当前仓库的 Linux 相关能力已经不再是“能不能起第一阶段”的问题。主线 `Wave 3`
-已经把真实 Linux fourth-stage checkpoint 冻结到
-`timerfd-one-shot-readback-ok`，`Wave 7` 也已经把 `linux_proto_console`
-接入前端 `/console`，能在显式提供真实 `Image` 时进入 `mycpu-linux# ` 提示符并完成
-最小命令往返。
+当前 Linux 主线已经越过“能不能启动真实内核”的阶段。此前 `linux_proto` fourth-stage
+checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受控
+`linux_proto_console` 接入 `/console`，显式提供真实 `Image` 后可以进入
+`mycpu-linux# ` mini shell。
 
-但这套能力仍然建立在一条刻意保守的边界上：repo 默认不携带真实 Linux `Image`，
-console 路线仍是受控 demo，用户态是最小 shell smoke，不是标准 Debian / Alpine /
-RISC-V 发行版环境。继续沿 `timerfd` 线追加同类 syscall 微分支，已经不再是当前最有价值
-的投入。
+`2026-05-05` 之后，这条线又获得了更强的真实外部发行版证据：
 
-因此，`Wave 7` 阶段性收口之后，本地工作区应把 Linux 方向重新定义为
-`标准 Linux 发行版平台` 新主线：目标不再是“再多过几条 fourth-stage marker”，而是
-推进到更接近 QEMU 使用体验的标准发行版镜像 bring-up、长期交互 shell 和动态链接用户态。
+- 外部 Alpine ext4 rootfs + 静态 `/init` 可以进入 `mycpu-distro# `，执行
+  `cat /etc/os-release` 并观察到 `ID=alpine`。
+- 外部 Alpine ext4 rootfs + 动态 `init=/bin/sh` 可以进入真实 BusyBox `~ # `，
+  执行 `cat /etc/os-release` 并回到 prompt。
+- 同一动态 BusyBox shell 会话已经通过多命令 smoke 和 `filesystem_consistency`
+  profile，覆盖 `/tmp` 目录创建、文件写入、追加、读回、长度检查、删除、目录移除和后续
+  shell 存活。
+- 为越过 musl loader，当前已补 FPR raw state、标准 `flw/fld/fsw/fsd` load-store
+  语义和 RVC `c.fld/c.fsd` / `c.fldsp/c.fsdsp` 解码。
+
+因此，这条线后续的主要价值已经不在于继续补几个同类 syscall marker，而在于把当前
+“能跑真实动态 shell 的点证据”推进成分层、可重复、可观察的发行版平台证据链。
 
 ## 目标
 
-- 以当前 `linux_proto` bring-up 基线为起点，推进到标准 Debian / Alpine / RISC-V
-  发行版镜像级平台。
-- 固定“标准发行版级支持”所需的 guest 可见平台合同、runtime 资产合同和最小 smoke。
-- 明确 Linux kernel、rootfs、console、virtio、timer、TTY、信号、文件系统和长期运行稳定性
-  的分层边界，避免把所有问题都揉进单条 smoke。
-- 保持 `reference-first`、真实镜像 opt-in 和 fail-closed 的方法论，不用展示层或前端叙事
-  代替平台能力声明。
+- 以当前 `linux_proto` bring-up 和外部 Alpine rootfs 证据为起点，推进到标准
+  Debian / Alpine / RISC-V 发行版镜像级平台。
+- 固定“标准发行版级支持”所需的 guest 可见平台合同、runtime 资产合同和 opt-in
+  验证合同。
+- 用真实发行版用户态驱动平台 gap，而不是用展示层文案或单点 marker 替代能力声明。
+- 保持 `reference-first`、真实镜像 opt-in、fail-closed 和默认回归不依赖外部资产。
 
 ## 非目标
 
 - 不把这条线等同于 `Wave 7` 远端云服务器部署；部署继续在远端 checkout 中推进。
-- 不在第一刀开放任意用户上传 kernel / rootfs / dtb。
-- 不在第一刀承诺图形桌面、网络栈、包管理完整可用或“等同 QEMU 全功能平台”。
-- 不把默认 backend 切到 `pipeline` 或 JIT，也不把 JIT / multicore / coherence 问题并入
-  本线。
+- 不开放任意用户上传 kernel / rootfs / dtb。
+- 不承诺图形桌面、网络栈、完整包管理或“等同 QEMU 全功能平台”。
+- 不把默认 backend 切到 `pipeline` 或 JIT。
+- 不把 JIT、multicore、coherence 或 AI accelerator 并入本线。
+- 不把 repo 自带 `linux_proto/rootfs.ext4` 当作标准发行版证据。
+- 不在 CLI / probe 层稳定前新增 frontend distro route。
 
-## 约束与边界
+## 稳定边界
 
 - 共享 `InstructionSemantics + functional backend` 仍是 Linux bring-up 的语义真值来源。
+- `pipeline`、未来 JIT 和其他执行形态只能消费共享语义，不复制 ISA 解释。
 - 仓库默认仍不提交标准发行版运行资产；真实 `Image`、rootfs、可选 initramfs 和相关产物
-  继续由开发者或远端环境显式提供。
-- 当前 `linux_proto_console`、`run_debug_cli_probe.py` 和既有 Linux runtime smoke
-  是这条线的事实基础，不再另起一套并行 harness。
-- 前端 `/console` 只能消费已有 session / runtime 合同，不应反向定义 Linux 平台语义。
-- 这条线需要独立 `design / plan / status`，不能继续复用 `Wave 7` 展示文档承载实时推进。
+  由开发者或远端环境显式提供。
+- 真实发行版 runtime guardrail 必须显式 opt-in，并在缺少外部 rootfs 时 fail-closed。
+- 前端 `/console` 只能消费已有 session / runtime 合同，不反向定义 Linux 平台语义。
 
-## 方案
+## 分层架构
 
-### 结构设计
-
-这条新主线按 4 层推进：
+这条主线按 5 层组织能力与证据：
 
 1. **发行版资产合同层**
-   - 固定标准 kernel、rootfs、可选 initramfs、DTB 和启动参数的组织方式。
-   - 明确哪些资产由仓库生成、哪些资产由外部提供、哪些路径通过环境变量显式注入。
+   固定外部 kernel `Image`、block rootfs、bootargs、prompt、profile 和 expected output
+   的组织方式。默认仓库不携带真实发行版资产。
 
-2. **guest 可见平台合同层**
-   - 围绕 Linux 实际会消费的 UART、virtio-blk、timer、PLIC/CLINT、中断、MMU、页表、
-     trap 和文件系统读写路径补齐缺口。
-   - 把“发行版级平台 gap”从当前 `timerfd` checkpoint 线里拆出来，避免 marker 与平台能力
-     混在一起。
+2. **runtime / probe 合同层**
+   复用 `linux_proto` 加载路径、debug CLI 和 `run_debug_cli_probe`，把验证目标从
+   mini shell marker 提升为真实动态 shell、TTY/login、process、filesystem 和 distro
+   matrix。
 
-3. **runtime / harness 层**
-   - 复用当前 `linux_proto` 加载路径、debug CLI、front-end console 和 opt-in runtime
-     smoke，但把验证目标从“最小 shell marker”提升为“长期交互 shell + 常用用户态工具”。
-   - 统一 prompt、boot marker、超时、reset/terminate 和最小命令 smoke 的合同。
+3. **guest 可见平台合同层**
+   围绕 UART、virtio-blk、CLINT/PLIC、timer、signal、TTY、MMU、页故障和文件系统路径补齐
+   Linux 真实用户态会消费的能力。
 
-4. **验证与展示层**
-   - 继续区分默认门禁和 opt-in 真实镜像门禁。
-   - 默认门禁锁住构建、装载、字符串、probe 和 fail-closed 诊断；真实发行版级断言通过
-     opt-in runtime smoke 单独证明。
+4. **ISA / platform 广告层**
+   保证 F/D、`fcsr`、FS state、DTB `riscv,isa`、hwcap 等广告与真实实现一致，不诱导用户态
+   进入未实现路径。
 
-### 第一刀切片
+5. **展示层**
+   frontend 只在 CLI / probe 合同稳定后消费能力；展示入口不是平台语义事实来源。
 
-当前第一刀不优先做 `/console` 里的新发行版卡片，也不继续沿 `timerfd` 线追加同类 marker。
-第一刀先收口为：
+## 当前运行合同
 
-1. **外部发行版运行资产合同**
-   - 明确外部 kernel `Image`、外部 block rootfs、可选 bootargs，以及期望 shell prompt /
-     命令回显的注入方式。
-   - 继续复用仓库现有的 `linux_sbi_shim`、生成 DTB 和 `virtio-blk` 板级合同，不先引入新的
-     frontend / 产品叙事入口。
+当前 opt-in runtime 入口仍以环境变量显式描述：
 
-2. **opt-in shell command smoke**
-   - 在 host CLI / probe 层证明“能启动到指定 prompt，并执行一条动态链接用户态命令，再回到 prompt”。
-   - 这条 smoke 的价值高于继续补 `timerfd` 之后的同类 syscall marker，因为它直接证明
-     发行版级 shell contract，而不是只证明第四阶段最小用户态 smoke。
+- `MYCPU_RUN_LINUX_DISTRO_RUNTIME=1`
+- `MYCPU_LINUX_DISTRO_RUNTIME_IMAGE=/path/to/Image`
+- `MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS=/path/to/rootfs.ext4`
+- `MYCPU_LINUX_DISTRO_RUNTIME_BOOTARGS='...'`（可选）
+- `MYCPU_LINUX_DISTRO_RUNTIME_PROMPT='...'`
+- `MYCPU_LINUX_DISTRO_RUNTIME_COMMAND='...'`
+- `MYCPU_LINUX_DISTRO_RUNTIME_EXPECT='...'`
+- `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS='command=>expected\n...'`（可选）
+- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency`（可选）
 
-3. **frontend distro route 延后**
-   - 在外部运行资产合同和 shell command smoke 证明之前，不单独新增 `linux_distro_console`
-     一类前端路线。
-   - 当前 `/console` 中的 `linux_proto_console` 继续承担受控 mini shell guardrail，
-     不被提前改写成“已经支持标准发行版”。
+当前已存在的真实 opt-in 目标包括：
 
-### 当前 gap 盘点
+- `test-host-run_debug_cli_probe_linux_distribution_runtime`
+- `test-host-run_debug_cli_probe_linux_distribution_filesystem`
 
-从当前 `linux_proto` 基线走向标准 Debian / Alpine / RISC-V 发行版镜像，当前最直接的 gap
-不是 CPU 核心语义，而是下面几层合同还没有正式收口：
+这两条 target 只能证明当前声明的 shell command / filesystem consistency contract，不等同于
+完整发行版矩阵、TTY/login、完整 process control、跨 reboot 持久性或完整 F/D 浮点支持。
 
-1. **运行资产合同缺口**
-   - 当前前端 manifest 只显式要求 `MYCPU_LINUX_PROTO_CONSOLE_IMAGE`，而 rootfs、DTB、
-     bootargs、prompt 仍默认绑定到 repo 内的 `linux_proto` mini shell 语义。
+## 能力分解
 
-2. **shell 合同缺口**
-   - 当前 e2e 只证明 `mycpu-linux# ` 和 `help / uptime / exit`，还没有形成“标准发行版 shell
-     可执行一条动态链接用户态命令并回到 prompt”的独立门禁。
+标准发行版平台按 5 个长期能力面拆分，具体执行顺序和 checklist 由
+[../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+维护：
 
-3. **验证分层缺口**
-   - 当前真实镜像 smoke 主要集中在前端 Linux console 和 `run_debug_cli_probe.py` 的
-     fourth-stage marker 断言；还没有单独的“发行版级 shell contract”层。
+1. **TTY / login / console 语义**
+   从 `init=/bin/sh` smoke 扩到 serial TTY / getty / login 相关语义。当前尚未声明
+   getty/login 完整支持。
+2. **signal / timer / process 控制**
+   覆盖真实 shell 脚本控制流、`sleep`、子进程、`wait`、返回码和基础 signal 语义。当前还只证明
+   多命令 shell 与文件系统一致性 smoke。
+3. **文件系统与块设备耐久性**
+   从 `/tmp` 会话内一致性扩到 ext4 / virtio-blk 的 sync、rename、目录遍历、较大文件和可选
+   reset / reboot 后一致性。当前不声明跨 reboot 持久性。
+4. **curated 发行版矩阵**
+   以显式外部资产维护 Alpine、Debian/RISC-V 等 curated matrix。当前只有外部 Alpine
+   rootfs 的正向证据，不开放任意镜像支持。
+5. **ISA / platform 合同补齐**
+   系统收口真实发行版触发到的 F/D、`fcsr`、FS state、DTB `riscv,isa`、hwcap 和平台设备
+   广告。当前 FP load-store 只是越过 musl loader 的最小合同。
 
-4. **后续平台 gap**
-   - TTY / login 语义、长期 uptime、动态链接用户态工具、文件系统一致性、signal / timer /
-     交互稳定性都属于后续第二阶段问题，不适合在第一刀里和外部资产合同一起处理。
+## 提交与阶段边界
 
-### 接口 / 数据 / 契约
+五个阶段都较大，提交边界按阶段完成态控制：
 
-- **镜像合同**
-  - 第一阶段仍使用显式环境变量指向真实 `Image`、rootfs 和可选 DTB。
-  - 运行资产路径必须是稳定绝对路径，不通过浏览器上传。
-  - 当前第一刀建议把 kernel `Image`、block rootfs、可选 bootargs、shell prompt、
-    测试命令和期望输出都收口成显式 contract，而不是继续把 rootfs / prompt 固定写死在
-    `linux_proto_console` 里。
-  - 当前建议的 opt-in contract 变量是：
-    - `MYCPU_RUN_LINUX_DISTRO_RUNTIME=1`
-    - `MYCPU_LINUX_DISTRO_RUNTIME_IMAGE=/path/to/Image`
-    - `MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS=/path/to/rootfs.ext4`
-    - `MYCPU_LINUX_DISTRO_RUNTIME_BOOTARGS='...'`（可选）
-    - `MYCPU_LINUX_DISTRO_RUNTIME_PROMPT='...'`
-    - `MYCPU_LINUX_DISTRO_RUNTIME_COMMAND='...'`
-    - `MYCPU_LINUX_DISTRO_RUNTIME_EXPECT='...'`
-    - `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS='command=>expected\n...'`（可选）
-    - `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency`（可选）
-  - 默认命令合同按 rootfs 来源分层：
-    - repo 自带 `linux_proto/rootfs.ext4` 仍默认 `help -> commands: help uptime exit`
-    - 显式外部 rootfs 默认切到 `cat /etc/os-release -> ID=`
-  - 这样可以保持现有 mini shell guardrail 不回退，同时让“外部发行版资产”默认落在更像标准
-    发行版用户态的一条高信号命令上，且比只看 `uname` 更接近真实用户空间与 rootfs 身份识别。
-  - `linux_distribution_runtime` 这条真实发行版 runtime guardrail 现在必须显式提供外部
-    `MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS`，不允许回落到 repo 自带 `linux_proto/rootfs.ext4`。
-    后者只保留给 mini shell / fourth-stage guardrail，不再被视为“发行版级 runtime”资产。
-  - `2026-05-05` 的第一条正向证据限定为
-    `external Alpine ext4 + static /init + cat /etc/os-release -> ID=alpine`。
-    该证据证明外部 block rootfs、ext4 mount、`virtio-blk` 和从 rootfs 执行 `/init`
-    的路径可用，但不把动态链接发行版用户态声明为已支持。
-  - `2026-05-05` 的后续正向证据已经扩到
-    `external Alpine ext4 + init=/bin/sh + cat /etc/os-release -> ID=alpine`。
-    该证据证明动态 BusyBox / musl loader 的最小 shell command contract 已可用；它仍不等同于
-    完整发行版矩阵、完整 F/D 浮点算术、TTY/login 或长期交互稳定性。
-  - 同日该 opt-in runtime guardrail 已支持同一 shell 会话内的多命令序列，使用
-    `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS` 的逐行 `command=>expected` 合同。当前正向证据
-    已覆盖 `cat /etc/os-release`、`ls -l /bin/sh` 和 `/tmp` 写读回显。
-  - 同日继续新增 `filesystem_consistency` profile 和
-    `test-host-run_debug_cli_probe_linux_distribution_filesystem` opt-in target，仍显式消费外部
-    `Image/rootfs/bootargs/prompt`。当前正向证据覆盖同一动态 BusyBox shell 会话内的
-    `/tmp` 目录创建、文件写入、追加、读回、长度检查、删除、目录移除和后续 prompt 存活；
-    这比单条命令 smoke 更接近长期交互 / 文件系统一致性 guardrail，但仍不声明完整发行版矩阵。
+- 每个阶段彻底完成后允许提交一次。
+- 中间 slice 默认不自动提交。
+- 如果阶段因为真实 blocker 无法完成，可以记录 blocker 和验证证据，但不把部分进展自动提交成阶段完成。
+- 阶段提交前必须核对 staged 范围，且只提交本阶段相关文件。
+- 不自动 push。
 
-- **session / console 合同**
-  - 成功标志从“到达最小 shell prompt”开始，但需要逐步扩展到动态链接用户态命令、
-    长时交互和 reset 后可重建状态。
-  - `Load / Run / Pause / Reset / Terminate` 仍复用现有会话 API，不新起并行入口。
-  - 第一刀先在 CLI / probe 层把“到达 prompt -> 输入命令 -> 观察输出 -> 回到 prompt”
-    收口成 opt-in smoke，再决定是否把同样合同提升到前端路由。
-
-- **guest 可见平台合同**
-  - 不把单个 syscall 通过 smoke 证明等同于“发行版级支持”。
-  - 需要为块设备、TTY、定时器、信号、文件系统、页故障、长期 uptime 和交互稳定性建立
-    更直接的门禁。
-
-- **验证合同**
-  - 维持默认仓库无真实发行版资产时的 fail-closed 语义。
-  - 真实镜像验证继续显式 opt-in，并产出稳定 prompt / 命令 / 输出证据，而不是只看内核日志。
-
-### 验证思路
+## 验证思路
 
 - 文档层：
   - `git diff --check`
@@ -212,31 +169,27 @@ RISC-V 发行版环境。继续沿 `timerfd` 线追加同类 syscall 微分支�
   - `cd frontend && node --test`
 - Linux 定向门禁：
   - `cd myCPU && make test-host-run_debug_cli_probe`
+  - 阶段对应的真实 opt-in target
   - `cd myCPU && make test-host-xv6_boot_smoke`
   - `cd myCPU && make test-host-xv6_shell_smoke`
-  - `cd myCPU && python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`
-- 真实发行版运行时断言：
-  - 第一刀优先新增“显式提供外部 `Image/rootfs` 后，boot 到指定 prompt、执行一条命令、再次观察
-    prompt”的 opt-in shell command smoke，不写成默认已证明。
+- ISA / pipeline 相关变更：
+  - 补对应 host / unit / pipeline smoke
+  - 至少跑相关窄门禁和 `make test-pipeline`
 
 ## 风险与取舍
 
-- 如果继续沿现有 fourth-stage smoke 横向补 marker，会延后真正的发行版平台 gap 盘点。
+- 如果继续沿 fourth-stage smoke 横向补 marker，会延后真正的平台 gap 盘点。
 - 如果过早开放任意用户镜像上传，会把资产管理、安全和资源问题提前混入 bring-up。
-- 如果把这条线和 `Wave 7` 远端部署混做一件事，会让本地平台合同和远端运维合同再次纠缠。
-- 标准发行版级平台的能力面天然比当前 `linux_proto` 更宽，必须分阶段明确“第一条发行版级 shell 基线”
-  和“更完整用户态能力”之间的边界。
-- 如果在外部运行资产合同稳定前就先做 frontend distro route，会把 manifest、健康诊断、
-  UI 文案和真实平台能力再次耦合起来，后续更难收口。
-- 当前外部 Alpine rootfs 已经能分别在静态 `/init` 和动态 `init=/bin/sh` 路线完成
-  最小 shell command smoke，动态路线还已扩到同一 shell 会话的多命令 smoke 和
-  `/tmp` 文件系统一致性 smoke。后续设计讨论不应再把此前动态 BusyBox / musl loader
-  问题归类为“缺少 rootfs 资产”或“kernel / virtio-blk 未挂载”，也不应把该证据扩大解释成
-  完整发行版平台、TTY/login 或完整包管理生态。
+- 如果先做 frontend distro route，会把 UI 文案和未稳定的平台能力耦合起来。
+- 如果过早广告 F/D 或 hwcap 能力，真实用户态库可能进入未实现路径。
+- 如果真实 rootfs 写入测试直接操作原资产，可能污染后续验证；需要使用临时副本。
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效。
-- 当前结果与下一步以
+- 当前执行计划以
+  [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+  为准。
+- 当前状态以
   [../status/linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)
   和 [../status/mainline_status.md](../status/mainline_status.md) 为准。

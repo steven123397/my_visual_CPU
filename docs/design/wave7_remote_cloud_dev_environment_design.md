@@ -18,13 +18,12 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
-- 相关计划：
+- 当前活跃计划：
   - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
 - 相关设计：
   - [wave7_productization_and_showcase_design.md](wave7_productization_and_showcase_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
   - [spike_differential_validation_design.md](spike_differential_validation_design.md)
-  - [future_expansion_roadmap_design.md](future_expansion_roadmap_design.md)
 
 ## 背景与问题
 
@@ -254,4 +253,4 @@ Remote Cloud Server
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效。
-- 当前结果与下一步以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前结果以 [../status/mainline_status.md](../status/mainline_status.md) 为准。

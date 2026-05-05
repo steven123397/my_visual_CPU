@@ -20,18 +20,17 @@
   - [../design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [../design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
-  - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)
   - [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
   - [../design/wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)
   - [../design/wave7_remote_cloud_dev_environment_design.md](../design/wave7_remote_cloud_dev_environment_design.md)
-  - [../design/xv6_linux_jit_mainline_design.md](../design/xv6_linux_jit_mainline_design.md)
 - 相关状态：
   - [kernel_alpha_status.md](kernel_alpha_status.md)
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
 - 当前活跃计划：
   - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
+  - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
   - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
@@ -918,7 +917,7 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    Linux 方向进入
    [linux_distribution_platform_status.md](linux_distribution_platform_status.md) /
    [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md) /
-   [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)；
+   [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)；
    AI 方向进入
    [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md) /
    [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md) /

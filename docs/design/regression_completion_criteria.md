@@ -11,7 +11,7 @@
 - 相关状态：
   - [status/mainline_status.md](../status/mainline_status.md)
   - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 相关计划：
+- 已完成计划：
   - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
 
 ## 当前有效性说明
@@ -86,13 +86,15 @@
 - 最近发现的问题主要来自新功能、新设备或新阶段目标，而不是当前冻结范围内的旧缺口。
 - 现有门禁已经足以在日常改动中稳定发现大多数回归，继续加 case 的收益明显下降。
 
-## 下一步
+## 维护边界
 
-1. 继续沿 reference path 维护已形成闭环的 `privilege / Sv39`、illegal / MMIO / ELF / CSR 矩阵，但按“新增 bug / 新合同补洞”而不是“想到什么补什么”推进。
-2. 把 `kernel_alpha` 十条基线和 `guest_supervisor_demo` 继续守在稳定输出上，作为 Phase 1 完成态的核心门禁。
-3. 维护现有 `pipeline` 差分矩阵，把后续工作收口到新增 bug 的最小回归和明确新合同，而不是继续做低收益 case 盘点。
-4. 把 `debug/frontend` 的验证继续限定在快照、协议和 demo 可用性，不扩成通用调试器验收清单。
-5. 后续每修掉一个真实 bug，都补一个最小但稳定的持久回归；如果只是重复已有覆盖，就不把它扩成新的长期门禁。
+当前回归体系的维护口径是：
+
+- `privilege / Sv39`、illegal / MMIO / ELF / CSR 矩阵按新增 bug 或新合同补最小持久回归。
+- `kernel_alpha` 十条基线和 `guest_supervisor_demo` 是 Phase 1 完成态的核心门禁。
+- `pipeline` 差分矩阵只围绕新增 bug 和明确新合同扩展，避免低收益 case 盘点。
+- `debug/frontend` 验证限定在快照、协议和 demo 可用性，不扩成通用调试器验收清单。
+- 若新增测试只是重复已有覆盖，不把它扩成新的长期门禁。
 
 ## 验证基线
 
