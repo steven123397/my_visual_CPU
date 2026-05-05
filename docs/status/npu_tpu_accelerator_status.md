@@ -14,8 +14,11 @@
 
 - 相关设计：
   - [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)
+  - [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
   - [../design/future_expansion_roadmap_design.md](../design/future_expansion_roadmap_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
+- 当前活跃计划：
+  - [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
 - 已完成计划：
   - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
@@ -28,6 +31,22 @@
 
 ## 当前状态
 
+- `2026-05-02` 已把 `Wave 7` 阶段性收口之后的 AI accelerator 后续方向正式收口为
+  `用户自定义 AI 任务 + 更接近商用 NPU 的性能模型` 新主线，并补齐独立
+  `design / plan` 入口；当前实时推进仍由本文档承接。
+- `2026-05-02` 同日已把这条新主线的第一刀进一步收窄为：
+  先落 host-side 受限 `task spec importer`，第一批 contract 固定为
+  `bounded_dynamic_gemm_v1 -> dynamic_bounded GEMM graph package`，并在 importer 内附带
+  最小 automatic memory plan helper；当前不把性能模型第一刀放到它之前。
+- `2026-05-02` 同日又沿同一 importer 路线继续落下一刀：
+  `bounded_dynamic_cnn_v1 -> dynamic_bounded CNN graph package` 现已接通，固定覆盖
+  `conv2d -> eltwise_relu -> layout_transpose -> reduce_sum`、`3x3/4x4` 受限输入、
+  `2x2` 固定 kernel、runtime shape table、expected output 与 host profile 路径；
+  automatic memory plan helper 也已升级为 `16B` 对齐顺序 scratchpad 分配，以对齐现有
+  `dynamic_cnn` contract。
+- `2026-05-02` 同日还把这套 task-spec lower / serialize 逻辑抽成共享 host-side 模块
+  `myCPU/workloads/ai_proto/task_spec_lowering.py`；`pack_graph.py` 现在只保留 CLI /
+  固定 workload 入口，frontend 也继续复用同一条 host 打包路径。
 - `2026-04-23` 已把这条线收口成正式设计文档 [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)，并明确它采用独立 `MMIO` 设备路线，而不是 CPU 紧耦合 tensor 指令扩展。
 - `2026-04-23` 同日已完成 wave 1 的任务 1：`DMA-ready` memory contract。
   - 已新增 `myCPU/src/mem/dma_transaction.{h,cpp}`，冻结 `initiator / direction / burst / fault / transferred_bytes` 最小合同。
@@ -262,6 +281,9 @@
   plan、更多 op / dtype / quantization、Linux-facing driver，并把 timing 从当前
   `timed-simple no-overlap` 推向更接近商用 NPU 的 tile scheduler、DMA + compute overlap、
   multi outstanding queue、buffer ownership、per-op timeline、带宽 / 延迟 / 利用率模型。
+- 当前这条 Post-Wave 7 新主线已经明确第一刀采用受限 importer，而不是先做性能模型、
+  任意模型上传或完整 runtime；当前 importer 已覆盖最小 `bounded_dynamic_gemm_v1` 与
+  最小 `bounded_dynamic_cnn_v1`，但仍不代表更宽 op family 已经开放。
 - 如果把这条线和当前 `xv6 / Linux` 主线混在同一轮里推进，很容易打散已有回归与 ownership 边界。
 
 ## 下一步
@@ -270,10 +292,16 @@
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
 2. `Wave 7` 展示优先做白名单 demo + 参数化小模型，而不是任意模型上传；前端参数必须经
    host 侧 graph package 生成 / 校验和资源限制后再运行。
-3. `Wave 7` 之后的新主线可以继续推进 `INT4 / training / MobileNet / Linux-facing NPU
-   driver / real DMA overlap / multi outstanding queue`，并把“用户自己的 AI 任务”和
-   “更接近商用 NPU 的性能模型”作为正式目标；这需要另开 AI accelerator 专项 design /
-   plan，不再沿用 `Wave 4 ~ Wave 7` 的保守完成定义。
+3. 当前已新增
+   [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
+   与
+   [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)，
+   后续应先在这套文档里明确第一刀的用户任务入口、compile / memory plan 和性能模型阶段边界。
+4. 当前第一刀实现已进一步收窄为 host-side `bounded_dynamic_gemm_v1` + `bounded_dynamic_cnn_v1`
+   task spec importer；共享 lower 模块已经抽出，下一步先守住它们与现有
+   `dynamic_gemm` / `dynamic_cnn` 共用 lowering / memory-plan 路径，再逐步扩展到更宽 task kind。
+5. 在第一刀实现中，优先保持现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`、
+   `tiny_attention_static`、guest `ai_accel_demo` 和既有 profile / debug 可观察性继续作为稳定 guardrail。
 
 ## 验证基线
 

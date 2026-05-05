@@ -195,6 +195,20 @@ bool expect_profile_failure(const std::filesystem::path& manifest,
     return expect_contains(profile.output, expected_error, "expected specific ai profile failure reason");
 }
 
+bool expect_task_spec_pack_failure(const std::filesystem::path& task_spec,
+                                   const std::filesystem::path& out_dir,
+                                   const char* expected_error,
+                                   const char* message) {
+    const CommandResult pack = run_command(
+        "python3 workloads/ai_proto/pack_graph.py --task-spec " + task_spec.string() +
+        " --out-dir " + out_dir.string());
+    if (!expect(pack.exit_code != 0, message)) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+    return expect_contains(pack.output, expected_error, "expected specific task spec pack failure reason");
+}
+
 bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
                              const char* workload,
                              const char* expected_name,
@@ -366,6 +380,221 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
 
     return expect(read_binary_file(actual) == read_binary_file(expected),
                   "expected dynamic_gemm output to match packaged expectation");
+}
+
+bool expect_pack_and_profile_task_spec_dynamic_gemm(const std::filesystem::path& temp_dir) {
+    const std::filesystem::path task_spec = temp_dir / "custom_dynamic_gemm.task_spec.json";
+    write_text_file(task_spec,
+                    "{\n"
+                    "  \"format\": \"ai_task_spec_v1\",\n"
+                    "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                    "  \"name\": \"custom_dynamic_gemm\",\n"
+                    "  \"source_tag\": 73,\n"
+                    "  \"max_ticks\": 128,\n"
+                    "  \"input0\": [\n"
+                    "    [2, 1, 0, -1, 3, 4, 5, 6],\n"
+                    "    [6, 5, 4, 3, 2, 1, 0, -1]\n"
+                    "  ],\n"
+                    "  \"input1\": [\n"
+                    "    [1, 0, 0, 1],\n"
+                    "    [0, 1, 1, 0],\n"
+                    "    [1, 1, 0, 0],\n"
+                    "    [0, 0, 1, 1],\n"
+                    "    [1, 0, 1, 0],\n"
+                    "    [0, 1, 0, 1],\n"
+                    "    [1, 0, 0, 0],\n"
+                    "    [0, 0, 1, 0]\n"
+                    "  ]\n"
+                    "}\n");
+
+    const std::string pack_command =
+        "python3 workloads/ai_proto/pack_graph.py --task-spec " + task_spec.string() +
+        " --out-dir " + temp_dir.string();
+    const CommandResult pack = run_command(pack_command);
+    if (!expect(pack.exit_code == 0, "expected task-spec pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+
+    const std::filesystem::path manifest = temp_dir / "custom_dynamic_gemm.manifest";
+    const std::filesystem::path graph = temp_dir / "custom_dynamic_gemm.graph.bin";
+    const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_gemm.runtime_shape.bin";
+    const std::filesystem::path actual = temp_dir / "custom_dynamic_gemm.output0.actual.bin";
+    const std::filesystem::path expected = temp_dir / "custom_dynamic_gemm.output0.expected.bin";
+    if (!expect_file_exists(manifest, "expected task-spec manifest") ||
+        !expect_file_exists(graph, "expected task-spec graph package") ||
+        !expect_file_exists(runtime_shape, "expected task-spec runtime shape table") ||
+        !expect_file_exists(expected, "expected task-spec expected output")) {
+        return false;
+    }
+
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph), package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    if (!expect(package.shape_mode == AiShapeMode::DynamicBounded,
+                "expected task-spec packaged graph shape mode") ||
+        !expect(package.dynamic_tensors.size() == 2,
+                "expected task-spec packaged graph dynamic tensors") ||
+        !expect(package.memory_plan.size() == 3,
+                "expected task-spec packaged graph memory plan size") ||
+        !expect(package.memory_plan[0].scratchpad_offset == 0 &&
+                    package.memory_plan[0].byte_size == 16,
+                "expected task-spec input tensor memory plan") ||
+        !expect(package.memory_plan[1].scratchpad_offset == 16 &&
+                    package.memory_plan[1].byte_size == 32,
+                "expected task-spec weight tensor memory plan") ||
+        !expect(package.memory_plan[2].scratchpad_offset == 48 &&
+                    package.memory_plan[2].byte_size == 32,
+                "expected task-spec output tensor memory plan") ||
+        !expect(package.scratchpad_budget_bytes == 80,
+                "expected task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+
+    const CommandResult profile =
+        run_command("./mycpu --ai-profile-manifest " + manifest.string());
+    if (!expect(profile.exit_code == 0, "expected task-spec ai profile command to succeed")) {
+        std::fprintf(stderr, "%s\n", profile.output.c_str());
+        return false;
+    }
+
+    if (!expect_contains(profile.output, "name=custom_dynamic_gemm", "expected task-spec workload name") ||
+        !expect_contains(profile.output, "shape_mode=dynamic_bounded", "expected task-spec shape mode summary") ||
+        !expect_contains(profile.output, "runtime_shapes=t0:2x8,t2:2x4", "expected task-spec runtime shape summary") ||
+        !expect_contains(profile.output, "device_cycles=15", "expected task-spec device cycle summary") ||
+        !expect_contains(profile.output, "dma_cycles=11", "expected task-spec DMA cycle summary") ||
+        !expect_contains(profile.output, "compute_cycles=2", "expected task-spec compute cycle summary") ||
+        !expect_contains(profile.output, "stall_cycles=2", "expected task-spec stall cycle summary") ||
+        !expect_contains(profile.output,
+                         "ai_profile_aggregate tile_count=2 scratchpad_peak_bytes=80 op_count=1",
+                         "expected task-spec aggregate itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=0 opcode=gemm retired_ops=64 compute_cycles=2 stall_cycles=2 tile_count=2",
+                         "expected task-spec op itemized profile output") ||
+        !expect_file_exists(actual, "expected task-spec actual output")) {
+        return false;
+    }
+
+    return expect(read_binary_file(actual) == read_binary_file(expected),
+                  "expected task-spec output to match packaged expectation");
+}
+
+bool expect_pack_and_profile_task_spec_dynamic_cnn(const std::filesystem::path& temp_dir) {
+    const std::filesystem::path task_spec = temp_dir / "custom_dynamic_cnn.task_spec.json";
+    write_text_file(task_spec,
+                    "{\n"
+                    "  \"format\": \"ai_task_spec_v1\",\n"
+                    "  \"task_kind\": \"bounded_dynamic_cnn_v1\",\n"
+                    "  \"name\": \"custom_dynamic_cnn\",\n"
+                    "  \"source_tag\": 79,\n"
+                    "  \"max_ticks\": 128,\n"
+                    "  \"input0\": [\n"
+                    "    [1, -2, 3],\n"
+                    "    [-4, 5, -6],\n"
+                    "    [7, -8, 9]\n"
+                    "  ],\n"
+                    "  \"input1\": [\n"
+                    "    [1, 0],\n"
+                    "    [-1, 2]\n"
+                    "  ]\n"
+                    "}\n");
+
+    const std::string pack_command =
+        "python3 workloads/ai_proto/pack_graph.py --task-spec " + task_spec.string() +
+        " --out-dir " + temp_dir.string();
+    const CommandResult pack = run_command(pack_command);
+    if (!expect(pack.exit_code == 0, "expected CNN task-spec pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+
+    const std::filesystem::path manifest = temp_dir / "custom_dynamic_cnn.manifest";
+    const std::filesystem::path graph = temp_dir / "custom_dynamic_cnn.graph.bin";
+    const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_cnn.runtime_shape.bin";
+    const std::filesystem::path actual = temp_dir / "custom_dynamic_cnn.output0.actual.bin";
+    const std::filesystem::path expected = temp_dir / "custom_dynamic_cnn.output0.expected.bin";
+    if (!expect_file_exists(manifest, "expected CNN task-spec manifest") ||
+        !expect_file_exists(graph, "expected CNN task-spec graph package") ||
+        !expect_file_exists(runtime_shape, "expected CNN task-spec runtime shape table") ||
+        !expect_file_exists(expected, "expected CNN task-spec expected output")) {
+        return false;
+    }
+
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph), package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    if (!expect(package.shape_mode == AiShapeMode::DynamicBounded,
+                "expected CNN task-spec packaged graph shape mode") ||
+        !expect(package.dynamic_tensors.size() == 5,
+                "expected CNN task-spec packaged graph dynamic tensors") ||
+        !expect(package.memory_plan.size() == 6,
+                "expected CNN task-spec packaged graph memory plan size") ||
+        !expect(package.memory_plan[0].scratchpad_offset == 0 &&
+                    package.memory_plan[0].byte_size == 16,
+                "expected CNN task-spec input tensor memory plan") ||
+        !expect(package.memory_plan[1].scratchpad_offset == 16 &&
+                    package.memory_plan[1].byte_size == 4,
+                "expected CNN task-spec weight tensor memory plan") ||
+        !expect(package.memory_plan[2].scratchpad_offset == 32 &&
+                    package.memory_plan[2].byte_size == 36,
+                "expected CNN task-spec conv output tensor memory plan") ||
+        !expect(package.memory_plan[3].scratchpad_offset == 80 &&
+                    package.memory_plan[3].byte_size == 36,
+                "expected CNN task-spec relu tensor memory plan") ||
+        !expect(package.memory_plan[4].scratchpad_offset == 128 &&
+                    package.memory_plan[4].byte_size == 36,
+                "expected CNN task-spec transpose tensor memory plan") ||
+        !expect(package.memory_plan[5].scratchpad_offset == 176 &&
+                    package.memory_plan[5].byte_size == 12,
+                "expected CNN task-spec output tensor memory plan") ||
+        !expect(package.scratchpad_budget_bytes == 192,
+                "expected CNN task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+
+    const CommandResult profile =
+        run_command("./mycpu --ai-profile-manifest " + manifest.string());
+    if (!expect(profile.exit_code == 0, "expected CNN task-spec ai profile command to succeed")) {
+        std::fprintf(stderr, "%s\n", profile.output.c_str());
+        return false;
+    }
+
+    if (!expect_contains(profile.output, "name=custom_dynamic_cnn", "expected CNN task-spec workload name") ||
+        !expect_contains(profile.output, "shape_mode=dynamic_bounded", "expected CNN task-spec shape mode summary") ||
+        !expect_contains(profile.output,
+                         "runtime_shapes=t0:3x3,t2:2x2,t3:2x2,t4:2x2,t5:2",
+                         "expected CNN task-spec runtime shape summary") ||
+        !expect_contains(profile.output, "device_cycles=17", "expected CNN task-spec device cycle summary") ||
+        !expect_contains(profile.output, "dma_cycles=9", "expected CNN task-spec DMA cycle summary") ||
+        !expect_contains(profile.output, "compute_cycles=4", "expected CNN task-spec compute cycle summary") ||
+        !expect_contains(profile.output, "stall_cycles=4", "expected CNN task-spec stall cycle summary") ||
+        !expect_contains(profile.output,
+                         "ai_profile_aggregate tile_count=4 scratchpad_peak_bytes=184 op_count=4",
+                         "expected CNN task-spec aggregate itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=0 opcode=conv2d retired_ops=16 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected CNN task-spec conv itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected CNN task-spec relu itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=2 opcode=layout_transpose retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected CNN task-spec transpose itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=3 opcode=reduce_sum retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected CNN task-spec reduce itemized profile output") ||
+        !expect_file_exists(actual, "expected CNN task-spec actual output")) {
+        return false;
+    }
+
+    return expect(read_binary_file(actual) == read_binary_file(expected),
+                  "expected CNN task-spec output to match packaged expectation");
 }
 
 bool expect_pack_and_profile_dynamic_tiny_model(const std::filesystem::path& temp_dir) {
@@ -620,6 +849,51 @@ int main() {
             return 1;
         }
 
+        const std::filesystem::path task_spec_malformed_dir = temp_dir / "task_spec_malformed";
+        std::filesystem::create_directories(task_spec_malformed_dir);
+        const std::filesystem::path oversized_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_oversized_rows.json";
+        write_text_file(oversized_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"oversized_rows_gemm\",\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8],\n"
+                        "    [8, 7, 6, 5, 4, 3, 2, 1],\n"
+                        "    [0, 0, 0, 0, 0, 0, 0, 0]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path oversized_cnn_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_cnn_oversized_rows.json";
+        write_text_file(oversized_cnn_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_cnn_v1\",\n"
+                        "  \"name\": \"oversized_rows_cnn\",\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4],\n"
+                        "    [5, 6, 7, 8],\n"
+                        "    [9, 10, 11, 12],\n"
+                        "    [13, 14, 15, 16],\n"
+                        "    [17, 18, 19, 20]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0],\n"
+                        "    [-1, 2]\n"
+                        "  ]\n"
+                        "}\n");
+
         const std::filesystem::path manifest = malformed_dir / "cnn.manifest";
         const std::filesystem::path no_format_manifest =
             manifest_without_format(manifest, malformed_dir / "cnn.no_format.manifest");
@@ -718,6 +992,14 @@ int main() {
             expect_profile_failure(bad_dims_runtime_shape_manifest,
                                    "failed to resolve AI profile runtime shapes: runtime shape dims exceed bounded tensor dims",
                                    "expected bad runtime shape dims to fail") &&
+            expect_task_spec_pack_failure(oversized_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_gemm_v1 input0 row count must be between 1 and 2",
+                                          "expected oversized task-spec runtime rows to fail") &&
+            expect_task_spec_pack_failure(oversized_cnn_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_cnn_v1 input0 row count must be between 3 and 4",
+                                          "expected oversized CNN task-spec runtime rows to fail") &&
             expect_pack_and_profile(temp_dir,
                                     "cnn",
                                     "name=cnn",
@@ -798,6 +1080,8 @@ int main() {
                                         "ai_profile_op op_index=1 opcode=softmax retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
                                         "ai_profile_op op_index=2 opcode=gemm retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
+            expect_pack_and_profile_task_spec_dynamic_gemm(temp_dir) &&
+            expect_pack_and_profile_task_spec_dynamic_cnn(temp_dir) &&
             expect_pack_and_profile_dynamic(temp_dir) &&
             expect_pack_and_profile_dynamic_tiny_model(temp_dir) &&
             expect_pack_and_profile_dynamic_cnn(temp_dir);

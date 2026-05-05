@@ -82,6 +82,75 @@ const TINY_ATTENTION_PRESETS = Object.freeze({
   }),
 });
 
+const CUSTOM_BOUNDED_DYNAMIC_GEMM_PRESETS = Object.freeze({
+  balanced_rows: Object.freeze({
+    label: '2x8 mixed rows',
+    input0: Object.freeze([
+      Object.freeze([2, 1, 0, -1, 3, 4, 5, 6]),
+      Object.freeze([6, 5, 4, 3, 2, 1, 0, -1]),
+    ]),
+    input1: Object.freeze([
+      Object.freeze([1, 0, 0, 1]),
+      Object.freeze([0, 1, 1, 0]),
+      Object.freeze([1, 1, 0, 0]),
+      Object.freeze([0, 0, 1, 1]),
+      Object.freeze([1, 0, 1, 0]),
+      Object.freeze([0, 1, 0, 1]),
+      Object.freeze([1, 0, 0, 0]),
+      Object.freeze([0, 0, 1, 0]),
+    ]),
+    expected: Object.freeze([10, 5, 9, 5, 12, 10, 9, 10]),
+  }),
+  identity_tail: Object.freeze({
+    label: '2x8 identity tail',
+    input0: Object.freeze([
+      Object.freeze([1, 2, 3, 4, 5, 6, 7, 8]),
+      Object.freeze([-1, 0, 1, 2, 3, 4, 5, 6]),
+    ]),
+    input1: Object.freeze([
+      Object.freeze([1, 0, 0, 0]),
+      Object.freeze([0, 1, 0, 0]),
+      Object.freeze([0, 0, 1, 0]),
+      Object.freeze([0, 0, 0, 0]),
+      Object.freeze([0, 0, 0, 0]),
+      Object.freeze([0, 0, 0, 0]),
+      Object.freeze([0, 0, 0, 0]),
+      Object.freeze([0, 0, 0, 1]),
+    ]),
+    expected: Object.freeze([1, 2, 3, 8, -1, 0, 1, 6]),
+  }),
+});
+
+const CUSTOM_BOUNDED_DYNAMIC_CNN_PRESETS = Object.freeze({
+  compact_2x2: Object.freeze({
+    label: '3x3 -> 2x2 compact path',
+    input0: Object.freeze([
+      Object.freeze([1, -2, 3]),
+      Object.freeze([-4, 5, -6]),
+      Object.freeze([7, -8, 9]),
+    ]),
+    input1: Object.freeze([
+      Object.freeze([1, 0]),
+      Object.freeze([-1, 2]),
+    ]),
+    expected: Object.freeze([15, 31]),
+  }),
+  full_3x3: Object.freeze({
+    label: '4x4 -> 3x3 full path',
+    input0: Object.freeze([
+      Object.freeze([1, -2, 3, -4]),
+      Object.freeze([5, -6, 7, -8]),
+      Object.freeze([9, -10, 11, -12]),
+      Object.freeze([13, -14, 15, -16]),
+    ]),
+    input1: Object.freeze([
+      Object.freeze([1, 0]),
+      Object.freeze([-1, 2]),
+    ]),
+    expected: Object.freeze([0, 78, 0]),
+  }),
+});
+
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -183,6 +252,10 @@ function buildI32Values(values) {
   return buffer;
 }
 
+async function writeTaskSpec(pathname, payload) {
+  await fs.writeFile(pathname, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
 function readTypedValues(buffer, dtype) {
   const values = [];
   for (let offset = 0; offset + 4 <= buffer.length; offset += 4) {
@@ -281,6 +354,22 @@ async function packWorkload({ repoRoot, outDir, workloadId }) {
     packer,
     '--workload',
     workloadId,
+    '--out-dir',
+    outDir,
+  ], {
+    cwd: myCpuRoot,
+    timeout: 10000,
+    maxBuffer: 1024 * 1024,
+  });
+}
+
+async function packTaskSpec({ repoRoot, outDir, taskSpecPath }) {
+  const myCpuRoot = path.join(repoRoot, 'myCPU');
+  const packer = path.join(myCpuRoot, 'workloads', 'ai_proto', 'pack_graph.py');
+  await execFileAsync('python3', [
+    packer,
+    '--task-spec',
+    taskSpecPath,
     '--out-dir',
     outDir,
   ], {
@@ -414,6 +503,64 @@ async function prepareDynamicCnn({ outDir, parameters, repoRoot }) {
     output: {
       dtype: 'int32',
       shape: [...preset.outputShape],
+    },
+  };
+}
+
+async function prepareCustomBoundedDynamicGemm({ outDir, parameters, repoRoot }) {
+  const { inputPreset } = parameters;
+  const preset = CUSTOM_BOUNDED_DYNAMIC_GEMM_PRESETS[inputPreset];
+  const taskSpecPath = path.join(outDir, 'custom_bounded_dynamic_gemm.task_spec.json');
+  await writeTaskSpec(taskSpecPath, {
+    format: 'ai_task_spec_v1',
+    task_kind: 'bounded_dynamic_gemm_v1',
+    name: 'custom_bounded_dynamic_gemm',
+    source_tag: 73,
+    max_ticks: 128,
+    input0: preset.input0,
+    input1: preset.input1,
+  });
+  await packTaskSpec({
+    repoRoot,
+    outDir,
+    taskSpecPath,
+  });
+  return {
+    manifestPath: path.join(outDir, 'custom_bounded_dynamic_gemm.manifest'),
+    actualPath: path.join(outDir, 'custom_bounded_dynamic_gemm.output0.actual.bin'),
+    expected: [...preset.expected],
+    output: {
+      dtype: 'int32',
+      shape: [2, 4],
+    },
+  };
+}
+
+async function prepareCustomBoundedDynamicCnn({ outDir, parameters, repoRoot }) {
+  const { inputPreset } = parameters;
+  const preset = CUSTOM_BOUNDED_DYNAMIC_CNN_PRESETS[inputPreset];
+  const taskSpecPath = path.join(outDir, 'custom_bounded_dynamic_cnn.task_spec.json');
+  await writeTaskSpec(taskSpecPath, {
+    format: 'ai_task_spec_v1',
+    task_kind: 'bounded_dynamic_cnn_v1',
+    name: 'custom_bounded_dynamic_cnn',
+    source_tag: 79,
+    max_ticks: 128,
+    input0: preset.input0,
+    input1: preset.input1,
+  });
+  await packTaskSpec({
+    repoRoot,
+    outDir,
+    taskSpecPath,
+  });
+  return {
+    manifestPath: path.join(outDir, 'custom_bounded_dynamic_cnn.manifest'),
+    actualPath: path.join(outDir, 'custom_bounded_dynamic_cnn.output0.actual.bin'),
+    expected: [...preset.expected],
+    output: {
+      dtype: 'int32',
+      shape: [preset.expected.length],
     },
   };
 }
@@ -575,6 +722,82 @@ const TEMPLATE_DEFINITIONS = Object.freeze([
       ]),
     }),
     prepare: prepareTinyAttentionStatic,
+  }),
+  Object.freeze({
+    id: 'custom_bounded_dynamic_gemm',
+    title: 'Custom Bounded Dynamic GEMM',
+    summary: 'Host-side task spec importer: approved int8 matrices are lowered to the shared dynamic GEMM graph package and memory plan.',
+    shapeMode: 'dynamic_bounded',
+    dtype: 'int8/int32',
+    opChain: Object.freeze(['gemm']),
+    parameters: Object.freeze({
+      inputPreset: Object.freeze({
+        label: 'Task preset',
+        default: 'balanced_rows',
+        choices: Object.freeze(Object.keys(CUSTOM_BOUNDED_DYNAMIC_GEMM_PRESETS)),
+        choiceLabels: Object.freeze(
+          Object.fromEntries(
+            Object.entries(CUSTOM_BOUNDED_DYNAMIC_GEMM_PRESETS).map(([key, value]) => [key, value.label]),
+          ),
+        ),
+      }),
+    }),
+    boundary: Object.freeze({
+      allowsCustomGraph: false,
+      allowsModelUpload: false,
+      taskSpecImporter: true,
+      taskKind: 'bounded_dynamic_gemm_v1',
+    }),
+    demo: Object.freeze({
+      expectedMarker: 'balanced_rows returns 10, 5, 9, 5, 12, 10, 9, 10; identity_tail returns 1, 2, 3, 8, -1, 0, 1, 6.',
+      proves: Object.freeze([
+        'The browser still selects from approved presets, but the host now lowers a formal task spec instead of only replaying a fixed workload ID.',
+        'The importer reuses the shared graph package, runtime shape table, manifest and simulated-cycle profile path.',
+      ]),
+      boundaries: Object.freeze([
+        'Still no arbitrary graph upload or ONNX/PyTorch runtime.',
+        'Only the bounded_dynamic_gemm_v1 task kind is exposed in this first cut.',
+      ]),
+    }),
+    prepare: prepareCustomBoundedDynamicGemm,
+  }),
+  Object.freeze({
+    id: 'custom_bounded_dynamic_cnn',
+    title: 'Custom Bounded Dynamic CNN',
+    summary: 'Host-side task spec importer: approved int8 CNN presets are lowered to the shared bounded dynamic conv/relu/transpose/reduce graph package and memory plan.',
+    shapeMode: 'dynamic_bounded',
+    dtype: 'int8/int32',
+    opChain: Object.freeze(['conv2d', 'eltwise_relu', 'layout_transpose', 'reduce_sum']),
+    parameters: Object.freeze({
+      inputPreset: Object.freeze({
+        label: 'Task preset',
+        default: 'compact_2x2',
+        choices: Object.freeze(Object.keys(CUSTOM_BOUNDED_DYNAMIC_CNN_PRESETS)),
+        choiceLabels: Object.freeze(
+          Object.fromEntries(
+            Object.entries(CUSTOM_BOUNDED_DYNAMIC_CNN_PRESETS).map(([key, value]) => [key, value.label]),
+          ),
+        ),
+      }),
+    }),
+    boundary: Object.freeze({
+      allowsCustomGraph: false,
+      allowsModelUpload: false,
+      taskSpecImporter: true,
+      taskKind: 'bounded_dynamic_cnn_v1',
+    }),
+    demo: Object.freeze({
+      expectedMarker: 'compact_2x2 returns 15, 31; full_3x3 returns 0, 78, 0.',
+      proves: Object.freeze([
+        'The browser still selects from approved presets, but the host now lowers a formal CNN task spec instead of replaying a fixed workload ID.',
+        'The importer reuses the shared graph package, runtime shape table, manifest and simulated-cycle profile path for conv/relu/transpose/reduce.',
+      ]),
+      boundaries: Object.freeze([
+        'Still no arbitrary graph upload or ONNX/PyTorch runtime.',
+        'Only the bounded_dynamic_cnn_v1 task kind is exposed in this slice.',
+      ]),
+    }),
+    prepare: prepareCustomBoundedDynamicCnn,
   }),
 ]);
 
