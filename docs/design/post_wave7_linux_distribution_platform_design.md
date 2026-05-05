@@ -53,6 +53,8 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - 同一动态 BusyBox shell 会话已经通过 `process_control` profile，覆盖 `sleep 1`、
   后台子进程与 `wait` 返回码、`trap` / `kill -TERM $$` 最小 signal 处理，以及 `||` /
   `&&` / `;` 和退出码读回的基础 shell 控制流。
+- 外部 Alpine rootfs 临时副本已经通过 `filesystem_persistence` profile，覆盖同会话 ext4
+  目录创建、文件写入、`sync` 可见路径、rename overwrite、目录遍历、64 KiB 文件写读和清理。
 - 为越过 musl loader，当前已补 FPR raw state、标准 `flw/fld/fsw/fsd` load-store
   语义和 RVC `c.fld/c.fsd` / `c.fldsp/c.fsdsp` 解码。
 
@@ -123,7 +125,7 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - `MYCPU_LINUX_DISTRO_RUNTIME_COMMAND='...'`
 - `MYCPU_LINUX_DISTRO_RUNTIME_EXPECT='...'`
 - `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS='command=>expected\n...'`（可选）
-- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency | tty_login_probe | process_control`（可选）
+- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency | tty_login_probe | process_control | filesystem_persistence`（可选）
 
 当前已存在的真实 opt-in 目标包括：
 
@@ -131,10 +133,11 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - `test-host-run_debug_cli_probe_linux_distribution_filesystem`
 - `test-host-run_debug_cli_probe_linux_distribution_tty_login`
 - `test-host-run_debug_cli_probe_linux_distribution_process_control`
+- `test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence`
 
 这些 target 只能证明当前声明的 shell command / filesystem consistency / 等价 serial TTY
-prompt / process-control smoke contract，不等同于完整发行版矩阵、init 管理的 getty、
-密码 login、完整 process control、跨 reboot 持久性或完整 F/D 浮点支持。
+prompt / process-control / 同会话 ext4 persistence smoke contract，不等同于完整发行版矩阵、
+init 管理的 getty、密码 login、完整 process control、跨 reboot 持久性或完整 F/D 浮点支持。
 
 ## 能力分解
 
@@ -152,7 +155,8 @@ prompt / process-control smoke contract，不等同于完整发行版矩阵、in
    delivery、作业控制、多进程压力或长期 timer 稳定性。
 3. **文件系统与块设备耐久性**
    从 `/tmp` 会话内一致性扩到 ext4 / virtio-blk 的 sync、rename、目录遍历、较大文件和可选
-   reset / reboot 后一致性。当前不声明跨 reboot 持久性。
+   reset / reboot 后一致性。当前已声明临时 rootfs 副本上的同会话 ext4 persistence profile；
+   仍不声明跨 reboot / reset 后读回。
 4. **curated 发行版矩阵**
    以显式外部资产维护 Alpine、Debian/RISC-V 等 curated matrix。当前只有外部 Alpine
    rootfs 的正向证据，不开放任意镜像支持。

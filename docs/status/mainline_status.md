@@ -935,10 +935,13 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    当前长线阶段 2 还新增
    `test-host-run_debug_cli_probe_linux_distribution_process_control`，在同一外部 Alpine
    动态 shell 下验证 `sleep 1`、后台子进程与 `wait` 返回码、`trap` / `kill -TERM $$`
-   和基础 shell 控制流。
+   和基础 shell 控制流。当前长线阶段 3 还新增
+   `test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence`，复制外部 Alpine
+   rootfs 到 `/tmp` 临时 ext4 副本后验证同会话目录创建、文件写入、`sync`、rename
+   overwrite、目录遍历和 64 KiB 文件写读。
    这仍只是最小 shell command / filesystem / 等价 serial TTY prompt / process-control
-   smoke contract，不等同于完整发行版矩阵、init 管理的 getty、密码 login 或完整 signal
-   子系统。AI 当前第一刀采用
+   / 同会话 ext4 persistence smoke contract，不等同于完整发行版矩阵、init 管理的 getty、
+   密码 login、完整 signal 子系统或跨 reboot 持久性。AI 当前第一刀采用
    host-side 受限 `ai_task_spec_v1` importer，并已覆盖 `bounded_dynamic_gemm_v1`
    与 `bounded_dynamic_cnn_v1` 到统一 graph package / runtime shape / manifest 路径；
    尚未开放任意模型上传、完整 ONNX / PyTorch runtime 或 wall-clock 性能结论。

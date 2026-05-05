@@ -96,6 +96,41 @@ LINUX_DISTRO_RUNTIME_PROFILES = {
             "or-ok:and-ok:status:1",
         ),
     ],
+    "filesystem_persistence": [
+        ("cat /etc/os-release", "ID=alpine"),
+        (
+            "rm -rf /root/mycpu-persist; mkdir -p /root/mycpu-persist/sub; "
+            'printf "persist-dir-status:%s" "$?"',
+            "persist-dir-status:0",
+        ),
+        (
+            "printf alpha >/root/mycpu-persist/file; "
+            "sync /root/mycpu-persist/file 2>/dev/null || sync; "
+            "cat /root/mycpu-persist/file",
+            "alpha",
+        ),
+        (
+            "printf beta >/root/mycpu-persist/tmp; "
+            "mv -f /root/mycpu-persist/tmp /root/mycpu-persist/file; "
+            "cat /root/mycpu-persist/file",
+            "beta",
+        ),
+        (
+            "find /root/mycpu-persist -maxdepth 2 -type f | sort",
+            "/root/mycpu-persist/file",
+        ),
+        (
+            "dd if=/dev/zero of=/root/mycpu-persist/large bs=1024 count=64 2>/dev/null; "
+            "sync /root/mycpu-persist/large 2>/dev/null || sync; "
+            'printf "large-size:"; wc -c </root/mycpu-persist/large',
+            "large-size:65536",
+        ),
+        (
+            "rm -rf /root/mycpu-persist; sync; "
+            'printf "persist-cleanup:%s" "$?"',
+            "persist-cleanup:0",
+        ),
+    ],
 }
 
 
@@ -552,6 +587,51 @@ class RunDebugCliProbeTest(unittest.TestCase):
                         "false || printf 'or-ok'; true && printf ':and-ok'; "
                         "false; printf ':status:%s' \"$?\"",
                         "or-ok:and-ok:status:1",
+                    ),
+                ],
+            )
+
+    def test_linux_distro_command_contracts_uses_filesystem_persistence_profile(self) -> None:
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"MYCPU_LINUX_DISTRO_RUNTIME_PROFILE": "filesystem_persistence"},
+            clear=True,
+        ):
+            self.assertEqual(
+                linux_distro_command_contracts("ignored", "ignored"),
+                [
+                    ("cat /etc/os-release", "ID=alpine"),
+                    (
+                        "rm -rf /root/mycpu-persist; mkdir -p /root/mycpu-persist/sub; "
+                        'printf "persist-dir-status:%s" "$?"',
+                        "persist-dir-status:0",
+                    ),
+                    (
+                        "printf alpha >/root/mycpu-persist/file; "
+                        "sync /root/mycpu-persist/file 2>/dev/null || sync; "
+                        "cat /root/mycpu-persist/file",
+                        "alpha",
+                    ),
+                    (
+                        "printf beta >/root/mycpu-persist/tmp; "
+                        "mv -f /root/mycpu-persist/tmp /root/mycpu-persist/file; "
+                        "cat /root/mycpu-persist/file",
+                        "beta",
+                    ),
+                    (
+                        "find /root/mycpu-persist -maxdepth 2 -type f | sort",
+                        "/root/mycpu-persist/file",
+                    ),
+                    (
+                        "dd if=/dev/zero of=/root/mycpu-persist/large bs=1024 count=64 2>/dev/null; "
+                        "sync /root/mycpu-persist/large 2>/dev/null || sync; "
+                        'printf "large-size:"; wc -c </root/mycpu-persist/large',
+                        "large-size:65536",
+                    ),
+                    (
+                        "rm -rf /root/mycpu-persist; sync; "
+                        'printf "persist-cleanup:%s" "$?"',
+                        "persist-cleanup:0",
                     ),
                 ],
             )
@@ -2152,6 +2232,53 @@ class RunDebugCliProbeTest(unittest.TestCase):
             [
                 "make",
                 "test-host-run_debug_cli_probe_linux_distribution_process_control",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_filesystem_persistence_target_requests_temp_rootfs_profile(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence",
+                "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS=/tmp/source-rootfs.ext4",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", proc.stdout)
+        self.assertIn("mktemp", proc.stdout)
+        self.assertIn('cp "/tmp/source-rootfs.ext4" "$temp_rootfs"', proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_persistence", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_filesystem_persistence_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence",
             ],
             cwd=MYCPU_DIR,
             stdout=subprocess.PIPE,

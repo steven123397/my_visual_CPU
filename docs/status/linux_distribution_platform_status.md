@@ -79,10 +79,15 @@
     `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=process_control`，覆盖 `sleep 1` timer 可见行为、
     后台子进程与 `wait` 返回码、`trap` / `kill -TERM $$` 最小 signal 处理，以及
     `||` / `&&` / `;` 和退出码读回的 shell 控制流。
+  - 外部 Alpine rootfs 临时副本上的文件系统耐久性第一阶段路线：
+    `test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence` 使用
+    `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_persistence`，先把外部 rootfs 复制到
+    `/tmp` 临时 ext4 副本，再覆盖 ext4 同会话目录创建、文件写入、`sync` 可见路径、
+    rename overwrite、目录遍历、64 KiB 文件写读和清理。
   这份 rootfs 是本机临时运行资产，不纳入仓库默认资产；动态路线当前只声明最小
-  shell command / 文件系统一致性 / 等价 serial TTY prompt / process-control smoke contract，
-  不声明完整发行版矩阵、init 管理的 getty、密码 login、完整 signal 子系统或完整
-  F/D 浮点算术支持。
+  shell command / 文件系统一致性 / 等价 serial TTY prompt / process-control / 同会话
+  ext4 persistence smoke contract，不声明完整发行版矩阵、init 管理的 getty、密码 login、
+  完整 signal 子系统、跨 reboot 持久性或完整 F/D 浮点算术支持。
 
 ## 关键历史节点
 
@@ -126,6 +131,11 @@
     Alpine 动态 `/bin/sh` 下证明 `sleep 1`、后台 `sleep` 子进程 + `wait` 返回码、
     `trap` / `kill -TERM $$` 和基础 shell 控制流均能在同一会话内观察到期望输出并回到
     `~ # ` prompt。
+  - 同日完成长线阶段 3 的文件系统与块设备耐久性第一刀：新增
+    `make test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence`，保持缺外部
+    rootfs fail-closed，并强制复制外部 Alpine rootfs 到 `/tmp` 临时 ext4 副本后运行；
+    真实 smoke 已在同一动态 `/bin/sh` 会话内通过目录创建、文件写入、`sync`、rename
+    overwrite、目录遍历、64 KiB 文件写读和清理。
 - `2026-05-02`
   - `Post-Wave 7 标准 Linux 发行版平台` 新主线正式启动，并新增：
     - [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md)
@@ -159,6 +169,9 @@
 - 当前 process / timer / signal 第一阶段只证明 BusyBox shell 可见的 `sleep`、子进程
   `wait`、`trap` / `kill` 和控制流；还不声明完整 signal delivery 语义、作业控制、
   多进程压力或长期 timer 稳定性。
+- 当前 filesystem persistence 第一阶段只证明临时外部 rootfs 副本上的同会话 ext4 读写、
+  `sync`、rename、目录遍历和较大文件一致性；还不声明跨 reboot / reset 后读回或 host
+  镜像 flush 完整语义。
 - 当前 TTY / login 第一阶段只证明 BusyBox getty autologin 到 `/bin/sh` 的等价 serial
   TTY prompt；还不声明 init 管理的 `/etc/inittab` getty、密码 login、PAM / shadow
   登录流或多终端会话支持。
@@ -174,15 +187,15 @@
 [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 执行，长线拆成五个阶段：
 
-1. 文件系统与块设备耐久性。
-2. curated 发行版矩阵。
-3. ISA / platform 合同补齐。
+1. curated 发行版矩阵。
+2. ISA / platform 合同补齐。
 
 执行期间继续保留 `external Alpine ext4 + static /init`、`external Alpine ext4 + dynamic /bin/sh`
 单命令、多命令 smoke、同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke、
-`tty_login_probe` 等价 serial TTY prompt smoke 和 `process_control` 最小矩阵 smoke 作为
-正向基线；不要把它们扩大解释成完整发行版用户态支持。五个阶段都较大，每个阶段彻底完成后
-才提交一次；其他中间 slice 不自动提交。
+`tty_login_probe` 等价 serial TTY prompt smoke、`process_control` 最小矩阵 smoke 和
+`filesystem_persistence` 同会话 ext4 persistence smoke 作为正向基线；不要把它们扩大解释成
+完整发行版用户态支持。五个阶段都较大，每个阶段彻底完成后才提交一次；其他中间 slice
+不自动提交。
 
 ## 验证基线
 
@@ -193,6 +206,7 @@
 - `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_tty_login`
 - `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_process_control`
 - `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_filesystem`
+- `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence`
 - `cd myCPU && make test-host-xv6_boot_smoke`
 - `cd myCPU && make test-host-xv6_shell_smoke`
 - `cd myCPU && python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`

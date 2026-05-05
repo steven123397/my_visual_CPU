@@ -35,6 +35,9 @@
 - 阶段 2 已完成第一刀正向收口：`process_control` 使用真实外部 Alpine rootfs 证明 `sleep`、
   后台子进程与 `wait` 返回码、`trap` / `kill` 和基础 shell 控制流；当前仍不声明完整
   signal delivery、作业控制、多进程压力或长期 timer 稳定性。
+- 阶段 3 已完成第一刀正向收口：`filesystem_persistence` 使用外部 Alpine rootfs 临时副本
+  证明同会话 ext4 `sync`、rename overwrite、目录遍历和 64 KiB 文件写读；当前仍不声明
+  跨 reboot / reset 后读回。
 
 ## 总目标
 
@@ -184,6 +187,8 @@
 
 ## 阶段 3：文件系统与块设备耐久性
 
+> **阶段状态：** 已完成第一刀正向收口；阶段提交项见 checklist。
+
 ### 目标
 
 从 `/tmp` 短命一致性推进到 ext4 / virtio-blk 更强合同，包括 `sync/fsync`、rename、目录遍历、较大文件读写和可选 reset / reboot 后一致性。
@@ -202,15 +207,21 @@
 
 ### Checklist
 
-- [ ] 新增 `filesystem_persistence` profile。
-- [ ] 真实验证使用外部 rootfs 临时副本，不破坏原始 rootfs。
-- [ ] 覆盖 `sync` / `fsync` 可见路径。
-- [ ] 覆盖 rename overwrite、目录遍历、较大文件写读。
-- [ ] 评估 reset / reboot 后是否能读回预期内容。
-- [ ] 若跨 reboot 失败，区分 guest sync、virtio-blk flush、host image 写入、reset 重装载语义。
-- [ ] 回写 status：区分同会话 `/tmp`、同会话 ext4、跨 reboot 持久性。
-- [ ] 阶段完成后运行通用验证基线。
-- [ ] 阶段完成后提交一次。
+- [x] 新增 `filesystem_persistence` profile。
+- [x] 真实验证使用外部 rootfs 临时副本，不破坏原始 rootfs。
+  本阶段 target 使用 `mktemp` 创建 `/tmp/mycpu-distro-rootfs.*.ext4` 并复制外部 rootfs，
+  运行结束后清理临时副本。
+- [x] 覆盖 `sync` / `fsync` 可见路径。
+  本阶段使用 BusyBox `sync <file> 2>/dev/null || sync` 覆盖可见同步路径。
+- [x] 覆盖 rename overwrite、目录遍历、较大文件写读。
+  本阶段覆盖 rename overwrite、`find ... | sort` 目录遍历和 64 KiB 文件写读。
+- [x] 评估 reset / reboot 后是否能读回预期内容。
+  本阶段先完成同会话 ext4 persistence；跨 reboot / reset 后读回保留为后续风险。
+- [x] 若跨 reboot 失败，区分 guest sync、virtio-blk flush、host image 写入、reset 重装载语义。
+  本阶段未声明跨 reboot 支持；后续若推进，需要单独区分这些路径。
+- [x] 回写 status：区分同会话 `/tmp`、同会话 ext4、跨 reboot 持久性。
+- [x] 阶段完成后运行通用验证基线。
+- [x] 阶段完成后提交一次。
 
 ### 完成定义
 
