@@ -57,6 +57,27 @@ LINUX_DISTRO_RUNTIME_PROFILES = {
         ),
         ("printf '\\163\\164\\151\\154\\154\\055\\141\\154\\151\\166\\145'", "still-alive"),
     ],
+    "tty_login_probe": [
+        ("cat /etc/os-release", "ID=alpine"),
+        (
+            "for x in getty login stty setsid tty; do "
+            'command -v "$x" >/dev/null 2>&1 && printf "%s=present\\n" "$x" || '
+            'printf "%s=missing\\n" "$x"; '
+            "done",
+            "tty=present",
+        ),
+        ('printf "tty-path:"; tty || true', "tty-path:"),
+        ("stty -a 2>&1 | sed -n '1p'", "speed"),
+        (
+            "setsid sh -c 'printf setsid-status:; tty || true' 2>&1",
+            "setsid-status:",
+        ),
+        (
+            "setsid /sbin/getty -n -l /bin/sh -L 115200 ttyS0 vt100",
+            "~ # ",
+        ),
+        ('printf "getty-roundtrip-ok"', "getty-roundtrip-ok"),
+    ],
 }
 
 
@@ -455,6 +476,37 @@ class RunDebugCliProbeTest(unittest.TestCase):
                         "rmdir-status:0",
                     ),
                     ("printf '\\163\\164\\151\\154\\154\\055\\141\\154\\151\\166\\145'", "still-alive"),
+                ],
+            )
+
+    def test_linux_distro_command_contracts_uses_tty_login_probe_profile(self) -> None:
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"MYCPU_LINUX_DISTRO_RUNTIME_PROFILE": "tty_login_probe"},
+            clear=True,
+        ):
+            self.assertEqual(
+                linux_distro_command_contracts("ignored", "ignored"),
+                [
+                    ("cat /etc/os-release", "ID=alpine"),
+                    (
+                        "for x in getty login stty setsid tty; do "
+                        'command -v "$x" >/dev/null 2>&1 && printf "%s=present\\n" "$x" || '
+                        'printf "%s=missing\\n" "$x"; '
+                        "done",
+                        "tty=present",
+                    ),
+                    ('printf "tty-path:"; tty || true', "tty-path:"),
+                    ("stty -a 2>&1 | sed -n '1p'", "speed"),
+                    (
+                        "setsid sh -c 'printf setsid-status:; tty || true' 2>&1",
+                        "setsid-status:",
+                    ),
+                    (
+                        "setsid /sbin/getty -n -l /bin/sh -L 115200 ttyS0 vt100",
+                        "~ # ",
+                    ),
+                    ('printf "getty-roundtrip-ok"', "getty-roundtrip-ok"),
                 ],
             )
 
@@ -1981,6 +2033,50 @@ class RunDebugCliProbeTest(unittest.TestCase):
             "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested",
             proc.stdout,
         )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_tty_login_target_requests_profile(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_tty_login",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=tty_login_probe", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_tty_login_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_tty_login",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
 
     def test_make_build_workload_linux_proto_block_mode_embeds_mininit_stage_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

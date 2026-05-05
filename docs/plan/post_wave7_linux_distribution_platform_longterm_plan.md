@@ -29,6 +29,9 @@
   - 同一动态 BusyBox shell 会话内的多命令 smoke
   - `filesystem_consistency` profile，覆盖 `/tmp` 目录创建、文件写入、追加、读回、长度检查、删除、目录移除和后续 shell 存活
 - 当前仍不声明：完整发行版矩阵、TTY/login、完整 signal/timer/process 控制、跨 reboot 持久性、完整 F/D 算术、`fcsr`、FS dirty state、DTB `riscv,isa` / hwcap 完整收口、frontend distro route、任意用户镜像上传。
+- 阶段 1 已完成第一刀正向收口：`tty_login_probe` 使用真实外部 Alpine rootfs 证明 BusyBox
+  getty autologin 到等价 serial TTY prompt，并完成后续输入输出往返；当前仍不声明 init 管理的
+  getty、密码 login 或多终端完整支持。
 
 ## 总目标
 
@@ -87,6 +90,8 @@
 
 ## 阶段 1：TTY / login / console 语义
 
+> **阶段状态：** 已完成第一刀正向收口；阶段提交项见 checklist。
+
 ### 目标
 
 从当前 `init=/bin/sh` smoke 推进到更标准的 serial TTY / login 体验。优先证明 getty/login 或明确定位它所需的 TTY / termios / session / controlling terminal 缺口。
@@ -107,16 +112,20 @@
 
 ### Checklist
 
-- [ ] 调查当前 Alpine rootfs 中 `getty`、`login`、`stty`、`setsid`、`tty` 等工具可用性。
-- [ ] 如果 Alpine rootfs 不足，评估使用外部 Debian rootfs 或临时 Alpine rootfs 副本，不提交 rootfs 资产。
-- [ ] 新增 opt-in profile，例如 `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=tty_login_probe`。
-- [ ] 新增 make target，例如 `test-host-run_debug_cli_probe_linux_distribution_tty_login`，保持 fail-closed。
-- [ ] 用 host 单测覆盖 profile 解析、make target 和缺 rootfs 的 fail-closed 行为。
-- [ ] 尝试通过 `bootargs`、`init` 包装脚本或 rootfs 临时副本进入 getty/login 或等价 TTY prompt。
-- [ ] 若 getty/login 无法跑通，必须定位到具体 blocker：TTY 设备、termios、session、controlling terminal、signal、fork/exec 还是 shell prompt settling。
-- [ ] 回写 status：记录正向证据或 blocker，不把 blocker 写成支持声明。
-- [ ] 阶段完成后运行通用验证基线。
-- [ ] 阶段完成后提交一次。
+- [x] 调查当前 Alpine rootfs 中 `getty`、`login`、`stty`、`setsid`、`tty` 等工具可用性。
+- [x] 如果 Alpine rootfs 不足，评估使用外部 Debian rootfs 或临时 Alpine rootfs 副本，不提交 rootfs 资产。
+  当前 Alpine rootfs 已具备所需工具；本阶段未引入或提交 rootfs 资产。
+- [x] 新增 opt-in profile，例如 `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=tty_login_probe`。
+- [x] 新增 make target，例如 `test-host-run_debug_cli_probe_linux_distribution_tty_login`，保持 fail-closed。
+- [x] 用 host 单测覆盖 profile 解析、make target 和缺 rootfs 的 fail-closed 行为。
+- [x] 尝试通过 `bootargs`、`init` 包装脚本或 rootfs 临时副本进入 getty/login 或等价 TTY prompt。
+  本阶段使用 `init=/bin/sh` 进入动态 BusyBox shell，再以
+  `setsid /sbin/getty -n -l /bin/sh -L 115200 ttyS0 vt100` 验证等价 serial TTY prompt。
+- [x] 若 getty/login 无法跑通，必须定位到具体 blocker：TTY 设备、termios、session、controlling terminal、signal、fork/exec 还是 shell prompt settling。
+  本阶段选择正向完成路径；剩余限制是尚未声明 init 管理的 getty 或密码 login。
+- [x] 回写 status：记录正向证据或 blocker，不把 blocker 写成支持声明。
+- [x] 阶段完成后运行通用验证基线。
+- [x] 阶段完成后提交一次。
 
 ### 完成定义
 

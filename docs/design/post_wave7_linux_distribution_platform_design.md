@@ -47,6 +47,9 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - 同一动态 BusyBox shell 会话已经通过多命令 smoke 和 `filesystem_consistency`
   profile，覆盖 `/tmp` 目录创建、文件写入、追加、读回、长度检查、删除、目录移除和后续
   shell 存活。
+- 同一动态 BusyBox shell 会话已经通过 `tty_login_probe` profile，覆盖 TTY 工具盘点、
+  `tty` / `stty` / `setsid` 往返，以及 BusyBox `getty -n -l /bin/sh -L 115200 ttyS0 vt100`
+  到等价 serial TTY prompt 后的后续输入输出往返。
 - 为越过 musl loader，当前已补 FPR raw state、标准 `flw/fld/fsw/fsd` load-store
   语义和 RVC `c.fld/c.fsd` / `c.fldsp/c.fsdsp` 解码。
 
@@ -117,15 +120,17 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - `MYCPU_LINUX_DISTRO_RUNTIME_COMMAND='...'`
 - `MYCPU_LINUX_DISTRO_RUNTIME_EXPECT='...'`
 - `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS='command=>expected\n...'`（可选）
-- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency`（可选）
+- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency | tty_login_probe`（可选）
 
 当前已存在的真实 opt-in 目标包括：
 
 - `test-host-run_debug_cli_probe_linux_distribution_runtime`
 - `test-host-run_debug_cli_probe_linux_distribution_filesystem`
+- `test-host-run_debug_cli_probe_linux_distribution_tty_login`
 
-这两条 target 只能证明当前声明的 shell command / filesystem consistency contract，不等同于
-完整发行版矩阵、TTY/login、完整 process control、跨 reboot 持久性或完整 F/D 浮点支持。
+这些 target 只能证明当前声明的 shell command / filesystem consistency / 等价 serial TTY
+prompt contract，不等同于完整发行版矩阵、init 管理的 getty、密码 login、完整 process
+control、跨 reboot 持久性或完整 F/D 浮点支持。
 
 ## 能力分解
 
@@ -134,8 +139,9 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 维护：
 
 1. **TTY / login / console 语义**
-   从 `init=/bin/sh` smoke 扩到 serial TTY / getty / login 相关语义。当前尚未声明
-   getty/login 完整支持。
+   从 `init=/bin/sh` smoke 扩到 serial TTY / getty / login 相关语义。当前已声明 BusyBox
+   getty autologin 到等价 serial TTY prompt 的 opt-in 合同，但尚未声明 init 管理的 getty
+   或密码 login 完整支持。
 2. **signal / timer / process 控制**
    覆盖真实 shell 脚本控制流、`sleep`、子进程、`wait`、返回码和基础 signal 语义。当前还只证明
    多命令 shell 与文件系统一致性 smoke。

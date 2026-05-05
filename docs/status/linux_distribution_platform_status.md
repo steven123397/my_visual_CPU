@@ -68,8 +68,15 @@
     `test-host-run_debug_cli_probe_linux_distribution_filesystem` 使用
     `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency`，覆盖 `/tmp` 目录创建、
     文件写入、追加、读回、长度检查、删除、目录移除和后续 shell 存活。
+  - 同一动态 BusyBox shell 会话的 TTY / login 第一阶段路线：
+    `test-host-run_debug_cli_probe_linux_distribution_tty_login` 使用
+    `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=tty_login_probe`，覆盖外部 Alpine rootfs 中
+    `getty` / `login` / `stty` / `setsid` / `tty` 工具盘点、`tty` / `stty` / `setsid`
+    往返，以及 BusyBox `getty -n -l /bin/sh -L 115200 ttyS0 vt100` 到等价 serial TTY
+    prompt 后的后续输入输出往返。
   这份 rootfs 是本机临时运行资产，不纳入仓库默认资产；动态路线当前只声明最小
-  shell command / 文件系统一致性 contract，不声明完整发行版矩阵或完整 F/D 浮点算术支持。
+  shell command / 文件系统一致性 / 等价 serial TTY prompt contract，不声明完整发行版矩阵、
+  init 管理的 getty、密码 login 或完整 F/D 浮点算术支持。
 
 ## 关键历史节点
 
@@ -101,6 +108,12 @@
     `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency`，并已在外部 Alpine
     动态 `/bin/sh` 下通过 `/tmp` 目录创建、文件写入、追加、读回、长度检查、删除、
     目录移除和后续 shell 存活。
+  - 同日完成长线阶段 1 的 TTY / login / console 第一刀：新增
+    `make test-host-run_debug_cli_probe_linux_distribution_tty_login`，保持缺外部 rootfs
+    fail-closed，并用 `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=tty_login_probe` 在真实外部
+    Alpine 动态 `/bin/sh` 下证明 `/dev/ttyS0` 可见、TTY 工具可用、`tty` / `stty` /
+    `setsid` 路线可交互，以及 BusyBox `getty -n -l /bin/sh -L 115200 ttyS0 vt100`
+    能到达等价 serial TTY prompt 并完成后续输入输出往返。
 - `2026-05-02`
   - `Post-Wave 7 标准 Linux 发行版平台` 新主线正式启动，并新增：
     - [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md)
@@ -127,9 +140,12 @@
   RISC-V 发行版环境。
 - 当前 `linux_proto_console` 的外部资产合同仍不完整：前端只显式检查 kernel `Image`，
   而标准发行版所需的 rootfs、bootargs、prompt 和命令回显合同还没有被单独收口。
-- 发行版级平台所需的 TTY / signal / timer、virtio 稳定性和长期运行 contract
-  还没有被拆成完整验证矩阵；动态 BusyBox / musl loader 已有最小 shell command 与
-  `/tmp` 文件系统一致性正向证据，但这不等同于完整发行版级支持。
+- 发行版级平台所需的 signal / timer / process、virtio 稳定性和长期运行 contract
+  还没有被拆成完整验证矩阵；动态 BusyBox / musl loader 已有最小 shell command、
+  `/tmp` 文件系统一致性和等价 serial TTY prompt 正向证据，但这不等同于完整发行版级支持。
+- 当前 TTY / login 第一阶段只证明 BusyBox getty autologin 到 `/bin/sh` 的等价 serial
+  TTY prompt；还不声明 init 管理的 `/etc/inittab` getty、密码 login、PAM / shadow
+  登录流或多终端会话支持。
 - 当前新增的是 FPR 原始状态与 FP load/store 的最小合同，足以越过 musl loader 的
   `c.fsd` 保存现场路径；它还不是完整 F/D arithmetic、FS dirty state、`fcsr` 或 DTB
   ISA 字符串收口。
@@ -142,16 +158,15 @@
 [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 执行，长线拆成五个阶段：
 
-1. TTY / login / console 语义。
-2. signal / timer / process 控制矩阵。
-3. 文件系统与块设备耐久性。
-4. curated 发行版矩阵。
-5. ISA / platform 合同补齐。
+1. signal / timer / process 控制矩阵。
+2. 文件系统与块设备耐久性。
+3. curated 发行版矩阵。
+4. ISA / platform 合同补齐。
 
 执行期间继续保留 `external Alpine ext4 + static /init`、`external Alpine ext4 + dynamic /bin/sh`
-单命令、多命令 smoke，以及同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke 作为正向基线；
-不要把它们扩大解释成完整发行版用户态支持。五个阶段都较大，每个阶段彻底完成后才提交一次；
-其他中间 slice 不自动提交。
+单命令、多命令 smoke、同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke，以及
+`tty_login_probe` 等价 serial TTY prompt smoke 作为正向基线；不要把它们扩大解释成完整
+发行版用户态支持。五个阶段都较大，每个阶段彻底完成后才提交一次；其他中间 slice 不自动提交。
 
 ## 验证基线
 
@@ -159,6 +174,7 @@
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`
 - `cd myCPU && make test-host-run_debug_cli_probe`
+- `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_tty_login`
 - `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_filesystem`
 - `cd myCPU && make test-host-xv6_boot_smoke`
 - `cd myCPU && make test-host-xv6_shell_smoke`
