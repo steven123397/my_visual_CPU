@@ -55,6 +55,11 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
   `&&` / `;` 和退出码读回的基础 shell 控制流。
 - 外部 Alpine rootfs 临时副本已经通过 `filesystem_persistence` profile，覆盖同会话 ext4
   目录创建、文件写入、`sync` 可见路径、rename overwrite、目录遍历、64 KiB 文件写读和清理。
+- 外部 Debian 13 (`trixie`) riscv64 ext4 rootfs 已建立 curated opt-in 路线：当前通过
+  外部 Linux `Image`、外部 Debian ext4、`init=/mycpu-debian-init`、serial wrapper prompt
+  `mycpu-debian# ` 和 `cat /etc/os-release -> ID=debian` 形成 Debian shell 第一刀正向证据。
+  这条 Debian 路线当前是 curated wrapper shell contract，不等同于“原生 Debian `/bin/sh` /
+  getty / login` 已完整稳定”。
 - 为越过 musl loader，当前已补 FPR raw state、标准 `flw/fld/fsw/fsd` load-store
   语义和 RVC `c.fld/c.fsd` / `c.fldsp/c.fsdsp` 解码。
 
@@ -158,8 +163,9 @@ init 管理的 getty、密码 login、完整 process control、跨 reboot 持久
    reset / reboot 后一致性。当前已声明临时 rootfs 副本上的同会话 ext4 persistence profile；
    仍不声明跨 reboot / reset 后读回。
 4. **curated 发行版矩阵**
-   以显式外部资产维护 Alpine、Debian/RISC-V 等 curated matrix。当前只有外部 Alpine
-   rootfs 的正向证据，不开放任意镜像支持。
+   以显式外部资产维护 Alpine、Debian/RISC-V 等 curated matrix。当前 Alpine 已有动态
+   BusyBox `/bin/sh`、filesystem、TTY/login、process-control 和同会话 ext4 persistence
+   证据；Debian 13 (`trixie`) 已有 curated wrapper shell `ID=debian` 证据，不开放任意镜像支持。
 5. **ISA / platform 合同补齐**
    系统收口真实发行版触发到的 F/D、`fcsr`、FS state、DTB `riscv,isa`、hwcap 和平台设备
    广告。当前 FP load-store 只是越过 musl loader 的最小合同。

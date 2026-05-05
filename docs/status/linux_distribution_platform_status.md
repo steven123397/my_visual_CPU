@@ -88,6 +88,20 @@
   shell command / 文件系统一致性 / 等价 serial TTY prompt / process-control / 同会话
   ext4 persistence smoke contract，不声明完整发行版矩阵、init 管理的 getty、密码 login、
   完整 signal 子系统、跨 reboot 持久性或完整 F/D 浮点算术支持。
+- `2026-05-05` 已完成 curated 发行版矩阵第一刀：
+  - 新增 `MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine|debian` 的 curated matrix 入口，固定
+    distro-specific `Image/rootfs/bootargs/prompt/command/expected` 环境变量约定。
+  - `make test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell` 继续复用外部
+    Alpine 动态 `/bin/sh` shell 基线，默认 `init=/bin/sh`、`~ # `、
+    `cat /etc/os-release -> ID=alpine`。
+  - `make test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell` 新增外部 Debian 13
+    (`trixie`) riscv64 curated route：当前通过外部 Linux `Image`、外部 Debian ext4、
+    `init=/mycpu-debian-init`、serial wrapper prompt `mycpu-debian# ` 和
+    `cat /etc/os-release -> ID=debian` 形成 shell 第一刀正向证据。
+  - `make test-host-run_debug_cli_probe_linux_distribution_curated_matrix` 会顺序运行 Alpine /
+    Debian 两条 curated shell target；缺少各自外部 rootfs 时保持 fail-closed。
+  - Debian 当前只声明 `shell` profile；Alpine 继续声明 `shell`、`filesystem_consistency`、
+    `tty_login_probe`、`process_control` 和 `filesystem_persistence`。
 
 ## 关键历史节点
 
@@ -166,6 +180,8 @@
   动态 BusyBox / musl loader 已有最小 shell command、`/tmp` 文件系统一致性、等价
   serial TTY prompt 和 process / timer / signal 最小矩阵正向证据，但这不等同于完整
   发行版级支持。
+- Debian curated route 当前依赖外部 rootfs 上的 `mycpu-debian-init` wrapper shell 合同；
+  还不声明原生 Debian `/bin/sh`、init 管理的 getty 或密码 login 已完整稳定。
 - 当前 process / timer / signal 第一阶段只证明 BusyBox shell 可见的 `sleep`、子进程
   `wait`、`trap` / `kill` 和控制流；还不声明完整 signal delivery 语义、作业控制、
   多进程压力或长期 timer 稳定性。
@@ -187,8 +203,7 @@
 [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 执行，长线拆成五个阶段：
 
-1. curated 发行版矩阵。
-2. ISA / platform 合同补齐。
+1. ISA / platform 合同补齐。
 
 执行期间继续保留 `external Alpine ext4 + static /init`、`external Alpine ext4 + dynamic /bin/sh`
 单命令、多命令 smoke、同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke、

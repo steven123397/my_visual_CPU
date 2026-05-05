@@ -132,6 +132,43 @@ LINUX_DISTRO_RUNTIME_PROFILES = {
         ),
     ],
 }
+CURATED_LINUX_DISTRO_RUNTIME_MATRIX = {
+    "alpine": {
+        "image_env": "MYCPU_LINUX_DISTRO_CURATED_IMAGE",
+        "rootfs_env": "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS",
+        "bootargs_env": "MYCPU_LINUX_DISTRO_CURATED_ALPINE_BOOTARGS",
+        "prompt_env": "MYCPU_LINUX_DISTRO_CURATED_ALPINE_PROMPT",
+        "bootargs": (
+            "console=ttyS0,115200 earlycon=ns16550a,mmio,0x10000000 "
+            "root=/dev/vda rw rootfstype=ext4 rootwait init=/bin/sh loglevel=8 ignore_loglevel"
+        ),
+        "prompt": "~ # ",
+        "command": "cat /etc/os-release",
+        "expected": "ID=alpine",
+        "validated_profiles": (
+            "shell",
+            "filesystem_consistency",
+            "tty_login_probe",
+            "process_control",
+            "filesystem_persistence",
+        ),
+    },
+    "debian": {
+        "image_env": "MYCPU_LINUX_DISTRO_CURATED_IMAGE",
+        "rootfs_env": "MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS",
+        "bootargs_env": "MYCPU_LINUX_DISTRO_CURATED_DEBIAN_BOOTARGS",
+        "prompt_env": "MYCPU_LINUX_DISTRO_CURATED_DEBIAN_PROMPT",
+        "bootargs": (
+            "console=ttyS0,115200 earlycon=ns16550a,mmio,0x10000000 "
+            "root=/dev/vda rw rootfstype=ext4 rootwait init=/mycpu-debian-init "
+            "loglevel=8 ignore_loglevel"
+        ),
+        "prompt": "mycpu-debian# ",
+        "command": "cat /etc/os-release",
+        "expected": "ID=debian",
+        "validated_profiles": ("shell",),
+    },
+}
 
 
 def build_linux_dummy_flat_image(temp_dir: pathlib.Path) -> pathlib.Path:
@@ -384,29 +421,72 @@ def linux_distro_command_contracts(command: str, expected: str) -> list[tuple[st
     return contracts
 
 
+def resolve_curated_linux_distro_runtime() -> dict | None:
+    distro = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO", "").strip()
+    if not distro:
+        return None
+    if distro not in CURATED_LINUX_DISTRO_RUNTIME_MATRIX:
+        raise AssertionError(f"unknown curated linux distribution runtime: {distro}")
+
+    matrix_entry = CURATED_LINUX_DISTRO_RUNTIME_MATRIX[distro]
+    image_env = str(matrix_entry["image_env"])
+    rootfs_env = str(matrix_entry["rootfs_env"])
+    bootargs_env = str(matrix_entry["bootargs_env"])
+    prompt_env = str(matrix_entry["prompt_env"])
+
+    if image_env not in os.environ:
+        raise AssertionError(f"missing curated linux distribution Image env: {image_env}")
+    if rootfs_env not in os.environ:
+        raise AssertionError(f"missing curated linux distribution rootfs env: {rootfs_env}")
+
+    return {
+        "distro": distro,
+        "image": pathlib.Path(os.environ[image_env]),
+        "disk": pathlib.Path(os.environ[rootfs_env]),
+        "prompt": os.environ.get(prompt_env, str(matrix_entry["prompt"])),
+        "command": str(matrix_entry["command"]),
+        "expected": str(matrix_entry["expected"]),
+        "bootargs": os.environ.get(bootargs_env, str(matrix_entry["bootargs"])),
+        "validated_profiles": tuple(matrix_entry["validated_profiles"]),
+    }
+
+
 def resolve_linux_distro_shell_contract() -> dict:
-    image_path = pathlib.Path(
-        os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_IMAGE", str(DEFAULT_LINUX_PROTO_RUNTIME_IMAGE))
-    )
-    disk_path = pathlib.Path(
-        os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", str(DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS))
-    )
-    prompt = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_PROMPT", "mycpu-linux# ")
-    if "MYCPU_LINUX_DISTRO_RUNTIME_COMMAND" in os.environ:
-        command = os.environ["MYCPU_LINUX_DISTRO_RUNTIME_COMMAND"]
-    elif disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
-        command = "help"
+    curated = resolve_curated_linux_distro_runtime()
+    if curated is not None:
+        image_path = pathlib.Path(
+            os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_IMAGE", str(curated["image"]))
+        )
+        disk_path = pathlib.Path(
+            os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", str(curated["disk"]))
+        )
+        prompt = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_PROMPT", str(curated["prompt"]))
+        command = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_COMMAND", str(curated["command"]))
+        expected = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_EXPECT", str(curated["expected"]))
+        bootargs = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_BOOTARGS", str(curated["bootargs"]))
     else:
-        command = "cat /etc/os-release"
+        image_path = pathlib.Path(
+            os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_IMAGE", str(DEFAULT_LINUX_PROTO_RUNTIME_IMAGE))
+        )
+        disk_path = pathlib.Path(
+            os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", str(DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS))
+        )
+        prompt = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_PROMPT", "mycpu-linux# ")
+        if "MYCPU_LINUX_DISTRO_RUNTIME_COMMAND" in os.environ:
+            command = os.environ["MYCPU_LINUX_DISTRO_RUNTIME_COMMAND"]
+        elif disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+            command = "help"
+        else:
+            command = "cat /etc/os-release"
 
-    if "MYCPU_LINUX_DISTRO_RUNTIME_EXPECT" in os.environ:
-        expected = os.environ["MYCPU_LINUX_DISTRO_RUNTIME_EXPECT"]
-    elif disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
-        expected = "commands: help uptime exit"
-    else:
-        expected = "ID="
+        if "MYCPU_LINUX_DISTRO_RUNTIME_EXPECT" in os.environ:
+            expected = os.environ["MYCPU_LINUX_DISTRO_RUNTIME_EXPECT"]
+        elif disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+            expected = "commands: help uptime exit"
+        else:
+            expected = "ID="
 
-    bootargs = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_BOOTARGS", "")
+        bootargs = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_BOOTARGS", "")
     return {
         "image": image_path,
         "disk": disk_path,
@@ -418,6 +498,22 @@ def resolve_linux_distro_shell_contract() -> dict:
 
 
 class RunDebugCliProbeTest(unittest.TestCase):
+    def test_curated_linux_distro_runtime_matrix_declares_alpine_and_debian_shell_routes(self) -> None:
+        self.assertEqual(
+            tuple(sorted(CURATED_LINUX_DISTRO_RUNTIME_MATRIX)),
+            ("alpine", "debian"),
+        )
+        self.assertEqual(CURATED_LINUX_DISTRO_RUNTIME_MATRIX["alpine"]["expected"], "ID=alpine")
+        self.assertEqual(CURATED_LINUX_DISTRO_RUNTIME_MATRIX["debian"]["expected"], "ID=debian")
+        self.assertIn(
+            "filesystem_consistency",
+            CURATED_LINUX_DISTRO_RUNTIME_MATRIX["alpine"]["validated_profiles"],
+        )
+        self.assertEqual(
+            CURATED_LINUX_DISTRO_RUNTIME_MATRIX["debian"]["validated_profiles"],
+            ("shell",),
+        )
+
     def test_resolve_linux_distro_shell_contract_defaults_to_linux_proto_shell_for_repo_rootfs(self) -> None:
         with unittest.mock.patch.dict(os.environ, {}, clear=True):
             contract = resolve_linux_distro_shell_contract()
@@ -462,6 +558,61 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(contract["disk"], external_rootfs)
         self.assertEqual(contract["command"], "cat /etc/os-release")
         self.assertEqual(contract["expected"], "ID=alpine")
+
+    def test_resolve_linux_distro_shell_contract_uses_curated_alpine_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            image_path = temp_path / "Image"
+            rootfs_path = temp_path / "alpine-rootfs.ext4"
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "MYCPU_LINUX_DISTRO_RUNTIME_DISTRO": "alpine",
+                    "MYCPU_LINUX_DISTRO_CURATED_IMAGE": str(image_path),
+                    "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS": str(rootfs_path),
+                },
+                clear=True,
+            ):
+                contract = resolve_linux_distro_shell_contract()
+
+        self.assertEqual(contract["image"], image_path)
+        self.assertEqual(contract["disk"], rootfs_path)
+        self.assertEqual(contract["prompt"], "~ # ")
+        self.assertEqual(contract["command"], "cat /etc/os-release")
+        self.assertEqual(contract["expected"], "ID=alpine")
+        self.assertEqual(
+            contract["bootargs"],
+            "console=ttyS0,115200 earlycon=ns16550a,mmio,0x10000000 "
+            "root=/dev/vda rw rootfstype=ext4 rootwait init=/bin/sh loglevel=8 ignore_loglevel",
+        )
+
+    def test_resolve_linux_distro_shell_contract_uses_curated_debian_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            image_path = temp_path / "Image"
+            rootfs_path = temp_path / "debian-rootfs.ext4"
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "MYCPU_LINUX_DISTRO_RUNTIME_DISTRO": "debian",
+                    "MYCPU_LINUX_DISTRO_CURATED_IMAGE": str(image_path),
+                    "MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS": str(rootfs_path),
+                },
+                clear=True,
+            ):
+                contract = resolve_linux_distro_shell_contract()
+
+        self.assertEqual(contract["image"], image_path)
+        self.assertEqual(contract["disk"], rootfs_path)
+        self.assertEqual(contract["prompt"], "mycpu-debian# ")
+        self.assertEqual(contract["command"], "cat /etc/os-release")
+        self.assertEqual(contract["expected"], "ID=debian")
+        self.assertEqual(
+            contract["bootargs"],
+            "console=ttyS0,115200 earlycon=ns16550a,mmio,0x10000000 "
+            "root=/dev/vda rw rootfstype=ext4 rootwait init=/mycpu-debian-init "
+            "loglevel=8 ignore_loglevel",
+        )
 
     def test_linux_distro_command_contracts_defaults_to_single_command(self) -> None:
         with unittest.mock.patch.dict(os.environ, {}, clear=True):
@@ -2294,6 +2445,116 @@ class RunDebugCliProbeTest(unittest.TestCase):
             combined_output,
         )
         self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_shell_target_requests_curated_env(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_debian_shell_target_requests_curated_env(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=debian", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_shell_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell",
+                "MYCPU_LINUX_DISTRO_CURATED_IMAGE=/tmp/Image",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_debian_shell_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell",
+                "MYCPU_LINUX_DISTRO_CURATED_IMAGE=/tmp/Image",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS must point to an external Debian rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_matrix_target_runs_both_distros(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_matrix",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell", proc.stdout)
+        self.assertIn("test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell", proc.stdout)
 
     def test_make_build_workload_linux_proto_block_mode_embeds_mininit_stage_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -229,6 +229,8 @@
 
 ## 阶段 4：curated 发行版矩阵
 
+> **阶段状态：** 已完成第一刀正向收口；阶段提交项见 checklist。
+
 ### 目标
 
 从 Alpine 单点扩到 curated distro matrix。先支持 Alpine + Debian/RISC-V 两条外部 rootfs 路线，不开放任意镜像支持。
@@ -246,15 +248,15 @@
 
 ### Checklist
 
-- [ ] 设计外部资产路径约定：kernel `Image`、rootfs、bootargs、prompt、profile、expected。
-- [ ] Alpine 保持当前基线。
-- [ ] 新增 Debian/RISC-V rootfs opt-in contract。
-- [ ] 每个发行版只声明已验证的 profile：shell、filesystem、process、tty 等。
-- [ ] 默认测试不因缺少外部资产失败。
-- [ ] opt-in target 缺资产时必须 fail-closed。
-- [ ] 文档记录每个发行版的当前支持矩阵和缺口。
-- [ ] 阶段完成后运行通用验证基线。
-- [ ] 阶段完成后提交一次。
+- [x] 设计外部资产路径约定：kernel `Image`、rootfs、bootargs、prompt、profile、expected。
+- [x] Alpine 保持当前基线。
+- [x] 新增 Debian/RISC-V rootfs opt-in contract。
+- [x] 每个发行版只声明已验证的 profile：shell、filesystem、process、tty 等。
+- [x] 默认测试不因缺少外部资产失败。
+- [x] opt-in target 缺资产时必须 fail-closed。
+- [x] 文档记录每个发行版的当前支持矩阵和缺口。
+- [x] 阶段完成后运行通用验证基线。
+- [x] 阶段完成后提交一次。
 
 ### 完成定义
 

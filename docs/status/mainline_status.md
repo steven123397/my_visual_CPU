@@ -938,7 +938,15 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    和基础 shell 控制流。当前长线阶段 3 还新增
    `test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence`，复制外部 Alpine
    rootfs 到 `/tmp` 临时 ext4 副本后验证同会话目录创建、文件写入、`sync`、rename
-   overwrite、目录遍历和 64 KiB 文件写读。
+   overwrite、目录遍历和 64 KiB 文件写读。当前长线阶段 4 也已完成第一刀：新增 curated
+   distro matrix 入口 `MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine|debian`，以及
+   `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell`、
+   `test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell`、
+   `test-host-run_debug_cli_probe_linux_distribution_curated_matrix` 三条 target。当前 Alpine
+   curated shell 继续走外部动态 `/bin/sh -> ~ # ` 基线；Debian 13 (`trixie`) riscv64 已通过外部 ext4 +
+   `init=/mycpu-debian-init` curated wrapper route 跑通
+   `mycpu-debian# -> cat /etc/os-release -> ID=debian`。这条 Debian 路线当前只声明
+   `shell` profile，不扩大解释成原生 Debian `/bin/sh` / getty / login 完整支持。
    这仍只是最小 shell command / filesystem / 等价 serial TTY prompt / process-control
    / 同会话 ext4 persistence smoke contract，不等同于完整发行版矩阵、init 管理的 getty、
    密码 login、完整 signal 子系统或跨 reboot 持久性。AI 当前第一刀采用

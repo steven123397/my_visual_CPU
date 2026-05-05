@@ -685,6 +685,47 @@ test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence: FORCE $
 	fi; \
 	printf '%s\n' "$$output"
 
+test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_shell ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_IMAGE)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_debian_shell ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_IMAGE)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS must point to an external Debian rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=debian python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_distribution_curated_matrix: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_matrix ==="
+	@$(MAKE) test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell
+	@$(MAKE) test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell
+
 build-workload: FORCE $(WORKLOAD_BUILD_DEPS)
 	$(WORKLOAD_BUILD_COMMAND)
 
