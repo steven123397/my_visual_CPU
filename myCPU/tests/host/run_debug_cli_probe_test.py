@@ -2,12 +2,14 @@
 import contextlib
 import importlib.util
 import io
+import json
 import os
 import pathlib
 import subprocess
 import tempfile
 import textwrap
 import unittest
+import unittest.mock
 
 
 MYCPU_DIR = pathlib.Path(__file__).resolve().parents[2]
@@ -19,6 +21,9 @@ PROBE = importlib.util.module_from_spec(MODULE_SPEC)
 MODULE_SPEC.loader.exec_module(PROBE)
 DEFAULT_LINUX_PROTO_RUNTIME_IMAGE = (
     MYCPU_DIR / "external" / "linux-riscv" / "arch" / "riscv" / "boot" / "Image"
+)
+DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS = (
+    MYCPU_DIR / "workloads" / "linux_proto" / "rootfs.ext4"
 )
 
 
@@ -216,7 +221,114 @@ def build_translation_plan_probe_flat_image(temp_dir: pathlib.Path) -> pathlib.P
     return bin_path
 
 
+def debug_cli_roundtrip(proc: subprocess.Popen[str], command: dict) -> dict:
+    if proc.stdin is None or proc.stdout is None:
+        raise AssertionError("debug CLI pipes were not created")
+
+    proc.stdin.write(json.dumps(command) + "\n")
+    proc.stdin.flush()
+    line = proc.stdout.readline()
+    if not line:
+        stderr = proc.stderr.read() if proc.stderr is not None else ""
+        raise AssertionError(
+            f"debug CLI produced no response for command {command!r}\nstderr:\n{stderr}"
+        )
+
+    response = json.loads(line)
+    if response.get("type") == "error":
+        raise AssertionError(
+            f"debug CLI returned error for command {command!r}: {response}"
+        )
+    return response
+
+
+def normalize_next_offset(response: dict) -> int:
+    if "next_offset" in response:
+        return int(response["next_offset"])
+    if "nextOffset" in response:
+        return int(response["nextOffset"])
+    raise AssertionError(f"missing next offset in response: {response}")
+
+
+def resolve_linux_distro_shell_contract() -> dict:
+    image_path = pathlib.Path(
+        os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_IMAGE", str(DEFAULT_LINUX_PROTO_RUNTIME_IMAGE))
+    )
+    disk_path = pathlib.Path(
+        os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", str(DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS))
+    )
+    prompt = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_PROMPT", "mycpu-linux# ")
+    if "MYCPU_LINUX_DISTRO_RUNTIME_COMMAND" in os.environ:
+        command = os.environ["MYCPU_LINUX_DISTRO_RUNTIME_COMMAND"]
+    elif disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+        command = "help"
+    else:
+        command = "cat /etc/os-release"
+
+    if "MYCPU_LINUX_DISTRO_RUNTIME_EXPECT" in os.environ:
+        expected = os.environ["MYCPU_LINUX_DISTRO_RUNTIME_EXPECT"]
+    elif disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+        expected = "commands: help uptime exit"
+    else:
+        expected = "ID="
+
+    bootargs = os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_BOOTARGS", "")
+    return {
+        "image": image_path,
+        "disk": disk_path,
+        "prompt": prompt,
+        "command": command,
+        "expected": expected,
+        "bootargs": bootargs,
+    }
+
+
 class RunDebugCliProbeTest(unittest.TestCase):
+    def test_resolve_linux_distro_shell_contract_defaults_to_linux_proto_shell_for_repo_rootfs(self) -> None:
+        with unittest.mock.patch.dict(os.environ, {}, clear=True):
+            contract = resolve_linux_distro_shell_contract()
+
+        self.assertEqual(contract["image"], DEFAULT_LINUX_PROTO_RUNTIME_IMAGE)
+        self.assertEqual(contract["disk"], DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS)
+        self.assertEqual(contract["prompt"], "mycpu-linux# ")
+        self.assertEqual(contract["command"], "help")
+        self.assertEqual(contract["expected"], "commands: help uptime exit")
+        self.assertEqual(contract["bootargs"], "")
+
+    def test_resolve_linux_distro_shell_contract_defaults_to_os_release_for_external_rootfs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            external_rootfs = pathlib.Path(temp_dir) / "debian-rootfs.ext4"
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS": str(external_rootfs),
+                },
+                clear=True,
+            ):
+                contract = resolve_linux_distro_shell_contract()
+
+        self.assertEqual(contract["disk"], external_rootfs)
+        self.assertEqual(contract["command"], "cat /etc/os-release")
+        self.assertEqual(contract["expected"], "ID=")
+
+    def test_resolve_linux_distro_shell_contract_prefers_explicit_shell_over_external_rootfs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            external_rootfs = pathlib.Path(temp_dir) / "alpine-rootfs.ext4"
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS": str(external_rootfs),
+                    "MYCPU_LINUX_DISTRO_RUNTIME_COMMAND": "cat /etc/os-release",
+                    "MYCPU_LINUX_DISTRO_RUNTIME_EXPECT": "ID=alpine",
+                },
+                clear=True,
+            ):
+                contract = resolve_linux_distro_shell_contract()
+
+        self.assertEqual(contract["disk"], external_rootfs)
+        self.assertEqual(contract["command"], "cat /etc/os-release")
+        self.assertEqual(contract["expected"], "ID=alpine")
+
     def test_missing_input_paths_reports_primary_image_and_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = pathlib.Path(temp_dir)
@@ -1673,6 +1785,28 @@ class RunDebugCliProbeTest(unittest.TestCase):
             proc.stdout,
         )
 
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_runtime_target_requests_real_linux_distribution_runtime(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_runtime",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested",
+            proc.stdout,
+        )
+
     def test_make_build_workload_linux_proto_block_mode_embeds_mininit_stage_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             proc = subprocess.run(
@@ -2067,6 +2201,123 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("mycpu linux userland: stage=unlinkat-reused-dirent-gone", probe_proc.stdout)
         self.assertIn("mycpu linux userland: stage=fourth-stage-reached", probe_proc.stdout)
         self.assertIn("mycpu linux userland: post-init reached", probe_proc.stdout)
+
+    def test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_DISTRO_RUNTIME") != "1":
+            self.skipTest("set MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 to run the real Linux distribution shell guardrail")
+
+        contract = resolve_linux_distro_shell_contract()
+        image_path = contract["image"]
+        disk_path = contract["disk"]
+        prompt = str(contract["prompt"])
+        command = str(contract["command"])
+        expected = str(contract["expected"])
+        bootargs = str(contract["bootargs"])
+
+        if not image_path.is_file():
+            self.fail(f"missing linux distribution runtime Image: {image_path}")
+        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+            self.fail(
+                "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
+                "repo linux_proto rootfs is only for the mini shell guardrail"
+            )
+
+        build_command = [
+            "make",
+            "build-workload",
+            "WORKLOAD_NAME=linux_proto",
+            "LINUX_PROTO_ROOTFS_MODE=block",
+            f"LINUX_PROTO_IMAGE={image_path}",
+            f"LINUX_PROTO_DISK={disk_path}",
+        ]
+        if bootargs:
+            build_command.append(f"LINUX_PROTO_BOOTARGS={bootargs}")
+
+        build_proc = subprocess.run(
+            build_command,
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+
+        command_text = command if command.endswith(("\r", "\n")) else f"{command}\r"
+        with subprocess.Popen(
+            ["./mycpu", "--debug-cli"],
+            cwd=MYCPU_DIR,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        ) as proc:
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load",
+                    "image": "workloads/linux_proto/linux_sbi_shim.bin",
+                    "backend": "functional",
+                    "disk": str(disk_path),
+                    "block_transport": "virtio-blk",
+                    "flat": True,
+                    "addr": 0x80000000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": str(image_path),
+                    "addr": 0x80200000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": "workloads/linux_proto/mycpu_virt.dtb",
+                    "addr": 0x87F00000,
+                },
+            )
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a0", "value": 0x0})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a1", "value": 0x87F00000})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a2", "value": 0x80200000})
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "run_until_uart_contains",
+                    "text": prompt,
+                    "max_steps": 300000000,
+                },
+            )
+            boot_chunk = debug_cli_roundtrip(proc, {"cmd": "uart_output", "offset": 0})
+            self.assertIn(prompt, boot_chunk.get("text", ""))
+            offset = normalize_next_offset(boot_chunk)
+
+            debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": command_text})
+            command_chunk = debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "run_until_new_uart_contains",
+                    "offset": offset,
+                    "text": prompt,
+                    "max_steps": 50000000,
+                },
+            )
+            command_text_output = command_chunk.get("text", "")
+            self.assertIn(expected, command_text_output)
+            self.assertTrue(
+                command_text_output.endswith(prompt),
+                msg=f"expected shell chunk to end with prompt {prompt!r}, got {command_text_output!r}",
+            )
+
+            debug_cli_roundtrip(proc, {"cmd": "quit"})
+            proc.wait(timeout=5)
+            stderr = proc.stderr.read() if proc.stderr is not None else ""
+            self.assertEqual(proc.returncode, 0, msg=stderr)
+
     def test_make_build_workload_linux_proto_block_mode_mininit_message_lengths_exclude_nul(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             proc = subprocess.run(

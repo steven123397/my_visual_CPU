@@ -215,6 +215,12 @@ Linux console reset re-arm 也已完成：`/api/session/reset` 对带 payload / 
 boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB，重设
 `a0/a1/a2`，并再次等待 `mycpu-linux# ` prompt；普通 demo reset 仍保持原有裸 reset
 语义。
+`Wave 7` 的剩余部署 / 运维工作已经转移到远端服务器上的仓库 checkout 继续推进；本地工作区
+当前先合入 `Post-Wave 7` 标准 Linux 发行版平台新主线入口：
+  [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md) /
+  [linux_distribution_platform_status.md](linux_distribution_platform_status.md) /
+  [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)。
+用户自定义 AI 任务与 NPU 性能模型仍在独立分支收口，合并后再进入主线状态。
 
 ## 当前状态
 
@@ -903,25 +909,31 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    RISC-V 发行版镜像；二是 AI accelerator 支持用户自己的 AI 任务，并逐步逼近商用
    NPU 的 tile scheduler、DMA / compute overlap、multi outstanding queue、Linux-facing
    driver 和性能模型。这两条都需要另开 design / plan，不并入 Wave 7 收尾。
-16. 默认 JIT backend 仍只做后续 readiness 评估；默认 backend、persistent cache、
+16. 当前 `Post-Wave 7` 标准 Linux 发行版平台新主线已经在本地工作区正式建档：
+   [linux_distribution_platform_status.md](linux_distribution_platform_status.md) /
+   [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md) /
+   [../plan/post_wave7_linux_distribution_platform_plan.md](../plan/post_wave7_linux_distribution_platform_plan.md)。
+   当前已跑通 `external Alpine ext4 + static /init` 的 opt-in runtime smoke；
+   动态链接 BusyBox / musl loader 用户态仍是近端 blocker。
+17. 默认 JIT backend 仍只做后续 readiness 评估；默认 backend、persistent cache、
    workload-level scheduler、CSR / atomic / vector helper runtime、multicore、coherence 和
    新的 memory consistency 模型仍不启动。
-17. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
+18. `pc_costs` / `branch_targets` 仍是 debug/profile 读侧合同，不是 guest ABI；后续
    如需调整排序或字段，必须先补 probe / host smoke 兼容门禁。
-18. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
+19. 继续把 pipeline-side `xv6` memory observation、functional `xv6`、Linux
    dummy/probe、pipeline `vector_cnn` 和现有 debug CLI 输出作为 `Wave 6`
    hot-path evidence 的前置 guardrail。
-19. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
+20. AI accelerator 后续若继续推进 `INT4 / training / MobileNet / Linux-facing NPU
    driver / real DMA overlap / multi outstanding queue`，应另开本方向专项 plan；其中
    用户自定义 AI 任务和商用 NPU-like 性能模型已经提升为 Post-Wave 7 新主线，但不改写
    当前 `Wave 6 / Wave 7` 收口边界。
-20. Wave 4 AI accelerator 的完成记录统一见
+21. Wave 4 AI accelerator 的完成记录统一见
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
-21. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
+22. 显式提供真实 Linux `Image` 时，补跑 `timerfd-one-shot-readback-ok` runtime
    guardrail；未提供 `Image` 时，不把该项写成默认已证明。
-22. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
+23. 继续守住 `xv6` shell、Linux probe、`kernel_alpha`、debug CLI、
    `make test` 和 `make test-pipeline` 这些稳定 guardrail。
-23. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
+24. 不继续向当前 Linux fourth-stage smoke 追加同类 syscall 微分支；如果真实 runtime
    暴露新 blocker，再按 blocker 驱动回补最窄 Linux guardrail。
 
 ## 验证基线
