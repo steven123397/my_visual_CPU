@@ -72,3 +72,6 @@ __pycache__/
 
 # Local git worktrees
 .worktrees/
+
+# Local deployment secrets
+/deploy/env/mycpu-frontend.env

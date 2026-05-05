@@ -24,6 +24,26 @@ function createSlotWithQueries(queries = {}) {
   };
 }
 
+function createElements() {
+  return {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+    demoWorkspace: createSlot(),
+    authPanel: createSlot(),
+    workload: createSlot(),
+    vector: createSlot(),
+  };
+}
+
 test('renderApp propagates failed MMIO bus details into the grouped platform inspector', () => {
   const state = createAppState();
   state.runState = 'paused';
@@ -128,6 +148,43 @@ test('renderApp propagates failed MMIO bus details into the grouped platform ins
   assert.match(elements.devices.innerHTML, /<span>status<\/span><strong>failed<\/strong>/);
   assert.match(elements.devices.innerHTML, /<span>detail<\/span><strong>invalid MMIO access<\/strong>/);
   assert.match(elements.devices.innerHTML, /uart write 0x10000000 failed: invalid MMIO access/);
+});
+
+test('renderApp shows a login form when auth is required and no session exists', () => {
+  const state = createAppState();
+  state.auth.required = true;
+  state.auth.authenticated = false;
+
+  const elements = createElements();
+  renderApp(elements, state);
+
+  assert.match(elements.authPanel.innerHTML, /auth-login-form/);
+  assert.match(elements.authPanel.innerHTML, /用户名/);
+  assert.match(elements.authPanel.innerHTML, /密码/);
+});
+
+test('renderApp shows controller status and actions for an authenticated session', () => {
+  const state = createAppState();
+  state.auth = {
+    ...state.auth,
+    required: true,
+    authenticated: true,
+    username: 'admin',
+    role: 'admin',
+    activeSessions: 2,
+    sessionLimit: 3,
+    controllerUsername: 'admin',
+    controllerSession: true,
+    canControl: true,
+  };
+
+  const elements = createElements();
+  renderApp(elements, state);
+
+  assert.match(elements.authPanel.innerHTML, /admin/);
+  assert.match(elements.authPanel.innerHTML, /2\/3 sessions/);
+  assert.match(elements.authPanel.innerHTML, /释放控制权/);
+  assert.match(elements.authPanel.innerHTML, /退出登录/);
 });
 
 test('renderApp shows predictor accuracy using resolved branch statistics contract', () => {

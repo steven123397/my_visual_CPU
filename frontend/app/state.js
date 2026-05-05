@@ -25,6 +25,19 @@ function createTerminalState() {
 
 export function createAppState() {
   return {
+    auth: {
+      required: false,
+      authenticated: false,
+      username: null,
+      role: null,
+      activeSessions: 0,
+      sessionLimit: 0,
+      controllerUsername: null,
+      controllerSession: false,
+      canControl: true,
+      loginPending: false,
+      loginError: null,
+    },
     tests: [],
     diagnostics: {},
     aiTinyModel: {
@@ -53,6 +66,31 @@ export function createAppState() {
       terminalCollapsed: false,
     },
   };
+}
+
+export function setAuthState(state, auth = {}) {
+  state.auth = {
+    ...state.auth,
+    required: Boolean(auth.required),
+    authenticated: Boolean(auth.authenticated),
+    username: auth.username ?? null,
+    role: auth.role ?? null,
+    activeSessions: Number.isInteger(auth.activeSessions) ? auth.activeSessions : 0,
+    sessionLimit: Number.isInteger(auth.sessionLimit) ? auth.sessionLimit : 0,
+    controllerUsername: auth.controllerUsername ?? null,
+    controllerSession: Boolean(auth.controllerSession),
+    canControl: auth.canControl ?? !auth.required,
+    loginPending: state.auth.loginPending,
+    loginError: state.auth.loginError,
+  };
+}
+
+export function setLoginPending(state, pending) {
+  state.auth.loginPending = pending;
+}
+
+export function setLoginError(state, error) {
+  state.auth.loginError = error ?? null;
 }
 
 export function setAiTinyModelTemplates(state, templates) {
@@ -108,10 +146,10 @@ export function setDiagnostics(state, diagnostics) {
 }
 
 export function setTests(state, tests, diagnostics = state.diagnostics) {
-  state.tests = tests;
+  state.tests = Array.isArray(tests) ? tests : [];
   setDiagnostics(state, diagnostics);
-  if (!tests.some((item) => item.name === state.selectedTest) && tests[0]) {
-    state.selectedTest = tests[0].name;
+  if (!state.tests.some((item) => item.name === state.selectedTest) && state.tests[0]) {
+    state.selectedTest = state.tests[0].name;
   }
 }
 

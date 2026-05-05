@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { startServer } from '../server/debug_server.mjs';
+import { buildPasswordHashForTests } from '../server/security.mjs';
 import { listTests } from '../server/tests_manifest.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -226,6 +227,32 @@ async function postJson(baseUrl, pathname, payload) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  return {
+    status: response.status,
+    body: await response.json(),
+  };
+}
+
+async function postJsonWithCookie(baseUrl, pathname, payload, cookie = '') {
+  const headers = { 'content-type': 'application/json' };
+  if (cookie) {
+    headers.cookie = cookie;
+  }
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  return {
+    status: response.status,
+    cookie: response.headers.get('set-cookie'),
+    body: await response.json(),
+  };
+}
+
+async function getJsonWithCookie(baseUrl, pathname, cookie = '') {
+  const headers = cookie ? { cookie } : {};
+  const response = await fetch(`${baseUrl}${pathname}`, { headers });
   return {
     status: response.status,
     body: await response.json(),
@@ -1970,6 +1997,103 @@ test('terminal input API forwards text and broadcasts terminal deltas over webso
     });
   } finally {
     socket.close();
+    await server.close();
+  }
+});
+
+test('auth-enabled server rejects unauthenticated API access and reports auth state', async () => {
+  const passwordHash = buildPasswordHashForTests('pw');
+  const server = await withEnv({
+    MYCPU_AUTH_ENABLED: '1',
+    MYCPU_AUTH_ADMIN_USERNAME: 'admin',
+    MYCPU_AUTH_ADMIN_PASSWORD_HASH: passwordHash,
+    MYCPU_AUTH_SESSION_LIMIT: '3',
+    MYCPU_AUTH_SECURE_COOKIES: '0',
+  }, () => startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  }));
+
+  try {
+    const authSession = await getJsonWithCookie(server.baseUrl, '/api/auth/session');
+    assert.equal(authSession.status, 200);
+    assert.equal(authSession.body.auth.required, true);
+    assert.equal(authSession.body.auth.authenticated, false);
+
+    const testsResponse = await getJsonWithCookie(server.baseUrl, '/api/tests');
+    assert.equal(testsResponse.status, 401);
+    assert.equal(testsResponse.body.error, 'authentication required');
+  } finally {
+    await server.close();
+  }
+});
+
+test('auth-enabled server grants login, enforces one controller, and limits concurrent sessions to three', async () => {
+  const passwordHash = buildPasswordHashForTests('pw');
+  const server = await withEnv({
+    MYCPU_AUTH_ENABLED: '1',
+    MYCPU_AUTH_ADMIN_USERNAME: 'admin',
+    MYCPU_AUTH_ADMIN_PASSWORD_HASH: passwordHash,
+    MYCPU_AUTH_SESSION_LIMIT: '3',
+    MYCPU_AUTH_SECURE_COOKIES: '0',
+  }, () => startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  }));
+
+  try {
+    const login1 = await postJsonWithCookie(server.baseUrl, '/api/auth/login', {
+      username: 'admin',
+      password: 'pw',
+    });
+    const login2 = await postJsonWithCookie(server.baseUrl, '/api/auth/login', {
+      username: 'admin',
+      password: 'pw',
+    });
+    const login3 = await postJsonWithCookie(server.baseUrl, '/api/auth/login', {
+      username: 'admin',
+      password: 'pw',
+    });
+    assert.equal(login1.status, 200);
+    assert.equal(login2.status, 200);
+    assert.equal(login3.status, 200);
+    assert.match(login1.cookie, /mycpu_session=/);
+
+    const login4 = await postJsonWithCookie(server.baseUrl, '/api/auth/login', {
+      username: 'admin',
+      password: 'pw',
+    });
+    assert.equal(login4.status, 429);
+    assert.match(login4.body.error, /concurrent session limit reached \(3\)/);
+
+    const testsResponse = await getJsonWithCookie(server.baseUrl, '/api/tests', login1.cookie);
+    assert.equal(testsResponse.status, 200);
+    assert.equal(testsResponse.body.auth.authenticated, true);
+    assert.equal(testsResponse.body.auth.canControl, true);
+
+    const firstLoad = await postJsonWithCookie(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    }, login1.cookie);
+    assert.equal(firstLoad.status, 200);
+
+    const secondLoad = await postJsonWithCookie(server.baseUrl, '/api/session/load', {
+      test: 'sum',
+      backend: 'pipeline',
+    }, login2.cookie);
+    assert.equal(secondLoad.status, 409);
+    assert.match(secondLoad.body.error, /controller locked by admin/);
+
+    const release = await postJsonWithCookie(server.baseUrl, '/api/auth/release-control', {}, login1.cookie);
+    assert.equal(release.status, 200);
+    assert.equal(release.body.auth.controllerSession, false);
+
+    const secondLoadAfterRelease = await postJsonWithCookie(server.baseUrl, '/api/session/load', {
+      test: 'sum',
+      backend: 'pipeline',
+    }, login2.cookie);
+    assert.equal(secondLoadAfterRelease.status, 200);
+  } finally {
     await server.close();
   }
 });

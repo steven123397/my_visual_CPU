@@ -7,6 +7,7 @@ import { DebugCliSession } from './debug_cli_session.mjs';
 import { createDebugServerRuntime } from './debug_server_runtime.mjs';
 import { createAiTinyModelService } from './ai_tiny_model_service.mjs';
 import { listTests } from './tests_manifest.mjs';
+import { createSecurityManagerFromEnv } from './security.mjs';
 import { createWebSocketHub } from './ws.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,8 +19,11 @@ const sharedRoot = path.join(repoRoot, 'frontend', 'shared');
 const docsRoot = path.join(repoRoot, 'docs');
 const showcaseRoot = path.join(repoRoot, 'docs', 'showcase');
 
-function json(response, statusCode, payload) {
-  response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
+function json(response, statusCode, payload, headers = {}) {
+  response.writeHead(statusCode, {
+    'content-type': 'application/json; charset=utf-8',
+    ...headers,
+  });
   response.end(JSON.stringify(payload));
 }
 
@@ -66,7 +70,7 @@ function staticRouteFor(pathname) {
   return pathname;
 }
 
-async function serveStatic(response, pathname) {
+async function serveStatic(response, pathname, headers = {}) {
   const relative = staticRouteFor(pathname);
   if (relative.startsWith('/source/docs/')) {
     await serveSourceDoc(response, relative);
@@ -87,14 +91,14 @@ async function serveStatic(response, pathname) {
   }
   try {
     const content = await fs.readFile(filePath);
-    response.writeHead(200, { 'content-type': contentTypeFor(filePath) });
+    response.writeHead(200, { 'content-type': contentTypeFor(filePath), ...headers });
     response.end(content);
   } catch {
-    json(response, 404, { error: 'not found' });
+    json(response, 404, { error: 'not found' }, headers);
   }
 }
 
-async function serveSourceDoc(response, pathname) {
+async function serveSourceDoc(response, pathname, headers = {}) {
   const trimmed = pathname.replace(/^\/source\/docs\/+/, '');
   const filePath = path.join(docsRoot, trimmed);
   if (!filePath.startsWith(docsRoot) || !filePath.endsWith('.md')) {
@@ -103,14 +107,14 @@ async function serveSourceDoc(response, pathname) {
   }
   try {
     const content = await fs.readFile(filePath);
-    response.writeHead(200, { 'content-type': contentTypeFor(filePath) });
+    response.writeHead(200, { 'content-type': contentTypeFor(filePath), ...headers });
     response.end(content);
   } catch {
-    json(response, 404, { error: 'not found' });
+    json(response, 404, { error: 'not found' }, headers);
   }
 }
 
-async function serveShowcaseAsset(response, pathname) {
+async function serveShowcaseAsset(response, pathname, headers = {}) {
   const trimmed = pathname.replace(/^\/source\/showcase\/+/, '');
   const filePath = path.join(showcaseRoot, trimmed);
   if (!filePath.startsWith(showcaseRoot) || !filePath.endsWith('.png')) {
@@ -119,19 +123,19 @@ async function serveShowcaseAsset(response, pathname) {
   }
   try {
     const content = await fs.readFile(filePath);
-    response.writeHead(200, { 'content-type': contentTypeFor(filePath) });
+    response.writeHead(200, { 'content-type': contentTypeFor(filePath), ...headers });
     response.end(content);
   } catch {
-    json(response, 404, { error: 'not found' });
+    json(response, 404, { error: 'not found' }, headers);
   }
 }
 
-async function respondWithAction(response, action) {
+async function respondWithAction(response, action, headers = {}) {
   try {
-    json(response, 200, await action());
+    json(response, 200, await action(), headers);
   } catch (error) {
     const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
-    json(response, statusCode, { error: error.message });
+    json(response, statusCode, { error: error.message }, headers);
   }
 }
 
@@ -146,11 +150,42 @@ export async function startServer({
 } = {}) {
   const tests = listTests(repoRoot);
   const diagnostics = tests.diagnostics ?? {};
+  const security = createSecurityManagerFromEnv(process.env);
 
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
+      const securityHeaders = security.commonSecurityHeaders();
+      const routeKey = `${request.method}:${url.pathname}`;
+      if (request.method === 'GET' && url.pathname === '/api/auth/session') {
+        json(response, 200, { auth: security.authStateForRequest(request) }, securityHeaders);
+        return;
+      }
+      if (request.method === 'POST' && url.pathname === '/api/auth/login') {
+        const body = await readBody(request);
+        const result = await security.login(request, body);
+        json(response, 200, { auth: result.auth }, {
+          ...securityHeaders,
+          ...result.headers,
+        });
+        return;
+      }
+      if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
+        const result = await security.logout(request);
+        json(response, 200, { auth: result.auth }, {
+          ...securityHeaders,
+          ...result.headers,
+        });
+        return;
+      }
+      if (request.method === 'POST' && url.pathname === '/api/auth/release-control') {
+        await security.requireAuthentication(request, routeKey);
+        await respondWithAction(response, () => security.releaseController(request), securityHeaders);
+        return;
+      }
+
       if (request.method === 'GET' && url.pathname === '/api/tests') {
+        security.requireAuthentication(request, routeKey);
         json(response, 200, {
           tests: tests.map(({
             name,
@@ -174,87 +209,102 @@ export async function startServer({
             workload,
           })),
           diagnostics,
-        });
+          auth: security.authStateForRequest(request),
+        }, securityHeaders);
         return;
       }
 
       if (request.method === 'GET' && url.pathname === '/api/ai/tiny-model/templates') {
-        await respondWithAction(response, () => aiTinyModelService.templates());
+        security.requireAuthentication(request, routeKey);
+        await respondWithAction(response, () => aiTinyModelService.templates(), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/ai/tiny-model/run') {
+        security.requireController(request, 'ai-tiny-model-run');
         const body = await readBody(request);
-        await respondWithAction(response, () => aiTinyModelService.run(body));
+        await respondWithAction(response, () => aiTinyModelService.run(body), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/load') {
+        security.requireController(request, 'load');
         const body = await readBody(request);
         const entry = tests.find((item) => item.name === body.test);
         if (!entry) {
-          json(response, 404, { error: `unknown test: ${body.test}` });
+          json(response, 404, { error: `unknown test: ${body.test}` }, securityHeaders);
           return;
         }
-        await respondWithAction(response, () => runtime.load(entry, body.backend ?? 'pipeline'));
+        await respondWithAction(response, () => runtime.load(entry, body.backend ?? 'pipeline'), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/snapshot') {
-        await respondWithAction(response, () => runtime.snapshot());
+        security.requireAuthentication(request, routeKey);
+        await respondWithAction(response, () => runtime.snapshot(), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/step-cycle') {
-        await respondWithAction(response, () => runtime.stepCycle());
+        security.requireController(request, 'step-cycle');
+        await respondWithAction(response, () => runtime.stepCycle(), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/step-commit') {
-        await respondWithAction(response, () => runtime.stepCommit());
+        security.requireController(request, 'step-commit');
+        await respondWithAction(response, () => runtime.stepCommit(), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/reset') {
-        await respondWithAction(response, () => runtime.reset());
+        security.requireController(request, 'reset');
+        await respondWithAction(response, () => runtime.reset(), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/terminate') {
-        await respondWithAction(response, () => runtime.terminate());
+        security.requireController(request, 'terminate');
+        await respondWithAction(response, () => runtime.terminate(), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/run') {
+        security.requireController(request, 'run');
         const body = await readBody(request);
-        await respondWithAction(response, () => runtime.run(body.rateHz ?? 8));
+        await respondWithAction(response, () => runtime.run(body.rateHz ?? 8), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/terminal-input') {
+        security.requireController(request, 'terminal-input');
         const body = await readBody(request);
-        await respondWithAction(response, () => runtime.terminalInput(body.text ?? ''));
+        await respondWithAction(response, () => runtime.terminalInput(body.text ?? ''), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/terminal-output') {
+        security.requireAuthentication(request, routeKey);
         const body = await readBody(request);
-        await respondWithAction(response, () => runtime.terminalOutput(body.offset ?? 0));
+        await respondWithAction(response, () => runtime.terminalOutput(body.offset ?? 0), securityHeaders);
         return;
       }
 
       if (request.method === 'POST' && url.pathname === '/api/session/pause') {
-        await respondWithAction(response, () => runtime.pause());
+        security.requireController(request, 'pause');
+        await respondWithAction(response, () => runtime.pause(), securityHeaders);
         return;
       }
 
-      await serveStatic(response, url.pathname);
+      await serveStatic(response, url.pathname, securityHeaders);
     } catch (error) {
-      json(response, 500, { error: error.message });
+      const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+      json(response, statusCode, { error: error.message }, security.commonSecurityHeaders());
     }
   });
 
   const wsHub = createWebSocketHub(server);
+  server.__mycpuWebSocketGuard = (request) => security.assertWebSocketAllowed(request);
   const runtime = createDebugServerRuntime({ createSession, wsHub });
 
   await new Promise((resolve) => {

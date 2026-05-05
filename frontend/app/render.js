@@ -524,6 +524,55 @@ function renderAiTinyModelPanel(state) {
   `;
 }
 
+function renderAuthPanel(state) {
+  const auth = state.auth;
+  if (!auth.required) {
+    return `
+      <div class="auth-panel auth-panel--disabled">
+        <strong>Auth disabled</strong>
+        <span>当前实例未启用登录控制。</span>
+      </div>
+    `;
+  }
+
+  if (!auth.authenticated) {
+    return `
+      <form class="auth-panel auth-panel--login" id="auth-login-form">
+        <label>
+          <span>用户名</span>
+          <input id="auth-username" name="username" type="text" autocomplete="username" value="admin">
+        </label>
+        <label>
+          <span>密码</span>
+          <input id="auth-password" name="password" type="password" autocomplete="current-password">
+        </label>
+        <button type="submit" ${auth.loginPending ? 'disabled' : ''}>
+          ${auth.loginPending ? '登录中...' : '登录'}
+        </button>
+        ${auth.loginError ? `<div class="auth-panel__error">${escapeHtml(auth.loginError)}</div>` : ''}
+      </form>
+    `;
+  }
+
+  const controllerText = auth.controllerUsername
+    ? (auth.controllerSession ? '你正在控制当前会话。' : `${auth.controllerUsername} 正在控制当前会话。`)
+    : '当前没有控制者，首次写操作会自动获取控制权。';
+  return `
+    <div class="auth-panel auth-panel--active">
+      <div class="auth-panel__status">
+        <strong>${escapeHtml(auth.username ?? 'unknown')}</strong>
+        <span>${escapeHtml(auth.role ?? 'observer')}</span>
+        <em>${escapeHtml(`${auth.activeSessions}/${auth.sessionLimit}`)} sessions</em>
+      </div>
+      <div class="auth-panel__hint">${escapeHtml(controllerText)}</div>
+      <div class="auth-panel__actions">
+        <button id="release-control-button" ${auth.controllerSession ? '' : 'disabled'}>释放控制权</button>
+        <button id="logout-button">退出登录</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderDemoWorkspace(state) {
   const selected = selectedTestEntry(state);
   return `
@@ -570,6 +619,9 @@ export function renderApp(elements, state) {
   if (elements.demoWorkspace) {
     elements.demoWorkspace.innerHTML = renderDemoWorkspace(state);
   }
+  if (elements.authPanel) {
+    elements.authPanel.innerHTML = renderAuthPanel(state);
+  }
   elements.desktop.dataset.debugOpen = state.layout.debugPanelOpen ? 'true' : 'false';
   elements.desktop.dataset.terminalCollapsed = state.layout.terminalCollapsed ? 'true' : 'false';
   elements.debugInspector.dataset.open = state.layout.debugPanelOpen ? 'true' : 'false';
@@ -607,6 +659,9 @@ export function renderApp(elements, state) {
 }
 
 export function updateControls(elements, state) {
+  const requiresAuth = state.auth.required;
+  const canControl = !requiresAuth || (state.auth.authenticated && state.auth.canControl);
+  const canObserve = !requiresAuth || state.auth.authenticated;
   elements.testSelect.innerHTML = state.tests.map((item) => `
     <option value="${item.name}" ${item.name === state.selectedTest ? 'selected' : ''}>
       ${item.menuLabel ?? item.name}${item.hasDisk ? ' [disk]' : ''}
@@ -614,4 +669,13 @@ export function updateControls(elements, state) {
   `).join('');
   elements.backendSelect.value = state.backend;
   elements.statusBadge.textContent = state.runState;
+  elements.testSelect.disabled = !canObserve;
+  elements.backendSelect.disabled = !canObserve;
+  document.querySelector('#load-button').disabled = !canControl;
+  document.querySelector('#run-button').disabled = !canControl;
+  document.querySelector('#pause-button').disabled = !canControl;
+  document.querySelector('#reset-button').disabled = !canControl;
+  document.querySelector('#terminate-button').disabled = !canControl;
+  document.querySelector('#step-cycle-button').disabled = !canControl;
+  document.querySelector('#step-commit-button').disabled = !canControl;
 }

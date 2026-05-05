@@ -3,6 +3,7 @@ async function postJson(pathname, payload = {}) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
+    credentials: 'same-origin',
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -12,7 +13,7 @@ async function postJson(pathname, payload = {}) {
 }
 
 export async function listTests() {
-  const response = await fetch('/api/tests');
+  const response = await fetch('/api/tests', { credentials: 'same-origin' });
   if (!response.ok) {
     throw new Error('failed to list tests');
   }
@@ -20,11 +21,31 @@ export async function listTests() {
 }
 
 export async function listAiTinyModelTemplates() {
-  const response = await fetch('/api/ai/tiny-model/templates');
+  const response = await fetch('/api/ai/tiny-model/templates', { credentials: 'same-origin' });
   if (!response.ok) {
     throw new Error('failed to list AI tiny model templates');
   }
   return response.json();
+}
+
+export async function getAuthSession() {
+  const response = await fetch('/api/auth/session', { credentials: 'same-origin' });
+  if (!response.ok) {
+    throw new Error('failed to fetch auth session');
+  }
+  return response.json();
+}
+
+export async function login(username, password) {
+  return postJson('/api/auth/login', { username, password });
+}
+
+export async function logout() {
+  return postJson('/api/auth/logout');
+}
+
+export async function releaseControl() {
+  return postJson('/api/auth/release-control');
 }
 
 export async function runAiTinyModel(parameters) {

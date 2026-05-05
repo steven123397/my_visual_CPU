@@ -1,8 +1,12 @@
 import {
+  getAuthSession,
   listTests,
   listAiTinyModelTemplates,
+  login,
   runAiTinyModel,
   loadSession,
+  logout,
+  releaseControl,
   stepCycle,
   stepCommit,
   resetSession,
@@ -29,6 +33,9 @@ import {
   setAiTinyModelParameters,
   setAiTinyModelRunState,
   setAiTinyModelResult,
+  setAuthState,
+  setLoginError,
+  setLoginPending,
   setTerminalPendingInput,
   setTests,
   selectDemo,
@@ -58,7 +65,13 @@ const elements = {
   csrs: document.querySelector('#csrs-slot'),
   bus: document.querySelector('#bus-slot'),
   notice: document.querySelector('#notice'),
+  authPanel: document.querySelector('#auth-panel'),
 };
+let snapshotSocket = null;
+
+function shouldConnectRealtime() {
+  return !state.auth.required || state.auth.authenticated;
+}
 
 function paint() {
   updateControls(elements, state);
@@ -144,6 +157,96 @@ async function loadAiTinyModelTemplates() {
   paint();
 }
 
+async function refreshAuthState() {
+  const response = await getAuthSession();
+  setAuthState(state, response.auth);
+  if (response.auth?.authenticated) {
+    setLoginError(state, null);
+  } else {
+    setTests(state, [], {});
+    clearLoadedSession(state);
+  }
+  paint();
+}
+
+async function handleLogin(form) {
+  const formData = new FormData(form);
+  const username = String(formData.get('username') ?? '');
+  const password = String(formData.get('password') ?? '');
+  setLoginPending(state, true);
+  setLoginError(state, null);
+  paint();
+  try {
+    const response = await login(username, password);
+    setAuthState(state, response.auth);
+    setLoginPending(state, false);
+    setLoginError(state, null);
+    paint();
+    showNotice(`已登录 ${response.auth.username}。`, 'success');
+    await initDataAfterAuth();
+    connectRealtime();
+  } catch (error) {
+    setLoginPending(state, false);
+    setLoginError(state, error.message);
+    paint();
+    showNotice(error.message, 'error');
+  }
+}
+
+async function handleLogout() {
+  const response = await logout();
+  setAuthState(state, response.auth);
+  setTests(state, [], {});
+  clearLoadedSession(state);
+  paint();
+  showNotice('已退出登录。', 'success');
+  connectRealtime();
+}
+
+async function handleReleaseControl() {
+  const response = await releaseControl();
+  setAuthState(state, response.auth);
+  paint();
+  showNotice('已释放控制权。', 'success');
+}
+
+async function initDataAfterAuth() {
+  const testsResponse = await listTests();
+  setTests(state, testsResponse.tests, testsResponse.diagnostics);
+  paint();
+  await loadAiTinyModelTemplates();
+}
+
+function connectRealtime() {
+  snapshotSocket?.close?.();
+  snapshotSocket = null;
+  if (!shouldConnectRealtime()) {
+    return;
+  }
+  snapshotSocket = connectSnapshotSocket(
+    (snapshot) => {
+      pushSnapshot(state, snapshot);
+      state.runState = snapshot.summary?.halted ? 'halted' : state.runState;
+      paint();
+    },
+    (message) => showNotice(message, 'error'),
+    (terminal) => {
+      if (
+        !state.loadedSession &&
+        terminal?.reset === true &&
+        (terminal.text ?? '').length === 0 &&
+        (terminal.nextOffset ?? terminal.next_offset ?? 0) === 0
+      ) {
+        clearLoadedSession(state);
+        paint();
+        return;
+      }
+      mergeTerminal(terminal);
+      paint();
+    },
+  );
+}
+
 async function handleRunAiTinyModel() {
   setAiTinyModelRunState(state, 'running', null);
   paint();
@@ -175,11 +278,15 @@ const terminalInputPump = createTerminalInputPump({
 });
 
 async function init() {
-  const testsResponse = await listTests();
-  setTests(state, testsResponse.tests, testsResponse.diagnostics);
   paint();
-  await loadAiTinyModelTemplates();
-  showNotice('本地调试服务已连接，先选择测试并点击 Load。');
+  await refreshAuthState();
+  if (state.auth.required && !state.auth.authenticated) {
+    showNotice('请输入管理员账号登录后再操作调试服务。');
+  } else {
+    await initDataAfterAuth();
+    showNotice('本地调试服务已连接，先选择测试并点击 Load。');
+  }
+  connectRealtime();
 
   elements.testSelect.addEventListener('change', (event) => {
     state.selectedTest = event.target.value;
@@ -246,6 +353,15 @@ async function init() {
     if (needsPaint) {
       paint();
     }
+  });
+
+  document.addEventListener('submit', async (event) => {
+    const loginForm = event.target.closest?.('#auth-login-form');
+    if (!loginForm) {
+      return;
+    }
+    event.preventDefault();
+    await handleLogin(loginForm);
   });
 
   document.addEventListener('keydown', async (event) => {
@@ -383,28 +499,28 @@ async function init() {
     }
   });
 
-  connectSnapshotSocket(
-    (snapshot) => {
-      pushSnapshot(state, snapshot);
-      state.runState = snapshot.summary?.halted ? 'halted' : state.runState;
-      paint();
-    },
-    (message) => showNotice(message, 'error'),
-    (terminal) => {
-      if (
-        !state.loadedSession &&
-        terminal?.reset === true &&
-        (terminal.text ?? '').length === 0 &&
-        (terminal.nextOffset ?? terminal.next_offset ?? 0) === 0
-      ) {
-        clearLoadedSession(state);
-        paint();
-        return;
+  document.addEventListener('click', async (event) => {
+    const logoutButton = event.target.closest?.('#logout-button');
+    if (logoutButton) {
+      event.preventDefault();
+      try {
+        await handleLogout();
+      } catch (error) {
+        showNotice(error.message, 'error');
       }
-      mergeTerminal(terminal);
-      paint();
-    },
-  );
+      return;
+    }
+    const releaseButton = event.target.closest?.('#release-control-button');
+    if (releaseButton) {
+      event.preventDefault();
+      try {
+        await handleReleaseControl();
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+  });
+
 }
 
 init().catch((error) => {

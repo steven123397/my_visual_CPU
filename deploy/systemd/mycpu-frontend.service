@@ -1,0 +1,26 @@
+[Unit]
+Description=my_visual_CPU frontend debug server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/srv/apps/my_visual_CPU/repo
+EnvironmentFile=-/srv/apps/my_visual_CPU/repo/deploy/env/mycpu-frontend.env
+Environment=MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/srv/apps/my_visual_CPU/runtime-assets/linux/Image
+Environment=MYCPU_LINUX_PROTO_RUNTIME_IMAGE=/srv/apps/my_visual_CPU/runtime-assets/linux/Image
+Environment=SPIKE_PATH=/srv/apps/my_visual_CPU/runtime-assets/spike/bin/spike
+Environment=MYCPU_RUNTIME_TMPDIR=/srv/apps/my_visual_CPU/tmp
+ExecStart=/usr/bin/env bash -lc 'source "$HOME/.nvm/nvm.sh" && nvm use 20 >/dev/null && exec node frontend/server/debug_server.mjs --port="${MYCPU_FRONTEND_PORT:-4173}"'
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/srv/apps/my_visual_CPU/tmp /srv/apps/my_visual_CPU/logs
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

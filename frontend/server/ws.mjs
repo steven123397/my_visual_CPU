@@ -31,6 +31,17 @@ export function createWebSocketHub(server) {
       return;
     }
 
+    try {
+      const guard = server.__mycpuWebSocketGuard;
+      if (typeof guard === 'function') {
+        guard(request);
+      }
+    } catch {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
     const key = request.headers['sec-websocket-key'];
     if (!key) {
       socket.destroy();

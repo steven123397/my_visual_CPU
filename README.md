@@ -147,6 +147,13 @@ node frontend/server/debug_server.mjs
 
 前端支持：选择 demo → 切换后端 → Load / Run / Pause / Step → 查看 Pipeline / Registers / Terminal / 向量面板
 
+### 远端云服务器部署支架
+
+远端单机开发/验证环境的部署模板在 [deploy/README.md](deploy/README.md)。该支架固定
+`/srv/apps/my_visual_CPU/repo` checkout、`runtime-assets/` 运行资产目录、systemd
+本机 Node debug server、nginx 反代和最小 remote smoke。Linux `Image/rootfs/DTB`
+与 Spike 不进仓库；缺失时保持 fail-closed 诊断。
+
 ## `interactive_os` 交互演示
 
 `interactive_os` 是一条"浏览器终端 + guest 串口 monitor"的完整交互闭环。当前 monitor 支持的命令：

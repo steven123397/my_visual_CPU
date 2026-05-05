@@ -931,7 +931,7 @@ inline SpikeProcessResult run_spike_process(const SpikeRunnerOptions& options,
 
         std::vector<std::string> argv_storage;
         argv_storage.push_back(options.spike_path);
-        argv_storage.push_back("--isa=rv64im_zicsr_zicntr");
+        argv_storage.push_back("--isa=rv64imac_zicsr_zicntr");
         argv_storage.push_back("--pc=0x80001000");
         char memory_arg[64];
         std::snprintf(memory_arg,

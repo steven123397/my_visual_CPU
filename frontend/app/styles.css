@@ -156,7 +156,7 @@ body {
 
 .control-bar {
   display: grid;
-  grid-template-columns: minmax(280px, 1.4fr) minmax(300px, 1.5fr) minmax(220px, 1fr);
+  grid-template-columns: minmax(280px, 1.25fr) minmax(260px, 1fr) minmax(220px, 0.95fr) minmax(220px, 0.95fr);
   gap: 14px;
   align-items: stretch;
   padding: 18px;
@@ -200,18 +200,24 @@ body {
 }
 
 select,
-button {
+button,
+input {
   border: 1px solid rgba(24, 33, 39, 0.14);
   border-radius: 14px;
   font: inherit;
 }
 
-select {
+select,
+input {
   padding: 12px 14px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   background: rgba(255, 255, 255, 0.85);
+}
+
+input {
+  color: var(--ink);
 }
 
 .button-row {
@@ -220,6 +226,71 @@ select {
   gap: 10px;
   min-width: 0;
   align-items: end;
+}
+
+.control-group-auth .control-group__body {
+  display: grid;
+  align-content: start;
+}
+
+.auth-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.auth-panel--disabled,
+.auth-panel--active {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(24, 33, 39, 0.08);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.auth-panel--disabled strong,
+.auth-panel__status strong {
+  font-size: 16px;
+}
+
+.auth-panel--disabled span,
+.auth-panel__hint,
+.auth-panel__status span,
+.auth-panel__status em {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: normal;
+}
+
+.auth-panel--login {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.auth-panel--login button {
+  width: 100%;
+}
+
+.auth-panel__status {
+  display: grid;
+  gap: 4px;
+}
+
+.auth-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.auth-panel__actions button {
+  flex: 1 1 120px;
+}
+
+.auth-panel__error {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(188, 92, 45, 0.25);
+  background: rgba(188, 92, 45, 0.12);
+  color: #7d3615;
+  font-size: 13px;
 }
 
 .button-row-primary button:first-child,
