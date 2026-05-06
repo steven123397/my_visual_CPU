@@ -16,6 +16,7 @@ static void clear_insn(Insn* insn, uint32_t raw, uint8_t size) {
     insn->funct3 = 0;
     insn->rs1 = 0;
     insn->rs2 = 0;
+    insn->rs3 = 0;
     insn->funct7 = 0;
     insn->funct5 = 0;
     insn->aq = 0;
@@ -131,6 +132,7 @@ static void decode_standard(uint32_t raw, Insn* insn) {
     insn->funct3 = (raw >> 12) & 0x07;
     insn->rs1 = (raw >> 15) & 0x1F;
     insn->rs2 = (raw >> 20) & 0x1F;
+    insn->rs3 = (raw >> 27) & 0x1F;
     insn->funct7 = (raw >> 25) & 0x7F;
     insn->funct5 = (raw >> 27) & 0x1F;
     insn->aq = (raw >> 26) & 0x01;

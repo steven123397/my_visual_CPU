@@ -288,6 +288,157 @@
 - [ ] 评估 `fcsr`、异常标志、rounding mode、FS dirty state 的 guest 可见合同。
 - [ ] 评估 DTB `riscv,isa`、hwcap、用户态库能力探测之间的一致性。
 - [ ] 补 functional host / unit tests；必要时补 pipeline smoke。
+  当前已经固化 `fmv.d.x` / `fmv.x.d` / `fmv.d` / `fadd.d` / `fsub.d` / `fmul.d` /
+  `fcvt.d.w` / `fcvt.w.d` / `fcvt.l.d` / `fcvt.d.l` / `feq.d` / `fle.d` / `fneg.d`
+  以及 `fcsr` alias，且已有真实 Alpine BusyBox `awk` 基础浮点矩阵 opt-in smoke
+  （加法、条件比较、除法、`%d/%u/%x` 整数格式化、负数格式化、平方根）；当前又补上了
+  `fdiv.d 7.0 / 0.0` 的最小 `CSR_FFLAGS.DZ`、`fsqrt.d sqrt(-1.0)` 的最小
+  `CSR_FFLAGS.NV`、`fsqrt.d sqrt(2.0)` 的最小 `CSR_FFLAGS.NX` 以及
+  `fmul.d 1e308*1e308` / `1e-308*1e-308` 的最小 `CSR_FFLAGS.OF` / `CSR_FFLAGS.UF`
+  host / pipeline 回归，并确认真实 Alpine BusyBox `awk` opt-in smoke 已扩到
+  `sqrt(-1) -> nan`、`1e308*1e308 -> inf` 和 `1e-308*1e-308 == 0` 且未回退；当前还补上了
+  `hpmcounter3-31` / `mhpmcounter3-31` / `mhpmevent3-31` 的最小 host CSR 合同，以及
+  `hpmcounter3-31 -> mhpmcounter3-31` alias 一致性，并用真实 Alpine procfs smoke 与
+  `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view` 固化了
+  `mount -t proc proc /proc -> grep '^isa' /proc/cpuinfo -> rv64imac_zicntr_zicsr_zifencei_zihpm`；
+  当前还新增了 `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view`，
+  用真实 Alpine rootfs 上的 `od -An -tx8 -w16 /proc/self/auxv` 固化当前
+  `AT_HWCAP=0x1105` 的 guest-visible 视图；当前还新增了
+  `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view`，
+  用离线提取 rootfs 中 `/bin/busybox` + host `readelf` 固化
+  `double-float ABI` 与 `Tag_RISCV_arch: rv64...f...d...c...` 的真实外部用户态 ABI 事实；
+  当前又补充了一次离线静态指令盘点，确认外部 Alpine `/bin/busybox` 与
+  `/lib/ld-musl-riscv64.so.1` 仍会用到 `flt.d`、`fcvt.wu.d`、`fcvt.lu.d`、
+  `fcvt.d.wu`、`fcvt.d.lu`，
+  以及更远的 `fmadd.d/fmsub.d/fnmsub.d/fnmadd.d` 和一批单精度 `*.s` 路径；同轮也把
+  `flt.d`、`fcvt.wu.d`、`fcvt.lu.d`、`fcvt.d.wu`、`fcvt.d.lu` 的最小 shared semantics /
+  pipeline 合同接了回来；本轮又继续把这条静态面里的第一组三输入 double FMA
+  `fmadd.d` / `fmsub.d` / `fnmsub.d` 接回 shared semantics 与 pipeline，并补上
+  `decode.rs3` / `SemanticInputs.rs3v` 的最小通路和对应 host / pipeline smoke；同轮还把
+  `fsgnj.d` / `fsgnjn.d` / `fabs.d` alias 收成最小 double sign-injection 合同，并新增
+  `fld -> fadd.d` 的 pipeline float load-use smoke，逼出并补上 older 未提交浮点写在 ROB
+  中时的最小 consumer stall；本轮又把静态面里已经出现的第一对单精度 convert
+  `fcvt.d.s` / `fcvt.s.d` 接回 shared semantics 与 pipeline smoke，并把它们纳入
+  older FP pending 分类；随后又继续把 `fcvt.s.w` 接回 shared semantics，并修正
+  pipeline decode/hazard 对它的入口分类，确保 `fcvt.s.w -> fcvt.d.s` 这类静态 userland
+  链路会真正读取 GPR `rs1` 而不是误落到默认路径；本轮又继续把 `fcvt.w.s` 接回
+  shared semantics 与 pipeline 整数写回路径，先只覆盖 signed single-to-int32 这条最小
+  convert 路径；本轮又继续把 `fcvt.l.s` 接回 shared semantics 与 pipeline 整数写回路径，
+  先只覆盖 signed single-to-int64 这条最小 convert 路径；本轮又继续把 `fcvt.wu.s`
+  接回 shared semantics 与 pipeline 整数写回路径，先只覆盖 unsigned single-to-int32
+  这条最小 convert 路径；本轮又继续把 `fcvt.lu.s` 接回 shared semantics 与 pipeline
+  整数写回路径，先只覆盖 unsigned single-to-int64 这条最小 convert 路径；本轮又继续把 `fsgnj.s` 接回
+  shared semantics 与 pipeline smoke，先只覆盖单精度 sign-copy 这条最小路径；随后又继续把
+  `fsgnjn.s` 和 `fabs.s` alias 接回 shared semantics、FPR 源分类、older-FP pending 分类和
+  host / pipeline smoke，收掉单精度 sign-injection 的最小第二刀；本轮又继续补上
+  `fsgnjx.s` 和 `fneg.s` alias 的 host / pipeline 正向证据，把单精度 sign-injection 四条
+  最小合同收齐；本轮又继续把外部 `ld-musl` 静态面里高频出现的 `fmv.w.x / fmv.x.w`
+  接回 shared semantics、pipeline 入口分类和 host / pipeline smoke，收掉单精度 bit-move
+  family 的最小第一刀；本轮又继续把同一静态面里明确出现的 `feq.s / flt.s / fle.s`
+  接回 shared semantics、FPR 源分类和 host / pipeline smoke，收掉单精度 compare family
+  的最小第一刀；本轮又继续把 `fcvt.s.l` 接回 shared semantics、pipeline 入口分类和
+  host / pipeline smoke，并用 `1ULL << 40` 这类真实 64-bit 输入把它同 `fcvt.s.w`
+  显式区分开，收掉 single int64-to-float convert 的最小第一刀；随后又把 `fcvt.s.lu`
+  接回 shared semantics、pipeline 入口分类和 host / pipeline smoke，先只覆盖 unsigned
+  int64-to-float 这条最小 single convert 路径；随后又把 `fcvt.s.wu` 接回
+  shared semantics、pipeline 入口分类和 host / pipeline smoke，先只覆盖 unsigned
+  int32-to-float 这条最小 single convert 路径，并显式守住“读 GPR rs1、写 FPR rd”的
+  int-to-float 合同；本轮又继续把 `fsqrt.s`
+  的正常路径接回 shared semantics、FPR 源分类和 host / pipeline smoke，先只覆盖
+  `sqrt(2.25f) -> 1.5f` 这条最小 single sqrt 合同；随后又补上
+  `fsqrt.s sqrt(-1.0f) -> CSR_FFLAGS.NV` 与 `fsqrt.s sqrt(2.0f) -> CSR_FFLAGS.NX`
+  的 host / pipeline 正向证据，并确认它们都会保留 guest 可见 rounding-mode bits；随后又把
+  `fmul.s max*max -> CSR_FFLAGS.OF` 和 `fmul.s min*min -> CSR_FFLAGS.UF` 的
+  host / pipeline 正向证据补齐；随后又把
+  `fadd.s` / `fsub.s` / `fmul.s` / `fdiv.s` 接回 shared semantics、FPR 源分类、older-FP pending
+  分类和 host / pipeline smoke，先只覆盖普通有限值加减乘，以及 `fdiv.s`
+  的正常路径、divide-by-zero `CSR_FFLAGS.DZ`、`0.0f / 0.0f -> CSR_FFLAGS.NV`、
+  `1.0f / 3.0f -> CSR_FFLAGS.NX` 这组最小单精度除法异常路径；当前仍不把这扩写成
+  single FMA、整批 `.s` 异常标志矩阵或更完整 NaN 角落语义已经完成；随后又把
+  `fmadd.s` / `fmsub.s` / `fnmsub.s` / `fnmadd.s` 接回 shared semantics、FPR 源分类、
+  older-FP pending 分类和 host / pipeline smoke，先只覆盖普通有限 single 值
+  fused multiply-add/subtract 路径；随后又补上 `fmadd.s inf*0+1 -> CSR_FFLAGS.NV`
+  与 `fmadd.s 1*1+2^-25 -> CSR_FFLAGS.NX` 的 host / pipeline 正向证据，并确认它们都会保留
+  guest 可见 rounding-mode bits；随后又补上 `fmadd.s max*max+0 -> CSR_FFLAGS.OF`
+  与 `fmadd.s min*min+0 -> CSR_FFLAGS.UF` 的 host / pipeline 正向证据；随后又把同一套最小异常标志合同补到
+  `fmsub.s`：`fmsub.s inf*0-1 -> CSR_FFLAGS.NV`、`fmsub.s 1*1-2^-25 -> CSR_FFLAGS.NX`、
+  `fmsub.s max*max-0 -> CSR_FFLAGS.OF`、`fmsub.s min*min-0 -> CSR_FFLAGS.UF`
+  现在也都有 host / pipeline 正向证据，并同样保留 guest 可见 rounding-mode bits；随后又把同一套最小异常标志合同补到
+  `fnmsub.s`：`fnmsub.s -(inf*0)+1 -> CSR_FFLAGS.NV`、`fnmsub.s -(1*1)+2^-25 -> CSR_FFLAGS.NX`、
+  `fnmsub.s -(max*max)+0 -> CSR_FFLAGS.OF`、`fnmsub.s -(min*min)+0 -> CSR_FFLAGS.UF`
+  现在也都有 host / pipeline 正向证据，并同样保留 guest 可见 rounding-mode bits；随后又把同一套最小异常标志合同补到
+  `fnmadd.s`：`fnmadd.s -(inf*0)-(-1) -> CSR_FFLAGS.NV`、`fnmadd.s -(1*1)-(-2^-25) -> CSR_FFLAGS.NX`、
+  `fnmadd.s -(max*max)-(-0) -> CSR_FFLAGS.OF`、`fnmadd.s -(min*min)-(-0) -> CSR_FFLAGS.UF`
+  现在也都有 host / pipeline 正向证据，并同样保留 guest 可见 rounding-mode bits；当前仍不把这扩写成更完整 `.s` 异常标志矩阵、
+  NaN 角落语义或完整 single arithmetic 已完成；随后又把
+  `fclass.s` 接回 shared semantics 与 pipeline 整数写回路径，先只覆盖真实已验证的
+  quiet-NaN / 正 normal 分类；本轮又继续把 `fclass.d` 接回 shared semantics 与
+  pipeline 整数写回路径，先只覆盖真实已验证的 quiet-NaN / 正 normal double 分类；
+  本轮又继续把 `fmax.d / fmin.d` 接回 shared semantics 与 pipeline smoke，先只覆盖
+  普通有限 double 值的 max/min 选择路径；随后又把同一静态面里明确还缺的 `fnmadd.d`
+  接回 shared semantics、older-FP pending 分类和 host / pipeline smoke，把 double FMA
+  第一组四条三输入路径补齐；随后又补上 `fmadd.d inf*0+1 -> CSR_FFLAGS.NV`
+  与 `fmadd.d 1*1+2^-54 -> CSR_FFLAGS.NX` 的 host / pipeline 正向证据，并确认它们都会保留
+  guest 可见 rounding-mode bits；随后又补上 `fmadd.d max*max+0 -> CSR_FFLAGS.OF`
+  与 `fmadd.d min*min+0 -> CSR_FFLAGS.UF` 的 host / pipeline 正向证据；随后又把同一套最小异常标志合同补到
+  `fmsub.d`：`fmsub.d inf*0-1 -> CSR_FFLAGS.NV`、`fmsub.d 1*1-2^-54 -> CSR_FFLAGS.NX`、
+  `fmsub.d max*max-0 -> CSR_FFLAGS.OF`、`fmsub.d min*min-0 -> CSR_FFLAGS.UF`
+  现在也都有 host / pipeline 正向证据，并同样保留 guest 可见 rounding-mode bits；随后又把同一套最小异常标志合同补到
+  `fnmsub.d`：`fnmsub.d -(inf*0)+1 -> CSR_FFLAGS.NV`、`fnmsub.d -(1*1)+2^-54 -> CSR_FFLAGS.NX`、
+  `fnmsub.d -(max*max)+0 -> CSR_FFLAGS.OF`、`fnmsub.d -(min*min)+0 -> CSR_FFLAGS.UF`
+  现在也都有 host / pipeline 正向证据，并同样保留 guest 可见 rounding-mode bits；随后又把同一套最小异常标志合同补到
+  `fnmadd.d`：`fnmadd.d -(inf*0)-(-1) -> CSR_FFLAGS.NV`、`fnmadd.d -(1*1)-(-2^-54) -> CSR_FFLAGS.NX`、
+  `fnmadd.d -(max*max)-(-0) -> CSR_FFLAGS.OF`、`fnmadd.d -(min*min)-(-0) -> CSR_FFLAGS.UF`
+  现在也都有 host / pipeline 正向证据，并同样保留 guest 可见 rounding-mode bits；本轮又继续把同一静态面里的 `fmax.s / fmin.s` 接回
+  shared semantics、older-FP pending 分类和 host / pipeline smoke，先只覆盖普通有限
+  single 值的 min/max 选择路径；本轮又继续把 compare/minmax 的最小 NaN/invalid flag
+  合同接回 shared semantics 与 pipeline：`feq.s` 在 quiet-NaN 下返回 unordered `0`
+  且不置 `NV`，在 signaling-NaN 下返回 unordered `0` 且把 `CSR_FFLAGS.NV` 写回；
+  `flt.s` / `fle.s` 在 NaN 下返回 unordered `0` 且把 `CSR_FFLAGS.NV` 写回；
+  `fmin.s` / `fmax.s` 在单侧 NaN 下返回非 NaN 操作数、在双侧 quiet-NaN 下返回 canonical NaN，
+  并在 signaling-NaN 路径上把 `CSR_FFLAGS.NV` 写回；随后又把同一套最小合同补到
+  double compare/minmax：`feq.d` 在 quiet-NaN 下返回 unordered `0` 且不置 `NV`，
+  在 signaling-NaN 下返回 unordered `0` 且把 `CSR_FFLAGS.NV` 写回；`flt.d` /
+  `fle.d` 在 NaN 下返回 unordered `0` 且把 `CSR_FFLAGS.NV` 写回；`fmin.d` /
+  `fmax.d` 在单侧 NaN 下返回非 NaN 操作数、在双侧 quiet-NaN 下返回 canonical
+  double NaN，并在 signaling-NaN 路径上把 `CSR_FFLAGS.NV` 写回；随后又把
+  `fcvt.w.s` / `fcvt.w.d` 的 `rm=111(dyn)` 路径接回 shared semantics 与 pipeline：
+  现在会真实读取 guest `frm`，并在 `frm=RUP` 下的 `7.5f -> 8`、`frm=RDN`
+  下的 `-3.5 -> -4` 这类可区分的非精确 float-to-int convert 路径上把
+  `CSR_FFLAGS.NX` 写回到 guest 可见 `fcsr` alias，同时保留 rounding-mode
+  bits；随后又把同一套动态 rounding / `fcsr` 合同补到 `fcvt.l.s` / `fcvt.l.d`：
+  `rm=111(dyn)` 现在在 `frm=RUP` / `frm=RDN` 下也会真实读取 guest `frm`，并用
+  `7.5f -> 8`、`-3.5 -> -4` 这类可区分样例把 `CSR_FFLAGS.NX` 写回到 guest 可见
+  `fcsr` alias，同时保留 rounding-mode bits；随后又把同一条动态 rounding 合同补到
+  `fcvt.lu.s` / `fcvt.lu.d`：`rm=111(dyn)` 现在在 `frm=RMM` 下也会按
+  round-to-nearest, ties-to-max-magnitude 处理 `3.5f -> 4` 与 `3.25 -> 3`，
+  并把 `CSR_FFLAGS.NX` 写回到 guest 可见 `fcsr` alias，同时保留 rounding-mode
+  bits；本轮又继续把同一条 float-to-int helper 的 `RMM` 第一刀接回 `fcvt.wu.s` /
+  `fcvt.wu.d`：`rm=111(dyn)` 现在在 `frm=RMM` 下会按 round-to-nearest,
+  ties-to-max-magnitude 处理 `3.25f` / `3.25 -> 3` 与 `3.5f` / `3.5 -> 4`，
+  并把 `CSR_FFLAGS.NX` 写回到 guest 可见 `fcsr` alias，同时保留 rounding-mode
+  bits；本轮又继续把 `fcvt.wu.s` / `fcvt.wu.d` 的 RV64 结果形状合同收回到
+  shared semantics 与 pipeline：当前 `WU` family 会把 32-bit unsigned 结果按 RV64
+  `X` 寄存器写回规则做符号扩展，因此 `4294967295 -> 0xffffffffffffffff`；同时也补了
+  `.s/.d` 路径上 `qNaN/-1.0 -> 0` 与 `+inf/qNaN -> UINT32_MAX` 的最小 invalid clipping 路径，并确认它只置
+  `CSR_FFLAGS.NV`、不额外置 `NX`；随后又把同一条 invalid clipping 合同补到
+  `fcvt.lu.s` / `fcvt.lu.d`：`qNaN/-1.0 -> 0`、`+inf/qNaN -> UINT64_MAX` 现在都有 host /
+  pipeline 正向证据，并同样只置 `NV`、不额外置 `NX`；本轮再把 `fcvt.w.s` 的
+  signed int32 invalid clipping 证据补齐：`+inf/qNaN -> INT32_MAX`、`-inf -> INT32_MIN`
+  现在也都有 host / pipeline 正向证据，并同样只置 `NV`、不额外置 `NX`；随后又把
+  同一条 signed invalid clipping 合同补到 `fcvt.l.s` / `fcvt.l.d`：
+  `+inf/qNaN -> INT64_MAX`、`-inf -> INT64_MIN` 现在也都有 host / pipeline 正向证据，
+  并同样只置 `NV`、不额外置 `NX`；当前仍不把这扩写成完整 `.s/.d -> {w,wu,l,lu}`
+  越界 / NaN / 饱和结果矩阵已经完成；
+  当前仍不把 compare/minmax 这部分扩写成完整 IEEE754 角落语义已经完成；
+  此外，当前 `AT_HWCAP=0x1105` 的根因也已明确：Linux 只是按 DT `riscv,isa` 的
+  单字母集合折算出 `IMAC`，并没有独立广告 F/D；
+  当前还把最小 `mstatus/sstatus.FS` / `SD` 合同接回 host / pipeline 路径，浮点提交后会置
+  `FS=DIRTY`，并已有 `atomic_semantics_smoke`、`instruction_semantics_smoke`、
+  `pipeline_backend_smoke` 回归；但真实 Alpine `BusyBox awk` runtime 的 `FS state`
+  采样仍会撞到 Linux trap / interrupt 路径把 `FS` 整理回 `INITIAL/CLEAN`，所以
+  real-rootfs `FS state` guardrail 还没有稳定正向证据，当前不保留为自动化 opt-in target，
+  后续仍需继续评估更完整的 F/D arithmetic、异常和 `FS state` 合同。
 - [ ] 不因 host unit 通过就声明发行版支持，必须回到真实 rootfs opt-in smoke 验证。
 - [ ] 文档明确已支持、未支持、刻意不广告的 ISA 能力。
 - [ ] 阶段完成后运行通用验证基线。

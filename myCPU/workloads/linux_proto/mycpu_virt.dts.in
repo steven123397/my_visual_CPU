@@ -27,7 +27,7 @@
             device_type = "cpu";
             reg = <0>;
             status = "okay";
-            riscv,isa = "rv64ima_zicsr_zifencei";
+            riscv,isa = "@BOARD_LINUX_RISCV_ISA@";
             mmu-type = "riscv,sv39";
 
             cpu0_intc: interrupt-controller {

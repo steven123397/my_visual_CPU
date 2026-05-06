@@ -69,6 +69,10 @@ public:
     void mark_ready(RobIndex index, const RobReady& ready);
     std::optional<RobEntry> peek_head() const;
     bool has_older_vector_pending(uint64_t sequence_id) const;
+    bool has_older_fp_pending(uint64_t sequence_id,
+                              uint8_t rs1,
+                              uint8_t rs2,
+                              uint8_t rs3) const;
     OlderVectorDependency inspect_older_vector_dependencies(uint64_t sequence_id,
                                                             uint8_t vs1,
                                                             uint8_t vs2) const;

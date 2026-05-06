@@ -1,5 +1,6 @@
 #include "pipeline_hazards.h"
 
+#include "floating_ops.h"
 #include "memory_ops.h"
 
 namespace {
@@ -31,6 +32,14 @@ bool forward_operand_from_slot(const StageSlot& slot, uint32_t phys, uint64_t& v
 namespace pipeline_hazards {
 
 bool reads_rs1(const Insn& insn) {
+    if (is_fmv_d_x(insn) || is_fmv_w_x(insn) || is_fcvt_d_w(insn) || is_fcvt_d_wu(insn) || is_fcvt_d_l(insn) || is_fcvt_d_lu(insn) ||
+        is_fcvt_s_w(insn) || is_fcvt_s_wu(insn) || is_fcvt_s_l(insn) || is_fcvt_s_lu(insn)) {
+        return true;
+    }
+    if (is_fcvt_w_d(insn) || is_fcvt_wu_d(insn) || is_fcvt_l_d(insn) || is_fcvt_lu_d(insn) || is_fcvt_w_s(insn) ||
+        is_fcvt_wu_s(insn) || is_fcvt_l_s(insn) || is_fcvt_lu_s(insn)) {
+        return false;
+    }
     switch (insn.opcode) {
     case 0x13:
     case 0x1B:
@@ -61,6 +70,15 @@ bool reads_rs2(const Insn& insn) {
     if (is_standard_fp_store(insn)) {
         return false;
     }
+    if (is_fadd_s(insn) || is_fsub_s(insn) || is_fmul_s(insn) || is_fdiv_s(insn) ||
+        is_fadd_d(insn) || is_fsub_d(insn) || is_fmul_d(insn) || is_fdiv_d(insn) ||
+        is_fmax_s(insn) || is_fmin_s(insn) || is_fmax_d(insn) || is_fmin_d(insn) ||
+        is_fsgnj_d(insn) || is_fsgnjn_d(insn) || is_fsgnjx_d(insn) ||
+        is_fsgnj_s(insn) || is_fsgnjn_s(insn) || is_fsgnjx_s(insn) ||
+        is_feq_s(insn) || is_flt_s(insn) || is_fle_s(insn) ||
+        is_feq_d(insn) || is_flt_d(insn) || is_fle_d(insn)) {
+        return false;
+    }
     switch (insn.opcode) {
     case 0x33:
     case 0x3B:
@@ -75,6 +93,13 @@ bool reads_rs2(const Insn& insn) {
 bool writes_rd(const Insn& insn) {
     if (is_standard_fp_load(insn)) {
         return false;
+    }
+    if ((is_fmv_x_d(insn) || is_fmv_x_w(insn) || is_fcvt_w_d(insn) || is_fcvt_wu_d(insn) || is_fcvt_l_d(insn) || is_fcvt_lu_d(insn) ||
+         is_fcvt_w_s(insn) || is_fcvt_wu_s(insn) || is_fcvt_l_s(insn) || is_fcvt_lu_s(insn) ||
+         is_feq_s(insn) || is_flt_s(insn) || is_fle_s(insn) ||
+         is_feq_d(insn) || is_flt_d(insn) || is_fle_d(insn) || is_fclass_s(insn) || is_fclass_d(insn)) &&
+        insn.rd != 0) {
+        return true;
     }
     switch (insn.opcode) {
     case 0x03:

@@ -3,12 +3,14 @@ CXX      = g++
 CFLAGS   = -O2 -Wall -Wextra -g -std=c11
 CXXFLAGS = -O2 -Wall -Wextra -g -std=c++17
 C_SRCS   = src/memory.c src/decode.c
-CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/arch/vector_state.cpp src/debug/debug_session.cpp src/debug/debug_protocol.cpp src/debug/debug_protocol_command.cpp src/debug/debug_protocol_response.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/vector_ops.cpp src/exec/branch_predictor.cpp src/exec/execution_profile.cpp src/exec/dbt_block_plan.cpp src/exec/dbt_ir.cpp src/exec/dbt_ir_eval.cpp src/exec/dbt_ir_lowering.cpp src/exec/dbt_block_cache.cpp src/exec/dbt_executable_cache.cpp src/exec/dbt_executable_memory.cpp src/exec/dbt_helper_execution_bridge.cpp src/exec/dbt_helper_replay.cpp src/exec/dbt_host_emitter.cpp src/exec/dbt_jit_engine.cpp src/exec/dbt_reference_fallback.cpp src/exec/dbt_reference_fallback_execution.cpp src/exec/dbt_runtime_dispatch.cpp src/exec/dbt_runtime_harness.cpp src/exec/dbt_runtime_invalidation.cpp src/exec/dbt_translator.cpp src/exec/interpreter_dbt_prototype.cpp src/exec/pipeline_sequence.cpp src/exec/pipeline_commit_boundary.cpp src/exec/pipeline_core_state.cpp src/exec/pipeline_hazards.cpp src/exec/physical_register_file.cpp src/exec/rename_map.cpp src/exec/reorder_buffer.cpp src/exec/load_store_queue.cpp src/exec/functional_backend.cpp src/exec/pipeline_backend.cpp src/exec/pipeline_backend_cycle.cpp src/exec/pipeline_backend_execute.cpp src/exec/pipeline_backend_frontend.cpp src/isa/atomic_contract.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/dma_transaction.cpp src/mem/simple_l1_cache.cpp src/mem/address_space.cpp src/devices/ai_graph_package.cpp src/devices/tensor_golden_ops.cpp src/devices/ai_submission_queue.cpp src/devices/ai_scratchpad.cpp src/devices/ai_dma_engine.cpp src/devices/ai_graph_scheduler.cpp src/devices/ai_compute_gemm.cpp src/devices/ai_compute_conv.cpp src/devices/ai_compute_elementwise.cpp src/devices/ai_accelerator.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/devices/virtqueue.cpp src/devices/virtio_device.cpp src/devices/virtio_blk.cpp src/devices/virtio_mmio.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
+CPP_SRCS = src/cpu.cpp src/trap.cpp src/main.cpp src/arch/core_state.cpp src/arch/csr_file.cpp src/arch/vector_state.cpp src/debug/debug_session.cpp src/debug/debug_protocol.cpp src/debug/debug_protocol_command.cpp src/debug/debug_protocol_response.cpp src/exec/system_ops.cpp src/exec/memory_ops.cpp src/exec/control_flow_ops.cpp src/exec/integer_ops.cpp src/exec/floating_ops.cpp src/exec/vector_ops.cpp src/exec/branch_predictor.cpp src/exec/execution_profile.cpp src/exec/dbt_block_plan.cpp src/exec/dbt_ir.cpp src/exec/dbt_ir_eval.cpp src/exec/dbt_ir_lowering.cpp src/exec/dbt_block_cache.cpp src/exec/dbt_executable_cache.cpp src/exec/dbt_executable_memory.cpp src/exec/dbt_helper_execution_bridge.cpp src/exec/dbt_helper_replay.cpp src/exec/dbt_host_emitter.cpp src/exec/dbt_jit_engine.cpp src/exec/dbt_reference_fallback.cpp src/exec/dbt_reference_fallback_execution.cpp src/exec/dbt_runtime_dispatch.cpp src/exec/dbt_runtime_harness.cpp src/exec/dbt_runtime_invalidation.cpp src/exec/dbt_translator.cpp src/exec/interpreter_dbt_prototype.cpp src/exec/pipeline_sequence.cpp src/exec/pipeline_commit_boundary.cpp src/exec/pipeline_core_state.cpp src/exec/pipeline_hazards.cpp src/exec/physical_register_file.cpp src/exec/rename_map.cpp src/exec/reorder_buffer.cpp src/exec/load_store_queue.cpp src/exec/functional_backend.cpp src/exec/pipeline_backend.cpp src/exec/pipeline_backend_cycle.cpp src/exec/pipeline_backend_execute.cpp src/exec/pipeline_backend_frontend.cpp src/isa/atomic_contract.cpp src/isa/execution_context.cpp src/isa/instruction_semantics.cpp src/mem/ram.cpp src/mem/bus.cpp src/mem/dma_transaction.cpp src/mem/simple_l1_cache.cpp src/mem/address_space.cpp src/devices/ai_graph_package.cpp src/devices/tensor_golden_ops.cpp src/devices/ai_submission_queue.cpp src/devices/ai_scratchpad.cpp src/devices/ai_dma_engine.cpp src/devices/ai_graph_scheduler.cpp src/devices/ai_compute_gemm.cpp src/devices/ai_compute_conv.cpp src/devices/ai_compute_elementwise.cpp src/devices/ai_accelerator.cpp src/devices/uart16550.cpp src/devices/clint.cpp src/devices/plic.cpp src/devices/simple_storage.cpp src/devices/virtqueue.cpp src/devices/virtio_device.cpp src/devices/virtio_blk.cpp src/devices/virtio_mmio.cpp src/loader/elf_loader.cpp src/loader/binary_loader.cpp src/platform/machine.cpp
 OBJS     = $(C_SRCS:.c=.o) $(CPP_SRCS:.cpp=.o)
 CORE_OBJS = $(filter-out src/main.o,$(OBJS))
 TARGET   = mycpu
 HOST_TEST_BINS = tests/host/instruction_semantics_smoke tests/host/rvc_semantics_smoke tests/host/atomic_semantics_smoke tests/host/address_space_faults_smoke tests/host/predictor_smoke tests/host/pipeline_backend_smoke tests/host/pipeline_core_state_smoke tests/host/pipeline_forwarding_smoke tests/host/pipeline_commit_trace_smoke tests/host/pipeline_rename_commit_smoke tests/host/pipeline_speculation_contracts_smoke tests/host/backend_differential_smoke tests/host/debug_cli_smoke tests/host/debug_protocol_command_smoke tests/host/execution_profile_smoke tests/host/dbt_block_plan_smoke tests/host/dbt_translator_smoke tests/host/dbt_ir_eval_smoke tests/host/dbt_ir_lowering_smoke tests/host/dbt_block_cache_smoke tests/host/dbt_executable_cache_smoke tests/host/dbt_executable_memory_smoke tests/host/dbt_helper_execution_bridge_smoke tests/host/dbt_helper_replay_smoke tests/host/dbt_host_emitter_smoke tests/host/dbt_jit_engine_smoke tests/host/dbt_reference_fallback_smoke tests/host/dbt_reference_fallback_execution_smoke tests/host/dbt_runtime_dispatch_smoke tests/host/dbt_runtime_harness_smoke tests/host/dbt_runtime_invalidation_smoke tests/host/interpreter_dbt_prototype_smoke tests/host/interactive_terminal_smoke tests/host/physical_register_file_smoke tests/host/rename_map_smoke tests/host/reorder_buffer_smoke tests/host/load_store_queue_smoke tests/host/vector_vlite_smoke tests/host/vector_backend_smoke tests/host/vector_operator_smoke tests/host/vector_cnn_smoke tests/host/vector_pipeline_smoke tests/host/virtio_blk_smoke tests/host/xv6_boot_smoke tests/host/xv6_shell_smoke tests/host/ai_tensor_golden_ops_smoke tests/host/ai_accelerator_submit_smoke tests/host/ai_accelerator_dma_smoke tests/host/ai_accelerator_cnn_smoke tests/host/ai_accelerator_gemm_smoke tests/host/ai_accelerator_profile_smoke tests/host/ai_accel_guest_smoke
 INDEPENDENT_HOST_TEST_BINS = tests/host/spike_differential_smoke
+HOST_TEST_SPLIT_BINS = tests/host/instruction_semantics_smoke_fp_compare_convert tests/host/instruction_semantics_smoke_fp_fma_flags tests/host/pipeline_backend_smoke_fp_arith_fma tests/host/pipeline_backend_smoke_fp_convert_tail
+HOST_TEST_BINS += $(HOST_TEST_SPLIT_BINS)
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults mmio_access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control csr_illegal_matrix counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_mprv sv39_pagewalk_contracts sv39_exec_privilege sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 ASM_DEPS  = $(ASM_ELFS:.elf=.d)
@@ -350,6 +352,7 @@ $(LINUX_PROTO_GENERATED_DTS): workloads/linux_proto/mycpu_virt.dts.in $(wildcard
 		-e 's|@BOARD_LINUX_INITRD_ADDR@|$(BOARD_LINUX_INITRD_ADDR)|g' \
 		-e "s|@BOARD_LINUX_INITRD_END@|$$initrd_end|g" \
 		-e 's|@BOARD_LINUX_TIMEBASE_FREQUENCY@|$(BOARD_LINUX_TIMEBASE_FREQUENCY)|g' \
+		-e 's|@BOARD_LINUX_RISCV_ISA@|$(BOARD_LINUX_RISCV_ISA)|g' \
 		-e 's|@BOARD_RAM_BASE@|$(BOARD_RAM_BASE)|g' \
 		-e 's|@BOARD_RAM_SIZE@|$(BOARD_RAM_SIZE)|g' \
 		-e 's|@BOARD_UART_BASE@|$(BOARD_UART_BASE)|g' \
@@ -452,19 +455,39 @@ test-unit-%: FORCE tests/unit/%
 	fi; \
 	printf '%s\n' "$$output"
 
-test-host-%: FORCE tests/host/%
-	@echo "=== host:$* ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/$* 2>&1)"; \
+define RUN_HOST_TEST_BINARY
+	@echo "=== host:$(1) ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/$(1) 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
-		echo "Host test timed out: $*" >&2; \
-		exit 1; \
+		echo "Host test timed out: $(1)" >&2; \
+	exit 1; \
 	fi; \
 	if [ $$status -ne 0 ]; then \
 		printf '%s\n' "$$output" >&2; \
 		exit $$status; \
 	fi; \
 	printf '%s\n' "$$output"
+endef
+
+test-host-%: FORCE tests/host/%
+	$(call RUN_HOST_TEST_BINARY,$*)
+
+test-host-instruction_semantics_smoke: FORCE tests/host/instruction_semantics_smoke tests/host/instruction_semantics_smoke_fp_compare_convert tests/host/instruction_semantics_smoke_fp_fma_flags
+	@$(MAKE) --no-print-directory test-host-instruction_semantics_smoke-core
+	@$(MAKE) --no-print-directory test-host-instruction_semantics_smoke_fp_compare_convert
+	@$(MAKE) --no-print-directory test-host-instruction_semantics_smoke_fp_fma_flags
+
+test-host-instruction_semantics_smoke-core: FORCE tests/host/instruction_semantics_smoke
+	$(call RUN_HOST_TEST_BINARY,instruction_semantics_smoke)
+
+test-host-pipeline_backend_smoke: FORCE tests/host/pipeline_backend_smoke tests/host/pipeline_backend_smoke_fp_arith_fma tests/host/pipeline_backend_smoke_fp_convert_tail
+	@$(MAKE) --no-print-directory test-host-pipeline_backend_smoke-core
+	@$(MAKE) --no-print-directory test-host-pipeline_backend_smoke_fp_arith_fma
+	@$(MAKE) --no-print-directory test-host-pipeline_backend_smoke_fp_convert_tail
+
+test-host-pipeline_backend_smoke-core: FORCE tests/host/pipeline_backend_smoke
+	$(call RUN_HOST_TEST_BINARY,pipeline_backend_smoke)
 
 test-host-vector_vlite_smoke: FORCE tests/host/vector_vlite_smoke
 	@echo "=== host:vector_vlite_smoke ==="; \
@@ -725,6 +748,92 @@ test-host-run_debug_cli_probe_linux_distribution_curated_matrix: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_matrix ==="
 	@$(MAKE) test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell
 	@$(MAKE) test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell
+
+test-host-run_debug_cli_probe_linux_distribution_curated_alpine_isa_advertisement: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_isa_advertisement ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_IMAGE)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_boot_log_reports_compressed_isa 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_awk_fp: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_busybox_awk_fp ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_IMAGE)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_busybox_awk_fp_matrix 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_IMAGE)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_proc_cpuinfo_isa_view 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_IMAGE)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_auxv_hwcap_view 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_curated_alpine_busybox_userland_abi_view 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
 
 build-workload: FORCE $(WORKLOAD_BUILD_DEPS)
 	$(WORKLOAD_BUILD_COMMAND)

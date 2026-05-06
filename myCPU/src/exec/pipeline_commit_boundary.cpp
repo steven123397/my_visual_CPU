@@ -26,6 +26,11 @@ bool access_crosses_page(uint64_t addr, int size) {
     return page_offset + static_cast<uint64_t>(size) > kPageSize;
 }
 
+void mark_floating_state_dirty(CPU& cpu) {
+    const uint64_t mstatus = cpu.csr().read(CSR_MSTATUS, cpu.core());
+    cpu.csr().write(CSR_MSTATUS, (mstatus & ~MSTATUS_FS_MASK) | MSTATUS_FS_DIRTY, cpu.core());
+}
+
 }  // namespace
 
 CommitBoundaryResult apply_commit_boundary(CPU& cpu,
@@ -124,6 +129,9 @@ CommitBoundaryResult apply_commit_boundary(CPU& cpu,
     }
     if (effects.fp_write.enable) {
         cpu.core().write_fpr(effects.fp_write.rd, effects.fp_write.value);
+    }
+    if (effects.floating_state_touched) {
+        mark_floating_state_dirty(cpu);
     }
     if (effects.control.flush_tlb) {
         cpu.address_space().flush_tlb();

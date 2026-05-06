@@ -105,6 +105,7 @@ InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v,
         effects.mem.kind = MemoryRequest::Kind::Load;
         effects.mem.target = MemoryRequest::Target::Float;
         effects.mem.rd = insn.rd;
+        effects.floating_state_touched = true;
         switch (insn.funct3) {
         case 2:
             effects.mem.size = 4;
@@ -142,6 +143,7 @@ InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v,
         effects.mem.store_value = rs2v;
         effects.mem.commit_at_boundary = true;
         effects.mem.non_speculative = true;
+        effects.floating_state_touched = true;
         switch (insn.funct3) {
         case 2:
             effects.mem.size = 4;

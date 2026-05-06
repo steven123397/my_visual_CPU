@@ -26,6 +26,12 @@ constexpr uint32_t kOpcodeSystem = 0x73U;
 constexpr uint32_t kOpcodeStore = 0x23U;
 constexpr uint32_t kOpcodeAmo = 0x2fU;
 constexpr uint32_t kWfi = 0x10500073U;
+constexpr uint32_t CSR_HPMCOUNTER3 = 0xC03U;
+constexpr uint32_t CSR_MHPMCOUNTER3 = 0xB03U;
+constexpr uint32_t CSR_MHPMEVENT3 = 0x323U;
+constexpr uint64_t kMstatusFsInitial = 0x1ULL << 12;
+constexpr uint64_t kMstatusFsDirty = 0x3ULL << 12;
+constexpr uint64_t kMstatusSd = 1ULL << 63;
 
 constexpr uint32_t encode_amo(uint32_t funct5,
                               bool aq,
@@ -270,6 +276,100 @@ bool test_misa_mhartid_and_wfi() {
                   "wfi should retire as a legal hint in machine mode");
 }
 
+bool test_fcsr_frm_aliases() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    const uint32_t kCsrrA0Frm = 0x00202573U;   // frrm a0
+    const uint32_t kCsrrA1Fcsr = 0x003025f3U;  // frcsr a1
+    const uint32_t kCsrwFrmA2 = 0x00261573U;   // fsrm a0? actually csrrw a0, frm, a2 shape not needed for this path
+    (void)kCsrwFrmA2;
+
+    cpu.csr().write(CSR_FRM, 3, cpu.core());
+    cpu.csr().write(CSR_FFLAGS, 0x1b, cpu.core());
+
+    const uint32_t program[] = {
+        kCsrrA0Frm,
+        kCsrrA1Fcsr,
+        kWfi,
+    };
+    write_program(ram, program, sizeof(program) / sizeof(program[0]));
+
+    cpu_step(cpu, bus);
+    cpu_step(cpu, bus);
+    cpu_step(cpu, bus);
+
+    return expect(cpu.core().read_gpr(10) == 3,
+                  "frrm should read the current rounding mode") &&
+           expect(cpu.core().read_gpr(11) == ((3ULL << 5) | 0x1bULL),
+                  "frcsr should read the combined fcsr alias value") &&
+           expect(cpu.csr().read(CSR_FRM, cpu.core()) == 3,
+                  "frm alias should preserve the programmed rounding mode") &&
+           expect(cpu.csr().read(CSR_FFLAGS, cpu.core()) == 0x1b,
+                  "fflags alias should preserve the programmed exception flags");
+}
+
+bool test_hpm_counter_aliases() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    cpu.csr().write(CSR_MHPMCOUNTER3, 0x1234ULL, cpu.core());
+    cpu.csr().write(CSR_MHPMEVENT3, 0x55aaULL, cpu.core());
+
+    const uint32_t program[] = {
+        encode_csrr(5, CSR_HPMCOUNTER3),
+        encode_csrr(6, CSR_MHPMCOUNTER3),
+        kWfi,
+    };
+    write_program(ram, program, sizeof(program) / sizeof(program[0]));
+
+    cpu_step(cpu, bus);
+    cpu_step(cpu, bus);
+    cpu_step(cpu, bus);
+
+    return expect(cpu.core().read_gpr(5) == 0x1234ULL,
+                  "hpmcounter3 should mirror mhpmcounter3 rather than trap or diverge from the machine counter value") &&
+           expect(cpu.core().read_gpr(6) == 0x1234ULL,
+                  "mhpmcounter3 should preserve the programmed machine counter value") &&
+           expect(cpu.csr().read(CSR_MHPMEVENT3, cpu.core()) == 0x55aaULL,
+                  "mhpmevent3 should preserve the programmed event selector value") &&
+           expect(cpu.core().pc() == kEntry + 12,
+                  "hpmcounter3 aliases should not trap or block forward progress");
+}
+
+bool test_mstatus_sstatus_fs_aliases() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    cpu.csr().write(CSR_MSTATUS, kMstatusFsInitial, cpu.core());
+
+    const uint32_t program[] = {
+        encode_csrr(5, CSR_SSTATUS),
+        encode_csrr(6, CSR_MSTATUS),
+        kWfi,
+    };
+    write_program(ram, program, sizeof(program) / sizeof(program[0]));
+
+    cpu_step(cpu, bus);
+    cpu_step(cpu, bus);
+    cpu_step(cpu, bus);
+
+    return expect((cpu.core().read_gpr(5) & kMstatusFsInitial) == kMstatusFsInitial,
+                  "sstatus should expose the FS field alias from mstatus") &&
+           expect((cpu.core().read_gpr(6) & kMstatusFsInitial) == kMstatusFsInitial,
+                  "mstatus should preserve the programmed FS field") &&
+           expect((cpu.core().read_gpr(5) & kMstatusSd) == 0,
+                  "sstatus should not raise SD when FS is only initial") &&
+           expect((cpu.core().read_gpr(6) & kMstatusSd) == 0,
+                  "mstatus should not raise SD when FS is only initial");
+}
+
 }  // namespace
 
 int main() {
@@ -279,7 +379,10 @@ int main() {
                    test_overlapping_store_invalidates_reservation() &&
                    test_commit_boundary_store_invalidates_reservation() &&
                    test_amoadd_and_amomaxu64() &&
-                   test_misa_mhartid_and_wfi()
+                   test_misa_mhartid_and_wfi() &&
+                   test_fcsr_frm_aliases() &&
+                   test_hpm_counter_aliases() &&
+                   test_mstatus_sstatus_fs_aliases()
                ? 0
                : 1;
 }

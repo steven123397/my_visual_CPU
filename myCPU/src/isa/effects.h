@@ -122,5 +122,6 @@ struct InsnEffects {
     VectorRequest vector{};
     TrapRequest trap{};
     ControlEffect control{};
+    bool floating_state_touched{false};
     bool retired{true};
 };

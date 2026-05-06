@@ -10,6 +10,9 @@ constexpr uint64_t SSTATUS_MASK = MSTATUS_SIE | MSTATUS_SPIE | MSTATUS_SPP | MST
 constexpr uint64_t SIE_MASK = MIE_SSIE | MIE_STIE | MIE_SEIE;
 constexpr uint64_t MIP_MIE_MASK = MIE_SSIE | MIE_MSIE | MIE_STIE | MIE_MTIE | MIE_SEIE | MIE_MEIE;
 constexpr uint64_t MENVCFG_STCE = 1ULL << 63;
+constexpr uint64_t FCSR_FFLAGS_MASK = 0x1FULL;
+constexpr uint64_t FCSR_FRM_MASK = 0x7ULL << 5;
+constexpr uint64_t FCSR_MASK = FCSR_FFLAGS_MASK | FCSR_FRM_MASK;
 constexpr uint64_t SATP_MODE_SHIFT = 60;
 constexpr uint64_t SATP_MODE_MASK = 0xFULL << SATP_MODE_SHIFT;
 constexpr uint64_t SATP_MODE_BARE = 0ULL;
@@ -30,7 +33,37 @@ constexpr uint64_t MEDELEG_MASK =
     (1ULL << 15);   // store/AMO page fault
 constexpr uint64_t MIDELEG_MASK = SIE_MASK;
 
+constexpr uint64_t SSTATUS_STATUS_MASK = SSTATUS_MASK | MSTATUS_FS_MASK | MSTATUS_VS_MASK;
+
+uint64_t with_sd_summary(uint64_t mstatus) {
+    const bool dirty = (mstatus & MSTATUS_FS_MASK) == MSTATUS_FS_DIRTY ||
+                       (mstatus & MSTATUS_VS_MASK) == MSTATUS_VS_DIRTY;
+    if (dirty) {
+        return mstatus | MSTATUS_SD;
+    }
+    return mstatus & ~MSTATUS_SD;
+}
+
+bool is_hpmcounter_shadow(uint32_t addr) {
+    return addr >= CSR_HPMCOUNTER3 && addr <= CSR_HPMCOUNTER31;
+}
+
+bool is_mhpmcounter(uint32_t addr) {
+    return addr >= CSR_MHPMCOUNTER3 && addr <= CSR_MHPMCOUNTER31;
+}
+
+bool is_mhpmevent(uint32_t addr) {
+    return addr >= CSR_MHPMEVENT3 && addr <= CSR_MHPMEVENT31;
+}
+
+uint32_t hpm_shadow_to_machine(uint32_t addr) {
+    return CSR_MHPMCOUNTER3 + (addr - CSR_HPMCOUNTER3);
+}
+
 bool is_supported_csr(uint32_t addr) {
+    if (is_hpmcounter_shadow(addr) || is_mhpmcounter(addr) || is_mhpmevent(addr)) {
+        return true;
+    }
     switch (addr & 0xFFF) {
     case CSR_SSTATUS:
     case CSR_SIE:
@@ -42,6 +75,9 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_STVAL:
     case CSR_SIP:
     case CSR_SATP:
+    case CSR_FFLAGS:
+    case CSR_FRM:
+    case CSR_FCSR:
     case CSR_MSTATUS:
     case CSR_MISA:
     case CSR_MEDELEG:
@@ -49,6 +85,7 @@ bool is_supported_csr(uint32_t addr) {
     case CSR_MIE:
     case CSR_MTVEC:
     case CSR_MCOUNTEREN:
+    case CSR_MCOUNTINHIBIT:
     case CSR_MENVCFG:
     case CSR_PMPCFG0:
     case CSR_PMPADDR0:
@@ -124,8 +161,23 @@ uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
     if (addr == CSR_INSTRET || addr == CSR_MINSTRET) {
         return core.instret();
     }
+    if (is_hpmcounter_shadow(addr)) {
+        return regs_[hpm_shadow_to_machine(addr)];
+    }
+    if (is_mhpmcounter(addr)) {
+        return regs_[addr];
+    }
     if (addr == CSR_SSTATUS) {
-        return regs_[CSR_MSTATUS] & SSTATUS_MASK;
+        return with_sd_summary(regs_[CSR_MSTATUS]) & (SSTATUS_STATUS_MASK | MSTATUS_SD);
+    }
+    if (addr == CSR_FFLAGS) {
+        return regs_[CSR_FCSR] & FCSR_FFLAGS_MASK;
+    }
+    if (addr == CSR_FRM) {
+        return (regs_[CSR_FCSR] & FCSR_FRM_MASK) >> 5;
+    }
+    if (addr == CSR_FCSR) {
+        return regs_[CSR_FCSR] & FCSR_MASK;
     }
     if (addr == CSR_MHARTID) {
         return 0;
@@ -159,6 +211,9 @@ uint64_t CsrFile::read(uint32_t addr, const CoreState& core) const {
     if (addr == CSR_MENVCFG) {
         return regs_[CSR_MENVCFG] & MENVCFG_STCE;
     }
+    if (addr == CSR_MSTATUS) {
+        return with_sd_summary(regs_[CSR_MSTATUS]);
+    }
     return regs_[addr];
 }
 
@@ -171,7 +226,24 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
         return;
     }
     if (addr == CSR_SSTATUS) {
-        regs_[CSR_MSTATUS] = (regs_[CSR_MSTATUS] & ~SSTATUS_MASK) | (value & SSTATUS_MASK);
+        regs_[CSR_MSTATUS] = with_sd_summary((regs_[CSR_MSTATUS] & ~SSTATUS_STATUS_MASK) |
+                                             (value & SSTATUS_STATUS_MASK));
+        return;
+    }
+    if (addr == CSR_FFLAGS) {
+        regs_[CSR_FCSR] = (regs_[CSR_FCSR] & ~FCSR_FFLAGS_MASK) | (value & FCSR_FFLAGS_MASK);
+        return;
+    }
+    if (addr == CSR_FRM) {
+        regs_[CSR_FCSR] = (regs_[CSR_FCSR] & ~FCSR_FRM_MASK) | ((value & 0x7ULL) << 5);
+        return;
+    }
+    if (addr == CSR_FCSR) {
+        regs_[CSR_FCSR] = value & FCSR_MASK;
+        return;
+    }
+    if (addr == CSR_MSTATUS) {
+        regs_[CSR_MSTATUS] = with_sd_summary(value & ~MSTATUS_SD);
         return;
     }
     if (addr == CSR_SATP) {
@@ -198,12 +270,24 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
         regs_[CSR_MIE] = value & MIP_MIE_MASK;
         return;
     }
+    if (addr == CSR_MCOUNTINHIBIT) {
+        regs_[CSR_MCOUNTINHIBIT] = value;
+        return;
+    }
     if (addr == CSR_MIP) {
         regs_[CSR_MIP] = value & MIP_MIE_MASK;
         return;
     }
     if (addr == CSR_MENVCFG) {
         regs_[CSR_MENVCFG] = value & MENVCFG_STCE;
+        return;
+    }
+    if (is_hpmcounter_shadow(addr)) {
+        regs_[hpm_shadow_to_machine(addr)] = value;
+        return;
+    }
+    if (is_mhpmcounter(addr) || is_mhpmevent(addr)) {
+        regs_[addr] = value;
         return;
     }
     if (addr == CSR_SIE) {
@@ -227,6 +311,10 @@ void CsrFile::write(uint32_t addr, uint64_t value, CoreState& core) {
     }
     if (addr == CSR_MINSTRET) {
         core.set_instret(value);
+        return;
+    }
+    if (is_mhpmcounter(addr)) {
+        regs_[addr] = value;
         return;
     }
     write(addr, value);

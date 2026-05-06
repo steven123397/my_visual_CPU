@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "floating_ops.h"
 #include "memory_ops.h"
 #include "vector_ops.h"
 
@@ -19,6 +20,17 @@ bool is_vector_raw(uint32_t raw) {
         return false;
     }
     return is_vector_opcode(insn.opcode);
+}
+
+bool writes_fp_destination(const Insn& insn) {
+    return is_standard_fp_load(insn) || is_fmv_d_x(insn) || is_fmv_w_x(insn) || is_fmv_d(insn) || is_fneg_d(insn) ||
+           is_fsgnj_d(insn) || is_fsgnjn_d(insn) || is_fsgnjx_d(insn) || is_fsgnj_s(insn) ||
+           is_fsgnjn_s(insn) || is_fsgnjx_s(insn) || is_fadd_s(insn) || is_fsub_s(insn) || is_fmul_s(insn) || is_fdiv_s(insn) ||
+           is_fadd_d(insn) || is_fsub_d(insn) || is_fmul_d(insn) ||
+           is_fdiv_d(insn) || is_fmax_s(insn) || is_fmin_s(insn) || is_fsqrt_s(insn) || is_fmadd_d(insn) ||
+           is_fmsub_d(insn) || is_fnmsub_d(insn) || is_fnmadd_d(insn) || is_fsqrt_d(insn) || is_fcvt_d_w(insn) ||
+           is_fcvt_d_wu(insn) || is_fcvt_d_l(insn) || is_fcvt_d_lu(insn) ||
+           is_fcvt_s_w(insn) || is_fcvt_s_wu(insn) || is_fcvt_s_l(insn) || is_fcvt_s_lu(insn) || is_fcvt_d_s(insn) || is_fcvt_s_d(insn);
 }
 
 }  // namespace
@@ -74,6 +86,30 @@ bool ReorderBuffer::has_older_vector_pending(uint64_t sequence_id) const {
                            return entry.sequence_id < sequence_id &&
                                   is_vector_raw(entry.raw);
                        });
+}
+
+bool ReorderBuffer::has_older_fp_pending(uint64_t sequence_id,
+                                         uint8_t rs1,
+                                         uint8_t rs2,
+                                         uint8_t rs3) const {
+    for (const RobEntry& entry : entries_) {
+        if (entry.sequence_id >= sequence_id) {
+            continue;
+        }
+
+        Insn insn{};
+        decode(entry.raw, &insn);
+        insn.raw = entry.raw;
+        if (!writes_fp_destination(insn)) {
+            continue;
+        }
+
+        const uint8_t rd = insn.rd;
+        if (rd == rs1 || rd == rs2 || rd == rs3) {
+            return true;
+        }
+    }
+    return false;
 }
 
 OlderVectorDependency ReorderBuffer::inspect_older_vector_dependencies(uint64_t sequence_id,

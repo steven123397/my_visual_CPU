@@ -71,6 +71,11 @@ bool csr_instruction_writes(const Insn& insn) {
 }
 
 uint64_t counter_access_mask(uint32_t addr) {
+    const uint32_t csr = addr & 0xFFF;
+    if ((csr >= CSR_HPMCOUNTER3 && csr <= CSR_HPMCOUNTER31) ||
+        (csr >= CSR_MHPMCOUNTER3 && csr <= CSR_MHPMCOUNTER31)) {
+        return 1ULL << (csr - (csr >= CSR_MHPMCOUNTER3 && csr <= CSR_MHPMCOUNTER31 ? CSR_MHPMCOUNTER3 : CSR_HPMCOUNTER3) + 3);
+    }
     switch (addr & 0xFFF) {
     case CSR_CYCLE:
         return 1ULL << 0;

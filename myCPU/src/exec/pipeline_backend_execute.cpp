@@ -10,6 +10,7 @@
 #include "memory_ops.h"
 #include "pipeline_hazards.h"
 #include "vector_ops.h"
+#include "floating_ops.h"
 
 namespace {
 
@@ -287,8 +288,14 @@ void PipelineBackend::step_ex() {
     inputs.rs2v = pipeline_hazards::resolve_ex_operand(forwarding,
                                                        state_.id_ex.slot.rs2_phys,
                                                        state_.id_ex.slot.rs2v);
-    if (is_standard_fp_store(state_.id_ex.slot.insn)) {
+    if (floating_rs1_from_fpr(state_.id_ex.slot.insn)) {
+        inputs.rs1v = cpu_.core().read_fpr(state_.id_ex.slot.insn.rs1);
+    }
+    if (floating_rs2_from_fpr(state_.id_ex.slot.insn)) {
         inputs.rs2v = cpu_.core().read_fpr(state_.id_ex.slot.insn.rs2);
+    }
+    if (floating_rs3_from_fpr(state_.id_ex.slot.insn)) {
+        inputs.rs3v = cpu_.core().read_fpr(state_.id_ex.slot.insn.rs3);
     }
     if (state_.id_ex.slot.insn.opcode == 0x73 && state_.id_ex.slot.insn.funct3 != 0) {
         inputs.has_csrv = true;

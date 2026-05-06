@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "../cpu.h"
+#include "floating_ops.h"
 #include "memory_ops.h"
 #include "pipeline_hazards.h"
 #include "vector_ops.h"
@@ -165,6 +166,14 @@ void PipelineBackend::step_id() {
             : 0;
     decoded_slot.ecall_a7_phys =
         decoded_slot.insn.raw == 0x00000073U ? state_.rename_map().map_source(17) : 0;
+
+    const uint8_t fp_rs1 = floating_rs1_from_fpr(decoded_slot.insn) ? decoded_slot.insn.rs1 : 0xffU;
+    const uint8_t fp_rs2 = floating_rs2_from_fpr(decoded_slot.insn) ? decoded_slot.insn.rs2 : 0xffU;
+    const uint8_t fp_rs3 = floating_rs3_from_fpr(decoded_slot.insn) ? decoded_slot.insn.rs3 : 0xffU;
+    if (state_.rob().has_older_fp_pending(decoded_slot.sequence_id.value, fp_rs1, fp_rs2, fp_rs3)) {
+        state_.note_stall(PipelineStallReason::SourceOperandsNotReady);
+        return;
+    }
 
     if (!sources_ready(decoded_slot)) {
         state_.note_stall(PipelineStallReason::SourceOperandsNotReady);

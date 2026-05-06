@@ -5,6 +5,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import subprocess
 import tempfile
 import textwrap
@@ -495,6 +496,36 @@ def resolve_linux_distro_shell_contract() -> dict:
         "expected": expected,
         "bootargs": bootargs,
     }
+
+
+@contextlib.contextmanager
+def extract_file_from_ext4_image(image_path: pathlib.Path, guest_path: str, host_name: str):
+    with tempfile.TemporaryDirectory(prefix="mycpu-ext4-extract.") as temp_dir:
+        extracted_path = pathlib.Path(temp_dir) / host_name
+        dump_proc = subprocess.run(
+            [
+                "debugfs",
+                "-R",
+                f"dump -p {guest_path} {extracted_path}",
+                str(image_path),
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if dump_proc.returncode != 0:
+            raise AssertionError(
+                f"failed to extract {guest_path} from {image_path}:\n"
+                f"stdout:\n{dump_proc.stdout}\n"
+                f"stderr:\n{dump_proc.stderr}"
+            )
+        if not extracted_path.is_file():
+            raise AssertionError(
+                f"debugfs reported success extracting {guest_path}, but host file is missing: {extracted_path}"
+            )
+        yield extracted_path
 
 
 class RunDebugCliProbeTest(unittest.TestCase):
@@ -2122,6 +2153,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         generated_text = generated_dts.read_text()
         self.assertIn("linux,initrd-start = <0x0 0x84000000>;", generated_text)
         self.assertNotIn("linux,initrd-end = <0x0 0x84000000>;", generated_text)
+        self.assertIn('riscv,isa = "rv64imac_zicsr_zifencei";', generated_text)
 
     def test_make_run_workload_linux_proto_forwards_optional_disk_alias(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2221,6 +2253,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("root=/dev/vda", generated_text)
         self.assertNotIn("rdinit=/init", generated_text)
         self.assertIn("linux,initrd-end = <0x0 0x84000000>;", generated_text)
+        self.assertIn('riscv,isa = "rv64imac_zicsr_zifencei";', generated_text)
 
     def test_make_run_workload_linux_proto_block_mode_uses_generated_disk(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2555,6 +2588,234 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         self.assertIn("test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell", proc.stdout)
         self.assertIn("test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell", proc.stdout)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_isa_advertisement_target_requests_curated_env(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_isa_advertisement",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_boot_log_reports_compressed_isa",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_isa_advertisement_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_isa_advertisement",
+                "MYCPU_LINUX_DISTRO_CURATED_IMAGE=/tmp/Image",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_busybox_awk_fp_target_requests_curated_env(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_awk_fp",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_busybox_awk_fp_matrix",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_busybox_awk_fp_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_awk_fp",
+                "MYCPU_LINUX_DISTRO_CURATED_IMAGE=/tmp/Image",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view_target_requests_curated_env(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_proc_cpuinfo_isa_view",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view",
+                "MYCPU_LINUX_DISTRO_CURATED_IMAGE=/tmp/Image",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view_target_requests_curated_env(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_auxv_hwcap_view",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view",
+                "MYCPU_LINUX_DISTRO_CURATED_IMAGE=/tmp/Image",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view_target_requests_curated_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertNotIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_curated_alpine_busybox_userland_abi_view",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
 
     def test_make_build_workload_linux_proto_block_mode_embeds_mininit_stage_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3080,6 +3341,533 @@ class RunDebugCliProbeTest(unittest.TestCase):
             proc.wait(timeout=5)
             stderr = proc.stderr.read() if proc.stderr is not None else ""
             self.assertEqual(proc.returncode, 0, msg=stderr)
+
+    def test_linux_distribution_runtime_curated_alpine_boot_log_reports_compressed_isa(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_DISTRO_RUNTIME") != "1":
+            self.skipTest("set MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 to run the real Linux distribution ISA advertisement guardrail")
+
+        contract = resolve_linux_distro_shell_contract()
+        image_path = contract["image"]
+        disk_path = contract["disk"]
+        prompt = str(contract["prompt"])
+        bootargs = str(contract["bootargs"])
+
+        if os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO") != "alpine":
+            self.skipTest("set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine ISA advertisement guardrail")
+        if not image_path.is_file():
+            self.fail(f"missing linux distribution runtime Image: {image_path}")
+        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+            self.fail(
+                "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
+                "repo linux_proto rootfs is only for the mini shell guardrail"
+            )
+
+        build_command = [
+            "make",
+            "build-workload",
+            "WORKLOAD_NAME=linux_proto",
+            "LINUX_PROTO_ROOTFS_MODE=block",
+            f"LINUX_PROTO_IMAGE={image_path}",
+            f"LINUX_PROTO_DISK={disk_path}",
+        ]
+        if bootargs:
+            build_command.append(f"LINUX_PROTO_BOOTARGS={bootargs}")
+
+        build_proc = subprocess.run(
+            build_command,
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+
+        with subprocess.Popen(
+            ["./mycpu", "--debug-cli"],
+            cwd=MYCPU_DIR,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        ) as proc:
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load",
+                    "image": "workloads/linux_proto/linux_sbi_shim.bin",
+                    "backend": "functional",
+                    "disk": str(disk_path),
+                    "block_transport": "virtio-blk",
+                    "flat": True,
+                    "addr": 0x80000000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": str(image_path),
+                    "addr": 0x80200000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": "workloads/linux_proto/mycpu_virt.dtb",
+                    "addr": 0x87F00000,
+                },
+            )
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a0", "value": 0x0})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a1", "value": 0x87F00000})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a2", "value": 0x80200000})
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "run_until_uart_contains",
+                    "text": prompt,
+                    "max_steps": 300000000,
+                },
+            )
+            boot_chunk = debug_cli_roundtrip(proc, {"cmd": "uart_output", "offset": 0})
+            boot_text = boot_chunk.get("text", "")
+            base_isa_match = re.search(r"riscv: base ISA extensions ([a-z0-9_]+)", boot_text)
+            self.assertIsNotNone(base_isa_match, msg=boot_text)
+            base_isa = base_isa_match.group(1)
+            self.assertEqual(set(base_isa), set("acim"))
+
+            elf_caps_match = re.search(r"riscv: ELF capabilities ([a-z0-9_]+)", boot_text)
+            self.assertIsNotNone(elf_caps_match, msg=boot_text)
+            elf_caps = elf_caps_match.group(1)
+            self.assertEqual(set(elf_caps), set("acim"))
+            self.assertIn(prompt, boot_text)
+
+            debug_cli_roundtrip(proc, {"cmd": "quit"})
+            proc.wait(timeout=5)
+            stderr = proc.stderr.read() if proc.stderr is not None else ""
+            self.assertEqual(proc.returncode, 0, msg=stderr)
+
+    def test_linux_distribution_runtime_curated_alpine_busybox_awk_fp_matrix(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_DISTRO_RUNTIME") != "1":
+            self.skipTest("set MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 to run the real Linux distribution BusyBox awk FP guardrail")
+
+        contract = resolve_linux_distro_shell_contract()
+        image_path = contract["image"]
+        disk_path = contract["disk"]
+        prompt = str(contract["prompt"])
+        bootargs = str(contract["bootargs"])
+
+        if os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO") != "alpine":
+            self.skipTest("set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine BusyBox awk FP guardrail")
+        if not image_path.is_file():
+            self.fail(f"missing linux distribution runtime Image: {image_path}")
+        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+            self.fail(
+                "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
+                "repo linux_proto rootfs is only for the mini shell guardrail"
+            )
+
+        build_command = [
+            "make",
+            "build-workload",
+            "WORKLOAD_NAME=linux_proto",
+            "LINUX_PROTO_ROOTFS_MODE=block",
+            f"LINUX_PROTO_IMAGE={image_path}",
+            f"LINUX_PROTO_DISK={disk_path}",
+        ]
+        if bootargs:
+            build_command.append(f"LINUX_PROTO_BOOTARGS={bootargs}")
+
+        build_proc = subprocess.run(
+            build_command,
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+
+        with subprocess.Popen(
+            ["./mycpu", "--debug-cli"],
+            cwd=MYCPU_DIR,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        ) as proc:
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load",
+                    "image": "workloads/linux_proto/linux_sbi_shim.bin",
+                    "backend": "functional",
+                    "disk": str(disk_path),
+                    "block_transport": "virtio-blk",
+                    "flat": True,
+                    "addr": 0x80000000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": str(image_path),
+                    "addr": 0x80200000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": "workloads/linux_proto/mycpu_virt.dtb",
+                    "addr": 0x87F00000,
+                },
+            )
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a0", "value": 0x0})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a1", "value": 0x87F00000})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a2", "value": 0x80200000})
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "run_until_uart_contains",
+                    "text": prompt,
+                    "max_steps": 300000000,
+                },
+            )
+            boot_chunk = debug_cli_roundtrip(proc, {"cmd": "uart_output", "offset": 0})
+            self.assertIn(prompt, boot_chunk.get("text", ""))
+            offset = normalize_next_offset(boot_chunk)
+            awk_contracts = [
+                ("awk 'BEGIN{print 1.5+2.25}'", "3.75"),
+                ("awk 'BEGIN{ if ((1.5+2.25)==3.75) print 11; else print 22 }'", "11"),
+                ("awk 'BEGIN{print 7/2}'", "3.5"),
+                ("awk 'BEGIN{printf \"%d\\n\", 7/2}'", "3"),
+                ("awk 'BEGIN{printf \"%u\\n\", 7/2}'", "3"),
+                ("awk 'BEGIN{printf \"%x\\n\", 15/2}'", "7"),
+                ("awk 'BEGIN{printf \"%.0f %.0f\\n\", 2.5, 3.5}'", "2 4"),
+                ("awk 'BEGIN{printf \"%.1f %.1f %.1f\\n\", 2.25, 2.35, -2.35}'", "2.2 2.4 -2.4"),
+                ("awk 'BEGIN{print 1e308*1e308}'", "inf"),
+                ("awk 'BEGIN{if ((1e-308*1e-308)==0) print 1; else print 0}'", "1"),
+                ("awk 'BEGIN{if (1.5 < 2.25) print 1; else print 0}'", "1"),
+                ("awk 'BEGIN{if (2.25 <= 2.25) print 1; else print 0}'", "1"),
+                ("awk 'BEGIN{if (2.25 > 1.5) print 1; else print 0}'", "1"),
+                ("awk 'BEGIN{printf \"%u\\n\", -1}'", "4294967295"),
+                ("awk 'BEGIN{printf \"%x\\n\", -1}'", "ffffffff"),
+                ("awk 'BEGIN{print sqrt(2)}'", "1.41421"),
+                ("awk 'BEGIN{print sqrt(-1)}'", "nan"),
+            ]
+            for command_text, expected_text in awk_contracts:
+                debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": f"{command_text}\r"})
+                command_chunk = debug_cli_roundtrip(
+                    proc,
+                    {
+                        "cmd": "run_until_new_uart_contains",
+                        "offset": offset,
+                        "text": prompt,
+                        "max_steps": 50000000,
+                    },
+                )
+                command_output = command_chunk.get("text", "")
+                self.assertIn(expected_text, command_output)
+                self.assertTrue(
+                    command_output.endswith(prompt),
+                    msg=f"expected shell chunk to end with prompt {prompt!r}, got {command_output!r}",
+                )
+                offset = normalize_next_offset(command_chunk)
+
+            debug_cli_roundtrip(proc, {"cmd": "quit"})
+            proc.wait(timeout=5)
+            stderr = proc.stderr.read() if proc.stderr is not None else ""
+            self.assertEqual(proc.returncode, 0, msg=stderr)
+
+    def test_linux_distribution_runtime_curated_alpine_proc_cpuinfo_isa_view(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_DISTRO_RUNTIME") != "1":
+            self.skipTest("set MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 to run the real Linux distribution procfs ISA-view guardrail")
+
+        contract = resolve_linux_distro_shell_contract()
+        image_path = contract["image"]
+        disk_path = contract["disk"]
+        prompt = str(contract["prompt"])
+        bootargs = str(contract["bootargs"])
+
+        if os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO") != "alpine":
+            self.skipTest("set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine procfs ISA-view guardrail")
+        if not image_path.is_file():
+            self.fail(f"missing linux distribution runtime Image: {image_path}")
+        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+            self.fail(
+                "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
+                "repo linux_proto rootfs is only for the mini shell guardrail"
+            )
+
+        build_command = [
+            "make",
+            "build-workload",
+            "WORKLOAD_NAME=linux_proto",
+            "LINUX_PROTO_ROOTFS_MODE=block",
+            f"LINUX_PROTO_IMAGE={image_path}",
+            f"LINUX_PROTO_DISK={disk_path}",
+        ]
+        if bootargs:
+            build_command.append(f"LINUX_PROTO_BOOTARGS={bootargs}")
+
+        build_proc = subprocess.run(
+            build_command,
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+
+        with subprocess.Popen(
+            ["./mycpu", "--debug-cli"],
+            cwd=MYCPU_DIR,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        ) as proc:
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load",
+                    "image": "workloads/linux_proto/linux_sbi_shim.bin",
+                    "backend": "functional",
+                    "disk": str(disk_path),
+                    "block_transport": "virtio-blk",
+                    "flat": True,
+                    "addr": 0x80000000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": str(image_path),
+                    "addr": 0x80200000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": "workloads/linux_proto/mycpu_virt.dtb",
+                    "addr": 0x87F00000,
+                },
+            )
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a0", "value": 0x0})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a1", "value": 0x87F00000})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a2", "value": 0x80200000})
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "run_until_uart_contains",
+                    "text": prompt,
+                    "max_steps": 300000000,
+                },
+            )
+            boot_chunk = debug_cli_roundtrip(proc, {"cmd": "uart_output", "offset": 0})
+            self.assertIn(prompt, boot_chunk.get("text", ""))
+            offset = normalize_next_offset(boot_chunk)
+
+            procfs_contracts = [
+                ("mount -t proc proc /proc", prompt),
+                ("grep '^isa' /proc/cpuinfo", "rv64imac_zicntr_zicsr_zifencei_zihpm"),
+            ]
+            for command_text, expected_text in procfs_contracts:
+                debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": f"{command_text}\r"})
+                command_chunk = debug_cli_roundtrip(
+                    proc,
+                    {
+                        "cmd": "run_until_new_uart_contains",
+                        "offset": offset,
+                        "text": prompt,
+                        "max_steps": 50000000,
+                    },
+                )
+                command_output = command_chunk.get("text", "")
+                self.assertIn(expected_text, command_output)
+                self.assertTrue(
+                    command_output.endswith(prompt),
+                    msg=f"expected shell chunk to end with prompt {prompt!r}, got {command_output!r}",
+                )
+                offset = normalize_next_offset(command_chunk)
+
+            debug_cli_roundtrip(proc, {"cmd": "quit"})
+            proc.wait(timeout=5)
+            stderr = proc.stderr.read() if proc.stderr is not None else ""
+            self.assertEqual(proc.returncode, 0, msg=stderr)
+
+    def test_linux_distribution_runtime_curated_alpine_auxv_hwcap_view(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_DISTRO_RUNTIME") != "1":
+            self.skipTest("set MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 to run the real Linux distribution auxv HWCAP guardrail")
+
+        contract = resolve_linux_distro_shell_contract()
+        image_path = contract["image"]
+        disk_path = contract["disk"]
+        prompt = str(contract["prompt"])
+        bootargs = str(contract["bootargs"])
+
+        if os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO") != "alpine":
+            self.skipTest("set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine auxv HWCAP guardrail")
+        if not image_path.is_file():
+            self.fail(f"missing linux distribution runtime Image: {image_path}")
+        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+            self.fail(
+                "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
+                "repo linux_proto rootfs is only for the mini shell guardrail"
+            )
+
+        build_command = [
+            "make",
+            "build-workload",
+            "WORKLOAD_NAME=linux_proto",
+            "LINUX_PROTO_ROOTFS_MODE=block",
+            f"LINUX_PROTO_IMAGE={image_path}",
+            f"LINUX_PROTO_DISK={disk_path}",
+        ]
+        if bootargs:
+            build_command.append(f"LINUX_PROTO_BOOTARGS={bootargs}")
+
+        build_proc = subprocess.run(
+            build_command,
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+
+        with subprocess.Popen(
+            ["./mycpu", "--debug-cli"],
+            cwd=MYCPU_DIR,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        ) as proc:
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load",
+                    "image": "workloads/linux_proto/linux_sbi_shim.bin",
+                    "backend": "functional",
+                    "disk": str(disk_path),
+                    "block_transport": "virtio-blk",
+                    "flat": True,
+                    "addr": 0x80000000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": str(image_path),
+                    "addr": 0x80200000,
+                },
+            )
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "load_payload",
+                    "image": "workloads/linux_proto/mycpu_virt.dtb",
+                    "addr": 0x87F00000,
+                },
+            )
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a0", "value": 0x0})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a1", "value": 0x87F00000})
+            debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a2", "value": 0x80200000})
+            debug_cli_roundtrip(
+                proc,
+                {
+                    "cmd": "run_until_uart_contains",
+                    "text": prompt,
+                    "max_steps": 300000000,
+                },
+            )
+            boot_chunk = debug_cli_roundtrip(proc, {"cmd": "uart_output", "offset": 0})
+            self.assertIn(prompt, boot_chunk.get("text", ""))
+            offset = normalize_next_offset(boot_chunk)
+
+            auxv_contracts = [
+                ("mount -t proc proc /proc", prompt),
+                ('od -An -tx8 -w16 /proc/self/auxv | sed -n "1,32p"', "0000000000000010 0000000000001105"),
+            ]
+            for command_text, expected_text in auxv_contracts:
+                debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": f"{command_text}\r"})
+                command_chunk = debug_cli_roundtrip(
+                    proc,
+                    {
+                        "cmd": "run_until_new_uart_contains",
+                        "offset": offset,
+                        "text": prompt,
+                        "max_steps": 50000000,
+                    },
+                )
+                command_output = command_chunk.get("text", "")
+                self.assertIn(expected_text, command_output)
+                self.assertTrue(
+                    command_output.endswith(prompt),
+                    msg=f"expected shell chunk to end with prompt {prompt!r}, got {command_output!r}",
+                )
+                offset = normalize_next_offset(command_chunk)
+
+            debug_cli_roundtrip(proc, {"cmd": "quit"})
+            proc.wait(timeout=5)
+            stderr = proc.stderr.read() if proc.stderr is not None else ""
+            self.assertEqual(proc.returncode, 0, msg=stderr)
+
+    def test_linux_distribution_curated_alpine_busybox_userland_abi_view(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_DISTRO_RUNTIME") != "1":
+            self.skipTest(
+                "set MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 to run the Alpine userland ABI guardrail"
+            )
+
+        rootfs_text = os.environ.get("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", "").strip()
+        if not rootfs_text:
+            self.skipTest(
+                "set MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS to run the Alpine userland ABI guardrail"
+            )
+
+        disk_path = pathlib.Path(rootfs_text)
+        if not disk_path.is_file():
+            self.fail(f"missing external Alpine rootfs image: {disk_path}")
+
+        with extract_file_from_ext4_image(disk_path, "/bin/busybox", "busybox") as busybox_path:
+            header_proc = subprocess.run(
+                ["readelf", "-h", str(busybox_path)],
+                cwd=MYCPU_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(header_proc.returncode, 0, msg=header_proc.stderr)
+            self.assertIn("Machine:                           RISC-V", header_proc.stdout)
+            self.assertIn("Flags:                             0x5, RVC, double-float ABI", header_proc.stdout)
+
+            attribute_proc = subprocess.run(
+                ["readelf", "-A", str(busybox_path)],
+                cwd=MYCPU_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(attribute_proc.returncode, 0, msg=attribute_proc.stderr)
+            self.assertIn(
+                'Tag_RISCV_arch: "rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0',
+                attribute_proc.stdout,
+            )
 
     def test_make_build_workload_linux_proto_block_mode_mininit_message_lengths_exclude_nul(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

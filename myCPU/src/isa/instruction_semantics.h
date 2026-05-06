@@ -12,6 +12,7 @@ struct SemanticInputs {
     uint64_t pc{0};
     uint64_t rs1v{0};
     uint64_t rs2v{0};
+    uint64_t rs3v{0};
     bool has_csrv{false};
     uint64_t csrv{0};
     bool has_ecall_a7{false};

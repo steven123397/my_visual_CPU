@@ -3,8 +3,10 @@
 #include "atomic_contract.h"
 #include "execution_context.h"
 
+#include "../arch/csr_file.h"
 #include "../arch/core_state.h"
 #include "../exec/control_flow_ops.h"
+#include "../exec/floating_ops.h"
 #include "../exec/integer_ops.h"
 #include "../exec/memory_ops.h"
 #include "../exec/system_ops.h"
@@ -43,6 +45,11 @@ bool InstructionSemantics::supports(const Insn& insn) {
     case 0x73:
     case 0x07:
     case 0x27:
+    case 0x53:
+    case 0x43:
+    case 0x47:
+    case 0x4B:
+    case 0x4F:
     case 0x57:
         return true;
     default:
@@ -53,8 +60,9 @@ bool InstructionSemantics::supports(const Insn& insn) {
 InsnEffects InstructionSemantics::execute(const Insn& insn, ExecutionContext& ctx) {
     SemanticInputs inputs;
     inputs.pc = ctx.core().pc();
-    inputs.rs1v = ctx.core().read_gpr(insn.rs1);
-    inputs.rs2v = is_standard_fp_store(insn) ? ctx.core().read_fpr(insn.rs2) : ctx.core().read_gpr(insn.rs2);
+    inputs.rs1v = floating_rs1_from_fpr(insn) ? ctx.core().read_fpr(insn.rs1) : ctx.core().read_gpr(insn.rs1);
+    inputs.rs2v = floating_rs2_from_fpr(insn) ? ctx.core().read_fpr(insn.rs2) : ctx.core().read_gpr(insn.rs2);
+    inputs.rs3v = floating_rs3_from_fpr(insn) ? ctx.core().read_fpr(insn.rs3) : 0;
     return execute(insn, ctx, inputs);
 }
 
@@ -83,6 +91,16 @@ InsnEffects InstructionSemantics::execute(const Insn& insn, ExecutionContext& ct
             return build_memory_effects(insn, inputs.rs1v, inputs.rs2v, insn.imm);
         }
         return build_vector_effects(insn, inputs.rs1v);
+    case 0x53:
+    case 0x43:
+    case 0x47:
+    case 0x4B:
+    case 0x4F:
+        return build_floating_effects(insn,
+                                      inputs.rs1v,
+                                      inputs.rs2v,
+                                      inputs.rs3v,
+                                      ctx.csr().read(CSR_FCSR, ctx.core()));
     case 0x57:
         return build_vector_effects(insn, inputs.rs1v);
     case 0x73:

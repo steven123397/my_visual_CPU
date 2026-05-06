@@ -15,5 +15,6 @@ BOARD_LINUX_INITRD_ADDR := 0x84000000
 BOARD_LINUX_CMDLINE_ADDR := 0x87ff0000
 BOARD_LINUX_TIMEBASE_FREQUENCY := 100000000
 BOARD_LINUX_BOOTARGS := console=ttyS0,115200 earlycon=ns16550a,mmio,0x10000000 rdinit=/init init=/init loglevel=8 ignore_loglevel
+BOARD_LINUX_RISCV_ISA := rv64imac_zicsr_zifencei
 BOARD_XV6_ARCH_MARCH := -march=rv64ima
 BOARD_XV6_ARCH_MABI := -mabi=lp64
