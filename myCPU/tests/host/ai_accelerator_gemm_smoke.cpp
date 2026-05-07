@@ -104,6 +104,55 @@ bool expect_op_summary(const AiAcceleratorOpProfileSummary& summary,
            expect(summary.tile_count == expected_tile_count, context);
 }
 
+bool expect_default_timing_model(const AiAcceleratorProfileSummary& summary, const char* context) {
+    return expect(summary.timing_model == AiAcceleratorTimingModel::TimedSimpleNoOverlap, context) &&
+           expect(summary.scheduler_ops_per_cycle == 32, context) &&
+           expect(summary.scheduler_tile_setup_cycles == 1, context) &&
+           expect(!summary.allow_dma_compute_overlap, context) &&
+           expect(summary.dma_setup_cycles == 2, context) &&
+           expect(summary.dma_bytes_per_cycle == 16, context);
+}
+
+bool expect_submission_timing(const AiAcceleratorProfileSummary& summary,
+                              uint64_t expected_device_cycles,
+                              uint64_t expected_dma_cycles,
+                              uint64_t expected_compute_cycles,
+                              uint64_t expected_stall_cycles,
+                              uint64_t expected_queue_cycles,
+                              uint64_t expected_completion_cycles,
+                              uint64_t expected_busy_cycles,
+                              const char* context) {
+    return expect(summary.last_submission_device_cycles == expected_device_cycles, context) &&
+           expect(summary.last_submission_dma_cycles == expected_dma_cycles, context) &&
+           expect(summary.last_submission_compute_cycles == expected_compute_cycles, context) &&
+           expect(summary.last_submission_stall_cycles == expected_stall_cycles, context) &&
+           expect(summary.last_submission_queue_cycles == expected_queue_cycles, context) &&
+           expect(summary.last_submission_completion_cycles == expected_completion_cycles, context) &&
+           expect(summary.last_submission_busy_cycles == expected_busy_cycles, context);
+}
+
+bool expect_submission_outcome(const AiAcceleratorProfileSummary& summary,
+                               uint32_t expected_fault,
+                               uint64_t expected_retired_ops,
+                               uint64_t expected_bytes_moved,
+                               const char* context) {
+    return expect(summary.last_submission_fault == expected_fault, context) &&
+           expect(summary.last_submission_retired_ops == expected_retired_ops, context) &&
+           expect(summary.last_submission_bytes_moved == expected_bytes_moved, context);
+}
+
+bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
+                                     uint64_t expected_load_cycles,
+                                     uint64_t expected_store_cycles,
+                                     uint64_t expected_load_bytes,
+                                     uint64_t expected_store_bytes,
+                                     const char* context) {
+    return expect(summary.last_submission_dma_load_cycles == expected_load_cycles, context) &&
+           expect(summary.last_submission_dma_store_cycles == expected_store_cycles, context) &&
+           expect(summary.last_submission_dma_load_bytes == expected_load_bytes, context) &&
+           expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
+}
+
 bool configure_queue(Bus& bus) {
     return store_u32(bus,
                      AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_BASE_LOW,
@@ -537,6 +586,13 @@ int main() {
             !expect(dma_cycles == 9, "expected GEMM DMA cycles") ||
             !expect(compute_cycles == 2, "expected GEMM compute cycles") ||
             !expect(stall_cycles == 2, "expected GEMM stall cycles") ||
+            !expect_default_timing_model(success_profile, "expected default GEMM timing model") ||
+            !expect_submission_timing(success_profile, 13, 9, 2, 2, 1, 1, 15,
+                                      "expected GEMM submission timing summary") ||
+            !expect_submission_outcome(success_profile, AI_ACCEL_FAULT_NONE, 12, 20,
+                                       "expected GEMM submission outcome summary") ||
+            !expect_submission_dma_breakdown(success_profile, 6, 3, 16, 4,
+                                            "expected GEMM submission DMA breakdown") ||
             !expect(success_profile.tile_count == 2, "expected GEMM aggregate tile count") ||
             !expect(success_profile.scratchpad_peak_bytes == 36,
                     "expected GEMM aggregate scratchpad peak bytes") ||
@@ -609,6 +665,13 @@ int main() {
             !expect(stall_cycles == 2, "expected cumulative GEMM stall cycles") ||
             !expect(dma_load_bytes == 32, "expected cumulative GEMM DMA load bytes") ||
             !expect(dma_store_bytes == 4, "expected cumulative GEMM DMA store bytes") ||
+            !expect_default_timing_model(fault_profile, "expected stable GEMM timing model after fault") ||
+            !expect_submission_timing(fault_profile, 6, 6, 0, 0, 1, 1, 8,
+                                      "expected fault GEMM submission timing summary") ||
+            !expect_submission_outcome(fault_profile, AI_ACCEL_FAULT_ILLEGAL_OP, 0, 16,
+                                       "expected fault GEMM submission outcome summary") ||
+            !expect_submission_dma_breakdown(fault_profile, 6, 0, 16, 0,
+                                            "expected fault GEMM submission DMA breakdown") ||
             !expect(fault_profile.tile_count == 2, "expected GEMM tile profile to remain stable on fault") ||
             !expect(fault_profile.scratchpad_peak_bytes == 36,
                     "expected GEMM scratchpad peak to remain stable on fault") ||
@@ -724,6 +787,13 @@ int main() {
                     "expected Softmax compute cycles") ||
             !expect(softmax_stall_cycles == 1,
                     "expected Softmax stall cycles") ||
+            !expect_default_timing_model(softmax_profile, "expected default Softmax timing model") ||
+            !expect_submission_timing(softmax_profile, 8, 6, 1, 1, 1, 1, 10,
+                                      "expected Softmax submission timing summary") ||
+            !expect_submission_outcome(softmax_profile, AI_ACCEL_FAULT_NONE, 4, 32,
+                                       "expected Softmax submission outcome summary") ||
+            !expect_submission_dma_breakdown(softmax_profile, 3, 3, 16, 16,
+                                            "expected Softmax submission DMA breakdown") ||
             !expect(softmax_profile.tile_count == 1,
                     "expected Softmax aggregate tile count") ||
             !expect(softmax_profile.scratchpad_peak_bytes == 48,
@@ -921,6 +991,14 @@ int main() {
                     "expected dynamic GEMM small DMA byte accounting") ||
             !expect(dynamic_small_output == expected_small_output,
                     "expected dynamic GEMM small output tensor") ||
+            !expect_default_timing_model(dynamic_small_profile,
+                                         "expected default dynamic GEMM small timing model") ||
+            !expect_submission_timing(dynamic_small_profile, 12, 10, 1, 1, 1, 1, 14,
+                                      "expected dynamic GEMM small timing summary") ||
+            !expect_submission_outcome(dynamic_small_profile, AI_ACCEL_FAULT_NONE, 32, 56,
+                                       "expected dynamic GEMM small outcome summary") ||
+            !expect_submission_dma_breakdown(dynamic_small_profile, 7, 3, 40, 16,
+                                            "expected dynamic GEMM small DMA breakdown") ||
             !expect(dynamic_small_profile.tile_count == 1,
                     "expected dynamic GEMM small aggregate tile count") ||
             !expect(dynamic_small_profile.scratchpad_peak_bytes == 64,
@@ -975,6 +1053,14 @@ int main() {
                     "expected dynamic GEMM large DMA byte accounting") ||
             !expect(dynamic_large_output == expected_large_output,
                     "expected dynamic GEMM large output tensor") ||
+            !expect_default_timing_model(dynamic_large_profile,
+                                         "expected default dynamic GEMM large timing model") ||
+            !expect_submission_timing(dynamic_large_profile, 15, 11, 2, 2, 1, 1, 17,
+                                      "expected dynamic GEMM large timing summary") ||
+            !expect_submission_outcome(dynamic_large_profile, AI_ACCEL_FAULT_NONE, 64, 80,
+                                       "expected dynamic GEMM large outcome summary") ||
+            !expect_submission_dma_breakdown(dynamic_large_profile, 7, 4, 48, 32,
+                                            "expected dynamic GEMM large DMA breakdown") ||
             !expect(dynamic_large_profile.tile_count == 2,
                     "expected dynamic GEMM large aggregate tile count") ||
             !expect(dynamic_large_profile.scratchpad_peak_bytes == 80,
@@ -1027,6 +1113,14 @@ int main() {
                     "expected zero dynamic GEMM bytes moved on unaligned-shape fault") ||
             !expect(dynamic_unaligned_output == expected_large_output,
                     "expected dynamic GEMM output tensor stability after unaligned fault") ||
+            !expect_default_timing_model(dynamic_unaligned_profile,
+                                         "expected stable dynamic GEMM timing model after unaligned fault") ||
+            !expect_submission_timing(dynamic_unaligned_profile, 15, 11, 2, 2, 1, 1, 17,
+                                      "expected stable dynamic GEMM timing after unaligned fault") ||
+            !expect_submission_outcome(dynamic_unaligned_profile, AI_ACCEL_FAULT_NONE, 64, 80,
+                                       "expected stable dynamic GEMM outcome after unaligned fault") ||
+            !expect_submission_dma_breakdown(dynamic_unaligned_profile, 7, 4, 48, 32,
+                                            "expected stable dynamic GEMM DMA breakdown after unaligned fault") ||
             !expect(dynamic_unaligned_profile.tile_count == 2,
                     "expected dynamic GEMM profile stability after unaligned-shape fault") ||
             !expect(dynamic_unaligned_profile.scratchpad_peak_bytes == 80,
@@ -1079,6 +1173,14 @@ int main() {
                     "expected zero dynamic GEMM bytes moved on missing-shape fault") ||
             !expect(dynamic_fault_output == expected_large_output,
                     "expected dynamic GEMM output tensor stability after missing-shape fault") ||
+            !expect_default_timing_model(dynamic_fault_profile,
+                                         "expected stable dynamic GEMM timing model after missing-shape fault") ||
+            !expect_submission_timing(dynamic_fault_profile, 15, 11, 2, 2, 1, 1, 17,
+                                      "expected stable dynamic GEMM timing after missing-shape fault") ||
+            !expect_submission_outcome(dynamic_fault_profile, AI_ACCEL_FAULT_NONE, 64, 80,
+                                       "expected stable dynamic GEMM outcome after missing-shape fault") ||
+            !expect_submission_dma_breakdown(dynamic_fault_profile, 7, 4, 48, 32,
+                                            "expected stable dynamic GEMM DMA breakdown after missing-shape fault") ||
             !expect(dynamic_fault_profile.tile_count == 2,
                     "expected dynamic GEMM profile stability after missing-shape fault") ||
             !expect(dynamic_fault_profile.scratchpad_peak_bytes == 80,
@@ -1214,6 +1316,14 @@ int main() {
                     "expected zero dynamic GEMM bytes moved on overlap fault") ||
             !expect(runtime_fault_overlap_output == expected_large_output,
                     "expected dynamic GEMM output tensor stability after overlap fault") ||
+            !expect_default_timing_model(runtime_fault_overlap_profile,
+                                         "expected stable dynamic GEMM timing model after overlap fault") ||
+            !expect_submission_timing(runtime_fault_overlap_profile, 15, 11, 2, 2, 1, 1, 17,
+                                      "expected stable dynamic GEMM timing after overlap fault") ||
+            !expect_submission_outcome(runtime_fault_overlap_profile, AI_ACCEL_FAULT_NONE, 64, 80,
+                                       "expected stable dynamic GEMM outcome after overlap fault") ||
+            !expect_submission_dma_breakdown(runtime_fault_overlap_profile, 7, 4, 48, 32,
+                                            "expected stable dynamic GEMM DMA breakdown after overlap fault") ||
             !expect(runtime_fault_overlap_profile.tile_count == 2,
                     "expected dynamic GEMM profile stability after overlap fault") ||
             !expect(runtime_fault_overlap_profile.scratchpad_peak_bytes == 80,
@@ -1272,6 +1382,14 @@ int main() {
                     "expected zero dynamic GEMM bytes moved on out-of-window fault") ||
             !expect(runtime_fault_out_of_window_output == expected_large_output,
                     "expected dynamic GEMM output tensor stability after out-of-window fault") ||
+            !expect_default_timing_model(runtime_fault_out_of_window_profile,
+                                         "expected stable dynamic GEMM timing model after out-of-window fault") ||
+            !expect_submission_timing(runtime_fault_out_of_window_profile, 15, 11, 2, 2, 1, 1, 17,
+                                      "expected stable dynamic GEMM timing after out-of-window fault") ||
+            !expect_submission_outcome(runtime_fault_out_of_window_profile, AI_ACCEL_FAULT_NONE, 64, 80,
+                                       "expected stable dynamic GEMM outcome after out-of-window fault") ||
+            !expect_submission_dma_breakdown(runtime_fault_out_of_window_profile, 7, 4, 48, 32,
+                                            "expected stable dynamic GEMM DMA breakdown after out-of-window fault") ||
             !expect(runtime_fault_out_of_window_profile.tile_count == 2,
                     "expected dynamic GEMM profile stability after out-of-window fault") ||
             !expect(runtime_fault_out_of_window_profile.scratchpad_peak_bytes == 80,
@@ -1393,6 +1511,14 @@ int main() {
                     "expected zero dynamic GEMM bytes moved on DMA fault") ||
             !expect(runtime_dma_fault_output == expected_large_output,
                     "expected dynamic GEMM output tensor stability after DMA fault") ||
+            !expect_default_timing_model(runtime_dma_fault_profile,
+                                         "expected default dynamic GEMM timing model after DMA fault") ||
+            !expect_submission_timing(runtime_dma_fault_profile, 0, 0, 0, 0, 0, 0, 0,
+                                      "expected empty dynamic GEMM timing after DMA fault without prior success") ||
+            !expect_submission_outcome(runtime_dma_fault_profile, AI_ACCEL_FAULT_NONE, 0, 0,
+                                       "expected empty dynamic GEMM outcome after DMA fault without prior success") ||
+            !expect_submission_dma_breakdown(runtime_dma_fault_profile, 0, 0, 0, 0,
+                                            "expected empty dynamic GEMM DMA breakdown after DMA fault") ||
             !expect(runtime_dma_fault_profile.tile_count == 0,
                     "expected empty dynamic GEMM profile after DMA fault without prior success") ||
             !expect(runtime_dma_fault_profile.scratchpad_peak_bytes == 0,

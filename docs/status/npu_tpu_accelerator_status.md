@@ -46,6 +46,127 @@
 - `2026-05-02` 同日还把这套 task-spec lower / serialize 逻辑抽成共享 host-side 模块
   `myCPU/workloads/ai_proto/task_spec_lowering.py`；`pack_graph.py` 现在只保留 CLI /
   固定 workload 入口，frontend 也继续复用同一条 host 打包路径。
+- `2026-05-06` 已把性能模型第一刀继续收窄并正式落到设备自有合同：
+  `AiAcceleratorProfileSummary` 现在固定暴露
+  `timing_model=TimedSimpleNoOverlap`、`scheduler_ops_per_cycle=32`、
+  `scheduler_tile_setup_cycles=1`、`allow_dma_compute_overlap=false`、
+  `dma_setup_cycles=2` 与 `dma_bytes_per_cycle=16`。
+  这一步不改执行语义，只把当前保守 `timed-simple no-overlap` 口径收成稳定 host-side
+  事实来源，并由 `ai_accelerator_gemm_smoke` / `ai_accelerator_cnn_smoke` 覆盖成功路径、
+  fault-stable 行为与 reset 后默认值。
+- `2026-05-06` 同日又沿同一收窄方向补上最近一次 submission 的 aggregate timing 画像：
+  `AiAcceleratorProfileSummary` 现已额外暴露
+  `last_submission_device_cycles / dma_cycles / compute_cycles / stall_cycles /
+  queue_cycles / completion_cycles / busy_cycles`，用于把当前
+  `queue -> dma -> compute/stall -> completion` 的阶段边界锁成 host-side 可测合同；
+  这仍不是 overlap、timeline 或 multi-outstanding queue 已经实现。
+- `2026-05-06` 同日还把最近一次 submission 的 outcome 也收进同一份 host-side 合同：
+  `last_submission_fault / retired_ops / bytes_moved` 现在与上面的 timing delta 一起由
+  `AiAcceleratorProfileSummary` 暴露，并由 GEMM / CNN host smoke 同时锁住成功与
+  fault-stable 路径。
+- `2026-05-06` 同日继续把 DMA 子阶段拆细：
+  `last_submission_dma_load/store_cycles` 与 `last_submission_dma_load/store_bytes`
+  也进入 `AiAcceleratorProfileSummary`，用于把当前 `timed-simple` 模型里的
+  DMA 读写拆分固定成 host-side 可测合同。
+- `2026-05-06` 同日还把这份 contract 接回 manifest/profile 路径：
+  `ai_accelerator_profile_smoke` 现在会在代表性
+  `cnn / gemm / tiny_model / dynamic_gemm / dynamic_tiny_model / dynamic_cnn /
+  custom_dynamic_gemm / custom_dynamic_cnn / tiny_attention_static` manifest
+  上直接走 `Machine::run_ai_profile_manifest()`，并验证设备自有
+  `profile_summary()` 会重新暴露同一份 timing / outcome / DMA 子阶段摘要；
+  这让 manifest 路径与设备 smoke 共享同一套 host-side 事实来源，而不用先扩 shared
+  CLI 或 frontend。
+- `2026-05-06` 同日继续补上 rerun 刷新合同：同一 `Machine` 连续执行不同
+  manifest 后，后一次 workload 的 `AiProfileRunResult`、设备 `profile_summary()`、
+  `completion_count / doorbell_count / last_fault` 都必须切到最新 workload，而不是残留或
+  累加前一次运行状态。
+- `2026-05-06` 同日也补上 manifest fail-closed 抛错后的 reset 合同：
+  如果一次成功 profile 之后再执行会在 host parser / runtime-shape resolve 阶段抛错的
+  manifest，设备 `profile_summary()`、`completion_count / doorbell_count / last_fault`
+  必须回到默认空状态，不能继续保留上一轮成功摘要。
+- `2026-05-06` 同日继续补上 `max_ticks` timeout 生命周期合同：
+  当 manifest 在设备执行阶段因 tick 预算不足返回 `AI_ACCEL_FAULT_TIMEOUT` 时，
+  `AiProfileRunResult` 会带回 timeout counters，但设备 `profile_summary()` 仍保持空摘要，
+  不伪造一条完成态 submission profile。
+- `2026-05-06` 同日还把 completion-fault 生命周期也接回 manifest/profile 路径：
+  对会在设备执行期返回 `AI_ACCEL_FAULT_ILLEGAL_OP` 之类 completion fault 的 manifest，
+  `AiProfileRunResult` 与设备 `profile_summary()` 现在都会如实暴露同一份失败 submission
+  摘要，同时保持空的 aggregate / per-op compute 画像。
+- `2026-05-07` 又把这份 host-side profile contract 接回当前 guest guardrail：
+  `ai_accel_guest_smoke` 现在不只锁住 `doorbell / completion / counter` ABI，还会验证
+  guest `ai_accel_demo` 提交完成后设备 `profile_summary()` 同样暴露最近一次 submission 的
+  timing / outcome / DMA breakdown / per-op 摘要；这一步仍不扩大到 Linux-facing driver。
+- `2026-05-07` 同日也把 guest 侧 reset 生命周期补成显式合同：
+  `ai_accel_guest_smoke` 现在会在 guest `ai_accel_demo` 成功提交后触发设备 MMIO reset，
+  并验证 `doorbell / completion / last_fault`、只读计数器和 `profile_summary()` 一起清回默认空状态。
+- `2026-05-07` 同日还把 guest debug snapshot 的 idle/reset 观察面一并锁住：
+  guest demo 成功后 `engine_busy=false`、`scratchpad_occupancy_bytes=0`，
+  reset 后 debug snapshot 里的 DMA/compute/stall/busy/queue/completion 计数器与
+  `effective_ops_per_cycle / utilization` 也必须一起回零。
+- `2026-05-07` 同日继续把 guest guardrail 补成完整生命周期：
+  `ai_accel_guest_smoke` 现在会在 `machine.run()` 之前先显式验证设备
+  `debug_snapshot`、MMIO 只读计数器与 `profile_summary()` 都处于零值 / 空摘要默认态，
+  并把 `submission_count / fault_count` 也并入成功路径与 reset 路径的 MMIO counter 合同。
+- `2026-05-07` 同日继续把 guest 直接可见的 MMIO 控制面默认态 / reset 合同锁进
+  `ai_accel_guest_smoke`：`status / queue_depth / irq_status / irq_mask / last_fault /
+  fault_detail` 现在也会在 pre-run 默认态和 reset 默认态下显式验证
+  `READY-only / queue empty / no IRQ / default mask / no fault / zero detail`。
+- `2026-05-07` 同日还把 guest 成功提交后的控制面最终状态也锁进了
+  `ai_accel_guest_smoke`：按当前 guest runtime 的真实路径，completion IRQ 会先被
+  guest ack，再由 post-handler 把 `irq_mask` 关到 `0`，因此成功路径现在显式验证
+  `READY-only / queue empty / irq_status=0 / irq_mask=0 / no fault / zero detail`。
+- `2026-05-07` 同日还把 guest-visible queue lifecycle 也并入了
+  `ai_accel_guest_smoke`：pre-run 默认态下 submit/completion queue 的
+  `size / head / tail` 都必须为 `0`，当前单 entry `ai_accel_demo` 成功路径必须稳定落到
+  `size=1 / head=1 / tail=1`，reset 后再统一清回 `0`。
+- `2026-05-07` 同日还把 guest-visible queue base 地址也并入了
+  `ai_accel_guest_smoke`：pre-run 默认态和 reset 默认态下
+  `submit_queue_base / completion_queue_base` 都必须为 `0`，而当前 `ai_accel_demo`
+  成功路径必须把两组 base 配成非零、`64B` 对齐且彼此不同的 ring 地址。
+- `2026-05-07` 同日还补了一个 host-only 的 guest bridge workload：
+  `ai_proto/guest_ai_accel_demo` 现在会在 `--ai-profile-manifest` 路径上镜像 guest
+  `ai_accel_demo` 的 `int32 reduce_sum` submission contract，并由
+  `ai_accelerator_profile_smoke` 锁住相同的 timing / DMA / per-op 摘要。
+- `2026-05-07` 同日也把 Task 4 的第一阶段系统集成边界写清：
+  当前共享 ABI 仍只包括 descriptor / queue / doorbell / completion / counters /
+  device `profile_summary()`，并已把验证矩阵分成默认门禁、host smoke、guest smoke
+  与“未来 Linux 集成门禁后移”四层，不把 Linux-facing driver 提前混进现阶段 gate。
+- `2026-05-07` 同日继续把 task-spec importer 的共享 lowering 路径锁成显式 guardrail：
+  `ai_accelerator_profile_smoke` 现在会直接比较 `custom_dynamic_gemm` 与 `dynamic_gemm`、
+  `custom_dynamic_cnn` 与 `dynamic_cnn` 生成出的 `graph.bin / runtime_shape.bin`，
+  确保 bounded task-spec 入口继续共用同一套 lowering / memory-plan 事实来源。
+- `2026-05-07` 同日又沿同一 importer 路线补上一条受限半精度小模型入口：
+  `bounded_dynamic_tiny_model_v1` 现已通过 host-side `task spec` lower 到现有
+  `dynamic_tiny_model` graph package / runtime shape table / manifest 路径，并由
+  `ai_accelerator_profile_smoke` 直接比较 `custom_dynamic_tiny_model` 与
+  `dynamic_tiny_model` 的 `graph.bin / runtime_shape.bin`、profile summary 与 expected
+  output，确保继续共用同一套 lowering / memory-plan 事实来源。
+- `2026-05-07` 同日继续沿同一 importer 路线补上一条最窄静态 attention-like 入口：
+  `static_tiny_attention_v1` 现已通过 host-side `task spec` lower 到现有
+  `tiny_attention_static` graph package / manifest 路径，并由
+  `ai_accelerator_profile_smoke` 直接比较 `custom_tiny_attention_static` 与
+  `tiny_attention_static` 的 `graph.bin`、profile summary 与 expected output，确保继续共用
+  同一套 graph / memory-plan / profile 事实来源。
+- `2026-05-07` 同日还把现有 importer 的顶层标量字段收成统一 fail-closed 合同：
+  所有已开放 task kind 的 `source_tag` 现在都要求 fit in `uint32`，`max_ticks` 必须是
+  非零 `uint32`，并显式拒绝 JSON `bool` 被当成整数吞掉；`ai_accelerator_profile_smoke`
+  也已补上负 `source_tag`、零 `max_ticks`、越界值和 bool 标量的 host-side reject matrix，
+  避免把歧义值延后到 manifest / device 路径再处理。
+- `2026-05-07` 同日继续把 importer 顶层 schema 收成显式白名单合同：
+  当前四条 task-spec 路径都会在 host-side 直接拒绝未知 top-level key，
+  避免拼写错误或未约定扩展字段被静默忽略；同一份 parser 现在也会拒绝 duplicate
+  top-level key，避免 JSON 后值静默覆盖前值；`ai_accelerator_profile_smoke` 也已补上
+  unknown / duplicate top-level key 的最小 reject guardrail。
+- `2026-05-07` 同日还继续把共享 importer 的 host-side guardrail 收紧到更完整的输入 hygiene：
+  `task spec` 顶层现在也显式要求 JSON object + 固定 `ai_task_spec_v1` format +
+  当前白名单 `task_kind` + 非空 `name`；坏 envelope 会在 host-side 直接 reject。
+  `source_tag / max_ticks` 与 `int8` payload 现在都会显式拒绝 JSON `bool` 被当成整数吞掉；
+  `task_spec.name` 也必须是安全 basename，不能靠 `../` 之类路径逃逸把打包产物写出
+  `--out-dir`。同一轮也把受限浮点输入面的 representable-range 收成显式合同：
+  `bounded_dynamic_tiny_model_v1` 的 `fp16` 输入和 `static_tiny_attention_v1` 的 `fp32`
+  输入如果超出可表示范围，或直接给出 `NaN / +/-Infinity` 之类 non-finite 值，
+  都会在 host-side 直接 fail-closed，而不是抛 Python traceback。
+  这些负向合同都已接进 `ai_accelerator_profile_smoke`。
 - `2026-04-23` 已把这条线收口成正式设计文档 [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)，并明确它采用独立 `MMIO` 设备路线，而不是 CPU 紧耦合 tensor 指令扩展。
 - `2026-04-23` 同日已完成 wave 1 的任务 1：`DMA-ready` memory contract。
   - 已新增 `myCPU/src/mem/dma_transaction.{h,cpp}`，冻结 `initiator / direction / burst / fault / transferred_bytes` 最小合同。
@@ -260,6 +381,8 @@
 - 当前已经有独立设备时序模型的第二刀，但仍只停在 `timed-simple`：`DMA + compute`
   当前固定为 no-overlap，`stall_cycles` 只承担 tile setup 等最小等待归因，因此这条线
   仍不能拿来讨论更激进的 tile overlap、queue 开销隐藏或更细颗粒度吞吐模型。
+- 当前 `timed-simple no-overlap` 的关键参数已经收口为稳定合同，但这仍只是“现状可观察化”，
+  不是 overlap / outstanding queue / timeline 已经实现。
 - 当前 per-op / per-tile profile summary 已经外推到 `--ai-profile-manifest` 的 `ai_profile_aggregate` / `ai_profile_op` 文本出口，但仍没有扩大到 MMIO 或 debug snapshot 的 itemized ABI；当前继续保持“host-side 文本出口 + 设备侧 ABI 不变”的边界。
 - 当前 `tiny_model` 已经补上，但它仍是受当前算子面约束的 `gemm -> relu -> pool` block，还不是更完整的 `conv -> relu -> pool -> fc`；如果后续要推进到后者，应先在独立设计里明确 dtype bridge 或更完整的 matmul-family 输入合同，而不是在 Wave 2 的 host workload 里偷开新语义。
 - 同时覆盖 quantized 与 semi-precision family 会明显放大验证矩阵；后续实施时必须坚持“统一 ABI + 代表性闭环”，不能一开始就追求全矩阵算子铺满。
@@ -296,9 +419,11 @@
    与
    [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)，
    后续应先在这套文档里明确第一刀的用户任务入口、compile / memory plan 和性能模型阶段边界。
-4. 当前第一刀实现已进一步收窄为 host-side `bounded_dynamic_gemm_v1` + `bounded_dynamic_cnn_v1`
-   task spec importer；共享 lower 模块已经抽出，下一步先守住它们与现有
-   `dynamic_gemm` / `dynamic_cnn` 共用 lowering / memory-plan 路径，再逐步扩展到更宽 task kind。
+4. 当前第一刀实现已进一步收窄为 host-side `bounded_dynamic_gemm_v1`、
+   `bounded_dynamic_cnn_v1`、`bounded_dynamic_tiny_model_v1` 与
+   `static_tiny_attention_v1` task spec importer；共享 lower 模块与
+   `dynamic_gemm / dynamic_cnn / dynamic_tiny_model / tiny_attention_static`
+   共用 lowering / memory-plan 路径已形成显式 guardrail，后续再逐步扩展到更宽 task kind。
 5. 在第一刀实现中，优先保持现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`、
    `tiny_attention_static`、guest `ai_accel_demo` 和既有 profile / debug 可观察性继续作为稳定 guardrail。
 

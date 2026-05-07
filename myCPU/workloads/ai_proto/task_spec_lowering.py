@@ -2,6 +2,7 @@
 import json
 import pathlib
 import struct
+import math
 from dataclasses import dataclass
 
 
@@ -114,6 +115,22 @@ class CnnTaskSpec:
     max_ticks: int
     input0_rows: list[list[int]]
     input1_rows: list[list[int]]
+
+
+@dataclass
+class DynamicTinyModelTaskSpec:
+    name: str
+    source_tag: int
+    max_ticks: int
+    input0_rows: list[list[float]]
+
+
+@dataclass
+class StaticTinyAttentionTaskSpec:
+    name: str
+    source_tag: int
+    max_ticks: int
+    value_vector: list[float]
 
 
 def append_u8(out: bytearray, value: int) -> None:
@@ -285,16 +302,109 @@ def require_json_object(value: object, label: str) -> dict:
     return value
 
 
+def parse_task_spec_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            fail(f"duplicate task spec key: {key}")
+        result[key] = value
+    return result
+
+
+def require_allowed_keys(spec: dict, allowed_keys: set[str], label: str) -> None:
+    for key in spec.keys():
+        if key not in allowed_keys:
+            fail(f"{label} has unexpected top-level key: {key}")
+
+
 def require_string(value: object, label: str) -> str:
     if not isinstance(value, str) or value == "":
         fail(f"{label} must be a non-empty string")
     return value
 
 
+def require_safe_basename(value: object, label: str) -> str:
+    parsed = require_string(value, label)
+    path = pathlib.PurePath(parsed)
+    if (path.name != parsed or parsed in {".", ".."} or any(ch in parsed for ch in "/\\") or
+            any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in parsed)):
+        fail(f"{label} must be a safe basename")
+    return parsed
+
+
 def require_int(value: object, label: str) -> int:
-    if not isinstance(value, int):
+    if not isinstance(value, int) or isinstance(value, bool):
         fail(f"{label} must be an integer")
     return value
+
+
+def require_uint32(value: object, label: str) -> int:
+    parsed = require_int(value, label)
+    if parsed < 0 or parsed > 0xFFFFFFFF:
+        fail(f"{label} must fit in uint32")
+    return parsed
+
+
+def require_uint32_nonzero(value: object, label: str) -> int:
+    parsed = require_int(value, label)
+    if parsed < 1 or parsed > 0xFFFFFFFF:
+        fail(f"{label} must be between 1 and 4294967295")
+    return parsed
+
+
+def require_number(value: object, label: str) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        fail(f"{label} must be a number")
+    return float(value)
+
+
+def require_fp16_value(value: float, label: str) -> float:
+    if not math.isfinite(value):
+        fail(f"{label} must be finite")
+    if abs(value) > 65504.0:
+        fail(f"{label} must fit in fp16")
+    return value
+
+
+def require_fp32_value(value: float, label: str) -> float:
+    if not math.isfinite(value):
+        fail(f"{label} must be finite")
+    if abs(value) > 3.4028235e38:
+        fail(f"{label} must fit in fp32")
+    return value
+
+
+def require_fp16_matrix(value: object,
+                        label: str,
+                        expected_cols: int,
+                        min_rows: int,
+                        max_rows: int) -> list[list[float]]:
+    if not isinstance(value, list):
+        fail(f"{label} must be a 2D array")
+    if len(value) < min_rows or len(value) > max_rows:
+        fail(f"{label} row count must be between {min_rows} and {max_rows}")
+    matrix: list[list[float]] = []
+    for row_index, row in enumerate(value):
+        if not isinstance(row, list) or len(row) != expected_cols:
+            fail(f"{label} row {row_index} must have exactly {expected_cols} columns")
+        parsed_row: list[float] = []
+        for col_index, item in enumerate(row):
+            value_fp = require_number(item, f"{label} row {row_index} column {col_index}")
+            parsed_row.append(
+                require_fp16_value(value_fp, f"{label} row {row_index} column {col_index}")
+            )
+        matrix.append(parsed_row)
+    return matrix
+
+
+def require_float_vector(value: object, label: str, expected_len: int) -> list[float]:
+    if not isinstance(value, list) or len(value) != expected_len:
+        fail(f"{label} must have exactly {expected_len} items")
+    result: list[float] = []
+    for index, item in enumerate(value):
+        value_fp = require_number(item, f"{label} item {index}")
+        result.append(require_fp32_value(value_fp, f"{label} item {index}"))
+    return result
 
 
 def require_i8_square_matrix(value: object,
@@ -312,7 +422,7 @@ def require_i8_square_matrix(value: object,
             fail(f"{label} row {row_index} must have exactly {expected_cols} columns")
         parsed_row: list[int] = []
         for col_index, item in enumerate(row):
-            if not isinstance(item, int) or item < -128 or item > 127:
+            if not isinstance(item, int) or isinstance(item, bool) or item < -128 or item > 127:
                 fail(f"{label} row {row_index} column {col_index} must be an int8 value")
             parsed_row.append(item)
         matrix.append(parsed_row)
@@ -330,7 +440,7 @@ def require_i8_matrix(value: object, label: str, expected_cols: int, min_rows: i
             fail(f"{label} row {row_index} must have exactly {expected_cols} columns")
         parsed_row: list[int] = []
         for col_index, item in enumerate(row):
-            if not isinstance(item, int) or item < -128 or item > 127:
+            if not isinstance(item, int) or isinstance(item, bool) or item < -128 or item > 127:
                 fail(f"{label} row {row_index} column {col_index} must be an int8 value")
             parsed_row.append(item)
         matrix.append(parsed_row)
@@ -340,6 +450,47 @@ def require_i8_matrix(value: object, label: str, expected_cols: int, min_rows: i
 def flatten_i8_matrix(rows: list[list[int]]) -> bytes:
     flat = [item for row in rows for item in row]
     return struct.pack(f"<{len(flat)}b", *flat)
+
+
+def float_to_fp16_bits(value: float) -> int:
+    return struct.unpack("<H", struct.pack("<e", value))[0]
+
+
+def flatten_fp16_matrix(rows: list[list[float]]) -> bytes:
+    flat = [float_to_fp16_bits(item) for row in rows for item in row]
+    return struct.pack(f"<{len(flat)}H", *flat)
+
+
+def gemm_fp16_fp32(lhs_rows: list[list[float]], rhs_rows: list[list[float]]) -> list[float]:
+    row_count = len(lhs_rows)
+    k_dim = len(lhs_rows[0])
+    col_count = len(rhs_rows[0])
+    result: list[float] = []
+    for row_index in range(row_count):
+        for col_index in range(col_count):
+            total = 0.0
+            for k_index in range(k_dim):
+                total += lhs_rows[row_index][k_index] * rhs_rows[k_index][col_index]
+            result.append(total)
+    return result
+
+
+def relu_fp32(values: list[float]) -> list[float]:
+    return [max(0.0, value) for value in values]
+
+
+def pool_max_rows(values: list[float], rows: int, cols: int, pool_rows: int, pool_cols: int) -> list[float]:
+    output: list[float] = []
+    for row_index in range(0, rows, pool_rows):
+        for col_index in range(0, cols, pool_cols):
+            window_max = values[row_index * cols + col_index]
+            for window_row in range(pool_rows):
+                for window_col in range(pool_cols):
+                    candidate = values[(row_index + window_row) * cols + col_index + window_col]
+                    if candidate > window_max:
+                        window_max = candidate
+            output.append(window_max)
+    return output
 
 
 def gemm_i8_i32(lhs_rows: list[list[int]], rhs_rows: list[list[int]]) -> list[int]:
@@ -411,9 +562,11 @@ def write_manifest(path: pathlib.Path,
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def parse_task_spec(path: pathlib.Path) -> GemmTaskSpec | CnnTaskSpec:
+def parse_task_spec(path: pathlib.Path) -> (
+    GemmTaskSpec | CnnTaskSpec | DynamicTinyModelTaskSpec | StaticTinyAttentionTaskSpec
+):
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=parse_task_spec_pairs)
     except FileNotFoundError:
         fail(f"task spec file does not exist: {path}")
     except json.JSONDecodeError as exc:
@@ -425,20 +578,68 @@ def parse_task_spec(path: pathlib.Path) -> GemmTaskSpec | CnnTaskSpec:
         fail("task spec format must be ai_task_spec_v1")
     task_kind = require_string(spec.get("task_kind"), "task spec task_kind")
     if task_kind == "bounded_dynamic_gemm_v1":
+        require_allowed_keys(
+            spec,
+            {"format", "task_kind", "name", "source_tag", "max_ticks", "input0", "input1"},
+            "bounded_dynamic_gemm_v1 task spec",
+        )
         return GemmTaskSpec(
-            name=require_string(spec.get("name"), "bounded_dynamic_gemm_v1 name"),
-            source_tag=require_int(spec.get("source_tag", 73), "bounded_dynamic_gemm_v1 source_tag"),
-            max_ticks=require_int(spec.get("max_ticks", 128), "bounded_dynamic_gemm_v1 max_ticks"),
+            name=require_safe_basename(spec.get("name"), "bounded_dynamic_gemm_v1 name"),
+            source_tag=require_uint32(spec.get("source_tag", 73), "bounded_dynamic_gemm_v1 source_tag"),
+            max_ticks=require_uint32_nonzero(
+                spec.get("max_ticks", 128), "bounded_dynamic_gemm_v1 max_ticks"
+            ),
             input0_rows=require_i8_matrix(spec.get("input0"), "bounded_dynamic_gemm_v1 input0", 8, 1, 2),
             input1_rows=require_i8_matrix(spec.get("input1"), "bounded_dynamic_gemm_v1 input1", 4, 8, 8),
         )
     if task_kind == "bounded_dynamic_cnn_v1":
+        require_allowed_keys(
+            spec,
+            {"format", "task_kind", "name", "source_tag", "max_ticks", "input0", "input1"},
+            "bounded_dynamic_cnn_v1 task spec",
+        )
         return CnnTaskSpec(
-            name=require_string(spec.get("name"), "bounded_dynamic_cnn_v1 name"),
-            source_tag=require_int(spec.get("source_tag", 79), "bounded_dynamic_cnn_v1 source_tag"),
-            max_ticks=require_int(spec.get("max_ticks", 128), "bounded_dynamic_cnn_v1 max_ticks"),
+            name=require_safe_basename(spec.get("name"), "bounded_dynamic_cnn_v1 name"),
+            source_tag=require_uint32(spec.get("source_tag", 79), "bounded_dynamic_cnn_v1 source_tag"),
+            max_ticks=require_uint32_nonzero(
+                spec.get("max_ticks", 128), "bounded_dynamic_cnn_v1 max_ticks"
+            ),
             input0_rows=require_i8_square_matrix(spec.get("input0"), "bounded_dynamic_cnn_v1 input0", 3, 4),
             input1_rows=require_i8_matrix(spec.get("input1"), "bounded_dynamic_cnn_v1 input1", 2, 2, 2),
+        )
+    if task_kind == "bounded_dynamic_tiny_model_v1":
+        require_allowed_keys(
+            spec,
+            {"format", "task_kind", "name", "source_tag", "max_ticks", "input0"},
+            "bounded_dynamic_tiny_model_v1 task spec",
+        )
+        return DynamicTinyModelTaskSpec(
+            name=require_safe_basename(spec.get("name"), "bounded_dynamic_tiny_model_v1 name"),
+            source_tag=require_uint32(
+                spec.get("source_tag", 83), "bounded_dynamic_tiny_model_v1 source_tag"
+            ),
+            max_ticks=require_uint32_nonzero(
+                spec.get("max_ticks", 128), "bounded_dynamic_tiny_model_v1 max_ticks"
+            ),
+            input0_rows=require_fp16_matrix(
+                spec.get("input0"), "bounded_dynamic_tiny_model_v1 input0", 3, 1, 2
+            ),
+        )
+    if task_kind == "static_tiny_attention_v1":
+        require_allowed_keys(
+            spec,
+            {"format", "task_kind", "name", "source_tag", "max_ticks", "value_vector"},
+            "static_tiny_attention_v1 task spec",
+        )
+        return StaticTinyAttentionTaskSpec(
+            name=require_safe_basename(spec.get("name"), "static_tiny_attention_v1 name"),
+            source_tag=require_uint32(spec.get("source_tag", 89), "static_tiny_attention_v1 source_tag"),
+            max_ticks=require_uint32_nonzero(
+                spec.get("max_ticks", 128), "static_tiny_attention_v1 max_ticks"
+            ),
+            value_vector=require_float_vector(
+                spec.get("value_vector"), "static_tiny_attention_v1 value_vector", 2
+            ),
         )
     fail(f"unsupported task spec task_kind: {task_kind}")
 
@@ -576,6 +777,125 @@ def build_dynamic_cnn_like(out_dir: pathlib.Path,
     )
 
 
+def build_dynamic_tiny_model_like(out_dir: pathlib.Path,
+                                  name: str,
+                                  source_tag: int,
+                                  max_ticks: int,
+                                  input0_rows: list[list[float]]) -> None:
+    weight_rows = [
+        [1.0, -1.0],
+        [2.0, 0.5],
+        [-1.0, 1.5],
+    ]
+    row_count = len(input0_rows)
+    gemm_output = gemm_fp16_fp32(input0_rows, weight_rows)
+    relu_output = relu_fp32(gemm_output)
+    output_values = pool_max_rows(relu_output, row_count, 2, 1, 2)
+    tensors = [
+        Tensor("fp16", "input", 2, (2, 3, 0, 0), (1, 3, 0, 0)),
+        Tensor("fp16", "weight", 2, (3, 2, 0, 0), (3, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (2, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (2, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp32", "output", 2, (2, 1, 0, 0), (1, 1, 0, 0)),
+    ]
+    ops = [
+        Op("gemm", "fp16", "fp32", 0, 1, 0xFFFF, 2),
+        Op("eltwise_relu", "fp32", "fp32", 2, 0xFFFF, 0xFFFF, 3),
+        Op("pool_max", "fp32", "fp32", 3, 0xFFFF, 0xFFFF, 4, (1, 2, 1, 2)),
+    ]
+    dependencies = [(0, 1), (1, 2)]
+    memory_plan = [
+        MemoryPlan(0, 0, 0, 12, 12),
+        MemoryPlan(1, 0, 12, 12, 12),
+        MemoryPlan(2, 0, 24, 16, 16),
+        MemoryPlan(3, 0, 40, 16, 16),
+        MemoryPlan(4, 0, 56, 8, 8),
+    ]
+    graph = serialize_graph_package(
+        64,
+        tensors,
+        ops,
+        dependencies,
+        memory_plan,
+        shape_mode="dynamic_bounded",
+        dynamic_tensors=[
+            DynamicTensor(0, 12),
+            DynamicTensor(2, 16),
+            DynamicTensor(3, 16),
+            DynamicTensor(4, 8),
+        ],
+    )
+    runtime_shape_table = serialize_runtime_shape_table([
+        RuntimeShape(0, 2, (row_count, 3, 0, 0)),
+        RuntimeShape(2, 2, (row_count, 2, 0, 0)),
+        RuntimeShape(3, 2, (row_count, 2, 0, 0)),
+        RuntimeShape(4, 2, (row_count, 1, 0, 0)),
+    ])
+    (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    (out_dir / f"{name}.runtime_shape.bin").write_bytes(runtime_shape_table)
+    (out_dir / f"{name}.input0.bin").write_bytes(flatten_fp16_matrix(input0_rows))
+    (out_dir / f"{name}.input1.bin").write_bytes(flatten_fp16_matrix(weight_rows))
+    (out_dir / f"{name}.output0.expected.bin").write_bytes(
+        struct.pack(f"<{len(output_values)}f", *output_values)
+    )
+    write_manifest(
+        out_dir / f"{name}.manifest",
+        name=name,
+        graph_package=f"{name}.graph.bin",
+        runtime_shape_table=f"{name}.runtime_shape.bin",
+        inputs=[f"{name}.input0.bin", f"{name}.input1.bin"],
+        outputs=[f"{name}.output0.actual.bin"],
+        expected_outputs=[f"{name}.output0.expected.bin"],
+        max_ticks=max_ticks,
+        source_tag=source_tag,
+    )
+
+
+def build_static_tiny_attention_like(out_dir: pathlib.Path,
+                                     name: str,
+                                     source_tag: int,
+                                     max_ticks: int,
+                                     value_vector: list[float]) -> None:
+    tensors = [
+        Tensor("fp16", "input", 2, (1, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp16", "weight", 2, (2, 2, 0, 0), (2, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (1, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp32", "intermediate", 2, (1, 2, 0, 0), (1, 2, 0, 0)),
+        Tensor("fp32", "weight", 2, (2, 1, 0, 0), (2, 1, 0, 0)),
+        Tensor("fp32", "output", 2, (1, 1, 0, 0), (1, 1, 0, 0)),
+    ]
+    ops = [
+        Op("gemm", "fp16", "fp32", 0, 1, 0xFFFF, 2),
+        Op("softmax", "fp32", "fp32", 2, 0xFFFF, 0xFFFF, 3),
+        Op("gemm", "fp32", "fp32", 3, 4, 0xFFFF, 5),
+    ]
+    dependencies = [(0, 1), (1, 2)]
+    memory_plan = [
+        MemoryPlan(0, 0, 0, 4, 4),
+        MemoryPlan(1, 0, 8, 8, 8),
+        MemoryPlan(2, 0, 16, 8, 8),
+        MemoryPlan(3, 0, 24, 8, 8),
+        MemoryPlan(4, 0, 32, 8, 8),
+        MemoryPlan(5, 0, 48, 4, 4),
+    ]
+    graph = serialize_graph_package(64, tensors, ops, dependencies, memory_plan)
+    (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<2H", 0x0000, 0x0000))
+    (out_dir / f"{name}.input1.bin").write_bytes(struct.pack("<4H", 0x3C00, 0x3C00, 0x3C00, 0x3C00))
+    (out_dir / f"{name}.input2.bin").write_bytes(struct.pack("<2f", *value_vector))
+    (out_dir / f"{name}.output0.expected.bin").write_bytes(struct.pack("<f", sum(value_vector) / 2.0))
+    write_manifest(
+        out_dir / f"{name}.manifest",
+        name=name,
+        graph_package=f"{name}.graph.bin",
+        inputs=[f"{name}.input0.bin", f"{name}.input1.bin", f"{name}.input2.bin"],
+        outputs=[f"{name}.output0.actual.bin"],
+        expected_outputs=[f"{name}.output0.expected.bin"],
+        max_ticks=max_ticks,
+        source_tag=source_tag,
+    )
+
+
 def build_task_spec(task_spec_path: pathlib.Path, out_dir: pathlib.Path) -> str:
     task_spec = parse_task_spec(task_spec_path)
     if isinstance(task_spec, GemmTaskSpec):
@@ -595,6 +915,22 @@ def build_task_spec(task_spec_path: pathlib.Path, out_dir: pathlib.Path) -> str:
             max_ticks=task_spec.max_ticks,
             input0_rows=task_spec.input0_rows,
             input1_rows=task_spec.input1_rows,
+        )
+    elif isinstance(task_spec, DynamicTinyModelTaskSpec):
+        build_dynamic_tiny_model_like(
+            out_dir=out_dir,
+            name=task_spec.name,
+            source_tag=task_spec.source_tag,
+            max_ticks=task_spec.max_ticks,
+            input0_rows=task_spec.input0_rows,
+        )
+    elif isinstance(task_spec, StaticTinyAttentionTaskSpec):
+        build_static_tiny_attention_like(
+            out_dir=out_dir,
+            name=task_spec.name,
+            source_tag=task_spec.source_tag,
+            max_ticks=task_spec.max_ticks,
+            value_vector=task_spec.value_vector,
         )
     else:
         fail("unsupported parsed task spec")

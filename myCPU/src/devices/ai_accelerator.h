@@ -96,7 +96,31 @@ inline constexpr uint32_t AI_ACCEL_MAX_GRAPH_PACKAGE_BYTES = 1024 * 1024;
 
 using AiAcceleratorOpProfileSummary = AiOpProfileSummary;
 
+enum class AiAcceleratorTimingModel : uint8_t {
+    TimedSimpleNoOverlap = 1,
+};
+
 struct AiAcceleratorProfileSummary {
+    AiAcceleratorTimingModel timing_model{AiAcceleratorTimingModel::TimedSimpleNoOverlap};
+    uint32_t scheduler_ops_per_cycle{0};
+    uint32_t scheduler_tile_setup_cycles{0};
+    bool allow_dma_compute_overlap{false};
+    uint32_t dma_setup_cycles{0};
+    uint32_t dma_bytes_per_cycle{0};
+    uint64_t last_submission_device_cycles{0};
+    uint64_t last_submission_dma_cycles{0};
+    uint64_t last_submission_dma_load_cycles{0};
+    uint64_t last_submission_dma_store_cycles{0};
+    uint64_t last_submission_compute_cycles{0};
+    uint64_t last_submission_stall_cycles{0};
+    uint64_t last_submission_queue_cycles{0};
+    uint64_t last_submission_completion_cycles{0};
+    uint64_t last_submission_busy_cycles{0};
+    uint32_t last_submission_fault{AI_ACCEL_FAULT_NONE};
+    uint64_t last_submission_retired_ops{0};
+    uint64_t last_submission_bytes_moved{0};
+    uint64_t last_submission_dma_load_bytes{0};
+    uint64_t last_submission_dma_store_bytes{0};
     uint64_t tile_count{0};
     uint32_t scratchpad_peak_bytes{0};
     std::vector<AiAcceleratorOpProfileSummary> op_summaries{};
@@ -116,6 +140,19 @@ struct AiActiveSubmissionState {
     uint64_t retired_ops{0};
     uint64_t compute_cycles_remaining{0};
     uint64_t stall_cycles_remaining{0};
+    uint64_t device_cycles_before{0};
+    uint64_t dma_cycles_before{0};
+    uint64_t dma_load_cycles_before{0};
+    uint64_t dma_store_cycles_before{0};
+    uint64_t compute_cycles_before{0};
+    uint64_t stall_cycles_before{0};
+    uint64_t queue_cycles_before{0};
+    uint64_t completion_cycles_before{0};
+    uint32_t completion_fault{AI_ACCEL_FAULT_NONE};
+    uint64_t completion_retired_ops{0};
+    uint64_t completion_bytes_moved{0};
+    uint64_t dma_load_bytes_before{0};
+    uint64_t dma_store_bytes_before{0};
 };
 
 class AiAccelerator : public Device {
@@ -148,6 +185,9 @@ private:
     uint32_t utilization() const;
     uint32_t counter_low(uint64_t value) const;
     uint32_t counter_high(uint64_t value) const;
+    void refresh_profile_summary_metadata();
+    void update_profile_summary_submission_timing();
+    void update_profile_summary_submission_outcome();
     void write_queue_base_low(bool submission, uint32_t value);
     void write_queue_base_high(bool submission, uint32_t value);
     void ring_doorbell(uint32_t budget);

@@ -50,7 +50,9 @@ AiAccelerator::AiAccelerator(Plic& plic,
     : Device(base, size),
       plic_(plic),
       irq_source_(irq_source),
-      dma_engine_(scratchpad_) {}
+      dma_engine_(scratchpad_) {
+    refresh_profile_summary_metadata();
+}
 
 void AiAccelerator::bind_bus(Bus& bus) {
     bus_ = &bus;
@@ -327,6 +329,55 @@ uint32_t AiAccelerator::counter_high(uint64_t value) const {
     return static_cast<uint32_t>(value >> 32);
 }
 
+void AiAccelerator::refresh_profile_summary_metadata() {
+    profile_summary_.timing_model = AiAcceleratorTimingModel::TimedSimpleNoOverlap;
+    profile_summary_.scheduler_ops_per_cycle = scheduler_.timing().ops_per_cycle;
+    profile_summary_.scheduler_tile_setup_cycles = scheduler_.timing().tile_setup_cycles;
+    profile_summary_.allow_dma_compute_overlap = scheduler_.timing().allow_dma_compute_overlap;
+    profile_summary_.dma_setup_cycles = dma_engine_.timing().setup_cycles;
+    profile_summary_.dma_bytes_per_cycle = dma_engine_.timing().bytes_per_cycle;
+}
+
+void AiAccelerator::update_profile_summary_submission_timing() {
+    if (!active_submission_valid_) {
+        return;
+    }
+    const uint64_t total_busy_before =
+        active_submission_.device_cycles_before + active_submission_.queue_cycles_before +
+        active_submission_.completion_cycles_before;
+    const uint64_t total_busy_after = busy_cycles();
+    profile_summary_.last_submission_device_cycles =
+        device_cycles_ - active_submission_.device_cycles_before;
+    profile_summary_.last_submission_dma_cycles =
+        dma_engine_.counters().total_cycles - active_submission_.dma_cycles_before;
+    profile_summary_.last_submission_dma_load_cycles =
+        dma_engine_.counters().load_cycles - active_submission_.dma_load_cycles_before;
+    profile_summary_.last_submission_dma_store_cycles =
+        dma_engine_.counters().store_cycles - active_submission_.dma_store_cycles_before;
+    profile_summary_.last_submission_compute_cycles =
+        compute_cycles_ - active_submission_.compute_cycles_before;
+    profile_summary_.last_submission_stall_cycles =
+        stall_cycles_ - active_submission_.stall_cycles_before;
+    profile_summary_.last_submission_queue_cycles =
+        queue_cycles_ - active_submission_.queue_cycles_before;
+    profile_summary_.last_submission_completion_cycles =
+        completion_cycles_ - active_submission_.completion_cycles_before;
+    profile_summary_.last_submission_busy_cycles = total_busy_after - total_busy_before;
+}
+
+void AiAccelerator::update_profile_summary_submission_outcome() {
+    if (!active_submission_valid_) {
+        return;
+    }
+    profile_summary_.last_submission_fault = active_submission_.completion_fault;
+    profile_summary_.last_submission_retired_ops = active_submission_.completion_retired_ops;
+    profile_summary_.last_submission_bytes_moved = active_submission_.completion_bytes_moved;
+    profile_summary_.last_submission_dma_load_bytes =
+        dma_engine_.counters().load_bytes - active_submission_.dma_load_bytes_before;
+    profile_summary_.last_submission_dma_store_bytes =
+        dma_engine_.counters().store_bytes - active_submission_.dma_store_bytes_before;
+}
+
 void AiAccelerator::write_queue_base_low(bool submission, uint32_t value) {
     if (submission) {
         queue_.set_submission_base(combine_u32(queue_.submission_base(), value, false));
@@ -471,6 +522,17 @@ bool AiAccelerator::begin_submission() {
         return false;
     }
 
+    const uint64_t submission_device_cycles_before = device_cycles_;
+    const uint64_t submission_dma_cycles_before = dma_engine_.counters().total_cycles;
+    const uint64_t submission_dma_load_cycles_before = dma_engine_.counters().load_cycles;
+    const uint64_t submission_dma_store_cycles_before = dma_engine_.counters().store_cycles;
+    const uint64_t submission_compute_cycles_before = compute_cycles_;
+    const uint64_t submission_stall_cycles_before = stall_cycles_;
+    const uint64_t submission_queue_cycles_before = queue_cycles_;
+    const uint64_t submission_completion_cycles_before = completion_cycles_;
+    const uint64_t submission_dma_load_bytes_before = dma_engine_.counters().load_bytes;
+    const uint64_t submission_dma_store_bytes_before = dma_engine_.counters().store_bytes;
+
     --pending_submission_budget_;
     ++queue_cycles_;
 
@@ -493,6 +555,16 @@ bool AiAccelerator::begin_submission() {
         complete_descriptor(descriptor, prepare_fault, detail, 0, 0);
         return false;
     }
+    active_submission_.device_cycles_before = submission_device_cycles_before;
+    active_submission_.dma_cycles_before = submission_dma_cycles_before;
+    active_submission_.dma_load_cycles_before = submission_dma_load_cycles_before;
+    active_submission_.dma_store_cycles_before = submission_dma_store_cycles_before;
+    active_submission_.compute_cycles_before = submission_compute_cycles_before;
+    active_submission_.stall_cycles_before = submission_stall_cycles_before;
+    active_submission_.queue_cycles_before = submission_queue_cycles_before;
+    active_submission_.completion_cycles_before = submission_completion_cycles_before;
+    active_submission_.dma_load_bytes_before = submission_dma_load_bytes_before;
+    active_submission_.dma_store_bytes_before = submission_dma_store_bytes_before;
     return true;
 }
 
@@ -812,6 +884,7 @@ bool AiAccelerator::start_compute(uint32_t& fault, uint32_t& detail) {
     profile_summary_.tile_count = result.tile_count;
     profile_summary_.scratchpad_peak_bytes = result.scratchpad_peak_bytes;
     profile_summary_.op_summaries = result.op_summaries;
+    update_profile_summary_submission_timing();
     if (active_submission_.compute_cycles_remaining == 0 &&
         active_submission_.stall_cycles_remaining == 0) {
         active_submission_.compute_complete = true;
@@ -835,8 +908,13 @@ bool AiAccelerator::complete_descriptor(const AiSubmissionDescriptor& descriptor
         return false;
     }
 
+    active_submission_.completion_fault = fault;
+    active_submission_.completion_retired_ops = retired_ops;
+    active_submission_.completion_bytes_moved = bytes_moved;
     ++completion_cycles_;
     retired_ops_ += retired_ops;
+    update_profile_summary_submission_timing();
+    update_profile_summary_submission_outcome();
     queue_.advance_submission();
     queue_.advance_completion();
     ++submission_count_;
@@ -931,6 +1009,7 @@ void AiAccelerator::reset_device() {
     completion_cycles_ = 0;
     retired_ops_ = 0;
     profile_summary_ = {};
+    refresh_profile_summary_metadata();
     update_interrupt_line();
 }
 
