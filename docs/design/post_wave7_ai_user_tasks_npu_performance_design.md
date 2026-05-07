@@ -102,6 +102,13 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 和 `tiny_attention_static` 继续作为功能与 profile guardrail；importer / lower 必须继续落到现有
 统一 graph package、runtime shape table 和 submission ABI，不能引入第二套设备行为。
 
+当前 host-side 固定 workload 还额外保留一条 `guest_ai_accel_demo` 镜像路径：
+
+- 它复用 guest `ai_accel_demo` 的最小 `int32 reduce_sum` submission contract。
+- 作用不是新增新的用户任务类型，而是把 guest/host 共用的 submission 事实来源也接回
+  `--ai-profile-manifest` 路径，方便在 host-only gate 里继续锁住 timing / DMA /
+  per-op 摘要。
+
 当前已经收口的用户任务入口是：
 
 - 先在 host-side `pack_graph.py` 打开一个受限 `task spec` 入口。
@@ -124,6 +131,27 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 - 这一步不是开放任意 CNN graph authoring，而是把“多 op + dependency + runtime shape +
   profile”正式纳入受限用户任务入口。
 
+同一路线当前也已补上一条受限的半精度小模型入口：
+
+- `task spec` 现在还支持 `bounded_dynamic_tiny_model_v1`。
+- 它固定映射到现有 `dynamic_tiny_model` 的
+  `fp16 gemm -> fp32 relu -> fp32 pool_max` bounded dynamic graph package，
+  只开放 batch=`1/2`、`3` 列输入 activations；权重、op family、runtime shape table 与
+  memory plan 继续复用现有 host-side baseline。
+- 这一步的意义仍然是把“受限用户任务入口”逐步扩到现有 guardrail 已覆盖的 workload family，
+  而不是开放任意 FP16 小模型 authoring、任意 pooling 参数或第二套设备 ABI。
+
+同一路线当前也已补上一条最窄的静态 attention-like 入口：
+
+- `task spec` 现在还支持 `static_tiny_attention_v1`。
+- 它固定映射到现有 `tiny_attention_static` 的
+  `fp16 gemm -> fp32 softmax -> fp32 gemm` 静态 graph package，只开放
+  `value_vector[2]` 这一组最小输入面；query/logits 路径、权重、memory plan 与 profile contract
+  继续复用既有 stretch baseline。
+- 这一步仍然不代表任意 attention authoring、动态 sequence length、KV-cache、多头注意力或
+  Transformer runtime 已经打开；它只是把现有静态 attention-like guardrail 也纳入统一的
+  host-side task-spec importer 路线。
+
 这意味着当前已经真正打开了“用户定义任务 contract”，但仍明确不开放：
 
 - 任意模型上传
@@ -137,25 +165,133 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 - **用户任务合同**
   - 需要一套公开但受限的 graph schema / importer / DSL contract。
   - 当前固定为 host-side `task spec` 文件入口，只接受
-    `bounded_dynamic_gemm_v1` 与 `bounded_dynamic_cnn_v1`。
+    `bounded_dynamic_gemm_v1`、`bounded_dynamic_cnn_v1` 与
+    `bounded_dynamic_tiny_model_v1`、`static_tiny_attention_v1`。
   - 用户输入先进入 host 侧校验、compile / lower 和资源预算，再转成统一 graph package。
+  - 除 workload-specific shape / payload 约束外，当前所有 task kind 还统一要求
+    `source_tag` 必须可表示为 `uint32`，`max_ticks` 必须落在 `[1, 4294967295]`；
+    不允许把负数、零、`bool` 或超出 `uint32` 的值延后到 manifest / device 路径再处理。
+  - 当前 `task spec` envelope 也固定 fail-closed：顶层必须是 JSON object，
+    `format` 必须是 `ai_task_spec_v1`，`task_kind` 只能是当前已开放的受限入口，
+    `name` 也必须先通过非空字符串校验，不能靠缺字段或空字符串绕过 host-side parser。
+  - 当前 importer 也会对每个 task kind 的顶层 key 集合做白名单校验；
+    未声明字段与重复顶层 key 都必须在 host-side 直接 fail-closed，不能被静默忽略或覆盖后继续 lower。
+  - `task spec.name` 当前也必须是安全 basename，不能包含路径分隔符或 `.` / `..` 这类路径逃逸成分；
+    host-side 打包产物不允许被写出 `--out-dir`。
 
 - **compile / lower 合同**
   - lowering 结果必须继续落到统一 graph package、tensor table、memory plan 和 submission ABI。
-  - 非法 shape、超预算 scratchpad、unsupported op / dtype / quantization 继续 fail-closed。
+  - 非法 shape、超预算 scratchpad、unsupported op / dtype / quantization 继续 fail-closed；
+    当前 `int8` payload 也显式拒绝 JSON `bool` 伪装成整数。
+  - 当前受限浮点输入面也继续 fail-closed：`bounded_dynamic_tiny_model_v1` 的
+    `fp16` activations 必须可表示为 `fp16`，`static_tiny_attention_v1` 的
+    `value_vector` 必须可表示为 `fp32`，而且这两类浮点输入都必须是 finite；
+    不允许把宿主侧打包阶段的 overflow / non-finite 值留成 Python traceback。
+  - task-spec 顶层标量字段也继续 fail-closed：当前 importer 会在 host-side 直接拒绝
+    非 `uint32` 的 `source_tag`、`bool` 标量与零/越界 `max_ticks`，避免把歧义值写进 manifest /
+    submission ABI 再依赖后续路径兜底。
+  - task-spec 顶层 schema 同样继续 fail-closed：当前 importer 会直接拒绝未知 top-level key
+    与重复顶层 key，避免拼写错误、未约定扩展字段或 JSON 重复键在 host-side 被静默吞掉或后值覆盖前值。
   - 当前 lowering 已覆盖：
     - `bounded_dynamic_gemm_v1 -> dynamic_bounded GEMM package`
     - `bounded_dynamic_cnn_v1 -> dynamic_bounded CNN package`
+    - `bounded_dynamic_tiny_model_v1 -> dynamic_tiny_model package`
+    - `static_tiny_attention_v1 -> tiny_attention_static package`
+  - 对当前两个 bounded task kind，task-spec importer 生成的 `graph.bin` 与
+    `runtime_shape.bin` 也应继续与现有 `dynamic_gemm / dynamic_cnn` 的同尺寸基线保持一致；
+    允许变化的是 `name / source_tag / input/output payload`，而不是第二套 lowering /
+    memory-plan 事实来源。
   - 更宽 op family 的 importer 仍要等后续专项切片逐步打开。
 
 - **性能模型合同**
   - 新增 tile scheduler、overlap、queue depth 和 timeline 观察时，优先通过 host profile /
     manifest / debug 只读字段暴露，不随意扩大 guest ABI。
   - simulated cycles 仍是唯一正式性能口径，不引入“宿主机跑得更快就是设备更强”的表述。
-  - 当前不改动 `timed-simple no-overlap`；性能模型仍以后续切片继续推进。
+  - 当前第一刀先把 `timed-simple no-overlap` 固定成稳定合同：
+    `AiAcceleratorProfileSummary` 必须暴露 `timing_model=TimedSimpleNoOverlap`、
+    `scheduler_ops_per_cycle=32`、`scheduler_tile_setup_cycles=1`、
+    `allow_dma_compute_overlap=false`、`dma_setup_cycles=2` 与
+    `dma_bytes_per_cycle=16`。
+  - 同一份 `AiAcceleratorProfileSummary` 还应暴露最近一次成功 submission 的
+    `queue / dma / compute / stall / completion / busy` aggregate timing delta，
+    让 host-side smoke 能直接验证阶段边界，而不必先穿过共享 CLI 或更宽前端入口。
+  - 同一合同还应保留最近一次 submission 的 outcome 摘要：
+    `fault / retired_ops / bytes_moved`。这样 host-side smoke 可以同时锁住
+    “阶段画像”和“本次完成结果”，而不需要把这类收口强行扩大成新的 guest ABI。
+  - 如果当前切片还要继续细化 `timed-simple`，优先补最近一次 submission 的
+    `dma_load/store cycles` 与 `dma_load/store bytes` 细分画像，而不是直接跨进 overlap
+    timeline 或更宽 guest ABI。
+  - 这组字段除了被直接设备 smoke 校验，也应能在
+    `Machine::run_ai_profile_manifest()` 完成后由设备自有 `profile_summary()` 原样读回，
+    这样 manifest/profile 路径就能复用同一份 host-side contract，而不必先扩 shared CLI
+    或 frontend 入口。
+  - 这条 manifest/profile readback 一致性至少要继续覆盖当前稳定 guardrail：
+    `cnn`、`gemm`、`tiny_model`、`dynamic_gemm`、`dynamic_tiny_model`、`dynamic_cnn`、
+    `custom_dynamic_gemm`、`custom_dynamic_cnn` 与 `tiny_attention_static`。
+  - 同一 `Machine` 上连续跑不同 manifest 时，这份 contract 也必须被后一次 workload
+    完整刷新；不能把 counters、per-op summary 或 doorbell/completion 状态按历史运行累加成
+    伪结果。
+  - 如果后一次 manifest 在 host 解析 / runtime-shape resolve 阶段就 fail-closed 抛错，
+    由于 `run_ai_profile_manifest()` 已先发 reset，这份 contract 也必须回到默认空状态，
+    不能继续保留上一轮成功摘要冒充“最新设备状态”。
+  - 如果 manifest 因 `max_ticks` 太小在设备执行期超时，host summary 应返回
+    `progress=timeout / fault_code=AI_ACCEL_FAULT_TIMEOUT`，同时设备 `profile_summary()`
+    仍保持“尚未完成 submission”的空摘要，而不是伪造一次完成态 profile。
+  - 如果 manifest 走到了设备执行期并以 completion fault 结束，host summary 与设备
+    `profile_summary()` 必须共享同一份失败 submission 摘要：fault code、DMA/queue/completion
+    计数器要如实落下，但 `tile_count / scratchpad_peak_bytes / op summaries` 仍保持空，
+    不伪造成功 compute 画像。
+  - 这一步仍不改动执行语义；它只把现有保守模型的关键参数收口成 host-side 可测事实来源，
+    供后续 tile scheduler / overlap / queue depth 切片在不破坏现有基线的前提下逐步展开。
 
 - **系统集成合同**
   - host harness、当前 guest demo、未来 Linux-facing driver 必须共享同一套设备语义。
+  - 当前已明确的共享 ABI 边界仍然只包括：
+    submission descriptor、submit/completion ring、doorbell、completion/fault status、
+    只读计数器，以及由同一次 submission 派生出来的设备 `profile_summary()`。
+  - host manifest/profile harness 可以额外暴露文本 summary，但它只能读取并组织这套既有设备事实，
+    不能引入第二套 guest completion 语义、第二套 queue 协议或独立 frontend-side 设备解释器。
+  - 当前 guest `ai_accel_demo` 至少要继续与 host-side profile contract 对齐：guest 提交完成后，
+    `debug_snapshot` 计数器与设备 `profile_summary()` 的 timing / outcome / DMA breakdown /
+    per-op 摘要必须指向同一份最近一次 submission 事实来源，而不是只在 host manifest
+    路径上成立。
+  - 同一条 guest/host 合同也必须覆盖最小 reset 生命周期：guest `ai_accel_demo` 成功提交后，
+    设备 MMIO reset 必须把 `doorbell / completion / last_fault`、只读计数器和
+    `profile_summary()` 一起清回默认空状态，不能残留上一轮 guest submission 摘要。
+  - 同一条 guest/host 合同在提交前也必须显式守住默认空状态：
+    guest `ai_accel_demo` 开始运行前，设备 `debug_snapshot`、只读计数器和
+    `profile_summary()` 都必须已经处于零值 / 空摘要默认态，不能依赖“第一次成功提交后再
+    倒推设备初始状态正确”。
+  - 这条默认态 / reset 合同还应继续覆盖 guest 直接可见的 MMIO 控制面：
+    `status`、`queue_depth`、`irq_status`、`irq_mask`、`last_fault` 与 `fault_detail`
+    在 pre-run 默认态和 reset 默认态都必须回到 `READY-only / queue empty / no IRQ /
+    default mask / no fault / zero detail`，不能只通过 debug snapshot 间接推断。
+  - 成功提交后的 guest 可见控制面合同也要按 guest runtime 的真实消费路径锁住：
+    当前 `ai_accel_demo` 会在 completion IRQ 到达后读取并 ack `irq_status`，随后在
+    external post-handler 里把 `irq_mask` 关到 `0`。因此 host smoke 需要验证的是
+    “successful completion 之后控制面回到 `READY-only / queue empty / irq_status=0 /
+    irq_mask=0 / no fault / zero detail`”，而不是假设 completion IRQ 仍然挂在设备上。
+  - 同一条 guest lifecycle 合同还应继续覆盖 submit/completion queue 的 guest-visible
+    ring state：pre-run 默认态下 `submit_queue_size / head / tail` 与
+    `completion_queue_size / head / tail` 都必须为 `0`；成功提交后，当前单 entry
+    `ai_accel_demo` 路径应稳定落到 `size=1 / head=1 / tail=1`；reset 后再统一清回 `0`。
+  - queue 配置本身的 guest-visible base 地址也应纳入同一合同：
+    pre-run 默认态和 reset 默认态下 `submit_queue_base / completion_queue_base` 必须为 `0`；
+    当前 `ai_accel_demo` 成功路径则必须把这两组 base 配成非零、`64B` 对齐且彼此不同的 ring
+    缓冲地址，而不是只通过 `size / head / tail` 间接推断 queue setup 已完成。
+  - 这条 guest reset 合同也应覆盖 debug snapshot 只读观察面：
+    `engine_busy`、`scratchpad_occupancy_bytes`、DMA/compute/stall/busy/queue/completion
+    计数器、`effective_ops_per_cycle` 与 `utilization` 在 guest demo 成功后必须回到 idle，
+    reset 后也必须回到零值默认态。
+  - 同一轮 guest lifecycle guardrail 也应把 `submission_count / fault_count` 与既有
+    `doorbell / completion` 一起纳入 MMIO 只读计数器合同：默认态为零，成功路径按当前
+    `ai_accel_demo` submission 精确落值，reset 后再次回零。
+  - 为了把这条 guest/host bridge 保持在 host-only 可回归范围内，`ai_proto` 现在还维护一个
+    `guest_ai_accel_demo` 镜像 workload：它在 `--ai-profile-manifest` 路径上复用和 guest
+    demo 同一类 `int32 reduce_sum` submission contract，并锁住相同的 timing / DMA /
+    per-op 摘要。
+  - 未来 Linux-facing driver 也必须继续消费这同一套 queue / completion / counter /
+    profile-summary 设备事实；它可以增加更系统的 driver/runtime 包装，但不能分叉设备 ABI。
   - 前端产品入口继续是受控展示面，不成为编译器或设备 ABI 的事实来源。
 
 ### 验证思路
@@ -173,6 +309,22 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
   - `cd myCPU && make test-host-ai_accelerator_cnn_smoke`
   - `cd myCPU && make test-host-ai_accel_guest_smoke`
   - `cd frontend && node --test`
+- 第一阶段验证矩阵：
+  - 默认门禁：
+    `git diff --check`、`cd myCPU && make test-host-ai_tensor_golden_ops_smoke`，以及按
+    `myCPU/AGENTS.md` 在触及 `tests/host/*` / `src/devices/*` 时补跑
+    `cd myCPU && make test-pipeline`。
+  - host smoke：
+    `test-host-ai_accelerator_gemm_smoke`、`test-host-ai_accelerator_cnn_smoke`、
+    `test-host-ai_accelerator_profile_smoke` 负责 timing/outcome/DMA breakdown、
+    manifest lifecycle、task-spec lowering guardrail 和代表性 workload consistency。
+  - guest smoke：
+    `test-host-ai_accel_guest_smoke`、`test-guest-ai_accel_demo`、
+    `test-pipeline-guest-ai_accel_demo` 负责 guest queue/completion/counter ABI，以及 guest
+    demo 与设备 `profile_summary()` 的同源 submission contract。
+  - 未来 Linux 集成门禁：
+    当前仍未启动；等 Linux-facing driver 真正打开后，再单独补更宽的 integration gate，
+    不提前混入这一阶段的 host/guest smoke。
 
 ## 风险与取舍
 

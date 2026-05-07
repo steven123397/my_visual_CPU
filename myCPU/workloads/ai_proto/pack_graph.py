@@ -140,6 +140,35 @@ def build_tiny_model(out_dir: pathlib.Path) -> None:
     )
 
 
+def build_guest_ai_accel_demo(out_dir: pathlib.Path) -> None:
+    name = "guest_ai_accel_demo"
+    tensors = [
+        Tensor("int32", "input", 2, (1, 3, 0, 0), (1, 3, 0, 0)),
+        Tensor("int32", "output", 1, (1, 0, 0, 0), (1, 0, 0, 0)),
+    ]
+    ops = [
+        Op("reduce_sum", "int32", "int32", 0, 0xFFFF, 0xFFFF, 1),
+    ]
+    memory_plan = [
+        MemoryPlan(0, 0, 0, 12, 12),
+        MemoryPlan(1, 0, 12, 4, 4),
+    ]
+    graph = serialize_graph_package(16, tensors, ops, [], memory_plan)
+    (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<3i", 1, 2, 3))
+    (out_dir / f"{name}.output0.expected.bin").write_bytes(struct.pack("<i", 6))
+    write_manifest(
+        out_dir / f"{name}.manifest",
+        name=name,
+        graph_package=f"{name}.graph.bin",
+        inputs=[f"{name}.input0.bin"],
+        outputs=[f"{name}.output0.actual.bin"],
+        expected_outputs=[f"{name}.output0.expected.bin"],
+        max_ticks=128,
+        source_tag=0x33,
+    )
+
+
 def build_dynamic_gemm(out_dir: pathlib.Path) -> None:
     build_dynamic_gemm_like(
         out_dir=out_dir,
@@ -294,6 +323,7 @@ def create_parser() -> argparse.ArgumentParser:
             "cnn",
             "gemm",
             "tiny_model",
+            "guest_ai_accel_demo",
             "dynamic_gemm",
             "dynamic_tiny_model",
             "dynamic_cnn",
@@ -322,6 +352,8 @@ def main(argv: list[str] | None = None) -> int:
         build_gemm(out_dir)
     if args.workload in ("tiny_model", "all"):
         build_tiny_model(out_dir)
+    if args.workload in ("guest_ai_accel_demo", "all"):
+        build_guest_ai_accel_demo(out_dir)
     if args.workload in ("dynamic_gemm", "all"):
         build_dynamic_gemm(out_dir)
     if args.workload in ("dynamic_tiny_model", "all"):

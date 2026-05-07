@@ -92,6 +92,55 @@ bool expect_op_summary(const AiAcceleratorOpProfileSummary& summary,
            expect(summary.tile_count == expected_tile_count, context);
 }
 
+bool expect_default_timing_model(const AiAcceleratorProfileSummary& summary, const char* context) {
+    return expect(summary.timing_model == AiAcceleratorTimingModel::TimedSimpleNoOverlap, context) &&
+           expect(summary.scheduler_ops_per_cycle == 32, context) &&
+           expect(summary.scheduler_tile_setup_cycles == 1, context) &&
+           expect(!summary.allow_dma_compute_overlap, context) &&
+           expect(summary.dma_setup_cycles == 2, context) &&
+           expect(summary.dma_bytes_per_cycle == 16, context);
+}
+
+bool expect_submission_timing(const AiAcceleratorProfileSummary& summary,
+                              uint64_t expected_device_cycles,
+                              uint64_t expected_dma_cycles,
+                              uint64_t expected_compute_cycles,
+                              uint64_t expected_stall_cycles,
+                              uint64_t expected_queue_cycles,
+                              uint64_t expected_completion_cycles,
+                              uint64_t expected_busy_cycles,
+                              const char* context) {
+    return expect(summary.last_submission_device_cycles == expected_device_cycles, context) &&
+           expect(summary.last_submission_dma_cycles == expected_dma_cycles, context) &&
+           expect(summary.last_submission_compute_cycles == expected_compute_cycles, context) &&
+           expect(summary.last_submission_stall_cycles == expected_stall_cycles, context) &&
+           expect(summary.last_submission_queue_cycles == expected_queue_cycles, context) &&
+           expect(summary.last_submission_completion_cycles == expected_completion_cycles, context) &&
+           expect(summary.last_submission_busy_cycles == expected_busy_cycles, context);
+}
+
+bool expect_submission_outcome(const AiAcceleratorProfileSummary& summary,
+                               uint32_t expected_fault,
+                               uint64_t expected_retired_ops,
+                               uint64_t expected_bytes_moved,
+                               const char* context) {
+    return expect(summary.last_submission_fault == expected_fault, context) &&
+           expect(summary.last_submission_retired_ops == expected_retired_ops, context) &&
+           expect(summary.last_submission_bytes_moved == expected_bytes_moved, context);
+}
+
+bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
+                                     uint64_t expected_load_cycles,
+                                     uint64_t expected_store_cycles,
+                                     uint64_t expected_load_bytes,
+                                     uint64_t expected_store_bytes,
+                                     const char* context) {
+    return expect(summary.last_submission_dma_load_cycles == expected_load_cycles, context) &&
+           expect(summary.last_submission_dma_store_cycles == expected_store_cycles, context) &&
+           expect(summary.last_submission_dma_load_bytes == expected_load_bytes, context) &&
+           expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
+}
+
 bool configure_queue(Bus& bus) {
     return store_u32(bus,
                      AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_BASE_LOW,
@@ -648,6 +697,13 @@ int main() {
             !expect(stall_cycles == 4, "expected CNN stall cycles") ||
             !expect(dma_load_bytes == 20, "expected CNN DMA load bytes") ||
             !expect(dma_store_bytes == 12, "expected CNN DMA store bytes") ||
+            !expect_default_timing_model(profile_summary, "expected default CNN timing model") ||
+            !expect_submission_timing(profile_summary, 18, 9, 5, 4, 1, 1, 20,
+                                      "expected CNN submission timing summary") ||
+            !expect_submission_outcome(profile_summary, AI_ACCEL_FAULT_NONE, 63, 32,
+                                       "expected CNN submission outcome summary") ||
+            !expect_submission_dma_breakdown(profile_summary, 6, 3, 20, 12,
+                                            "expected CNN submission DMA breakdown") ||
             !expect(profile_summary.tile_count == 4, "expected CNN aggregate tile count") ||
             !expect(profile_summary.scratchpad_peak_bytes == 188,
                     "expected CNN aggregate scratchpad peak bytes") ||
@@ -764,6 +820,14 @@ int main() {
             !expect(dynamic_completion.bytes_moved == 21, "expected dynamic CNN bytes moved") ||
             !expect(dynamic_output_tensor == std::array<int32_t, 3>{{15, 31, 0}},
                     "expected dynamic CNN output tensor") ||
+            !expect_default_timing_model(dynamic_profile_summary,
+                                         "expected default dynamic CNN timing model") ||
+            !expect_submission_timing(dynamic_profile_summary, 17, 9, 4, 4, 1, 1, 19,
+                                      "expected dynamic CNN submission timing summary") ||
+            !expect_submission_outcome(dynamic_profile_summary, AI_ACCEL_FAULT_NONE, 28, 21,
+                                       "expected dynamic CNN submission outcome summary") ||
+            !expect_submission_dma_breakdown(dynamic_profile_summary, 6, 3, 13, 8,
+                                            "expected dynamic CNN submission DMA breakdown") ||
             !expect(dynamic_profile_summary.tile_count == 4,
                     "expected dynamic CNN aggregate tile count") ||
             !expect(dynamic_profile_summary.scratchpad_peak_bytes == 184,
@@ -862,6 +926,14 @@ int main() {
                     "expected zero bytes moved on dynamic CNN overflow") ||
             !expect(dynamic_overflow_output == dynamic_output_tensor,
                     "expected dynamic CNN output stability after overflow fault") ||
+            !expect_default_timing_model(dynamic_overflow_profile,
+                                         "expected stable dynamic CNN timing model after overflow fault") ||
+            !expect_submission_timing(dynamic_overflow_profile, 17, 9, 4, 4, 1, 1, 19,
+                                      "expected stable dynamic CNN timing after overflow fault") ||
+            !expect_submission_outcome(dynamic_overflow_profile, AI_ACCEL_FAULT_NONE, 28, 21,
+                                       "expected stable dynamic CNN outcome after overflow fault") ||
+            !expect_submission_dma_breakdown(dynamic_overflow_profile, 6, 3, 13, 8,
+                                            "expected stable dynamic CNN DMA breakdown after overflow fault") ||
             !expect(dynamic_overflow_profile.tile_count == 4,
                     "expected dynamic CNN profile stability after overflow fault") ||
             !expect(dynamic_overflow_profile.scratchpad_peak_bytes == 184,
@@ -879,7 +951,14 @@ int main() {
             return 1;
         }
         const AiAcceleratorProfileSummary& reset_profile_summary = machine.ai_accelerator().profile_summary();
-        if (!expect(reset_profile_summary.tile_count == 0, "expected CNN profile tile count reset") ||
+        if (!expect_default_timing_model(reset_profile_summary, "expected default CNN timing model after reset") ||
+            !expect_submission_timing(reset_profile_summary, 0, 0, 0, 0, 0, 0, 0,
+                                      "expected empty CNN submission timing after reset") ||
+            !expect_submission_outcome(reset_profile_summary, AI_ACCEL_FAULT_NONE, 0, 0,
+                                       "expected empty CNN submission outcome after reset") ||
+            !expect_submission_dma_breakdown(reset_profile_summary, 0, 0, 0, 0,
+                                            "expected empty CNN DMA breakdown after reset") ||
+            !expect(reset_profile_summary.tile_count == 0, "expected CNN profile tile count reset") ||
             !expect(reset_profile_summary.scratchpad_peak_bytes == 0,
                     "expected CNN scratchpad peak bytes reset") ||
             !expect(reset_profile_summary.op_summaries.empty(), "expected CNN op summaries reset") ||

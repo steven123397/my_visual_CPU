@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../../src/devices/ai_graph_package.h"
+#include "../../src/platform/machine.h"
 
 namespace {
 
@@ -183,6 +184,25 @@ std::filesystem::path manifest_with_replaced_scalar_key(const std::filesystem::p
     return destination;
 }
 
+std::filesystem::path graph_with_faulty_pool_attr(const std::filesystem::path& source,
+                                                  const std::filesystem::path& destination) {
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(source), package, error)) {
+        throw std::runtime_error("failed to parse source graph package: " + error);
+    }
+    if (package.ops.size() < 2 || package.ops[1].opcode != AiOpCode::PoolMax) {
+        throw std::runtime_error("faulty pool graph source is missing expected PoolMax op");
+    }
+    package.ops[1].attrs[0] = 0;
+    std::vector<uint8_t> bytes{};
+    if (!serialize_ai_graph_package(package, bytes, error)) {
+        throw std::runtime_error("failed to serialize faulty pool graph package: " + error);
+    }
+    write_binary_file(destination, bytes);
+    return destination;
+}
+
 bool expect_profile_failure(const std::filesystem::path& manifest,
                             const char* expected_error,
                             const char* message) {
@@ -207,6 +227,346 @@ bool expect_task_spec_pack_failure(const std::filesystem::path& task_spec,
         return false;
     }
     return expect_contains(pack.output, expected_error, "expected specific task spec pack failure reason");
+}
+
+bool expect_matching_binary_file(const std::filesystem::path& actual,
+                                 const std::filesystem::path& expected,
+                                 const char* context) {
+    return expect_file_exists(actual, context) &&
+           expect_file_exists(expected, context) &&
+           expect(read_binary_file(actual) == read_binary_file(expected), context);
+}
+
+bool expect_default_timing_model(const AiAcceleratorProfileSummary& summary, const char* context) {
+    return expect(summary.timing_model == AiAcceleratorTimingModel::TimedSimpleNoOverlap, context) &&
+           expect(summary.scheduler_ops_per_cycle == 32, context) &&
+           expect(summary.scheduler_tile_setup_cycles == 1, context) &&
+           expect(!summary.allow_dma_compute_overlap, context) &&
+           expect(summary.dma_setup_cycles == 2, context) &&
+           expect(summary.dma_bytes_per_cycle == 16, context);
+}
+
+bool expect_submission_timing(const AiAcceleratorProfileSummary& summary,
+                              uint64_t expected_device_cycles,
+                              uint64_t expected_dma_cycles,
+                              uint64_t expected_compute_cycles,
+                              uint64_t expected_stall_cycles,
+                              uint64_t expected_queue_cycles,
+                              uint64_t expected_completion_cycles,
+                              uint64_t expected_busy_cycles,
+                              const char* context) {
+    return expect(summary.last_submission_device_cycles == expected_device_cycles, context) &&
+           expect(summary.last_submission_dma_cycles == expected_dma_cycles, context) &&
+           expect(summary.last_submission_compute_cycles == expected_compute_cycles, context) &&
+           expect(summary.last_submission_stall_cycles == expected_stall_cycles, context) &&
+           expect(summary.last_submission_queue_cycles == expected_queue_cycles, context) &&
+           expect(summary.last_submission_completion_cycles == expected_completion_cycles, context) &&
+           expect(summary.last_submission_busy_cycles == expected_busy_cycles, context);
+}
+
+bool expect_submission_outcome(const AiAcceleratorProfileSummary& summary,
+                               uint32_t expected_fault,
+                               uint64_t expected_retired_ops,
+                               uint64_t expected_bytes_moved,
+                               const char* context) {
+    return expect(summary.last_submission_fault == expected_fault, context) &&
+           expect(summary.last_submission_retired_ops == expected_retired_ops, context) &&
+           expect(summary.last_submission_bytes_moved == expected_bytes_moved, context);
+}
+
+bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
+                                     uint64_t expected_load_cycles,
+                                     uint64_t expected_store_cycles,
+                                     uint64_t expected_load_bytes,
+                                     uint64_t expected_store_bytes,
+                                     const char* context) {
+    return expect(summary.last_submission_dma_load_cycles == expected_load_cycles, context) &&
+           expect(summary.last_submission_dma_store_cycles == expected_store_cycles, context) &&
+           expect(summary.last_submission_dma_load_bytes == expected_load_bytes, context) &&
+           expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
+}
+
+bool expect_matching_op_summaries(const std::vector<AiOpProfileSummary>& actual,
+                                  const std::vector<AiAcceleratorOpProfileSummary>& expected,
+                                  const char* context) {
+    if (!expect(actual.size() == expected.size(), context)) {
+        return false;
+    }
+    for (size_t i = 0; i < actual.size(); ++i) {
+        if (!expect(actual[i].op_index == expected[i].op_index, context) ||
+            !expect(actual[i].opcode == expected[i].opcode, context) ||
+            !expect(actual[i].retired_ops == expected[i].retired_ops, context) ||
+            !expect(actual[i].compute_cycles == expected[i].compute_cycles, context) ||
+            !expect(actual[i].stall_cycles == expected[i].stall_cycles, context) ||
+            !expect(actual[i].tile_count == expected[i].tile_count, context)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool expect_manifest_device_profile_summary(const std::filesystem::path& manifest,
+                                            uint64_t expected_device_cycles,
+                                            uint64_t expected_dma_cycles,
+                                            uint64_t expected_compute_cycles,
+                                            uint64_t expected_stall_cycles,
+                                            uint64_t expected_busy_cycles,
+                                            uint64_t expected_queue_cycles,
+                                            uint64_t expected_completion_cycles,
+                                            uint64_t expected_dma_load_cycles,
+                                            uint64_t expected_dma_store_cycles,
+                                            uint64_t expected_dma_load_bytes,
+                                            uint64_t expected_dma_store_bytes,
+                                            uint64_t expected_retired_ops,
+                                            uint64_t expected_bytes_moved,
+                                            uint64_t expected_tile_count,
+                                            uint32_t expected_scratchpad_peak_bytes,
+                                            size_t expected_op_count,
+                                            const char* context) {
+    Machine machine{};
+    const Machine::AiProfileRunResult result = machine.run_ai_profile_manifest(manifest.string());
+    const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    return expect(result.completed, context) &&
+           expect(result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, context) &&
+           expect(result.fault_code == AI_ACCEL_FAULT_NONE, context) &&
+           expect(result.device_cycles == expected_device_cycles, context) &&
+           expect(result.dma_cycles == expected_dma_cycles, context) &&
+           expect(result.compute_cycles == expected_compute_cycles, context) &&
+           expect(result.stall_cycles == expected_stall_cycles, context) &&
+           expect(result.busy_cycles == expected_busy_cycles, context) &&
+           expect(result.queue_cycles == expected_queue_cycles, context) &&
+           expect(result.completion_cycles == expected_completion_cycles, context) &&
+           expect(result.retired_ops == expected_retired_ops, context) &&
+           expect(result.bytes_moved == expected_bytes_moved, context) &&
+           expect(result.tile_count == expected_tile_count, context) &&
+           expect(result.scratchpad_peak_bytes == expected_scratchpad_peak_bytes, context) &&
+           expect(result.op_summaries.size() == expected_op_count, context) &&
+           expect(machine.ai_accelerator().completion_count() == 1, context) &&
+           expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
+           expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
+           expect_default_timing_model(summary, context) &&
+           expect_submission_timing(summary,
+                                    expected_device_cycles,
+                                    expected_dma_cycles,
+                                    expected_compute_cycles,
+                                    expected_stall_cycles,
+                                    expected_queue_cycles,
+                                    expected_completion_cycles,
+                                    expected_busy_cycles,
+                                    context) &&
+           expect_submission_outcome(summary,
+                                     AI_ACCEL_FAULT_NONE,
+                                     expected_retired_ops,
+                                     expected_bytes_moved,
+                                     context) &&
+           expect_submission_dma_breakdown(summary,
+                                           expected_dma_load_cycles,
+                                           expected_dma_store_cycles,
+                                           expected_dma_load_bytes,
+                                           expected_dma_store_bytes,
+                                           context) &&
+           expect(summary.tile_count == expected_tile_count, context) &&
+           expect(summary.scratchpad_peak_bytes == expected_scratchpad_peak_bytes, context) &&
+           expect(summary.op_summaries.size() == expected_op_count, context) &&
+           expect_matching_op_summaries(result.op_summaries, summary.op_summaries, context);
+}
+
+bool expect_manifest_rerun_refresh(const std::filesystem::path& first_manifest,
+                                   const std::filesystem::path& second_manifest,
+                                   uint64_t expected_second_device_cycles,
+                                   uint64_t expected_second_dma_cycles,
+                                   uint64_t expected_second_compute_cycles,
+                                   uint64_t expected_second_stall_cycles,
+                                   uint64_t expected_second_busy_cycles,
+                                   uint64_t expected_second_queue_cycles,
+                                   uint64_t expected_second_completion_cycles,
+                                   uint64_t expected_second_dma_load_cycles,
+                                   uint64_t expected_second_dma_store_cycles,
+                                   uint64_t expected_second_dma_load_bytes,
+                                   uint64_t expected_second_dma_store_bytes,
+                                   uint64_t expected_second_retired_ops,
+                                   uint64_t expected_second_bytes_moved,
+                                   uint64_t expected_second_tile_count,
+                                   uint32_t expected_second_scratchpad_peak_bytes,
+                                   size_t expected_second_op_count,
+                                   const char* context) {
+    Machine machine{};
+    const Machine::AiProfileRunResult first = machine.run_ai_profile_manifest(first_manifest.string());
+    const Machine::AiProfileRunResult second = machine.run_ai_profile_manifest(second_manifest.string());
+    const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    return expect(first.completed, context) &&
+           expect(second.completed, context) &&
+           expect(second.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, context) &&
+           expect(second.fault_code == AI_ACCEL_FAULT_NONE, context) &&
+           expect(second.device_cycles == expected_second_device_cycles, context) &&
+           expect(second.dma_cycles == expected_second_dma_cycles, context) &&
+           expect(second.compute_cycles == expected_second_compute_cycles, context) &&
+           expect(second.stall_cycles == expected_second_stall_cycles, context) &&
+           expect(second.busy_cycles == expected_second_busy_cycles, context) &&
+           expect(second.queue_cycles == expected_second_queue_cycles, context) &&
+           expect(second.completion_cycles == expected_second_completion_cycles, context) &&
+           expect(second.retired_ops == expected_second_retired_ops, context) &&
+           expect(second.bytes_moved == expected_second_bytes_moved, context) &&
+           expect(second.tile_count == expected_second_tile_count, context) &&
+           expect(second.scratchpad_peak_bytes == expected_second_scratchpad_peak_bytes, context) &&
+           expect(second.op_summaries.size() == expected_second_op_count, context) &&
+           expect(machine.ai_accelerator().completion_count() == 1, context) &&
+           expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
+           expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
+           expect_default_timing_model(summary, context) &&
+           expect_submission_timing(summary,
+                                    expected_second_device_cycles,
+                                    expected_second_dma_cycles,
+                                    expected_second_compute_cycles,
+                                    expected_second_stall_cycles,
+                                    expected_second_queue_cycles,
+                                    expected_second_completion_cycles,
+                                    expected_second_busy_cycles,
+                                    context) &&
+           expect_submission_outcome(summary,
+                                     AI_ACCEL_FAULT_NONE,
+                                     expected_second_retired_ops,
+                                     expected_second_bytes_moved,
+                                     context) &&
+           expect_submission_dma_breakdown(summary,
+                                           expected_second_dma_load_cycles,
+                                           expected_second_dma_store_cycles,
+                                           expected_second_dma_load_bytes,
+                                           expected_second_dma_store_bytes,
+                                           context) &&
+           expect(summary.tile_count == expected_second_tile_count, context) &&
+           expect(summary.scratchpad_peak_bytes == expected_second_scratchpad_peak_bytes, context) &&
+           expect(summary.op_summaries.size() == expected_second_op_count, context) &&
+           expect_matching_op_summaries(second.op_summaries, summary.op_summaries, context);
+}
+
+bool expect_manifest_failure_resets_device_state(const std::filesystem::path& success_manifest,
+                                                 const std::filesystem::path& failing_manifest,
+                                                 const char* expected_error,
+                                                 const char* context) {
+    Machine machine{};
+    const Machine::AiProfileRunResult success = machine.run_ai_profile_manifest(success_manifest.string());
+    if (!expect(success.completed, context) ||
+        !expect(success.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, context)) {
+        return false;
+    }
+
+    bool threw = false;
+    try {
+        static_cast<void>(machine.run_ai_profile_manifest(failing_manifest.string()));
+    } catch (const std::runtime_error& ex) {
+        threw = true;
+        if (!expect(std::string(ex.what()).find(expected_error) != std::string::npos, context)) {
+            return false;
+        }
+    }
+    if (!expect(threw, context)) {
+        return false;
+    }
+
+    const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    return expect(machine.ai_accelerator().completion_count() == 0, context) &&
+           expect(machine.ai_accelerator().doorbell_count() == 0, context) &&
+           expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
+           expect_default_timing_model(summary, context) &&
+           expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
+           expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
+           expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
+           expect(summary.tile_count == 0, context) &&
+           expect(summary.scratchpad_peak_bytes == 0, context) &&
+           expect(summary.op_summaries.empty(), context);
+}
+
+bool expect_manifest_timeout_state(const std::filesystem::path& manifest,
+                                   uint64_t expected_ticks,
+                                   uint64_t expected_device_cycles,
+                                   uint64_t expected_dma_cycles,
+                                   uint64_t expected_compute_cycles,
+                                   uint64_t expected_stall_cycles,
+                                   uint64_t expected_busy_cycles,
+                                   uint64_t expected_queue_cycles,
+                                   uint64_t expected_completion_cycles,
+                                   const char* context) {
+    Machine machine{};
+    const Machine::AiProfileRunResult result = machine.run_ai_profile_manifest(manifest.string());
+    const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    return expect(!result.completed, context) &&
+           expect(result.completion_status == AI_ACCEL_COMPLETION_STATUS_FAULT, context) &&
+           expect(result.fault_code == AI_ACCEL_FAULT_TIMEOUT, context) &&
+           expect(result.ticks == expected_ticks, context) &&
+           expect(result.device_cycles == expected_device_cycles, context) &&
+           expect(result.dma_cycles == expected_dma_cycles, context) &&
+           expect(result.compute_cycles == expected_compute_cycles, context) &&
+           expect(result.stall_cycles == expected_stall_cycles, context) &&
+           expect(result.busy_cycles == expected_busy_cycles, context) &&
+           expect(result.queue_cycles == expected_queue_cycles, context) &&
+           expect(result.completion_cycles == expected_completion_cycles, context) &&
+           expect(result.bytes_moved == 0, context) &&
+           expect(result.retired_ops == 0, context) &&
+           expect(result.tile_count == 0, context) &&
+           expect(result.scratchpad_peak_bytes == 0, context) &&
+           expect(result.op_summaries.empty(), context) &&
+           expect(machine.ai_accelerator().completion_count() == 0, context) &&
+           expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
+           expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
+           expect_default_timing_model(summary, context) &&
+           expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
+           expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
+           expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
+           expect(summary.tile_count == 0, context) &&
+           expect(summary.scratchpad_peak_bytes == 0, context) &&
+           expect(summary.op_summaries.empty(), context);
+}
+
+bool expect_manifest_completion_fault_state(const std::filesystem::path& manifest,
+                                            uint64_t expected_ticks,
+                                            uint32_t expected_fault_code,
+                                            uint64_t expected_device_cycles,
+                                            uint64_t expected_dma_cycles,
+                                            uint64_t expected_compute_cycles,
+                                            uint64_t expected_stall_cycles,
+                                            uint64_t expected_busy_cycles,
+                                            uint64_t expected_queue_cycles,
+                                            uint64_t expected_completion_cycles,
+                                            uint64_t expected_bytes_moved,
+                                            const char* context) {
+    Machine machine{};
+    const Machine::AiProfileRunResult result = machine.run_ai_profile_manifest(manifest.string());
+    const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    return expect(result.completed, context) &&
+           expect(result.completion_status == AI_ACCEL_COMPLETION_STATUS_FAULT, context) &&
+           expect(result.fault_code == expected_fault_code, context) &&
+           expect(result.ticks == expected_ticks, context) &&
+           expect(result.device_cycles == expected_device_cycles, context) &&
+           expect(result.dma_cycles == expected_dma_cycles, context) &&
+           expect(result.compute_cycles == expected_compute_cycles, context) &&
+           expect(result.stall_cycles == expected_stall_cycles, context) &&
+           expect(result.busy_cycles == expected_busy_cycles, context) &&
+           expect(result.queue_cycles == expected_queue_cycles, context) &&
+           expect(result.completion_cycles == expected_completion_cycles, context) &&
+           expect(result.bytes_moved == expected_bytes_moved, context) &&
+           expect(result.retired_ops == 0, context) &&
+           expect(result.tile_count == 0, context) &&
+           expect(result.scratchpad_peak_bytes == 0, context) &&
+           expect(result.op_summaries.empty(), context) &&
+           expect(machine.ai_accelerator().completion_count() == 1, context) &&
+           expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
+           expect(machine.ai_accelerator().last_fault() == expected_fault_code, context) &&
+           expect_default_timing_model(summary, context) &&
+           expect_submission_timing(summary,
+                                    expected_device_cycles,
+                                    expected_dma_cycles,
+                                    expected_compute_cycles,
+                                    expected_stall_cycles,
+                                    expected_queue_cycles,
+                                    expected_completion_cycles,
+                                    expected_busy_cycles,
+                                    context) &&
+           expect_submission_outcome(summary, expected_fault_code, 0, expected_bytes_moved, context) &&
+           expect_submission_dma_breakdown(summary, 6, 0, expected_bytes_moved, 0, context) &&
+           expect(summary.tile_count == 0, context) &&
+           expect(summary.scratchpad_peak_bytes == 0, context) &&
+           expect(summary.op_summaries.empty(), context);
 }
 
 bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
@@ -597,6 +957,252 @@ bool expect_pack_and_profile_task_spec_dynamic_cnn(const std::filesystem::path& 
                   "expected CNN task-spec output to match packaged expectation");
 }
 
+bool expect_pack_and_profile_task_spec_dynamic_tiny_model(const std::filesystem::path& temp_dir) {
+    const std::filesystem::path task_spec = temp_dir / "custom_dynamic_tiny_model.task_spec.json";
+    write_text_file(task_spec,
+                    "{\n"
+                    "  \"format\": \"ai_task_spec_v1\",\n"
+                    "  \"task_kind\": \"bounded_dynamic_tiny_model_v1\",\n"
+                    "  \"name\": \"custom_dynamic_tiny_model\",\n"
+                    "  \"source_tag\": 83,\n"
+                    "  \"max_ticks\": 128,\n"
+                    "  \"input0\": [\n"
+                    "    [0.5, 2.0, -1.0]\n"
+                    "  ]\n"
+                    "}\n");
+
+    const std::string pack_command =
+        "python3 workloads/ai_proto/pack_graph.py --task-spec " + task_spec.string() +
+        " --out-dir " + temp_dir.string();
+    const CommandResult pack = run_command(pack_command);
+    if (!expect(pack.exit_code == 0, "expected dynamic tiny task-spec pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+
+    const std::filesystem::path manifest = temp_dir / "custom_dynamic_tiny_model.manifest";
+    const std::filesystem::path graph = temp_dir / "custom_dynamic_tiny_model.graph.bin";
+    const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_tiny_model.runtime_shape.bin";
+    const std::filesystem::path actual = temp_dir / "custom_dynamic_tiny_model.output0.actual.bin";
+    const std::filesystem::path expected = temp_dir / "custom_dynamic_tiny_model.output0.expected.bin";
+    if (!expect_file_exists(manifest, "expected dynamic tiny task-spec manifest") ||
+        !expect_file_exists(graph, "expected dynamic tiny task-spec graph package") ||
+        !expect_file_exists(runtime_shape, "expected dynamic tiny task-spec runtime shape table") ||
+        !expect_file_exists(expected, "expected dynamic tiny task-spec expected output")) {
+        return false;
+    }
+
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph), package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    if (!expect(package.shape_mode == AiShapeMode::DynamicBounded,
+                "expected dynamic tiny task-spec packaged graph shape mode") ||
+        !expect(package.dynamic_tensors.size() == 4,
+                "expected dynamic tiny task-spec packaged graph dynamic tensors") ||
+        !expect(package.memory_plan.size() == 5,
+                "expected dynamic tiny task-spec packaged graph memory plan size") ||
+        !expect(package.memory_plan[0].scratchpad_offset == 0 &&
+                    package.memory_plan[0].byte_size == 12,
+                "expected dynamic tiny task-spec input tensor memory plan") ||
+        !expect(package.memory_plan[1].scratchpad_offset == 12 &&
+                    package.memory_plan[1].byte_size == 12,
+                "expected dynamic tiny task-spec weight tensor memory plan") ||
+        !expect(package.memory_plan[2].scratchpad_offset == 24 &&
+                    package.memory_plan[2].byte_size == 16,
+                "expected dynamic tiny task-spec gemm tensor memory plan") ||
+        !expect(package.memory_plan[3].scratchpad_offset == 40 &&
+                    package.memory_plan[3].byte_size == 16,
+                "expected dynamic tiny task-spec relu tensor memory plan") ||
+        !expect(package.memory_plan[4].scratchpad_offset == 56 &&
+                    package.memory_plan[4].byte_size == 8,
+                "expected dynamic tiny task-spec output tensor memory plan") ||
+        !expect(package.scratchpad_budget_bytes == 64,
+                "expected dynamic tiny task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+
+    const CommandResult profile =
+        run_command("./mycpu --ai-profile-manifest " + manifest.string());
+    if (!expect(profile.exit_code == 0,
+                "expected dynamic tiny task-spec ai profile command to succeed")) {
+        std::fprintf(stderr, "%s\n", profile.output.c_str());
+        return false;
+    }
+
+    if (!expect_contains(profile.output,
+                         "name=custom_dynamic_tiny_model",
+                         "expected dynamic tiny task-spec workload name") ||
+        !expect_contains(profile.output,
+                         "shape_mode=dynamic_bounded",
+                         "expected dynamic tiny task-spec shape mode summary") ||
+        !expect_contains(profile.output,
+                         "runtime_shapes=t0:1x3,t2:1x2,t3:1x2,t4:1x1",
+                         "expected dynamic tiny task-spec runtime shape summary") ||
+        !expect_contains(profile.output,
+                         "device_cycles=15",
+                         "expected dynamic tiny task-spec device cycle summary") ||
+        !expect_contains(profile.output,
+                         "dma_cycles=9",
+                         "expected dynamic tiny task-spec DMA cycle summary") ||
+        !expect_contains(profile.output,
+                         "compute_cycles=3",
+                         "expected dynamic tiny task-spec compute cycle summary") ||
+        !expect_contains(profile.output,
+                         "stall_cycles=3",
+                         "expected dynamic tiny task-spec stall cycle summary") ||
+        !expect_contains(profile.output,
+                         "busy_cycles=17",
+                         "expected dynamic tiny task-spec busy cycle summary") ||
+        !expect_contains(profile.output,
+                         "queue_cycles=1",
+                         "expected dynamic tiny task-spec queue cycle summary") ||
+        !expect_contains(profile.output,
+                         "completion_cycles=1",
+                         "expected dynamic tiny task-spec completion cycle summary") ||
+        !expect_contains(profile.output,
+                         "effective_ops_per_cycle=3",
+                         "expected dynamic tiny task-spec op/cycle summary") ||
+        !expect_contains(profile.output,
+                         "utilization=17",
+                         "expected dynamic tiny task-spec utilization summary") ||
+        !expect_contains(profile.output,
+                         "bytes_moved=22",
+                         "expected dynamic tiny task-spec bytes moved summary") ||
+        !expect_contains(profile.output,
+                         "retired_ops=10",
+                         "expected dynamic tiny task-spec retired op summary") ||
+        !expect_contains(profile.output,
+                         "ai_profile_aggregate tile_count=3 scratchpad_peak_bytes=60 op_count=3",
+                         "expected dynamic tiny task-spec aggregate itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=0 opcode=gemm retired_ops=6 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic tiny task-spec GEMM itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic tiny task-spec ReLU itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=2 opcode=pool_max retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected dynamic tiny task-spec pool itemized profile output") ||
+        !expect_file_exists(actual, "expected dynamic tiny task-spec actual output")) {
+        return false;
+    }
+
+    return expect(read_binary_file(actual) == read_binary_file(expected),
+                  "expected dynamic tiny task-spec output to match packaged expectation");
+}
+
+bool expect_pack_and_profile_task_spec_static_tiny_attention(const std::filesystem::path& temp_dir) {
+    const std::filesystem::path task_spec = temp_dir / "custom_tiny_attention_static.task_spec.json";
+    write_text_file(task_spec,
+                    "{\n"
+                    "  \"format\": \"ai_task_spec_v1\",\n"
+                    "  \"task_kind\": \"static_tiny_attention_v1\",\n"
+                    "  \"name\": \"custom_tiny_attention_static\",\n"
+                    "  \"source_tag\": 89,\n"
+                    "  \"max_ticks\": 128,\n"
+                    "  \"value_vector\": [2.0, 6.0]\n"
+                    "}\n");
+
+    const std::string pack_command =
+        "python3 workloads/ai_proto/pack_graph.py --task-spec " + task_spec.string() +
+        " --out-dir " + temp_dir.string();
+    const CommandResult pack = run_command(pack_command);
+    if (!expect(pack.exit_code == 0, "expected static tiny attention task-spec pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+
+    const std::filesystem::path manifest = temp_dir / "custom_tiny_attention_static.manifest";
+    const std::filesystem::path graph = temp_dir / "custom_tiny_attention_static.graph.bin";
+    const std::filesystem::path actual = temp_dir / "custom_tiny_attention_static.output0.actual.bin";
+    const std::filesystem::path expected = temp_dir / "custom_tiny_attention_static.output0.expected.bin";
+    if (!expect_file_exists(manifest, "expected static tiny attention task-spec manifest") ||
+        !expect_file_exists(graph, "expected static tiny attention task-spec graph package") ||
+        !expect_file_exists(expected, "expected static tiny attention task-spec expected output")) {
+        return false;
+    }
+
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph), package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    if (!expect(package.shape_mode == AiShapeMode::Static,
+                "expected static tiny attention task-spec packaged graph shape mode") ||
+        !expect(package.dynamic_tensors.empty(),
+                "expected static tiny attention task-spec packaged graph to stay static") ||
+        !expect(package.memory_plan.size() == 6,
+                "expected static tiny attention task-spec packaged graph memory plan size") ||
+        !expect(package.memory_plan[0].scratchpad_offset == 0 &&
+                    package.memory_plan[0].byte_size == 4,
+                "expected static tiny attention task-spec input tensor memory plan") ||
+        !expect(package.memory_plan[1].scratchpad_offset == 8 &&
+                    package.memory_plan[1].byte_size == 8,
+                "expected static tiny attention task-spec query weight tensor memory plan") ||
+        !expect(package.memory_plan[2].scratchpad_offset == 16 &&
+                    package.memory_plan[2].byte_size == 8,
+                "expected static tiny attention task-spec first gemm tensor memory plan") ||
+        !expect(package.memory_plan[3].scratchpad_offset == 24 &&
+                    package.memory_plan[3].byte_size == 8,
+                "expected static tiny attention task-spec softmax tensor memory plan") ||
+        !expect(package.memory_plan[4].scratchpad_offset == 32 &&
+                    package.memory_plan[4].byte_size == 8,
+                "expected static tiny attention task-spec value tensor memory plan") ||
+        !expect(package.memory_plan[5].scratchpad_offset == 48 &&
+                    package.memory_plan[5].byte_size == 4,
+                "expected static tiny attention task-spec output tensor memory plan") ||
+        !expect(package.scratchpad_budget_bytes == 64,
+                "expected static tiny attention task-spec scratchpad budget")) {
+        return false;
+    }
+
+    const CommandResult profile =
+        run_command("./mycpu --ai-profile-manifest " + manifest.string());
+    if (!expect(profile.exit_code == 0,
+                "expected static tiny attention task-spec ai profile command to succeed")) {
+        std::fprintf(stderr, "%s\n", profile.output.c_str());
+        return false;
+    }
+
+    if (!expect_contains(profile.output,
+                         "name=custom_tiny_attention_static",
+                         "expected static tiny attention task-spec workload name") ||
+        !expect_contains(profile.output, "shape_mode=static", "expected static tiny attention shape mode summary") ||
+        !expect_contains(profile.output, "device_cycles=18", "expected static tiny attention device cycle summary") ||
+        !expect_contains(profile.output, "dma_cycles=12", "expected static tiny attention DMA cycle summary") ||
+        !expect_contains(profile.output, "compute_cycles=3", "expected static tiny attention compute cycle summary") ||
+        !expect_contains(profile.output, "stall_cycles=3", "expected static tiny attention stall cycle summary") ||
+        !expect_contains(profile.output, "busy_cycles=20", "expected static tiny attention busy cycle summary") ||
+        !expect_contains(profile.output, "queue_cycles=1", "expected static tiny attention queue cycle summary") ||
+        !expect_contains(profile.output, "completion_cycles=1", "expected static tiny attention completion cycle summary") ||
+        !expect_contains(profile.output, "effective_ops_per_cycle=2", "expected static tiny attention op/cycle summary") ||
+        !expect_contains(profile.output, "utilization=15", "expected static tiny attention utilization summary") ||
+        !expect_contains(profile.output, "bytes_moved=24", "expected static tiny attention bytes moved summary") ||
+        !expect_contains(profile.output, "retired_ops=8", "expected static tiny attention retired op summary") ||
+        !expect_contains(profile.output,
+                         "ai_profile_aggregate tile_count=3 scratchpad_peak_bytes=52 op_count=3",
+                         "expected static tiny attention aggregate itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=0 opcode=gemm retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected static tiny attention first GEMM itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=1 opcode=softmax retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected static tiny attention softmax itemized profile output") ||
+        !expect_contains(profile.output,
+                         "ai_profile_op op_index=2 opcode=gemm retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
+                         "expected static tiny attention second GEMM itemized profile output") ||
+        !expect_file_exists(actual, "expected static tiny attention task-spec actual output")) {
+        return false;
+    }
+
+    return expect(read_binary_file(actual) == read_binary_file(expected),
+                  "expected static tiny attention task-spec output to match packaged expectation");
+}
+
 bool expect_pack_and_profile_dynamic_tiny_model(const std::filesystem::path& temp_dir) {
     const std::string pack_command =
         "python3 workloads/ai_proto/pack_graph.py --workload dynamic_tiny_model --out-dir " +
@@ -779,6 +1385,8 @@ int main() {
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=cnn");
         const CommandResult tiny_model_make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_model");
+        const CommandResult guest_ai_accel_demo_make_run = run_command(
+            "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=guest_ai_accel_demo");
         const CommandResult dynamic_gemm_make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_gemm");
         const CommandResult dynamic_tiny_model_make_run = run_command(
@@ -790,6 +1398,8 @@ int main() {
         if (!expect(make_run.exit_code == 0, "expected ai workload make dry-run to succeed") ||
             !expect(tiny_model_make_run.exit_code == 0,
                     "expected tiny model ai workload make dry-run to succeed") ||
+            !expect(guest_ai_accel_demo_make_run.exit_code == 0,
+                    "expected guest_ai_accel_demo ai workload make dry-run to succeed") ||
             !expect(dynamic_gemm_make_run.exit_code == 0,
                     "expected dynamic_gemm ai workload make dry-run to succeed") ||
             !expect(dynamic_tiny_model_make_run.exit_code == 0,
@@ -807,6 +1417,10 @@ int main() {
             !expect_contains(tiny_model_make_run.output,
                              "--ai-profile-manifest workloads/ai_proto/generated/tiny_model.manifest",
                              "expected tiny model dry-run manifest argument") ||
+            !expect_contains(
+                guest_ai_accel_demo_make_run.output,
+                "--ai-profile-manifest workloads/ai_proto/generated/guest_ai_accel_demo.manifest",
+                "expected guest_ai_accel_demo dry-run manifest argument") ||
             !expect_contains(dynamic_gemm_make_run.output,
                              "--ai-profile-manifest workloads/ai_proto/generated/dynamic_gemm.manifest",
                              "expected dynamic_gemm dry-run manifest argument") ||
@@ -892,6 +1506,348 @@ int main() {
                         "    [1, 0],\n"
                         "    [-1, 2]\n"
                         "  ]\n"
+                        "}\n");
+        const std::filesystem::path oversized_dynamic_tiny_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_tiny_model_oversized_rows.json";
+        write_text_file(oversized_dynamic_tiny_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_tiny_model_v1\",\n"
+                        "  \"name\": \"oversized_rows_dynamic_tiny_model\",\n"
+                        "  \"input0\": [\n"
+                        "    [0.5, 2.0, -1.0],\n"
+                        "    [1.0, -2.0, 3.0],\n"
+                        "    [-1.0, -1.0, -1.0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path bad_attention_task_spec =
+            task_spec_malformed_dir / "static_tiny_attention_bad_value_count.json";
+        write_text_file(bad_attention_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"static_tiny_attention_v1\",\n"
+                        "  \"name\": \"bad_value_count_attention\",\n"
+                        "  \"value_vector\": [1.0, 2.0, 3.0]\n"
+                        "}\n");
+        const std::filesystem::path non_object_task_spec =
+            task_spec_malformed_dir / "task_spec_non_object.json";
+        write_text_file(non_object_task_spec, "[1, 2, 3]\n");
+        const std::filesystem::path wrong_format_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_wrong_format.json";
+        write_text_file(wrong_format_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v0\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"wrong_format_gemm\",\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path unsupported_task_kind_task_spec =
+            task_spec_malformed_dir / "unsupported_task_kind.json";
+        write_text_file(unsupported_task_kind_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"future_dynamic_attention_v1\",\n"
+                        "  \"name\": \"unsupported_task_kind\",\n"
+                        "  \"input0\": [1]\n"
+                        "}\n");
+        const std::filesystem::path empty_name_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_empty_name.json";
+        write_text_file(empty_name_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"\",\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path negative_source_tag_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_negative_source_tag.json";
+        write_text_file(negative_source_tag_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"negative_source_tag_gemm\",\n"
+                        "  \"source_tag\": -1,\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path zero_max_ticks_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_cnn_zero_max_ticks.json";
+        write_text_file(zero_max_ticks_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_cnn_v1\",\n"
+                        "  \"name\": \"zero_max_ticks_cnn\",\n"
+                        "  \"max_ticks\": 0,\n"
+                        "  \"input0\": [\n"
+                        "    [1, -2, 3],\n"
+                        "    [-4, 5, -6],\n"
+                        "    [7, -8, 9]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0],\n"
+                        "    [-1, 2]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path oversized_source_tag_task_spec =
+            task_spec_malformed_dir / "dynamic_tiny_model_oversized_source_tag.json";
+        write_text_file(oversized_source_tag_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_tiny_model_v1\",\n"
+                        "  \"name\": \"oversized_source_tag_dynamic_tiny_model\",\n"
+                        "  \"source_tag\": 4294967296,\n"
+                        "  \"input0\": [\n"
+                        "    [0.5, 2.0, -1.0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path oversized_max_ticks_attention_task_spec =
+            task_spec_malformed_dir / "static_tiny_attention_oversized_max_ticks.json";
+        write_text_file(oversized_max_ticks_attention_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"static_tiny_attention_v1\",\n"
+                        "  \"name\": \"oversized_max_ticks_attention\",\n"
+                        "  \"max_ticks\": 4294967296,\n"
+                        "  \"value_vector\": [1.0, 3.0]\n"
+                        "}\n");
+        const std::filesystem::path unknown_top_level_key_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_unknown_top_level_key.json";
+        write_text_file(unknown_top_level_key_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"unknown_top_level_key_gemm\",\n"
+                        "  \"unknown_extra\": 1,\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path duplicate_name_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_duplicate_name.json";
+        write_text_file(duplicate_name_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"duplicate_name_first\",\n"
+                        "  \"name\": \"duplicate_name_second\",\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path bool_source_tag_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_bool_source_tag.json";
+        write_text_file(bool_source_tag_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"bool_source_tag_gemm\",\n"
+                        "  \"source_tag\": true,\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path bool_max_ticks_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_cnn_bool_max_ticks.json";
+        write_text_file(bool_max_ticks_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_cnn_v1\",\n"
+                        "  \"name\": \"bool_max_ticks_cnn\",\n"
+                        "  \"max_ticks\": true,\n"
+                        "  \"input0\": [\n"
+                        "    [1, -2, 3],\n"
+                        "    [-4, 5, -6],\n"
+                        "    [7, -8, 9]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0],\n"
+                        "    [-1, 2]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path bool_input0_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_bool_input0.json";
+        write_text_file(bool_input0_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"bool_input0_gemm\",\n"
+                        "  \"input0\": [\n"
+                        "    [true, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path bool_kernel_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_cnn_bool_kernel.json";
+        write_text_file(bool_kernel_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_cnn_v1\",\n"
+                        "  \"name\": \"bool_kernel_cnn\",\n"
+                        "  \"input0\": [\n"
+                        "    [1, -2, 3],\n"
+                        "    [-4, 5, -6],\n"
+                        "    [7, -8, 9]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [true, 0],\n"
+                        "    [-1, 2]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path path_escape_name_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_path_escape_name.json";
+        write_text_file(path_escape_name_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"../escaped_name\",\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path newline_name_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_gemm_newline_name.json";
+        write_text_file(newline_name_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_gemm_v1\",\n"
+                        "  \"name\": \"evil\\nmax_ticks=1\",\n"
+                        "  \"input0\": [\n"
+                        "    [1, 2, 3, 4, 5, 6, 7, 8]\n"
+                        "  ],\n"
+                        "  \"input1\": [\n"
+                        "    [1, 0, 0, 0],\n"
+                        "    [0, 1, 0, 0],\n"
+                        "    [0, 0, 1, 0],\n"
+                        "    [0, 0, 0, 1],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0],\n"
+                        "    [0, 0, 0, 0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path overflow_fp16_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_tiny_model_overflow_fp16.json";
+        write_text_file(overflow_fp16_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_tiny_model_v1\",\n"
+                        "  \"name\": \"overflow_fp16_tiny_model\",\n"
+                        "  \"input0\": [\n"
+                        "    [1e100, 2.0, -1.0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path overflow_fp32_attention_task_spec =
+            task_spec_malformed_dir / "static_tiny_attention_overflow_fp32.json";
+        write_text_file(overflow_fp32_attention_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"static_tiny_attention_v1\",\n"
+                        "  \"name\": \"overflow_fp32_attention\",\n"
+                        "  \"value_vector\": [1e100, 6.0]\n"
+                        "}\n");
+        const std::filesystem::path non_finite_fp16_task_spec =
+            task_spec_malformed_dir / "bounded_dynamic_tiny_model_non_finite_fp16.json";
+        write_text_file(non_finite_fp16_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"bounded_dynamic_tiny_model_v1\",\n"
+                        "  \"name\": \"non_finite_fp16_tiny_model\",\n"
+                        "  \"input0\": [\n"
+                        "    [1.0e309, 2.0, -1.0]\n"
+                        "  ]\n"
+                        "}\n");
+        const std::filesystem::path non_finite_fp32_attention_task_spec =
+            task_spec_malformed_dir / "static_tiny_attention_non_finite_fp32.json";
+        write_text_file(non_finite_fp32_attention_task_spec,
+                        "{\n"
+                        "  \"format\": \"ai_task_spec_v1\",\n"
+                        "  \"task_kind\": \"static_tiny_attention_v1\",\n"
+                        "  \"name\": \"non_finite_fp32_attention\",\n"
+                        "  \"value_vector\": [1.0, -1.0e309]\n"
                         "}\n");
 
         const std::filesystem::path manifest = malformed_dir / "cnn.manifest";
@@ -1000,6 +1956,94 @@ int main() {
                                           task_spec_malformed_dir,
                                           "bounded_dynamic_cnn_v1 input0 row count must be between 3 and 4",
                                           "expected oversized CNN task-spec runtime rows to fail") &&
+            expect_task_spec_pack_failure(oversized_dynamic_tiny_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_tiny_model_v1 input0 row count must be between 1 and 2",
+                                          "expected oversized dynamic tiny task-spec rows to fail") &&
+            expect_task_spec_pack_failure(bad_attention_task_spec,
+                                          task_spec_malformed_dir,
+                                          "static_tiny_attention_v1 value_vector must have exactly 2 items",
+                                          "expected malformed static tiny attention task-spec to fail") &&
+            expect_task_spec_pack_failure(non_object_task_spec,
+                                          task_spec_malformed_dir,
+                                          "task spec must be a JSON object",
+                                          "expected non-object task-spec to fail") &&
+            expect_task_spec_pack_failure(wrong_format_task_spec,
+                                          task_spec_malformed_dir,
+                                          "task spec format must be ai_task_spec_v1",
+                                          "expected wrong task-spec format to fail") &&
+            expect_task_spec_pack_failure(unsupported_task_kind_task_spec,
+                                          task_spec_malformed_dir,
+                                          "unsupported task spec task_kind: future_dynamic_attention_v1",
+                                          "expected unsupported task-spec task_kind to fail") &&
+            expect_task_spec_pack_failure(empty_name_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_gemm_v1 name must be a non-empty string",
+                                          "expected empty task-spec name to fail") &&
+            expect_task_spec_pack_failure(negative_source_tag_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_gemm_v1 source_tag must fit in uint32",
+                                          "expected negative source_tag task-spec to fail") &&
+            expect_task_spec_pack_failure(zero_max_ticks_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_cnn_v1 max_ticks must be between 1 and 4294967295",
+                                          "expected zero max_ticks task-spec to fail") &&
+            expect_task_spec_pack_failure(oversized_source_tag_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_tiny_model_v1 source_tag must fit in uint32",
+                                          "expected oversized source_tag dynamic tiny task-spec to fail") &&
+            expect_task_spec_pack_failure(oversized_max_ticks_attention_task_spec,
+                                          task_spec_malformed_dir,
+                                          "static_tiny_attention_v1 max_ticks must be between 1 and 4294967295",
+                                          "expected oversized max_ticks attention task-spec to fail") &&
+            expect_task_spec_pack_failure(unknown_top_level_key_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_gemm_v1 task spec has unexpected top-level key: unknown_extra",
+                                          "expected task-spec with unknown top-level key to fail") &&
+            expect_task_spec_pack_failure(duplicate_name_task_spec,
+                                          task_spec_malformed_dir,
+                                          "duplicate task spec key: name",
+                                          "expected task-spec with duplicate top-level key to fail") &&
+            expect_task_spec_pack_failure(bool_source_tag_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_gemm_v1 source_tag must be an integer",
+                                          "expected bool source_tag task-spec to fail") &&
+            expect_task_spec_pack_failure(bool_max_ticks_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_cnn_v1 max_ticks must be an integer",
+                                          "expected bool max_ticks task-spec to fail") &&
+            expect_task_spec_pack_failure(bool_input0_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_gemm_v1 input0 row 0 column 0 must be an int8 value",
+                                          "expected bool GEMM input0 task-spec to fail") &&
+            expect_task_spec_pack_failure(bool_kernel_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_cnn_v1 input1 row 0 column 0 must be an int8 value",
+                                          "expected bool CNN kernel task-spec to fail") &&
+            expect_task_spec_pack_failure(path_escape_name_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_gemm_v1 name must be a safe basename",
+                                          "expected path-escape task-spec name to fail") &&
+            expect_task_spec_pack_failure(newline_name_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_gemm_v1 name must be a safe basename",
+                                          "expected newline task-spec name to fail") &&
+            expect_task_spec_pack_failure(overflow_fp16_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_tiny_model_v1 input0 row 0 column 0 must fit in fp16",
+                                          "expected overflow fp16 task-spec to fail") &&
+            expect_task_spec_pack_failure(overflow_fp32_attention_task_spec,
+                                          task_spec_malformed_dir,
+                                          "static_tiny_attention_v1 value_vector item 0 must fit in fp32",
+                                          "expected overflow fp32 attention task-spec to fail") &&
+            expect_task_spec_pack_failure(non_finite_fp16_task_spec,
+                                          task_spec_malformed_dir,
+                                          "bounded_dynamic_tiny_model_v1 input0 row 0 column 0 must be finite",
+                                          "expected non-finite fp16 task-spec to fail") &&
+            expect_task_spec_pack_failure(non_finite_fp32_attention_task_spec,
+                                          task_spec_malformed_dir,
+                                          "static_tiny_attention_v1 value_vector item 1 must be finite",
+                                          "expected non-finite fp32 attention task-spec to fail") &&
             expect_pack_and_profile(temp_dir,
                                     "cnn",
                                     "name=cnn",
@@ -1021,6 +2065,29 @@ int main() {
                                         "ai_profile_op op_index=2 opcode=layout_transpose retired_ops=9 compute_cycles=1 stall_cycles=1 tile_count=1",
                                         "ai_profile_op op_index=3 opcode=reduce_sum retired_ops=9 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
+            expect_manifest_device_profile_summary(temp_dir / "cnn.manifest",
+                                                   18,
+                                                   9,
+                                                   5,
+                                                   4,
+                                                   20,
+                                                   1,
+                                                   1,
+                                                   6,
+                                                   3,
+                                                   20,
+                                                   12,
+                                                   63,
+                                                   32,
+                                                   4,
+                                                   188,
+                                                   4,
+                                                   "expected cnn manifest to repopulate device profile summary") &&
+            expect_manifest_failure_resets_device_state(
+                temp_dir / "cnn.manifest",
+                bad_dims_runtime_shape_manifest,
+                "failed to resolve AI profile runtime shapes: runtime shape dims exceed bounded tensor dims",
+                "expected failing manifest rerun to reset device state") &&
             expect_pack_and_profile(temp_dir,
                                     "gemm",
                                     "name=gemm",
@@ -1040,6 +2107,44 @@ int main() {
                                         "ai_profile_op op_index=0 opcode=gemm retired_ops=8 compute_cycles=1 stall_cycles=1 tile_count=1",
                                         "ai_profile_op op_index=1 opcode=pool_max retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
+            expect_manifest_device_profile_summary(temp_dir / "gemm.manifest",
+                                                   13,
+                                                   9,
+                                                   2,
+                                                   2,
+                                                   15,
+                                                   1,
+                                                   1,
+                                                   6,
+                                                   3,
+                                                   16,
+                                                   4,
+                                                   12,
+                                                   20,
+                                                   2,
+                                                   36,
+                                                   2,
+                                                   "expected gemm manifest to repopulate device profile summary") &&
+            expect_manifest_completion_fault_state(
+                manifest_with_replaced_scalar_key(temp_dir / "gemm.manifest",
+                                                  temp_dir / "fault_gemm.manifest",
+                                                  "graph_package",
+                                                  graph_with_faulty_pool_attr(temp_dir / "gemm.graph.bin",
+                                                                              temp_dir / "fault_gemm.graph.bin")
+                                                      .filename()
+                                                      .string()
+                                                      .c_str()),
+                6,
+                AI_ACCEL_FAULT_ILLEGAL_OP,
+                6,
+                6,
+                0,
+                0,
+                8,
+                1,
+                1,
+                16,
+                "expected fault gemm manifest to return completion fault state") &&
             expect_pack_and_profile(temp_dir,
                                     "tiny_model",
                                     "name=tiny_model",
@@ -1060,6 +2165,60 @@ int main() {
                                         "ai_profile_op op_index=1 opcode=eltwise_relu retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
                                         "ai_profile_op op_index=2 opcode=pool_max retired_ops=4 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
+            expect_manifest_device_profile_summary(temp_dir / "tiny_model.manifest",
+                                                   15,
+                                                   9,
+                                                   3,
+                                                   3,
+                                                   17,
+                                                   1,
+                                                   1,
+                                                   6,
+                                                   3,
+                                                   24,
+                                                   4,
+                                                   20,
+                                                   28,
+                                                   3,
+                                                   60,
+                                                   3,
+                                                   "expected tiny_model manifest to repopulate device profile summary") &&
+            expect_pack_and_profile(temp_dir,
+                                    "guest_ai_accel_demo",
+                                    "name=guest_ai_accel_demo",
+                                    8,
+                                    6,
+                                    1,
+                                    1,
+                                    10,
+                                    1,
+                                    1,
+                                    3,
+                                    10,
+                                    16,
+                                    3,
+                                    {
+                                        "ai_profile_aggregate tile_count=1 scratchpad_peak_bytes=16 op_count=1",
+                                        "ai_profile_op op_index=0 opcode=reduce_sum retired_ops=3 compute_cycles=1 stall_cycles=1 tile_count=1",
+                                    }) &&
+            expect_manifest_device_profile_summary(temp_dir / "guest_ai_accel_demo.manifest",
+                                                   8,
+                                                   6,
+                                                   1,
+                                                   1,
+                                                   10,
+                                                   1,
+                                                   1,
+                                                   3,
+                                                   3,
+                                                   12,
+                                                   4,
+                                                   3,
+                                                   16,
+                                                   1,
+                                                   16,
+                                                   1,
+                                                   "expected guest_ai_accel_demo manifest to repopulate device profile summary") &&
             expect_pack_and_profile(temp_dir,
                                     "tiny_attention_static",
                                     "name=tiny_attention_static",
@@ -1080,11 +2239,233 @@ int main() {
                                         "ai_profile_op op_index=1 opcode=softmax retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
                                         "ai_profile_op op_index=2 opcode=gemm retired_ops=2 compute_cycles=1 stall_cycles=1 tile_count=1",
                                     }) &&
+            expect_manifest_device_profile_summary(temp_dir / "tiny_attention_static.manifest",
+                                                   18,
+                                                   12,
+                                                   3,
+                                                   3,
+                                                   20,
+                                                   1,
+                                                   1,
+                                                   9,
+                                                   3,
+                                                   20,
+                                                   4,
+                                                   8,
+                                                   24,
+                                                   3,
+                                                   52,
+                                                   3,
+                                                   "expected tiny_attention_static manifest to repopulate device profile summary") &&
+            expect_pack_and_profile_task_spec_static_tiny_attention(temp_dir) &&
+            expect_manifest_device_profile_summary(temp_dir / "custom_tiny_attention_static.manifest",
+                                                   18,
+                                                   12,
+                                                   3,
+                                                   3,
+                                                   20,
+                                                   1,
+                                                   1,
+                                                   9,
+                                                   3,
+                                                   20,
+                                                   4,
+                                                   8,
+                                                   24,
+                                                   3,
+                                                   52,
+                                                   3,
+                                                   "expected static tiny attention task-spec manifest to repopulate device profile summary") &&
+            expect_matching_binary_file(temp_dir / "custom_tiny_attention_static.graph.bin",
+                                        temp_dir / "tiny_attention_static.graph.bin",
+                                        "expected task-spec tiny attention to share graph package with tiny_attention_static") &&
             expect_pack_and_profile_task_spec_dynamic_gemm(temp_dir) &&
+            expect_manifest_device_profile_summary(temp_dir / "custom_dynamic_gemm.manifest",
+                                                   15,
+                                                   11,
+                                                   2,
+                                                   2,
+                                                   17,
+                                                   1,
+                                                   1,
+                                                   7,
+                                                   4,
+                                                   48,
+                                                   32,
+                                                   64,
+                                                   80,
+                                                   2,
+                                                   80,
+                                                   1,
+                                                   "expected task-spec dynamic gemm manifest to repopulate device profile summary") &&
             expect_pack_and_profile_task_spec_dynamic_cnn(temp_dir) &&
+            expect_manifest_device_profile_summary(temp_dir / "custom_dynamic_cnn.manifest",
+                                                   17,
+                                                   9,
+                                                   4,
+                                                   4,
+                                                   19,
+                                                   1,
+                                                   1,
+                                                   6,
+                                                   3,
+                                                   13,
+                                                   8,
+                                                   28,
+                                                   21,
+                                                   4,
+                                                   184,
+                                                   4,
+                                                   "expected task-spec dynamic cnn manifest to repopulate device profile summary") &&
             expect_pack_and_profile_dynamic(temp_dir) &&
+            expect_manifest_device_profile_summary(temp_dir / "dynamic_gemm.manifest",
+                                                   15,
+                                                   11,
+                                                   2,
+                                                   2,
+                                                   17,
+                                                   1,
+                                                   1,
+                                                   7,
+                                                   4,
+                                                   48,
+                                                   32,
+                                                   64,
+                                                   80,
+                                                   2,
+                                                   80,
+                                                   1,
+                                                   "expected dynamic_gemm manifest to repopulate device profile summary") &&
+            expect_matching_binary_file(temp_dir / "custom_dynamic_gemm.graph.bin",
+                                        temp_dir / "dynamic_gemm.graph.bin",
+                                        "expected task-spec dynamic gemm to share graph package with dynamic_gemm") &&
+            expect_matching_binary_file(
+                temp_dir / "custom_dynamic_gemm.runtime_shape.bin",
+                temp_dir / "dynamic_gemm.runtime_shape.bin",
+                "expected task-spec dynamic gemm to share runtime shape table with dynamic_gemm") &&
+            expect_pack_and_profile_task_spec_dynamic_tiny_model(temp_dir) &&
             expect_pack_and_profile_dynamic_tiny_model(temp_dir) &&
-            expect_pack_and_profile_dynamic_cnn(temp_dir);
+            expect_manifest_device_profile_summary(temp_dir / "custom_dynamic_tiny_model.manifest",
+                                                   15,
+                                                   9,
+                                                   3,
+                                                   3,
+                                                   17,
+                                                   1,
+                                                   1,
+                                                   6,
+                                                   3,
+                                                   18,
+                                                   4,
+                                                   10,
+                                                   22,
+                                                   3,
+                                                   60,
+                                                   3,
+                                                   "expected dynamic tiny task-spec manifest to repopulate device profile summary") &&
+            expect_matching_binary_file(temp_dir / "custom_dynamic_tiny_model.graph.bin",
+                                        temp_dir / "dynamic_tiny_model.graph.bin",
+                                        "expected task-spec dynamic tiny model to share graph package with dynamic_tiny_model") &&
+            expect_matching_binary_file(
+                temp_dir / "custom_dynamic_tiny_model.runtime_shape.bin",
+                temp_dir / "dynamic_tiny_model.runtime_shape.bin",
+                "expected task-spec dynamic tiny model to share runtime shape table with dynamic_tiny_model") &&
+            expect_manifest_device_profile_summary(temp_dir / "dynamic_tiny_model.manifest",
+                                                   15,
+                                                   9,
+                                                   3,
+                                                   3,
+                                                   17,
+                                                   1,
+                                                   1,
+                                                   6,
+                                                   3,
+                                                   18,
+                                                   4,
+                                                   10,
+                                                   22,
+                                                   3,
+                                                   60,
+                                                   3,
+                                                   "expected dynamic_tiny_model manifest to repopulate device profile summary") &&
+            expect_pack_and_profile_dynamic_cnn(temp_dir) &&
+            expect_matching_binary_file(temp_dir / "custom_dynamic_cnn.graph.bin",
+                                        temp_dir / "dynamic_cnn.graph.bin",
+                                        "expected task-spec dynamic cnn to share graph package with dynamic_cnn") &&
+            expect_matching_binary_file(
+                temp_dir / "custom_dynamic_cnn.runtime_shape.bin",
+                temp_dir / "dynamic_cnn.runtime_shape.bin",
+                "expected task-spec dynamic cnn to share runtime shape table with dynamic_cnn") &&
+            expect_manifest_device_profile_summary(temp_dir / "dynamic_cnn.manifest",
+                                                   17,
+                                                   9,
+                                                   4,
+                                                   4,
+                                                   19,
+                                                   1,
+                                                   1,
+                                                   6,
+                                                   3,
+                                                   13,
+                                                   8,
+                                                   28,
+                                                   21,
+                                                   4,
+                                                   184,
+                                                   4,
+                                                   "expected dynamic_cnn manifest to repopulate device profile summary") &&
+            expect_manifest_rerun_refresh(temp_dir / "cnn.manifest",
+                                          temp_dir / "gemm.manifest",
+                                          13,
+                                          9,
+                                          2,
+                                          2,
+                                          15,
+                                          1,
+                                          1,
+                                          6,
+                                          3,
+                                          16,
+                                          4,
+                                          12,
+                                          20,
+                                          2,
+                                          36,
+                                          2,
+                                          "expected rerun manifest path to refresh device profile summary") &&
+            expect_manifest_rerun_refresh(temp_dir / "dynamic_gemm.manifest",
+                                          temp_dir / "dynamic_cnn.manifest",
+                                          17,
+                                          9,
+                                          4,
+                                          4,
+                                          19,
+                                          1,
+                                          1,
+                                          6,
+                                          3,
+                                          13,
+                                          8,
+                                          28,
+                                          21,
+                                          4,
+                                          184,
+                                          4,
+                                          "expected rerun dynamic manifest path to refresh device profile summary") &&
+            expect_manifest_timeout_state(
+                manifest_with_replaced_scalar_key(temp_dir / "dynamic_cnn.manifest",
+                                                  temp_dir / "dynamic_cnn.timeout.manifest",
+                                                  "max_ticks",
+                                                  "1"),
+                1,
+                1,
+                1,
+                0,
+                0,
+                2,
+                1,
+                0,
+                "expected timeout manifest to leave default device profile state");
 
         std::filesystem::remove_all(temp_dir);
         if (!ok) {
