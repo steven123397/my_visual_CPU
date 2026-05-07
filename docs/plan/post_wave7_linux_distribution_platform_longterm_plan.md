@@ -38,6 +38,10 @@
 - 阶段 3 已完成第一刀正向收口：`filesystem_persistence` 使用外部 Alpine rootfs 临时副本
   证明同会话 ext4 `sync`、rename overwrite、目录遍历和 64 KiB 文件写读；当前仍不声明
   跨 reboot / reset 后读回。
+- 阶段 4 已完成第一刀正向收口：`fs_state_guardrail` 使用真实外部 Alpine rootfs 证明
+  `awk` 浮点用户态路径在 `sleep 1` timer roundtrip、后台子进程 `awk` + `wait` 返回码之后
+  仍能继续正确执行；当前仍不声明任意时点 `mstatus/sstatus.FS` snapshot 必须保持 `DIRTY`，
+  也不声明完整 Linux `FS state` 可见合同已经收口。
 
 ## 总目标
 
@@ -428,7 +432,12 @@
   现在也都有 host / pipeline 正向证据，并同样只置 `NV`、不额外置 `NX`；随后又把
   同一条 signed invalid clipping 合同补到 `fcvt.l.s` / `fcvt.l.d`：
   `+inf/qNaN -> INT64_MAX`、`-inf -> INT64_MIN` 现在也都有 host / pipeline 正向证据，
-  并同样只置 `NV`、不额外置 `NX`；当前仍不把这扩写成完整 `.s/.d -> {w,wu,l,lu}`
+  并同样只置 `NV`、不额外置 `NX`；本轮又继续把 `fcvt.d.l` / `fcvt.d.lu` 的
+  int64-to-double 动态 rounding / `fcsr` 最小合同接回 shared semantics 与 pipeline：
+  `rm=111(dyn)` 现在在 `frm=RUP` / `frm=RDN` 下也会真实读取 guest `frm`，并用
+  `2^53+1` 这类不能被 binary64 精确表示的 64-bit 整数样例，固化
+  `9007199254740994.0` / `9007199254740992.0` 两条可区分结果，同时把
+  `CSR_FFLAGS.NX` 写回到 guest 可见 `fcsr` alias，并保留 rounding-mode bits；当前仍不把这扩写成完整 `.s/.d -> {w,wu,l,lu}`
   越界 / NaN / 饱和结果矩阵已经完成；
   当前仍不把 compare/minmax 这部分扩写成完整 IEEE754 角落语义已经完成；
   此外，当前 `AT_HWCAP=0x1105` 的根因也已明确：Linux 只是按 DT `riscv,isa` 的
@@ -437,8 +446,11 @@
   `FS=DIRTY`，并已有 `atomic_semantics_smoke`、`instruction_semantics_smoke`、
   `pipeline_backend_smoke` 回归；但真实 Alpine `BusyBox awk` runtime 的 `FS state`
   采样仍会撞到 Linux trap / interrupt 路径把 `FS` 整理回 `INITIAL/CLEAN`，所以
-  real-rootfs `FS state` guardrail 还没有稳定正向证据，当前不保留为自动化 opt-in target，
-  后续仍需继续评估更完整的 F/D arithmetic、异常和 `FS state` 合同。
+  不应把“单次 snapshot 必须为 `DIRTY`”当作完成定义；本轮已新增
+  `test-host-run_debug_cli_probe_linux_distribution_fs_state_guardrail`，用真实 rootfs 上的
+  FP 用户态执行 -> timer / child-process roundtrip -> 后续 FP 用户态仍正确 这条最小
+  正向证据替代不稳定 snapshot 断言；后续仍需继续评估更完整的 F/D arithmetic、异常和
+  `FS state` 合同。
 - [ ] 不因 host unit 通过就声明发行版支持，必须回到真实 rootfs opt-in smoke 验证。
 - [ ] 文档明确已支持、未支持、刻意不广告的 ISA 能力。
 - [ ] 阶段完成后运行通用验证基线。

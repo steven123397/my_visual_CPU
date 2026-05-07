@@ -84,9 +84,17 @@
     `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_persistence`，先把外部 rootfs 复制到
     `/tmp` 临时 ext4 副本，再覆盖 ext4 同会话目录创建、文件写入、`sync` 可见路径、
     rename overwrite、目录遍历、64 KiB 文件写读和清理。
+  - 同一动态 BusyBox shell 会话的 `FS state` 第一刀 guardrail：
+    `test-host-run_debug_cli_probe_linux_distribution_fs_state_guardrail` 使用
+    `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=fs_state_guardrail`，先执行 `awk 'BEGIN{print sqrt(2)}'`
+    触发真实用户态浮点路径，再经过 `sleep 1` timer roundtrip、后台子进程 `awk` + `wait`
+    返回码往返，最后再次执行 `awk` 浮点格式化 / `sqrt(2)*sqrt(2)` 读回，固化
+    “真实 Linux trap / timer / child-process return 之后，后续用户态 FP 路径仍可继续正确执行”
+    这条最小正向证据；当前仍不把它扩大解释成任意时点 `mstatus/sstatus.FS` snapshot
+    都必须保持 `DIRTY`。
   这份 rootfs 是本机临时运行资产，不纳入仓库默认资产；动态路线当前只声明最小
   shell command / 文件系统一致性 / 等价 serial TTY prompt / process-control / 同会话
-  ext4 persistence smoke contract，不声明完整发行版矩阵、init 管理的 getty、密码 login、
+  ext4 persistence / `FS state` roundtrip smoke contract，不声明完整发行版矩阵、init 管理的 getty、密码 login、
   完整 signal 子系统、跨 reboot 持久性或完整 F/D 浮点算术支持。
 - `2026-05-05` 已完成 curated 发行版矩阵第一刀：
   - 新增 `MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine|debian` 的 curated matrix 入口，固定
@@ -359,7 +367,12 @@
       `-inf -> INT32_MIN` 现在也都有 host / pipeline 正向证据，并同样只置
       `NV`、不额外置 `NX`；随后又把同一条 signed invalid clipping 合同补到
       `fcvt.l.s` / `fcvt.l.d`：`+inf/qNaN -> INT64_MAX`、`-inf -> INT64_MIN` 现在也都有
-      host / pipeline 正向证据，并同样只置 `NV`、不额外置 `NX`；对应
+      host / pipeline 正向证据，并同样只置 `NV`、不额外置 `NX`；本轮又继续把
+      `fcvt.d.l` / `fcvt.d.lu` 的 int64-to-double 动态 rounding / `fcsr` 最小合同接回
+      shared semantics 与 pipeline：`rm=111(dyn)` 现在在 `frm=RUP` / `frm=RDN` 下也会
+      真实读取 guest `frm`，并用 `2^53+1` 这类不能被 binary64 精确表示的 64-bit 整数样例，
+      固化 `9007199254740994.0` / `9007199254740992.0` 两条可区分结果，同时把
+      `CSR_FFLAGS.NX` 写回到 guest 可见 `fcsr` alias，并保留 rounding-mode bits；对应
       `instruction_semantics_smoke` / `pipeline_backend_smoke` 已新增并通过。当前仍不把这扩写成完整 `.s/.d -> {w,wu,l,lu}`
       越界 / NaN / 饱和结果矩阵已经完成。当前剩余重心已经不再是 double FMA opcode 缺口，而是单精度 `*.s`
       尾项、更完整异常/rounding/NaN 角落语义，以及 real-rootfs `FS state` / capability 收口。
@@ -437,16 +450,17 @@
 
 执行期间继续保留 `external Alpine ext4 + static /init`、`external Alpine ext4 + dynamic /bin/sh`
 单命令、多命令 smoke、同一动态 shell 会话内的 `/tmp` 文件系统一致性 smoke、
-`tty_login_probe` 等价 serial TTY prompt smoke、`process_control` 最小矩阵 smoke 和
-`filesystem_persistence` 同会话 ext4 persistence smoke 作为正向基线；不要把它们扩大解释成
-完整发行版用户态支持。当前近端 blocker 已从 DTB `riscv,isa` 广告不一致和最早
+`tty_login_probe` 等价 serial TTY prompt smoke、`process_control` 最小矩阵 smoke、
+`filesystem_persistence` 同会话 ext4 persistence smoke，以及 `fs_state_guardrail`
+的最小 FP roundtrip smoke 作为正向基线；不要把它们扩大解释成完整发行版用户态支持。当前近端 blocker 已从 DTB `riscv,isa` 广告不一致和最早
 `F/D move/convert` 缺失，推进到 BusyBox `awk` 动态路径的更完整异常 / rounding /
 capability 尾项；`fdiv.d -> CSR_FFLAGS.DZ`、`fsqrt.d sqrt(-1.0) -> CSR_FFLAGS.NV`、
 `fsqrt.d sqrt(2.0) -> CSR_FFLAGS.NX`、`fmul.d 1e308*1e308 -> CSR_FFLAGS.OF`、
 `fmul.d 1e-308*1e-308 -> CSR_FFLAGS.UF`、`/proc/cpuinfo isa` 视图所需的最小
 `zihpm` CSR 合同、`AT_HWCAP=0x1105` 的当前 guest-visible `auxv` 视图，以及 Alpine BusyBox
 `double-float ABI` / `rv64...f...d...c...` 的 userland ABI 事实都已不再是“未知项”；当前 blocker
-已经收窄到如何让 guest-visible capability 广告、真实 Linux trap/return 路径下的 `FS state`，
+已经收窄到如何让 guest-visible capability 广告，以及真实 Linux trap/return 路径下更完整的 `FS state`
+可见合同，
 以及这条真实 userland ABI 事实收口一致。
 五个阶段都较大，每个阶段彻底完成后才提交一次；其他中间 slice 不自动提交。
 

@@ -1157,6 +1157,78 @@
         return 1;
     }
 
+    cpu.csr().write(CSR_FCSR, 3ULL << 5, cpu.core());
+    cpu.core().write_gpr(10, (1ULL << 53) + 1ULL);
+    Insn fcvt_d_l_dyn{};
+    fcvt_d_l_dyn.raw = 0xd22577d3U;
+    fcvt_d_l_dyn.opcode = 0x53;
+    fcvt_d_l_dyn.rd = 15;
+    fcvt_d_l_dyn.funct3 = 7;
+    fcvt_d_l_dyn.rs1 = 10;
+    fcvt_d_l_dyn.rs2 = 2;
+    fcvt_d_l_dyn.funct7 = 0x69;
+    const InsnEffects fcvt_d_l_dyn_effects = InstructionSemantics::execute(fcvt_d_l_dyn, ctx);
+    if (!expect(fcvt_d_l_dyn_effects.fp_write.enable,
+                "fcvt.d.l dyn should still produce an fp register write")) {
+        return 1;
+    }
+    if (!expect(fcvt_d_l_dyn_effects.fp_write.value == double_to_raw_bits(9007199254740994.0),
+                "fcvt.d.l dyn should obey frm=RUP and round 2^53+1 toward positive infinity")) {
+        return 1;
+    }
+    if (!expect(fcvt_d_l_dyn_effects.csr_write.enable,
+                "fcvt.d.l dyn should produce a floating-point CSR write for inexact flags")) {
+        return 1;
+    }
+    if (!expect(fcvt_d_l_dyn_effects.csr_write.addr == CSR_FCSR,
+                "fcvt.d.l dyn should update the combined fcsr alias")) {
+        return 1;
+    }
+    if (!expect((fcvt_d_l_dyn_effects.csr_write.value & 0x1ULL) != 0,
+                "fcvt.d.l dyn should set the inexact-operation flag for 2^53+1")) {
+        return 1;
+    }
+    if (!expect((fcvt_d_l_dyn_effects.csr_write.value & ~0x1fULL) == (3ULL << 5),
+                "fcvt.d.l dyn should preserve the current rounding-mode bits")) {
+        return 1;
+    }
+
+    cpu.csr().write(CSR_FCSR, 2ULL << 5, cpu.core());
+    cpu.core().write_gpr(10, (1ULL << 53) + 1ULL);
+    Insn fcvt_d_lu_dyn{};
+    fcvt_d_lu_dyn.raw = 0xd23577d3U;
+    fcvt_d_lu_dyn.opcode = 0x53;
+    fcvt_d_lu_dyn.rd = 15;
+    fcvt_d_lu_dyn.funct3 = 7;
+    fcvt_d_lu_dyn.rs1 = 10;
+    fcvt_d_lu_dyn.rs2 = 3;
+    fcvt_d_lu_dyn.funct7 = 0x69;
+    const InsnEffects fcvt_d_lu_dyn_effects = InstructionSemantics::execute(fcvt_d_lu_dyn, ctx);
+    if (!expect(fcvt_d_lu_dyn_effects.fp_write.enable,
+                "fcvt.d.lu dyn should still produce an fp register write")) {
+        return 1;
+    }
+    if (!expect(fcvt_d_lu_dyn_effects.fp_write.value == double_to_raw_bits(9007199254740992.0),
+                "fcvt.d.lu dyn should obey frm=RDN and round 2^53+1 toward negative infinity")) {
+        return 1;
+    }
+    if (!expect(fcvt_d_lu_dyn_effects.csr_write.enable,
+                "fcvt.d.lu dyn should produce a floating-point CSR write for inexact flags")) {
+        return 1;
+    }
+    if (!expect(fcvt_d_lu_dyn_effects.csr_write.addr == CSR_FCSR,
+                "fcvt.d.lu dyn should update the combined fcsr alias")) {
+        return 1;
+    }
+    if (!expect((fcvt_d_lu_dyn_effects.csr_write.value & 0x1ULL) != 0,
+                "fcvt.d.lu dyn should set the inexact-operation flag for 2^53+1")) {
+        return 1;
+    }
+    if (!expect((fcvt_d_lu_dyn_effects.csr_write.value & ~0x1fULL) == (2ULL << 5),
+                "fcvt.d.lu dyn should preserve the current rounding-mode bits")) {
+        return 1;
+    }
+
     cpu.csr().write(CSR_FRM, 0, cpu.core());
     cpu.core().write_fpr(18, float_to_fpr_raw_bits(5.75f));
     cpu.core().write_fpr(10, float_to_fpr_raw_bits(2.0f));
@@ -1328,4 +1400,3 @@
                 "fdiv.s 1/3 should preserve the current rounding-mode bits")) {
         return 1;
     }
-

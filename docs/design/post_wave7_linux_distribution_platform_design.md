@@ -55,6 +55,12 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
   `&&` / `;` 和退出码读回的基础 shell 控制流。
 - 外部 Alpine rootfs 临时副本已经通过 `filesystem_persistence` profile，覆盖同会话 ext4
   目录创建、文件写入、`sync` 可见路径、rename overwrite、目录遍历、64 KiB 文件写读和清理。
+- 同一动态 BusyBox shell 会话已经通过 `fs_state_guardrail` profile，覆盖
+  `awk 'BEGIN{print sqrt(2)}'` 的真实用户态浮点执行、`sleep 1` timer roundtrip、
+  后台子进程 `awk` + `wait` 返回码往返，以及回到同一 shell 后再次执行 `awk`
+  浮点格式化 / `sqrt(2)*sqrt(2)` 读回；它证明的是 Linux trap / timer /
+  child-process return 之后，后续用户态 FP 路径仍能继续正确执行，而不是任意时点
+  `mstatus/sstatus.FS` snapshot 都必须保持 `DIRTY`。
 - 外部 Debian 13 (`trixie`) riscv64 ext4 rootfs 已建立 curated opt-in 路线：当前通过
   外部 Linux `Image`、外部 Debian ext4、`init=/mycpu-debian-init`、serial wrapper prompt
   `mycpu-debian# ` 和 `cat /etc/os-release -> ID=debian` 形成 Debian shell 第一刀正向证据。
@@ -130,7 +136,7 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - `MYCPU_LINUX_DISTRO_RUNTIME_COMMAND='...'`
 - `MYCPU_LINUX_DISTRO_RUNTIME_EXPECT='...'`
 - `MYCPU_LINUX_DISTRO_RUNTIME_COMMANDS='command=>expected\n...'`（可选）
-- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency | tty_login_probe | process_control | filesystem_persistence`（可选）
+- `MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency | tty_login_probe | process_control | filesystem_persistence | fs_state_guardrail`（可选）
 
 当前已存在的真实 opt-in 目标包括：
 
@@ -139,6 +145,7 @@ checkpoint 冻结在 `timerfd-one-shot-readback-ok`；`Wave 7` 也已经把受�
 - `test-host-run_debug_cli_probe_linux_distribution_tty_login`
 - `test-host-run_debug_cli_probe_linux_distribution_process_control`
 - `test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence`
+- `test-host-run_debug_cli_probe_linux_distribution_fs_state_guardrail`
 
 这些 target 只能证明当前声明的 shell command / filesystem consistency / 等价 serial TTY
 prompt / process-control / 同会话 ext4 persistence smoke contract，不等同于完整发行版矩阵、
@@ -194,7 +201,9 @@ init 管理的 getty、密码 login、完整 process control、跨 reboot 持久
    提交后置 `FS=DIRTY`；但真实 Linux guest 在 trap / interrupt / context-switch
    路径里会按自身约定把 `FS` 清回 `INITIAL/CLEAN`，因此 real-rootfs `FS state`
    guardrail 还不能靠单次 snapshot 断言完成，当前也不应把这类不稳定 snapshot 保留成
-   自动化 opt-in target；
+   自动化 opt-in target；因此本轮只把一条“FP 用户态执行 -> trap/timer/child-process
+   roundtrip -> 后续 FP 用户态仍正确”的最小 real-rootfs guardrail 固化下来，而不把
+   “任意时点 snapshot 必须为 DIRTY” 错当成完成定义；
    另外，离线外部 userland 静态面已经证明 `/bin/busybox` 与 `ld-musl` 还会继续用到
    `flt.d`、`fcvt.wu.d`、`fcvt.lu.d`、`fcvt.d.wu`、`fcvt.d.lu`，以及更远的 `fmadd.d/fmsub.d/fnmsub.d` 和
    单精度 `*.s` 子集；因此阶段后续不应只靠动态 `awk` 碰撞来“猜”缺口，而要把
@@ -331,7 +340,12 @@ init 管理的 getty、密码 login、完整 process control、跨 reboot 持久
    `-inf -> INT32_MIN` 现在也都有 host / pipeline 正向证据，并同样只置 `NV`、
    不额外置 `NX`；随后又把同一条 signed invalid clipping 合同补到
    `fcvt.l.s` / `fcvt.l.d`：`+inf/qNaN -> INT64_MAX`、`-inf -> INT64_MIN` 现在也都有
-   host / pipeline 正向证据，并同样只置 `NV`、不额外置 `NX`。当前仍不把这扩写成
+   host / pipeline 正向证据，并同样只置 `NV`、不额外置 `NX`；本轮又继续把
+   `fcvt.d.l` / `fcvt.d.lu` 的 int64-to-double 动态 rounding / `fcsr` 最小合同接回
+   shared semantics 与 pipeline：`rm=111(dyn)` 现在在 `frm=RUP` / `frm=RDN` 下也会
+   真实读取 guest `frm`，并用 `2^53+1` 这类不能被 binary64 精确表示的 64-bit 整数样例，
+   固化 `9007199254740994.0` / `9007199254740992.0` 两条可区分结果，同时把
+   `CSR_FFLAGS.NX` 写回到 guest 可见 `fcsr` alias，并保留 rounding-mode bits。当前仍不把这扩写成
    完整 `.s/.d -> {w,wu,l,lu}` 越界 / NaN / 饱和结果矩阵已经收口。
    当前剩余重心已经不再是 double FMA opcode 缺口，而是更系统的单精度 `*.s` 尾项、
    更完整异常标志矩阵，以及更完整的三源 forwarding / rename / hazard 建模。

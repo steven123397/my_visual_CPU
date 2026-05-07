@@ -169,6 +169,64 @@
         CPU cpu;
         cpu_init(cpu, kEntry);
 
+        cpu.csr().write(CSR_FCSR, 3ULL << 5, cpu.core());
+        cpu.core().write_gpr(13, (1ULL << 53) + 1ULL);
+        write32(ram, kEntry + 0, 0xd226f7d3U);           // fcvt.d.l fa5, a3, dyn
+        write32(ram, kEntry + 4, kAddiA7Exit);
+        write32(ram, kEntry + 8, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "pipeline fcvt.d.l dyn rounding smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_fpr(15) == double_to_raw_bits(9007199254740994.0),
+                    "pipeline fcvt.d.l dyn should obey frm=RUP for 2^53+1")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_FCSR, cpu.core()) == ((3ULL << 5) | 0x1ULL),
+                    "pipeline fcvt.d.l dyn should preserve frm and set NX in the combined fcsr alias")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+
+        cpu.csr().write(CSR_FCSR, 2ULL << 5, cpu.core());
+        cpu.core().write_gpr(13, (1ULL << 53) + 1ULL);
+        write32(ram, kEntry + 0, 0xd236f7d3U);           // fcvt.d.lu fa5, a3, dyn
+        write32(ram, kEntry + 4, kAddiA7Exit);
+        write32(ram, kEntry + 8, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "pipeline fcvt.d.lu dyn rounding smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_fpr(15) == double_to_raw_bits(9007199254740992.0),
+                    "pipeline fcvt.d.lu dyn should obey frm=RDN for 2^53+1")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_FCSR, cpu.core()) == ((2ULL << 5) | 0x1ULL),
+                    "pipeline fcvt.d.lu dyn should preserve frm and set NX in the combined fcsr alias")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(7.5f));
         write32(ram, kEntry + 0, kFcvtWSX10FromF10);
         write32(ram, kEntry + 4, kAddiA7Exit);

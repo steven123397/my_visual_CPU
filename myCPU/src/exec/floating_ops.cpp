@@ -556,7 +556,8 @@ uint64_t minmax_double_result_bits(const Insn& insn, uint64_t rs1v, uint64_t rs2
 bool compute_integer_to_double_result(const Insn& insn,
                                       uint64_t frm,
                                       uint64_t rs1v,
-                                      uint64_t& result_bits) {
+                                      uint64_t& result_bits,
+                                      uint64_t& exception_flags) {
     uint64_t resolved_rm = 0;
     if (!resolve_rounding_mode(insn, frm, resolved_rm)) {
         return false;
@@ -565,11 +566,28 @@ bool compute_integer_to_double_result(const Insn& insn,
     if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
+    std::feclearexcept(FE_ALL_EXCEPT);
     const double result =
         is_fcvt_d_l(insn)  ? static_cast<double>(static_cast<int64_t>(rs1v))
         : is_fcvt_d_lu(insn) ? static_cast<double>(rs1v)
         : is_fcvt_d_wu(insn) ? static_cast<double>(static_cast<uint32_t>(rs1v))
                              : static_cast<double>(static_cast<int32_t>(static_cast<uint32_t>(rs1v)));
+    exception_flags = 0;
+    if (std::fetestexcept(FE_INVALID) != 0) {
+        exception_flags |= FCSR_FLAG_NV;
+    }
+    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
+        exception_flags |= FCSR_FLAG_DZ;
+    }
+    if (std::fetestexcept(FE_OVERFLOW) != 0) {
+        exception_flags |= FCSR_FLAG_OF;
+    }
+    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
+        exception_flags |= FCSR_FLAG_UF;
+    }
+    if (std::fetestexcept(FE_INEXACT) != 0) {
+        exception_flags |= FCSR_FLAG_NX;
+    }
     if (std::fesetround(previous_mode) != 0) {
         return false;
     }
@@ -1604,12 +1622,22 @@ InsnEffects build_floating_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2
         }
         {
             uint64_t result_bits = 0;
-            if (!compute_integer_to_double_result(insn, (fcsr & FCSR_FRM_MASK) >> 5, rs1v, result_bits)) {
+            uint64_t exception_flags = 0;
+            if (!compute_integer_to_double_result(insn,
+                                                  (fcsr & FCSR_FRM_MASK) >> 5,
+                                                  rs1v,
+                                                  result_bits,
+                                                  exception_flags)) {
                 return illegal_floating_instruction(insn.raw);
             }
             effects.fp_write.enable = true;
             effects.fp_write.rd = insn.rd;
             effects.fp_write.value = result_bits;
+            if (exception_flags != 0) {
+                effects.csr_write.enable = true;
+                effects.csr_write.addr = CSR_FCSR;
+                effects.csr_write.value = update_fcsr_flags(fcsr, exception_flags);
+            }
             return effects;
         }
     case FUNCT7_FMV_W_X:
