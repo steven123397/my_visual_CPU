@@ -77,11 +77,14 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
                                         uint32_t expected_constant_tensor_count,
                                         uint32_t expected_intermediate_tensor_count,
                                         uint32_t expected_scratchpad_budget_bytes,
+                                        uint32_t expected_op_count,
                                         uint32_t expected_dependency_count,
                                         uint32_t expected_root_op_count,
                                         uint32_t expected_leaf_op_count,
                                         uint32_t expected_load_entry_count,
                                         uint32_t expected_store_entry_count,
+                                        uint32_t expected_load_plan_bytes,
+                                        uint32_t expected_store_plan_bytes,
                                         uint64_t expected_token,
                                         uint32_t expected_flags,
                                         uint64_t expected_graph_package_addr,
@@ -117,11 +120,14 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
            expect(summary.last_submission_scratchpad_budget_bytes ==
                       expected_scratchpad_budget_bytes,
                   context) &&
+           expect(summary.last_submission_op_count == expected_op_count, context) &&
            expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
            expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
            expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
            expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
            expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
+           expect(summary.last_submission_load_plan_bytes == expected_load_plan_bytes, context) &&
+           expect(summary.last_submission_store_plan_bytes == expected_store_plan_bytes, context) &&
            expect(summary.last_submission_token == expected_token, context) &&
            expect(summary.last_submission_flags == expected_flags, context) &&
            expect(summary.last_submission_graph_package_addr == expected_graph_package_addr, context) &&
@@ -254,6 +260,9 @@ int main() {
                                              "guest AI accel demo should start with zero DMA breakdown") ||
             !expect_submission_compile_contract(initial_summary,
                                                AiShapeMode::Static,
+                                               0,
+                                               0,
+                                               0,
                                                0,
                                                0,
                                                0,
@@ -644,11 +653,14 @@ int main() {
                                                0,
                                                0,
                                                16,
+                                               1,
                                                0,
                                                1,
                                                1,
                                                1,
                                                1,
+                                               12,
+                                               4,
                                                UINT64_C(0x41494343454c0101),
                                                0,
                                                summary.last_submission_graph_package_addr,
@@ -730,6 +742,9 @@ int main() {
                                              "guest AI accel demo should clear DMA breakdown after reset") ||
             !expect_submission_compile_contract(reset_summary,
                                                AiShapeMode::Static,
+                                               0,
+                                               0,
+                                               0,
                                                0,
                                                0,
                                                0,

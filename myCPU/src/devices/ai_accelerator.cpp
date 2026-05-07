@@ -113,6 +113,34 @@ void count_tensor_roles(const AiGraphPackage& package,
     }
 }
 
+void count_transfer_plan(const AiGraphPackage& package,
+                         uint32_t& load_entries,
+                         uint32_t& store_entries,
+                         uint32_t& load_plan_bytes,
+                         uint32_t& store_plan_bytes) {
+    load_entries = 0;
+    store_entries = 0;
+    load_plan_bytes = 0;
+    store_plan_bytes = 0;
+    for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+        if (entry.tensor_index >= package.tensors.size()) {
+            continue;
+        }
+        const AiTensorRole role = package.tensors[entry.tensor_index].role;
+        if (role == AiTensorRole::Output) {
+            ++store_entries;
+            store_plan_bytes = static_cast<uint32_t>(std::min<uint64_t>(
+                static_cast<uint64_t>(store_plan_bytes) + entry.byte_size,
+                std::numeric_limits<uint32_t>::max()));
+        } else if (role != AiTensorRole::Intermediate && role != AiTensorRole::Invalid) {
+            ++load_entries;
+            load_plan_bytes = static_cast<uint32_t>(std::min<uint64_t>(
+                static_cast<uint64_t>(load_plan_bytes) + entry.byte_size,
+                std::numeric_limits<uint32_t>::max()));
+        }
+    }
+}
+
 }  // namespace
 
 AiAccelerator::AiAccelerator(Plic& plic,
@@ -434,6 +462,8 @@ void AiAccelerator::update_profile_summary_submission_compile_contract() {
         active_submission_.profile_intermediate_tensor_count;
     profile_summary_.last_submission_scratchpad_budget_bytes =
         active_submission_.profile_scratchpad_budget_bytes;
+    profile_summary_.last_submission_op_count =
+        active_submission_.profile_op_count;
     profile_summary_.last_submission_dependency_count =
         active_submission_.profile_dependency_count;
     profile_summary_.last_submission_root_op_count =
@@ -444,6 +474,10 @@ void AiAccelerator::update_profile_summary_submission_compile_contract() {
         active_submission_.profile_load_entry_count;
     profile_summary_.last_submission_store_entry_count =
         active_submission_.profile_store_entry_count;
+    profile_summary_.last_submission_load_plan_bytes =
+        active_submission_.profile_load_plan_bytes;
+    profile_summary_.last_submission_store_plan_bytes =
+        active_submission_.profile_store_plan_bytes;
     profile_summary_.last_submission_graph_package_bytes =
         active_submission_.profile_graph_package_bytes;
     profile_summary_.last_submission_runtime_shape_table_offset =
@@ -742,9 +776,19 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
                        profile_constant_tensor_count,
                        profile_intermediate_tensor_count);
     const uint32_t profile_scratchpad_budget_bytes = package.scratchpad_budget_bytes;
+    const uint32_t profile_op_count = saturating_u32(package.ops.size());
     const uint32_t profile_dependency_count = saturating_u32(package.dependencies.size());
     const uint32_t profile_root_op_count = dependency_root_op_count(package);
     const uint32_t profile_leaf_op_count = dependency_leaf_op_count(package);
+    uint32_t profile_load_entry_count = 0;
+    uint32_t profile_store_entry_count = 0;
+    uint32_t profile_load_plan_bytes = 0;
+    uint32_t profile_store_plan_bytes = 0;
+    count_transfer_plan(package,
+                        profile_load_entry_count,
+                        profile_store_entry_count,
+                        profile_load_plan_bytes,
+                        profile_store_plan_bytes);
     const uint32_t profile_graph_package_bytes = descriptor.graph_package_bytes;
     const uint32_t profile_runtime_shape_table_offset = descriptor.runtime_shape_table_offset;
     uint64_t profile_runtime_shape_table_addr = 0;
@@ -865,11 +909,14 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     active_submission_.profile_constant_tensor_count = profile_constant_tensor_count;
     active_submission_.profile_intermediate_tensor_count = profile_intermediate_tensor_count;
     active_submission_.profile_scratchpad_budget_bytes = profile_scratchpad_budget_bytes;
+    active_submission_.profile_op_count = profile_op_count;
     active_submission_.profile_dependency_count = profile_dependency_count;
     active_submission_.profile_root_op_count = profile_root_op_count;
     active_submission_.profile_leaf_op_count = profile_leaf_op_count;
-    active_submission_.profile_load_entry_count = saturating_u32(active_submission_.load_entries.size());
-    active_submission_.profile_store_entry_count = saturating_u32(active_submission_.store_entries.size());
+    active_submission_.profile_load_entry_count = profile_load_entry_count;
+    active_submission_.profile_store_entry_count = profile_store_entry_count;
+    active_submission_.profile_load_plan_bytes = profile_load_plan_bytes;
+    active_submission_.profile_store_plan_bytes = profile_store_plan_bytes;
     active_submission_.profile_graph_package_bytes = profile_graph_package_bytes;
     active_submission_.profile_runtime_shape_table_offset = profile_runtime_shape_table_offset;
     active_submission_.profile_runtime_shape_table_addr = profile_runtime_shape_table_addr;

@@ -216,11 +216,17 @@
   设备 `profile_summary()` 事实来源。
 - `2026-05-07` 同日设备自有 `profile_summary()` 还继续补上了 graph topology /
   transfer-plan 摘要：
-  `dependency_count / root_op_count / leaf_op_count / load_entry_count / store_entry_count`。
+  `op_count / dependency_count / root_op_count / leaf_op_count / load_entry_count / store_entry_count`。
   对应的 `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
   `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 single-op、multi-op、
   guest bridge 与 manifest readback 四类代表路径，继续把 queue / overlap 之前的结构摘要
   收口成设备自有 host-side contract。
+- `2026-05-07` 同日同一份设备 contract 也继续把 transfer-plan 摘要细化到 planned bytes：
+  `last_submission_load_plan_bytes / store_plan_bytes`。对应的
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 static、
+  bounded dynamic、guest bridge 与 manifest readback 四类代表路径，并明确把这层
+  “graph package 计划搬运字节数” 与执行结果里的 `dma_load/store_bytes` 区分开。
 - `2026-05-07` 同日同一份设备 contract 也继续补上 tensor-role breakdown：
   `last_submission_input_tensor_count / output_tensor_count / weight_tensor_count /
   constant_tensor_count / intermediate_tensor_count`。对应的

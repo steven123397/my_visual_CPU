@@ -265,10 +265,14 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
     graph package 角色分布收成设备自有 host-side contract，而不是让 direct device、
     guest bridge 和 manifest/profile harness 各自手抄一套角色猜测。
   - 同一份合同还可以继续保留不改变执行语义的 graph topology / transfer-plan 摘要：
-    `dependency_count / root_op_count / leaf_op_count / load_entry_count /
+    `op_count / dependency_count / root_op_count / leaf_op_count / load_entry_count /
     store_entry_count`。这类字段的作用是把“本次 submission 究竟是单 op 还是多 op、是否有
     dependency 链、系统 RAM <-> scratchpad 传输了几类 tensor”收成 host-side 可测事实来源，
     为后续 queue / overlap-ready staged metadata 继续留窄边界。
+    如果还要把 transfer-plan contract 再细一层，也可以继续补
+    `load_plan_bytes / store_plan_bytes`，把最近一次 submission 计划从系统 RAM 搬入 /
+    搬出的 tensor byte budget 一起收成设备自有 host-side contract，同时继续和运行后
+    `dma_load/store_bytes` 区分开：前者是 graph package 级计划摘要，后者是本次执行后的结果摘要。
   - 如果还要继续往 queue-ready 方向收窄，可以优先补最近一次 submission 创建时的
     queue snapshot，例如 `submission_base / completion_base / queue_depth /
     submission_queue_size / completion_queue_size / queue_configured`。这类字段只回答

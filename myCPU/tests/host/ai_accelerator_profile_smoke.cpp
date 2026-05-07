@@ -397,11 +397,14 @@ struct ExpectedManifestCompileContract {
     uint32_t constant_tensor_count{0};
     uint32_t intermediate_tensor_count{0};
     uint32_t scratchpad_budget_bytes{0};
+    uint32_t op_count{0};
     uint32_t dependency_count{0};
     uint32_t root_op_count{0};
     uint32_t leaf_op_count{0};
     uint32_t load_entry_count{0};
     uint32_t store_entry_count{0};
+    uint32_t load_plan_bytes{0};
+    uint32_t store_plan_bytes{0};
     uint64_t token{0xA1A1A1A1ULL};
     uint32_t flags{AI_ACCEL_SUBMISSION_FLAG_PROFILE};
     uint64_t graph_package_addr{MEM_BASE + 0x26000};
@@ -463,9 +466,13 @@ ExpectedManifestCompileContract expected_manifest_compile_contract(const std::fi
     };
     auto count_transfers = [](const AiGraphPackage& package,
                               uint32_t& load_entries,
-                              uint32_t& store_entries) {
+                              uint32_t& store_entries,
+                              uint32_t& load_plan_bytes,
+                              uint32_t& store_plan_bytes) {
         load_entries = 0;
         store_entries = 0;
+        load_plan_bytes = 0;
+        store_plan_bytes = 0;
         for (const AiMemoryPlanEntry& entry : package.memory_plan) {
             if (entry.tensor_index >= package.tensors.size()) {
                 continue;
@@ -473,8 +480,10 @@ ExpectedManifestCompileContract expected_manifest_compile_contract(const std::fi
             const AiTensorRole role = package.tensors[entry.tensor_index].role;
             if (role == AiTensorRole::Output) {
                 ++store_entries;
+                store_plan_bytes += entry.byte_size;
             } else if (role != AiTensorRole::Intermediate && role != AiTensorRole::Invalid) {
                 ++load_entries;
+                load_plan_bytes += entry.byte_size;
             }
         }
     };
@@ -515,6 +524,7 @@ ExpectedManifestCompileContract expected_manifest_compile_contract(const std::fi
         }
     }
     expected.scratchpad_budget_bytes = packaged.scratchpad_budget_bytes;
+    expected.op_count = static_cast<uint32_t>(packaged.ops.size());
     expected.dependency_count = static_cast<uint32_t>(packaged.dependencies.size());
     expected.root_op_count = count_roots(packaged);
     expected.leaf_op_count = count_leaves(packaged);
@@ -548,7 +558,11 @@ ExpectedManifestCompileContract expected_manifest_compile_contract(const std::fi
         expected.runtime_shape_count = static_cast<uint32_t>(runtime_shapes.size());
     }
 
-    count_transfers(packaged, expected.load_entry_count, expected.store_entry_count);
+    count_transfers(packaged,
+                    expected.load_entry_count,
+                    expected.store_entry_count,
+                    expected.load_plan_bytes,
+                    expected.store_plan_bytes);
     return expected;
 }
 
@@ -564,11 +578,14 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
                                         uint32_t expected_constant_tensor_count,
                                         uint32_t expected_intermediate_tensor_count,
                                         uint32_t expected_scratchpad_budget_bytes,
+                                        uint32_t expected_op_count,
                                         uint32_t expected_dependency_count,
                                         uint32_t expected_root_op_count,
                                         uint32_t expected_leaf_op_count,
                                         uint32_t expected_load_entry_count,
                                         uint32_t expected_store_entry_count,
+                                        uint32_t expected_load_plan_bytes,
+                                        uint32_t expected_store_plan_bytes,
                                         uint64_t expected_token,
                                         uint32_t expected_flags,
                                         uint64_t expected_graph_package_addr,
@@ -604,11 +621,14 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
            expect(summary.last_submission_scratchpad_budget_bytes ==
                       expected_scratchpad_budget_bytes,
                   context) &&
+           expect(summary.last_submission_op_count == expected_op_count, context) &&
            expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
            expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
            expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
            expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
            expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
+           expect(summary.last_submission_load_plan_bytes == expected_load_plan_bytes, context) &&
+           expect(summary.last_submission_store_plan_bytes == expected_store_plan_bytes, context) &&
            expect(summary.last_submission_token == expected_token, context) &&
            expect(summary.last_submission_flags == expected_flags, context) &&
            expect(summary.last_submission_graph_package_addr == expected_graph_package_addr, context) &&
@@ -661,6 +681,9 @@ bool expect_empty_submission_compile_contract(const AiAcceleratorProfileSummary&
                                               const char* context) {
     return expect_submission_compile_contract(summary,
                                               AiShapeMode::Static,
+                                              0,
+                                              0,
+                                              0,
                                               0,
                                               0,
                                               0,
@@ -772,11 +795,14 @@ bool expect_manifest_device_profile_summary(const std::filesystem::path& manifes
                                               expected.constant_tensor_count,
                                               expected.intermediate_tensor_count,
                                               expected.scratchpad_budget_bytes,
+                                              expected.op_count,
                                               expected.dependency_count,
                                               expected.root_op_count,
                                               expected.leaf_op_count,
                                               expected.load_entry_count,
                                               expected.store_entry_count,
+                                              expected.load_plan_bytes,
+                                              expected.store_plan_bytes,
                                               expected.token,
                                               expected.flags,
                                               expected.graph_package_addr,
@@ -880,11 +906,14 @@ bool expect_manifest_rerun_refresh(const std::filesystem::path& first_manifest,
                                               expected.constant_tensor_count,
                                               expected.intermediate_tensor_count,
                                               expected.scratchpad_budget_bytes,
+                                              expected.op_count,
                                               expected.dependency_count,
                                               expected.root_op_count,
                                               expected.leaf_op_count,
                                               expected.load_entry_count,
                                               expected.store_entry_count,
+                                              expected.load_plan_bytes,
+                                              expected.store_plan_bytes,
                                               expected.token,
                                               expected.flags,
                                               expected.graph_package_addr,

@@ -250,12 +250,18 @@
   manifest readback 路径，确保 workload sidecar、runtime-shape resolve 与设备自有
   `profile_summary()` 继续共用同一份 graph-package 事实来源。
 - 当前同一合同也已继续补上 graph topology / transfer-plan 摘要：
-  `last_submission_dependency_count / root_op_count / leaf_op_count /
+  `last_submission_op_count / dependency_count / root_op_count / leaf_op_count /
   load_entry_count / store_entry_count`。对应 `ai_accelerator_gemm_smoke`、
   `ai_accelerator_cnn_smoke`、`ai_accel_guest_smoke` 与
   `ai_accelerator_profile_smoke` 现在会把 single-op、multi-op、guest bridge 和 manifest
   readback 四类代表路径一起锁住，继续把 queue/overlap 之前的结构摘要收口成设备自有
   host-side contract。
+- 当前同一合同也已继续把 transfer-plan 摘要细化到 planned bytes：
+  `last_submission_load_plan_bytes / store_plan_bytes`。对应
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、`ai_accel_guest_smoke`
+  与 `ai_accelerator_profile_smoke` 现在会把 static、bounded dynamic、guest bridge
+  和 manifest readback 四类代表路径一起锁住，并明确区分“graph package 计划搬运字节数”
+  与执行结果里的 `dma_load/store_bytes`。
 - 当前同一合同也已继续补上 tensor-role breakdown：
   `last_submission_input_tensor_count / output_tensor_count / weight_tensor_count /
   constant_tensor_count / intermediate_tensor_count`。对应

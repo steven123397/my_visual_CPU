@@ -153,11 +153,14 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
                                         uint32_t expected_constant_tensor_count,
                                         uint32_t expected_intermediate_tensor_count,
                                         uint32_t expected_scratchpad_budget_bytes,
+                                        uint32_t expected_op_count,
                                         uint32_t expected_dependency_count,
                                         uint32_t expected_root_op_count,
                                         uint32_t expected_leaf_op_count,
                                         uint32_t expected_load_entry_count,
                                         uint32_t expected_store_entry_count,
+                                        uint32_t expected_load_plan_bytes,
+                                        uint32_t expected_store_plan_bytes,
                                         uint64_t expected_token,
                                         uint32_t expected_flags,
                                         uint64_t expected_graph_package_addr,
@@ -193,11 +196,14 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
            expect(summary.last_submission_scratchpad_budget_bytes ==
                       expected_scratchpad_budget_bytes,
                   context) &&
+           expect(summary.last_submission_op_count == expected_op_count, context) &&
            expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
            expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
            expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
            expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
            expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
+           expect(summary.last_submission_load_plan_bytes == expected_load_plan_bytes, context) &&
+           expect(summary.last_submission_store_plan_bytes == expected_store_plan_bytes, context) &&
            expect(summary.last_submission_token == expected_token, context) &&
            expect(summary.last_submission_flags == expected_flags, context) &&
            expect(summary.last_submission_graph_package_addr == expected_graph_package_addr, context) &&
@@ -802,11 +808,14 @@ int main() {
                                                0,
                                                3,
                                                192,
+                                               4,
                                                3,
                                                1,
                                                1,
                                                2,
                                                1,
+                                               20,
+                                               12,
                                                descriptor.token,
                                                descriptor.flags,
                                                descriptor.graph_package_addr,
@@ -963,11 +972,14 @@ int main() {
                                                0,
                                                3,
                                                192,
+                                               4,
                                                3,
                                                1,
                                                1,
                                                2,
                                                1,
+                                               20,
+                                               12,
                                                dynamic_descriptor.token,
                                                dynamic_descriptor.flags,
                                                dynamic_descriptor.graph_package_addr,
@@ -1106,11 +1118,14 @@ int main() {
                                                0,
                                                3,
                                                192,
+                                               4,
                                                3,
                                                1,
                                                1,
                                                2,
                                                1,
+                                               20,
+                                               12,
                                                dynamic_descriptor.token,
                                                dynamic_descriptor.flags,
                                                dynamic_descriptor.graph_package_addr,
@@ -1157,6 +1172,9 @@ int main() {
                                             "expected empty CNN DMA breakdown after reset") ||
             !expect_submission_compile_contract(reset_profile_summary,
                                                AiShapeMode::Static,
+                                               0,
+                                               0,
+                                               0,
                                                0,
                                                0,
                                                0,
