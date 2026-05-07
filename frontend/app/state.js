@@ -23,6 +23,14 @@ function createTerminalState() {
   return terminal;
 }
 
+function createJitDispatchState() {
+  return {
+    runState: 'idle',
+    error: null,
+    summary: null,
+  };
+}
+
 export function createAppState() {
   return {
     auth: {
@@ -51,7 +59,11 @@ export function createAppState() {
       error: null,
       result: null,
     },
+    jitDispatch: createJitDispatchState(),
     selectedTest: 'hello',
+    selectedScenario: 'hello',
+    selectedScenarioTest: 'hello',
+    selectedScenarioBackend: 'pipeline',
     backend: 'pipeline',
     loadedSession: null,
     loadProgress: null,
@@ -150,6 +162,13 @@ export function setTests(state, tests, diagnostics = state.diagnostics) {
   setDiagnostics(state, diagnostics);
   if (!state.tests.some((item) => item.name === state.selectedTest) && state.tests[0]) {
     state.selectedTest = state.tests[0].name;
+    state.selectedScenario = state.tests[0].name;
+    state.selectedScenarioTest = state.tests[0].name;
+    state.selectedScenarioBackend = state.tests[0].backend ?? state.backend;
+  } else if (!state.selectedScenario) {
+    state.selectedScenario = state.selectedTest;
+    state.selectedScenarioTest = state.selectedTest;
+    state.selectedScenarioBackend = state.backend;
   }
 }
 
@@ -159,8 +178,41 @@ export function selectDemo(state, testName, backend = state.backend) {
   }
 
   state.selectedTest = testName;
+  state.selectedScenario = testName;
+  state.selectedScenarioTest = testName;
   if (typeof backend === 'string' && backend.length > 0) {
     state.backend = backend;
+    state.selectedScenarioBackend = backend;
+  }
+  return true;
+}
+
+export function selectScenario(state, scenarioKey, scenarioTest = null, scenarioBackend = state.backend) {
+  if (typeof scenarioKey !== 'string' || scenarioKey.length === 0) {
+    return false;
+  }
+  state.selectedScenario = scenarioKey;
+  state.selectedScenarioTest =
+    typeof scenarioTest === 'string' && scenarioTest.length > 0
+      ? scenarioTest
+      : null;
+  state.selectedScenarioBackend =
+    typeof scenarioBackend === 'string' && scenarioBackend.length > 0
+      ? scenarioBackend
+      : state.backend;
+  return true;
+}
+
+export function syncScenarioSessionSelection(state, testName, backend = state.backend) {
+  if (!state.tests.some((item) => item.name === testName)) {
+    return false;
+  }
+
+  state.selectedTest = testName;
+  state.selectedScenarioTest = testName;
+  if (typeof backend === 'string' && backend.length > 0) {
+    state.backend = backend;
+    state.selectedScenarioBackend = backend;
   }
   return true;
 }
@@ -236,6 +288,7 @@ export function clearLoadedSession(state) {
   state.runState = 'idle';
   resetHistory(state);
   resetTerminalState(state);
+  clearJitDispatch(state);
 }
 
 export function appendTerminalOutput(state, payload = {}) {
@@ -266,6 +319,24 @@ export function setTerminalFocus(state, focused) {
 
 export function setTerminalPendingInput(state, pending) {
   state.terminal.pendingInput = pending;
+}
+
+export function setJitDispatchRunState(state, runState, error = null) {
+  state.jitDispatch.runState = runState;
+  state.jitDispatch.error = error ?? null;
+  if (runState === 'running' || runState === 'error') {
+    state.jitDispatch.summary = null;
+  }
+}
+
+export function setJitDispatchResult(state, summary) {
+  state.jitDispatch.summary = summary ?? null;
+  state.jitDispatch.error = null;
+  state.jitDispatch.runState = summary ? 'completed' : 'idle';
+}
+
+export function clearJitDispatch(state) {
+  state.jitDispatch = createJitDispatchState();
 }
 
 export function setDebugPanelOpen(state, open) {

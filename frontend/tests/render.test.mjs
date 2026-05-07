@@ -735,9 +735,72 @@ test('renderApp lets the Linux serial console route select a configured linux_pr
   assert.match(elements.demoWorkspace.innerHTML, /Linux runtime/);
   assert.match(elements.demoWorkspace.innerHTML, /mycpu-linux# /);
   assert.match(elements.demoWorkspace.innerHTML, /virtio-blk rootfs/);
+  assert.match(elements.demoWorkspace.innerHTML, /Session contract/);
+  assert.match(elements.demoWorkspace.innerHTML, /Asset Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
+  assert.match(elements.demoWorkspace.innerHTML, /Load the scenario to create a session and watch the primary stage/);
+  assert.match(elements.demoWorkspace.innerHTML, /Linux distro lane/);
+  assert.match(elements.demoWorkspace.innerHTML, /Capability ladder/);
+  assert.match(elements.demoWorkspace.innerHTML, /Curated distro matrix/);
+  assert.match(elements.demoWorkspace.innerHTML, /Alpine Distro Evidence/);
+  assert.match(elements.demoWorkspace.innerHTML, /Capability &amp; ISA Matrix/);
   assert.match(elements.demoWorkspace.innerHTML, /is-selected/);
   assert.doesNotMatch(elements.demoWorkspace.innerHTML, /Runtime Image required/);
   assert.doesNotMatch(elements.demoWorkspace.innerHTML, /Not configured/);
+});
+
+test('renderApp can focus Linux distro evidence topics without requiring a runnable session', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'linux_proto_console',
+      menuLabel: 'linux_proto_console · Linux serial',
+      kind: 'linux',
+      backend: 'functional',
+      title: 'Linux Serial Console',
+      badge: 'Linux runtime',
+      summary: '启动受控 linux_proto runtime，进入 UART 串口 console。',
+      workload: {
+        stage: 'Wave 7',
+        category: 'linux-serial-console',
+        expectedMarker: 'mycpu-linux# ',
+        ops: ['flat SBI shim', 'Linux Image payload', 'DTB', 'virtio-blk rootfs'],
+      },
+    },
+  ];
+  state.selectedTest = 'linux_proto_console';
+  state.selectedScenario = 'linux_alpine_evidence';
+  state.selectedScenarioTest = null;
+  state.backend = 'functional';
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Alpine Distro Evidence/);
+  assert.match(elements.demoWorkspace.innerHTML, /Topic ready/);
+  assert.match(elements.demoWorkspace.innerHTML, /Read the distro evidence, then open the live shell route/);
+  assert.match(elements.demoWorkspace.innerHTML, /Viewing topic|Open topic/);
+  assert.match(elements.demoWorkspace.innerHTML, /Open live shell/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-action="open-scenario-live"/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-scenario-backend="functional"/);
+  assert.match(elements.demoWorkspace.innerHTML, /Linux distro lane/);
+  assert.match(elements.demoWorkspace.innerHTML, /Capability ladder/);
+  assert.match(elements.demoWorkspace.innerHTML, /Curated distro matrix/);
 });
 
 test('renderApp shows a Linux boot progress strip while linux_proto_console is loading', () => {
@@ -896,6 +959,133 @@ test('renderApp shows Linux console workload asset note for a loaded Linux sessi
   assert.match(elements.workload.innerHTML, /MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
   assert.match(elements.workload.innerHTML, /mycpu-linux# /);
   assert.match(elements.workload.innerHTML, /virtio-blk rootfs/);
+});
+
+test('renderApp turns JIT runtime labs into a runtime evidence topic instead of a placeholder', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'guest_vector_cnn_demo',
+      menuLabel: 'guest_vector_cnn_demo · Vector CNN',
+      kind: 'guest',
+      backend: 'pipeline',
+      title: 'Minimal CNN Demo',
+      badge: 'Vector + ML',
+      summary: '固定 conv -> relu workload。',
+      workload: {
+        expectedMarker: 'V3OK',
+        ops: ['vector registers', 'CNN lanes'],
+      },
+    },
+  ];
+  state.selectedTest = 'guest_vector_cnn_demo';
+  state.selectedScenario = 'jit_runtime_lab';
+  state.selectedScenarioTest = 'guest_vector_cnn_demo';
+  state.backend = 'pipeline';
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+    authPanel: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /JIT \/ DBT Runtime Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /Runtime evidence topic/);
+  assert.match(elements.demoWorkspace.innerHTML, /Sample runtime dispatch/);
+  assert.match(elements.demoWorkspace.innerHTML, /Run JIT probe/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-action="run-jit-dispatch"/);
+  assert.match(elements.demoWorkspace.innerHTML, /Sync session|Session synced/);
+  assert.match(elements.demoWorkspace.innerHTML, /Sync a runtime-friendly workload, then run the JIT probe/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-scenario-key="jit_runtime_lab"[\s\S]*Viewing topic/);
+});
+
+test('renderApp shows collected JIT dispatch evidence inside the runtime topic', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'guest_vector_cnn_demo',
+      menuLabel: 'guest_vector_cnn_demo · Vector CNN',
+      kind: 'guest',
+      backend: 'pipeline',
+      title: 'Minimal CNN Demo',
+      badge: 'Vector + ML',
+      summary: '固定 conv -> relu workload。',
+      workload: {
+        expectedMarker: 'V3OK',
+        ops: ['vector registers', 'CNN lanes'],
+      },
+    },
+  ];
+  state.selectedTest = 'guest_vector_cnn_demo';
+  state.selectedScenario = 'jit_runtime_lab';
+  state.selectedScenarioTest = 'guest_vector_cnn_demo';
+  state.backend = 'pipeline';
+  state.jitDispatch = {
+    runState: 'completed',
+    error: null,
+    summary: {
+      type: 'jit_dispatch',
+      ok: true,
+      source: 'hot-path-profile',
+      action: 'lowered-ready',
+      start_pc: '0x80000000',
+      end_pc: '0x80000020',
+      cache_state: 'hit',
+      planned: true,
+      translated: true,
+      lowered: true,
+      fallback_to_reference: false,
+      lowered_instruction_count: 5,
+      candidate_executions: 18,
+      candidate_retired_instructions: 72,
+      reject_kind: 'none',
+      reject_reason: 'none',
+      helper_replay_kind: 'none',
+      host_code: false,
+      executable_memory: false,
+      guest_execution: false,
+    },
+  };
+
+  const elements = {
+    desktop: createSlot(),
+    debugInspector: createSlot(),
+    demoWorkspace: createSlot(),
+    terminal: createSlot(),
+    summary: createSlot(),
+    workload: createSlot(),
+    predictor: createSlot(),
+    pipeline: createSlot(),
+    events: createSlot(),
+    vector: createSlot(),
+    devices: createSlot(),
+    registers: createSlot(),
+    csrs: createSlot(),
+    bus: createSlot(),
+    authPanel: createSlot(),
+  };
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Observed runtime dispatch/);
+  assert.match(elements.demoWorkspace.innerHTML, /lowered-ready/);
+  assert.match(elements.demoWorkspace.innerHTML, /hot-path-profile/);
+  assert.match(elements.demoWorkspace.innerHTML, /candidate executions 18/);
+  assert.match(elements.demoWorkspace.innerHTML, /cache hit/);
 });
 
 
@@ -1719,15 +1909,31 @@ test('renderApp shows a demo-first workspace with selectable workloads and futur
 
   renderApp(elements, state);
 
-  assert.match(elements.demoWorkspace.innerHTML, /Demo workspace/);
-  assert.match(elements.demoWorkspace.innerHTML, /OS Bring-up/);
+  assert.match(elements.demoWorkspace.innerHTML, /Lab navigator/);
+  assert.match(elements.demoWorkspace.innerHTML, /System Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /Linux Distro Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /Machine Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /AI Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /Runtime Labs/);
   assert.match(elements.demoWorkspace.innerHTML, /interactive_os Monitor/);
+  assert.match(elements.demoWorkspace.innerHTML, /Scenario brief/);
+  assert.match(elements.demoWorkspace.innerHTML, /Operate the guest monitor through the browser terminal/);
+  assert.match(elements.demoWorkspace.innerHTML, /Session contract/);
+  assert.match(elements.demoWorkspace.innerHTML, /Inspector focus/);
+  assert.match(elements.demoWorkspace.innerHTML, /Observation trail/);
+  assert.match(elements.demoWorkspace.innerHTML, /Evidence and boundary/);
   assert.match(elements.demoWorkspace.innerHTML, /AI Accelerator/);
   assert.match(elements.demoWorkspace.innerHTML, /AI Accelerator Demo/);
   assert.match(elements.demoWorkspace.innerHTML, /Vector CNN/);
   assert.match(elements.demoWorkspace.innerHTML, /Minimal CNN Demo/);
   assert.match(elements.demoWorkspace.innerHTML, /JIT \/ DBT Runtime Labs/);
-  assert.match(elements.demoWorkspace.innerHTML, /Coming soon/);
+  assert.match(elements.demoWorkspace.innerHTML, /Open topic/);
+  assert.match(elements.demoWorkspace.innerHTML, /Selected lab/);
+  assert.match(elements.demoWorkspace.innerHTML, /Primary stage/);
+  assert.match(elements.demoWorkspace.innerHTML, /Next action/);
+  assert.match(elements.demoWorkspace.innerHTML, /Load the scenario to create a session and watch the primary stage/);
+  assert.match(elements.demoWorkspace.innerHTML, /Scenario controls/);
+  assert.match(elements.demoWorkspace.innerHTML, /Sync session|Session synced/);
   assert.match(elements.demoWorkspace.innerHTML, /data-demo-test="guest_ai_accel_demo"/);
   assert.match(elements.demoWorkspace.innerHTML, /data-demo-backend="pipeline"/);
   assert.match(elements.demoWorkspace.innerHTML, /is-selected/);

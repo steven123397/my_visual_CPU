@@ -26,7 +26,7 @@
     主线 `Wave 6 / JIT / DBT` 当前 readiness、证据链、translation contract、原型边界和
     `DBT translator + IR v0 dry-run` 完成态设计入口。
 11. [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
-    主线 `Wave 7 / 产品化展示与在线控制台` 的产品官网、控制台和产品文档设计入口。
+    主线 `Wave 7 / 产品化展示与在线控制台` 的历史设计入口，保留首页壳层与 demo workspace v1 语境。
 12. [design/wave7_remote_cloud_dev_environment_design.md](design/wave7_remote_cloud_dev_environment_design.md)
     主线 `Wave 7` 在另一台云服务器上承接完整开发/验证环境的设计入口。
 13. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
@@ -41,17 +41,24 @@
     `Wave 7` 阶段性收口后的 `用户自定义 AI 任务 + NPU 性能模型` 新主线设计入口。
 18. [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
     `用户自定义 AI 任务 + NPU 性能模型` 新主线的当前活跃计划。
-19. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+19. [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
+    `Post-Wave 7` 前端从 `demo workspace v1` 重构为 `Lab workbench` 的当前设计入口。
+20. [plan/history_plan.md#post-wave7-frontend-lab-product-plan](plan/history_plan.md#post-wave7-frontend-lab-product-plan)
+    `Post-Wave 7` 前端 `Lab workbench` 第一轮重构完成归档。
+21. [plan/history_plan.md#post-wave7-frontend-lab-completion-plan](plan/history_plan.md#post-wave7-frontend-lab-completion-plan)
+    `Post-Wave 7` 前端 `Lab workbench` 第二轮补完完成归档，覆盖真实 Linux Image、
+    Scenario controls、Linux topic/live 连通和 JIT runtime evidence topic。
+22. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     向量扩展与 ML workload 的统一设计边界。
-20. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+23. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 方向设计。
-21. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+24. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
     `debug_session / protocol + frontend` 设计边界。
-22. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+25. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
     Spike 外部差分验证边界。
-23. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
+26. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
     主线 `Wave 7` 远端云服务器开发/验证环境的当前活跃计划。
-24. [plan/history_plan.md](plan/history_plan.md)
+27. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -98,6 +105,9 @@
   - [plan/history_plan.md](plan/history_plan.md)
 - `Wave 7 / 产品化展示`
   - [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
+  - [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
+  - [plan/history_plan.md#post-wave7-frontend-lab-product-plan](plan/history_plan.md#post-wave7-frontend-lab-product-plan)
+  - [plan/history_plan.md#post-wave7-frontend-lab-completion-plan](plan/history_plan.md#post-wave7-frontend-lab-completion-plan)
   - [design/wave7_remote_cloud_dev_environment_design.md](design/wave7_remote_cloud_dev_environment_design.md)
   - [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
   - [plan/history_plan.md#mainline-wave7-product-website-shell-plan](plan/history_plan.md#mainline-wave7-product-website-shell-plan)

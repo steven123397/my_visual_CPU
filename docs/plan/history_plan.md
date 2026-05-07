@@ -23,6 +23,41 @@
 
 ### 2026-05-05
 
+#### post-wave7-frontend-lab-completion-plan
+
+- 原文件：`post_wave7_frontend_lab_completion_plan.md`
+- 完成内容：完成 `Post-Wave 7` 前端 `Lab workbench` 第二轮补完。当前 worktree 的本地
+  debug server 已接通真实 Linux `Image`，`/api/tests` 会把 `linux_proto_console`
+  暴露为 ready；`/console` 新增 `Scenario controls`，把专题卡、`测试 / 后端 / Load`
+  和 live session 组织成一条更清晰的工作流。Linux topical cards 现在会携带各自绑定的
+  runnable route / backend，`Open live shell` 和 `Load current scenario` 可以直接回到
+  真实 Linux serial shell。`Runtime Labs` 也不再只剩占位卡，而是通过
+  `POST /api/session/jit-dispatch` 将当前 loaded session 的 JIT / DBT dry-run summary
+  接入 runtime evidence topic。
+- 实现过程摘要：这一轮先确认本机真实 Linux `Image`，再用最小 server / state / render
+  改动把 topic -> scenario test/backend -> Load 的状态链接实。浏览器端继续只消费
+  manifest、diagnostics、terminal、snapshot 和 debug server 的真实响应，不新增伪造执行结果，
+  也不扩写尚未完成的 AI 分支内容。
+- 结果参考：[post_wave7_frontend_lab_product_design.md](../design/post_wave7_frontend_lab_product_design.md)、[mainline_status.md](../status/mainline_status.md)
+
+#### post-wave7-frontend-lab-product-plan
+
+- 原文件：`post_wave7_frontend_lab_product_plan.md`
+- 完成内容：完成 `Post-Wave 7` 前端 `Lab workbench` 第一轮重构。旧 `Wave 7` 首页 /
+  `demo workspace v1` 设计已降级为历史语境，现行入口切到
+  [post_wave7_frontend_lab_product_design.md](../design/post_wave7_frontend_lab_product_design.md)。
+  `/console` 当前已经固定 `Lab Navigator + Session Bar + Primary Stage + Inspector Stack +
+  Evidence Drawer` 骨架，并把解释层收成 `Session contract -> Primary stage ->
+  Observation trail -> Evidence / boundary`。Linux family 也已从单一卡片扩成
+  `Linux Serial Console`、`Alpine Distro Evidence` 和 `Capability & ISA Matrix`
+  三类专题入口：前者保持真实可运行的 gated serial shell route，后两者作为只读专题卡承载
+  发行版证据链与 capability / ISA 收口说明。AI Labs 在这一轮只保留现有已落地入口，不继续扩写。
+- 实现过程摘要：这一轮先按 TDD 钉住 `Lab workbench` 骨架和解释层，再把 Linux 专题卡与
+  可运行 demo 的状态机拆开，避免 read-only topic 干扰 `selectedTest` 的主会话路径。
+  浏览器端仍只消费 manifest / snapshot / diagnostics / terminal 的真实后端响应，不新增并行事实来源，
+  也不改动底层 debug session / simulator 执行语义。
+- 结果参考：[post_wave7_frontend_lab_product_design.md](../design/post_wave7_frontend_lab_product_design.md)、[wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)、[mainline_status.md](../status/mainline_status.md)
+
 #### post-wave7-linux-distribution-platform-plan
 
 - 原文件：`post_wave7_linux_distribution_platform_plan.md`

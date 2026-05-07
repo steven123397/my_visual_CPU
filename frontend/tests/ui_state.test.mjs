@@ -9,6 +9,7 @@ import {
   createAppState,
   appendTerminalOutput,
   selectDemo,
+  selectScenario,
   setLoadProgress,
   setDiagnostics,
   setLoadedSession,
@@ -21,6 +22,7 @@ import {
   diffRegisters,
   diffVectorRegisters,
   pushSnapshot,
+  syncScenarioSessionSelection,
   shouldAutoScrollToBottom,
 } from '../app/state.js';
 
@@ -113,6 +115,39 @@ test('selectDemo updates the workload and backend only for manifest-backed demos
   assert.equal(selectDemo(state, 'linux_shell_demo', 'pipeline'), false);
   assert.equal(state.selectedTest, 'guest_ai_accel_demo');
   assert.equal(state.backend, 'pipeline');
+});
+
+test('selectScenario can focus a read-only lab topic without changing the last runnable test', () => {
+  const state = {
+    tests: [{ name: 'linux_proto_console' }],
+    selectedTest: 'linux_proto_console',
+    selectedScenario: 'linux_proto_console',
+    selectedScenarioTest: 'linux_proto_console',
+    selectedScenarioBackend: 'functional',
+    backend: 'functional',
+  };
+
+  assert.equal(selectScenario(state, 'linux_alpine_evidence', 'linux_proto_console', 'functional'), true);
+  assert.equal(state.selectedScenario, 'linux_alpine_evidence');
+  assert.equal(state.selectedScenarioTest, 'linux_proto_console');
+  assert.equal(state.selectedScenarioBackend, 'functional');
+  assert.equal(state.selectedTest, 'linux_proto_console');
+});
+
+test('syncScenarioSessionSelection aligns the current runnable session target with a topical scenario', () => {
+  const state = createAppState();
+  state.tests = [{ name: 'linux_proto_console' }];
+  state.selectedScenario = 'linux_alpine_evidence';
+  state.selectedScenarioTest = 'linux_proto_console';
+  state.selectedScenarioBackend = 'functional';
+  state.selectedTest = 'hello';
+  state.backend = 'pipeline';
+
+  assert.equal(syncScenarioSessionSelection(state, 'linux_proto_console', 'functional'), true);
+  assert.equal(state.selectedTest, 'linux_proto_console');
+  assert.equal(state.selectedScenarioTest, 'linux_proto_console');
+  assert.equal(state.selectedScenarioBackend, 'functional');
+  assert.equal(state.backend, 'functional');
 });
 
 test('setTests stores read-only diagnostics alongside the workload manifest', () => {

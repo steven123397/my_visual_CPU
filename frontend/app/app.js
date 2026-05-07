@@ -1,5 +1,6 @@
 import {
   getAuthSession,
+  jitDispatch,
   listTests,
   listAiTinyModelTemplates,
   login,
@@ -33,12 +34,16 @@ import {
   setAiTinyModelParameters,
   setAiTinyModelRunState,
   setAiTinyModelResult,
+  setJitDispatchRunState,
+  setJitDispatchResult,
   setAuthState,
   setLoginError,
   setLoginPending,
   setTerminalPendingInput,
   setTests,
   selectDemo,
+  selectScenario,
+  syncScenarioSessionSelection,
 } from './state.js';
 import { formatLoadErrorMessage } from './load_error_message.js';
 import { createTerminalInputPump } from './terminal_input_pump.js';
@@ -262,6 +267,21 @@ async function handleRunAiTinyModel() {
   }
 }
 
+async function handleRunJitDispatch() {
+  setJitDispatchRunState(state, 'running', null);
+  paint();
+  try {
+    const result = await jitDispatch();
+    setJitDispatchResult(state, result.summary ?? null);
+    paint();
+    showNotice('JIT / DBT runtime probe 已刷新。', 'success');
+  } catch (error) {
+    setJitDispatchRunState(state, 'error', error.message);
+    paint();
+    showNotice(error.message, 'error');
+  }
+}
+
 const terminalInputPump = createTerminalInputPump({
   sendInput: terminalInput,
   onResponse: (response) => {
@@ -289,7 +309,8 @@ async function init() {
   connectRealtime();
 
   elements.testSelect.addEventListener('change', (event) => {
-    state.selectedTest = event.target.value;
+    selectDemo(state, event.target.value, state.backend);
+    paint();
   });
   elements.backendSelect.addEventListener('change', (event) => {
     state.backend = event.target.value;
@@ -323,10 +344,62 @@ async function init() {
       needsPaint = true;
     }
 
+    const scenarioCard = event.target.closest?.('.demo-card[data-scenario-key]');
+    if (scenarioCard) {
+      event.preventDefault();
+      const didSelect = selectScenario(
+        state,
+        scenarioCard.dataset.scenarioKey,
+        scenarioCard.dataset.scenarioTest,
+        scenarioCard.dataset.scenarioBackend,
+      );
+      if (didSelect) {
+        showNotice(`已切到 ${scenarioCard.dataset.scenarioKey} 专题，可先阅读工作台说明。`, 'success');
+        needsPaint = true;
+      }
+    }
+
+    const syncScenarioButton = event.target.closest?.('[data-action="sync-scenario-session"]');
+    if (syncScenarioButton) {
+      event.preventDefault();
+      const targetTest = syncScenarioButton.dataset.scenarioTest;
+      const targetBackend = syncScenarioButton.dataset.scenarioBackend;
+      const didSync = syncScenarioSessionSelection(state, targetTest, targetBackend);
+      if (didSync) {
+        showNotice(`已同步到 ${targetTest}，点击 Load 启动当前场景。`, 'success');
+        paint();
+      }
+    }
+
+    const scenarioLoadButton = event.target.closest?.('[data-action="load-current-session"]');
+    if (scenarioLoadButton) {
+      event.preventDefault();
+      document.querySelector('#load-button')?.click();
+    }
+
+    const openLiveButton = event.target.closest?.('[data-action="open-scenario-live"]');
+    if (openLiveButton) {
+      event.preventDefault();
+      const targetTest = openLiveButton.dataset.scenarioTest;
+      const targetBackend = openLiveButton.dataset.scenarioBackend;
+      const didSelect = selectDemo(state, targetTest, targetBackend);
+      if (didSelect) {
+        showNotice(`已切回 ${targetTest} live shell，可直接 Load。`, 'success');
+        paint();
+      }
+    }
+
     const aiRunButton = event.target.closest?.('[data-action="run-ai-tiny-model"]');
     if (aiRunButton) {
       event.preventDefault();
       await handleRunAiTinyModel();
+      return;
+    }
+
+    const jitRunButton = event.target.closest?.('[data-action="run-jit-dispatch"]');
+    if (jitRunButton) {
+      event.preventDefault();
+      await handleRunJitDispatch();
       return;
     }
 
@@ -381,6 +454,66 @@ async function init() {
       event.preventDefault();
       showNotice('已打开 AI 参数化小模型面板，可直接运行 host profile。', 'success');
       document.querySelector('.ai-tiny-model')?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    const scenarioCard = event.target.closest?.('.demo-card[data-scenario-key]');
+    if (scenarioCard && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      const didSelect = selectScenario(
+        state,
+        scenarioCard.dataset.scenarioKey,
+        scenarioCard.dataset.scenarioTest,
+        scenarioCard.dataset.scenarioBackend,
+      );
+      if (didSelect) {
+        showNotice(`已切到 ${scenarioCard.dataset.scenarioKey} 专题，可先阅读工作台说明。`, 'success');
+        paint();
+      }
+      return;
+    }
+
+    const syncScenarioButton = event.target.closest?.('[data-action="sync-scenario-session"]');
+    if (syncScenarioButton && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      const didSync = syncScenarioSessionSelection(
+        state,
+        syncScenarioButton.dataset.scenarioTest,
+        syncScenarioButton.dataset.scenarioBackend,
+      );
+      if (didSync) {
+        showNotice(`已同步到 ${syncScenarioButton.dataset.scenarioTest}，点击 Load 启动当前场景。`, 'success');
+        paint();
+      }
+      return;
+    }
+
+    const scenarioLoadButton = event.target.closest?.('[data-action="load-current-session"]');
+    if (scenarioLoadButton && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      document.querySelector('#load-button')?.click();
+      return;
+    }
+
+    const openLiveButton = event.target.closest?.('[data-action="open-scenario-live"]');
+    if (openLiveButton && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      const didSelect = selectDemo(
+        state,
+        openLiveButton.dataset.scenarioTest,
+        openLiveButton.dataset.scenarioBackend,
+      );
+      if (didSelect) {
+        showNotice(`已切回 ${openLiveButton.dataset.scenarioTest} live shell，可直接 Load。`, 'success');
+        paint();
+      }
+      return;
+    }
+
+    const jitRunButton = event.target.closest?.('[data-action="run-jit-dispatch"]');
+    if (jitRunButton && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      await handleRunJitDispatch();
       return;
     }
 

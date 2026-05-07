@@ -290,6 +290,12 @@ export async function startServer({
         return;
       }
 
+      if (request.method === 'POST' && url.pathname === '/api/session/jit-dispatch') {
+        security.requireAuthentication(request, routeKey);
+        await respondWithAction(response, () => runtime.jitDispatch(), securityHeaders);
+        return;
+      }
+
       if (request.method === 'POST' && url.pathname === '/api/session/pause') {
         security.requireController(request, 'pause');
         await respondWithAction(response, () => runtime.pause(), securityHeaders);

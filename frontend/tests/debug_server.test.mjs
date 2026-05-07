@@ -182,6 +182,30 @@ function createFakeSession(sessionLabel = 'session-1') {
         text: terminal.slice(offset),
       };
     },
+    async jitDispatch() {
+      return {
+        type: 'jit_dispatch',
+        ok: currentTest === 'guest_vector_cnn_demo',
+        source: 'hot-path-profile',
+        action: currentTest === 'guest_vector_cnn_demo' ? 'lowered-ready' : 'reference-fallback',
+        start_pc: '0x80000000',
+        end_pc: '0x80000020',
+        cache_state: currentTest === 'guest_vector_cnn_demo' ? 'hit' : 'miss',
+        planned: true,
+        translated: true,
+        lowered: currentTest === 'guest_vector_cnn_demo',
+        fallback_to_reference: currentTest !== 'guest_vector_cnn_demo',
+        lowered_instruction_count: currentTest === 'guest_vector_cnn_demo' ? 5 : 0,
+        candidate_executions: currentTest === 'guest_vector_cnn_demo' ? 18 : 3,
+        candidate_retired_instructions: currentTest === 'guest_vector_cnn_demo' ? 72 : 6,
+        reject_kind: currentTest === 'guest_vector_cnn_demo' ? 'none' : 'control-flow',
+        reject_reason: currentTest === 'guest_vector_cnn_demo' ? 'none' : 'fallback-required',
+        helper_replay_kind: 'none',
+        host_code: false,
+        executable_memory: false,
+        guest_execution: false,
+      };
+    },
     async close() {},
     get stepCommitCount() {
       return stepCommitCount;
@@ -1240,15 +1264,58 @@ test('GET /console keeps serving the existing browser console app', async () => 
     const body = await response.text();
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type') ?? '', /text\/html/);
-    assert.match(body, /交互式终端调试台/);
+    assert.match(body, /Lab workbench/);
     assert.match(body, /id="demo-workspace-slot"/);
-    assert.match(body, /Demo workspace/);
+    assert.match(body, /Lab workspace/);
+    assert.match(body, /选择一个实验场景/);
     assert.match(body, /Linux serial console/);
     assert.match(body, /MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
     assert.match(body, /id="test-select"/);
     assert.match(body, /id="terminate-button"/);
     assert.match(body, />Terminate</);
     assert.match(body, /src="\/app\.js"/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/jit-dispatch returns the current runtime dry-run summary', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_vector_cnn_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const response = await postJson(server.baseUrl, '/api/session/jit-dispatch', {});
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.summary, {
+      type: 'jit_dispatch',
+      ok: true,
+      source: 'hot-path-profile',
+      action: 'lowered-ready',
+      start_pc: '0x80000000',
+      end_pc: '0x80000020',
+      cache_state: 'hit',
+      planned: true,
+      translated: true,
+      lowered: true,
+      fallback_to_reference: false,
+      lowered_instruction_count: 5,
+      candidate_executions: 18,
+      candidate_retired_instructions: 72,
+      reject_kind: 'none',
+      reject_reason: 'none',
+      helper_replay_kind: 'none',
+      host_code: false,
+      executable_memory: false,
+      guest_execution: false,
+    });
   } finally {
     await server.close();
   }

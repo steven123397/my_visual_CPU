@@ -42,6 +42,7 @@ function createFakeSession({
   linuxPromptMode = false,
   loadError = null,
   snapshotError = null,
+  jitDispatchSummary = null,
 } = {}) {
   let cycle = 0;
   let terminal = `boot:${label}\r\n> `;
@@ -146,6 +147,31 @@ function createFakeSession({
       return {
         text: terminal.slice(offset),
         nextOffset: terminal.length,
+      };
+    },
+    async jitDispatch() {
+      callLog.push('jitDispatch');
+      return jitDispatchSummary ?? {
+        type: 'jit_dispatch',
+        ok: false,
+        source: 'hot-path-profile',
+        action: 'reference-fallback',
+        start_pc: '0x80200000',
+        end_pc: '0x80200008',
+        cache_state: 'miss',
+        planned: true,
+        translated: true,
+        lowered: false,
+        fallback_to_reference: true,
+        lowered_instruction_count: 0,
+        candidate_executions: 3,
+        candidate_retired_instructions: 6,
+        reject_kind: 'control-flow',
+        reject_reason: 'fallback-required',
+        helper_replay_kind: 'none',
+        host_code: false,
+        executable_memory: false,
+        guest_execution: false,
       };
     },
     async close() {
@@ -573,6 +599,73 @@ test('createDebugServerRuntime terminalInput waits for Linux prompt command outp
   assert.equal(terminalMessages.length, 1);
   assert.match(terminalMessages[0].text, /commands: help uptime exit/);
   assert.match(terminalMessages[0].text, /mycpu-linux# $/);
+
+  await runtime.close();
+});
+
+test('createDebugServerRuntime jitDispatch returns the current dry-run summary for a loaded session', async () => {
+  const session = createFakeSession({
+    label: 'jit-session',
+    jitDispatchSummary: {
+      type: 'jit_dispatch',
+      ok: true,
+      source: 'hot-path-profile',
+      action: 'lowered-ready',
+      start_pc: '0x80000000',
+      end_pc: '0x80000020',
+      cache_state: 'hit',
+      planned: true,
+      translated: true,
+      lowered: true,
+      fallback_to_reference: false,
+      lowered_instruction_count: 5,
+      candidate_executions: 18,
+      candidate_retired_instructions: 72,
+      reject_kind: 'none',
+      reject_reason: 'none',
+      helper_replay_kind: 'none',
+      host_code: false,
+      executable_memory: false,
+      guest_execution: false,
+    },
+  });
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => session,
+    wsHub,
+  });
+
+  await runtime.load({
+    name: 'guest_vector_cnn_demo',
+    image: 'guest/vector_cnn_demo.elf',
+    terminalPrompt: '> ',
+  }, 'pipeline');
+
+  const response = await runtime.jitDispatch();
+
+  assert.deepEqual(response.summary, {
+    type: 'jit_dispatch',
+    ok: true,
+    source: 'hot-path-profile',
+    action: 'lowered-ready',
+    start_pc: '0x80000000',
+    end_pc: '0x80000020',
+    cache_state: 'hit',
+    planned: true,
+    translated: true,
+    lowered: true,
+    fallback_to_reference: false,
+    lowered_instruction_count: 5,
+    candidate_executions: 18,
+    candidate_retired_instructions: 72,
+    reject_kind: 'none',
+    reject_reason: 'none',
+    helper_replay_kind: 'none',
+    host_code: false,
+    executable_memory: false,
+    guest_execution: false,
+  });
+  assert.ok(session.callLog.includes('jitDispatch'));
 
   await runtime.close();
 });

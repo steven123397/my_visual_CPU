@@ -28,7 +28,7 @@ export function activeVectorStages(snapshot) {
 export function renderSummary(snapshot, runState) {
   const summary = snapshot?.summary ?? {};
   return card(
-    '运行摘要',
+    'Session summary',
     `
       <div class="summary-grid">
         <div><span>state</span><strong>${runState}</strong></div>
@@ -108,5 +108,5 @@ export function renderWorkloadPanel(testEntry, snapshot) {
       <div class="empty-state">当前 demo 暂无专门的 workload 说明，仍可用这套前端观察流水线、寄存器与设备状态。</div>
     `;
 
-  return card('工作负载导览', body, 'panel-workload');
+  return card('Scenario inspector', body, 'panel-workload');
 }

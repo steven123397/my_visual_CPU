@@ -13,8 +13,8 @@ import {
 
 const DEMO_GROUPS = [
   {
-    title: 'OS Bring-up',
-    summary: '启动 guest monitor、xv6 和 Linux 路线，观察 boot log、UART 和系统 marker。',
+    title: 'System Labs',
+    summary: '从最小 monitor 到 supervisor 平台闭环，先验证系统可启动、可交互、可观察。',
     demos: [
       {
         title: 'interactive_os Monitor',
@@ -23,6 +23,18 @@ const DEMO_GROUPS = [
         fallbackSummary: '输入 help、regs、disk 和 pagewalk，直接体验浏览器终端到 guest monitor 的闭环。',
         marker: 'monitor> ',
         panels: ['terminal', 'registers', 'devices'],
+        brief: 'Operate the guest monitor through the browser terminal and confirm command roundtrips before widening into larger OS bring-up flows.',
+        primaryStage: 'Terminal + session summary',
+        inspectorFocus: [
+          'Terminal I/O and prompt settling',
+          'Register and device state after monitor commands',
+          'Pipeline timeline once the session is loaded',
+        ],
+        proves: [
+          'The browser terminal, debug CLI session, and guest monitor form one closed interactive loop.',
+          'A small but real OS-like control path is observable before Linux distro bring-up.',
+        ],
+        boundary: 'This route is a curated monitor session, not a general-purpose userland shell.',
       },
       {
         title: 'Supervisor Platform',
@@ -31,7 +43,25 @@ const DEMO_GROUPS = [
         fallbackSummary: '沿 supervisor demo 观察 trap、MMIO、timer 和 storage platform smoke。',
         marker: 'supervisor demo',
         panels: ['pipeline', 'devices', 'events'],
+        brief: 'Inspect the supervisor-platform checkpoint where traps, timer delivery, MMIO, and storage coordination converge in one guest path.',
+        primaryStage: 'Pipeline board + platform inspector',
+        inspectorFocus: [
+          'Trap and interrupt-related pipeline events',
+          'Platform device state and event flow',
+          'Storage and timer side effects in one snapshot stream',
+        ],
+        proves: [
+          'Supervisor-mode runtime and platform devices can complete a controlled smoke path together.',
+          'The platform path remains observable from pipeline to device counters.',
+        ],
+        boundary: 'This is still a proof-oriented platform smoke, not a full multi-process operating system route.',
       },
+    ],
+  },
+  {
+    title: 'Linux Distro Labs',
+    summary: '把 Linux 串口会话、发行版证据链和 capability 收口组织成一组连续实验。',
+    demos: [
       {
         title: 'Linux Serial Console',
         test: 'linux_proto_console',
@@ -41,12 +71,65 @@ const DEMO_GROUPS = [
         fallbackSummary: '配置 MYCPU_LINUX_PROTO_CONSOLE_IMAGE 后，可用受控 linux_proto runtime 打开 UART 串口 console。',
         marker: 'post-init reached',
         panels: ['terminal', 'Linux Image', 'DTB', 'virtio-blk'],
+        brief: 'Boot the curated Linux serial route, reach a live prompt over UART, and keep the distro-facing runtime contract visible beside the session.',
+        primaryStage: 'Terminal + distro contract',
+        inspectorFocus: [
+          'UART output and shell prompt settling',
+          'Linux runtime assets and backend selection',
+          'Platform devices relevant to boot and console I/O',
+        ],
+        proves: [
+          'The frontend can load a real Linux Image through the existing debug session flow.',
+          'A controlled Linux shell path is available without hiding asset gating and runtime boundaries.',
+        ],
+        boundary: 'This is a curated serial shell route, not a general-purpose cloud VM or arbitrary distro launcher.',
+        assetNote: 'Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image before starting the frontend server.',
+      },
+      {
+        title: 'Alpine Distro Evidence',
+        scenarioKey: 'linux_alpine_evidence',
+        scenarioTest: 'linux_proto_console',
+        backend: 'functional',
+        fallbackSummary: '围绕 Alpine external rootfs 的 shell、filesystem、process 和 FS-state 正向证据整理专题视图。',
+        marker: 'filesystem / process / fs-state',
+        panels: ['shell', 'filesystem', 'process', 'FP roundtrip'],
+        brief: 'Surface the external Alpine evidence chain as a guided lab instead of scattering it across status notes and one-off probes.',
+        primaryStage: 'Evidence cards + terminal excerpts',
+        inspectorFocus: [
+          'Filesystem and process-control checkpoints',
+          'FS-state roundtrip interpretation',
+          'External asset contract and verification scope',
+        ],
+        proves: [
+          'Linux distro support is presented as a sequence of verified contracts, not as a single shell screenshot.',
+        ],
+        boundary: 'This slice is planned; it should not claim complete distro compatibility before the underlying contracts are finished.',
+      },
+      {
+        title: 'Capability & ISA Matrix',
+        scenarioKey: 'linux_capability_isa_matrix',
+        scenarioTest: 'linux_proto_console',
+        backend: 'functional',
+        fallbackSummary: '把 riscv,isa、hwcap、FCSR/FP 和 guest-visible capability 的收口做成专题观察面。',
+        marker: 'capability closure',
+        panels: ['riscv,isa', 'hwcap', 'FP / FCSR'],
+        brief: 'Turn Linux capability and ISA closure into an explicit lab so the remaining platform gaps can be explained next to live evidence.',
+        primaryStage: 'Capability matrix + probe evidence',
+        inspectorFocus: [
+          'Guest-visible capability advertisement',
+          'FCSR and floating-point contract evidence',
+          'Remaining distro-facing ISA gaps',
+        ],
+        proves: [
+          'Linux capability closure is a platform contract problem, not just a shell-demo concern.',
+        ],
+        boundary: 'This lab remains planned until the guest-visible capability contract is further tightened.',
       },
     ],
   },
   {
-    title: 'Machine Inspector',
-    summary: '把 pipeline、register、CSR、memory 和 platform device 状态放进同一个观察面。',
+    title: 'Machine Labs',
+    summary: '围绕 pipeline、寄存器、CSR、memory 与 platform 观察面组织微架构实验。',
     demos: [
       {
         title: 'Pipeline Inspector',
@@ -55,6 +138,18 @@ const DEMO_GROUPS = [
         fallbackSummary: '用最小 asm workload 快速观察五级 pipeline、commit、stall 和事件流。',
         marker: 'halt',
         panels: ['pipeline', 'timeline', 'registers'],
+        brief: 'Use the smallest assembly workload to inspect pipeline stages, commit cadence, and control-flow events without workload noise.',
+        primaryStage: 'Pipeline board + timeline',
+        inspectorFocus: [
+          'Stage occupancy and commit cadence',
+          'Redirect, stall, and event annotations',
+          'Register diffs beside pipeline snapshots',
+        ],
+        proves: [
+          'The frontend can expose pipeline internals without inventing simulator state.',
+          'Microarchitecture observation stays usable even on minimal workloads.',
+        ],
+        boundary: 'This route prioritizes observability over workload richness.',
       },
       {
         title: 'Memory & Platform',
@@ -63,12 +158,23 @@ const DEMO_GROUPS = [
         fallbackSummary: '观察 Sv39 / MMIO / storage 相关 platform smoke 的设备状态。',
         marker: 'platform smoke',
         panels: ['AddressSpace', 'CLINT', 'PLIC', 'virtio-blk'],
+        brief: 'Trace memory-system and MMIO-facing platform behavior through snapshots, bus state, and device counters.',
+        primaryStage: 'Platform inspector + bus/events',
+        inspectorFocus: [
+          'Bus access summary and MMIO outcome',
+          'Platform devices and event stream',
+          'Address-space-adjacent observations from the current snapshot',
+        ],
+        proves: [
+          'Platform-side observability is available in the same workbench as execution state.',
+        ],
+        boundary: 'This route is still a guided platform smoke, not a full tracing environment.',
       },
     ],
   },
   {
-    title: 'AI Accelerator',
-    summary: '运行 guest AI 设备 demo，查看 MMIO doorbell、DMA、completion 和 profile counters。',
+    title: 'AI Labs',
+    summary: '把 guest accelerator、白名单 tiny model 和后续 task-spec workload 组织成受控 AI 实验域。',
     demos: [
       {
         title: 'AI Accelerator Demo',
@@ -77,6 +183,17 @@ const DEMO_GROUPS = [
         fallbackSummary: '通过 MMIO 提交 graph package，并用 KMVAI 验证 guest 到设备闭环。',
         marker: 'KMVAI',
         panels: ['AI counters', 'DMA bytes', 'completion'],
+        brief: 'Run the guest accelerator demo and correlate MMIO submission, DMA movement, completion, and device-side counters in one view.',
+        primaryStage: 'Terminal + AI counters',
+        inspectorFocus: [
+          'Doorbell, DMA, completion, and utilization counters',
+          'Guest-visible marker versus device-side profile data',
+          'AI-specific workload guide and current runtime scope',
+        ],
+        proves: [
+          'The accelerator path is observable from guest submission through device completion.',
+        ],
+        boundary: 'This route exercises a curated accelerator workload, not arbitrary user-supplied models.',
       },
       {
         title: 'Parameterized Tiny Model',
@@ -85,6 +202,17 @@ const DEMO_GROUPS = [
         fallbackSummary: '用服务器端白名单模板生成 bounded dynamic tiny model，观察输出和 timed-simple profile。',
         marker: 'server-generated graph',
         panels: ['shape controls', 'profile', 'op summary'],
+        brief: 'Use a server-generated whitelist template to inspect bounded runtime shapes, expected output, and accelerator profile counters together.',
+        primaryStage: 'Profile result + runtime counters',
+        inspectorFocus: [
+          'Template-scoped parameters and runtime shapes',
+          'Observed output versus expected output',
+          'DMA / compute / stall / utilization breakdown',
+        ],
+        proves: [
+          'The AI lab can expose a constrained user-task entry point without opening arbitrary graph upload.',
+        ],
+        boundary: 'Execution stays inside whitelist templates and server-side validation.',
       },
     ],
   },
@@ -99,13 +227,37 @@ const DEMO_GROUPS = [
         fallbackSummary: '固定输入和卷积核的 conv -> relu 样本，用 V3OK 验证 vector CNN 闭环。',
         marker: 'V3OK',
         panels: ['vector registers', 'CNN lanes'],
+        brief: 'Inspect a fixed vector CNN workload with live vector-register context and workload-specific guide rails.',
+        primaryStage: 'Vector register view + workload guide',
+        inspectorFocus: [
+          'Vector-register state and changed lanes',
+          'CNN lane summary and workload-specific evidence',
+          'Vector-flavored pipeline stages when visible',
+        ],
+        proves: [
+          'Vector and ML-oriented runtime behavior can be explained in the same workbench as OS demos.',
+        ],
+        boundary: 'This route is a fixed workload sample, not a general vector-kernel laboratory.',
       },
       {
         title: 'JIT / DBT Runtime Labs',
-        status: 'soon',
+        scenarioKey: 'jit_runtime_lab',
+        scenarioTest: 'guest_vector_cnn_demo',
+        backend: 'pipeline',
         fallbackSummary: '展示 opt-in runtime stats：hit、miss、emit、fallback、invalidate 和 differential mismatch。',
         marker: 'jit-dispatch',
         panels: ['stats', 'fallback', 'invalidate'],
+        brief: 'Use a synced runtime-friendly workload to request the current JIT / DBT dry-run summary and keep it visible beside the live session.',
+        primaryStage: 'Runtime evidence topic',
+        inspectorFocus: [
+          'hit / miss / emit / invalidate counters',
+          'fallback and differential mismatch evidence',
+          'Current runtime boundary versus future backend ambitions',
+        ],
+        proves: [
+          'The runtime line can be presented as evidence-first instrumentation rather than as a hidden prototype.',
+        ],
+        boundary: 'Current output reflects the existing dry-run dispatch contract only; it does not enable a default JIT backend.',
       },
     ],
   },
@@ -142,11 +294,62 @@ function findManifestEntry(state, testName) {
   return state.tests.find((item) => item.name === testName) ?? null;
 }
 
+function findDemoRecordByTest(testName) {
+  for (const group of DEMO_GROUPS) {
+    for (const demo of group.demos) {
+      if (demo.test === testName) {
+        return { group, demo };
+      }
+    }
+  }
+  return null;
+}
+
+function findDemoRecordByScenarioKey(scenarioKey) {
+  for (const group of DEMO_GROUPS) {
+    for (const demo of group.demos) {
+      const demoKey = demo.scenarioKey ?? demo.test ?? demo.localTool ?? demo.title;
+      if (demoKey === scenarioKey) {
+        return { group, demo };
+      }
+    }
+  }
+  return null;
+}
+
 function isLinuxConsoleDemo(demo) {
   return demo.test === 'linux_proto_console';
 }
 
-function demoCardStatusLabel(demo, available, selected) {
+function resolveDemoState(demo, state) {
+  const entry = demo.test ? findManifestEntry(state, demo.test) : null;
+  const localToolAvailable = demo.localTool === 'ai_tiny_model';
+  const topical = typeof demo.scenarioKey === 'string' && demo.scenarioKey.length > 0;
+  const available = Boolean(entry) || localToolAvailable || topical;
+  const scenarioKey = demo.scenarioKey ?? demo.test ?? demo.localTool ?? demo.title;
+  const selected = topical
+    ? state.selectedScenario === scenarioKey
+    : demo.test
+      ? state.selectedTest === demo.test
+      : state.selectedScenario === scenarioKey;
+  return {
+    entry,
+    localToolAvailable,
+    topical,
+    available,
+    selected,
+    scenarioKey,
+  };
+}
+
+function resolvedScenarioTest(demo, entry, state) {
+  return demo.scenarioTest ?? demo.test ?? entry?.name ?? state.selectedScenarioTest ?? state.selectedTest ?? null;
+}
+
+function demoCardStatusLabel(demo, available, selected, topical = false) {
+  if (topical) {
+    return selected ? 'Viewing topic' : 'Open topic';
+  }
   if (demo.localTool === 'ai_tiny_model') {
     return 'Run profile';
   }
@@ -249,10 +452,14 @@ function renderDemoGateNote(demo, available, state) {
 }
 
 function renderDemoCard(demo, state) {
-  const entry = demo.test ? findManifestEntry(state, demo.test) : null;
-  const localToolAvailable = demo.localTool === 'ai_tiny_model';
-  const available = Boolean(entry) || localToolAvailable;
-  const selected = available && state.selectedTest === demo.test;
+  const {
+    entry,
+    localToolAvailable,
+    topical,
+    available,
+    selected,
+    scenarioKey,
+  } = resolveDemoState(demo, state);
   const routeLabel = demo.title;
   const title = entry?.title ?? demo.title;
   const summary = entry?.summary ?? demo.fallbackSummary ?? '';
@@ -264,6 +471,7 @@ function renderDemoCard(demo, state) {
     selected ? 'is-selected' : '',
     available ? 'is-available' : 'is-soon',
     localToolAvailable ? 'is-local-tool' : '',
+    topical ? 'is-topical' : '',
     demo.gated && !available ? 'is-gated' : '',
     isLinuxConsoleDemo(demo) && available ? 'is-ready' : '',
   ].filter(Boolean).join(' ');
@@ -271,10 +479,12 @@ function renderDemoCard(demo, state) {
     ? (
         localToolAvailable
           ? `data-demo-tool="${escapeHtml(demo.localTool)}" role="button" tabindex="0"`
-          : `data-demo-test="${escapeHtml(demo.test)}" data-demo-backend="${escapeHtml(demo.backend ?? state.backend)}" role="button" tabindex="0"`
+          : topical
+            ? `data-scenario-key="${escapeHtml(scenarioKey)}" data-scenario-test="${escapeHtml(demo.scenarioTest ?? '')}" data-scenario-backend="${escapeHtml(demo.backend ?? state.backend)}" role="button" tabindex="0"`
+            : `data-demo-test="${escapeHtml(demo.test)}" data-demo-backend="${escapeHtml(demo.backend ?? state.backend)}" role="button" tabindex="0"`
       )
     : 'aria-disabled="true"';
-  const statusLabel = demoCardStatusLabel(demo, available, selected);
+  const statusLabel = demoCardStatusLabel(demo, available, selected, topical);
   const gateNote = renderDemoGateNote(demo, available, state);
 
   return `
@@ -295,6 +505,384 @@ function renderDemoCard(demo, state) {
       </div>
       ${gateNote}
     </article>
+  `;
+}
+
+function selectedScenarioContext(state) {
+  const selectedEntry = selectedTestEntry(state);
+  const scenarioRecord = state.selectedScenario ? findDemoRecordByScenarioKey(state.selectedScenario) : null;
+  const record = scenarioRecord?.demo?.scenarioKey
+    ? scenarioRecord
+    : findDemoRecordByTest(state.selectedTest)
+      ?? (state.selectedScenarioTest ? findDemoRecordByTest(state.selectedScenarioTest) : null)
+      ?? scenarioRecord;
+  if (record) {
+    const { demo, group } = record;
+    const resolved = resolveDemoState(demo, state);
+    const runtimeEntry = resolved.entry
+      ?? findManifestEntry(state, demo.scenarioTest ?? '')
+      ?? findManifestEntry(state, state.selectedScenarioTest ?? '')
+      ?? selectedEntry;
+    const entry = resolved.topical ? runtimeEntry : (resolved.entry ?? selectedEntry);
+    const marker = entry?.workload?.expectedMarker ?? demo.marker ?? '-';
+    const assetNote = entry?.workload?.assetNote ?? demo.assetNote ?? '';
+    const scenarioTest = resolvedScenarioTest(demo, entry, state);
+    const readyLabel = resolved.available
+      ? (resolved.localToolAvailable ? 'Host tool ready' : (resolved.topical ? 'Topic ready' : 'Manifest ready'))
+      : (demo.gated ? 'External asset required' : 'Planned');
+    const sessionBackend = resolved.topical
+      ? (state.selectedScenarioBackend ?? demo.backend ?? state.backend ?? '-')
+      : (state.loadedSession?.backend ?? demo.backend ?? state.backend ?? '-');
+    const sessionState = state.runState ?? 'idle';
+    const expectedPrompt = marker && marker !== '-' ? marker : 'No prompt marker declared';
+    let topicalNextAction = 'Read the topic, then switch to a runnable live scenario when you want runtime evidence.';
+    if (group.title === 'Linux Distro Labs') {
+      topicalNextAction = 'Read the distro evidence, then open the live shell route when you want UART-backed confirmation.';
+    } else if ((demo.scenarioKey ?? '') === 'jit_runtime_lab') {
+      topicalNextAction = 'Sync a runtime-friendly workload, then run the JIT probe to collect the current dry-run summary.';
+    }
+    const nextAction = resolved.available
+      ? (resolved.topical
+        ? topicalNextAction
+        : sessionState === 'idle'
+        ? 'Load the scenario to create a session and watch the primary stage.'
+        : sessionState === 'loading'
+          ? 'Wait for the marker, then inspect the primary stage and evidence cards.'
+          : 'Use Run, Pause, Reset, or Terminate to steer the live session.')
+      : (demo.gated
+        ? 'Prepare the required external asset, then reopen the route.'
+        : 'This scenario is catalogued but not wired into a runnable path yet.');
+    const sessionContract = [
+      `Backend ${sessionBackend}`,
+      `Run state ${sessionState}`,
+      `Expected marker ${expectedPrompt}`,
+    ];
+    if (assetNote) {
+      sessionContract.push(`Asset ${assetNote}`);
+    }
+    const observationHints = [
+      `Primary stage: ${demo.primaryStage ?? 'Terminal + inspector'}`,
+      ...(demo.inspectorFocus ?? []).slice(0, 2),
+    ];
+    return {
+      groupTitle: group.title,
+      demo,
+      entry,
+      readyLabel,
+      title: entry?.title ?? demo.title ?? state.selectedTest,
+      summary: entry?.summary ?? demo.fallbackSummary ?? 'No scenario summary yet.',
+      brief: demo.brief ?? entry?.summary ?? demo.fallbackSummary ?? 'No scenario brief yet.',
+      primaryStage: demo.primaryStage ?? 'Terminal + inspector',
+      inspectorFocus: demo.inspectorFocus ?? [],
+      proves: demo.proves ?? [],
+      boundary: demo.boundary ?? 'This scenario only claims the currently verified contract.',
+      marker,
+      assetNote,
+      sessionBackend,
+      sessionState,
+      nextAction,
+      sessionContract,
+      observationHints,
+      scenarioKey: resolved.scenarioKey,
+      scenarioTest,
+      scenarioBackend: sessionBackend,
+      topical: resolved.topical,
+      selected: resolved.selected,
+    };
+  }
+
+  const fallbackBackend = state.loadedSession?.backend ?? state.backend ?? '-';
+  const fallbackState = state.runState ?? 'idle';
+  return {
+    groupTitle: 'Ad-hoc scenario',
+    demo: null,
+    entry: selectedEntry,
+    readyLabel: selectedEntry ? 'Manifest ready' : 'Unavailable',
+    title: selectedEntry?.title ?? selectedEntry?.menuLabel ?? state.selectedTest,
+    summary: selectedEntry?.summary ?? 'Current manifest entry does not provide a curated lab summary yet.',
+    brief: selectedEntry?.summary ?? 'Current manifest entry is available but does not yet have a curated scenario brief.',
+    primaryStage: 'Terminal + inspector',
+    inspectorFocus: ['Terminal session', 'Snapshot summary', 'Platform and register panels'],
+    proves: ['This route is available through the current manifest and debug-session pipeline.'],
+    boundary: 'This scenario has not yet been rewritten into the new lab catalog.',
+    marker: selectedEntry?.workload?.expectedMarker ?? '-',
+    assetNote: selectedEntry?.workload?.assetNote ?? '',
+    sessionBackend: fallbackBackend,
+    sessionState: fallbackState,
+    nextAction: selectedEntry
+      ? 'Load or resume this manifest-backed route, then inspect the snapshot and platform panels.'
+      : 'Choose a wired scenario from the navigator before launching a session.',
+    sessionContract: [
+      `Backend ${fallbackBackend}`,
+      `Run state ${fallbackState}`,
+      `Expected marker ${selectedEntry?.workload?.expectedMarker ?? 'No prompt marker declared'}`,
+    ],
+    observationHints: ['Terminal session', 'Snapshot summary', 'Platform and register panels'],
+  };
+}
+
+function renderSessionMetric(label, value, detail = '') {
+  return `
+    <article class="demo-workspace__session-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      ${detail ? `<em>${escapeHtml(detail)}</em>` : ''}
+    </article>
+  `;
+}
+
+function renderScenarioFocusList(items = []) {
+  return `
+    <ul class="demo-workspace__focus-list">
+      ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+    </ul>
+  `;
+}
+
+function renderScenarioContract(context) {
+  return `
+    <article class="demo-workspace__brief-card demo-workspace__brief-card--contract">
+      <span>Session contract</span>
+      <strong>${escapeHtml(context.readyLabel)}</strong>
+      ${renderScenarioFocusList(context.sessionContract)}
+      <p>${escapeHtml(context.nextAction)}</p>
+    </article>
+  `;
+}
+
+function renderScenarioObservation(context) {
+  return `
+    <article class="demo-workspace__brief-card demo-workspace__brief-card--observation">
+      <span>Observation trail</span>
+      <strong>Follow the stage, then verify the machine.</strong>
+      ${renderScenarioFocusList(context.observationHints)}
+      <p>Keep the live stage, inspector stack, and evidence drawer aligned to the same claim.</p>
+    </article>
+  `;
+}
+
+function renderScenarioEvidence(context) {
+  const markerLine = context.marker && context.marker !== '-'
+    ? `Expected marker ${context.marker}`
+    : 'Expected marker is not declared yet.';
+  return `
+    <article class="demo-workspace__brief-card demo-workspace__brief-card--evidence">
+      <span>Evidence and boundary</span>
+      <strong>${escapeHtml(markerLine)}</strong>
+      ${renderScenarioFocusList(context.proves)}
+      <p>${escapeHtml(context.boundary)}</p>
+      ${context.assetNote ? `<code>${escapeHtml(context.assetNote)}</code>` : ''}
+    </article>
+  `;
+}
+
+function renderScenarioControls(context, state) {
+  const syncDisabled = !context.scenarioTest;
+  const syncLabel = state.selectedTest === context.scenarioTest
+    ? 'Session synced'
+    : 'Sync session';
+  const liveButton = context.groupTitle === 'Linux Distro Labs' && context.topical && context.scenarioTest
+    ? `
+      <button
+        id="scenario-open-live-button"
+        type="button"
+        class="demo-workspace__action-button demo-workspace__action-button--accent"
+      data-action="open-scenario-live"
+        data-scenario-test="${escapeHtml(context.scenarioTest)}"
+        data-scenario-backend="${escapeHtml(context.scenarioBackend ?? context.sessionBackend)}"
+      >
+        Open live shell
+      </button>
+    `
+    : '';
+  const probeButton = context.scenarioKey === 'jit_runtime_lab'
+    ? `
+      <button
+        type="button"
+        class="demo-workspace__action-button demo-workspace__action-button--teal"
+        data-action="run-jit-dispatch"
+      >
+        Run JIT probe
+      </button>
+    `
+    : '';
+  return `
+    <article class="demo-workspace__brief-card demo-workspace__brief-card--actions">
+      <span>Scenario controls</span>
+      <strong>Keep the topic and the live session aligned.</strong>
+      <div class="demo-workspace__action-row">
+        <button
+          id="scenario-sync-button"
+          type="button"
+          class="demo-workspace__action-button"
+          data-action="sync-scenario-session"
+          data-scenario-test="${escapeHtml(context.scenarioTest ?? '')}"
+          data-scenario-backend="${escapeHtml(context.scenarioBackend ?? context.sessionBackend)}"
+          ${syncDisabled ? 'disabled' : ''}
+        >
+          ${escapeHtml(syncLabel)}
+        </button>
+        <button
+          id="scenario-load-button"
+          type="button"
+          class="demo-workspace__action-button"
+          data-action="load-current-session"
+        >
+          Load current scenario
+        </button>
+        ${liveButton}
+        ${probeButton}
+      </div>
+      <p>Scenario cards pick the narrative view; session controls below still own Load, Run, Pause, Reset, and Terminate.</p>
+    </article>
+  `;
+}
+
+function renderJitDispatchEvidence(state) {
+  if (state.jitDispatch.runState === 'running') {
+    return `
+      <article class="demo-workspace__brief-card demo-workspace__brief-card--runtime is-pending">
+        <span>Observed runtime dispatch</span>
+        <strong>Collecting dry-run summary…</strong>
+        <p>Run JIT probe is querying the current loaded session.</p>
+      </article>
+    `;
+  }
+  if (state.jitDispatch.runState === 'error') {
+    return `
+      <article class="demo-workspace__brief-card demo-workspace__brief-card--runtime is-error">
+        <span>Observed runtime dispatch</span>
+        <strong>Probe failed</strong>
+        <p>${escapeHtml(state.jitDispatch.error ?? 'unknown error')}</p>
+      </article>
+    `;
+  }
+  if (!state.jitDispatch.summary) {
+    return `
+      <article class="demo-workspace__brief-card demo-workspace__brief-card--runtime">
+        <span>Observed runtime dispatch</span>
+        <strong>Sample runtime dispatch</strong>
+        <p>Use Run JIT probe after syncing a runtime-friendly workload to collect the current dry-run summary.</p>
+      </article>
+    `;
+  }
+
+  const summary = state.jitDispatch.summary;
+  const cacheLabel = summary.cache_state ? `cache ${summary.cache_state}` : 'cache unknown';
+  return `
+    <article class="demo-workspace__brief-card demo-workspace__brief-card--runtime">
+      <span>Observed runtime dispatch</span>
+      <strong>${escapeHtml(summary.action ?? 'unknown action')}</strong>
+      ${renderScenarioFocusList([
+        `source ${summary.source ?? 'unknown'}`,
+        `candidate executions ${summary.candidate_executions ?? 0}`,
+        `candidate retired ${summary.candidate_retired_instructions ?? 0}`,
+        cacheLabel,
+        `range ${(summary.start_pc ?? '0x0')} -> ${(summary.end_pc ?? '0x0')}`,
+      ])}
+      <p>reject ${escapeHtml(summary.reject_kind ?? 'none')} / reason ${escapeHtml(summary.reject_reason ?? 'none')}</p>
+    </article>
+  `;
+}
+
+function linuxLaneContext(context) {
+  if (context.groupTitle !== 'Linux Distro Labs') {
+    return null;
+  }
+  return {
+    title: 'Linux distro lane',
+    summary: 'Use one workbench to move from serial shell bring-up toward distro-facing process, filesystem, and ISA closure.',
+    ladder: [
+      'Boot -> Shell',
+      'TTY / login semantics',
+      'Process control',
+      'Filesystem persistence',
+      'Capability / ISA closure',
+    ],
+    matrix: [
+      'Linux Serial Console -> live curated shell route',
+      'Alpine Distro Evidence -> shell / filesystem / process / FS-state',
+      'Capability & ISA Matrix -> riscv,isa / hwcap / FCSR / FP',
+    ],
+  };
+}
+
+function renderLinuxLane(context) {
+  const lane = linuxLaneContext(context);
+  if (!lane) {
+    return '';
+  }
+  return `
+    <section class="demo-workspace__lane demo-workspace__lane--linux">
+      <div class="demo-workspace__lane-head">
+        <span>${escapeHtml(lane.title)}</span>
+        <strong>${escapeHtml(context.title)}</strong>
+        <p>${escapeHtml(lane.summary)}</p>
+      </div>
+      <div class="demo-workspace__lane-grid">
+        <article class="demo-workspace__brief-card demo-workspace__brief-card--linux">
+          <span>Capability ladder</span>
+          <strong>Track the platform claim from shell to ISA.</strong>
+          ${renderScenarioFocusList(lane.ladder)}
+        </article>
+        <article class="demo-workspace__brief-card demo-workspace__brief-card--linux">
+          <span>Curated distro matrix</span>
+          <strong>Keep the current Linux family visible beside the live session.</strong>
+          ${renderScenarioFocusList(lane.matrix)}
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+function renderRuntimeLane(context, state) {
+  if (context.scenarioKey !== 'jit_runtime_lab') {
+    return '';
+  }
+  return `
+    <section class="demo-workspace__lane demo-workspace__lane--runtime">
+      <div class="demo-workspace__lane-head">
+        <span>Runtime evidence topic</span>
+        <strong>${escapeHtml(context.title)}</strong>
+        <p>Keep one runtime-friendly workload synced while you inspect the current JIT / DBT dry-run contract.</p>
+      </div>
+      <div class="demo-workspace__lane-grid">
+        <article class="demo-workspace__brief-card demo-workspace__brief-card--runtime">
+          <span>Runtime focus</span>
+          <strong>Sample runtime dispatch</strong>
+          ${renderScenarioFocusList([
+            'hit / miss / emit / fallback',
+            'reject kind and fallback reason',
+            'current dry-run scope versus default backend ambitions',
+          ])}
+        </article>
+        ${renderJitDispatchEvidence(state)}
+      </div>
+    </section>
+  `;
+}
+
+function renderLabNavigator(state) {
+  return `
+    <aside class="demo-workspace__navigator">
+      <div class="demo-workspace__navigator-head">
+        <span>Lab navigator</span>
+        <strong>Choose a scenario family, then launch a session.</strong>
+      </div>
+      <div class="demo-workspace__navigator-groups">
+        ${DEMO_GROUPS.map((group) => `
+          <section class="demo-group">
+            <div class="demo-group__header">
+              <h3>${escapeHtml(group.title)}</h3>
+              <p>${escapeHtml(group.summary)}</p>
+            </div>
+            <div class="demo-group__cards">
+              ${group.demos.map((demo) => renderDemoCard(demo, state)).join('')}
+            </div>
+          </section>
+        `).join('')}
+      </div>
+    </aside>
   `;
 }
 
@@ -574,32 +1162,55 @@ function renderAuthPanel(state) {
 }
 
 function renderDemoWorkspace(state) {
-  const selected = selectedTestEntry(state);
+  const context = selectedScenarioContext(state);
+  const showAiTinyModelPanel =
+    context.groupTitle === 'AI Labs' ||
+    state.aiTinyModel.templates.length > 0 ||
+    state.aiTinyModel.runState !== 'idle' ||
+    state.aiTinyModel.result !== null ||
+    state.aiTinyModel.error !== null;
   return `
     <div class="demo-workspace__intro">
-      <span>Demo workspace</span>
-      <strong>选择 demo 卡片后，再用下方控制条启动。</strong>
+      <span>Lab workbench</span>
+      <strong>Run, control, inspect, and explain every scenario from one browser workbench.</strong>
     </div>
-    <div class="demo-workspace__status">
-      <span>Selected route</span>
-      <strong>${escapeHtml(selected?.title ?? selected?.menuLabel ?? state.selectedTest)}</strong>
-      <em>${escapeHtml(state.backend)}</em>
+    <div class="demo-workspace__session-bar">
+      ${renderSessionMetric('Selected lab', context.groupTitle, context.readyLabel)}
+      ${renderSessionMetric('Scenario', context.title, state.runState)}
+      ${renderSessionMetric('Primary stage', context.primaryStage, context.sessionBackend)}
+      ${renderSessionMetric('Expected marker', context.marker, context.assetNote ? 'asset-aware' : 'snapshot-backed')}
+      ${renderSessionMetric('Next action', context.nextAction, context.sessionState)}
     </div>
     ${renderLinuxLoadProgress(state)}
-    <div class="demo-workspace__grid">
-      ${DEMO_GROUPS.map((group) => `
-        <section class="demo-group">
-          <div class="demo-group__header">
-            <h3>${escapeHtml(group.title)}</h3>
-            <p>${escapeHtml(group.summary)}</p>
-          </div>
-          <div class="demo-group__cards">
-            ${group.demos.map((demo) => renderDemoCard(demo, state)).join('')}
-          </div>
-        </section>
-      `).join('')}
+    <div class="demo-workspace__layout">
+      ${renderLabNavigator(state)}
+      <section class="demo-workspace__focus">
+        <div class="demo-workspace__focus-head">
+          <span>Scenario brief</span>
+          <strong>${escapeHtml(context.title)}</strong>
+          <p>${escapeHtml(context.brief)}</p>
+        </div>
+        <div class="demo-workspace__focus-grid">
+          <article class="demo-workspace__brief-card">
+            <span>Primary stage</span>
+            <strong>${escapeHtml(context.primaryStage)}</strong>
+            <p>${escapeHtml(context.summary)}</p>
+          </article>
+          ${renderScenarioControls(context, state)}
+          ${renderScenarioContract(context)}
+          <article class="demo-workspace__brief-card">
+            <span>Inspector focus</span>
+            <strong>Watch the machine where this scenario matters most.</strong>
+            ${renderScenarioFocusList(context.inspectorFocus)}
+          </article>
+          ${renderScenarioObservation(context)}
+          ${renderScenarioEvidence(context)}
+        </div>
+        ${renderLinuxLane(context)}
+        ${renderRuntimeLane(context, state)}
+        ${showAiTinyModelPanel ? renderAiTinyModelPanel(state) : ''}
+      </section>
     </div>
-    ${renderAiTinyModelPanel(state)}
   `;
 }
 

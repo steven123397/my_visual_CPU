@@ -2,18 +2,29 @@
 
 ## 文档定位
 
-本文档记录主线 `Wave 7 / 产品化展示与在线调试平台收口` 的当前有效设计边界。
+本文档记录主线 `Wave 7 / 产品化展示与在线调试平台收口` 的历史设计边界。
 
-它回答：
+它回答在 `Wave 7` 首轮产品化阶段曾经采用过的站点壳层和展示目标：
 
 - `Wave 7` 为什么不是继续堆核心执行功能，而是把已有能力整理成可访问、可体验、可解释的产品形态。
 - 面向用户时，首页、控制台和产品文档应如何分工。
 - 首页如何从 [../showcase/preview.html](../showcase/preview.html) 演化成真正产品官网。
-- `frontend/` 控制台为什么需要按 demo workspace 重新组织展示内容。
+- `frontend/` 控制台为什么最初会按 demo workspace 重新组织展示内容。
 - `Wave 7` 和 Post-Wave 7 新主线之间的边界。
+
+当前前端展示与 `/console` 的现行设计，已经统一迁移到
+[post_wave7_frontend_lab_product_design.md](post_wave7_frontend_lab_product_design.md)。
+本文档不再作为当前前端展示结构、导航分组、场景组织或 `/docs` 信息架构的权威来源。
 
 本文档不记录执行 checklist。具体实施步骤写入 `docs/plan/`，当前状态以
 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+
+## 当前有效性说明
+
+- 历史语境有效：本文档保留 `Wave 7` 首轮产品官网壳层、首页叙事和 demo workspace v1 的设计背景。
+- 当前前端现行设计入口：
+  [post_wave7_frontend_lab_product_design.md](post_wave7_frontend_lab_product_design.md)
+- 当前状态以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
 
 ## 关联文档
 
@@ -22,6 +33,7 @@
 - 已完成计划归档：
   - [../plan/history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)
 - 相关设计：
+  - [post_wave7_frontend_lab_product_design.md](post_wave7_frontend_lab_product_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
   - [wave6_jit_dbt_readiness_design.md](wave6_jit_dbt_readiness_design.md)
@@ -74,7 +86,7 @@ ML workload、L1D / shadow cache、JIT / DBT opt-in 原型和完整回归门禁�
 - AI accelerator 在 `Wave 7` 首页和控制台主叙事中展示白名单 demo + 参数化小模型体验；任意 graph package 或模型导入的限制写入内部设计 / 状态文档，不放进对外卖点。
 - 产品文档必须链接回原始 design / status 证据链，但面向读者重写结构和语言。
 
-## 方案
+## 历史方案
 
 ### 结构设计
 
@@ -118,6 +130,10 @@ Product Site
 
 #### 2. 控制台
 
+以下内容描述的是 `Wave 7` 首轮 `demo workspace v1` 的组织方式，保留为历史设计语境。
+当前 `/console` 的现行结构已经改为 `Lab workbench`，以
+[post_wave7_frontend_lab_product_design.md](post_wave7_frontend_lab_product_design.md) 为准。
+
 控制台从当前调试台重构为 demo workspace。推荐一级入口：
 
 - `OS Bring-up`
@@ -151,6 +167,9 @@ Product Site
 `tests_manifest.mjs`、terminal input pump 和 debug CLI session，但前端展示从“状态面板优先”调整为“demo 任务优先”。
 
 #### 3. 产品文档
+
+以下目录结构属于 `Wave 7` 首轮产品文档设想。当前前端产品解释层、`/console` 信息架构和后续
+Linux 专题组织，不再以这里的目录分组作为现行约束。
 
 `/docs` 是面向用户的产品文档，不是直接暴露 `docs/design`。推荐目录：
 
@@ -227,8 +246,8 @@ Design References
 - 公网部署不能先于 session / 资源 / 白名单边界，否则 Linux 和 AI demo 都会变成安全风险。
 - Post-Wave 7 两条新主线可以打破现有边界，但不能提前塞进 `Wave 7` 产品化收口。
 
-## 当前有效性说明
+## 历史收口说明
 
-- 当前有效：本文档作为 `Wave 7` 产品化展示、在线控制台和产品文档的设计入口。
-- 当前状态以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
-- 首轮计划已归档：[../plan/history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)。
+- `Wave 7` 首页壳层、产品文档 v1 和 `demo workspace v1` 已完成并归档。
+- 首轮计划归档：
+  [../plan/history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)

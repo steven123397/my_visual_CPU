@@ -617,6 +617,17 @@ export function createDebugServerRuntime({
       });
     },
 
+    async jitDispatch() {
+      const generation = currentGeneration;
+      return runQueued(async () => {
+        assertGeneration(generation);
+        requireSessionLoaded();
+        const summary = await callSession('jitDispatch');
+        assertGeneration(generation);
+        return { summary };
+      });
+    },
+
     async pause() {
       stopRunLoop();
       return runQueued(async () => ({ ok: true, snapshot: currentSnapshot }));

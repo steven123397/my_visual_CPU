@@ -80,6 +80,10 @@ export async function pauseSession() {
   return postJson('/api/session/pause');
 }
 
+export async function jitDispatch() {
+  return postJson('/api/session/jit-dispatch');
+}
+
 export async function terminalInput(text) {
   return postJson('/api/session/terminal-input', { text });
 }

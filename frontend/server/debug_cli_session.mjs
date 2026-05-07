@@ -225,6 +225,10 @@ export class DebugCliSession {
     };
   }
 
+  async jitDispatch() {
+    return this.request({ cmd: 'jit_dispatch' });
+  }
+
   async close() {
     if (this.closePromise) {
       return this.closePromise;

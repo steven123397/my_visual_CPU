@@ -215,6 +215,26 @@ Linux console reset re-arm 也已完成：`/api/session/reset` 对带 payload / 
 boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB，重设
 `a0/a1/a2`，并再次等待 `mycpu-linux# ` prompt；普通 demo reset 仍保持原有裸 reset
 语义。
+在此基础上，本地前端已经正式进入 `Post-Wave 7` 的 `Lab workbench` 重构：旧
+`Wave 7` 产品首页 / demo workspace 设计现已降级为历史语境，当前现行入口改为
+[../design/post_wave7_frontend_lab_product_design.md](../design/post_wave7_frontend_lab_product_design.md)。
+`Post-Wave 7` 前端 `Lab workbench` 第一轮重构现已完成并归档到
+[../plan/history_plan.md#post-wave7-frontend-lab-product-plan](../plan/history_plan.md#post-wave7-frontend-lab-product-plan)：
+`/console` 当前已经以 `Lab Navigator + Session Bar + Primary Stage + Inspector Stack +
+Evidence Drawer` 组织场景；解释层固定成 `Session contract -> Primary stage ->
+Observation trail -> Evidence / boundary`；`Linux Distro Labs` 也已从单一卡片扩成
+`Linux Serial Console + Alpine Distro Evidence + Capability & ISA Matrix` 的专题 family。
+当前仍暂不扩写 AI Labs 的新专题内容；Linux 更深一层的发行版专题页仍可作为后续单独切片继续推进。
+这套 `Lab workbench` 当前又完成了一轮补完并归档到
+[../plan/history_plan.md#post-wave7-frontend-lab-completion-plan](../plan/history_plan.md#post-wave7-frontend-lab-completion-plan)：
+本机真实 Linux `Image` 已接到当前 worktree 的 debug server，`/api/tests` 现会把
+`linux_proto_console` 暴露为 `ready`；工作台也新增了 `Scenario controls`，把专题卡、
+`测试 / 后端 / Load` 与 live session 的职责边界收成一条主路径。Linux 专题卡现在会记住
+它绑定的 runnable route 和 backend，`Open live shell` / `Load current scenario`
+可直接回到真实串口 shell；`Runtime Labs` 也不再只剩占位卡，而是通过
+`POST /api/session/jit-dispatch` 把当前 loaded session 的 JIT / DBT dry-run summary
+接进专题工作台。AI Labs 这轮仍只保持现有 guest demo 与 parameterized tiny model，
+没有提前扩写尚未完成的 AI 分支内容。
 `Wave 7` 的剩余部署 / 运维工作已经转移到远端服务器上的仓库 checkout 继续推进；本地工作区
 现已正式打开两条 `Post-Wave 7` 新主线，并分别补齐独立文档入口：
 - 标准 Linux 发行版平台：
@@ -498,6 +518,11 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    table、输入和 expected output，再调用现有 `mycpu --ai-profile-manifest`，返回输出、
    `runtime_shapes`、profile counters 与 op summary。该入口仍不接受任意 graph package、
    任意模型上传或 Linux-facing NPU driver。
+   在此之后，当前前端已完成 `Post-Wave 7` 的 `Lab workbench` 第一轮重构并归档到
+   [../plan/history_plan.md#post-wave7-frontend-lab-product-plan](../plan/history_plan.md#post-wave7-frontend-lab-product-plan)。
+   现行设计入口为 [Post-Wave 7 前端 Lab 产品设计](../design/post_wave7_frontend_lab_product_design.md)；
+   `/console` 当前已固定 `Session contract -> Primary stage -> Observation trail ->
+   Evidence / boundary` 的解释层，并把 Linux family 扩成更明确的专题导航；AI Labs 暂不继续扩写。
    本轮仍不做公网部署、底层 session API 重构、标准发行版镜像支持或任意用户镜像上传。
 3. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`
