@@ -12,9 +12,11 @@ from task_spec_lowering import (
     build_dynamic_cnn_like,
     build_dynamic_gemm_like,
     build_task_spec as lower_build_task_spec,
+    resolve_memory_plan_for_runtime_shapes,
     serialize_graph_package,
     serialize_runtime_shape_table,
     write_manifest,
+    write_memory_plan_summary,
 )
 
 
@@ -49,6 +51,7 @@ def build_cnn(out_dir: pathlib.Path) -> None:
     ]
     graph = serialize_graph_package(192, tensors, ops, dependencies, memory_plan)
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(out_dir / f"{name}.memory_plan.txt", "static", 192, tensors, memory_plan)
     (out_dir / f"{name}.input0.bin").write_bytes(
         struct.pack("<16b", 1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -16)
     )
@@ -87,6 +90,7 @@ def build_gemm(out_dir: pathlib.Path) -> None:
     ]
     graph = serialize_graph_package(48, tensors, ops, dependencies, memory_plan)
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(out_dir / f"{name}.memory_plan.txt", "static", 48, tensors, memory_plan)
     (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<4H", 0x3C00, 0x4000, 0x3800, 0xBC00))
     (out_dir / f"{name}.input1.bin").write_bytes(struct.pack("<4H", 0x3C00, 0x4000, 0x3E00, 0x3800))
     (out_dir / f"{name}.output0.expected.bin").write_bytes(struct.pack("<f", 4.0))
@@ -126,6 +130,7 @@ def build_tiny_model(out_dir: pathlib.Path) -> None:
     ]
     graph = serialize_graph_package(64, tensors, ops, dependencies, memory_plan)
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(out_dir / f"{name}.memory_plan.txt", "static", 64, tensors, memory_plan)
     (out_dir / f"{name}.input0.bin").write_bytes(
         struct.pack("<6H", 0x3C00, 0xC000, 0x4200, 0x3800, 0x4000, 0xBC00)
     )
@@ -160,6 +165,7 @@ def build_guest_ai_accel_demo(out_dir: pathlib.Path) -> None:
     ]
     graph = serialize_graph_package(16, tensors, ops, [], memory_plan)
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(out_dir / f"{name}.memory_plan.txt", "static", 16, tensors, memory_plan)
     (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<3i", 1, 2, 3))
     (out_dir / f"{name}.output0.expected.bin").write_bytes(struct.pack("<i", 6))
     write_manifest(
@@ -239,7 +245,25 @@ def build_dynamic_tiny_model(out_dir: pathlib.Path) -> None:
         RuntimeShape(3, 2, (1, 2, 0, 0)),
         RuntimeShape(4, 2, (1, 1, 0, 0)),
     ])
+    resolved_tensors, resolved_memory_plan = resolve_memory_plan_for_runtime_shapes(
+        tensors,
+        memory_plan,
+        [
+            RuntimeShape(0, 2, (1, 3, 0, 0)),
+            RuntimeShape(2, 2, (1, 2, 0, 0)),
+            RuntimeShape(3, 2, (1, 2, 0, 0)),
+            RuntimeShape(4, 2, (1, 1, 0, 0)),
+        ],
+    )
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(out_dir / f"{name}.memory_plan.txt", "dynamic_bounded", 64, tensors, memory_plan)
+    write_memory_plan_summary(
+        out_dir / f"{name}.resolved_memory_plan.txt",
+        "static",
+        64,
+        resolved_tensors,
+        resolved_memory_plan,
+    )
     (out_dir / f"{name}.runtime_shape.bin").write_bytes(runtime_shape_table)
     (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<3H", 0x3C00, 0xC000, 0x4200))
     (out_dir / f"{name}.input1.bin").write_bytes(
@@ -303,6 +327,7 @@ def build_tiny_attention_static(out_dir: pathlib.Path) -> None:
     ]
     graph = serialize_graph_package(64, tensors, ops, dependencies, memory_plan)
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(out_dir / f"{name}.memory_plan.txt", "static", 64, tensors, memory_plan)
     (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<2H", 0x0000, 0x0000))
     (out_dir / f"{name}.input1.bin").write_bytes(struct.pack("<4H", 0x3C00, 0x3C00, 0x3C00, 0x3C00))
     (out_dir / f"{name}.input2.bin").write_bytes(struct.pack("<2f", 1.0, 3.0))

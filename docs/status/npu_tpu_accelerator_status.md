@@ -182,6 +182,22 @@
   `docs/status/npu_tpu_accelerator_status.md` 与归档后的计划条目现在统一明确：
   本轮只展示 4 条 task-spec user-task 入口和 1 条 guest/host bridge workload，
   不误报任意模型上传、通用 compiler、Linux-facing driver 或更深性能模型已完成。
+- `2026-05-07` 同日继续把 compile / memory-plan 路径收成 host-side 可读合同：
+  `pack_graph.py` 与 `task_spec_lowering.py` 现在会为内建 workload 和四条 task-spec
+  路径额外导出 `<name>.memory_plan.txt` sidecar，固定回显 `shape_mode`、
+  `scratchpad_budget_bytes`、tensor 数量和逐 tensor
+  `role / dtype / system_offset / scratchpad_offset / byte_size / scratchpad_bytes`。
+  `ai_accelerator_profile_smoke` 也会把这份 sidecar 与 graph package memory-plan
+  逐项对齐，确保 compile 资源摘要继续共用同一套 graph-package 事实来源，而不是漂成第二套
+  layout 来源；对应的 task-spec / 内建 workload 配对现在也会显式比较
+  `.memory_plan.txt` 文本完全一致，进一步锁住它们继续共用同一份 lowering / layout 合同。
+- `2026-05-07` 同日继续把 bounded dynamic workload 的 runtime-shape resolve 也收成可读合同：
+  `dynamic_gemm / dynamic_cnn / dynamic_tiny_model` 及其 task-spec 对应路径现在还会额外导出
+  `<name>.resolved_memory_plan.txt` sidecar，固定回显共享 runtime-shape resolve 之后的真实
+  tensor `byte_size / scratchpad_bytes`。`ai_accelerator_profile_smoke` 会继续复用
+  `resolve_ai_runtime_shape_package()` 校验这份 sidecar，并要求 task-spec / 内建 workload
+  配对的 `.resolved_memory_plan.txt` 文本完全一致，避免 Python 打包侧漂出第二套 resolved
+  layout 语义。
 - `2026-04-23` 已把这条线收口成正式设计文档 [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)，并明确它采用独立 `MMIO` 设备路线，而不是 CPU 紧耦合 tensor 指令扩展。
 - `2026-04-23` 同日已完成 wave 1 的任务 1：`DMA-ready` memory contract。
   - 已新增 `myCPU/src/mem/dma_transaction.{h,cpp}`，冻结 `initiator / direction / burst / fault / transferred_bytes` 最小合同。

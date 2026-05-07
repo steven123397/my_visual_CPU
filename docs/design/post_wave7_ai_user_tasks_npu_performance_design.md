@@ -208,6 +208,14 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
 
 - **compile / lower 合同**
   - lowering 结果必须继续落到统一 graph package、tensor table、memory plan 和 submission ABI。
+  - 当前 host-side pack / importer 还会额外导出 `<name>.memory_plan.txt` 可读 sidecar，
+    用同一份 graph package memory-plan 事实来源回显 `shape_mode`、scratchpad budget、
+    tensor 数量和逐 tensor layout；它只用于 host smoke / compile-profile contract 校验，
+    不是新的设备 ABI 或第二套 layout 来源。
+  - 对 bounded dynamic workload，当前 host-side pack / importer 还会额外导出
+    `<name>.resolved_memory_plan.txt`，把共享 runtime-shape resolve 之后的真实
+    tensor byte_size / scratchpad_bytes 也收成可读 sidecar；它同样必须继续和共享
+    graph-package + runtime-shape 合同共源，不能在 Python 打包侧发明第二套运行时 layout 语义。
   - 非法 shape、超预算 scratchpad、unsupported op / dtype / quantization 继续 fail-closed；
     当前 `int8` payload 也显式拒绝 JSON `bool` 伪装成整数。
   - 当前受限浮点输入面也继续 fail-closed：`bounded_dynamic_tiny_model_v1` 的

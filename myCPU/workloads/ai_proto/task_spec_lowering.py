@@ -562,6 +562,77 @@ def write_manifest(path: pathlib.Path,
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_memory_plan_summary(path: pathlib.Path,
+                              shape_mode: str,
+                              scratchpad_budget_bytes: int,
+                              tensors: list[Tensor],
+                              memory_plan: list[MemoryPlan]) -> None:
+    lines = [
+        "format=ai_proto_memory_plan_v1",
+        f"shape_mode={shape_mode}",
+        f"scratchpad_budget_bytes={scratchpad_budget_bytes}",
+        f"tensor_count={len(tensors)}",
+        f"memory_plan_entries={len(memory_plan)}",
+    ]
+    for entry in memory_plan:
+        if entry.tensor_index >= len(tensors):
+            fail(f"memory plan entry tensor index is out of range: {entry.tensor_index}")
+        tensor = tensors[entry.tensor_index]
+        lines.append(
+            "memory_plan_entry "
+            f"tensor_index={entry.tensor_index} "
+            f"role={tensor.role} "
+            f"dtype={tensor.dtype} "
+            f"system_offset={entry.system_offset} "
+            f"scratchpad_offset={entry.scratchpad_offset} "
+            f"byte_size={entry.byte_size} "
+            f"scratchpad_bytes={entry.scratchpad_bytes}"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def resolve_memory_plan_for_runtime_shapes(
+        tensors: list[Tensor],
+        memory_plan: list[MemoryPlan],
+        runtime_shapes: list[RuntimeShape]) -> tuple[list[Tensor], list[MemoryPlan]]:
+    resolved_tensors = [
+        Tensor(tensor.dtype, tensor.role, tensor.rank, tensor.dims, tensor.tile_dims) for tensor in tensors
+    ]
+    resolved_memory_plan = [
+        MemoryPlan(
+            entry.tensor_index,
+            entry.system_offset,
+            entry.scratchpad_offset,
+            entry.byte_size,
+            entry.scratchpad_bytes,
+        )
+        for entry in memory_plan
+    ]
+    memory_plan_by_tensor = {entry.tensor_index: entry for entry in resolved_memory_plan}
+    for runtime_shape in runtime_shapes:
+        if runtime_shape.tensor_index >= len(resolved_tensors):
+            fail(f"runtime shape tensor index is out of range: {runtime_shape.tensor_index}")
+        tensor = resolved_tensors[runtime_shape.tensor_index]
+        dims = [0, 0, 0, 0]
+        tile_dims = [0, 0, 0, 0]
+        for axis in range(4):
+            if axis < runtime_shape.rank:
+                dims[axis] = runtime_shape.dims[axis]
+                tile_dims[axis] = min(tensor.tile_dims[axis], runtime_shape.dims[axis])
+        tensor.rank = runtime_shape.rank
+        tensor.dims = tuple(dims)
+        tensor.tile_dims = tuple(tile_dims)
+        entry = memory_plan_by_tensor.get(runtime_shape.tensor_index)
+        if entry is None:
+            fail(f"runtime shape tensor memory plan is missing: {runtime_shape.tensor_index}")
+        runtime_bytes = tensor_byte_size(tensor)
+        if runtime_bytes <= 0:
+            fail(f"runtime shape bytes are invalid: tensor_index={runtime_shape.tensor_index}")
+        entry.byte_size = runtime_bytes
+        entry.scratchpad_bytes = runtime_bytes
+    return resolved_tensors, resolved_memory_plan
+
+
 def parse_task_spec(path: pathlib.Path) -> (
     GemmTaskSpec | CnnTaskSpec | DynamicTinyModelTaskSpec | StaticTinyAttentionTaskSpec
 ):
@@ -681,7 +752,29 @@ def build_dynamic_gemm_like(out_dir: pathlib.Path,
         RuntimeShape(0, 2, (row_count, 8, 0, 0)),
         RuntimeShape(2, 2, (row_count, 4, 0, 0)),
     ])
+    resolved_tensors, resolved_memory_plan = resolve_memory_plan_for_runtime_shapes(
+        tensors,
+        memory_plan,
+        [
+            RuntimeShape(0, 2, (row_count, 8, 0, 0)),
+            RuntimeShape(2, 2, (row_count, 4, 0, 0)),
+        ],
+    )
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(
+        out_dir / f"{name}.memory_plan.txt",
+        "dynamic_bounded",
+        scratchpad_budget,
+        tensors,
+        memory_plan,
+    )
+    write_memory_plan_summary(
+        out_dir / f"{name}.resolved_memory_plan.txt",
+        "static",
+        scratchpad_budget,
+        resolved_tensors,
+        resolved_memory_plan,
+    )
     (out_dir / f"{name}.runtime_shape.bin").write_bytes(runtime_shape_table)
     (out_dir / f"{name}.input0.bin").write_bytes(flatten_i8_matrix(input0_rows))
     (out_dir / f"{name}.input1.bin").write_bytes(flatten_i8_matrix(input1_rows))
@@ -757,7 +850,32 @@ def build_dynamic_cnn_like(out_dir: pathlib.Path,
         RuntimeShape(4, 2, (reduced_cols, reduced_rows, 0, 0)),
         RuntimeShape(5, 1, (reduced_rows, 0, 0, 0)),
     ])
+    resolved_tensors, resolved_memory_plan = resolve_memory_plan_for_runtime_shapes(
+        tensors,
+        memory_plan,
+        [
+            RuntimeShape(0, 2, (input_rows, input_cols, 0, 0)),
+            RuntimeShape(2, 2, (reduced_rows, reduced_cols, 0, 0)),
+            RuntimeShape(3, 2, (reduced_rows, reduced_cols, 0, 0)),
+            RuntimeShape(4, 2, (reduced_cols, reduced_rows, 0, 0)),
+            RuntimeShape(5, 1, (reduced_rows, 0, 0, 0)),
+        ],
+    )
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(
+        out_dir / f"{name}.memory_plan.txt",
+        "dynamic_bounded",
+        scratchpad_budget,
+        tensors,
+        memory_plan,
+    )
+    write_memory_plan_summary(
+        out_dir / f"{name}.resolved_memory_plan.txt",
+        "static",
+        scratchpad_budget,
+        resolved_tensors,
+        resolved_memory_plan,
+    )
     (out_dir / f"{name}.runtime_shape.bin").write_bytes(runtime_shape_table)
     (out_dir / f"{name}.input0.bin").write_bytes(flatten_i8_matrix(input0_rows))
     (out_dir / f"{name}.input1.bin").write_bytes(flatten_i8_matrix(input1_rows))
@@ -831,7 +949,31 @@ def build_dynamic_tiny_model_like(out_dir: pathlib.Path,
         RuntimeShape(3, 2, (row_count, 2, 0, 0)),
         RuntimeShape(4, 2, (row_count, 1, 0, 0)),
     ])
+    resolved_tensors, resolved_memory_plan = resolve_memory_plan_for_runtime_shapes(
+        tensors,
+        memory_plan,
+        [
+            RuntimeShape(0, 2, (row_count, 3, 0, 0)),
+            RuntimeShape(2, 2, (row_count, 2, 0, 0)),
+            RuntimeShape(3, 2, (row_count, 2, 0, 0)),
+            RuntimeShape(4, 2, (row_count, 1, 0, 0)),
+        ],
+    )
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(
+        out_dir / f"{name}.memory_plan.txt",
+        "dynamic_bounded",
+        64,
+        tensors,
+        memory_plan,
+    )
+    write_memory_plan_summary(
+        out_dir / f"{name}.resolved_memory_plan.txt",
+        "static",
+        64,
+        resolved_tensors,
+        resolved_memory_plan,
+    )
     (out_dir / f"{name}.runtime_shape.bin").write_bytes(runtime_shape_table)
     (out_dir / f"{name}.input0.bin").write_bytes(flatten_fp16_matrix(input0_rows))
     (out_dir / f"{name}.input1.bin").write_bytes(flatten_fp16_matrix(weight_rows))
@@ -880,6 +1022,13 @@ def build_static_tiny_attention_like(out_dir: pathlib.Path,
     ]
     graph = serialize_graph_package(64, tensors, ops, dependencies, memory_plan)
     (out_dir / f"{name}.graph.bin").write_bytes(graph)
+    write_memory_plan_summary(
+        out_dir / f"{name}.memory_plan.txt",
+        "static",
+        64,
+        tensors,
+        memory_plan,
+    )
     (out_dir / f"{name}.input0.bin").write_bytes(struct.pack("<2H", 0x0000, 0x0000))
     (out_dir / f"{name}.input1.bin").write_bytes(struct.pack("<4H", 0x3C00, 0x3C00, 0x3C00, 0x3C00))
     (out_dir / f"{name}.input2.bin").write_bytes(struct.pack("<2f", *value_vector))

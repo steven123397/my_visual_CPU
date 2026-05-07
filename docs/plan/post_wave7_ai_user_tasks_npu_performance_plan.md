@@ -84,6 +84,12 @@
   正向与 fail-closed 负向合同。
   当前已完成 `task_spec_lowering.py` 共享 host-side lower 模块抽离，`pack_graph.py`
   只保留 CLI 与固定 workload 入口，前端继续复用同一条 host 打包路径。
+  当前 pack / task-spec 路径也会额外导出 `<name>.memory_plan.txt` 可读 sidecar，并由
+  `ai_accelerator_profile_smoke` 直接对齐 graph package 的 scratchpad budget 与逐 tensor
+  memory-plan entry，避免 compile 资源摘要漂成第二套 layout 来源。
+  同一条 bounded dynamic 路径现在也会额外导出 `<name>.resolved_memory_plan.txt`，
+  并由 host smoke 继续复用共享 runtime-shape resolve 合同验证真实运行时 byte_size /
+  scratchpad_bytes，避免 Python 打包侧漂出第二套 resolved layout 语义。
   `ai_accelerator_profile_smoke` 现也会直接比较 task-spec `custom_dynamic_gemm`
   与内建 `dynamic_gemm` 的 `graph.bin / runtime_shape.bin`，锁住它们继续共用同一套
   lowering / memory-plan 事实来源。
@@ -107,6 +113,9 @@
   runtime shape table、expected output 和 manifest，不引入第二套设备 ABI。
 - [x] **步骤 3：** 把 automatic memory plan helper 升级为 `16B` 对齐顺序 scratchpad
   分配，并用 host/frontend 最窄 smoke 锁住正向与 fail-closed 合同。
+  当前同一路径的 `<name>.memory_plan.txt` sidecar 也会一起回显 `dynamic_cnn` /
+  `custom_dynamic_cnn` 的 compile 资源布局，并由 host smoke 与 graph package memory-plan
+  逐项对齐。
   `ai_accelerator_profile_smoke` 现也会直接比较 task-spec `custom_dynamic_cnn`
   与内建 `dynamic_cnn` 的 `graph.bin / runtime_shape.bin`，锁住它们继续共用同一套
   lowering / memory-plan 事实来源。
@@ -127,6 +136,8 @@
   runtime shape table、expected output 和 manifest，不引入第二套设备 ABI。
 - [x] **步骤 3：** 用 host smoke 锁住 task-spec 与内建 `dynamic_tiny_model`
   继续共用同一套 lowering / memory-plan / profile-summary 事实来源。
+  当前 `dynamic_tiny_model / custom_dynamic_tiny_model` 的 `<name>.memory_plan.txt`
+  sidecar 也已纳入同一套 host-side compile/profile contract。
 
 ### 任务 2D：沿同一 importer 路线扩到 `static_tiny_attention_v1`
 
@@ -144,6 +155,8 @@
   graph package、expected output 和 manifest，不引入第二套设备 ABI。
 - [x] **步骤 3：** 用 host smoke 锁住 task-spec 与内建 `tiny_attention_static`
   继续共用同一套 graph / memory-plan / profile-summary 事实来源。
+  当前 `tiny_attention_static / custom_tiny_attention_static` 的 `<name>.memory_plan.txt`
+  sidecar 也已纳入同一套 host-side compile/profile contract。
 
 ### 任务 2E：统一 importer 顶层标量字段的 fail-closed 约束
 

@@ -61,6 +61,24 @@ bool expect_contains(const std::string& text, const char* needle, const char* me
     return true;
 }
 
+const char* ai_tensor_role_name_local(AiTensorRole role) {
+    switch (role) {
+    case AiTensorRole::Input:
+        return "input";
+    case AiTensorRole::Output:
+        return "output";
+    case AiTensorRole::Weight:
+        return "weight";
+    case AiTensorRole::Intermediate:
+        return "intermediate";
+    case AiTensorRole::Constant:
+        return "constant";
+    case AiTensorRole::Invalid:
+        return "invalid";
+    }
+    return "unknown";
+}
+
 struct CommandResult {
     int exit_code{0};
     std::string output{};
@@ -235,6 +253,82 @@ bool expect_matching_binary_file(const std::filesystem::path& actual,
     return expect_file_exists(actual, context) &&
            expect_file_exists(expected, context) &&
            expect(read_binary_file(actual) == read_binary_file(expected), context);
+}
+
+bool expect_matching_text_file(const std::filesystem::path& actual,
+                               const std::filesystem::path& expected,
+                               const char* context) {
+    return expect_file_exists(actual, context) &&
+           expect_file_exists(expected, context) &&
+           expect(read_text_file(actual) == read_text_file(expected), context);
+}
+
+bool expect_memory_plan_summary_matches(const std::filesystem::path& summary_path,
+                                        const AiGraphPackage& package,
+                                        const char* expected_shape_mode,
+                                        const char* context) {
+    if (!expect_file_exists(summary_path, context)) {
+        return false;
+    }
+    const std::string summary = read_text_file(summary_path);
+    if (!expect_contains(summary, "format=ai_proto_memory_plan_v1", context) ||
+        !expect_contains(summary,
+                         ("shape_mode=" + std::string(expected_shape_mode)).c_str(),
+                         context) ||
+        !expect_contains(summary,
+                         ("scratchpad_budget_bytes=" +
+                          std::to_string(package.scratchpad_budget_bytes)).c_str(),
+                         context) ||
+        !expect_contains(summary,
+                         ("tensor_count=" + std::to_string(package.tensors.size())).c_str(),
+                         context) ||
+        !expect_contains(summary,
+                         ("memory_plan_entries=" + std::to_string(package.memory_plan.size())).c_str(),
+                         context)) {
+        return false;
+    }
+    for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+        if (!expect(entry.tensor_index < package.tensors.size(), context)) {
+            return false;
+        }
+        const AiTensorMetadata& tensor = package.tensors[entry.tensor_index];
+        const std::string line =
+            "memory_plan_entry tensor_index=" + std::to_string(entry.tensor_index) +
+            " role=" + ai_tensor_role_name_local(tensor.role) +
+            " dtype=" + std::string(ai_dtype_name(tensor.dtype)) +
+            " system_offset=" + std::to_string(entry.system_offset) +
+            " scratchpad_offset=" + std::to_string(entry.scratchpad_offset) +
+            " byte_size=" + std::to_string(entry.byte_size) +
+            " scratchpad_bytes=" + std::to_string(entry.scratchpad_bytes);
+        if (!expect_contains(summary, line.c_str(), context)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool expect_resolved_memory_plan_summary_matches(const std::filesystem::path& summary_path,
+                                                 const AiGraphPackage& package,
+                                                 const std::filesystem::path& runtime_shape_path,
+                                                 const char* context) {
+    if (!expect_file_exists(runtime_shape_path, context)) {
+        return false;
+    }
+    std::vector<AiRuntimeShapeEntry> runtime_shapes{};
+    std::string error;
+    if (!parse_ai_runtime_shape_table(read_binary_file(runtime_shape_path),
+                                      package.dynamic_tensors.size(),
+                                      runtime_shapes,
+                                      error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    AiGraphPackage resolved_package{};
+    if (!resolve_ai_runtime_shape_package(package, runtime_shapes, resolved_package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    return expect_memory_plan_summary_matches(summary_path, resolved_package, "static", context);
 }
 
 bool expect_default_timing_model(const AiAcceleratorProfileSummary& summary, const char* context) {
@@ -595,10 +689,13 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
 
     const std::filesystem::path manifest = temp_dir / (std::string(workload) + ".manifest");
     const std::filesystem::path graph = temp_dir / (std::string(workload) + ".graph.bin");
+    const std::filesystem::path memory_plan_summary =
+        temp_dir / (std::string(workload) + ".memory_plan.txt");
     const std::filesystem::path actual = temp_dir / (std::string(workload) + ".output0.actual.bin");
     const std::filesystem::path expected = temp_dir / (std::string(workload) + ".output0.expected.bin");
     if (!expect_file_exists(manifest, "expected ai_proto manifest") ||
         !expect_file_exists(graph, "expected ai_proto graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected ai_proto memory plan summary") ||
         !expect_file_exists(expected, "expected ai_proto expected output")) {
         return false;
     }
@@ -611,6 +708,14 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
     }
     if (!expect(!package.ops.empty(), "expected packaged graph ops") ||
         !expect(package.scratchpad_budget_bytes != 0, "expected packaged scratchpad budget")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            package.shape_mode == AiShapeMode::DynamicBounded
+                                                ? "dynamic_bounded"
+                                                : "static",
+                                            "expected ai_proto memory plan summary to match graph package")) {
         return false;
     }
 
@@ -684,11 +789,17 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
 
     const std::filesystem::path manifest = temp_dir / "dynamic_gemm.manifest";
     const std::filesystem::path graph = temp_dir / "dynamic_gemm.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "dynamic_gemm.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "dynamic_gemm.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "dynamic_gemm.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "dynamic_gemm.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "dynamic_gemm.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected dynamic_gemm manifest") ||
         !expect_file_exists(graph, "expected dynamic_gemm graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected dynamic_gemm memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected dynamic_gemm resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected dynamic_gemm runtime shape table") ||
         !expect_file_exists(expected, "expected dynamic_gemm expected output")) {
         return false;
@@ -704,6 +815,19 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
                 "expected dynamic_gemm packaged graph shape mode") ||
         !expect(package.dynamic_tensors.size() == 2,
                 "expected dynamic_gemm packaged graph dynamic tensors")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected dynamic_gemm memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected dynamic_gemm resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -778,11 +902,17 @@ bool expect_pack_and_profile_task_spec_dynamic_gemm(const std::filesystem::path&
 
     const std::filesystem::path manifest = temp_dir / "custom_dynamic_gemm.manifest";
     const std::filesystem::path graph = temp_dir / "custom_dynamic_gemm.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "custom_dynamic_gemm.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "custom_dynamic_gemm.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_gemm.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "custom_dynamic_gemm.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "custom_dynamic_gemm.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected task-spec manifest") ||
         !expect_file_exists(graph, "expected task-spec graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected task-spec memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected task-spec resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected task-spec runtime shape table") ||
         !expect_file_exists(expected, "expected task-spec expected output")) {
         return false;
@@ -811,6 +941,19 @@ bool expect_pack_and_profile_task_spec_dynamic_gemm(const std::filesystem::path&
                 "expected task-spec output tensor memory plan") ||
         !expect(package.scratchpad_budget_bytes == 80,
                 "expected task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected task-spec GEMM memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected task-spec GEMM resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -873,11 +1016,17 @@ bool expect_pack_and_profile_task_spec_dynamic_cnn(const std::filesystem::path& 
 
     const std::filesystem::path manifest = temp_dir / "custom_dynamic_cnn.manifest";
     const std::filesystem::path graph = temp_dir / "custom_dynamic_cnn.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "custom_dynamic_cnn.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "custom_dynamic_cnn.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_cnn.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "custom_dynamic_cnn.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "custom_dynamic_cnn.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected CNN task-spec manifest") ||
         !expect_file_exists(graph, "expected CNN task-spec graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected CNN task-spec memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected CNN task-spec resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected CNN task-spec runtime shape table") ||
         !expect_file_exists(expected, "expected CNN task-spec expected output")) {
         return false;
@@ -915,6 +1064,19 @@ bool expect_pack_and_profile_task_spec_dynamic_cnn(const std::filesystem::path& 
                 "expected CNN task-spec output tensor memory plan") ||
         !expect(package.scratchpad_budget_bytes == 192,
                 "expected CNN task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected task-spec CNN memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected task-spec CNN resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -982,11 +1144,18 @@ bool expect_pack_and_profile_task_spec_dynamic_tiny_model(const std::filesystem:
 
     const std::filesystem::path manifest = temp_dir / "custom_dynamic_tiny_model.manifest";
     const std::filesystem::path graph = temp_dir / "custom_dynamic_tiny_model.graph.bin";
+    const std::filesystem::path memory_plan_summary =
+        temp_dir / "custom_dynamic_tiny_model.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "custom_dynamic_tiny_model.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_tiny_model.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "custom_dynamic_tiny_model.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "custom_dynamic_tiny_model.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected dynamic tiny task-spec manifest") ||
         !expect_file_exists(graph, "expected dynamic tiny task-spec graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected dynamic tiny task-spec memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected dynamic tiny task-spec resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected dynamic tiny task-spec runtime shape table") ||
         !expect_file_exists(expected, "expected dynamic tiny task-spec expected output")) {
         return false;
@@ -1021,6 +1190,20 @@ bool expect_pack_and_profile_task_spec_dynamic_tiny_model(const std::filesystem:
                 "expected dynamic tiny task-spec output tensor memory plan") ||
         !expect(package.scratchpad_budget_bytes == 64,
                 "expected dynamic tiny task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(
+            memory_plan_summary,
+            package,
+            "dynamic_bounded",
+            "expected dynamic tiny task-spec memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected dynamic tiny task-spec resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -1117,10 +1300,14 @@ bool expect_pack_and_profile_task_spec_static_tiny_attention(const std::filesyst
 
     const std::filesystem::path manifest = temp_dir / "custom_tiny_attention_static.manifest";
     const std::filesystem::path graph = temp_dir / "custom_tiny_attention_static.graph.bin";
+    const std::filesystem::path memory_plan_summary =
+        temp_dir / "custom_tiny_attention_static.memory_plan.txt";
     const std::filesystem::path actual = temp_dir / "custom_tiny_attention_static.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "custom_tiny_attention_static.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected static tiny attention task-spec manifest") ||
         !expect_file_exists(graph, "expected static tiny attention task-spec graph package") ||
+        !expect_file_exists(memory_plan_summary,
+                            "expected static tiny attention task-spec memory plan summary") ||
         !expect_file_exists(expected, "expected static tiny attention task-spec expected output")) {
         return false;
     }
@@ -1157,6 +1344,13 @@ bool expect_pack_and_profile_task_spec_static_tiny_attention(const std::filesyst
                 "expected static tiny attention task-spec output tensor memory plan") ||
         !expect(package.scratchpad_budget_bytes == 64,
                 "expected static tiny attention task-spec scratchpad budget")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(
+            memory_plan_summary,
+            package,
+            "static",
+            "expected static tiny attention task-spec memory plan summary to match graph package")) {
         return false;
     }
 
@@ -1215,11 +1409,17 @@ bool expect_pack_and_profile_dynamic_tiny_model(const std::filesystem::path& tem
 
     const std::filesystem::path manifest = temp_dir / "dynamic_tiny_model.manifest";
     const std::filesystem::path graph = temp_dir / "dynamic_tiny_model.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "dynamic_tiny_model.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "dynamic_tiny_model.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "dynamic_tiny_model.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "dynamic_tiny_model.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "dynamic_tiny_model.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected dynamic_tiny_model manifest") ||
         !expect_file_exists(graph, "expected dynamic_tiny_model graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected dynamic_tiny_model memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected dynamic_tiny_model resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected dynamic_tiny_model runtime shape table") ||
         !expect_file_exists(expected, "expected dynamic_tiny_model expected output")) {
         return false;
@@ -1235,6 +1435,19 @@ bool expect_pack_and_profile_dynamic_tiny_model(const std::filesystem::path& tem
                 "expected dynamic_tiny_model packaged graph shape mode") ||
         !expect(package.dynamic_tensors.size() == 4,
                 "expected dynamic_tiny_model packaged graph dynamic tensors")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected dynamic_tiny_model memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected dynamic_tiny_model resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -1295,11 +1508,17 @@ bool expect_pack_and_profile_dynamic_cnn(const std::filesystem::path& temp_dir) 
 
     const std::filesystem::path manifest = temp_dir / "dynamic_cnn.manifest";
     const std::filesystem::path graph = temp_dir / "dynamic_cnn.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "dynamic_cnn.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "dynamic_cnn.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "dynamic_cnn.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "dynamic_cnn.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "dynamic_cnn.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected dynamic_cnn manifest") ||
         !expect_file_exists(graph, "expected dynamic_cnn graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected dynamic_cnn memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected dynamic_cnn resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected dynamic_cnn runtime shape table") ||
         !expect_file_exists(expected, "expected dynamic_cnn expected output")) {
         return false;
@@ -1315,6 +1534,19 @@ bool expect_pack_and_profile_dynamic_cnn(const std::filesystem::path& temp_dir) 
                 "expected dynamic_cnn packaged graph shape mode") ||
         !expect(package.dynamic_tensors.size() == 5,
                 "expected dynamic_cnn packaged graph dynamic tensors")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected dynamic_cnn memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected dynamic_cnn resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -2369,6 +2601,10 @@ int main() {
             expect_matching_binary_file(temp_dir / "custom_tiny_attention_static.graph.bin",
                                         temp_dir / "tiny_attention_static.graph.bin",
                                         "expected task-spec tiny attention to share graph package with tiny_attention_static") &&
+            expect_matching_text_file(
+                temp_dir / "custom_tiny_attention_static.memory_plan.txt",
+                temp_dir / "tiny_attention_static.memory_plan.txt",
+                "expected task-spec tiny attention to share memory plan summary with tiny_attention_static") &&
             expect_pack_and_profile_task_spec_dynamic_gemm(temp_dir) &&
             expect_manifest_device_profile_summary(temp_dir / "custom_dynamic_gemm.manifest",
                                                    15,
@@ -2433,6 +2669,14 @@ int main() {
                 temp_dir / "custom_dynamic_gemm.runtime_shape.bin",
                 temp_dir / "dynamic_gemm.runtime_shape.bin",
                 "expected task-spec dynamic gemm to share runtime shape table with dynamic_gemm") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_gemm.memory_plan.txt",
+                temp_dir / "dynamic_gemm.memory_plan.txt",
+                "expected task-spec dynamic gemm to share memory plan summary with dynamic_gemm") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_gemm.resolved_memory_plan.txt",
+                temp_dir / "dynamic_gemm.resolved_memory_plan.txt",
+                "expected task-spec dynamic gemm to share resolved memory plan summary with dynamic_gemm") &&
             expect_pack_and_profile_task_spec_dynamic_tiny_model(temp_dir) &&
             expect_pack_and_profile_dynamic_tiny_model(temp_dir) &&
             expect_manifest_device_profile_summary(temp_dir / "custom_dynamic_tiny_model.manifest",
@@ -2460,6 +2704,14 @@ int main() {
                 temp_dir / "custom_dynamic_tiny_model.runtime_shape.bin",
                 temp_dir / "dynamic_tiny_model.runtime_shape.bin",
                 "expected task-spec dynamic tiny model to share runtime shape table with dynamic_tiny_model") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_tiny_model.memory_plan.txt",
+                temp_dir / "dynamic_tiny_model.memory_plan.txt",
+                "expected task-spec dynamic tiny model to share memory plan summary with dynamic_tiny_model") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_tiny_model.resolved_memory_plan.txt",
+                temp_dir / "dynamic_tiny_model.resolved_memory_plan.txt",
+                "expected task-spec dynamic tiny model to share resolved memory plan summary with dynamic_tiny_model") &&
             expect_manifest_device_profile_summary(temp_dir / "dynamic_tiny_model.manifest",
                                                    15,
                                                    9,
@@ -2486,6 +2738,14 @@ int main() {
                 temp_dir / "custom_dynamic_cnn.runtime_shape.bin",
                 temp_dir / "dynamic_cnn.runtime_shape.bin",
                 "expected task-spec dynamic cnn to share runtime shape table with dynamic_cnn") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_cnn.memory_plan.txt",
+                temp_dir / "dynamic_cnn.memory_plan.txt",
+                "expected task-spec dynamic cnn to share memory plan summary with dynamic_cnn") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_cnn.resolved_memory_plan.txt",
+                temp_dir / "dynamic_cnn.resolved_memory_plan.txt",
+                "expected task-spec dynamic cnn to share resolved memory plan summary with dynamic_cnn") &&
             expect_manifest_device_profile_summary(temp_dir / "dynamic_cnn.manifest",
                                                    17,
                                                    9,

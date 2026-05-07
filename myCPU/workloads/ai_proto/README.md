@@ -11,6 +11,8 @@
   `ai_task_spec_v1 / static_tiny_attention_v1`。
   它会在 host 侧完成校验、lower 到统一 graph package、生成 runtime shape table、
   expected output、manifest，以及最小顺序 scratchpad memory plan。
+  同时还会生成 `<name>.memory_plan.txt`，把同一份 graph package memory-plan
+  事实来源以可读 sidecar 形式导出，方便 host-side compile/profile contract 做只读校验。
 - `pack_graph.py --demo-v1 --out-dir <dir>`
   固定生成 `Demo V1` 的展示资产：`guest_ai_accel_demo` bridge workload、
   4 条正向 task-spec 样例，以及 1 条只用于 fail-closed 观察的负向 task-spec。
@@ -214,6 +216,15 @@ python3 workloads/ai_proto/pack_graph.py \
   预期输出。
 - `<name>.manifest`
   host profile 入口读取的 manifest。
+- `<name>.memory_plan.txt`
+  host-side 可读 compile / memory-plan sidecar，固定回显 `shape_mode`、
+  `scratchpad_budget_bytes`、tensor 数量和每个 memory-plan entry 的
+  `role / dtype / system_offset / scratchpad_offset / byte_size / scratchpad_bytes`。
+  它不是新的设备 ABI，也不替代 graph package；两者必须继续共享同一份事实来源。
+- `<name>.resolved_memory_plan.txt`
+  bounded dynamic workload 额外生成的 runtime-shape resolved sidecar。
+  它固定回显同一次 manifest 运行会看到的真实 tensor byte_size / scratchpad_bytes，
+  并要求继续和共享 runtime-shape resolve 合同保持一致；它同样不是新的设备 ABI。
 
 `task-spec` 当前也生成同样一组产物，只是名字由 `task_spec.name` 决定。
 
