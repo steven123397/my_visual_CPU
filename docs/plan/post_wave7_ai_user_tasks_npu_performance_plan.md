@@ -242,15 +242,56 @@
   `last_submission_dma_load/store_cycles` 与 `last_submission_dma_load/store_bytes`
   也纳入 host-side profile contract，用来锁住当前 `timed-simple` 模型里的
   DMA 读写拆分，而不提前引入 overlap/timeline。
+- 当前同一合同也已补上最近一次 submission 的 compile/runtime-shape 摘要：
+  `last_submission_shape_mode / runtime_shape_count / tensor_count /
+  memory_plan_entries / dynamic_tensor_count / scratchpad_budget_bytes`。
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke` 与
+  `ai_accelerator_profile_smoke` 现在会同时锁住 static / dynamic / fault-stable / reset /
+  manifest readback 路径，确保 workload sidecar、runtime-shape resolve 与设备自有
+  `profile_summary()` 继续共用同一份 graph-package 事实来源。
+- 当前同一合同也已继续补上 graph topology / transfer-plan 摘要：
+  `last_submission_dependency_count / root_op_count / leaf_op_count /
+  load_entry_count / store_entry_count`。对应 `ai_accelerator_gemm_smoke`、
+  `ai_accelerator_cnn_smoke`、`ai_accel_guest_smoke` 与
+  `ai_accelerator_profile_smoke` 现在会把 single-op、multi-op、guest bridge 和 manifest
+  readback 四类代表路径一起锁住，继续把 queue/overlap 之前的结构摘要收口成设备自有
+  host-side contract。
+- 当前同一合同也已继续补上 tensor-role breakdown：
+  `last_submission_input_tensor_count / output_tensor_count / weight_tensor_count /
+  constant_tensor_count / intermediate_tensor_count`。对应
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、`ai_accel_guest_smoke`
+  与 `ai_accelerator_profile_smoke` 现在会把 static、bounded dynamic、guest bridge
+  和 manifest readback 四类代表路径一起锁住，确保 direct device、guest bridge 和
+  manifest/profile harness 继续共用同一份 graph package 角色分布事实来源。
+- 当前同一合同还已继续补上 queue snapshot：
+  `submission_base_snapshot / completion_base_snapshot / queue_depth_snapshot /
+  submission_queue_size_snapshot / completion_queue_size_snapshot /
+  queue_configured_snapshot`。这组字段继续只记录“最近一次 submission 创建时的 ring 配置与
+  pending depth”，不引入 overlap / multi-outstanding queue 语义；direct device / guest
+  bridge / manifest readback 三条路径都已纳入 AI smoke。
+- 当前同一合同也已把 queue snapshot 继续细化到 ring 游标层：
+  `submission_head_snapshot / submission_tail_snapshot /
+  completion_head_snapshot / completion_tail_snapshot`。这组字段继续只复述设备开始执行该
+  submission 时看到的 queue lifecycle 状态，不把完成后的 MMIO 终态误当成 submission
+  创建时的 contract；direct device / guest bridge / manifest readback 三条路径都已纳入 AI smoke。
+- 当前同一合同也已继续补上 descriptor header 摘要：
+  `last_submission_token / flags / graph_package_bytes / runtime_shape_table_offset /
+  runtime_shape_table_addr / source_tag`。对应 `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 现在会把 direct device、
+  guest bridge 和 manifest readback 三条路径的真实 descriptor header 合同一起锁住。
+  这组字段继续只复述设备已经真实消费过的 submission header 事实，不引入第二套 host-only
+  descriptor 口径；direct device / guest bridge / manifest readback 三条路径都已纳入 AI smoke。
 - 当前 `ai_accelerator_profile_smoke` 也已补上 manifest 路径的设备侧回读校验：
   代表性 `cnn / gemm / tiny_model / dynamic_gemm / dynamic_tiny_model / dynamic_cnn /
   custom_dynamic_gemm / custom_dynamic_cnn / tiny_attention_static` manifest
   在 `Machine::run_ai_profile_manifest()` 结束后，必须把同一份
-  `AiAcceleratorProfileSummary` timing / outcome / DMA 子阶段合同重新填充出来。
+  `AiAcceleratorProfileSummary` compile / timing / outcome / queue / descriptor
+  合同重新填充出来。
 - 当前同一 smoke 还已补上 rerun 刷新合同：
   同一 `Machine` 连续执行不同 manifest 后，后一次 workload 的
   `AiProfileRunResult / profile_summary / completion_count / doorbell_count / last_fault`
-  都必须切到最新状态，不允许沿用或累加前一次运行的摘要。
+  都必须切到最新状态，不允许沿用或累加前一次运行的摘要；最近一次 workload 的
+  compile / topology / queue / descriptor 摘要也必须整份刷新到第二次 manifest。
 - 当前同一 smoke 还补上了“成功后接 host-side fail-closed 抛错”的 reset 合同：
   如果第二次 manifest 在 parser / runtime-shape resolve 阶段就抛异常，
   设备 `profile_summary / completion_count / doorbell_count / last_fault` 也必须回到默认空状态。

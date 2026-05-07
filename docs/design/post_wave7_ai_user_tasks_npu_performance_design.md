@@ -253,13 +253,49 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
   - 同一合同还应保留最近一次 submission 的 outcome 摘要：
     `fault / retired_ops / bytes_moved`。这样 host-side smoke 可以同时锁住
     “阶段画像”和“本次完成结果”，而不需要把这类收口强行扩大成新的 guest ABI。
+  - 同一份 `AiAcceleratorProfileSummary` 现在也应携带最近一次真正进入设备 submission
+    contract 的 compile/runtime-shape 摘要：
+    `shape_mode / runtime_shape_count / tensor_count / memory_plan_entries /
+    dynamic_tensor_count / scratchpad_budget_bytes`。对 bounded dynamic workload，
+    这里要保留“原始 graph package 仍是 dynamic_bounded，本次 submission 带了多少条
+    runtime-shape entry”的事实，而不是被 resolved package 漂成另一套 host-only 口径。
+    同一组摘要也可以继续补成 tensor-role breakdown，例如
+    `input_tensor_count / output_tensor_count / weight_tensor_count /
+    constant_tensor_count / intermediate_tensor_count`，把最近一次 submission 的
+    graph package 角色分布收成设备自有 host-side contract，而不是让 direct device、
+    guest bridge 和 manifest/profile harness 各自手抄一套角色猜测。
+  - 同一份合同还可以继续保留不改变执行语义的 graph topology / transfer-plan 摘要：
+    `dependency_count / root_op_count / leaf_op_count / load_entry_count /
+    store_entry_count`。这类字段的作用是把“本次 submission 究竟是单 op 还是多 op、是否有
+    dependency 链、系统 RAM <-> scratchpad 传输了几类 tensor”收成 host-side 可测事实来源，
+    为后续 queue / overlap-ready staged metadata 继续留窄边界。
+  - 如果还要继续往 queue-ready 方向收窄，可以优先补最近一次 submission 创建时的
+    queue snapshot，例如 `submission_base / completion_base / queue_depth /
+    submission_queue_size / completion_queue_size / queue_configured`。这类字段只回答
+    “设备当时拿到的是哪种 ring 配置”，不回答 overlap、outstanding queue 调度或 timeline
+    隐藏。
+  - 如果还要把 queue-ready staged metadata 再细化一层，也可以继续补
+    `submission_head / submission_tail / completion_head / completion_tail` snapshot。
+    这类字段同样只复述设备在开始执行该 submission 时看到的 ring 游标状态，
+    用来让 direct device、guest bridge 和 manifest/profile 路径共享同一份 queue lifecycle
+    事实来源，而不是把完成后的 MMIO 终态误当成 submission 创建时的 contract。
+  - 如果还要继续往 descriptor-ready 方向收窄，也可以优先补最近一次 submission 的
+    descriptor header 摘要，例如 `token / flags / graph_package_bytes /
+    runtime_shape_table_offset / runtime_shape_table_addr / source_tag`。这类字段只重复设备已经真实消费过的
+    submission header 事实，
+    用来让 direct device、guest bridge 和 manifest/profile 路径继续共用同一份
+    device-owned host-side contract，而不是在 host harness 再发明第二套 descriptor 文本口径。
   - 如果当前切片还要继续细化 `timed-simple`，优先补最近一次 submission 的
     `dma_load/store cycles` 与 `dma_load/store bytes` 细分画像，而不是直接跨进 overlap
     timeline 或更宽 guest ABI。
   - 这组字段除了被直接设备 smoke 校验，也应能在
     `Machine::run_ai_profile_manifest()` 完成后由设备自有 `profile_summary()` 原样读回，
-    这样 manifest/profile 路径就能复用同一份 host-side contract，而不必先扩 shared CLI
-    或 frontend 入口。
+    这样 manifest/profile 路径就能复用同一份完整的 compile / timing / outcome /
+    queue / descriptor host-side contract，而不必先扩 shared CLI 或 frontend 入口。
+  - 这组 compile/runtime-shape 摘要继续只作为 host-side / manifest-side 可读合同，
+    不新增 guest MMIO 字段，也不取代 `<name>.memory_plan.txt` /
+    `<name>.resolved_memory_plan.txt` 两层 sidecar；三者必须继续共用同一份 graph package +
+    runtime-shape resolve 事实来源。
   - 这条 manifest/profile readback 一致性至少要继续覆盖当前稳定 guardrail：
     `cnn`、`gemm`、`tiny_model`、`dynamic_gemm`、`dynamic_tiny_model`、`dynamic_cnn`、
     `custom_dynamic_gemm`、`custom_dynamic_cnn` 与 `tiny_attention_static`。

@@ -74,13 +74,15 @@
   `cnn / gemm / tiny_model / dynamic_gemm / dynamic_tiny_model / dynamic_cnn /
   custom_dynamic_gemm / custom_dynamic_cnn / tiny_attention_static` manifest
   上直接走 `Machine::run_ai_profile_manifest()`，并验证设备自有
-  `profile_summary()` 会重新暴露同一份 timing / outcome / DMA 子阶段摘要；
+  `profile_summary()` 会重新暴露同一份 compile / timing / outcome / queue / descriptor
+  摘要；
   这让 manifest 路径与设备 smoke 共享同一套 host-side 事实来源，而不用先扩 shared
   CLI 或 frontend。
 - `2026-05-06` 同日继续补上 rerun 刷新合同：同一 `Machine` 连续执行不同
   manifest 后，后一次 workload 的 `AiProfileRunResult`、设备 `profile_summary()`、
   `completion_count / doorbell_count / last_fault` 都必须切到最新 workload，而不是残留或
-  累加前一次运行状态。
+  累加前一次运行状态；最近一次 compile / topology / queue / descriptor 摘要也必须整份
+  切换到第二次 manifest。
 - `2026-05-06` 同日也补上 manifest fail-closed 抛错后的 reset 合同：
   如果一次成功 profile 之后再执行会在 host parser / runtime-shape resolve 阶段抛错的
   manifest，设备 `profile_summary()`、`completion_count / doorbell_count / last_fault`
@@ -198,6 +200,55 @@
   `resolve_ai_runtime_shape_package()` 校验这份 sidecar，并要求 task-spec / 内建 workload
   配对的 `.resolved_memory_plan.txt` 文本完全一致，避免 Python 打包侧漂出第二套 resolved
   layout 语义。
+- `2026-05-07` 同日继续把这组 compile/runtime-shape 合同回接到设备自有 profile：
+  `AiAcceleratorProfileSummary` 现在除了 timing / outcome / DMA breakdown 外，还会暴露
+  最近一次 submission 的 `shape_mode / runtime_shape_count / tensor_count /
+  memory_plan_entries / dynamic_tensor_count / scratchpad_budget_bytes`。对应
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke` 与
+  `ai_accelerator_profile_smoke` 已覆盖 static / dynamic / fault-stable / reset /
+  manifest readback 路径，确保 workload sidecar、runtime-shape resolve 与设备
+  `profile_summary()` 继续共用同一份 graph-package 事实来源，而不是漂出第二套 host-only
+  compile 摘要。
+- `2026-05-07` 同日这组字段也已接回 guest/host 共享 ABI guardrail：
+  `ai_accel_guest_smoke` 现在除了 timing / outcome / DMA breakdown 外，也会锁住
+  `guest_ai_accel_demo` 成功提交与 reset 默认态下的 compile/runtime-shape 摘要，
+  确保 guest bridge、host manifest/profile 路径和 direct device smoke 继续共用同一份
+  设备 `profile_summary()` 事实来源。
+- `2026-05-07` 同日设备自有 `profile_summary()` 还继续补上了 graph topology /
+  transfer-plan 摘要：
+  `dependency_count / root_op_count / leaf_op_count / load_entry_count / store_entry_count`。
+  对应的 `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 single-op、multi-op、
+  guest bridge 与 manifest readback 四类代表路径，继续把 queue / overlap 之前的结构摘要
+  收口成设备自有 host-side contract。
+- `2026-05-07` 同日同一份设备 contract 也继续补上 tensor-role breakdown：
+  `last_submission_input_tensor_count / output_tensor_count / weight_tensor_count /
+  constant_tensor_count / intermediate_tensor_count`。对应的
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 static、
+  bounded dynamic、guest bridge 与 manifest readback 四类代表路径，继续把最近一次
+  submission 的 graph package 角色分布收口成设备自有 host-side contract。
+- `2026-05-07` 同日同一份设备 contract 也继续补上 queue snapshot：
+  `submission_base_snapshot / completion_base_snapshot / queue_depth_snapshot /
+  submission_queue_size_snapshot / completion_queue_size_snapshot /
+  queue_configured_snapshot`。这组字段只记录最近一次 submission 创建时的 ring 配置与
+  pending depth，不引入 overlap / multi-outstanding queue 语义；对应的 direct device /
+  guest bridge / manifest readback guardrail 也已接进
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke`。
+- `2026-05-07` 同日同一份设备 contract 也把 queue snapshot 继续细化到 ring 游标层：
+  `submission_head_snapshot / submission_tail_snapshot /
+  completion_head_snapshot / completion_tail_snapshot`。这组字段只复述设备开始执行该
+  submission 时看到的 queue lifecycle 状态，不把完成后的 MMIO 终态误当成 submission
+  创建时的 contract；对应的 direct device / guest bridge / manifest readback guardrail 也已接进
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke`。
+- `2026-05-07` 同日同一份设备 contract 也继续补上 descriptor header 摘要：
+  `last_submission_token / flags / graph_package_bytes / runtime_shape_table_offset /
+  runtime_shape_table_addr / source_tag`。这组字段只复述设备已经真实消费过的 submission header 事实，不引入第二套 host-only
+  descriptor 口径；对应的 direct device / guest bridge / manifest readback guardrail 也已接进
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke`。
 - `2026-04-23` 已把这条线收口成正式设计文档 [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)，并明确它采用独立 `MMIO` 设备路线，而不是 CPU 紧耦合 tensor 指令扩展。
 - `2026-04-23` 同日已完成 wave 1 的任务 1：`DMA-ready` memory contract。
   - 已新增 `myCPU/src/mem/dma_transaction.{h,cpp}`，冻结 `initiator / direction / burst / fault / transferred_bytes` 最小合同。

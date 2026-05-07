@@ -61,6 +61,11 @@ bool expect_contains(const std::string& text, const char* needle, const char* me
     return true;
 }
 
+uint32_t align_up_u32(uint32_t value, uint32_t alignment) {
+    const uint32_t mask = alignment - 1;
+    return (value + mask) & ~mask;
+}
+
 const char* ai_tensor_role_name_local(AiTensorRole role) {
     switch (role) {
     case AiTensorRole::Input:
@@ -380,6 +385,259 @@ bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
            expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
 }
 
+struct ExpectedManifestCompileContract {
+    AiShapeMode shape_mode{AiShapeMode::Static};
+    uint32_t runtime_shape_count{0};
+    uint32_t tensor_count{0};
+    uint32_t memory_plan_entries{0};
+    uint32_t dynamic_tensor_count{0};
+    uint32_t input_tensor_count{0};
+    uint32_t output_tensor_count{0};
+    uint32_t weight_tensor_count{0};
+    uint32_t constant_tensor_count{0};
+    uint32_t intermediate_tensor_count{0};
+    uint32_t scratchpad_budget_bytes{0};
+    uint32_t dependency_count{0};
+    uint32_t root_op_count{0};
+    uint32_t leaf_op_count{0};
+    uint32_t load_entry_count{0};
+    uint32_t store_entry_count{0};
+    uint64_t token{0xA1A1A1A1ULL};
+    uint32_t flags{AI_ACCEL_SUBMISSION_FLAG_PROFILE};
+    uint64_t graph_package_addr{MEM_BASE + 0x26000};
+    uint64_t input_table_addr{MEM_BASE + 0x28000};
+    uint64_t output_table_addr{MEM_BASE + 0x29000};
+    uint64_t submission_base_snapshot{MEM_BASE + 0x22000};
+    uint64_t completion_base_snapshot{MEM_BASE + 0x24000};
+    uint32_t graph_package_bytes{0};
+    uint32_t runtime_shape_table_offset{0};
+    uint64_t runtime_shape_table_addr{0};
+    uint32_t source_tag{0};
+    uint32_t queue_depth_snapshot{1};
+    uint32_t submission_queue_size_snapshot{4};
+    uint32_t completion_queue_size_snapshot{4};
+    uint32_t submission_head_snapshot{0};
+    uint32_t submission_tail_snapshot{1};
+    uint32_t completion_head_snapshot{0};
+    uint32_t completion_tail_snapshot{0};
+    bool queue_configured_snapshot{true};
+};
+
+ExpectedManifestCompileContract expected_manifest_compile_contract(const std::filesystem::path& manifest,
+                                                                  uint32_t graph_package_bytes) {
+    auto count_roots = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> indegree(package.ops.size(), 0);
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.target_op < indegree.size()) {
+                ++indegree[edge.target_op];
+            }
+        }
+        uint32_t count = 0;
+        for (uint32_t degree : indegree) {
+            if (degree == 0) {
+                ++count;
+            }
+        }
+        return count;
+    };
+    auto count_leaves = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> outdegree(package.ops.size(), 0);
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.source_op < outdegree.size()) {
+                ++outdegree[edge.source_op];
+            }
+        }
+        uint32_t count = 0;
+        for (uint32_t degree : outdegree) {
+            if (degree == 0) {
+                ++count;
+            }
+        }
+        return count;
+    };
+    auto count_transfers = [](const AiGraphPackage& package,
+                              uint32_t& load_entries,
+                              uint32_t& store_entries) {
+        load_entries = 0;
+        store_entries = 0;
+        for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+            if (entry.tensor_index >= package.tensors.size()) {
+                continue;
+            }
+            const AiTensorRole role = package.tensors[entry.tensor_index].role;
+            if (role == AiTensorRole::Output) {
+                ++store_entries;
+            } else if (role != AiTensorRole::Intermediate && role != AiTensorRole::Invalid) {
+                ++load_entries;
+            }
+        }
+    };
+
+    const std::filesystem::path manifest_dir = manifest.parent_path();
+    const std::string graph_name = manifest.stem().string();
+    const std::filesystem::path graph_path = manifest_dir / (graph_name + ".graph.bin");
+    AiGraphPackage packaged{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph_path), packaged, error)) {
+        throw std::runtime_error("failed to parse manifest graph package: " + error);
+    }
+
+    ExpectedManifestCompileContract expected{};
+    expected.shape_mode = packaged.shape_mode;
+    expected.tensor_count = static_cast<uint32_t>(packaged.tensors.size());
+    expected.memory_plan_entries = static_cast<uint32_t>(packaged.memory_plan.size());
+    expected.dynamic_tensor_count = static_cast<uint32_t>(packaged.dynamic_tensors.size());
+    for (const AiTensorMetadata& tensor : packaged.tensors) {
+        switch (tensor.role) {
+        case AiTensorRole::Input:
+            ++expected.input_tensor_count;
+            break;
+        case AiTensorRole::Output:
+            ++expected.output_tensor_count;
+            break;
+        case AiTensorRole::Weight:
+            ++expected.weight_tensor_count;
+            break;
+        case AiTensorRole::Constant:
+            ++expected.constant_tensor_count;
+            break;
+        case AiTensorRole::Intermediate:
+            ++expected.intermediate_tensor_count;
+            break;
+        case AiTensorRole::Invalid:
+            break;
+        }
+    }
+    expected.scratchpad_budget_bytes = packaged.scratchpad_budget_bytes;
+    expected.dependency_count = static_cast<uint32_t>(packaged.dependencies.size());
+    expected.root_op_count = count_roots(packaged);
+    expected.leaf_op_count = count_leaves(packaged);
+    expected.graph_package_bytes = graph_package_bytes;
+    expected.runtime_shape_table_offset =
+        packaged.shape_mode == AiShapeMode::DynamicBounded ? align_up_u32(graph_package_bytes, 64) : 0;
+    expected.runtime_shape_table_addr =
+        expected.runtime_shape_table_offset == 0
+            ? 0
+            : expected.graph_package_addr + expected.runtime_shape_table_offset;
+
+    const std::string manifest_text = read_text_file(manifest);
+    const std::string source_tag_key = "source_tag=";
+    const size_t source_tag_pos = manifest_text.find(source_tag_key);
+    if (source_tag_pos != std::string::npos) {
+        const size_t value_begin = source_tag_pos + source_tag_key.size();
+        const size_t value_end = manifest_text.find_first_of("\r\n", value_begin);
+        const std::string value = manifest_text.substr(value_begin, value_end - value_begin);
+        expected.source_tag = static_cast<uint32_t>(std::stoul(value, nullptr, 0));
+    }
+
+    if (packaged.shape_mode == AiShapeMode::DynamicBounded) {
+        const std::filesystem::path runtime_shape_path = manifest_dir / (graph_name + ".runtime_shape.bin");
+        std::vector<AiRuntimeShapeEntry> runtime_shapes{};
+        if (!parse_ai_runtime_shape_table(read_binary_file(runtime_shape_path),
+                                          packaged.dynamic_tensors.size(),
+                                          runtime_shapes,
+                                          error)) {
+            throw std::runtime_error("failed to parse manifest runtime shape table: " + error);
+        }
+        expected.runtime_shape_count = static_cast<uint32_t>(runtime_shapes.size());
+    }
+
+    count_transfers(packaged, expected.load_entry_count, expected.store_entry_count);
+    return expected;
+}
+
+bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
+                                        AiShapeMode expected_shape_mode,
+                                        uint32_t expected_runtime_shape_count,
+                                        uint32_t expected_tensor_count,
+                                        uint32_t expected_memory_plan_entries,
+                                        uint32_t expected_dynamic_tensor_count,
+                                        uint32_t expected_input_tensor_count,
+                                        uint32_t expected_output_tensor_count,
+                                        uint32_t expected_weight_tensor_count,
+                                        uint32_t expected_constant_tensor_count,
+                                        uint32_t expected_intermediate_tensor_count,
+                                        uint32_t expected_scratchpad_budget_bytes,
+                                        uint32_t expected_dependency_count,
+                                        uint32_t expected_root_op_count,
+                                        uint32_t expected_leaf_op_count,
+                                        uint32_t expected_load_entry_count,
+                                        uint32_t expected_store_entry_count,
+                                        uint64_t expected_token,
+                                        uint32_t expected_flags,
+                                        uint64_t expected_graph_package_addr,
+                                        uint64_t expected_input_table_addr,
+                                        uint64_t expected_output_table_addr,
+                                        uint64_t expected_submission_base_snapshot,
+                                        uint64_t expected_completion_base_snapshot,
+                                        uint32_t expected_graph_package_bytes,
+                                        uint32_t expected_runtime_shape_table_offset,
+                                        uint64_t expected_runtime_shape_table_addr,
+                                        uint32_t expected_source_tag,
+                                        uint32_t expected_queue_depth_snapshot,
+                                        uint32_t expected_submission_queue_size_snapshot,
+                                        uint32_t expected_completion_queue_size_snapshot,
+                                        uint32_t expected_submission_head_snapshot,
+                                        uint32_t expected_submission_tail_snapshot,
+                                        uint32_t expected_completion_head_snapshot,
+                                        uint32_t expected_completion_tail_snapshot,
+                                        bool expected_queue_configured_snapshot,
+                                        const char* context) {
+    return expect(summary.last_submission_shape_mode == expected_shape_mode, context) &&
+           expect(summary.last_submission_runtime_shape_count == expected_runtime_shape_count, context) &&
+           expect(summary.last_submission_tensor_count == expected_tensor_count, context) &&
+           expect(summary.last_submission_memory_plan_entries == expected_memory_plan_entries, context) &&
+           expect(summary.last_submission_dynamic_tensor_count == expected_dynamic_tensor_count, context) &&
+           expect(summary.last_submission_input_tensor_count == expected_input_tensor_count, context) &&
+           expect(summary.last_submission_output_tensor_count == expected_output_tensor_count, context) &&
+           expect(summary.last_submission_weight_tensor_count == expected_weight_tensor_count, context) &&
+           expect(summary.last_submission_constant_tensor_count == expected_constant_tensor_count, context) &&
+           expect(summary.last_submission_intermediate_tensor_count ==
+                      expected_intermediate_tensor_count,
+                  context) &&
+           expect(summary.last_submission_scratchpad_budget_bytes ==
+                      expected_scratchpad_budget_bytes,
+                  context) &&
+           expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
+           expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
+           expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
+           expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
+           expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
+           expect(summary.last_submission_token == expected_token, context) &&
+           expect(summary.last_submission_flags == expected_flags, context) &&
+           expect(summary.last_submission_graph_package_addr == expected_graph_package_addr, context) &&
+           expect(summary.last_submission_input_table_addr == expected_input_table_addr, context) &&
+           expect(summary.last_submission_output_table_addr == expected_output_table_addr, context) &&
+           expect(summary.submission_base_snapshot == expected_submission_base_snapshot, context) &&
+           expect(summary.completion_base_snapshot == expected_completion_base_snapshot, context) &&
+           expect(summary.last_submission_graph_package_bytes == expected_graph_package_bytes, context) &&
+           expect(summary.last_submission_runtime_shape_table_offset ==
+                      expected_runtime_shape_table_offset,
+                  context) &&
+           expect(summary.last_submission_runtime_shape_table_addr ==
+                      expected_runtime_shape_table_addr,
+                  context) &&
+           expect(summary.last_submission_source_tag == expected_source_tag, context) &&
+           expect(summary.queue_depth_snapshot == expected_queue_depth_snapshot, context) &&
+           expect(summary.submission_queue_size_snapshot ==
+                      expected_submission_queue_size_snapshot,
+                  context) &&
+           expect(summary.completion_queue_size_snapshot ==
+                      expected_completion_queue_size_snapshot,
+                  context) &&
+           expect(summary.submission_head_snapshot == expected_submission_head_snapshot, context) &&
+           expect(summary.submission_tail_snapshot == expected_submission_tail_snapshot, context) &&
+           expect(summary.completion_head_snapshot == expected_completion_head_snapshot, context) &&
+           expect(summary.completion_tail_snapshot == expected_completion_tail_snapshot, context) &&
+           expect(summary.queue_configured_snapshot == expected_queue_configured_snapshot, context);
+}
+
 bool expect_matching_op_summaries(const std::vector<AiOpProfileSummary>& actual,
                                   const std::vector<AiAcceleratorOpProfileSummary>& expected,
                                   const char* context) {
@@ -397,6 +655,47 @@ bool expect_matching_op_summaries(const std::vector<AiOpProfileSummary>& actual,
         }
     }
     return true;
+}
+
+bool expect_empty_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
+                                              const char* context) {
+    return expect_submission_compile_contract(summary,
+                                              AiShapeMode::Static,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              false,
+                                              context);
 }
 
 bool expect_manifest_device_profile_summary(const std::filesystem::path& manifest,
@@ -420,6 +719,8 @@ bool expect_manifest_device_profile_summary(const std::filesystem::path& manifes
     Machine machine{};
     const Machine::AiProfileRunResult result = machine.run_ai_profile_manifest(manifest.string());
     const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    const ExpectedManifestCompileContract expected =
+        expected_manifest_compile_contract(manifest, result.graph_package_bytes);
     return expect(result.completed, context) &&
            expect(result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, context) &&
            expect(result.fault_code == AI_ACCEL_FAULT_NONE, context) &&
@@ -459,6 +760,43 @@ bool expect_manifest_device_profile_summary(const std::filesystem::path& manifes
                                            expected_dma_load_bytes,
                                            expected_dma_store_bytes,
                                            context) &&
+           expect_submission_compile_contract(summary,
+                                              expected.shape_mode,
+                                              expected.runtime_shape_count,
+                                              expected.tensor_count,
+                                              expected.memory_plan_entries,
+                                              expected.dynamic_tensor_count,
+                                              expected.input_tensor_count,
+                                              expected.output_tensor_count,
+                                              expected.weight_tensor_count,
+                                              expected.constant_tensor_count,
+                                              expected.intermediate_tensor_count,
+                                              expected.scratchpad_budget_bytes,
+                                              expected.dependency_count,
+                                              expected.root_op_count,
+                                              expected.leaf_op_count,
+                                              expected.load_entry_count,
+                                              expected.store_entry_count,
+                                              expected.token,
+                                              expected.flags,
+                                              expected.graph_package_addr,
+                                              expected.input_table_addr,
+                                              expected.output_table_addr,
+                                              expected.submission_base_snapshot,
+                                              expected.completion_base_snapshot,
+                                              expected.graph_package_bytes,
+                                              expected.runtime_shape_table_offset,
+                                              expected.runtime_shape_table_addr,
+                                              expected.source_tag,
+                                              expected.queue_depth_snapshot,
+                                              expected.submission_queue_size_snapshot,
+                                              expected.completion_queue_size_snapshot,
+                                              expected.submission_head_snapshot,
+                                              expected.submission_tail_snapshot,
+                                              expected.completion_head_snapshot,
+                                              expected.completion_tail_snapshot,
+                                              expected.queue_configured_snapshot,
+                                              context) &&
            expect(summary.tile_count == expected_tile_count, context) &&
            expect(summary.scratchpad_peak_bytes == expected_scratchpad_peak_bytes, context) &&
            expect(summary.op_summaries.size() == expected_op_count, context) &&
@@ -488,6 +826,8 @@ bool expect_manifest_rerun_refresh(const std::filesystem::path& first_manifest,
     const Machine::AiProfileRunResult first = machine.run_ai_profile_manifest(first_manifest.string());
     const Machine::AiProfileRunResult second = machine.run_ai_profile_manifest(second_manifest.string());
     const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    const ExpectedManifestCompileContract expected =
+        expected_manifest_compile_contract(second_manifest, second.graph_package_bytes);
     return expect(first.completed, context) &&
            expect(second.completed, context) &&
            expect(second.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, context) &&
@@ -528,6 +868,43 @@ bool expect_manifest_rerun_refresh(const std::filesystem::path& first_manifest,
                                            expected_second_dma_load_bytes,
                                            expected_second_dma_store_bytes,
                                            context) &&
+           expect_submission_compile_contract(summary,
+                                              expected.shape_mode,
+                                              expected.runtime_shape_count,
+                                              expected.tensor_count,
+                                              expected.memory_plan_entries,
+                                              expected.dynamic_tensor_count,
+                                              expected.input_tensor_count,
+                                              expected.output_tensor_count,
+                                              expected.weight_tensor_count,
+                                              expected.constant_tensor_count,
+                                              expected.intermediate_tensor_count,
+                                              expected.scratchpad_budget_bytes,
+                                              expected.dependency_count,
+                                              expected.root_op_count,
+                                              expected.leaf_op_count,
+                                              expected.load_entry_count,
+                                              expected.store_entry_count,
+                                              expected.token,
+                                              expected.flags,
+                                              expected.graph_package_addr,
+                                              expected.input_table_addr,
+                                              expected.output_table_addr,
+                                              expected.submission_base_snapshot,
+                                              expected.completion_base_snapshot,
+                                              expected.graph_package_bytes,
+                                              expected.runtime_shape_table_offset,
+                                              expected.runtime_shape_table_addr,
+                                              expected.source_tag,
+                                              expected.queue_depth_snapshot,
+                                              expected.submission_queue_size_snapshot,
+                                              expected.completion_queue_size_snapshot,
+                                              expected.submission_head_snapshot,
+                                              expected.submission_tail_snapshot,
+                                              expected.completion_head_snapshot,
+                                              expected.completion_tail_snapshot,
+                                              expected.queue_configured_snapshot,
+                                              context) &&
            expect(summary.tile_count == expected_second_tile_count, context) &&
            expect(summary.scratchpad_peak_bytes == expected_second_scratchpad_peak_bytes, context) &&
            expect(summary.op_summaries.size() == expected_second_op_count, context) &&
@@ -566,6 +943,7 @@ bool expect_manifest_failure_resets_device_state(const std::filesystem::path& su
            expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
            expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
            expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
+           expect_empty_submission_compile_contract(summary, context) &&
            expect(summary.tile_count == 0, context) &&
            expect(summary.scratchpad_peak_bytes == 0, context) &&
            expect(summary.op_summaries.empty(), context);
@@ -607,6 +985,7 @@ bool expect_manifest_timeout_state(const std::filesystem::path& manifest,
            expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
            expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
            expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
+           expect_empty_submission_compile_contract(summary, context) &&
            expect(summary.tile_count == 0, context) &&
            expect(summary.scratchpad_peak_bytes == 0, context) &&
            expect(summary.op_summaries.empty(), context);
@@ -658,6 +1037,7 @@ bool expect_manifest_completion_fault_state(const std::filesystem::path& manifes
                                     context) &&
            expect_submission_outcome(summary, expected_fault_code, 0, expected_bytes_moved, context) &&
            expect_submission_dma_breakdown(summary, 6, 0, expected_bytes_moved, 0, context) &&
+           expect_empty_submission_compile_contract(summary, context) &&
            expect(summary.tile_count == 0, context) &&
            expect(summary.scratchpad_peak_bytes == 0, context) &&
            expect(summary.op_summaries.empty(), context);

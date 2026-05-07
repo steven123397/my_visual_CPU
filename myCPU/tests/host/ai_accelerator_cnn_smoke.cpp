@@ -141,6 +141,92 @@ bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
            expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
 }
 
+bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
+                                        AiShapeMode expected_shape_mode,
+                                        uint32_t expected_runtime_shape_count,
+                                        uint32_t expected_tensor_count,
+                                        uint32_t expected_memory_plan_entries,
+                                        uint32_t expected_dynamic_tensor_count,
+                                        uint32_t expected_input_tensor_count,
+                                        uint32_t expected_output_tensor_count,
+                                        uint32_t expected_weight_tensor_count,
+                                        uint32_t expected_constant_tensor_count,
+                                        uint32_t expected_intermediate_tensor_count,
+                                        uint32_t expected_scratchpad_budget_bytes,
+                                        uint32_t expected_dependency_count,
+                                        uint32_t expected_root_op_count,
+                                        uint32_t expected_leaf_op_count,
+                                        uint32_t expected_load_entry_count,
+                                        uint32_t expected_store_entry_count,
+                                        uint64_t expected_token,
+                                        uint32_t expected_flags,
+                                        uint64_t expected_graph_package_addr,
+                                        uint64_t expected_input_table_addr,
+                                        uint64_t expected_output_table_addr,
+                                        uint64_t expected_submission_base_snapshot,
+                                        uint64_t expected_completion_base_snapshot,
+                                        uint32_t expected_graph_package_bytes,
+                                        uint32_t expected_runtime_shape_table_offset,
+                                        uint64_t expected_runtime_shape_table_addr,
+                                        uint32_t expected_source_tag,
+                                        uint32_t expected_queue_depth_snapshot,
+                                        uint32_t expected_submission_queue_size_snapshot,
+                                        uint32_t expected_completion_queue_size_snapshot,
+                                        uint32_t expected_submission_head_snapshot,
+                                        uint32_t expected_submission_tail_snapshot,
+                                        uint32_t expected_completion_head_snapshot,
+                                        uint32_t expected_completion_tail_snapshot,
+                                        bool expected_queue_configured_snapshot,
+                                        const char* context) {
+    return expect(summary.last_submission_shape_mode == expected_shape_mode, context) &&
+           expect(summary.last_submission_runtime_shape_count == expected_runtime_shape_count, context) &&
+           expect(summary.last_submission_tensor_count == expected_tensor_count, context) &&
+           expect(summary.last_submission_memory_plan_entries == expected_memory_plan_entries, context) &&
+           expect(summary.last_submission_dynamic_tensor_count == expected_dynamic_tensor_count, context) &&
+           expect(summary.last_submission_input_tensor_count == expected_input_tensor_count, context) &&
+           expect(summary.last_submission_output_tensor_count == expected_output_tensor_count, context) &&
+           expect(summary.last_submission_weight_tensor_count == expected_weight_tensor_count, context) &&
+           expect(summary.last_submission_constant_tensor_count == expected_constant_tensor_count, context) &&
+           expect(summary.last_submission_intermediate_tensor_count ==
+                      expected_intermediate_tensor_count,
+                  context) &&
+           expect(summary.last_submission_scratchpad_budget_bytes ==
+                      expected_scratchpad_budget_bytes,
+                  context) &&
+           expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
+           expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
+           expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
+           expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
+           expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
+           expect(summary.last_submission_token == expected_token, context) &&
+           expect(summary.last_submission_flags == expected_flags, context) &&
+           expect(summary.last_submission_graph_package_addr == expected_graph_package_addr, context) &&
+           expect(summary.last_submission_input_table_addr == expected_input_table_addr, context) &&
+           expect(summary.last_submission_output_table_addr == expected_output_table_addr, context) &&
+           expect(summary.submission_base_snapshot == expected_submission_base_snapshot, context) &&
+           expect(summary.completion_base_snapshot == expected_completion_base_snapshot, context) &&
+           expect(summary.last_submission_graph_package_bytes == expected_graph_package_bytes, context) &&
+           expect(summary.last_submission_runtime_shape_table_offset ==
+                      expected_runtime_shape_table_offset,
+                  context) &&
+           expect(summary.last_submission_runtime_shape_table_addr ==
+                      expected_runtime_shape_table_addr,
+                  context) &&
+           expect(summary.last_submission_source_tag == expected_source_tag, context) &&
+           expect(summary.queue_depth_snapshot == expected_queue_depth_snapshot, context) &&
+           expect(summary.submission_queue_size_snapshot ==
+                      expected_submission_queue_size_snapshot,
+                  context) &&
+           expect(summary.completion_queue_size_snapshot ==
+                      expected_completion_queue_size_snapshot,
+                  context) &&
+           expect(summary.submission_head_snapshot == expected_submission_head_snapshot, context) &&
+           expect(summary.submission_tail_snapshot == expected_submission_tail_snapshot, context) &&
+           expect(summary.completion_head_snapshot == expected_completion_head_snapshot, context) &&
+           expect(summary.completion_tail_snapshot == expected_completion_tail_snapshot, context) &&
+           expect(summary.queue_configured_snapshot == expected_queue_configured_snapshot, context);
+}
+
 bool configure_queue(Bus& bus) {
     return store_u32(bus,
                      AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_BASE_LOW,
@@ -704,6 +790,43 @@ int main() {
                                        "expected CNN submission outcome summary") ||
             !expect_submission_dma_breakdown(profile_summary, 6, 3, 20, 12,
                                             "expected CNN submission DMA breakdown") ||
+            !expect_submission_compile_contract(profile_summary,
+                                               AiShapeMode::Static,
+                                               0,
+                                               6,
+                                               6,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               3,
+                                               192,
+                                               3,
+                                               1,
+                                               1,
+                                               2,
+                                               1,
+                                               descriptor.token,
+                                               descriptor.flags,
+                                               descriptor.graph_package_addr,
+                                               descriptor.input_table_addr,
+                                               descriptor.output_table_addr,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               graph_package_size,
+                                               0,
+                                               0,
+                                               23,
+                                               1,
+                                               4,
+                                               4,
+                                               0,
+                                               1,
+                                               0,
+                                               0,
+                                               true,
+                                               "expected CNN submission compile contract") ||
             !expect(profile_summary.tile_count == 4, "expected CNN aggregate tile count") ||
             !expect(profile_summary.scratchpad_peak_bytes == 188,
                     "expected CNN aggregate scratchpad peak bytes") ||
@@ -828,6 +951,43 @@ int main() {
                                        "expected dynamic CNN submission outcome summary") ||
             !expect_submission_dma_breakdown(dynamic_profile_summary, 6, 3, 13, 8,
                                             "expected dynamic CNN submission DMA breakdown") ||
+            !expect_submission_compile_contract(dynamic_profile_summary,
+                                               AiShapeMode::DynamicBounded,
+                                               5,
+                                               6,
+                                               6,
+                                               5,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               3,
+                                               192,
+                                               3,
+                                               1,
+                                               1,
+                                               2,
+                                               1,
+                                               dynamic_descriptor.token,
+                                               dynamic_descriptor.flags,
+                                               dynamic_descriptor.graph_package_addr,
+                                               dynamic_descriptor.input_table_addr,
+                                               dynamic_descriptor.output_table_addr,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               dynamic_graph_package_size,
+                                               kDynamicRuntimeShapeOffset,
+                                               kGraphPackageAddr + kDynamicRuntimeShapeOffset,
+                                               25,
+                                               1,
+                                               4,
+                                               4,
+                                               1,
+                                               2,
+                                               0,
+                                               1,
+                                               true,
+                                               "expected dynamic CNN submission compile contract") ||
             !expect(dynamic_profile_summary.tile_count == 4,
                     "expected dynamic CNN aggregate tile count") ||
             !expect(dynamic_profile_summary.scratchpad_peak_bytes == 184,
@@ -934,6 +1094,43 @@ int main() {
                                        "expected stable dynamic CNN outcome after overflow fault") ||
             !expect_submission_dma_breakdown(dynamic_overflow_profile, 6, 3, 13, 8,
                                             "expected stable dynamic CNN DMA breakdown after overflow fault") ||
+            !expect_submission_compile_contract(dynamic_overflow_profile,
+                                               AiShapeMode::DynamicBounded,
+                                               5,
+                                               6,
+                                               6,
+                                               5,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               3,
+                                               192,
+                                               3,
+                                               1,
+                                               1,
+                                               2,
+                                               1,
+                                               dynamic_descriptor.token,
+                                               dynamic_descriptor.flags,
+                                               dynamic_descriptor.graph_package_addr,
+                                               dynamic_descriptor.input_table_addr,
+                                               dynamic_descriptor.output_table_addr,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               dynamic_graph_package_size,
+                                               kDynamicRuntimeShapeOffset,
+                                               kGraphPackageAddr + kDynamicRuntimeShapeOffset,
+                                               25,
+                                               1,
+                                               4,
+                                               4,
+                                               1,
+                                               2,
+                                               0,
+                                               1,
+                                               true,
+                                               "expected stable dynamic CNN compile contract after overflow fault") ||
             !expect(dynamic_overflow_profile.tile_count == 4,
                     "expected dynamic CNN profile stability after overflow fault") ||
             !expect(dynamic_overflow_profile.scratchpad_peak_bytes == 184,
@@ -958,6 +1155,43 @@ int main() {
                                        "expected empty CNN submission outcome after reset") ||
             !expect_submission_dma_breakdown(reset_profile_summary, 0, 0, 0, 0,
                                             "expected empty CNN DMA breakdown after reset") ||
+            !expect_submission_compile_contract(reset_profile_summary,
+                                               AiShapeMode::Static,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               false,
+                                               "expected empty CNN compile contract after reset") ||
             !expect(reset_profile_summary.tile_count == 0, "expected CNN profile tile count reset") ||
             !expect(reset_profile_summary.scratchpad_peak_bytes == 0,
                     "expected CNN scratchpad peak bytes reset") ||
