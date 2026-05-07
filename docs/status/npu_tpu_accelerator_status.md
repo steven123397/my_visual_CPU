@@ -19,6 +19,7 @@
 - 当前活跃计划：
   - [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
 - 已完成计划：
+  - [../plan/history_plan.md#post-wave7-ai-demo-v1-plan](../plan/history_plan.md#post-wave7-ai-demo-v1-plan)
   - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
@@ -167,6 +168,20 @@
   输入如果超出可表示范围，或直接给出 `NaN / +/-Infinity` 之类 non-finite 值，
   都会在 host-side 直接 fail-closed，而不是抛 Python traceback。
   这些负向合同都已接进 `ai_accelerator_profile_smoke`。
+- `2026-05-07` 同日把展示窗口前的 `Demo V1` 收口成固定演示入口：
+  `pack_graph.py --demo-v1` 现在会一次性生成 `guest_ai_accel_demo` bridge workload、
+  `bounded_dynamic_gemm_v1`、`bounded_dynamic_cnn_v1`、
+  `bounded_dynamic_tiny_model_v1`、`static_tiny_attention_v1` 四条正向 task-spec 样例，
+  以及 1 条带未知 top-level key 的 fail-closed 样例。`run_demo_v1.py` 进一步把
+  `task spec -> pack -> run -> summary` 收成固定路径，默认运行
+  `guest_ai_accel_demo`、`custom_dynamic_gemm`、`custom_dynamic_cnn`、
+  `custom_dynamic_tiny_model` 这 4 条推荐正向样例，再验证 1 条 fail-closed 样例；
+  `custom_tiny_attention_static` 保留为可选第五条正向 manifest，不作为默认脚本步骤。
+- `2026-05-07` 同日也把 `Demo V1` 的展示资产与最小验证矩阵补齐到正式文档：
+  `myCPU/workloads/ai_proto/README.md`、`docs/showcase/post_wave7_ai_demo_v1_guide.md`、
+  `docs/status/npu_tpu_accelerator_status.md` 与归档后的计划条目现在统一明确：
+  本轮只展示 4 条 task-spec user-task 入口和 1 条 guest/host bridge workload，
+  不误报任意模型上传、通用 compiler、Linux-facing driver 或更深性能模型已完成。
 - `2026-04-23` 已把这条线收口成正式设计文档 [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)，并明确它采用独立 `MMIO` 设备路线，而不是 CPU 紧耦合 tensor 指令扩展。
 - `2026-04-23` 同日已完成 wave 1 的任务 1：`DMA-ready` memory contract。
   - 已新增 `myCPU/src/mem/dma_transaction.{h,cpp}`，冻结 `initiator / direction / burst / fault / transferred_bytes` 最小合同。
@@ -407,6 +422,12 @@
   任意模型上传或完整 runtime；当前 importer 已覆盖最小 `bounded_dynamic_gemm_v1` 与
   最小 `bounded_dynamic_cnn_v1`，但仍不代表更宽 op family 已经开放。
 - 如果把这条线和当前 `xv6 / Linux` 主线混在同一轮里推进，很容易打散已有回归与 ownership 边界。
+- `Demo V1` 当前虽然已经有固定入口和固定样例，但默认脚本只运行 4 条推荐正向样例；
+  `static_tiny_attention_v1` 仍是可选第五条 manifest 演示项，不应在对外描述里被写成
+  “所有 demo 必跑项”。
+- `Demo V1` 的 fail-closed 当前只固定展示一条 host-side importer reject 样例；
+  它证明输入 hygiene 和 fail-closed 方向是稳定的，但不代表完整 malformed-input 矩阵都适合
+  面向外部逐条演示。
 
 ## 下一步
 
@@ -419,13 +440,19 @@
    与
    [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)，
    后续应先在这套文档里明确第一刀的用户任务入口、compile / memory plan 和性能模型阶段边界。
-4. 当前第一刀实现已进一步收窄为 host-side `bounded_dynamic_gemm_v1`、
+4. 展示窗口前的近端收口已完成并归档到
+   [../plan/history_plan.md#post-wave7-ai-demo-v1-plan](../plan/history_plan.md#post-wave7-ai-demo-v1-plan)：
+   当前已有固定的 `Demo V1` 入口、推荐样例顺序、fail-closed 观察点和最小验证矩阵。
+5. 当前第一刀实现已进一步收窄为 host-side `bounded_dynamic_gemm_v1`、
    `bounded_dynamic_cnn_v1`、`bounded_dynamic_tiny_model_v1` 与
    `static_tiny_attention_v1` task spec importer；共享 lower 模块与
    `dynamic_gemm / dynamic_cnn / dynamic_tiny_model / tiny_attention_static`
    共用 lowering / memory-plan 路径已形成显式 guardrail，后续再逐步扩展到更宽 task kind。
-5. 在第一刀实现中，优先保持现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`、
+6. 在第一刀实现中，优先保持现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`、
    `tiny_attention_static`、guest `ai_accel_demo` 和既有 profile / debug 可观察性继续作为稳定 guardrail。
+7. 如果下一轮继续推进，应回到
+   [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
+   的长线边界，优先处理更宽 importer / 性能模型切片，而不是重新打开 `Demo V1` 收口范围。
 
 ## 验证基线
 
@@ -450,3 +477,8 @@
   - `cd myCPU && make test`
   - `cd myCPU && make test-pipeline`
 - 后续继续扩到设备控制面、debug 或 guest/runtime 路径时，仍应按触达范围补跑 `make test` / `make test-pipeline` 与对应窄门禁。
+- `Demo V1` 本轮 fresh gate：
+  - `git diff --check`
+  - `cd myCPU && make test`
+  - `cd myCPU && make test-pipeline`
+  - `cd myCPU && make test-host-ai_accelerator_profile_smoke`

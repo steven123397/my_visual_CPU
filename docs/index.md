@@ -41,17 +41,19 @@
     `Wave 7` 阶段性收口后的 `用户自定义 AI 任务 + NPU 性能模型` 新主线设计入口。
 18. [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
     `用户自定义 AI 任务 + NPU 性能模型` 新主线的当前活跃计划。
-19. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+19. [showcase/post_wave7_ai_demo_v1_guide.md](showcase/post_wave7_ai_demo_v1_guide.md)
+    `Post-Wave 7 AI demo v1` 的最短演示路径、预期输出与最小验证矩阵。
+20. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     向量扩展与 ML workload 的统一设计边界。
-20. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+21. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 方向设计。
-21. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+22. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
     `debug_session / protocol + frontend` 设计边界。
-22. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+23. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
     Spike 外部差分验证边界。
-23. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
+24. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
     主线 `Wave 7` 远端云服务器开发/验证环境的当前活跃计划。
-24. [plan/history_plan.md](plan/history_plan.md)
+25. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -75,6 +77,8 @@
   - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
   - [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
   - [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
+  - [showcase/post_wave7_ai_demo_v1_guide.md](showcase/post_wave7_ai_demo_v1_guide.md)
+  - [plan/history_plan.md#post-wave7-ai-demo-v1-plan](plan/history_plan.md#post-wave7-ai-demo-v1-plan)
   - [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
   - [plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [plan/history_plan.md#npu-tpu-accelerator-wave3-plan](plan/history_plan.md#npu-tpu-accelerator-wave3-plan)

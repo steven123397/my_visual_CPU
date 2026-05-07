@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import pathlib
 import struct
 from task_spec_lowering import (
@@ -15,6 +16,10 @@ from task_spec_lowering import (
     serialize_runtime_shape_table,
     write_manifest,
 )
+
+
+def write_json(path: pathlib.Path, payload: object) -> None:
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def build_cnn(out_dir: pathlib.Path) -> None:
@@ -314,8 +319,102 @@ def build_tiny_attention_static(out_dir: pathlib.Path) -> None:
     )
 
 
+def build_demo_v1(out_dir: pathlib.Path) -> None:
+    build_guest_ai_accel_demo(out_dir)
+
+    positive_task_specs = {
+        "custom_dynamic_gemm.task_spec.json": {
+            "format": "ai_task_spec_v1",
+            "task_kind": "bounded_dynamic_gemm_v1",
+            "name": "custom_dynamic_gemm",
+            "source_tag": 73,
+            "max_ticks": 128,
+            "input0": [
+                [2, 1, 0, -1, 3, 4, 5, 6],
+                [6, 5, 4, 3, 2, 1, 0, -1],
+            ],
+            "input1": [
+                [1, 0, 0, 1],
+                [0, 1, 1, 0],
+                [1, 1, 0, 0],
+                [0, 0, 1, 1],
+                [1, 0, 1, 0],
+                [0, 1, 0, 1],
+                [1, 0, 0, 0],
+                [0, 0, 1, 0],
+            ],
+        },
+        "custom_dynamic_cnn.task_spec.json": {
+            "format": "ai_task_spec_v1",
+            "task_kind": "bounded_dynamic_cnn_v1",
+            "name": "custom_dynamic_cnn",
+            "source_tag": 79,
+            "max_ticks": 128,
+            "input0": [
+                [1, -2, 3],
+                [-4, 5, -6],
+                [7, -8, 9],
+            ],
+            "input1": [
+                [1, 0],
+                [-1, 2],
+            ],
+        },
+        "custom_dynamic_tiny_model.task_spec.json": {
+            "format": "ai_task_spec_v1",
+            "task_kind": "bounded_dynamic_tiny_model_v1",
+            "name": "custom_dynamic_tiny_model",
+            "source_tag": 83,
+            "max_ticks": 128,
+            "input0": [
+                [0.5, 2.0, -1.0],
+            ],
+        },
+        "custom_tiny_attention_static.task_spec.json": {
+            "format": "ai_task_spec_v1",
+            "task_kind": "static_tiny_attention_v1",
+            "name": "custom_tiny_attention_static",
+            "source_tag": 89,
+            "max_ticks": 128,
+            "value_vector": [2.0, 6.0],
+        },
+    }
+
+    for filename, payload in positive_task_specs.items():
+        task_spec_path = out_dir / filename
+        write_json(task_spec_path, payload)
+        lower_build_task_spec(task_spec_path, out_dir)
+
+    write_json(
+        out_dir / "custom_dynamic_gemm_fail_closed.task_spec.json",
+        {
+            "format": "ai_task_spec_v1",
+            "task_kind": "bounded_dynamic_gemm_v1",
+            "name": "custom_dynamic_gemm_fail_closed",
+            "source_tag": 97,
+            "max_ticks": 128,
+            "unexpected_extra": 1,
+            "input0": [
+                [2, 1, 0, -1, 3, 4, 5, 6],
+            ],
+            "input1": [
+                [1, 0, 0, 1],
+                [0, 1, 1, 0],
+                [1, 1, 0, 0],
+                [0, 0, 1, 1],
+                [1, 0, 1, 0],
+                [0, 1, 0, 1],
+                [1, 0, 0, 0],
+                [0, 0, 1, 0],
+            ],
+        },
+    )
+
+
 def create_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Pack fixed AI accelerator graph workloads")
+    parser = argparse.ArgumentParser(
+        description="Pack AI accelerator workloads, task-spec demos, and demo-v1 assets"
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
         "--workload",
@@ -332,6 +431,7 @@ def create_parser() -> argparse.ArgumentParser:
         ],
     )
     mode.add_argument("--task-spec")
+    mode.add_argument("--demo-v1", action="store_true")
     parser.add_argument("--out-dir", required=True)
     return parser
 
@@ -344,6 +444,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.task_spec is not None:
         task_name = lower_build_task_spec(pathlib.Path(args.task_spec), out_dir)
         print(f"packed task_spec={args.task_spec} task_name={task_name} out_dir={out_dir}")
+        return 0
+
+    if args.demo_v1:
+        build_demo_v1(out_dir)
+        print(f"packed demo_v1 out_dir={out_dir}")
         return 0
 
     if args.workload in ("cnn", "all"):

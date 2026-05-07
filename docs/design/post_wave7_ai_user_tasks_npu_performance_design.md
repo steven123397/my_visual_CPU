@@ -109,6 +109,24 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
   `--ai-profile-manifest` 路径，方便在 host-only gate 里继续锁住 timing / DMA /
   per-op 摘要。
 
+为了展示窗口前的 `Demo V1` 收口，当前推荐的固定展示矩阵也已经收窄成同一组正式入口：
+
+- `bounded_dynamic_gemm_v1`
+- `bounded_dynamic_cnn_v1`
+- `bounded_dynamic_tiny_model_v1`
+- `static_tiny_attention_v1`
+- `guest_ai_accel_demo`
+
+其中：
+
+- 前 4 条是当前真正开放的 task-spec user-task 入口；
+- `guest_ai_accel_demo` 不是新的 user-task kind，而是 guest/host bridge workload；
+- 推荐演示顺序固定为 `guest_ai_accel_demo -> dynamic_gemm -> dynamic_cnn ->
+  dynamic_tiny_model`，`static_tiny_attention_v1` 作为可选第五条正向样例保留；
+- fail-closed 观察固定使用一条带未知 top-level key 的
+  `bounded_dynamic_gemm_v1` 样例，让 host-side importer 直接拒绝，而不是把错误推迟到
+  manifest / device。
+
 当前已经收口的用户任务入口是：
 
 - 先在 host-side `pack_graph.py` 打开一个受限 `task spec` 入口。
@@ -159,6 +177,15 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 - 任意 op graph authoring
 - 独立 frontend-side graph interpreter
 - 新的 guest ABI 或新的设备 descriptor 语义
+
+同样地，`Demo V1` 的完成定义也只到“固定样例可复现、固定 fail-closed 可观察”：
+
+- 可以把 `task spec -> pack -> run -> summary` 走通成固定入口；
+- 可以稳定展示 4 条推荐正向样例和 1 条 fail-closed 样例；
+- 可以用 `guest_ai_accel_demo` 证明 guest/host bridge 仍然和 host profile contract 同源。
+
+它不代表任意 task authoring、广义 NPU runtime、任意 attention family、动态 sequence、
+KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap scheduler 已完成。
 
 ### 接口 / 数据 / 契约
 
@@ -325,6 +352,25 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
   - 未来 Linux 集成门禁：
     当前仍未启动；等 Linux-facing driver 真正打开后，再单独补更宽的 integration gate，
     不提前混入这一阶段的 host/guest smoke。
+
+### Demo V1 展示路径
+
+展示窗口前，当前固定的 `Demo V1` 入口是：
+
+- `python3 workloads/ai_proto/pack_graph.py --demo-v1 --out-dir workloads/ai_proto/generated/demo_v1`
+- `python3 workloads/ai_proto/run_demo_v1.py --out-dir workloads/ai_proto/generated/demo_v1`
+
+其中 `run_demo_v1.py` 只固定做三件事：
+
+1. 先生成 `Demo V1` 展示资产；
+2. 再运行 4 条推荐正向样例：
+   `guest_ai_accel_demo`、`custom_dynamic_gemm`、`custom_dynamic_cnn`、
+   `custom_dynamic_tiny_model`；
+3. 最后验证 1 条 fail-closed 样例：
+   `custom_dynamic_gemm_fail_closed.task_spec.json`。
+
+可选第五条正向样例 `custom_tiny_attention_static` 保留为单独 manifest 运行项，而不是默认脚本
+步骤，以避免把 stretch workload 误表述成当前演示闭环的必要前提。
 
 ## 风险与取舍
 

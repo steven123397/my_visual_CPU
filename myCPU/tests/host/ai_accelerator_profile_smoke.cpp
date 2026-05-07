@@ -1366,6 +1366,72 @@ bool expect_pack_and_profile_dynamic_cnn(const std::filesystem::path& temp_dir) 
                   "expected dynamic_cnn output to match packaged expectation");
 }
 
+bool expect_demo_v1_pack(const std::filesystem::path& temp_dir) {
+    const CommandResult pack =
+        run_command("python3 workloads/ai_proto/pack_graph.py --demo-v1 --out-dir " + temp_dir.string());
+    if (!expect(pack.exit_code == 0, "expected demo_v1 pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+    if (!expect_contains(pack.output, "packed demo_v1 out_dir=", "expected demo_v1 pack summary")) {
+        return false;
+    }
+
+    const std::filesystem::path guest_manifest = temp_dir / "guest_ai_accel_demo.manifest";
+    const std::filesystem::path gemm_spec = temp_dir / "custom_dynamic_gemm.task_spec.json";
+    const std::filesystem::path cnn_spec = temp_dir / "custom_dynamic_cnn.task_spec.json";
+    const std::filesystem::path tiny_spec = temp_dir / "custom_dynamic_tiny_model.task_spec.json";
+    const std::filesystem::path attention_spec = temp_dir / "custom_tiny_attention_static.task_spec.json";
+    const std::filesystem::path fail_closed_spec =
+        temp_dir / "custom_dynamic_gemm_fail_closed.task_spec.json";
+    const std::filesystem::path gemm_manifest = temp_dir / "custom_dynamic_gemm.manifest";
+    const std::filesystem::path cnn_manifest = temp_dir / "custom_dynamic_cnn.manifest";
+    const std::filesystem::path tiny_manifest = temp_dir / "custom_dynamic_tiny_model.manifest";
+    const std::filesystem::path attention_manifest = temp_dir / "custom_tiny_attention_static.manifest";
+
+    return expect_file_exists(guest_manifest, "expected demo_v1 guest bridge manifest") &&
+           expect_file_exists(gemm_spec, "expected demo_v1 GEMM task spec") &&
+           expect_file_exists(cnn_spec, "expected demo_v1 CNN task spec") &&
+           expect_file_exists(tiny_spec, "expected demo_v1 tiny-model task spec") &&
+           expect_file_exists(attention_spec, "expected demo_v1 attention task spec") &&
+           expect_file_exists(fail_closed_spec, "expected demo_v1 fail-closed task spec") &&
+           expect_file_exists(gemm_manifest, "expected demo_v1 GEMM manifest") &&
+           expect_file_exists(cnn_manifest, "expected demo_v1 CNN manifest") &&
+           expect_file_exists(tiny_manifest, "expected demo_v1 tiny-model manifest") &&
+           expect_file_exists(attention_manifest, "expected demo_v1 attention manifest");
+}
+
+bool expect_demo_v1_run_script(const std::filesystem::path& temp_dir) {
+    const CommandResult run = run_command(
+        "python3 workloads/ai_proto/run_demo_v1.py --out-dir " + temp_dir.string());
+    if (!expect(run.exit_code == 0, "expected demo_v1 run script to succeed")) {
+        std::fprintf(stderr, "%s\n", run.output.c_str());
+        return false;
+    }
+    return expect_contains(run.output, "== demo_v1 pack ==", "expected demo_v1 run script pack section") &&
+           expect_contains(run.output,
+                           "== guest_ai_accel_demo summary ==",
+                           "expected demo_v1 run script guest bridge section") &&
+           expect_contains(run.output,
+                           "== custom_dynamic_gemm summary ==",
+                           "expected demo_v1 run script GEMM section") &&
+           expect_contains(run.output,
+                           "== custom_dynamic_cnn summary ==",
+                           "expected demo_v1 run script CNN section") &&
+           expect_contains(run.output,
+                           "== custom_dynamic_tiny_model summary ==",
+                           "expected demo_v1 run script tiny-model section") &&
+           expect_contains(run.output,
+                           "== demo_v1 fail-closed ==",
+                           "expected demo_v1 run script fail-closed section") &&
+           expect_contains(run.output,
+                           "demo_v1 summary: packed fixed assets, ran 4 positive samples, and verified 1 fail-closed sample",
+                           "expected demo_v1 run script final summary") &&
+           expect_contains(run.output,
+                           "demo_v1 note: custom_tiny_attention_static.manifest was packed but not run",
+                           "expected demo_v1 run script optional attention note");
+}
+
 }  // namespace
 
 int main() {
@@ -1373,14 +1439,17 @@ int main() {
         const std::filesystem::path profile_mk = "workloads/ai_proto/profile.mk";
         const std::filesystem::path pack_graph = "workloads/ai_proto/pack_graph.py";
         const std::filesystem::path readme = "workloads/ai_proto/README.md";
+        const std::filesystem::path demo_v1_runner = "workloads/ai_proto/run_demo_v1.py";
 
         if (!expect_file_exists(profile_mk, "ai profile smoke expects workload profile") ||
             !expect_file_exists(pack_graph, "ai profile smoke expects packer script") ||
+            !expect_file_exists(demo_v1_runner, "ai profile smoke expects demo_v1 runner") ||
             !expect_file_exists(readme, "ai profile smoke expects ai workload readme")) {
             return 1;
         }
 
         const std::string profile_text = read_text_file(profile_mk);
+        const std::string readme_text = read_text_file(readme);
         const CommandResult make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=cnn");
         const CommandResult tiny_model_make_run = run_command(
@@ -1432,7 +1501,22 @@ int main() {
                              "expected dynamic_cnn dry-run manifest argument") ||
             !expect_contains(tiny_attention_make_run.output,
                              "--ai-profile-manifest workloads/ai_proto/generated/tiny_attention_static.manifest",
-                             "expected tiny_attention_static dry-run manifest argument")) {
+                             "expected tiny_attention_static dry-run manifest argument") ||
+            !expect_contains(readme_text,
+                             "python3 workloads/ai_proto/pack_graph.py --demo-v1 --out-dir workloads/ai_proto/generated/demo_v1",
+                             "expected ai workload readme to document demo_v1 pack command") ||
+            !expect_contains(readme_text,
+                             "python3 workloads/ai_proto/run_demo_v1.py --out-dir workloads/ai_proto/generated/demo_v1",
+                             "expected ai workload readme to document demo_v1 run command") ||
+            !expect_contains(readme_text,
+                             "./mycpu --ai-profile-manifest workloads/ai_proto/generated/demo_v1/custom_dynamic_gemm.manifest",
+                             "expected ai workload readme to document demo_v1 manifest run command") ||
+            !expect_contains(readme_text,
+                             "custom_dynamic_gemm_fail_closed.task_spec.json",
+                             "expected ai workload readme to document demo_v1 fail-closed example") ||
+            !expect_contains(readme_text,
+                             "guest_ai_accel_demo.manifest",
+                             "expected ai workload readme to document guest bridge demo asset")) {
             std::fprintf(stderr, "%s\n", make_run.output.c_str());
             return 1;
         }
@@ -2044,6 +2128,12 @@ int main() {
                                           task_spec_malformed_dir,
                                           "static_tiny_attention_v1 value_vector item 1 must be finite",
                                           "expected non-finite fp32 attention task-spec to fail") &&
+            expect_demo_v1_pack(temp_dir / "demo_v1") &&
+            expect_demo_v1_run_script(temp_dir / "demo_v1_run") &&
+            expect_task_spec_pack_failure(temp_dir / "demo_v1" / "custom_dynamic_gemm_fail_closed.task_spec.json",
+                                          temp_dir / "demo_v1",
+                                          "bounded_dynamic_gemm_v1 task spec has unexpected top-level key: unexpected_extra",
+                                          "expected demo_v1 fail-closed task-spec to fail") &&
             expect_pack_and_profile(temp_dir,
                                     "cnn",
                                     "name=cnn",
