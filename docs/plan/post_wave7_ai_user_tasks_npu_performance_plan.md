@@ -251,7 +251,8 @@
   `profile_summary()` 继续共用同一份 graph-package 事实来源。
 - 当前同一合同也已继续补上 graph topology / transfer-plan 摘要：
   `last_submission_op_count / dependency_count / root_op_count / leaf_op_count /
-  load_entry_count / store_entry_count`。对应 `ai_accelerator_gemm_smoke`、
+  dependency_depth / max_fanin / max_fanout / load_entry_count / store_entry_count`。
+  对应 `ai_accelerator_gemm_smoke`、
   `ai_accelerator_cnn_smoke`、`ai_accel_guest_smoke` 与
   `ai_accelerator_profile_smoke` 现在会把 single-op、multi-op、guest bridge 和 manifest
   readback 四类代表路径一起锁住，继续把 queue/overlap 之前的结构摘要收口成设备自有

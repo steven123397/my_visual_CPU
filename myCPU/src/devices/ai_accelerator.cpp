@@ -79,6 +79,84 @@ uint32_t dependency_leaf_op_count(const AiGraphPackage& package) {
     return count;
 }
 
+uint32_t dependency_max_fanin(const AiGraphPackage& package) {
+    if (package.ops.empty()) {
+        return 0;
+    }
+    std::vector<uint32_t> indegree(package.ops.size(), 0);
+    for (const AiDependencyEdge& edge : package.dependencies) {
+        if (edge.target_op < indegree.size()) {
+            ++indegree[edge.target_op];
+        }
+    }
+    uint32_t max_fanin = 0;
+    for (uint32_t degree : indegree) {
+        max_fanin = std::max(max_fanin, degree);
+    }
+    return max_fanin;
+}
+
+uint32_t dependency_max_fanout(const AiGraphPackage& package) {
+    if (package.ops.empty()) {
+        return 0;
+    }
+    std::vector<uint32_t> outdegree(package.ops.size(), 0);
+    for (const AiDependencyEdge& edge : package.dependencies) {
+        if (edge.source_op < outdegree.size()) {
+            ++outdegree[edge.source_op];
+        }
+    }
+    uint32_t max_fanout = 0;
+    for (uint32_t degree : outdegree) {
+        max_fanout = std::max(max_fanout, degree);
+    }
+    return max_fanout;
+}
+
+uint32_t dependency_max_depth(const AiGraphPackage& package) {
+    if (package.ops.empty()) {
+        return 0;
+    }
+    std::vector<uint32_t> indegree(package.ops.size(), 0);
+    std::vector<std::vector<uint32_t>> adjacency(package.ops.size());
+    for (const AiDependencyEdge& edge : package.dependencies) {
+        if (edge.source_op < adjacency.size() && edge.target_op < indegree.size()) {
+            adjacency[edge.source_op].push_back(edge.target_op);
+            ++indegree[edge.target_op];
+        }
+    }
+
+    std::vector<uint32_t> ready{};
+    ready.reserve(package.ops.size());
+    std::vector<uint32_t> depth(package.ops.size(), 1);
+    for (uint32_t op = 0; op < indegree.size(); ++op) {
+        if (indegree[op] == 0) {
+            ready.push_back(op);
+        }
+    }
+
+    size_t cursor = 0;
+    uint32_t max_depth = ready.empty() ? 0 : 1;
+    while (cursor < ready.size()) {
+        const uint32_t source = ready[cursor++];
+        max_depth = std::max(max_depth, depth[source]);
+        for (uint32_t target : adjacency[source]) {
+            depth[target] = std::max(depth[target], depth[source] + 1);
+            if (indegree[target] > 0) {
+                --indegree[target];
+                if (indegree[target] == 0) {
+                    ready.push_back(target);
+                }
+            }
+        }
+    }
+
+    if (ready.size() != package.ops.size()) {
+        return 0;
+    }
+    return max_depth;
+}
+
 void count_tensor_roles(const AiGraphPackage& package,
                         uint32_t& input_count,
                         uint32_t& output_count,
@@ -470,6 +548,12 @@ void AiAccelerator::update_profile_summary_submission_compile_contract() {
         active_submission_.profile_root_op_count;
     profile_summary_.last_submission_leaf_op_count =
         active_submission_.profile_leaf_op_count;
+    profile_summary_.last_submission_dependency_depth =
+        active_submission_.profile_dependency_depth;
+    profile_summary_.last_submission_max_fanin =
+        active_submission_.profile_max_fanin;
+    profile_summary_.last_submission_max_fanout =
+        active_submission_.profile_max_fanout;
     profile_summary_.last_submission_load_entry_count =
         active_submission_.profile_load_entry_count;
     profile_summary_.last_submission_store_entry_count =
@@ -780,6 +864,9 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     const uint32_t profile_dependency_count = saturating_u32(package.dependencies.size());
     const uint32_t profile_root_op_count = dependency_root_op_count(package);
     const uint32_t profile_leaf_op_count = dependency_leaf_op_count(package);
+    const uint32_t profile_dependency_depth = dependency_max_depth(package);
+    const uint32_t profile_max_fanin = dependency_max_fanin(package);
+    const uint32_t profile_max_fanout = dependency_max_fanout(package);
     uint32_t profile_load_entry_count = 0;
     uint32_t profile_store_entry_count = 0;
     uint32_t profile_load_plan_bytes = 0;
@@ -913,6 +1000,9 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     active_submission_.profile_dependency_count = profile_dependency_count;
     active_submission_.profile_root_op_count = profile_root_op_count;
     active_submission_.profile_leaf_op_count = profile_leaf_op_count;
+    active_submission_.profile_dependency_depth = profile_dependency_depth;
+    active_submission_.profile_max_fanin = profile_max_fanin;
+    active_submission_.profile_max_fanout = profile_max_fanout;
     active_submission_.profile_load_entry_count = profile_load_entry_count;
     active_submission_.profile_store_entry_count = profile_store_entry_count;
     active_submission_.profile_load_plan_bytes = profile_load_plan_bytes;

@@ -81,6 +81,9 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
                                         uint32_t expected_dependency_count,
                                         uint32_t expected_root_op_count,
                                         uint32_t expected_leaf_op_count,
+                                        uint32_t expected_dependency_depth,
+                                        uint32_t expected_max_fanin,
+                                        uint32_t expected_max_fanout,
                                         uint32_t expected_load_entry_count,
                                         uint32_t expected_store_entry_count,
                                         uint32_t expected_load_plan_bytes,
@@ -124,6 +127,9 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
            expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
            expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
            expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
+           expect(summary.last_submission_dependency_depth == expected_dependency_depth, context) &&
+           expect(summary.last_submission_max_fanin == expected_max_fanin, context) &&
+           expect(summary.last_submission_max_fanout == expected_max_fanout, context) &&
            expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
            expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
            expect(summary.last_submission_load_plan_bytes == expected_load_plan_bytes, context) &&
@@ -260,6 +266,9 @@ int main() {
                                              "guest AI accel demo should start with zero DMA breakdown") ||
             !expect_submission_compile_contract(initial_summary,
                                                AiShapeMode::Static,
+                                               0,
+                                               0,
+                                               0,
                                                0,
                                                0,
                                                0,
@@ -658,6 +667,9 @@ int main() {
                                                1,
                                                1,
                                                1,
+                                               0,
+                                               0,
+                                               1,
                                                1,
                                                12,
                                                4,
@@ -742,6 +754,9 @@ int main() {
                                              "guest AI accel demo should clear DMA breakdown after reset") ||
             !expect_submission_compile_contract(reset_summary,
                                                AiShapeMode::Static,
+                                               0,
+                                               0,
+                                               0,
                                                0,
                                                0,
                                                0,

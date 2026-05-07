@@ -122,6 +122,9 @@ struct AiAcceleratorProfileSummary {
     uint32_t last_submission_dependency_count{0};
     uint32_t last_submission_root_op_count{0};
     uint32_t last_submission_leaf_op_count{0};
+    uint32_t last_submission_dependency_depth{0};
+    uint32_t last_submission_max_fanin{0};
+    uint32_t last_submission_max_fanout{0};
     uint32_t last_submission_load_entry_count{0};
     uint32_t last_submission_store_entry_count{0};
     uint32_t last_submission_load_plan_bytes{0};
@@ -206,6 +209,9 @@ struct AiActiveSubmissionState {
     uint32_t profile_dependency_count{0};
     uint32_t profile_root_op_count{0};
     uint32_t profile_leaf_op_count{0};
+    uint32_t profile_dependency_depth{0};
+    uint32_t profile_max_fanin{0};
+    uint32_t profile_max_fanout{0};
     uint32_t profile_load_entry_count{0};
     uint32_t profile_store_entry_count{0};
     uint32_t profile_load_plan_bytes{0};

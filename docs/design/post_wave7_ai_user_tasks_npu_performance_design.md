@@ -265,8 +265,9 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
     graph package 角色分布收成设备自有 host-side contract，而不是让 direct device、
     guest bridge 和 manifest/profile harness 各自手抄一套角色猜测。
   - 同一份合同还可以继续保留不改变执行语义的 graph topology / transfer-plan 摘要：
-    `op_count / dependency_count / root_op_count / leaf_op_count / load_entry_count /
-    store_entry_count`。这类字段的作用是把“本次 submission 究竟是单 op 还是多 op、是否有
+    `op_count / dependency_count / root_op_count / leaf_op_count / dependency_depth /
+    max_fanin / max_fanout / load_entry_count / store_entry_count`。这类字段的作用是把
+    “本次 submission 究竟是单 op 还是多 op、dependency 链有多深、图结构扇入扇出是否发生变化、是否有
     dependency 链、系统 RAM <-> scratchpad 传输了几类 tensor”收成 host-side 可测事实来源，
     为后续 queue / overlap-ready staged metadata 继续留窄边界。
     如果还要把 transfer-plan contract 再细一层，也可以继续补

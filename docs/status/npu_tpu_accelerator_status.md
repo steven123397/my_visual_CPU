@@ -216,7 +216,8 @@
   设备 `profile_summary()` 事实来源。
 - `2026-05-07` 同日设备自有 `profile_summary()` 还继续补上了 graph topology /
   transfer-plan 摘要：
-  `op_count / dependency_count / root_op_count / leaf_op_count / load_entry_count / store_entry_count`。
+  `op_count / dependency_count / root_op_count / leaf_op_count / dependency_depth /
+  max_fanin / max_fanout / load_entry_count / store_entry_count`。
   对应的 `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
   `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 single-op、multi-op、
   guest bridge 与 manifest readback 四类代表路径，继续把 queue / overlap 之前的结构摘要

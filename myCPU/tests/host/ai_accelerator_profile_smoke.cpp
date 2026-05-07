@@ -401,6 +401,9 @@ struct ExpectedManifestCompileContract {
     uint32_t dependency_count{0};
     uint32_t root_op_count{0};
     uint32_t leaf_op_count{0};
+    uint32_t dependency_depth{0};
+    uint32_t max_fanin{0};
+    uint32_t max_fanout{0};
     uint32_t load_entry_count{0};
     uint32_t store_entry_count{0};
     uint32_t load_plan_bytes{0};
@@ -463,6 +466,78 @@ ExpectedManifestCompileContract expected_manifest_compile_contract(const std::fi
             }
         }
         return count;
+    };
+    auto count_max_fanin = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> indegree(package.ops.size(), 0);
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.target_op < indegree.size()) {
+                ++indegree[edge.target_op];
+            }
+        }
+        uint32_t max_fanin = 0;
+        for (uint32_t degree : indegree) {
+            max_fanin = std::max(max_fanin, degree);
+        }
+        return max_fanin;
+    };
+    auto count_max_fanout = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> outdegree(package.ops.size(), 0);
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.source_op < outdegree.size()) {
+                ++outdegree[edge.source_op];
+            }
+        }
+        uint32_t max_fanout = 0;
+        for (uint32_t degree : outdegree) {
+            max_fanout = std::max(max_fanout, degree);
+        }
+        return max_fanout;
+    };
+    auto count_max_depth = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> indegree(package.ops.size(), 0);
+        std::vector<std::vector<uint32_t>> adjacency(package.ops.size());
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.source_op < adjacency.size() && edge.target_op < indegree.size()) {
+                adjacency[edge.source_op].push_back(edge.target_op);
+                ++indegree[edge.target_op];
+            }
+        }
+        std::vector<uint32_t> ready{};
+        ready.reserve(package.ops.size());
+        std::vector<uint32_t> depth(package.ops.size(), 1);
+        for (uint32_t op = 0; op < indegree.size(); ++op) {
+            if (indegree[op] == 0) {
+                ready.push_back(op);
+            }
+        }
+        size_t cursor = 0;
+        uint32_t max_depth = ready.empty() ? 0 : 1;
+        while (cursor < ready.size()) {
+            const uint32_t source = ready[cursor++];
+            max_depth = std::max(max_depth, depth[source]);
+            for (uint32_t target : adjacency[source]) {
+                depth[target] = std::max(depth[target], depth[source] + 1);
+                if (indegree[target] > 0) {
+                    --indegree[target];
+                    if (indegree[target] == 0) {
+                        ready.push_back(target);
+                    }
+                }
+            }
+        }
+        if (ready.size() != package.ops.size()) {
+            return 0;
+        }
+        return max_depth;
     };
     auto count_transfers = [](const AiGraphPackage& package,
                               uint32_t& load_entries,
@@ -528,6 +603,9 @@ ExpectedManifestCompileContract expected_manifest_compile_contract(const std::fi
     expected.dependency_count = static_cast<uint32_t>(packaged.dependencies.size());
     expected.root_op_count = count_roots(packaged);
     expected.leaf_op_count = count_leaves(packaged);
+    expected.dependency_depth = count_max_depth(packaged);
+    expected.max_fanin = count_max_fanin(packaged);
+    expected.max_fanout = count_max_fanout(packaged);
     expected.graph_package_bytes = graph_package_bytes;
     expected.runtime_shape_table_offset =
         packaged.shape_mode == AiShapeMode::DynamicBounded ? align_up_u32(graph_package_bytes, 64) : 0;
@@ -582,6 +660,9 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
                                         uint32_t expected_dependency_count,
                                         uint32_t expected_root_op_count,
                                         uint32_t expected_leaf_op_count,
+                                        uint32_t expected_dependency_depth,
+                                        uint32_t expected_max_fanin,
+                                        uint32_t expected_max_fanout,
                                         uint32_t expected_load_entry_count,
                                         uint32_t expected_store_entry_count,
                                         uint32_t expected_load_plan_bytes,
@@ -625,6 +706,9 @@ bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summa
            expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
            expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
            expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
+           expect(summary.last_submission_dependency_depth == expected_dependency_depth, context) &&
+           expect(summary.last_submission_max_fanin == expected_max_fanin, context) &&
+           expect(summary.last_submission_max_fanout == expected_max_fanout, context) &&
            expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
            expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
            expect(summary.last_submission_load_plan_bytes == expected_load_plan_bytes, context) &&
@@ -681,6 +765,9 @@ bool expect_empty_submission_compile_contract(const AiAcceleratorProfileSummary&
                                               const char* context) {
     return expect_submission_compile_contract(summary,
                                               AiShapeMode::Static,
+                                              0,
+                                              0,
+                                              0,
                                               0,
                                               0,
                                               0,
@@ -799,6 +886,9 @@ bool expect_manifest_device_profile_summary(const std::filesystem::path& manifes
                                               expected.dependency_count,
                                               expected.root_op_count,
                                               expected.leaf_op_count,
+                                              expected.dependency_depth,
+                                              expected.max_fanin,
+                                              expected.max_fanout,
                                               expected.load_entry_count,
                                               expected.store_entry_count,
                                               expected.load_plan_bytes,
@@ -910,6 +1000,9 @@ bool expect_manifest_rerun_refresh(const std::filesystem::path& first_manifest,
                                               expected.dependency_count,
                                               expected.root_op_count,
                                               expected.leaf_op_count,
+                                              expected.dependency_depth,
+                                              expected.max_fanin,
+                                              expected.max_fanout,
                                               expected.load_entry_count,
                                               expected.store_entry_count,
                                               expected.load_plan_bytes,
