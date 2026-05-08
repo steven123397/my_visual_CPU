@@ -39,26 +39,28 @@
     `标准 Linux 发行版平台` 五阶段长线活跃计划。
 17. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
     `Wave 7` 阶段性收口后的 `用户自定义 AI 任务 + NPU 性能模型` 新主线设计入口。
-18. [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
-    `用户自定义 AI 任务 + NPU 性能模型` 新主线的当前活跃计划。
-19. [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
+18. [plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
+    `用户自定义 AI 任务 + NPU 性能模型` 第一阶段完成计划归档。
+19. [showcase/post_wave7_ai_demo_v1_guide.md](showcase/post_wave7_ai_demo_v1_guide.md)
+    `Post-Wave 7 AI demo v1` 的最短演示路径、预期输出与最小验证矩阵。
+20. [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
     `Post-Wave 7` 前端从 `demo workspace v1` 重构为 `Lab workbench` 的当前设计入口。
-20. [plan/history_plan.md#post-wave7-frontend-lab-product-plan](plan/history_plan.md#post-wave7-frontend-lab-product-plan)
+21. [plan/history_plan.md#post-wave7-frontend-lab-product-plan](plan/history_plan.md#post-wave7-frontend-lab-product-plan)
     `Post-Wave 7` 前端 `Lab workbench` 第一轮重构完成归档。
-21. [plan/history_plan.md#post-wave7-frontend-lab-completion-plan](plan/history_plan.md#post-wave7-frontend-lab-completion-plan)
+22. [plan/history_plan.md#post-wave7-frontend-lab-completion-plan](plan/history_plan.md#post-wave7-frontend-lab-completion-plan)
     `Post-Wave 7` 前端 `Lab workbench` 第二轮补完完成归档，覆盖真实 Linux Image、
     Scenario controls、Linux topic/live 连通和 JIT runtime evidence topic。
-22. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
+23. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
     向量扩展与 ML workload 的统一设计边界。
-23. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
+24. [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
     独立 `MMIO NPU / TPU-like` AI accelerator 方向设计。
-24. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
+25. [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
     `debug_session / protocol + frontend` 设计边界。
-25. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
+26. [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
     Spike 外部差分验证边界。
-26. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
+27. [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
     主线 `Wave 7` 远端云服务器开发/验证环境的当前活跃计划。
-27. [plan/history_plan.md](plan/history_plan.md)
+28. [plan/history_plan.md](plan/history_plan.md)
     已完成计划的统一归档入口。
 
 ## 专题入口
@@ -81,7 +83,9 @@
 - `AI accelerator / NPU`
   - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
   - [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
-  - [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
+  - [plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
+  - [showcase/post_wave7_ai_demo_v1_guide.md](showcase/post_wave7_ai_demo_v1_guide.md)
+  - [plan/history_plan.md#post-wave7-ai-demo-v1-plan](plan/history_plan.md#post-wave7-ai-demo-v1-plan)
   - [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
   - [plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [plan/history_plan.md#npu-tpu-accelerator-wave3-plan](plan/history_plan.md#npu-tpu-accelerator-wave3-plan)

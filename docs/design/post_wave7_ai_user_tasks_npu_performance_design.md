@@ -20,8 +20,8 @@
 - 状态文档：
   - [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
   - [../status/mainline_status.md](../status/mainline_status.md)
-- 当前活跃计划：
-  - [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
+- 已完成计划：
+  - [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
 - 相关设计：
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
@@ -109,6 +109,24 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
   `--ai-profile-manifest` 路径，方便在 host-only gate 里继续锁住 timing / DMA /
   per-op 摘要。
 
+为了展示窗口前的 `Demo V1` 收口，当前推荐的固定展示矩阵也已经收窄成同一组正式入口：
+
+- `bounded_dynamic_gemm_v1`
+- `bounded_dynamic_cnn_v1`
+- `bounded_dynamic_tiny_model_v1`
+- `static_tiny_attention_v1`
+- `guest_ai_accel_demo`
+
+其中：
+
+- 前 4 条是当前真正开放的 task-spec user-task 入口；
+- `guest_ai_accel_demo` 不是新的 user-task kind，而是 guest/host bridge workload；
+- 推荐演示顺序固定为 `guest_ai_accel_demo -> dynamic_gemm -> dynamic_cnn ->
+  dynamic_tiny_model`，`static_tiny_attention_v1` 作为可选第五条正向样例保留；
+- fail-closed 观察固定使用一条带未知 top-level key 的
+  `bounded_dynamic_gemm_v1` 样例，让 host-side importer 直接拒绝，而不是把错误推迟到
+  manifest / device。
+
 当前已经收口的用户任务入口是：
 
 - 先在 host-side `pack_graph.py` 打开一个受限 `task spec` 入口。
@@ -160,6 +178,15 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 - 独立 frontend-side graph interpreter
 - 新的 guest ABI 或新的设备 descriptor 语义
 
+同样地，`Demo V1` 的完成定义也只到“固定样例可复现、固定 fail-closed 可观察”：
+
+- 可以把 `task spec -> pack -> run -> summary` 走通成固定入口；
+- 可以稳定展示 4 条推荐正向样例和 1 条 fail-closed 样例；
+- 可以用 `guest_ai_accel_demo` 证明 guest/host bridge 仍然和 host profile contract 同源。
+
+它不代表任意 task authoring、广义 NPU runtime、任意 attention family、动态 sequence、
+KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap scheduler 已完成。
+
 ### 接口 / 数据 / 契约
 
 - **用户任务合同**
@@ -181,6 +208,14 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
 
 - **compile / lower 合同**
   - lowering 结果必须继续落到统一 graph package、tensor table、memory plan 和 submission ABI。
+  - 当前 host-side pack / importer 还会额外导出 `<name>.memory_plan.txt` 可读 sidecar，
+    用同一份 graph package memory-plan 事实来源回显 `shape_mode`、scratchpad budget、
+    tensor 数量和逐 tensor layout；它只用于 host smoke / compile-profile contract 校验，
+    不是新的设备 ABI 或第二套 layout 来源。
+  - 对 bounded dynamic workload，当前 host-side pack / importer 还会额外导出
+    `<name>.resolved_memory_plan.txt`，把共享 runtime-shape resolve 之后的真实
+    tensor byte_size / scratchpad_bytes 也收成可读 sidecar；它同样必须继续和共享
+    graph-package + runtime-shape 合同共源，不能在 Python 打包侧发明第二套运行时 layout 语义。
   - 非法 shape、超预算 scratchpad、unsupported op / dtype / quantization 继续 fail-closed；
     当前 `int8` payload 也显式拒绝 JSON `bool` 伪装成整数。
   - 当前受限浮点输入面也继续 fail-closed：`bounded_dynamic_tiny_model_v1` 的
@@ -218,13 +253,65 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
   - 同一合同还应保留最近一次 submission 的 outcome 摘要：
     `fault / retired_ops / bytes_moved`。这样 host-side smoke 可以同时锁住
     “阶段画像”和“本次完成结果”，而不需要把这类收口强行扩大成新的 guest ABI。
+  - 同一份 `AiAcceleratorProfileSummary` 现在也应携带最近一次真正进入设备 submission
+    contract 的 compile/runtime-shape 摘要：
+    `shape_mode / runtime_shape_count / tensor_count / memory_plan_entries /
+    dynamic_tensor_count / scratchpad_budget_bytes`。对 bounded dynamic workload，
+    这里要保留“原始 graph package 仍是 dynamic_bounded，本次 submission 带了多少条
+    runtime-shape entry”的事实，而不是被 resolved package 漂成另一套 host-only 口径。
+    同一组摘要也可以继续补成 tensor-role breakdown，例如
+    `input_tensor_count / output_tensor_count / weight_tensor_count /
+    constant_tensor_count / intermediate_tensor_count`，把最近一次 submission 的
+    graph package 角色分布收成设备自有 host-side contract，而不是让 direct device、
+    guest bridge 和 manifest/profile harness 各自手抄一套角色猜测。
+  - 同一份合同还可以继续保留不改变执行语义的 graph topology / transfer-plan 摘要：
+    `op_count / dependency_count / root_op_count / leaf_op_count / dependency_depth /
+    max_fanin / max_fanout / load_entry_count / store_entry_count`。这类字段的作用是把
+    “本次 submission 究竟是单 op 还是多 op、dependency 链有多深、图结构扇入扇出是否发生变化、是否有
+    dependency 链、系统 RAM <-> scratchpad 传输了几类 tensor”收成 host-side 可测事实来源，
+    为后续 queue / overlap-ready staged metadata 继续留窄边界。
+    如果还要把 transfer-plan contract 再细一层，也可以继续补
+    `load_plan_bytes / store_plan_bytes`，把最近一次 submission 计划从系统 RAM 搬入 /
+    搬出的 tensor byte budget 一起收成设备自有 host-side contract，同时继续和运行后
+    `dma_load/store_bytes` 区分开：前者是 graph package 级计划摘要，后者是本次执行后的结果摘要。
+    同一条 compile contract 也可以继续补成 memory-plan 总量摘要，例如
+    `memory_plan_total_bytes / memory_plan_total_scratchpad_bytes /
+    memory_plan_scratchpad_span_bytes`，让 direct device、guest bridge 与
+    manifest/profile 路径都能直接读取最近一次有效 submission 的总 layout budget，
+    而不必在各自 harness 里重复手算 memory-plan 汇总；其中
+    `scratchpad_span_bytes` 明确表示 memory-plan 里的最大
+    `scratchpad_offset + scratchpad_bytes`，故意与简单求和的
+    `memory_plan_total_scratchpad_bytes`、以及运行期聚合的 `scratchpad_peak_bytes`
+    区分开。
+  - 如果还要继续往 queue-ready 方向收窄，可以优先补最近一次 submission 创建时的
+    queue snapshot，例如 `submission_base / completion_base / queue_depth /
+    submission_queue_size / completion_queue_size / queue_configured`。这类字段只回答
+    “设备当时拿到的是哪种 ring 配置”，不回答 overlap、outstanding queue 调度或 timeline
+    隐藏。
+  - 如果还要把 queue-ready staged metadata 再细化一层，也可以继续补
+    `submission_head / submission_tail / completion_head / completion_tail` snapshot。
+    这类字段同样只复述设备在开始执行该 submission 时看到的 ring 游标状态，
+    用来让 direct device、guest bridge 和 manifest/profile 路径共享同一份 queue lifecycle
+    事实来源，而不是把完成后的 MMIO 终态误当成 submission 创建时的 contract。
+  - 如果还要继续往 descriptor-ready 方向收窄，也可以优先补最近一次 submission 的
+    descriptor header 摘要，例如 `token / flags / graph_package_bytes /
+    runtime_shape_table_offset / runtime_shape_table_bytes / runtime_shape_table_addr /
+    source_tag`，以及 `input_table_addr / output_table_addr` 对应的
+    table access span bytes。这类字段只重复设备已经真实消费过的
+    submission header 事实，
+    用来让 direct device、guest bridge 和 manifest/profile 路径继续共用同一份
+    device-owned host-side contract，而不是在 host harness 再发明第二套 descriptor 文本口径。
   - 如果当前切片还要继续细化 `timed-simple`，优先补最近一次 submission 的
     `dma_load/store cycles` 与 `dma_load/store bytes` 细分画像，而不是直接跨进 overlap
     timeline 或更宽 guest ABI。
   - 这组字段除了被直接设备 smoke 校验，也应能在
     `Machine::run_ai_profile_manifest()` 完成后由设备自有 `profile_summary()` 原样读回，
-    这样 manifest/profile 路径就能复用同一份 host-side contract，而不必先扩 shared CLI
-    或 frontend 入口。
+    这样 manifest/profile 路径就能复用同一份完整的 compile / timing / outcome /
+    queue / descriptor host-side contract，而不必先扩 shared CLI 或 frontend 入口。
+  - 这组 compile/runtime-shape 摘要继续只作为 host-side / manifest-side 可读合同，
+    不新增 guest MMIO 字段，也不取代 `<name>.memory_plan.txt` /
+    `<name>.resolved_memory_plan.txt` 两层 sidecar；三者必须继续共用同一份 graph package +
+    runtime-shape resolve 事实来源。
   - 这条 manifest/profile readback 一致性至少要继续覆盖当前稳定 guardrail：
     `cnn`、`gemm`、`tiny_model`、`dynamic_gemm`、`dynamic_tiny_model`、`dynamic_cnn`、
     `custom_dynamic_gemm`、`custom_dynamic_cnn` 与 `tiny_attention_static`。
@@ -235,12 +322,15 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
     由于 `run_ai_profile_manifest()` 已先发 reset，这份 contract 也必须回到默认空状态，
     不能继续保留上一轮成功摘要冒充“最新设备状态”。
   - 如果 manifest 因 `max_ticks` 太小在设备执行期超时，host summary 应返回
-    `progress=timeout / fault_code=AI_ACCEL_FAULT_TIMEOUT`，同时设备 `profile_summary()`
-    仍保持“尚未完成 submission”的空摘要，而不是伪造一次完成态 profile。
+    `progress=timeout / fault_code=AI_ACCEL_FAULT_TIMEOUT`；设备 `profile_summary()` 不应
+    伪造一次完成态 timing/outcome / per-op profile，但对于已经被设备接受并进入
+    `active_submission` 的那次 submission，compile / descriptor / queue snapshot contract
+    仍应保留最近一次 accepted submission 的事实来源。
   - 如果 manifest 走到了设备执行期并以 completion fault 结束，host summary 与设备
     `profile_summary()` 必须共享同一份失败 submission 摘要：fault code、DMA/queue/completion
-    计数器要如实落下，但 `tile_count / scratchpad_peak_bytes / op summaries` 仍保持空，
-    不伪造成功 compute 画像。
+    计数器要如实落下；同一次 accepted submission 的 compile / descriptor contract 也要
+    保留下来，但 `tile_count / scratchpad_peak_bytes / op summaries` 仍保持空，不伪造成功
+    compute 画像。
   - 这一步仍不改动执行语义；它只把现有保守模型的关键参数收口成 host-side 可测事实来源，
     供后续 tile scheduler / overlap / queue depth 切片在不破坏现有基线的前提下逐步展开。
 
@@ -325,6 +415,25 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
   - 未来 Linux 集成门禁：
     当前仍未启动；等 Linux-facing driver 真正打开后，再单独补更宽的 integration gate，
     不提前混入这一阶段的 host/guest smoke。
+
+### Demo V1 展示路径
+
+展示窗口前，当前固定的 `Demo V1` 入口是：
+
+- `python3 workloads/ai_proto/pack_graph.py --demo-v1 --out-dir workloads/ai_proto/generated/demo_v1`
+- `python3 workloads/ai_proto/run_demo_v1.py --out-dir workloads/ai_proto/generated/demo_v1`
+
+其中 `run_demo_v1.py` 只固定做三件事：
+
+1. 先生成 `Demo V1` 展示资产；
+2. 再运行 4 条推荐正向样例：
+   `guest_ai_accel_demo`、`custom_dynamic_gemm`、`custom_dynamic_cnn`、
+   `custom_dynamic_tiny_model`；
+3. 最后验证 1 条 fail-closed 样例：
+   `custom_dynamic_gemm_fail_closed.task_spec.json`。
+
+可选第五条正向样例 `custom_tiny_attention_static` 保留为单独 manifest 运行项，而不是默认脚本
+步骤，以避免把 stretch workload 误表述成当前演示闭环的必要前提。
 
 ## 风险与取舍
 

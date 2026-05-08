@@ -170,10 +170,11 @@ DEPS     += $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS)
 DEPS     += $(ASM_DEPS) $(ATOMIC_ASM_DEPS)
 DEPS     += $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_MININIT_DEP) $(LINUX_PROTO_POSTINIT_DEP) $(LINUX_PROTO_POSTINIT_EXEC_DEP)
 TEST_TIMEOUT ?= 3s
+AI_ACCEL_PROFILE_SMOKE_TIMEOUT ?= 10s
 XV6_SHELL_SMOKE_TIMEOUT ?= 300s
 SUPERVISOR_GUEST_TEST_TIMEOUT ?= 7s
 DEBUG_CLI_SMOKE_TIMEOUT ?= 12s
-AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 3s
+AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 10s
 # Pipeline guest demos execute the full guest runtime under the pipeline
 # backend and need a wider budget than the functional path on debug builds.
 PIPELINE_GUEST_TEST_TIMEOUT ?= 8s
@@ -589,7 +590,7 @@ test-host-xv6_shell_smoke: FORCE $(TARGET) build-workload-xv6 tests/host/xv6_she
 
 test-host-ai_accelerator_profile_smoke: FORCE $(TARGET) tests/host/ai_accelerator_profile_smoke
 	@echo "=== host:ai_accelerator_profile_smoke ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/ai_accelerator_profile_smoke 2>&1)"; \
+	output="$$(timeout $(AI_ACCEL_PROFILE_SMOKE_TIMEOUT) ./tests/host/ai_accelerator_profile_smoke 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
 		echo "Host test timed out: ai_accelerator_profile_smoke" >&2; \

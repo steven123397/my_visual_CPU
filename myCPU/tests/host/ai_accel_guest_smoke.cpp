@@ -65,6 +65,132 @@ bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
            expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
 }
 
+bool expect_submission_lifecycle(const AiAcceleratorProfileSummary& summary,
+                                 bool expected_accepted,
+                                 bool expected_completed,
+                                 const char* context) {
+    return expect(summary.last_submission_accepted == expected_accepted, context) &&
+           expect(summary.last_submission_completed == expected_completed, context);
+}
+
+bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
+                                        AiShapeMode expected_shape_mode,
+                                        uint32_t expected_runtime_shape_count,
+                                        uint32_t expected_tensor_count,
+                                        uint32_t expected_memory_plan_entries,
+                                        uint32_t expected_memory_plan_total_bytes,
+                                        uint32_t expected_memory_plan_total_scratchpad_bytes,
+                                        uint32_t expected_memory_plan_scratchpad_span_bytes,
+                                        uint32_t expected_dynamic_tensor_count,
+                                        uint32_t expected_input_tensor_count,
+                                        uint32_t expected_output_tensor_count,
+                                        uint32_t expected_weight_tensor_count,
+                                        uint32_t expected_constant_tensor_count,
+                                        uint32_t expected_intermediate_tensor_count,
+                                        uint32_t expected_scratchpad_budget_bytes,
+                                        uint32_t expected_op_count,
+                                        uint32_t expected_dependency_count,
+                                        uint32_t expected_root_op_count,
+                                        uint32_t expected_leaf_op_count,
+                                        uint32_t expected_dependency_depth,
+                                        uint32_t expected_max_fanin,
+                                        uint32_t expected_max_fanout,
+                                        uint32_t expected_load_entry_count,
+                                        uint32_t expected_store_entry_count,
+                                        uint32_t expected_load_plan_bytes,
+                                        uint32_t expected_store_plan_bytes,
+                                        uint64_t expected_token,
+                                        uint32_t expected_flags,
+                                        uint64_t expected_graph_package_addr,
+                                        uint64_t expected_input_table_addr,
+                                        uint64_t expected_output_table_addr,
+                                        uint32_t expected_input_table_bytes,
+                                        uint32_t expected_output_table_bytes,
+                                        uint64_t expected_submission_base_snapshot,
+                                        uint64_t expected_completion_base_snapshot,
+                                        uint32_t expected_graph_package_bytes,
+                                        uint32_t expected_runtime_shape_table_offset,
+                                        uint32_t expected_runtime_shape_table_bytes,
+                                        uint64_t expected_runtime_shape_table_addr,
+                                        uint32_t expected_source_tag,
+                                        uint32_t expected_queue_depth_snapshot,
+                                        uint32_t expected_submission_queue_size_snapshot,
+                                        uint32_t expected_completion_queue_size_snapshot,
+                                        uint32_t expected_submission_head_snapshot,
+                                        uint32_t expected_submission_tail_snapshot,
+                                        uint32_t expected_completion_head_snapshot,
+                                        uint32_t expected_completion_tail_snapshot,
+                                        bool expected_queue_configured_snapshot,
+                                        const char* context) {
+    return expect(summary.last_submission_shape_mode == expected_shape_mode, context) &&
+           expect(summary.last_submission_runtime_shape_count == expected_runtime_shape_count, context) &&
+           expect(summary.last_submission_tensor_count == expected_tensor_count, context) &&
+           expect(summary.last_submission_memory_plan_entries == expected_memory_plan_entries, context) &&
+           expect(summary.last_submission_memory_plan_total_bytes ==
+                      expected_memory_plan_total_bytes,
+                  context) &&
+           expect(summary.last_submission_memory_plan_total_scratchpad_bytes ==
+                      expected_memory_plan_total_scratchpad_bytes,
+                  context) &&
+           expect(summary.last_submission_memory_plan_scratchpad_span_bytes ==
+                      expected_memory_plan_scratchpad_span_bytes,
+                  context) &&
+           expect(summary.last_submission_dynamic_tensor_count == expected_dynamic_tensor_count, context) &&
+           expect(summary.last_submission_input_tensor_count == expected_input_tensor_count, context) &&
+           expect(summary.last_submission_output_tensor_count == expected_output_tensor_count, context) &&
+           expect(summary.last_submission_weight_tensor_count == expected_weight_tensor_count, context) &&
+           expect(summary.last_submission_constant_tensor_count == expected_constant_tensor_count, context) &&
+           expect(summary.last_submission_intermediate_tensor_count ==
+                      expected_intermediate_tensor_count,
+                  context) &&
+           expect(summary.last_submission_scratchpad_budget_bytes ==
+                      expected_scratchpad_budget_bytes,
+                  context) &&
+           expect(summary.last_submission_op_count == expected_op_count, context) &&
+           expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
+           expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
+           expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
+           expect(summary.last_submission_dependency_depth == expected_dependency_depth, context) &&
+           expect(summary.last_submission_max_fanin == expected_max_fanin, context) &&
+           expect(summary.last_submission_max_fanout == expected_max_fanout, context) &&
+           expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
+           expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
+           expect(summary.last_submission_load_plan_bytes == expected_load_plan_bytes, context) &&
+           expect(summary.last_submission_store_plan_bytes == expected_store_plan_bytes, context) &&
+           expect(summary.last_submission_token == expected_token, context) &&
+           expect(summary.last_submission_flags == expected_flags, context) &&
+           expect(summary.last_submission_graph_package_addr == expected_graph_package_addr, context) &&
+           expect(summary.last_submission_input_table_addr == expected_input_table_addr, context) &&
+           expect(summary.last_submission_output_table_addr == expected_output_table_addr, context) &&
+           expect(summary.last_submission_input_table_span_bytes == expected_input_table_bytes, context) &&
+           expect(summary.last_submission_output_table_span_bytes == expected_output_table_bytes, context) &&
+           expect(summary.submission_base_snapshot == expected_submission_base_snapshot, context) &&
+           expect(summary.completion_base_snapshot == expected_completion_base_snapshot, context) &&
+           expect(summary.last_submission_graph_package_bytes == expected_graph_package_bytes, context) &&
+           expect(summary.last_submission_runtime_shape_table_offset ==
+                      expected_runtime_shape_table_offset,
+                  context) &&
+           expect(summary.last_submission_runtime_shape_table_bytes ==
+                      expected_runtime_shape_table_bytes,
+                  context) &&
+           expect(summary.last_submission_runtime_shape_table_addr ==
+                      expected_runtime_shape_table_addr,
+                  context) &&
+           expect(summary.last_submission_source_tag == expected_source_tag, context) &&
+           expect(summary.queue_depth_snapshot == expected_queue_depth_snapshot, context) &&
+           expect(summary.submission_queue_size_snapshot ==
+                      expected_submission_queue_size_snapshot,
+                  context) &&
+           expect(summary.completion_queue_size_snapshot ==
+                      expected_completion_queue_size_snapshot,
+                  context) &&
+           expect(summary.submission_head_snapshot == expected_submission_head_snapshot, context) &&
+           expect(summary.submission_tail_snapshot == expected_submission_tail_snapshot, context) &&
+           expect(summary.completion_head_snapshot == expected_completion_head_snapshot, context) &&
+           expect(summary.completion_tail_snapshot == expected_completion_tail_snapshot, context) &&
+           expect(summary.queue_configured_snapshot == expected_queue_configured_snapshot, context);
+}
+
 bool load_counter(Bus& bus, uint32_t low_reg, uint32_t high_reg, uint64_t& value) {
     uint64_t low = 0;
     uint64_t high = 0;
@@ -146,6 +272,10 @@ int main() {
         const AiAcceleratorProfileSummary& initial_summary = machine.ai_accelerator().profile_summary();
         if (!expect_default_timing_model(initial_summary,
                                          "guest AI accel demo should preserve timing metadata before run") ||
+            !expect_submission_lifecycle(initial_summary,
+                                         false,
+                                         false,
+                                         "guest AI accel demo should start with empty submission lifecycle") ||
             !expect_submission_timing(initial_summary,
                                       0,
                                       0,
@@ -166,6 +296,55 @@ int main() {
                                              0,
                                              0,
                                              "guest AI accel demo should start with zero DMA breakdown") ||
+            !expect_submission_compile_contract(initial_summary,
+                                               AiShapeMode::Static,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               false,
+                                               "guest AI accel demo should start with zero compile contract") ||
             !expect(initial_summary.tile_count == 0,
                     "guest AI accel demo should start with zero tile count") ||
             !expect(initial_summary.scratchpad_peak_bytes == 0,
@@ -489,6 +668,10 @@ int main() {
         const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
         if (!expect_default_timing_model(summary,
                                          "guest AI accel demo should preserve default timing model metadata") ||
+            !expect_submission_lifecycle(summary,
+                                         true,
+                                         true,
+                                         "guest AI accel demo should publish accepted+completed lifecycle") ||
             !expect_submission_timing(summary,
                                       8,
                                       6,
@@ -509,6 +692,55 @@ int main() {
                                              12,
                                              4,
                                              "guest AI accel demo should publish submission DMA breakdown") ||
+            !expect_submission_compile_contract(summary,
+                                               AiShapeMode::Static,
+                                               0,
+                                               2,
+                                               2,
+                                               16,
+                                               16,
+                                               16,
+                                               0,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               0,
+                                               16,
+                                               1,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               1,
+                                               1,
+                                               12,
+                                               4,
+                                               UINT64_C(0x41494343454c0101),
+                                               0,
+                                               summary.last_submission_graph_package_addr,
+                                               summary.last_submission_input_table_addr,
+                                               summary.last_submission_output_table_addr,
+                                               8,
+                                               16,
+                                               success_submit_queue_base,
+                                               success_complete_queue_base,
+                                               180,
+                                               0,
+                                               0,
+                                               0,
+                                               0x33,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               1,
+                                               0,
+                                               0,
+                                               true,
+                                               "guest AI accel demo should publish submission compile contract") ||
             !expect(summary.tile_count == 1,
                     "guest AI accel demo should publish one tile in profile summary") ||
             !expect(summary.scratchpad_peak_bytes == 16,
@@ -526,7 +758,17 @@ int main() {
             !expect(summary.op_summaries[0].stall_cycles == 1,
                     "guest AI accel demo should publish stall cycles in op summary") ||
             !expect(summary.op_summaries[0].tile_count == 1,
-                    "guest AI accel demo should publish tile count in op summary")) {
+                    "guest AI accel demo should publish tile count in op summary") ||
+            !expect(summary.last_submission_graph_package_addr != 0,
+                    "guest AI accel demo should publish non-zero graph package addr") ||
+            !expect(summary.last_submission_input_table_addr != 0,
+                    "guest AI accel demo should publish non-zero input table addr") ||
+            !expect(summary.last_submission_output_table_addr != 0,
+                    "guest AI accel demo should publish non-zero output table addr") ||
+            !expect((summary.last_submission_input_table_addr % 8) == 0,
+                    "guest AI accel demo should publish 8B-aligned input table addr") ||
+            !expect((summary.last_submission_output_table_addr % 8) == 0,
+                    "guest AI accel demo should publish 8B-aligned output table addr")) {
             return 1;
         }
 
@@ -538,6 +780,10 @@ int main() {
         const AiAcceleratorProfileSummary& reset_summary = machine.ai_accelerator().profile_summary();
         if (!expect_default_timing_model(reset_summary,
                                          "guest AI accel demo should preserve timing metadata after reset") ||
+            !expect_submission_lifecycle(reset_summary,
+                                         false,
+                                         false,
+                                         "guest AI accel demo should clear submission lifecycle after reset") ||
             !expect_submission_timing(reset_summary,
                                       0,
                                       0,
@@ -558,6 +804,55 @@ int main() {
                                              0,
                                              0,
                                              "guest AI accel demo should clear DMA breakdown after reset") ||
+            !expect_submission_compile_contract(reset_summary,
+                                               AiShapeMode::Static,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               false,
+                                               "guest AI accel demo should clear compile contract after reset") ||
             !expect(reset_summary.tile_count == 0,
                     "guest AI accel demo should clear tile count after reset") ||
             !expect(reset_summary.scratchpad_peak_bytes == 0,

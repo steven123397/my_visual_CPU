@@ -16,9 +16,9 @@
   - [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)
   - [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
-- 当前活跃计划：
-  - [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
 - 已完成计划：
+  - [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
+  - [../plan/history_plan.md#post-wave7-ai-demo-v1-plan](../plan/history_plan.md#post-wave7-ai-demo-v1-plan)
   - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
@@ -73,25 +73,29 @@
   `cnn / gemm / tiny_model / dynamic_gemm / dynamic_tiny_model / dynamic_cnn /
   custom_dynamic_gemm / custom_dynamic_cnn / tiny_attention_static` manifest
   上直接走 `Machine::run_ai_profile_manifest()`，并验证设备自有
-  `profile_summary()` 会重新暴露同一份 timing / outcome / DMA 子阶段摘要；
+  `profile_summary()` 会重新暴露同一份 compile / timing / outcome / queue / descriptor
+  摘要；
   这让 manifest 路径与设备 smoke 共享同一套 host-side 事实来源，而不用先扩 shared
   CLI 或 frontend。
 - `2026-05-06` 同日继续补上 rerun 刷新合同：同一 `Machine` 连续执行不同
   manifest 后，后一次 workload 的 `AiProfileRunResult`、设备 `profile_summary()`、
   `completion_count / doorbell_count / last_fault` 都必须切到最新 workload，而不是残留或
-  累加前一次运行状态。
+  累加前一次运行状态；最近一次 compile / topology / queue / descriptor 摘要也必须整份
+  切换到第二次 manifest。
 - `2026-05-06` 同日也补上 manifest fail-closed 抛错后的 reset 合同：
   如果一次成功 profile 之后再执行会在 host parser / runtime-shape resolve 阶段抛错的
   manifest，设备 `profile_summary()`、`completion_count / doorbell_count / last_fault`
   必须回到默认空状态，不能继续保留上一轮成功摘要。
 - `2026-05-06` 同日继续补上 `max_ticks` timeout 生命周期合同：
   当 manifest 在设备执行阶段因 tick 预算不足返回 `AI_ACCEL_FAULT_TIMEOUT` 时，
-  `AiProfileRunResult` 会带回 timeout counters，但设备 `profile_summary()` 仍保持空摘要，
-  不伪造一条完成态 submission profile。
+  `AiProfileRunResult` 会带回 timeout counters；设备 `profile_summary()` 不伪造一条完成态
+  submission profile，但会保留这次已被设备接受的 submission compile / descriptor /
+  queue snapshot contract，继续把“未完成”和“未接受”两类状态区分开。
 - `2026-05-06` 同日还把 completion-fault 生命周期也接回 manifest/profile 路径：
   对会在设备执行期返回 `AI_ACCEL_FAULT_ILLEGAL_OP` 之类 completion fault 的 manifest，
   `AiProfileRunResult` 与设备 `profile_summary()` 现在都会如实暴露同一份失败 submission
-  摘要，同时保持空的 aggregate / per-op compute 画像。
+  摘要，同时保持空的 aggregate / per-op compute 画像；对应的 accepted submission
+  compile / descriptor contract 也会一起保留下来。
 - `2026-05-07` 又把这份 host-side profile contract 接回当前 guest guardrail：
   `ai_accel_guest_smoke` 现在不只锁住 `doorbell / completion / counter` ABI，还会验证
   guest `ai_accel_demo` 提交完成后设备 `profile_summary()` 同样暴露最近一次 submission 的
@@ -167,6 +171,102 @@
   输入如果超出可表示范围，或直接给出 `NaN / +/-Infinity` 之类 non-finite 值，
   都会在 host-side 直接 fail-closed，而不是抛 Python traceback。
   这些负向合同都已接进 `ai_accelerator_profile_smoke`。
+- `2026-05-07` 同日把展示窗口前的 `Demo V1` 收口成固定演示入口：
+  `pack_graph.py --demo-v1` 现在会一次性生成 `guest_ai_accel_demo` bridge workload、
+  `bounded_dynamic_gemm_v1`、`bounded_dynamic_cnn_v1`、
+  `bounded_dynamic_tiny_model_v1`、`static_tiny_attention_v1` 四条正向 task-spec 样例，
+  以及 1 条带未知 top-level key 的 fail-closed 样例。`run_demo_v1.py` 进一步把
+  `task spec -> pack -> run -> summary` 收成固定路径，默认运行
+  `guest_ai_accel_demo`、`custom_dynamic_gemm`、`custom_dynamic_cnn`、
+  `custom_dynamic_tiny_model` 这 4 条推荐正向样例，再验证 1 条 fail-closed 样例；
+  `custom_tiny_attention_static` 保留为可选第五条正向 manifest，不作为默认脚本步骤。
+- `2026-05-07` 同日也把 `Demo V1` 的展示资产与最小验证矩阵补齐到正式文档：
+  `myCPU/workloads/ai_proto/README.md`、`docs/showcase/post_wave7_ai_demo_v1_guide.md`、
+  `docs/status/npu_tpu_accelerator_status.md` 与归档后的计划条目现在统一明确：
+  本轮只展示 4 条 task-spec user-task 入口和 1 条 guest/host bridge workload，
+  不误报任意模型上传、通用 compiler、Linux-facing driver 或更深性能模型已完成。
+- `2026-05-07` 同日继续把 compile / memory-plan 路径收成 host-side 可读合同：
+  `pack_graph.py` 与 `task_spec_lowering.py` 现在会为内建 workload 和四条 task-spec
+  路径额外导出 `<name>.memory_plan.txt` sidecar，固定回显 `shape_mode`、
+  `scratchpad_budget_bytes`、tensor 数量和逐 tensor
+  `role / dtype / system_offset / scratchpad_offset / byte_size / scratchpad_bytes`。
+  `ai_accelerator_profile_smoke` 也会把这份 sidecar 与 graph package memory-plan
+  逐项对齐，确保 compile 资源摘要继续共用同一套 graph-package 事实来源，而不是漂成第二套
+  layout 来源；对应的 task-spec / 内建 workload 配对现在也会显式比较
+  `.memory_plan.txt` 文本完全一致，进一步锁住它们继续共用同一份 lowering / layout 合同。
+- `2026-05-07` 同日继续把 bounded dynamic workload 的 runtime-shape resolve 也收成可读合同：
+  `dynamic_gemm / dynamic_cnn / dynamic_tiny_model` 及其 task-spec 对应路径现在还会额外导出
+  `<name>.resolved_memory_plan.txt` sidecar，固定回显共享 runtime-shape resolve 之后的真实
+  tensor `byte_size / scratchpad_bytes`。`ai_accelerator_profile_smoke` 会继续复用
+  `resolve_ai_runtime_shape_package()` 校验这份 sidecar，并要求 task-spec / 内建 workload
+  配对的 `.resolved_memory_plan.txt` 文本完全一致，避免 Python 打包侧漂出第二套 resolved
+  layout 语义。
+- `2026-05-07` 同日继续把这组 compile/runtime-shape 合同回接到设备自有 profile：
+  `AiAcceleratorProfileSummary` 现在除了 timing / outcome / DMA breakdown 外，还会暴露
+  最近一次 submission 的 `shape_mode / runtime_shape_count / tensor_count /
+  memory_plan_entries / dynamic_tensor_count / scratchpad_budget_bytes`。对应
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke` 与
+  `ai_accelerator_profile_smoke` 已覆盖 static / dynamic / fault-stable / reset /
+  manifest readback 路径，确保 workload sidecar、runtime-shape resolve 与设备
+  `profile_summary()` 继续共用同一份 graph-package 事实来源，而不是漂出第二套 host-only
+  compile 摘要。
+- `2026-05-07` 同日这组字段也已接回 guest/host 共享 ABI guardrail：
+  `ai_accel_guest_smoke` 现在除了 timing / outcome / DMA breakdown 外，也会锁住
+  `guest_ai_accel_demo` 成功提交与 reset 默认态下的 compile/runtime-shape 摘要，
+  确保 guest bridge、host manifest/profile 路径和 direct device smoke 继续共用同一份
+  设备 `profile_summary()` 事实来源。
+- `2026-05-07` 同日设备自有 `profile_summary()` 还继续补上了 graph topology /
+  transfer-plan 摘要：
+  `op_count / dependency_count / root_op_count / leaf_op_count / dependency_depth /
+  max_fanin / max_fanout / load_entry_count / store_entry_count`。
+  对应的 `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 single-op、multi-op、
+  guest bridge 与 manifest readback 四类代表路径，继续把 queue / overlap 之前的结构摘要
+  收口成设备自有 host-side contract。
+- `2026-05-07` 同日同一份设备 contract 也继续把 transfer-plan 摘要细化到 planned bytes：
+  `last_submission_load_plan_bytes / store_plan_bytes`。对应的
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 static、
+  bounded dynamic、guest bridge 与 manifest readback 四类代表路径，并明确把这层
+  “graph package 计划搬运字节数” 与执行结果里的 `dma_load/store_bytes` 区分开。
+- `2026-05-07` 同日同一份设备 contract 也继续补上 tensor-role breakdown：
+  `last_submission_input_tensor_count / output_tensor_count / weight_tensor_count /
+  constant_tensor_count / intermediate_tensor_count`。对应的
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 static、
+  bounded dynamic、guest bridge 与 manifest readback 四类代表路径，继续把最近一次
+  submission 的 graph package 角色分布收口成设备自有 host-side contract。
+- `2026-05-08` 同日同一份设备 contract 也继续补上 memory-plan 总量摘要：
+  `last_submission_memory_plan_total_bytes / memory_plan_total_scratchpad_bytes /
+  memory_plan_scratchpad_span_bytes`。其中 `scratchpad_span_bytes` 表示 memory-plan
+  里的最大 `scratchpad_offset + scratchpad_bytes`，显式区别于简单求和的
+  `total_scratchpad_bytes` 和运行期 `scratchpad_peak_bytes`。对应的
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 static、
+  bounded dynamic、guest bridge 与 manifest readback 四类代表路径，继续把最近一次
+  submission 的总 layout budget 收口成设备自有 host-side contract。
+- `2026-05-07` 同日同一份设备 contract 也继续补上 queue snapshot：
+  `submission_base_snapshot / completion_base_snapshot / queue_depth_snapshot /
+  submission_queue_size_snapshot / completion_queue_size_snapshot /
+  queue_configured_snapshot`。这组字段只记录最近一次 submission 创建时的 ring 配置与
+  pending depth，不引入 overlap / multi-outstanding queue 语义；对应的 direct device /
+  guest bridge / manifest readback guardrail 也已接进
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke`。
+- `2026-05-07` 同日同一份设备 contract 也把 queue snapshot 继续细化到 ring 游标层：
+  `submission_head_snapshot / submission_tail_snapshot /
+  completion_head_snapshot / completion_tail_snapshot`。这组字段只复述设备开始执行该
+  submission 时看到的 queue lifecycle 状态，不把完成后的 MMIO 终态误当成 submission
+  创建时的 contract；对应的 direct device / guest bridge / manifest readback guardrail 也已接进
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke`。
+- `2026-05-07` 同日同一份设备 contract 也继续补上 descriptor header 摘要：
+  `last_submission_token / flags / graph_package_bytes / runtime_shape_table_offset /
+  runtime_shape_table_bytes / runtime_shape_table_addr / source_tag`，以及
+  `input_table / output_table` 的 access span bytes。这组字段只复述设备已经真实消费过的 submission header 事实，不引入第二套 host-only
+  descriptor 口径；对应的 direct device / guest bridge / manifest readback guardrail 也已接进
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke`。
 - `2026-04-23` 已把这条线收口成正式设计文档 [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)，并明确它采用独立 `MMIO` 设备路线，而不是 CPU 紧耦合 tensor 指令扩展。
 - `2026-04-23` 同日已完成 wave 1 的任务 1：`DMA-ready` memory contract。
   - 已新增 `myCPU/src/mem/dma_transaction.{h,cpp}`，冻结 `initiator / direction / burst / fault / transferred_bytes` 最小合同。
@@ -407,6 +507,12 @@
   任意模型上传或完整 runtime；当前 importer 已覆盖最小 `bounded_dynamic_gemm_v1` 与
   最小 `bounded_dynamic_cnn_v1`，但仍不代表更宽 op family 已经开放。
 - 如果把这条线和当前 `xv6 / Linux` 主线混在同一轮里推进，很容易打散已有回归与 ownership 边界。
+- `Demo V1` 当前虽然已经有固定入口和固定样例，但默认脚本只运行 4 条推荐正向样例；
+  `static_tiny_attention_v1` 仍是可选第五条 manifest 演示项，不应在对外描述里被写成
+  “所有 demo 必跑项”。
+- `Demo V1` 的 fail-closed 当前只固定展示一条 host-side importer reject 样例；
+  它证明输入 hygiene 和 fail-closed 方向是稳定的，但不代表完整 malformed-input 矩阵都适合
+  面向外部逐条演示。
 
 ## 下一步
 
@@ -414,18 +520,22 @@
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
 2. `Wave 7` 展示优先做白名单 demo + 参数化小模型，而不是任意模型上传；前端参数必须经
    host 侧 graph package 生成 / 校验和资源限制后再运行。
-3. 当前已新增
-   [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
-   与
-   [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)，
-   后续应先在这套文档里明确第一刀的用户任务入口、compile / memory plan 和性能模型阶段边界。
-4. 当前第一刀实现已进一步收窄为 host-side `bounded_dynamic_gemm_v1`、
+3. `Post-Wave 7 用户 AI 任务 + NPU 性能模型` 第一阶段已完成并归档到
+   [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)；
+   当前 design / status 已固定第一刀的用户任务入口、compile / memory plan、设备自有
+   profile contract 和第一阶段验证矩阵。
+4. 展示窗口前的近端收口已完成并归档到
+   [../plan/history_plan.md#post-wave7-ai-demo-v1-plan](../plan/history_plan.md#post-wave7-ai-demo-v1-plan)：
+   当前已有固定的 `Demo V1` 入口、推荐样例顺序、fail-closed 观察点和最小验证矩阵。
+5. 当前第一刀实现已进一步收窄为 host-side `bounded_dynamic_gemm_v1`、
    `bounded_dynamic_cnn_v1`、`bounded_dynamic_tiny_model_v1` 与
    `static_tiny_attention_v1` task spec importer；共享 lower 模块与
    `dynamic_gemm / dynamic_cnn / dynamic_tiny_model / tiny_attention_static`
    共用 lowering / memory-plan 路径已形成显式 guardrail，后续再逐步扩展到更宽 task kind。
-5. 在第一刀实现中，优先保持现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`、
+6. 在第一刀实现中，优先保持现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`、
    `tiny_attention_static`、guest `ai_accel_demo` 和既有 profile / debug 可观察性继续作为稳定 guardrail。
+7. 如果下一轮继续推进，应沿当前 design / status 已收口的长线边界继续推进，优先处理更宽
+   importer / 性能模型切片，而不是重新打开 `Demo V1` 收口范围。
 
 ## 验证基线
 
@@ -450,3 +560,8 @@
   - `cd myCPU && make test`
   - `cd myCPU && make test-pipeline`
 - 后续继续扩到设备控制面、debug 或 guest/runtime 路径时，仍应按触达范围补跑 `make test` / `make test-pipeline` 与对应窄门禁。
+- `Demo V1` 本轮 fresh gate：
+  - `git diff --check`
+  - `cd myCPU && make test`
+  - `cd myCPU && make test-pipeline`
+  - `cd myCPU && make test-host-ai_accelerator_profile_smoke`

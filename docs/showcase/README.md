@@ -18,6 +18,8 @@
   交互式终端运行截图。
 - [vector_panel.png](vector_panel.png)
   向量 / CNN workload 观察面板截图。
+- [post_wave7_ai_demo_v1_guide.md](post_wave7_ai_demo_v1_guide.md)
+  `Post-Wave 7 AI demo v1` 的最短演示路径、预期输出与最小验证矩阵。
 
 ## 项目定位
 
