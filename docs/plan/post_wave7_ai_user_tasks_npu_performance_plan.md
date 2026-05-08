@@ -263,6 +263,15 @@
   与 `ai_accelerator_profile_smoke` 现在会把 static、bounded dynamic、guest bridge
   和 manifest readback 四类代表路径一起锁住，并明确区分“graph package 计划搬运字节数”
   与执行结果里的 `dma_load/store_bytes`。
+- 当前同一合同也已继续补上 memory-plan 总量摘要：
+  `last_submission_memory_plan_total_bytes / memory_plan_total_scratchpad_bytes /
+  memory_plan_scratchpad_span_bytes`。对应
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、`ai_accel_guest_smoke`
+  与 `ai_accelerator_profile_smoke` 现在会把 static、bounded dynamic、guest bridge
+  和 manifest readback 四类代表路径一起锁住，确保 direct device、guest bridge 与
+  manifest/profile harness 继续共用同一份 recent submission layout budget 事实来源；
+  其中 `scratchpad_span_bytes` 表示 memory-plan 的最大 scratchpad 结束位置，继续和
+  `total_scratchpad_bytes`、`scratchpad_peak_bytes` 区分。
 - 当前同一合同也已继续补上 tensor-role breakdown：
   `last_submission_input_tensor_count / output_tensor_count / weight_tensor_count /
   constant_tensor_count / intermediate_tensor_count`。对应
@@ -283,7 +292,9 @@
   创建时的 contract；direct device / guest bridge / manifest readback 三条路径都已纳入 AI smoke。
 - 当前同一合同也已继续补上 descriptor header 摘要：
   `last_submission_token / flags / graph_package_bytes / runtime_shape_table_offset /
-  runtime_shape_table_addr / source_tag`。对应 `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  runtime_shape_table_bytes / runtime_shape_table_addr / source_tag`，以及
+  `input_table / output_table` 的 access span bytes。对应
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
   `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 现在会把 direct device、
   guest bridge 和 manifest readback 三条路径的真实 descriptor header 合同一起锁住。
   这组字段继续只复述设备已经真实消费过的 submission header 事实，不引入第二套 host-only
@@ -304,11 +315,14 @@
   设备 `profile_summary / completion_count / doorbell_count / last_fault` 也必须回到默认空状态。
 - 当前同一 smoke 还补上了 `max_ticks` 超时合同：
   当 manifest 在设备执行阶段超时返回 `AI_ACCEL_FAULT_TIMEOUT` 时，
-  `AiProfileRunResult` 必须带回 timeout 计数器，而设备 `profile_summary` 仍保持空摘要。
+  `AiProfileRunResult` 必须带回 timeout 计数器；设备 `profile_summary` 仍保持空的
+  timing/outcome / per-op compute 画像，但对这次已被设备接受的 submission，compile /
+  descriptor / queue snapshot contract 不能被清空。
 - 当前同一 smoke 还补上了 completion-fault 合同：
   当 manifest 在设备执行阶段返回 completion fault 时，
   `AiProfileRunResult` 与设备 `profile_summary` 必须共享同一份失败 submission 摘要，
-  并保持空的 aggregate / per-op compute 画像。
+  并保持空的 aggregate / per-op compute 画像；同一次 accepted submission 的
+  compile / descriptor contract 也必须一起保留下来。
 
 ### 任务 4：规划系统集成与验证矩阵
 

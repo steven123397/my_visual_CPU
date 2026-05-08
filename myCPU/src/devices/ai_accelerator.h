@@ -111,6 +111,9 @@ struct AiAcceleratorProfileSummary {
     uint32_t last_submission_runtime_shape_count{0};
     uint32_t last_submission_tensor_count{0};
     uint32_t last_submission_memory_plan_entries{0};
+    uint32_t last_submission_memory_plan_total_bytes{0};
+    uint32_t last_submission_memory_plan_total_scratchpad_bytes{0};
+    uint32_t last_submission_memory_plan_scratchpad_span_bytes{0};
     uint32_t last_submission_dynamic_tensor_count{0};
     uint32_t last_submission_input_tensor_count{0};
     uint32_t last_submission_output_tensor_count{0};
@@ -131,6 +134,7 @@ struct AiAcceleratorProfileSummary {
     uint32_t last_submission_store_plan_bytes{0};
     uint32_t last_submission_graph_package_bytes{0};
     uint32_t last_submission_runtime_shape_table_offset{0};
+    uint32_t last_submission_runtime_shape_table_bytes{0};
     uint64_t last_submission_runtime_shape_table_addr{0};
     uint32_t last_submission_source_tag{0};
     uint64_t last_submission_token{0};
@@ -138,6 +142,8 @@ struct AiAcceleratorProfileSummary {
     uint64_t last_submission_graph_package_addr{0};
     uint64_t last_submission_input_table_addr{0};
     uint64_t last_submission_output_table_addr{0};
+    uint32_t last_submission_input_table_span_bytes{0};
+    uint32_t last_submission_output_table_span_bytes{0};
     uint64_t submission_base_snapshot{0};
     uint64_t completion_base_snapshot{0};
     uint32_t queue_depth_snapshot{0};
@@ -198,6 +204,9 @@ struct AiActiveSubmissionState {
     uint32_t profile_runtime_shape_count{0};
     uint32_t profile_tensor_count{0};
     uint32_t profile_memory_plan_entries{0};
+    uint32_t profile_memory_plan_total_bytes{0};
+    uint32_t profile_memory_plan_total_scratchpad_bytes{0};
+    uint32_t profile_memory_plan_scratchpad_span_bytes{0};
     uint32_t profile_dynamic_tensor_count{0};
     uint32_t profile_input_tensor_count{0};
     uint32_t profile_output_tensor_count{0};
@@ -218,6 +227,7 @@ struct AiActiveSubmissionState {
     uint32_t profile_store_plan_bytes{0};
     uint32_t profile_graph_package_bytes{0};
     uint32_t profile_runtime_shape_table_offset{0};
+    uint32_t profile_runtime_shape_table_bytes{0};
     uint64_t profile_runtime_shape_table_addr{0};
     uint32_t profile_source_tag{0};
     uint64_t profile_token{0};
@@ -225,6 +235,8 @@ struct AiActiveSubmissionState {
     uint64_t profile_graph_package_addr{0};
     uint64_t profile_input_table_addr{0};
     uint64_t profile_output_table_addr{0};
+    uint32_t profile_input_table_span_bytes{0};
+    uint32_t profile_output_table_span_bytes{0};
 };
 
 class AiAccelerator : public Device {

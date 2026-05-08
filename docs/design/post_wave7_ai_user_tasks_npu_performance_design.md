@@ -274,6 +274,15 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
     `load_plan_bytes / store_plan_bytes`，把最近一次 submission 计划从系统 RAM 搬入 /
     搬出的 tensor byte budget 一起收成设备自有 host-side contract，同时继续和运行后
     `dma_load/store_bytes` 区分开：前者是 graph package 级计划摘要，后者是本次执行后的结果摘要。
+    同一条 compile contract 也可以继续补成 memory-plan 总量摘要，例如
+    `memory_plan_total_bytes / memory_plan_total_scratchpad_bytes /
+    memory_plan_scratchpad_span_bytes`，让 direct device、guest bridge 与
+    manifest/profile 路径都能直接读取最近一次有效 submission 的总 layout budget，
+    而不必在各自 harness 里重复手算 memory-plan 汇总；其中
+    `scratchpad_span_bytes` 明确表示 memory-plan 里的最大
+    `scratchpad_offset + scratchpad_bytes`，故意与简单求和的
+    `memory_plan_total_scratchpad_bytes`、以及运行期聚合的 `scratchpad_peak_bytes`
+    区分开。
   - 如果还要继续往 queue-ready 方向收窄，可以优先补最近一次 submission 创建时的
     queue snapshot，例如 `submission_base / completion_base / queue_depth /
     submission_queue_size / completion_queue_size / queue_configured`。这类字段只回答
@@ -286,7 +295,9 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
     事实来源，而不是把完成后的 MMIO 终态误当成 submission 创建时的 contract。
   - 如果还要继续往 descriptor-ready 方向收窄，也可以优先补最近一次 submission 的
     descriptor header 摘要，例如 `token / flags / graph_package_bytes /
-    runtime_shape_table_offset / runtime_shape_table_addr / source_tag`。这类字段只重复设备已经真实消费过的
+    runtime_shape_table_offset / runtime_shape_table_bytes / runtime_shape_table_addr /
+    source_tag`，以及 `input_table_addr / output_table_addr` 对应的
+    table access span bytes。这类字段只重复设备已经真实消费过的
     submission header 事实，
     用来让 direct device、guest bridge 和 manifest/profile 路径继续共用同一份
     device-owned host-side contract，而不是在 host harness 再发明第二套 descriptor 文本口径。
@@ -311,12 +322,15 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
     由于 `run_ai_profile_manifest()` 已先发 reset，这份 contract 也必须回到默认空状态，
     不能继续保留上一轮成功摘要冒充“最新设备状态”。
   - 如果 manifest 因 `max_ticks` 太小在设备执行期超时，host summary 应返回
-    `progress=timeout / fault_code=AI_ACCEL_FAULT_TIMEOUT`，同时设备 `profile_summary()`
-    仍保持“尚未完成 submission”的空摘要，而不是伪造一次完成态 profile。
+    `progress=timeout / fault_code=AI_ACCEL_FAULT_TIMEOUT`；设备 `profile_summary()` 不应
+    伪造一次完成态 timing/outcome / per-op profile，但对于已经被设备接受并进入
+    `active_submission` 的那次 submission，compile / descriptor / queue snapshot contract
+    仍应保留最近一次 accepted submission 的事实来源。
   - 如果 manifest 走到了设备执行期并以 completion fault 结束，host summary 与设备
     `profile_summary()` 必须共享同一份失败 submission 摘要：fault code、DMA/queue/completion
-    计数器要如实落下，但 `tile_count / scratchpad_peak_bytes / op summaries` 仍保持空，
-    不伪造成功 compute 画像。
+    计数器要如实落下；同一次 accepted submission 的 compile / descriptor contract 也要
+    保留下来，但 `tile_count / scratchpad_peak_bytes / op summaries` 仍保持空，不伪造成功
+    compute 画像。
   - 这一步仍不改动执行语义；它只把现有保守模型的关键参数收口成 host-side 可测事实来源，
     供后续 tile scheduler / overlap / queue depth 切片在不破坏现有基线的前提下逐步展开。
 

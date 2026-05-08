@@ -219,6 +219,52 @@ void count_transfer_plan(const AiGraphPackage& package,
     }
 }
 
+void count_memory_plan_totals(const AiGraphPackage& package,
+                              uint32_t& total_bytes,
+                              uint32_t& total_scratchpad_bytes,
+                              uint32_t& scratchpad_span_bytes) {
+    total_bytes = 0;
+    total_scratchpad_bytes = 0;
+    scratchpad_span_bytes = 0;
+    for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+        total_bytes = static_cast<uint32_t>(std::min<uint64_t>(
+            static_cast<uint64_t>(total_bytes) + entry.byte_size,
+            std::numeric_limits<uint32_t>::max()));
+        total_scratchpad_bytes = static_cast<uint32_t>(std::min<uint64_t>(
+            static_cast<uint64_t>(total_scratchpad_bytes) + entry.scratchpad_bytes,
+            std::numeric_limits<uint32_t>::max()));
+        const uint32_t entry_end = static_cast<uint32_t>(std::min<uint64_t>(
+            static_cast<uint64_t>(entry.scratchpad_offset) + entry.scratchpad_bytes,
+            std::numeric_limits<uint32_t>::max()));
+        scratchpad_span_bytes = std::max(scratchpad_span_bytes, entry_end);
+    }
+}
+
+void count_table_entry_spans(const AiGraphPackage& package,
+                             uint32_t& input_table_span_bytes,
+                             uint32_t& output_table_span_bytes) {
+    input_table_span_bytes = 0;
+    output_table_span_bytes = 0;
+    for (size_t index = 0; index < package.tensors.size(); ++index) {
+        const uint64_t span = (static_cast<uint64_t>(index) + 1ULL) * 8ULL;
+        const uint32_t span_u32 =
+            static_cast<uint32_t>(std::min<uint64_t>(span, std::numeric_limits<uint32_t>::max()));
+        switch (package.tensors[index].role) {
+        case AiTensorRole::Input:
+        case AiTensorRole::Weight:
+        case AiTensorRole::Constant:
+            input_table_span_bytes = std::max(input_table_span_bytes, span_u32);
+            break;
+        case AiTensorRole::Output:
+            output_table_span_bytes = std::max(output_table_span_bytes, span_u32);
+            break;
+        case AiTensorRole::Intermediate:
+        case AiTensorRole::Invalid:
+            break;
+        }
+    }
+}
+
 }  // namespace
 
 AiAccelerator::AiAccelerator(Plic& plic,
@@ -526,6 +572,12 @@ void AiAccelerator::update_profile_summary_submission_compile_contract() {
     profile_summary_.last_submission_tensor_count = active_submission_.profile_tensor_count;
     profile_summary_.last_submission_memory_plan_entries =
         active_submission_.profile_memory_plan_entries;
+    profile_summary_.last_submission_memory_plan_total_bytes =
+        active_submission_.profile_memory_plan_total_bytes;
+    profile_summary_.last_submission_memory_plan_total_scratchpad_bytes =
+        active_submission_.profile_memory_plan_total_scratchpad_bytes;
+    profile_summary_.last_submission_memory_plan_scratchpad_span_bytes =
+        active_submission_.profile_memory_plan_scratchpad_span_bytes;
     profile_summary_.last_submission_dynamic_tensor_count =
         active_submission_.profile_dynamic_tensor_count;
     profile_summary_.last_submission_input_tensor_count =
@@ -566,6 +618,8 @@ void AiAccelerator::update_profile_summary_submission_compile_contract() {
         active_submission_.profile_graph_package_bytes;
     profile_summary_.last_submission_runtime_shape_table_offset =
         active_submission_.profile_runtime_shape_table_offset;
+    profile_summary_.last_submission_runtime_shape_table_bytes =
+        active_submission_.profile_runtime_shape_table_bytes;
     profile_summary_.last_submission_runtime_shape_table_addr =
         active_submission_.profile_runtime_shape_table_addr;
     profile_summary_.last_submission_source_tag =
@@ -578,6 +632,10 @@ void AiAccelerator::update_profile_summary_submission_compile_contract() {
         active_submission_.profile_input_table_addr;
     profile_summary_.last_submission_output_table_addr =
         active_submission_.profile_output_table_addr;
+    profile_summary_.last_submission_input_table_span_bytes =
+        active_submission_.profile_input_table_span_bytes;
+    profile_summary_.last_submission_output_table_span_bytes =
+        active_submission_.profile_output_table_span_bytes;
     profile_summary_.submission_base_snapshot = queue_.submission_base();
     profile_summary_.completion_base_snapshot = queue_.completion_base();
     profile_summary_.queue_depth_snapshot = queue_.pending_depth();
@@ -847,6 +905,13 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     uint32_t profile_runtime_shape_count = 0;
     const uint32_t profile_tensor_count = saturating_u32(package.tensors.size());
     const uint32_t profile_memory_plan_entries = saturating_u32(package.memory_plan.size());
+    uint32_t profile_memory_plan_total_bytes = 0;
+    uint32_t profile_memory_plan_total_scratchpad_bytes = 0;
+    uint32_t profile_memory_plan_scratchpad_span_bytes = 0;
+    count_memory_plan_totals(package,
+                             profile_memory_plan_total_bytes,
+                             profile_memory_plan_total_scratchpad_bytes,
+                             profile_memory_plan_scratchpad_span_bytes);
     const uint32_t profile_dynamic_tensor_count = saturating_u32(package.dynamic_tensors.size());
     uint32_t profile_input_tensor_count = 0;
     uint32_t profile_output_tensor_count = 0;
@@ -878,6 +943,7 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
                         profile_store_plan_bytes);
     const uint32_t profile_graph_package_bytes = descriptor.graph_package_bytes;
     const uint32_t profile_runtime_shape_table_offset = descriptor.runtime_shape_table_offset;
+    uint32_t profile_runtime_shape_table_bytes = 0;
     uint64_t profile_runtime_shape_table_addr = 0;
     const uint32_t profile_source_tag = descriptor.source_tag;
     const uint64_t profile_token = descriptor.token;
@@ -885,6 +951,10 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     const uint64_t profile_graph_package_addr = descriptor.graph_package_addr;
     const uint64_t profile_input_table_addr = descriptor.input_table_addr;
     const uint64_t profile_output_table_addr = descriptor.output_table_addr;
+    uint32_t profile_input_table_span_bytes = 0;
+    uint32_t profile_output_table_span_bytes = 0;
+    count_table_entry_spans(
+        package, profile_input_table_span_bytes, profile_output_table_span_bytes);
 
     if (package.shape_mode == AiShapeMode::Static) {
         if (descriptor.runtime_shape_table_offset != 0) {
@@ -905,6 +975,7 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
         }
         const uint32_t runtime_shape_table_bytes = static_cast<uint32_t>(
             package.dynamic_tensors.size() * kAiRuntimeShapeEntryBytes);
+        profile_runtime_shape_table_bytes = runtime_shape_table_bytes;
         if (descriptor.runtime_shape_table_offset < descriptor.graph_package_bytes) {
             fault = AI_ACCEL_FAULT_INVALID_DESCRIPTOR;
             detail = descriptor.runtime_shape_table_offset;
@@ -989,6 +1060,11 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     active_submission_.profile_runtime_shape_count = profile_runtime_shape_count;
     active_submission_.profile_tensor_count = profile_tensor_count;
     active_submission_.profile_memory_plan_entries = profile_memory_plan_entries;
+    active_submission_.profile_memory_plan_total_bytes = profile_memory_plan_total_bytes;
+    active_submission_.profile_memory_plan_total_scratchpad_bytes =
+        profile_memory_plan_total_scratchpad_bytes;
+    active_submission_.profile_memory_plan_scratchpad_span_bytes =
+        profile_memory_plan_scratchpad_span_bytes;
     active_submission_.profile_dynamic_tensor_count = profile_dynamic_tensor_count;
     active_submission_.profile_input_tensor_count = profile_input_tensor_count;
     active_submission_.profile_output_tensor_count = profile_output_tensor_count;
@@ -1009,6 +1085,7 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     active_submission_.profile_store_plan_bytes = profile_store_plan_bytes;
     active_submission_.profile_graph_package_bytes = profile_graph_package_bytes;
     active_submission_.profile_runtime_shape_table_offset = profile_runtime_shape_table_offset;
+    active_submission_.profile_runtime_shape_table_bytes = profile_runtime_shape_table_bytes;
     active_submission_.profile_runtime_shape_table_addr = profile_runtime_shape_table_addr;
     active_submission_.profile_source_tag = profile_source_tag;
     active_submission_.profile_token = profile_token;
@@ -1016,7 +1093,10 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     active_submission_.profile_graph_package_addr = profile_graph_package_addr;
     active_submission_.profile_input_table_addr = profile_input_table_addr;
     active_submission_.profile_output_table_addr = profile_output_table_addr;
+    active_submission_.profile_input_table_span_bytes = profile_input_table_span_bytes;
+    active_submission_.profile_output_table_span_bytes = profile_output_table_span_bytes;
     active_submission_valid_ = true;
+    update_profile_summary_submission_compile_contract();
     return true;
 }
 
@@ -1209,7 +1289,6 @@ bool AiAccelerator::start_compute(uint32_t& fault, uint32_t& detail) {
     active_submission_.retired_ops = result.retired_ops;
     active_submission_.compute_cycles_remaining = result.compute_cycles;
     active_submission_.stall_cycles_remaining = result.stall_cycles;
-    update_profile_summary_submission_compile_contract();
     profile_summary_.tile_count = result.tile_count;
     profile_summary_.scratchpad_peak_bytes = result.scratchpad_peak_bytes;
     profile_summary_.op_summaries = result.op_summaries;

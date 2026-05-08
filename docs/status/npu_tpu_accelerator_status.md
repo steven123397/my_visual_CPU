@@ -89,12 +89,14 @@
   必须回到默认空状态，不能继续保留上一轮成功摘要。
 - `2026-05-06` 同日继续补上 `max_ticks` timeout 生命周期合同：
   当 manifest 在设备执行阶段因 tick 预算不足返回 `AI_ACCEL_FAULT_TIMEOUT` 时，
-  `AiProfileRunResult` 会带回 timeout counters，但设备 `profile_summary()` 仍保持空摘要，
-  不伪造一条完成态 submission profile。
+  `AiProfileRunResult` 会带回 timeout counters；设备 `profile_summary()` 不伪造一条完成态
+  submission profile，但会保留这次已被设备接受的 submission compile / descriptor /
+  queue snapshot contract，继续把“未完成”和“未接受”两类状态区分开。
 - `2026-05-06` 同日还把 completion-fault 生命周期也接回 manifest/profile 路径：
   对会在设备执行期返回 `AI_ACCEL_FAULT_ILLEGAL_OP` 之类 completion fault 的 manifest，
   `AiProfileRunResult` 与设备 `profile_summary()` 现在都会如实暴露同一份失败 submission
-  摘要，同时保持空的 aggregate / per-op compute 画像。
+  摘要，同时保持空的 aggregate / per-op compute 画像；对应的 accepted submission
+  compile / descriptor contract 也会一起保留下来。
 - `2026-05-07` 又把这份 host-side profile contract 接回当前 guest guardrail：
   `ai_accel_guest_smoke` 现在不只锁住 `doorbell / completion / counter` ABI，还会验证
   guest `ai_accel_demo` 提交完成后设备 `profile_summary()` 同样暴露最近一次 submission 的
@@ -235,6 +237,15 @@
   `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 static、
   bounded dynamic、guest bridge 与 manifest readback 四类代表路径，继续把最近一次
   submission 的 graph package 角色分布收口成设备自有 host-side contract。
+- `2026-05-08` 同日同一份设备 contract 也继续补上 memory-plan 总量摘要：
+  `last_submission_memory_plan_total_bytes / memory_plan_total_scratchpad_bytes /
+  memory_plan_scratchpad_span_bytes`。其中 `scratchpad_span_bytes` 表示 memory-plan
+  里的最大 `scratchpad_offset + scratchpad_bytes`，显式区别于简单求和的
+  `total_scratchpad_bytes` 和运行期 `scratchpad_peak_bytes`。对应的
+  `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
+  `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke` 已覆盖 static、
+  bounded dynamic、guest bridge 与 manifest readback 四类代表路径，继续把最近一次
+  submission 的总 layout budget 收口成设备自有 host-side contract。
 - `2026-05-07` 同日同一份设备 contract 也继续补上 queue snapshot：
   `submission_base_snapshot / completion_base_snapshot / queue_depth_snapshot /
   submission_queue_size_snapshot / completion_queue_size_snapshot /
@@ -252,7 +263,8 @@
   `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke`。
 - `2026-05-07` 同日同一份设备 contract 也继续补上 descriptor header 摘要：
   `last_submission_token / flags / graph_package_bytes / runtime_shape_table_offset /
-  runtime_shape_table_addr / source_tag`。这组字段只复述设备已经真实消费过的 submission header 事实，不引入第二套 host-only
+  runtime_shape_table_bytes / runtime_shape_table_addr / source_tag`，以及
+  `input_table / output_table` 的 access span bytes。这组字段只复述设备已经真实消费过的 submission header 事实，不引入第二套 host-only
   descriptor 口径；对应的 direct device / guest bridge / manifest readback guardrail 也已接进
   `ai_accelerator_gemm_smoke`、`ai_accelerator_cnn_smoke`、
   `ai_accel_guest_smoke` 与 `ai_accelerator_profile_smoke`。
