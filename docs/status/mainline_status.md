@@ -224,7 +224,7 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
 - 用户自定义 AI 任务与更接近商用 NPU 的性能模型：
   [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md) /
   [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md) /
-  [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
+  [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
 
 ## 当前状态
 
@@ -921,7 +921,7 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
    AI 方向进入
    [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md) /
    [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md) /
-   [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)。
+   [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)。
    Linux 当前已跑通 `external Alpine ext4 + static /init` 和
    `external Alpine ext4 + dynamic /bin/sh` 两条 opt-in runtime smoke；动态 `/bin/sh`
    路线已能在同一 shell 会话内执行 `cat /etc/os-release`、`ls -l /bin/sh` 和

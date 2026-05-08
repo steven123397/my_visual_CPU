@@ -23,6 +23,44 @@
 
 ### 2026-05-05
 
+#### post-wave7-ai-user-tasks-npu-performance-plan
+
+- 原文件：`post_wave7_ai_user_tasks_npu_performance_plan.md`
+- 完成内容：完成 `Post-Wave 7 用户 AI 任务 + NPU 性能模型` 第一阶段收口。当前已把受限
+  `task-spec importer`、compile / runtime-shape / memory-plan sidecar、设备自有
+  `profile_summary()` staged metadata，以及 host manifest/profile / guest bridge 的
+  生命周期合同一起收成稳定基线。第一阶段正式开放的 task-spec 入口固定为
+  `bounded_dynamic_gemm_v1`、`bounded_dynamic_cnn_v1`、
+  `bounded_dynamic_tiny_model_v1` 与 `static_tiny_attention_v1`；设备自有
+  `profile_summary()` 也已覆盖 compile/runtime-shape、topology、transfer、queue、
+  descriptor、timing/outcome/DMA breakdown 等 host-side contract。
+- 实现过程摘要：这一轮保持 AI 边界收窄，优先推进 `devices/workload/host smoke/性能模型`
+  切片，不提前打开 Linux-facing driver、shared frontend、overlap、multi outstanding
+  queue 或完整 runtime。实现上先把 importer 和 automatic memory plan 收成受限、
+  fail-closed 的 host-side contract，再把现有 `timed-simple no-overlap` 与设备自有
+  `profile_summary()` 持续补齐为可测 staged metadata；最后把 direct device、guest bridge
+  和 manifest/profile readback 三条路径的生命周期与验证矩阵对齐到同一份事实来源。
+- 结果参考：[post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
+
+#### post-wave7-ai-demo-v1-plan
+
+- 原文件：`post_wave7_ai_demo_v1_plan.md`
+- 完成内容：完成 `Post-Wave 7 AI demo v1` 收口。当前 AI 演示范围正式固定为
+  `bounded_dynamic_gemm_v1`、`bounded_dynamic_cnn_v1`、
+  `bounded_dynamic_tiny_model_v1`、`static_tiny_attention_v1` 与
+  `guest_ai_accel_demo` 5 条稳定入口；其中 `run_demo_v1.py` 默认串起
+  `guest_ai_accel_demo`、`custom_dynamic_gemm`、`custom_dynamic_cnn`、
+  `custom_dynamic_tiny_model` 4 条正向样例和 1 条 fail-closed 样例，
+  `custom_tiny_attention_static` 保留为可选第五条正向 manifest。仓库也已补齐
+  `task spec -> pack -> run -> summary` 的固定 demo 入口、短 guide、预期输出和 fresh gate。
+- 实现过程摘要：这一轮不再继续扩长期设计，而是把现有 `task-spec importer + profile contract +
+  guest/host bridge` 收成一个可展示、可复现、无明显缺口的 `Demo V1`。实现上新增
+  `pack_graph.py --demo-v1` 与 `run_demo_v1.py`，并用
+  `test-host-ai_accelerator_profile_smoke` 锁住固定样例、固定错误样例和脚本输出要点。
+  本轮仍不开放任意模型上传、通用 compiler、Linux-facing NPU driver、
+  `DMA + compute overlap`、tile scheduler 或 multi outstanding queue。
+- 结果参考：[post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[../showcase/post_wave7_ai_demo_v1_guide.md](../showcase/post_wave7_ai_demo_v1_guide.md)
+
 #### post-wave7-linux-distribution-platform-plan
 
 - 原文件：`post_wave7_linux_distribution_platform_plan.md`

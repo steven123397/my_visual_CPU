@@ -153,6 +153,132 @@ bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
            expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
 }
 
+bool expect_submission_lifecycle(const AiAcceleratorProfileSummary& summary,
+                                 bool expected_accepted,
+                                 bool expected_completed,
+                                 const char* context) {
+    return expect(summary.last_submission_accepted == expected_accepted, context) &&
+           expect(summary.last_submission_completed == expected_completed, context);
+}
+
+bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
+                                        AiShapeMode expected_shape_mode,
+                                        uint32_t expected_runtime_shape_count,
+                                        uint32_t expected_tensor_count,
+                                        uint32_t expected_memory_plan_entries,
+                                        uint32_t expected_memory_plan_total_bytes,
+                                        uint32_t expected_memory_plan_total_scratchpad_bytes,
+                                        uint32_t expected_memory_plan_scratchpad_span_bytes,
+                                        uint32_t expected_dynamic_tensor_count,
+                                        uint32_t expected_input_tensor_count,
+                                        uint32_t expected_output_tensor_count,
+                                        uint32_t expected_weight_tensor_count,
+                                        uint32_t expected_constant_tensor_count,
+                                        uint32_t expected_intermediate_tensor_count,
+                                        uint32_t expected_scratchpad_budget_bytes,
+                                        uint32_t expected_op_count,
+                                        uint32_t expected_dependency_count,
+                                        uint32_t expected_root_op_count,
+                                        uint32_t expected_leaf_op_count,
+                                        uint32_t expected_dependency_depth,
+                                        uint32_t expected_max_fanin,
+                                        uint32_t expected_max_fanout,
+                                        uint32_t expected_load_entry_count,
+                                        uint32_t expected_store_entry_count,
+                                        uint32_t expected_load_plan_bytes,
+                                        uint32_t expected_store_plan_bytes,
+                                        uint64_t expected_token,
+                                        uint32_t expected_flags,
+                                        uint64_t expected_graph_package_addr,
+                                        uint64_t expected_input_table_addr,
+                                        uint64_t expected_output_table_addr,
+                                        uint32_t expected_input_table_bytes,
+                                        uint32_t expected_output_table_bytes,
+                                        uint64_t expected_submission_base_snapshot,
+                                        uint64_t expected_completion_base_snapshot,
+                                        uint32_t expected_graph_package_bytes,
+                                        uint32_t expected_runtime_shape_table_offset,
+                                        uint32_t expected_runtime_shape_table_bytes,
+                                        uint64_t expected_runtime_shape_table_addr,
+                                        uint32_t expected_source_tag,
+                                        uint32_t expected_queue_depth_snapshot,
+                                        uint32_t expected_submission_queue_size_snapshot,
+                                        uint32_t expected_completion_queue_size_snapshot,
+                                        uint32_t expected_submission_head_snapshot,
+                                        uint32_t expected_submission_tail_snapshot,
+                                        uint32_t expected_completion_head_snapshot,
+                                        uint32_t expected_completion_tail_snapshot,
+                                        bool expected_queue_configured_snapshot,
+                                        const char* context) {
+    return expect(summary.last_submission_shape_mode == expected_shape_mode, context) &&
+           expect(summary.last_submission_runtime_shape_count == expected_runtime_shape_count, context) &&
+           expect(summary.last_submission_tensor_count == expected_tensor_count, context) &&
+           expect(summary.last_submission_memory_plan_entries == expected_memory_plan_entries, context) &&
+           expect(summary.last_submission_memory_plan_total_bytes ==
+                      expected_memory_plan_total_bytes,
+                  context) &&
+           expect(summary.last_submission_memory_plan_total_scratchpad_bytes ==
+                      expected_memory_plan_total_scratchpad_bytes,
+                  context) &&
+           expect(summary.last_submission_memory_plan_scratchpad_span_bytes ==
+                      expected_memory_plan_scratchpad_span_bytes,
+                  context) &&
+           expect(summary.last_submission_dynamic_tensor_count == expected_dynamic_tensor_count, context) &&
+           expect(summary.last_submission_input_tensor_count == expected_input_tensor_count, context) &&
+           expect(summary.last_submission_output_tensor_count == expected_output_tensor_count, context) &&
+           expect(summary.last_submission_weight_tensor_count == expected_weight_tensor_count, context) &&
+           expect(summary.last_submission_constant_tensor_count == expected_constant_tensor_count, context) &&
+           expect(summary.last_submission_intermediate_tensor_count ==
+                      expected_intermediate_tensor_count,
+                  context) &&
+           expect(summary.last_submission_scratchpad_budget_bytes ==
+                      expected_scratchpad_budget_bytes,
+                  context) &&
+           expect(summary.last_submission_op_count == expected_op_count, context) &&
+           expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
+           expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
+           expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
+           expect(summary.last_submission_dependency_depth == expected_dependency_depth, context) &&
+           expect(summary.last_submission_max_fanin == expected_max_fanin, context) &&
+           expect(summary.last_submission_max_fanout == expected_max_fanout, context) &&
+           expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
+           expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
+           expect(summary.last_submission_load_plan_bytes == expected_load_plan_bytes, context) &&
+           expect(summary.last_submission_store_plan_bytes == expected_store_plan_bytes, context) &&
+           expect(summary.last_submission_token == expected_token, context) &&
+           expect(summary.last_submission_flags == expected_flags, context) &&
+           expect(summary.last_submission_graph_package_addr == expected_graph_package_addr, context) &&
+           expect(summary.last_submission_input_table_addr == expected_input_table_addr, context) &&
+           expect(summary.last_submission_output_table_addr == expected_output_table_addr, context) &&
+           expect(summary.last_submission_input_table_span_bytes == expected_input_table_bytes, context) &&
+           expect(summary.last_submission_output_table_span_bytes == expected_output_table_bytes, context) &&
+           expect(summary.submission_base_snapshot == expected_submission_base_snapshot, context) &&
+           expect(summary.completion_base_snapshot == expected_completion_base_snapshot, context) &&
+           expect(summary.last_submission_graph_package_bytes == expected_graph_package_bytes, context) &&
+           expect(summary.last_submission_runtime_shape_table_offset ==
+                      expected_runtime_shape_table_offset,
+                  context) &&
+           expect(summary.last_submission_runtime_shape_table_bytes ==
+                      expected_runtime_shape_table_bytes,
+                  context) &&
+           expect(summary.last_submission_runtime_shape_table_addr ==
+                      expected_runtime_shape_table_addr,
+                  context) &&
+           expect(summary.last_submission_source_tag == expected_source_tag, context) &&
+           expect(summary.queue_depth_snapshot == expected_queue_depth_snapshot, context) &&
+           expect(summary.submission_queue_size_snapshot ==
+                      expected_submission_queue_size_snapshot,
+                  context) &&
+           expect(summary.completion_queue_size_snapshot ==
+                      expected_completion_queue_size_snapshot,
+                  context) &&
+           expect(summary.submission_head_snapshot == expected_submission_head_snapshot, context) &&
+           expect(summary.submission_tail_snapshot == expected_submission_tail_snapshot, context) &&
+           expect(summary.completion_head_snapshot == expected_completion_head_snapshot, context) &&
+           expect(summary.completion_tail_snapshot == expected_completion_tail_snapshot, context) &&
+           expect(summary.queue_configured_snapshot == expected_queue_configured_snapshot, context);
+}
+
 bool configure_queue(Bus& bus) {
     return store_u32(bus,
                      AI_ACCEL_BASE + AI_ACCEL_REG_SUBMIT_QUEUE_BASE_LOW,
@@ -587,12 +713,65 @@ int main() {
             !expect(compute_cycles == 2, "expected GEMM compute cycles") ||
             !expect(stall_cycles == 2, "expected GEMM stall cycles") ||
             !expect_default_timing_model(success_profile, "expected default GEMM timing model") ||
+            !expect_submission_lifecycle(success_profile,
+                                         true,
+                                         true,
+                                         "expected accepted+completed lifecycle for GEMM success") ||
             !expect_submission_timing(success_profile, 13, 9, 2, 2, 1, 1, 15,
                                       "expected GEMM submission timing summary") ||
             !expect_submission_outcome(success_profile, AI_ACCEL_FAULT_NONE, 12, 20,
                                        "expected GEMM submission outcome summary") ||
             !expect_submission_dma_breakdown(success_profile, 6, 3, 16, 4,
                                             "expected GEMM submission DMA breakdown") ||
+            !expect_submission_compile_contract(success_profile,
+                                               AiShapeMode::Static,
+                                               0,
+                                               4,
+                                               4,
+                                               36,
+                                               36,
+                                               36,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               1,
+                                               48,
+                                               2,
+                                               1,
+                                               1,
+                                               1,
+                                               2,
+                                               1,
+                                               1,
+                                               2,
+                                               1,
+                                               16,
+                                               4,
+                                               success_descriptor.token,
+                                               success_descriptor.flags,
+                                               success_descriptor.graph_package_addr,
+                                               success_descriptor.input_table_addr,
+                                               success_descriptor.output_table_addr,
+                                               16,
+                                               32,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               graph_package_size,
+                                               0,
+                                               0,
+                                               0,
+                                               29,
+                                               1,
+                                               4,
+                                               4,
+                                               0,
+                                               1,
+                                               0,
+                                               0,
+                                               true,
+                                               "expected GEMM submission compile contract") ||
             !expect(success_profile.tile_count == 2, "expected GEMM aggregate tile count") ||
             !expect(success_profile.scratchpad_peak_bytes == 36,
                     "expected GEMM aggregate scratchpad peak bytes") ||
@@ -666,12 +845,65 @@ int main() {
             !expect(dma_load_bytes == 32, "expected cumulative GEMM DMA load bytes") ||
             !expect(dma_store_bytes == 4, "expected cumulative GEMM DMA store bytes") ||
             !expect_default_timing_model(fault_profile, "expected stable GEMM timing model after fault") ||
+            !expect_submission_lifecycle(fault_profile,
+                                         true,
+                                         true,
+                                         "expected accepted+completed lifecycle for GEMM completion fault") ||
             !expect_submission_timing(fault_profile, 6, 6, 0, 0, 1, 1, 8,
                                       "expected fault GEMM submission timing summary") ||
             !expect_submission_outcome(fault_profile, AI_ACCEL_FAULT_ILLEGAL_OP, 0, 16,
                                        "expected fault GEMM submission outcome summary") ||
             !expect_submission_dma_breakdown(fault_profile, 6, 0, 16, 0,
                                             "expected fault GEMM submission DMA breakdown") ||
+            !expect_submission_compile_contract(fault_profile,
+                                               AiShapeMode::Static,
+                                               0,
+                                               4,
+                                               4,
+                                               36,
+                                               36,
+                                               36,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               1,
+                                               48,
+                                               2,
+                                               1,
+                                               1,
+                                               1,
+                                               2,
+                                               1,
+                                               1,
+                                               2,
+                                               1,
+                                               16,
+                                               4,
+                                               fault_descriptor.token,
+                                               fault_descriptor.flags,
+                                               fault_descriptor.graph_package_addr,
+                                               fault_descriptor.input_table_addr,
+                                               fault_descriptor.output_table_addr,
+                                               16,
+                                               32,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               fault_graph_package_size,
+                                               0,
+                                               0,
+                                               0,
+                                               31,
+                                               1,
+                                               4,
+                                               4,
+                                               1,
+                                               2,
+                                               0,
+                                               1,
+                                               true,
+                                               "expected stable GEMM compile contract after fault") ||
             !expect(fault_profile.tile_count == 2, "expected GEMM tile profile to remain stable on fault") ||
             !expect(fault_profile.scratchpad_peak_bytes == 36,
                     "expected GEMM scratchpad peak to remain stable on fault") ||
@@ -794,6 +1026,55 @@ int main() {
                                        "expected Softmax submission outcome summary") ||
             !expect_submission_dma_breakdown(softmax_profile, 3, 3, 16, 16,
                                             "expected Softmax submission DMA breakdown") ||
+            !expect_submission_compile_contract(softmax_profile,
+                                               AiShapeMode::Static,
+                                               0,
+                                               2,
+                                               2,
+                                               32,
+                                               32,
+                                               48,
+                                               0,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               0,
+                                               64,
+                                               1,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               1,
+                                               1,
+                                               16,
+                                               16,
+                                               softmax_descriptor.token,
+                                               softmax_descriptor.flags,
+                                               softmax_descriptor.graph_package_addr,
+                                               softmax_descriptor.input_table_addr,
+                                               softmax_descriptor.output_table_addr,
+                                               8,
+                                               16,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               softmax_graph_package_size,
+                                               0,
+                                               0,
+                                               0,
+                                               59,
+                                               1,
+                                               4,
+                                               4,
+                                               0,
+                                               1,
+                                               0,
+                                               0,
+                                               true,
+                                               "expected Softmax submission compile contract") ||
             !expect(softmax_profile.tile_count == 1,
                     "expected Softmax aggregate tile count") ||
             !expect(softmax_profile.scratchpad_peak_bytes == 48,
@@ -999,6 +1280,55 @@ int main() {
                                        "expected dynamic GEMM small outcome summary") ||
             !expect_submission_dma_breakdown(dynamic_small_profile, 7, 3, 40, 16,
                                             "expected dynamic GEMM small DMA breakdown") ||
+            !expect_submission_compile_contract(dynamic_small_profile,
+                                               AiShapeMode::DynamicBounded,
+                                               2,
+                                               3,
+                                               3,
+                                               80,
+                                               80,
+                                               80,
+                                               2,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               96,
+                                               1,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               2,
+                                               1,
+                                               48,
+                                               32,
+                                               dynamic_small_descriptor.token,
+                                               dynamic_small_descriptor.flags,
+                                               dynamic_small_descriptor.graph_package_addr,
+                                               dynamic_small_descriptor.input_table_addr,
+                                               dynamic_small_descriptor.output_table_addr,
+                                               16,
+                                               24,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               dynamic_graph_package_size,
+                                               kDynamicRuntimeShapeSmallOffset,
+                                               kDynamicRuntimeShapeBytes,
+                                               kGraphPackageAddr + kDynamicRuntimeShapeSmallOffset,
+                                               41,
+                                               1,
+                                               4,
+                                               4,
+                                               0,
+                                               1,
+                                               0,
+                                               0,
+                                               true,
+                                               "expected dynamic GEMM small compile contract") ||
             !expect(dynamic_small_profile.tile_count == 1,
                     "expected dynamic GEMM small aggregate tile count") ||
             !expect(dynamic_small_profile.scratchpad_peak_bytes == 64,
@@ -1061,6 +1391,55 @@ int main() {
                                        "expected dynamic GEMM large outcome summary") ||
             !expect_submission_dma_breakdown(dynamic_large_profile, 7, 4, 48, 32,
                                             "expected dynamic GEMM large DMA breakdown") ||
+            !expect_submission_compile_contract(dynamic_large_profile,
+                                               AiShapeMode::DynamicBounded,
+                                               2,
+                                               3,
+                                               3,
+                                               80,
+                                               80,
+                                               80,
+                                               2,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               96,
+                                               1,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               2,
+                                               1,
+                                               48,
+                                               32,
+                                               dynamic_large_descriptor.token,
+                                               dynamic_large_descriptor.flags,
+                                               dynamic_large_descriptor.graph_package_addr,
+                                               dynamic_large_descriptor.input_table_addr,
+                                               dynamic_large_descriptor.output_table_addr,
+                                               16,
+                                               24,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               dynamic_graph_package_size,
+                                               kDynamicRuntimeShapeLargeOffset,
+                                               kDynamicRuntimeShapeBytes,
+                                               kGraphPackageAddr + kDynamicRuntimeShapeLargeOffset,
+                                               43,
+                                               1,
+                                               4,
+                                               4,
+                                               1,
+                                               2,
+                                               0,
+                                               1,
+                                               true,
+                                               "expected dynamic GEMM large compile contract") ||
             !expect(dynamic_large_profile.tile_count == 2,
                     "expected dynamic GEMM large aggregate tile count") ||
             !expect(dynamic_large_profile.scratchpad_peak_bytes == 80,
@@ -1121,6 +1500,55 @@ int main() {
                                        "expected stable dynamic GEMM outcome after unaligned fault") ||
             !expect_submission_dma_breakdown(dynamic_unaligned_profile, 7, 4, 48, 32,
                                             "expected stable dynamic GEMM DMA breakdown after unaligned fault") ||
+            !expect_submission_compile_contract(dynamic_unaligned_profile,
+                                               AiShapeMode::DynamicBounded,
+                                               2,
+                                               3,
+                                               3,
+                                               80,
+                                               80,
+                                               80,
+                                               2,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               96,
+                                               1,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               2,
+                                               1,
+                                               48,
+                                               32,
+                                               dynamic_large_descriptor.token,
+                                               dynamic_large_descriptor.flags,
+                                               dynamic_large_descriptor.graph_package_addr,
+                                               dynamic_large_descriptor.input_table_addr,
+                                               dynamic_large_descriptor.output_table_addr,
+                                               16,
+                                               24,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               dynamic_graph_package_size,
+                                               kDynamicRuntimeShapeLargeOffset,
+                                               kDynamicRuntimeShapeBytes,
+                                               kGraphPackageAddr + kDynamicRuntimeShapeLargeOffset,
+                                               43,
+                                               1,
+                                               4,
+                                               4,
+                                               1,
+                                               2,
+                                               0,
+                                               1,
+                                               true,
+                                               "expected stable dynamic GEMM compile contract after unaligned fault") ||
             !expect(dynamic_unaligned_profile.tile_count == 2,
                     "expected dynamic GEMM profile stability after unaligned-shape fault") ||
             !expect(dynamic_unaligned_profile.scratchpad_peak_bytes == 80,
@@ -1181,6 +1609,55 @@ int main() {
                                        "expected stable dynamic GEMM outcome after missing-shape fault") ||
             !expect_submission_dma_breakdown(dynamic_fault_profile, 7, 4, 48, 32,
                                             "expected stable dynamic GEMM DMA breakdown after missing-shape fault") ||
+            !expect_submission_compile_contract(dynamic_fault_profile,
+                                               AiShapeMode::DynamicBounded,
+                                               2,
+                                               3,
+                                               3,
+                                               80,
+                                               80,
+                                               80,
+                                               2,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               96,
+                                               1,
+                                               0,
+                                               1,
+                                               1,
+                                               1,
+                                               0,
+                                               0,
+                                               2,
+                                               1,
+                                               48,
+                                               32,
+                                               dynamic_large_descriptor.token,
+                                               dynamic_large_descriptor.flags,
+                                               dynamic_large_descriptor.graph_package_addr,
+                                               dynamic_large_descriptor.input_table_addr,
+                                               dynamic_large_descriptor.output_table_addr,
+                                               16,
+                                               24,
+                                               kSubmitQueueAddr,
+                                               kCompleteQueueAddr,
+                                               dynamic_graph_package_size,
+                                               kDynamicRuntimeShapeLargeOffset,
+                                               kDynamicRuntimeShapeBytes,
+                                               kGraphPackageAddr + kDynamicRuntimeShapeLargeOffset,
+                                               43,
+                                               1,
+                                               4,
+                                               4,
+                                               1,
+                                               2,
+                                               0,
+                                               1,
+                                               true,
+                                               "expected stable dynamic GEMM compile contract after missing-shape fault") ||
             !expect(dynamic_fault_profile.tile_count == 2,
                     "expected dynamic GEMM profile stability after missing-shape fault") ||
             !expect(dynamic_fault_profile.scratchpad_peak_bytes == 80,

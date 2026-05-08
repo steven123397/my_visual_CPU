@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <limits>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -59,6 +60,29 @@ bool expect_contains(const std::string& text, const char* needle, const char* me
         return false;
     }
     return true;
+}
+
+uint32_t align_up_u32(uint32_t value, uint32_t alignment) {
+    const uint32_t mask = alignment - 1;
+    return (value + mask) & ~mask;
+}
+
+const char* ai_tensor_role_name_local(AiTensorRole role) {
+    switch (role) {
+    case AiTensorRole::Input:
+        return "input";
+    case AiTensorRole::Output:
+        return "output";
+    case AiTensorRole::Weight:
+        return "weight";
+    case AiTensorRole::Intermediate:
+        return "intermediate";
+    case AiTensorRole::Constant:
+        return "constant";
+    case AiTensorRole::Invalid:
+        return "invalid";
+    }
+    return "unknown";
 }
 
 struct CommandResult {
@@ -237,6 +261,82 @@ bool expect_matching_binary_file(const std::filesystem::path& actual,
            expect(read_binary_file(actual) == read_binary_file(expected), context);
 }
 
+bool expect_matching_text_file(const std::filesystem::path& actual,
+                               const std::filesystem::path& expected,
+                               const char* context) {
+    return expect_file_exists(actual, context) &&
+           expect_file_exists(expected, context) &&
+           expect(read_text_file(actual) == read_text_file(expected), context);
+}
+
+bool expect_memory_plan_summary_matches(const std::filesystem::path& summary_path,
+                                        const AiGraphPackage& package,
+                                        const char* expected_shape_mode,
+                                        const char* context) {
+    if (!expect_file_exists(summary_path, context)) {
+        return false;
+    }
+    const std::string summary = read_text_file(summary_path);
+    if (!expect_contains(summary, "format=ai_proto_memory_plan_v1", context) ||
+        !expect_contains(summary,
+                         ("shape_mode=" + std::string(expected_shape_mode)).c_str(),
+                         context) ||
+        !expect_contains(summary,
+                         ("scratchpad_budget_bytes=" +
+                          std::to_string(package.scratchpad_budget_bytes)).c_str(),
+                         context) ||
+        !expect_contains(summary,
+                         ("tensor_count=" + std::to_string(package.tensors.size())).c_str(),
+                         context) ||
+        !expect_contains(summary,
+                         ("memory_plan_entries=" + std::to_string(package.memory_plan.size())).c_str(),
+                         context)) {
+        return false;
+    }
+    for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+        if (!expect(entry.tensor_index < package.tensors.size(), context)) {
+            return false;
+        }
+        const AiTensorMetadata& tensor = package.tensors[entry.tensor_index];
+        const std::string line =
+            "memory_plan_entry tensor_index=" + std::to_string(entry.tensor_index) +
+            " role=" + ai_tensor_role_name_local(tensor.role) +
+            " dtype=" + std::string(ai_dtype_name(tensor.dtype)) +
+            " system_offset=" + std::to_string(entry.system_offset) +
+            " scratchpad_offset=" + std::to_string(entry.scratchpad_offset) +
+            " byte_size=" + std::to_string(entry.byte_size) +
+            " scratchpad_bytes=" + std::to_string(entry.scratchpad_bytes);
+        if (!expect_contains(summary, line.c_str(), context)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool expect_resolved_memory_plan_summary_matches(const std::filesystem::path& summary_path,
+                                                 const AiGraphPackage& package,
+                                                 const std::filesystem::path& runtime_shape_path,
+                                                 const char* context) {
+    if (!expect_file_exists(runtime_shape_path, context)) {
+        return false;
+    }
+    std::vector<AiRuntimeShapeEntry> runtime_shapes{};
+    std::string error;
+    if (!parse_ai_runtime_shape_table(read_binary_file(runtime_shape_path),
+                                      package.dynamic_tensors.size(),
+                                      runtime_shapes,
+                                      error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    AiGraphPackage resolved_package{};
+    if (!resolve_ai_runtime_shape_package(package, runtime_shapes, resolved_package, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return false;
+    }
+    return expect_memory_plan_summary_matches(summary_path, resolved_package, "static", context);
+}
+
 bool expect_default_timing_model(const AiAcceleratorProfileSummary& summary, const char* context) {
     return expect(summary.timing_model == AiAcceleratorTimingModel::TimedSimpleNoOverlap, context) &&
            expect(summary.scheduler_ops_per_cycle == 32, context) &&
@@ -286,6 +386,462 @@ bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
            expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
 }
 
+struct ExpectedManifestCompileContract {
+    AiShapeMode shape_mode{AiShapeMode::Static};
+    uint32_t runtime_shape_count{0};
+    uint32_t tensor_count{0};
+    uint32_t memory_plan_entries{0};
+    uint32_t memory_plan_total_bytes{0};
+    uint32_t memory_plan_total_scratchpad_bytes{0};
+    uint32_t memory_plan_scratchpad_span_bytes{0};
+    uint32_t dynamic_tensor_count{0};
+    uint32_t input_tensor_count{0};
+    uint32_t output_tensor_count{0};
+    uint32_t weight_tensor_count{0};
+    uint32_t constant_tensor_count{0};
+    uint32_t intermediate_tensor_count{0};
+    uint32_t scratchpad_budget_bytes{0};
+    uint32_t op_count{0};
+    uint32_t dependency_count{0};
+    uint32_t root_op_count{0};
+    uint32_t leaf_op_count{0};
+    uint32_t dependency_depth{0};
+    uint32_t max_fanin{0};
+    uint32_t max_fanout{0};
+    uint32_t load_entry_count{0};
+    uint32_t store_entry_count{0};
+    uint32_t load_plan_bytes{0};
+    uint32_t store_plan_bytes{0};
+    uint64_t token{0xA1A1A1A1ULL};
+    uint32_t flags{AI_ACCEL_SUBMISSION_FLAG_PROFILE};
+    uint64_t graph_package_addr{MEM_BASE + 0x26000};
+    uint64_t input_table_addr{MEM_BASE + 0x28000};
+    uint64_t output_table_addr{MEM_BASE + 0x29000};
+    uint32_t input_table_bytes{0};
+    uint32_t output_table_bytes{0};
+    uint64_t submission_base_snapshot{MEM_BASE + 0x22000};
+    uint64_t completion_base_snapshot{MEM_BASE + 0x24000};
+    uint32_t graph_package_bytes{0};
+    uint32_t runtime_shape_table_offset{0};
+    uint32_t runtime_shape_table_bytes{0};
+    uint64_t runtime_shape_table_addr{0};
+    uint32_t source_tag{0};
+    uint32_t queue_depth_snapshot{1};
+    uint32_t submission_queue_size_snapshot{4};
+    uint32_t completion_queue_size_snapshot{4};
+    uint32_t submission_head_snapshot{0};
+    uint32_t submission_tail_snapshot{1};
+    uint32_t completion_head_snapshot{0};
+    uint32_t completion_tail_snapshot{0};
+    bool queue_configured_snapshot{true};
+};
+
+ExpectedManifestCompileContract expected_manifest_compile_contract(const std::filesystem::path& manifest,
+                                                                  uint32_t graph_package_bytes) {
+    auto find_manifest_scalar = [](const std::string& text, const char* key) -> std::string {
+        const std::string prefix = std::string(key) + "=";
+        const size_t pos = text.find(prefix);
+        if (pos == std::string::npos) {
+            return {};
+        }
+        const size_t value_begin = pos + prefix.size();
+        const size_t value_end = text.find_first_of("\r\n", value_begin);
+        return text.substr(value_begin, value_end - value_begin);
+    };
+    auto count_roots = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> indegree(package.ops.size(), 0);
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.target_op < indegree.size()) {
+                ++indegree[edge.target_op];
+            }
+        }
+        uint32_t count = 0;
+        for (uint32_t degree : indegree) {
+            if (degree == 0) {
+                ++count;
+            }
+        }
+        return count;
+    };
+    auto count_leaves = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> outdegree(package.ops.size(), 0);
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.source_op < outdegree.size()) {
+                ++outdegree[edge.source_op];
+            }
+        }
+        uint32_t count = 0;
+        for (uint32_t degree : outdegree) {
+            if (degree == 0) {
+                ++count;
+            }
+        }
+        return count;
+    };
+    auto count_max_fanin = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> indegree(package.ops.size(), 0);
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.target_op < indegree.size()) {
+                ++indegree[edge.target_op];
+            }
+        }
+        uint32_t max_fanin = 0;
+        for (uint32_t degree : indegree) {
+            max_fanin = std::max(max_fanin, degree);
+        }
+        return max_fanin;
+    };
+    auto count_max_fanout = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> outdegree(package.ops.size(), 0);
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.source_op < outdegree.size()) {
+                ++outdegree[edge.source_op];
+            }
+        }
+        uint32_t max_fanout = 0;
+        for (uint32_t degree : outdegree) {
+            max_fanout = std::max(max_fanout, degree);
+        }
+        return max_fanout;
+    };
+    auto count_max_depth = [](const AiGraphPackage& package) -> uint32_t {
+        if (package.ops.empty()) {
+            return 0;
+        }
+        std::vector<uint32_t> indegree(package.ops.size(), 0);
+        std::vector<std::vector<uint32_t>> adjacency(package.ops.size());
+        for (const AiDependencyEdge& edge : package.dependencies) {
+            if (edge.source_op < adjacency.size() && edge.target_op < indegree.size()) {
+                adjacency[edge.source_op].push_back(edge.target_op);
+                ++indegree[edge.target_op];
+            }
+        }
+        std::vector<uint32_t> ready{};
+        ready.reserve(package.ops.size());
+        std::vector<uint32_t> depth(package.ops.size(), 1);
+        for (uint32_t op = 0; op < indegree.size(); ++op) {
+            if (indegree[op] == 0) {
+                ready.push_back(op);
+            }
+        }
+        size_t cursor = 0;
+        uint32_t max_depth = ready.empty() ? 0 : 1;
+        while (cursor < ready.size()) {
+            const uint32_t source = ready[cursor++];
+            max_depth = std::max(max_depth, depth[source]);
+            for (uint32_t target : adjacency[source]) {
+                depth[target] = std::max(depth[target], depth[source] + 1);
+                if (indegree[target] > 0) {
+                    --indegree[target];
+                    if (indegree[target] == 0) {
+                        ready.push_back(target);
+                    }
+                }
+            }
+        }
+        if (ready.size() != package.ops.size()) {
+            return 0;
+        }
+        return max_depth;
+    };
+    auto count_transfers = [](const AiGraphPackage& package,
+                              uint32_t& load_entries,
+                              uint32_t& store_entries,
+                              uint32_t& load_plan_bytes,
+                              uint32_t& store_plan_bytes) {
+        load_entries = 0;
+        store_entries = 0;
+        load_plan_bytes = 0;
+        store_plan_bytes = 0;
+        for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+            if (entry.tensor_index >= package.tensors.size()) {
+                continue;
+            }
+            const AiTensorRole role = package.tensors[entry.tensor_index].role;
+            if (role == AiTensorRole::Output) {
+                ++store_entries;
+                store_plan_bytes += entry.byte_size;
+            } else if (role != AiTensorRole::Intermediate && role != AiTensorRole::Invalid) {
+                ++load_entries;
+                load_plan_bytes += entry.byte_size;
+            }
+        }
+    };
+    auto count_memory_plan_totals = [](const AiGraphPackage& package,
+                                       uint32_t& total_bytes,
+                                       uint32_t& total_scratchpad_bytes,
+                                       uint32_t& scratchpad_span_bytes) {
+        total_bytes = 0;
+        total_scratchpad_bytes = 0;
+        scratchpad_span_bytes = 0;
+        for (const AiMemoryPlanEntry& entry : package.memory_plan) {
+            total_bytes = static_cast<uint32_t>(std::min<uint64_t>(
+                static_cast<uint64_t>(total_bytes) + entry.byte_size,
+                std::numeric_limits<uint32_t>::max()));
+            total_scratchpad_bytes = static_cast<uint32_t>(std::min<uint64_t>(
+                static_cast<uint64_t>(total_scratchpad_bytes) + entry.scratchpad_bytes,
+                std::numeric_limits<uint32_t>::max()));
+            scratchpad_span_bytes = std::max(
+                scratchpad_span_bytes,
+                static_cast<uint32_t>(std::min<uint64_t>(
+                    static_cast<uint64_t>(entry.scratchpad_offset) + entry.scratchpad_bytes,
+                    std::numeric_limits<uint32_t>::max())));
+        }
+    };
+    auto count_table_entry_spans = [](const AiGraphPackage& package,
+                                      uint32_t& input_table_bytes,
+                                      uint32_t& output_table_bytes) {
+        input_table_bytes = 0;
+        output_table_bytes = 0;
+        for (size_t index = 0; index < package.tensors.size(); ++index) {
+            const uint32_t span = static_cast<uint32_t>(std::min<uint64_t>(
+                (static_cast<uint64_t>(index) + 1ULL) * 8ULL,
+                std::numeric_limits<uint32_t>::max()));
+            switch (package.tensors[index].role) {
+            case AiTensorRole::Input:
+            case AiTensorRole::Weight:
+            case AiTensorRole::Constant:
+                input_table_bytes = std::max(input_table_bytes, span);
+                break;
+            case AiTensorRole::Output:
+                output_table_bytes = std::max(output_table_bytes, span);
+                break;
+            case AiTensorRole::Intermediate:
+            case AiTensorRole::Invalid:
+                break;
+            }
+        }
+    };
+
+    const std::filesystem::path manifest_dir = manifest.parent_path();
+    const std::string manifest_text = read_text_file(manifest);
+    const std::string graph_name = manifest.stem().string();
+    const std::string graph_package_name = find_manifest_scalar(manifest_text, "graph_package");
+    if (graph_package_name.empty()) {
+        throw std::runtime_error("manifest is missing graph_package entry");
+    }
+    const std::filesystem::path graph_path = manifest_dir / graph_package_name;
+    AiGraphPackage packaged{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(graph_path), packaged, error)) {
+        throw std::runtime_error("failed to parse manifest graph package: " + error);
+    }
+
+    ExpectedManifestCompileContract expected{};
+    expected.shape_mode = packaged.shape_mode;
+    expected.tensor_count = static_cast<uint32_t>(packaged.tensors.size());
+    expected.memory_plan_entries = static_cast<uint32_t>(packaged.memory_plan.size());
+    count_memory_plan_totals(packaged,
+                             expected.memory_plan_total_bytes,
+                             expected.memory_plan_total_scratchpad_bytes,
+                             expected.memory_plan_scratchpad_span_bytes);
+    expected.dynamic_tensor_count = static_cast<uint32_t>(packaged.dynamic_tensors.size());
+    for (const AiTensorMetadata& tensor : packaged.tensors) {
+        switch (tensor.role) {
+        case AiTensorRole::Input:
+            ++expected.input_tensor_count;
+            break;
+        case AiTensorRole::Output:
+            ++expected.output_tensor_count;
+            break;
+        case AiTensorRole::Weight:
+            ++expected.weight_tensor_count;
+            break;
+        case AiTensorRole::Constant:
+            ++expected.constant_tensor_count;
+            break;
+        case AiTensorRole::Intermediate:
+            ++expected.intermediate_tensor_count;
+            break;
+        case AiTensorRole::Invalid:
+            break;
+        }
+    }
+    expected.scratchpad_budget_bytes = packaged.scratchpad_budget_bytes;
+    count_table_entry_spans(
+        packaged, expected.input_table_bytes, expected.output_table_bytes);
+    expected.op_count = static_cast<uint32_t>(packaged.ops.size());
+    expected.dependency_count = static_cast<uint32_t>(packaged.dependencies.size());
+    expected.root_op_count = count_roots(packaged);
+    expected.leaf_op_count = count_leaves(packaged);
+    expected.dependency_depth = count_max_depth(packaged);
+    expected.max_fanin = count_max_fanin(packaged);
+    expected.max_fanout = count_max_fanout(packaged);
+    expected.graph_package_bytes = graph_package_bytes;
+    expected.runtime_shape_table_offset =
+        packaged.shape_mode == AiShapeMode::DynamicBounded ? align_up_u32(graph_package_bytes, 64) : 0;
+        expected.runtime_shape_table_addr =
+        expected.runtime_shape_table_offset == 0
+            ? 0
+            : expected.graph_package_addr + expected.runtime_shape_table_offset;
+    expected.runtime_shape_table_bytes =
+        packaged.shape_mode == AiShapeMode::DynamicBounded
+            ? static_cast<uint32_t>(packaged.dynamic_tensors.size() * kAiRuntimeShapeEntryBytes)
+            : 0;
+
+    const std::string source_tag_key = "source_tag=";
+    const size_t source_tag_pos = manifest_text.find(source_tag_key);
+    if (source_tag_pos != std::string::npos) {
+        const size_t value_begin = source_tag_pos + source_tag_key.size();
+        const size_t value_end = manifest_text.find_first_of("\r\n", value_begin);
+        const std::string value = manifest_text.substr(value_begin, value_end - value_begin);
+        expected.source_tag = static_cast<uint32_t>(std::stoul(value, nullptr, 0));
+    }
+
+    if (packaged.shape_mode == AiShapeMode::DynamicBounded) {
+        const std::string runtime_shape_name = find_manifest_scalar(manifest_text, "runtime_shape_table");
+        if (runtime_shape_name.empty()) {
+            throw std::runtime_error("manifest is missing runtime_shape_table entry for dynamic graph");
+        }
+        const std::filesystem::path runtime_shape_path = manifest_dir / runtime_shape_name;
+        std::vector<AiRuntimeShapeEntry> runtime_shapes{};
+        if (!parse_ai_runtime_shape_table(read_binary_file(runtime_shape_path),
+                                          packaged.dynamic_tensors.size(),
+                                          runtime_shapes,
+                                          error)) {
+            throw std::runtime_error("failed to parse manifest runtime shape table: " + error);
+        }
+        expected.runtime_shape_count = static_cast<uint32_t>(runtime_shapes.size());
+    }
+
+    count_transfers(packaged,
+                    expected.load_entry_count,
+                    expected.store_entry_count,
+                    expected.load_plan_bytes,
+                    expected.store_plan_bytes);
+    return expected;
+}
+
+bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
+                                        AiShapeMode expected_shape_mode,
+                                        uint32_t expected_runtime_shape_count,
+                                        uint32_t expected_tensor_count,
+                                        uint32_t expected_memory_plan_entries,
+                                        uint32_t expected_memory_plan_total_bytes,
+                                        uint32_t expected_memory_plan_total_scratchpad_bytes,
+                                        uint32_t expected_memory_plan_scratchpad_span_bytes,
+                                        uint32_t expected_dynamic_tensor_count,
+                                        uint32_t expected_input_tensor_count,
+                                        uint32_t expected_output_tensor_count,
+                                        uint32_t expected_weight_tensor_count,
+                                        uint32_t expected_constant_tensor_count,
+                                        uint32_t expected_intermediate_tensor_count,
+                                        uint32_t expected_scratchpad_budget_bytes,
+                                        uint32_t expected_op_count,
+                                        uint32_t expected_dependency_count,
+                                        uint32_t expected_root_op_count,
+                                        uint32_t expected_leaf_op_count,
+                                        uint32_t expected_dependency_depth,
+                                        uint32_t expected_max_fanin,
+                                        uint32_t expected_max_fanout,
+                                        uint32_t expected_load_entry_count,
+                                        uint32_t expected_store_entry_count,
+                                        uint32_t expected_load_plan_bytes,
+                                        uint32_t expected_store_plan_bytes,
+                                        uint64_t expected_token,
+                                        uint32_t expected_flags,
+                                        uint64_t expected_graph_package_addr,
+                                        uint64_t expected_input_table_addr,
+                                        uint64_t expected_output_table_addr,
+                                        uint32_t expected_input_table_bytes,
+                                        uint32_t expected_output_table_bytes,
+                                        uint64_t expected_submission_base_snapshot,
+                                        uint64_t expected_completion_base_snapshot,
+                                        uint32_t expected_graph_package_bytes,
+                                        uint32_t expected_runtime_shape_table_offset,
+                                        uint32_t expected_runtime_shape_table_bytes,
+                                        uint64_t expected_runtime_shape_table_addr,
+                                        uint32_t expected_source_tag,
+                                        uint32_t expected_queue_depth_snapshot,
+                                        uint32_t expected_submission_queue_size_snapshot,
+                                        uint32_t expected_completion_queue_size_snapshot,
+                                        uint32_t expected_submission_head_snapshot,
+                                        uint32_t expected_submission_tail_snapshot,
+                                        uint32_t expected_completion_head_snapshot,
+                                        uint32_t expected_completion_tail_snapshot,
+                                        bool expected_queue_configured_snapshot,
+                                        const char* context) {
+    return expect(summary.last_submission_shape_mode == expected_shape_mode, context) &&
+           expect(summary.last_submission_runtime_shape_count == expected_runtime_shape_count, context) &&
+           expect(summary.last_submission_tensor_count == expected_tensor_count, context) &&
+           expect(summary.last_submission_memory_plan_entries == expected_memory_plan_entries, context) &&
+           expect(summary.last_submission_memory_plan_total_bytes ==
+                      expected_memory_plan_total_bytes,
+                  context) &&
+           expect(summary.last_submission_memory_plan_total_scratchpad_bytes ==
+                      expected_memory_plan_total_scratchpad_bytes,
+                  context) &&
+           expect(summary.last_submission_memory_plan_scratchpad_span_bytes ==
+                      expected_memory_plan_scratchpad_span_bytes,
+                  context) &&
+           expect(summary.last_submission_dynamic_tensor_count == expected_dynamic_tensor_count, context) &&
+           expect(summary.last_submission_input_tensor_count == expected_input_tensor_count, context) &&
+           expect(summary.last_submission_output_tensor_count == expected_output_tensor_count, context) &&
+           expect(summary.last_submission_weight_tensor_count == expected_weight_tensor_count, context) &&
+           expect(summary.last_submission_constant_tensor_count == expected_constant_tensor_count, context) &&
+           expect(summary.last_submission_intermediate_tensor_count ==
+                      expected_intermediate_tensor_count,
+                  context) &&
+           expect(summary.last_submission_scratchpad_budget_bytes ==
+                      expected_scratchpad_budget_bytes,
+                  context) &&
+           expect(summary.last_submission_op_count == expected_op_count, context) &&
+           expect(summary.last_submission_dependency_count == expected_dependency_count, context) &&
+           expect(summary.last_submission_root_op_count == expected_root_op_count, context) &&
+           expect(summary.last_submission_leaf_op_count == expected_leaf_op_count, context) &&
+           expect(summary.last_submission_dependency_depth == expected_dependency_depth, context) &&
+           expect(summary.last_submission_max_fanin == expected_max_fanin, context) &&
+           expect(summary.last_submission_max_fanout == expected_max_fanout, context) &&
+           expect(summary.last_submission_load_entry_count == expected_load_entry_count, context) &&
+           expect(summary.last_submission_store_entry_count == expected_store_entry_count, context) &&
+           expect(summary.last_submission_load_plan_bytes == expected_load_plan_bytes, context) &&
+           expect(summary.last_submission_store_plan_bytes == expected_store_plan_bytes, context) &&
+           expect(summary.last_submission_token == expected_token, context) &&
+           expect(summary.last_submission_flags == expected_flags, context) &&
+           expect(summary.last_submission_graph_package_addr == expected_graph_package_addr, context) &&
+           expect(summary.last_submission_input_table_addr == expected_input_table_addr, context) &&
+           expect(summary.last_submission_output_table_addr == expected_output_table_addr, context) &&
+           expect(summary.last_submission_input_table_span_bytes == expected_input_table_bytes, context) &&
+           expect(summary.last_submission_output_table_span_bytes == expected_output_table_bytes, context) &&
+           expect(summary.submission_base_snapshot == expected_submission_base_snapshot, context) &&
+           expect(summary.completion_base_snapshot == expected_completion_base_snapshot, context) &&
+           expect(summary.last_submission_graph_package_bytes == expected_graph_package_bytes, context) &&
+           expect(summary.last_submission_runtime_shape_table_offset ==
+                      expected_runtime_shape_table_offset,
+                  context) &&
+           expect(summary.last_submission_runtime_shape_table_bytes ==
+                      expected_runtime_shape_table_bytes,
+                  context) &&
+           expect(summary.last_submission_runtime_shape_table_addr ==
+                      expected_runtime_shape_table_addr,
+                  context) &&
+           expect(summary.last_submission_source_tag == expected_source_tag, context) &&
+           expect(summary.queue_depth_snapshot == expected_queue_depth_snapshot, context) &&
+           expect(summary.submission_queue_size_snapshot ==
+                      expected_submission_queue_size_snapshot,
+                  context) &&
+           expect(summary.completion_queue_size_snapshot ==
+                      expected_completion_queue_size_snapshot,
+                  context) &&
+           expect(summary.submission_head_snapshot == expected_submission_head_snapshot, context) &&
+           expect(summary.submission_tail_snapshot == expected_submission_tail_snapshot, context) &&
+           expect(summary.completion_head_snapshot == expected_completion_head_snapshot, context) &&
+           expect(summary.completion_tail_snapshot == expected_completion_tail_snapshot, context) &&
+           expect(summary.queue_configured_snapshot == expected_queue_configured_snapshot, context);
+}
+
 bool expect_matching_op_summaries(const std::vector<AiOpProfileSummary>& actual,
                                   const std::vector<AiAcceleratorOpProfileSummary>& expected,
                                   const char* context) {
@@ -303,6 +859,67 @@ bool expect_matching_op_summaries(const std::vector<AiOpProfileSummary>& actual,
         }
     }
     return true;
+}
+
+bool expect_submission_lifecycle(const AiAcceleratorProfileSummary& summary,
+                                 bool expected_accepted,
+                                 bool expected_completed,
+                                 const char* context) {
+    return expect(summary.last_submission_accepted == expected_accepted, context) &&
+           expect(summary.last_submission_completed == expected_completed, context);
+}
+
+bool expect_empty_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
+                                              const char* context) {
+    return expect_submission_compile_contract(summary,
+                                              AiShapeMode::Static,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              false,
+                                              context);
 }
 
 bool expect_manifest_device_profile_summary(const std::filesystem::path& manifest,
@@ -326,6 +943,8 @@ bool expect_manifest_device_profile_summary(const std::filesystem::path& manifes
     Machine machine{};
     const Machine::AiProfileRunResult result = machine.run_ai_profile_manifest(manifest.string());
     const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    const ExpectedManifestCompileContract expected =
+        expected_manifest_compile_contract(manifest, result.graph_package_bytes);
     return expect(result.completed, context) &&
            expect(result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, context) &&
            expect(result.fault_code == AI_ACCEL_FAULT_NONE, context) &&
@@ -345,6 +964,7 @@ bool expect_manifest_device_profile_summary(const std::filesystem::path& manifes
            expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
            expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
            expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, true, true, context) &&
            expect_submission_timing(summary,
                                     expected_device_cycles,
                                     expected_dma_cycles,
@@ -365,6 +985,55 @@ bool expect_manifest_device_profile_summary(const std::filesystem::path& manifes
                                            expected_dma_load_bytes,
                                            expected_dma_store_bytes,
                                            context) &&
+           expect_submission_compile_contract(summary,
+                                              expected.shape_mode,
+                                              expected.runtime_shape_count,
+                                              expected.tensor_count,
+                                              expected.memory_plan_entries,
+                                              expected.memory_plan_total_bytes,
+                                              expected.memory_plan_total_scratchpad_bytes,
+                                              expected.memory_plan_scratchpad_span_bytes,
+                                              expected.dynamic_tensor_count,
+                                              expected.input_tensor_count,
+                                              expected.output_tensor_count,
+                                              expected.weight_tensor_count,
+                                              expected.constant_tensor_count,
+                                              expected.intermediate_tensor_count,
+                                              expected.scratchpad_budget_bytes,
+                                              expected.op_count,
+                                              expected.dependency_count,
+                                              expected.root_op_count,
+                                              expected.leaf_op_count,
+                                              expected.dependency_depth,
+                                              expected.max_fanin,
+                                              expected.max_fanout,
+                                              expected.load_entry_count,
+                                              expected.store_entry_count,
+                                              expected.load_plan_bytes,
+                                              expected.store_plan_bytes,
+                                              expected.token,
+                                              expected.flags,
+                                              expected.graph_package_addr,
+                                              expected.input_table_addr,
+                                              expected.output_table_addr,
+                                              expected.input_table_bytes,
+                                              expected.output_table_bytes,
+                                              expected.submission_base_snapshot,
+                                              expected.completion_base_snapshot,
+                                              expected.graph_package_bytes,
+                                              expected.runtime_shape_table_offset,
+                                              expected.runtime_shape_table_bytes,
+                                              expected.runtime_shape_table_addr,
+                                              expected.source_tag,
+                                              expected.queue_depth_snapshot,
+                                              expected.submission_queue_size_snapshot,
+                                              expected.completion_queue_size_snapshot,
+                                              expected.submission_head_snapshot,
+                                              expected.submission_tail_snapshot,
+                                              expected.completion_head_snapshot,
+                                              expected.completion_tail_snapshot,
+                                              expected.queue_configured_snapshot,
+                                              context) &&
            expect(summary.tile_count == expected_tile_count, context) &&
            expect(summary.scratchpad_peak_bytes == expected_scratchpad_peak_bytes, context) &&
            expect(summary.op_summaries.size() == expected_op_count, context) &&
@@ -394,6 +1063,8 @@ bool expect_manifest_rerun_refresh(const std::filesystem::path& first_manifest,
     const Machine::AiProfileRunResult first = machine.run_ai_profile_manifest(first_manifest.string());
     const Machine::AiProfileRunResult second = machine.run_ai_profile_manifest(second_manifest.string());
     const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    const ExpectedManifestCompileContract expected =
+        expected_manifest_compile_contract(second_manifest, second.graph_package_bytes);
     return expect(first.completed, context) &&
            expect(second.completed, context) &&
            expect(second.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, context) &&
@@ -434,6 +1105,55 @@ bool expect_manifest_rerun_refresh(const std::filesystem::path& first_manifest,
                                            expected_second_dma_load_bytes,
                                            expected_second_dma_store_bytes,
                                            context) &&
+           expect_submission_compile_contract(summary,
+                                              expected.shape_mode,
+                                              expected.runtime_shape_count,
+                                              expected.tensor_count,
+                                              expected.memory_plan_entries,
+                                              expected.memory_plan_total_bytes,
+                                              expected.memory_plan_total_scratchpad_bytes,
+                                              expected.memory_plan_scratchpad_span_bytes,
+                                              expected.dynamic_tensor_count,
+                                              expected.input_tensor_count,
+                                              expected.output_tensor_count,
+                                              expected.weight_tensor_count,
+                                              expected.constant_tensor_count,
+                                              expected.intermediate_tensor_count,
+                                              expected.scratchpad_budget_bytes,
+                                              expected.op_count,
+                                              expected.dependency_count,
+                                              expected.root_op_count,
+                                              expected.leaf_op_count,
+                                              expected.dependency_depth,
+                                              expected.max_fanin,
+                                              expected.max_fanout,
+                                              expected.load_entry_count,
+                                              expected.store_entry_count,
+                                              expected.load_plan_bytes,
+                                              expected.store_plan_bytes,
+                                              expected.token,
+                                              expected.flags,
+                                              expected.graph_package_addr,
+                                              expected.input_table_addr,
+                                              expected.output_table_addr,
+                                              expected.input_table_bytes,
+                                              expected.output_table_bytes,
+                                              expected.submission_base_snapshot,
+                                              expected.completion_base_snapshot,
+                                              expected.graph_package_bytes,
+                                              expected.runtime_shape_table_offset,
+                                              expected.runtime_shape_table_bytes,
+                                              expected.runtime_shape_table_addr,
+                                              expected.source_tag,
+                                              expected.queue_depth_snapshot,
+                                              expected.submission_queue_size_snapshot,
+                                              expected.completion_queue_size_snapshot,
+                                              expected.submission_head_snapshot,
+                                              expected.submission_tail_snapshot,
+                                              expected.completion_head_snapshot,
+                                              expected.completion_tail_snapshot,
+                                              expected.queue_configured_snapshot,
+                                              context) &&
            expect(summary.tile_count == expected_second_tile_count, context) &&
            expect(summary.scratchpad_peak_bytes == expected_second_scratchpad_peak_bytes, context) &&
            expect(summary.op_summaries.size() == expected_second_op_count, context) &&
@@ -469,9 +1189,11 @@ bool expect_manifest_failure_resets_device_state(const std::filesystem::path& su
            expect(machine.ai_accelerator().doorbell_count() == 0, context) &&
            expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
            expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, false, false, context) &&
            expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
            expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
            expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
+           expect_empty_submission_compile_contract(summary, context) &&
            expect(summary.tile_count == 0, context) &&
            expect(summary.scratchpad_peak_bytes == 0, context) &&
            expect(summary.op_summaries.empty(), context);
@@ -479,6 +1201,8 @@ bool expect_manifest_failure_resets_device_state(const std::filesystem::path& su
 
 bool expect_manifest_timeout_state(const std::filesystem::path& manifest,
                                    uint64_t expected_ticks,
+                                   uint32_t expected_graph_package_bytes,
+                                   uint32_t expected_source_tag,
                                    uint64_t expected_device_cycles,
                                    uint64_t expected_dma_cycles,
                                    uint64_t expected_compute_cycles,
@@ -490,6 +1214,8 @@ bool expect_manifest_timeout_state(const std::filesystem::path& manifest,
     Machine machine{};
     const Machine::AiProfileRunResult result = machine.run_ai_profile_manifest(manifest.string());
     const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    const ExpectedManifestCompileContract expected =
+        expected_manifest_compile_contract(manifest, expected_graph_package_bytes);
     return expect(!result.completed, context) &&
            expect(result.completion_status == AI_ACCEL_COMPLETION_STATUS_FAULT, context) &&
            expect(result.fault_code == AI_ACCEL_FAULT_TIMEOUT, context) &&
@@ -510,9 +1236,59 @@ bool expect_manifest_timeout_state(const std::filesystem::path& manifest,
            expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
            expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
            expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, true, false, context) &&
            expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
            expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
            expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
+           expect_submission_compile_contract(summary,
+                                              expected.shape_mode,
+                                              expected.runtime_shape_count,
+                                              expected.tensor_count,
+                                              expected.memory_plan_entries,
+                                              expected.memory_plan_total_bytes,
+                                              expected.memory_plan_total_scratchpad_bytes,
+                                              expected.memory_plan_scratchpad_span_bytes,
+                                              expected.dynamic_tensor_count,
+                                              expected.input_tensor_count,
+                                              expected.output_tensor_count,
+                                              expected.weight_tensor_count,
+                                              expected.constant_tensor_count,
+                                              expected.intermediate_tensor_count,
+                                              expected.scratchpad_budget_bytes,
+                                              expected.op_count,
+                                              expected.dependency_count,
+                                              expected.root_op_count,
+                                              expected.leaf_op_count,
+                                              expected.dependency_depth,
+                                              expected.max_fanin,
+                                              expected.max_fanout,
+                                              expected.load_entry_count,
+                                              expected.store_entry_count,
+                                              expected.load_plan_bytes,
+                                              expected.store_plan_bytes,
+                                              expected.token,
+                                              expected.flags,
+                                              expected.graph_package_addr,
+                                              expected.input_table_addr,
+                                              expected.output_table_addr,
+                                              expected.input_table_bytes,
+                                              expected.output_table_bytes,
+                                              expected.submission_base_snapshot,
+                                              expected.completion_base_snapshot,
+                                              expected.graph_package_bytes,
+                                              expected.runtime_shape_table_offset,
+                                              expected.runtime_shape_table_bytes,
+                                              expected.runtime_shape_table_addr,
+                                              expected_source_tag,
+                                              expected.queue_depth_snapshot,
+                                              expected.submission_queue_size_snapshot,
+                                              expected.completion_queue_size_snapshot,
+                                              expected.submission_head_snapshot,
+                                              expected.submission_tail_snapshot,
+                                              expected.completion_head_snapshot,
+                                              expected.completion_tail_snapshot,
+                                              expected.queue_configured_snapshot,
+                                              context) &&
            expect(summary.tile_count == 0, context) &&
            expect(summary.scratchpad_peak_bytes == 0, context) &&
            expect(summary.op_summaries.empty(), context);
@@ -521,6 +1297,8 @@ bool expect_manifest_timeout_state(const std::filesystem::path& manifest,
 bool expect_manifest_completion_fault_state(const std::filesystem::path& manifest,
                                             uint64_t expected_ticks,
                                             uint32_t expected_fault_code,
+                                            uint32_t expected_graph_package_bytes,
+                                            uint32_t expected_source_tag,
                                             uint64_t expected_device_cycles,
                                             uint64_t expected_dma_cycles,
                                             uint64_t expected_compute_cycles,
@@ -533,6 +1311,8 @@ bool expect_manifest_completion_fault_state(const std::filesystem::path& manifes
     Machine machine{};
     const Machine::AiProfileRunResult result = machine.run_ai_profile_manifest(manifest.string());
     const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    const ExpectedManifestCompileContract expected =
+        expected_manifest_compile_contract(manifest, expected_graph_package_bytes);
     return expect(result.completed, context) &&
            expect(result.completion_status == AI_ACCEL_COMPLETION_STATUS_FAULT, context) &&
            expect(result.fault_code == expected_fault_code, context) &&
@@ -553,6 +1333,7 @@ bool expect_manifest_completion_fault_state(const std::filesystem::path& manifes
            expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
            expect(machine.ai_accelerator().last_fault() == expected_fault_code, context) &&
            expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, true, true, context) &&
            expect_submission_timing(summary,
                                     expected_device_cycles,
                                     expected_dma_cycles,
@@ -564,6 +1345,55 @@ bool expect_manifest_completion_fault_state(const std::filesystem::path& manifes
                                     context) &&
            expect_submission_outcome(summary, expected_fault_code, 0, expected_bytes_moved, context) &&
            expect_submission_dma_breakdown(summary, 6, 0, expected_bytes_moved, 0, context) &&
+           expect_submission_compile_contract(summary,
+                                              expected.shape_mode,
+                                              expected.runtime_shape_count,
+                                              expected.tensor_count,
+                                              expected.memory_plan_entries,
+                                              expected.memory_plan_total_bytes,
+                                              expected.memory_plan_total_scratchpad_bytes,
+                                              expected.memory_plan_scratchpad_span_bytes,
+                                              expected.dynamic_tensor_count,
+                                              expected.input_tensor_count,
+                                              expected.output_tensor_count,
+                                              expected.weight_tensor_count,
+                                              expected.constant_tensor_count,
+                                              expected.intermediate_tensor_count,
+                                              expected.scratchpad_budget_bytes,
+                                              expected.op_count,
+                                              expected.dependency_count,
+                                              expected.root_op_count,
+                                              expected.leaf_op_count,
+                                              expected.dependency_depth,
+                                              expected.max_fanin,
+                                              expected.max_fanout,
+                                              expected.load_entry_count,
+                                              expected.store_entry_count,
+                                              expected.load_plan_bytes,
+                                              expected.store_plan_bytes,
+                                              expected.token,
+                                              expected.flags,
+                                              expected.graph_package_addr,
+                                              expected.input_table_addr,
+                                              expected.output_table_addr,
+                                              expected.input_table_bytes,
+                                              expected.output_table_bytes,
+                                              expected.submission_base_snapshot,
+                                              expected.completion_base_snapshot,
+                                              expected.graph_package_bytes,
+                                              expected.runtime_shape_table_offset,
+                                              expected.runtime_shape_table_bytes,
+                                              expected.runtime_shape_table_addr,
+                                              expected_source_tag,
+                                              expected.queue_depth_snapshot,
+                                              expected.submission_queue_size_snapshot,
+                                              expected.completion_queue_size_snapshot,
+                                              expected.submission_head_snapshot,
+                                              expected.submission_tail_snapshot,
+                                              expected.completion_head_snapshot,
+                                              expected.completion_tail_snapshot,
+                                              expected.queue_configured_snapshot,
+                                              context) &&
            expect(summary.tile_count == 0, context) &&
            expect(summary.scratchpad_peak_bytes == 0, context) &&
            expect(summary.op_summaries.empty(), context);
@@ -595,10 +1425,13 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
 
     const std::filesystem::path manifest = temp_dir / (std::string(workload) + ".manifest");
     const std::filesystem::path graph = temp_dir / (std::string(workload) + ".graph.bin");
+    const std::filesystem::path memory_plan_summary =
+        temp_dir / (std::string(workload) + ".memory_plan.txt");
     const std::filesystem::path actual = temp_dir / (std::string(workload) + ".output0.actual.bin");
     const std::filesystem::path expected = temp_dir / (std::string(workload) + ".output0.expected.bin");
     if (!expect_file_exists(manifest, "expected ai_proto manifest") ||
         !expect_file_exists(graph, "expected ai_proto graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected ai_proto memory plan summary") ||
         !expect_file_exists(expected, "expected ai_proto expected output")) {
         return false;
     }
@@ -611,6 +1444,14 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
     }
     if (!expect(!package.ops.empty(), "expected packaged graph ops") ||
         !expect(package.scratchpad_budget_bytes != 0, "expected packaged scratchpad budget")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            package.shape_mode == AiShapeMode::DynamicBounded
+                                                ? "dynamic_bounded"
+                                                : "static",
+                                            "expected ai_proto memory plan summary to match graph package")) {
         return false;
     }
 
@@ -684,11 +1525,17 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
 
     const std::filesystem::path manifest = temp_dir / "dynamic_gemm.manifest";
     const std::filesystem::path graph = temp_dir / "dynamic_gemm.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "dynamic_gemm.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "dynamic_gemm.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "dynamic_gemm.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "dynamic_gemm.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "dynamic_gemm.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected dynamic_gemm manifest") ||
         !expect_file_exists(graph, "expected dynamic_gemm graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected dynamic_gemm memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected dynamic_gemm resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected dynamic_gemm runtime shape table") ||
         !expect_file_exists(expected, "expected dynamic_gemm expected output")) {
         return false;
@@ -704,6 +1551,19 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
                 "expected dynamic_gemm packaged graph shape mode") ||
         !expect(package.dynamic_tensors.size() == 2,
                 "expected dynamic_gemm packaged graph dynamic tensors")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected dynamic_gemm memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected dynamic_gemm resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -778,11 +1638,17 @@ bool expect_pack_and_profile_task_spec_dynamic_gemm(const std::filesystem::path&
 
     const std::filesystem::path manifest = temp_dir / "custom_dynamic_gemm.manifest";
     const std::filesystem::path graph = temp_dir / "custom_dynamic_gemm.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "custom_dynamic_gemm.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "custom_dynamic_gemm.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_gemm.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "custom_dynamic_gemm.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "custom_dynamic_gemm.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected task-spec manifest") ||
         !expect_file_exists(graph, "expected task-spec graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected task-spec memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected task-spec resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected task-spec runtime shape table") ||
         !expect_file_exists(expected, "expected task-spec expected output")) {
         return false;
@@ -811,6 +1677,19 @@ bool expect_pack_and_profile_task_spec_dynamic_gemm(const std::filesystem::path&
                 "expected task-spec output tensor memory plan") ||
         !expect(package.scratchpad_budget_bytes == 80,
                 "expected task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected task-spec GEMM memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected task-spec GEMM resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -873,11 +1752,17 @@ bool expect_pack_and_profile_task_spec_dynamic_cnn(const std::filesystem::path& 
 
     const std::filesystem::path manifest = temp_dir / "custom_dynamic_cnn.manifest";
     const std::filesystem::path graph = temp_dir / "custom_dynamic_cnn.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "custom_dynamic_cnn.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "custom_dynamic_cnn.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_cnn.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "custom_dynamic_cnn.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "custom_dynamic_cnn.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected CNN task-spec manifest") ||
         !expect_file_exists(graph, "expected CNN task-spec graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected CNN task-spec memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected CNN task-spec resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected CNN task-spec runtime shape table") ||
         !expect_file_exists(expected, "expected CNN task-spec expected output")) {
         return false;
@@ -915,6 +1800,19 @@ bool expect_pack_and_profile_task_spec_dynamic_cnn(const std::filesystem::path& 
                 "expected CNN task-spec output tensor memory plan") ||
         !expect(package.scratchpad_budget_bytes == 192,
                 "expected CNN task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected task-spec CNN memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected task-spec CNN resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -982,11 +1880,18 @@ bool expect_pack_and_profile_task_spec_dynamic_tiny_model(const std::filesystem:
 
     const std::filesystem::path manifest = temp_dir / "custom_dynamic_tiny_model.manifest";
     const std::filesystem::path graph = temp_dir / "custom_dynamic_tiny_model.graph.bin";
+    const std::filesystem::path memory_plan_summary =
+        temp_dir / "custom_dynamic_tiny_model.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "custom_dynamic_tiny_model.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "custom_dynamic_tiny_model.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "custom_dynamic_tiny_model.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "custom_dynamic_tiny_model.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected dynamic tiny task-spec manifest") ||
         !expect_file_exists(graph, "expected dynamic tiny task-spec graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected dynamic tiny task-spec memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected dynamic tiny task-spec resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected dynamic tiny task-spec runtime shape table") ||
         !expect_file_exists(expected, "expected dynamic tiny task-spec expected output")) {
         return false;
@@ -1021,6 +1926,20 @@ bool expect_pack_and_profile_task_spec_dynamic_tiny_model(const std::filesystem:
                 "expected dynamic tiny task-spec output tensor memory plan") ||
         !expect(package.scratchpad_budget_bytes == 64,
                 "expected dynamic tiny task-spec scratchpad budget from automatic memory plan")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(
+            memory_plan_summary,
+            package,
+            "dynamic_bounded",
+            "expected dynamic tiny task-spec memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected dynamic tiny task-spec resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -1117,10 +2036,14 @@ bool expect_pack_and_profile_task_spec_static_tiny_attention(const std::filesyst
 
     const std::filesystem::path manifest = temp_dir / "custom_tiny_attention_static.manifest";
     const std::filesystem::path graph = temp_dir / "custom_tiny_attention_static.graph.bin";
+    const std::filesystem::path memory_plan_summary =
+        temp_dir / "custom_tiny_attention_static.memory_plan.txt";
     const std::filesystem::path actual = temp_dir / "custom_tiny_attention_static.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "custom_tiny_attention_static.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected static tiny attention task-spec manifest") ||
         !expect_file_exists(graph, "expected static tiny attention task-spec graph package") ||
+        !expect_file_exists(memory_plan_summary,
+                            "expected static tiny attention task-spec memory plan summary") ||
         !expect_file_exists(expected, "expected static tiny attention task-spec expected output")) {
         return false;
     }
@@ -1157,6 +2080,13 @@ bool expect_pack_and_profile_task_spec_static_tiny_attention(const std::filesyst
                 "expected static tiny attention task-spec output tensor memory plan") ||
         !expect(package.scratchpad_budget_bytes == 64,
                 "expected static tiny attention task-spec scratchpad budget")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(
+            memory_plan_summary,
+            package,
+            "static",
+            "expected static tiny attention task-spec memory plan summary to match graph package")) {
         return false;
     }
 
@@ -1215,11 +2145,17 @@ bool expect_pack_and_profile_dynamic_tiny_model(const std::filesystem::path& tem
 
     const std::filesystem::path manifest = temp_dir / "dynamic_tiny_model.manifest";
     const std::filesystem::path graph = temp_dir / "dynamic_tiny_model.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "dynamic_tiny_model.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "dynamic_tiny_model.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "dynamic_tiny_model.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "dynamic_tiny_model.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "dynamic_tiny_model.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected dynamic_tiny_model manifest") ||
         !expect_file_exists(graph, "expected dynamic_tiny_model graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected dynamic_tiny_model memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected dynamic_tiny_model resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected dynamic_tiny_model runtime shape table") ||
         !expect_file_exists(expected, "expected dynamic_tiny_model expected output")) {
         return false;
@@ -1235,6 +2171,19 @@ bool expect_pack_and_profile_dynamic_tiny_model(const std::filesystem::path& tem
                 "expected dynamic_tiny_model packaged graph shape mode") ||
         !expect(package.dynamic_tensors.size() == 4,
                 "expected dynamic_tiny_model packaged graph dynamic tensors")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected dynamic_tiny_model memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected dynamic_tiny_model resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -1295,11 +2244,17 @@ bool expect_pack_and_profile_dynamic_cnn(const std::filesystem::path& temp_dir) 
 
     const std::filesystem::path manifest = temp_dir / "dynamic_cnn.manifest";
     const std::filesystem::path graph = temp_dir / "dynamic_cnn.graph.bin";
+    const std::filesystem::path memory_plan_summary = temp_dir / "dynamic_cnn.memory_plan.txt";
+    const std::filesystem::path resolved_memory_plan_summary =
+        temp_dir / "dynamic_cnn.resolved_memory_plan.txt";
     const std::filesystem::path runtime_shape = temp_dir / "dynamic_cnn.runtime_shape.bin";
     const std::filesystem::path actual = temp_dir / "dynamic_cnn.output0.actual.bin";
     const std::filesystem::path expected = temp_dir / "dynamic_cnn.output0.expected.bin";
     if (!expect_file_exists(manifest, "expected dynamic_cnn manifest") ||
         !expect_file_exists(graph, "expected dynamic_cnn graph package") ||
+        !expect_file_exists(memory_plan_summary, "expected dynamic_cnn memory plan summary") ||
+        !expect_file_exists(resolved_memory_plan_summary,
+                            "expected dynamic_cnn resolved memory plan summary") ||
         !expect_file_exists(runtime_shape, "expected dynamic_cnn runtime shape table") ||
         !expect_file_exists(expected, "expected dynamic_cnn expected output")) {
         return false;
@@ -1315,6 +2270,19 @@ bool expect_pack_and_profile_dynamic_cnn(const std::filesystem::path& temp_dir) 
                 "expected dynamic_cnn packaged graph shape mode") ||
         !expect(package.dynamic_tensors.size() == 5,
                 "expected dynamic_cnn packaged graph dynamic tensors")) {
+        return false;
+    }
+    if (!expect_memory_plan_summary_matches(memory_plan_summary,
+                                            package,
+                                            "dynamic_bounded",
+                                            "expected dynamic_cnn memory plan summary to match graph package")) {
+        return false;
+    }
+    if (!expect_resolved_memory_plan_summary_matches(
+            resolved_memory_plan_summary,
+            package,
+            runtime_shape,
+            "expected dynamic_cnn resolved memory plan summary to match runtime-resolved graph package")) {
         return false;
     }
 
@@ -1366,6 +2334,72 @@ bool expect_pack_and_profile_dynamic_cnn(const std::filesystem::path& temp_dir) 
                   "expected dynamic_cnn output to match packaged expectation");
 }
 
+bool expect_demo_v1_pack(const std::filesystem::path& temp_dir) {
+    const CommandResult pack =
+        run_command("python3 workloads/ai_proto/pack_graph.py --demo-v1 --out-dir " + temp_dir.string());
+    if (!expect(pack.exit_code == 0, "expected demo_v1 pack command to succeed")) {
+        std::fprintf(stderr, "%s\n", pack.output.c_str());
+        return false;
+    }
+    if (!expect_contains(pack.output, "packed demo_v1 out_dir=", "expected demo_v1 pack summary")) {
+        return false;
+    }
+
+    const std::filesystem::path guest_manifest = temp_dir / "guest_ai_accel_demo.manifest";
+    const std::filesystem::path gemm_spec = temp_dir / "custom_dynamic_gemm.task_spec.json";
+    const std::filesystem::path cnn_spec = temp_dir / "custom_dynamic_cnn.task_spec.json";
+    const std::filesystem::path tiny_spec = temp_dir / "custom_dynamic_tiny_model.task_spec.json";
+    const std::filesystem::path attention_spec = temp_dir / "custom_tiny_attention_static.task_spec.json";
+    const std::filesystem::path fail_closed_spec =
+        temp_dir / "custom_dynamic_gemm_fail_closed.task_spec.json";
+    const std::filesystem::path gemm_manifest = temp_dir / "custom_dynamic_gemm.manifest";
+    const std::filesystem::path cnn_manifest = temp_dir / "custom_dynamic_cnn.manifest";
+    const std::filesystem::path tiny_manifest = temp_dir / "custom_dynamic_tiny_model.manifest";
+    const std::filesystem::path attention_manifest = temp_dir / "custom_tiny_attention_static.manifest";
+
+    return expect_file_exists(guest_manifest, "expected demo_v1 guest bridge manifest") &&
+           expect_file_exists(gemm_spec, "expected demo_v1 GEMM task spec") &&
+           expect_file_exists(cnn_spec, "expected demo_v1 CNN task spec") &&
+           expect_file_exists(tiny_spec, "expected demo_v1 tiny-model task spec") &&
+           expect_file_exists(attention_spec, "expected demo_v1 attention task spec") &&
+           expect_file_exists(fail_closed_spec, "expected demo_v1 fail-closed task spec") &&
+           expect_file_exists(gemm_manifest, "expected demo_v1 GEMM manifest") &&
+           expect_file_exists(cnn_manifest, "expected demo_v1 CNN manifest") &&
+           expect_file_exists(tiny_manifest, "expected demo_v1 tiny-model manifest") &&
+           expect_file_exists(attention_manifest, "expected demo_v1 attention manifest");
+}
+
+bool expect_demo_v1_run_script(const std::filesystem::path& temp_dir) {
+    const CommandResult run = run_command(
+        "python3 workloads/ai_proto/run_demo_v1.py --out-dir " + temp_dir.string());
+    if (!expect(run.exit_code == 0, "expected demo_v1 run script to succeed")) {
+        std::fprintf(stderr, "%s\n", run.output.c_str());
+        return false;
+    }
+    return expect_contains(run.output, "== demo_v1 pack ==", "expected demo_v1 run script pack section") &&
+           expect_contains(run.output,
+                           "== guest_ai_accel_demo summary ==",
+                           "expected demo_v1 run script guest bridge section") &&
+           expect_contains(run.output,
+                           "== custom_dynamic_gemm summary ==",
+                           "expected demo_v1 run script GEMM section") &&
+           expect_contains(run.output,
+                           "== custom_dynamic_cnn summary ==",
+                           "expected demo_v1 run script CNN section") &&
+           expect_contains(run.output,
+                           "== custom_dynamic_tiny_model summary ==",
+                           "expected demo_v1 run script tiny-model section") &&
+           expect_contains(run.output,
+                           "== demo_v1 fail-closed ==",
+                           "expected demo_v1 run script fail-closed section") &&
+           expect_contains(run.output,
+                           "demo_v1 summary: packed fixed assets, ran 4 positive samples, and verified 1 fail-closed sample",
+                           "expected demo_v1 run script final summary") &&
+           expect_contains(run.output,
+                           "demo_v1 note: custom_tiny_attention_static.manifest was packed but not run",
+                           "expected demo_v1 run script optional attention note");
+}
+
 }  // namespace
 
 int main() {
@@ -1373,14 +2407,17 @@ int main() {
         const std::filesystem::path profile_mk = "workloads/ai_proto/profile.mk";
         const std::filesystem::path pack_graph = "workloads/ai_proto/pack_graph.py";
         const std::filesystem::path readme = "workloads/ai_proto/README.md";
+        const std::filesystem::path demo_v1_runner = "workloads/ai_proto/run_demo_v1.py";
 
         if (!expect_file_exists(profile_mk, "ai profile smoke expects workload profile") ||
             !expect_file_exists(pack_graph, "ai profile smoke expects packer script") ||
+            !expect_file_exists(demo_v1_runner, "ai profile smoke expects demo_v1 runner") ||
             !expect_file_exists(readme, "ai profile smoke expects ai workload readme")) {
             return 1;
         }
 
         const std::string profile_text = read_text_file(profile_mk);
+        const std::string readme_text = read_text_file(readme);
         const CommandResult make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=cnn");
         const CommandResult tiny_model_make_run = run_command(
@@ -1432,7 +2469,22 @@ int main() {
                              "expected dynamic_cnn dry-run manifest argument") ||
             !expect_contains(tiny_attention_make_run.output,
                              "--ai-profile-manifest workloads/ai_proto/generated/tiny_attention_static.manifest",
-                             "expected tiny_attention_static dry-run manifest argument")) {
+                             "expected tiny_attention_static dry-run manifest argument") ||
+            !expect_contains(readme_text,
+                             "python3 workloads/ai_proto/pack_graph.py --demo-v1 --out-dir workloads/ai_proto/generated/demo_v1",
+                             "expected ai workload readme to document demo_v1 pack command") ||
+            !expect_contains(readme_text,
+                             "python3 workloads/ai_proto/run_demo_v1.py --out-dir workloads/ai_proto/generated/demo_v1",
+                             "expected ai workload readme to document demo_v1 run command") ||
+            !expect_contains(readme_text,
+                             "./mycpu --ai-profile-manifest workloads/ai_proto/generated/demo_v1/custom_dynamic_gemm.manifest",
+                             "expected ai workload readme to document demo_v1 manifest run command") ||
+            !expect_contains(readme_text,
+                             "custom_dynamic_gemm_fail_closed.task_spec.json",
+                             "expected ai workload readme to document demo_v1 fail-closed example") ||
+            !expect_contains(readme_text,
+                             "guest_ai_accel_demo.manifest",
+                             "expected ai workload readme to document guest bridge demo asset")) {
             std::fprintf(stderr, "%s\n", make_run.output.c_str());
             return 1;
         }
@@ -2044,6 +3096,12 @@ int main() {
                                           task_spec_malformed_dir,
                                           "static_tiny_attention_v1 value_vector item 1 must be finite",
                                           "expected non-finite fp32 attention task-spec to fail") &&
+            expect_demo_v1_pack(temp_dir / "demo_v1") &&
+            expect_demo_v1_run_script(temp_dir / "demo_v1_run") &&
+            expect_task_spec_pack_failure(temp_dir / "demo_v1" / "custom_dynamic_gemm_fail_closed.task_spec.json",
+                                          temp_dir / "demo_v1",
+                                          "bounded_dynamic_gemm_v1 task spec has unexpected top-level key: unexpected_extra",
+                                          "expected demo_v1 fail-closed task-spec to fail") &&
             expect_pack_and_profile(temp_dir,
                                     "cnn",
                                     "name=cnn",
@@ -2136,6 +3194,8 @@ int main() {
                                                       .c_str()),
                 6,
                 AI_ACCEL_FAULT_ILLEGAL_OP,
+                324,
+                29,
                 6,
                 6,
                 0,
@@ -2279,6 +3339,10 @@ int main() {
             expect_matching_binary_file(temp_dir / "custom_tiny_attention_static.graph.bin",
                                         temp_dir / "tiny_attention_static.graph.bin",
                                         "expected task-spec tiny attention to share graph package with tiny_attention_static") &&
+            expect_matching_text_file(
+                temp_dir / "custom_tiny_attention_static.memory_plan.txt",
+                temp_dir / "tiny_attention_static.memory_plan.txt",
+                "expected task-spec tiny attention to share memory plan summary with tiny_attention_static") &&
             expect_pack_and_profile_task_spec_dynamic_gemm(temp_dir) &&
             expect_manifest_device_profile_summary(temp_dir / "custom_dynamic_gemm.manifest",
                                                    15,
@@ -2343,6 +3407,14 @@ int main() {
                 temp_dir / "custom_dynamic_gemm.runtime_shape.bin",
                 temp_dir / "dynamic_gemm.runtime_shape.bin",
                 "expected task-spec dynamic gemm to share runtime shape table with dynamic_gemm") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_gemm.memory_plan.txt",
+                temp_dir / "dynamic_gemm.memory_plan.txt",
+                "expected task-spec dynamic gemm to share memory plan summary with dynamic_gemm") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_gemm.resolved_memory_plan.txt",
+                temp_dir / "dynamic_gemm.resolved_memory_plan.txt",
+                "expected task-spec dynamic gemm to share resolved memory plan summary with dynamic_gemm") &&
             expect_pack_and_profile_task_spec_dynamic_tiny_model(temp_dir) &&
             expect_pack_and_profile_dynamic_tiny_model(temp_dir) &&
             expect_manifest_device_profile_summary(temp_dir / "custom_dynamic_tiny_model.manifest",
@@ -2370,6 +3442,14 @@ int main() {
                 temp_dir / "custom_dynamic_tiny_model.runtime_shape.bin",
                 temp_dir / "dynamic_tiny_model.runtime_shape.bin",
                 "expected task-spec dynamic tiny model to share runtime shape table with dynamic_tiny_model") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_tiny_model.memory_plan.txt",
+                temp_dir / "dynamic_tiny_model.memory_plan.txt",
+                "expected task-spec dynamic tiny model to share memory plan summary with dynamic_tiny_model") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_tiny_model.resolved_memory_plan.txt",
+                temp_dir / "dynamic_tiny_model.resolved_memory_plan.txt",
+                "expected task-spec dynamic tiny model to share resolved memory plan summary with dynamic_tiny_model") &&
             expect_manifest_device_profile_summary(temp_dir / "dynamic_tiny_model.manifest",
                                                    15,
                                                    9,
@@ -2396,6 +3476,14 @@ int main() {
                 temp_dir / "custom_dynamic_cnn.runtime_shape.bin",
                 temp_dir / "dynamic_cnn.runtime_shape.bin",
                 "expected task-spec dynamic cnn to share runtime shape table with dynamic_cnn") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_cnn.memory_plan.txt",
+                temp_dir / "dynamic_cnn.memory_plan.txt",
+                "expected task-spec dynamic cnn to share memory plan summary with dynamic_cnn") &&
+            expect_matching_text_file(
+                temp_dir / "custom_dynamic_cnn.resolved_memory_plan.txt",
+                temp_dir / "dynamic_cnn.resolved_memory_plan.txt",
+                "expected task-spec dynamic cnn to share resolved memory plan summary with dynamic_cnn") &&
             expect_manifest_device_profile_summary(temp_dir / "dynamic_cnn.manifest",
                                                    17,
                                                    9,
@@ -2458,6 +3546,8 @@ int main() {
                                                   "max_ticks",
                                                   "1"),
                 1,
+                556,
+                67,
                 1,
                 1,
                 0,
@@ -2465,7 +3555,7 @@ int main() {
                 2,
                 1,
                 0,
-                "expected timeout manifest to leave default device profile state");
+                "expected timeout manifest to preserve accepted submission compile contract");
 
         std::filesystem::remove_all(temp_dir);
         if (!ok) {
