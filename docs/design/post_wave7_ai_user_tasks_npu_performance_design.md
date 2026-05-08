@@ -20,8 +20,8 @@
 - 状态文档：
   - [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
   - [../status/mainline_status.md](../status/mainline_status.md)
-- 当前活跃计划：
-  - [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
+- 已完成计划：
+  - [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
 - 相关设计：
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)

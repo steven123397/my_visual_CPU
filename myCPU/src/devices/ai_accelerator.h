@@ -107,6 +107,8 @@ struct AiAcceleratorProfileSummary {
     bool allow_dma_compute_overlap{false};
     uint32_t dma_setup_cycles{0};
     uint32_t dma_bytes_per_cycle{0};
+    bool last_submission_accepted{false};
+    bool last_submission_completed{false};
     AiShapeMode last_submission_shape_mode{AiShapeMode::Static};
     uint32_t last_submission_runtime_shape_count{0};
     uint32_t last_submission_tensor_count{0};
@@ -237,6 +239,8 @@ struct AiActiveSubmissionState {
     uint64_t profile_output_table_addr{0};
     uint32_t profile_input_table_span_bytes{0};
     uint32_t profile_output_table_span_bytes{0};
+    bool profile_accepted{false};
+    bool profile_completed{false};
 };
 
 class AiAccelerator : public Device {

@@ -65,6 +65,14 @@ bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
            expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
 }
 
+bool expect_submission_lifecycle(const AiAcceleratorProfileSummary& summary,
+                                 bool expected_accepted,
+                                 bool expected_completed,
+                                 const char* context) {
+    return expect(summary.last_submission_accepted == expected_accepted, context) &&
+           expect(summary.last_submission_completed == expected_completed, context);
+}
+
 bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
                                         AiShapeMode expected_shape_mode,
                                         uint32_t expected_runtime_shape_count,
@@ -264,6 +272,10 @@ int main() {
         const AiAcceleratorProfileSummary& initial_summary = machine.ai_accelerator().profile_summary();
         if (!expect_default_timing_model(initial_summary,
                                          "guest AI accel demo should preserve timing metadata before run") ||
+            !expect_submission_lifecycle(initial_summary,
+                                         false,
+                                         false,
+                                         "guest AI accel demo should start with empty submission lifecycle") ||
             !expect_submission_timing(initial_summary,
                                       0,
                                       0,
@@ -656,6 +668,10 @@ int main() {
         const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
         if (!expect_default_timing_model(summary,
                                          "guest AI accel demo should preserve default timing model metadata") ||
+            !expect_submission_lifecycle(summary,
+                                         true,
+                                         true,
+                                         "guest AI accel demo should publish accepted+completed lifecycle") ||
             !expect_submission_timing(summary,
                                       8,
                                       6,
@@ -764,6 +780,10 @@ int main() {
         const AiAcceleratorProfileSummary& reset_summary = machine.ai_accelerator().profile_summary();
         if (!expect_default_timing_model(reset_summary,
                                          "guest AI accel demo should preserve timing metadata after reset") ||
+            !expect_submission_lifecycle(reset_summary,
+                                         false,
+                                         false,
+                                         "guest AI accel demo should clear submission lifecycle after reset") ||
             !expect_submission_timing(reset_summary,
                                       0,
                                       0,

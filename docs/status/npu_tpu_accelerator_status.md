@@ -16,9 +16,8 @@
   - [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)
   - [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
-- 当前活跃计划：
-  - [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
 - 已完成计划：
+  - [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
   - [../plan/history_plan.md#post-wave7-ai-demo-v1-plan](../plan/history_plan.md#post-wave7-ai-demo-v1-plan)
   - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
   - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
@@ -521,11 +520,10 @@
    [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)。
 2. `Wave 7` 展示优先做白名单 demo + 参数化小模型，而不是任意模型上传；前端参数必须经
    host 侧 graph package 生成 / 校验和资源限制后再运行。
-3. 当前已新增
-   [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
-   与
-   [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)，
-   后续应先在这套文档里明确第一刀的用户任务入口、compile / memory plan 和性能模型阶段边界。
+3. `Post-Wave 7 用户 AI 任务 + NPU 性能模型` 第一阶段已完成并归档到
+   [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)；
+   当前 design / status 已固定第一刀的用户任务入口、compile / memory plan、设备自有
+   profile contract 和第一阶段验证矩阵。
 4. 展示窗口前的近端收口已完成并归档到
    [../plan/history_plan.md#post-wave7-ai-demo-v1-plan](../plan/history_plan.md#post-wave7-ai-demo-v1-plan)：
    当前已有固定的 `Demo V1` 入口、推荐样例顺序、fail-closed 观察点和最小验证矩阵。
@@ -536,9 +534,8 @@
    共用 lowering / memory-plan 路径已形成显式 guardrail，后续再逐步扩展到更宽 task kind。
 6. 在第一刀实现中，优先保持现有 `dynamic_tiny_model`、`dynamic_gemm`、`dynamic_cnn`、
    `tiny_attention_static`、guest `ai_accel_demo` 和既有 profile / debug 可观察性继续作为稳定 guardrail。
-7. 如果下一轮继续推进，应回到
-   [../plan/post_wave7_ai_user_tasks_npu_performance_plan.md](../plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
-   的长线边界，优先处理更宽 importer / 性能模型切片，而不是重新打开 `Demo V1` 收口范围。
+7. 如果下一轮继续推进，应沿当前 design / status 已收口的长线边界继续推进，优先处理更宽
+   importer / 性能模型切片，而不是重新打开 `Demo V1` 收口范围。
 
 ## 验证基线
 

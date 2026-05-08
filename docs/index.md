@@ -39,8 +39,8 @@
     `标准 Linux 发行版平台` 五阶段长线活跃计划。
 17. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
     `Wave 7` 阶段性收口后的 `用户自定义 AI 任务 + NPU 性能模型` 新主线设计入口。
-18. [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
-    `用户自定义 AI 任务 + NPU 性能模型` 新主线的当前活跃计划。
+18. [plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
+    `用户自定义 AI 任务 + NPU 性能模型` 第一阶段完成计划归档。
 19. [showcase/post_wave7_ai_demo_v1_guide.md](showcase/post_wave7_ai_demo_v1_guide.md)
     `Post-Wave 7 AI demo v1` 的最短演示路径、预期输出与最小验证矩阵。
 20. [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
@@ -76,7 +76,7 @@
 - `AI accelerator / NPU`
   - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
   - [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
-  - [plan/post_wave7_ai_user_tasks_npu_performance_plan.md](plan/post_wave7_ai_user_tasks_npu_performance_plan.md)
+  - [plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
   - [showcase/post_wave7_ai_demo_v1_guide.md](showcase/post_wave7_ai_demo_v1_guide.md)
   - [plan/history_plan.md#post-wave7-ai-demo-v1-plan](plan/history_plan.md#post-wave7-ai-demo-v1-plan)
   - [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)

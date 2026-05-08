@@ -566,6 +566,8 @@ void AiAccelerator::update_profile_summary_submission_compile_contract() {
     if (!active_submission_valid_) {
         return;
     }
+    profile_summary_.last_submission_accepted = active_submission_.profile_accepted;
+    profile_summary_.last_submission_completed = active_submission_.profile_completed;
     profile_summary_.last_submission_shape_mode = active_submission_.profile_shape_mode;
     profile_summary_.last_submission_runtime_shape_count =
         active_submission_.profile_runtime_shape_count;
@@ -679,6 +681,8 @@ void AiAccelerator::update_profile_summary_submission_outcome() {
     if (!active_submission_valid_) {
         return;
     }
+    profile_summary_.last_submission_accepted = active_submission_.profile_accepted;
+    profile_summary_.last_submission_completed = active_submission_.profile_completed;
     profile_summary_.last_submission_fault = active_submission_.completion_fault;
     profile_summary_.last_submission_retired_ops = active_submission_.completion_retired_ops;
     profile_summary_.last_submission_bytes_moved = active_submission_.completion_bytes_moved;
@@ -1095,6 +1099,8 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     active_submission_.profile_output_table_addr = profile_output_table_addr;
     active_submission_.profile_input_table_span_bytes = profile_input_table_span_bytes;
     active_submission_.profile_output_table_span_bytes = profile_output_table_span_bytes;
+    active_submission_.profile_accepted = true;
+    active_submission_.profile_completed = false;
     active_submission_valid_ = true;
     update_profile_summary_submission_compile_contract();
     return true;
@@ -1319,6 +1325,7 @@ bool AiAccelerator::complete_descriptor(const AiSubmissionDescriptor& descriptor
     active_submission_.completion_fault = fault;
     active_submission_.completion_retired_ops = retired_ops;
     active_submission_.completion_bytes_moved = bytes_moved;
+    active_submission_.profile_completed = true;
     ++completion_cycles_;
     retired_ops_ += retired_ops;
     update_profile_summary_submission_timing();

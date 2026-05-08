@@ -861,6 +861,14 @@ bool expect_matching_op_summaries(const std::vector<AiOpProfileSummary>& actual,
     return true;
 }
 
+bool expect_submission_lifecycle(const AiAcceleratorProfileSummary& summary,
+                                 bool expected_accepted,
+                                 bool expected_completed,
+                                 const char* context) {
+    return expect(summary.last_submission_accepted == expected_accepted, context) &&
+           expect(summary.last_submission_completed == expected_completed, context);
+}
+
 bool expect_empty_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
                                               const char* context) {
     return expect_submission_compile_contract(summary,
@@ -956,6 +964,7 @@ bool expect_manifest_device_profile_summary(const std::filesystem::path& manifes
            expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
            expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
            expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, true, true, context) &&
            expect_submission_timing(summary,
                                     expected_device_cycles,
                                     expected_dma_cycles,
@@ -1180,6 +1189,7 @@ bool expect_manifest_failure_resets_device_state(const std::filesystem::path& su
            expect(machine.ai_accelerator().doorbell_count() == 0, context) &&
            expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
            expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, false, false, context) &&
            expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
            expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
            expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
@@ -1226,6 +1236,7 @@ bool expect_manifest_timeout_state(const std::filesystem::path& manifest,
            expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
            expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
            expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, true, false, context) &&
            expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
            expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
            expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
@@ -1322,6 +1333,7 @@ bool expect_manifest_completion_fault_state(const std::filesystem::path& manifes
            expect(machine.ai_accelerator().doorbell_count() == 1, context) &&
            expect(machine.ai_accelerator().last_fault() == expected_fault_code, context) &&
            expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, true, true, context) &&
            expect_submission_timing(summary,
                                     expected_device_cycles,
                                     expected_dma_cycles,

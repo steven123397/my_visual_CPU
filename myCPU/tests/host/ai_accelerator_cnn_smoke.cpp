@@ -141,6 +141,14 @@ bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
            expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
 }
 
+bool expect_submission_lifecycle(const AiAcceleratorProfileSummary& summary,
+                                 bool expected_accepted,
+                                 bool expected_completed,
+                                 const char* context) {
+    return expect(summary.last_submission_accepted == expected_accepted, context) &&
+           expect(summary.last_submission_completed == expected_completed, context);
+}
+
 bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
                                         AiShapeMode expected_shape_mode,
                                         uint32_t expected_runtime_shape_count,
@@ -816,6 +824,10 @@ int main() {
             !expect(dma_load_bytes == 20, "expected CNN DMA load bytes") ||
             !expect(dma_store_bytes == 12, "expected CNN DMA store bytes") ||
             !expect_default_timing_model(profile_summary, "expected default CNN timing model") ||
+            !expect_submission_lifecycle(profile_summary,
+                                         true,
+                                         true,
+                                         "expected accepted+completed lifecycle for CNN success") ||
             !expect_submission_timing(profile_summary, 18, 9, 5, 4, 1, 1, 20,
                                       "expected CNN submission timing summary") ||
             !expect_submission_outcome(profile_summary, AI_ACCEL_FAULT_NONE, 63, 32,
@@ -1217,6 +1229,10 @@ int main() {
         }
         const AiAcceleratorProfileSummary& reset_profile_summary = machine.ai_accelerator().profile_summary();
         if (!expect_default_timing_model(reset_profile_summary, "expected default CNN timing model after reset") ||
+            !expect_submission_lifecycle(reset_profile_summary,
+                                         false,
+                                         false,
+                                         "expected empty lifecycle after CNN reset") ||
             !expect_submission_timing(reset_profile_summary, 0, 0, 0, 0, 0, 0, 0,
                                       "expected empty CNN submission timing after reset") ||
             !expect_submission_outcome(reset_profile_summary, AI_ACCEL_FAULT_NONE, 0, 0,

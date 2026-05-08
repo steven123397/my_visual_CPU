@@ -153,6 +153,14 @@ bool expect_submission_dma_breakdown(const AiAcceleratorProfileSummary& summary,
            expect(summary.last_submission_dma_store_bytes == expected_store_bytes, context);
 }
 
+bool expect_submission_lifecycle(const AiAcceleratorProfileSummary& summary,
+                                 bool expected_accepted,
+                                 bool expected_completed,
+                                 const char* context) {
+    return expect(summary.last_submission_accepted == expected_accepted, context) &&
+           expect(summary.last_submission_completed == expected_completed, context);
+}
+
 bool expect_submission_compile_contract(const AiAcceleratorProfileSummary& summary,
                                         AiShapeMode expected_shape_mode,
                                         uint32_t expected_runtime_shape_count,
@@ -705,6 +713,10 @@ int main() {
             !expect(compute_cycles == 2, "expected GEMM compute cycles") ||
             !expect(stall_cycles == 2, "expected GEMM stall cycles") ||
             !expect_default_timing_model(success_profile, "expected default GEMM timing model") ||
+            !expect_submission_lifecycle(success_profile,
+                                         true,
+                                         true,
+                                         "expected accepted+completed lifecycle for GEMM success") ||
             !expect_submission_timing(success_profile, 13, 9, 2, 2, 1, 1, 15,
                                       "expected GEMM submission timing summary") ||
             !expect_submission_outcome(success_profile, AI_ACCEL_FAULT_NONE, 12, 20,
@@ -833,6 +845,10 @@ int main() {
             !expect(dma_load_bytes == 32, "expected cumulative GEMM DMA load bytes") ||
             !expect(dma_store_bytes == 4, "expected cumulative GEMM DMA store bytes") ||
             !expect_default_timing_model(fault_profile, "expected stable GEMM timing model after fault") ||
+            !expect_submission_lifecycle(fault_profile,
+                                         true,
+                                         true,
+                                         "expected accepted+completed lifecycle for GEMM completion fault") ||
             !expect_submission_timing(fault_profile, 6, 6, 0, 0, 1, 1, 8,
                                       "expected fault GEMM submission timing summary") ||
             !expect_submission_outcome(fault_profile, AI_ACCEL_FAULT_ILLEGAL_OP, 0, 16,

@@ -23,6 +23,25 @@
 
 ### 2026-05-05
 
+#### post-wave7-ai-user-tasks-npu-performance-plan
+
+- 原文件：`post_wave7_ai_user_tasks_npu_performance_plan.md`
+- 完成内容：完成 `Post-Wave 7 用户 AI 任务 + NPU 性能模型` 第一阶段收口。当前已把受限
+  `task-spec importer`、compile / runtime-shape / memory-plan sidecar、设备自有
+  `profile_summary()` staged metadata，以及 host manifest/profile / guest bridge 的
+  生命周期合同一起收成稳定基线。第一阶段正式开放的 task-spec 入口固定为
+  `bounded_dynamic_gemm_v1`、`bounded_dynamic_cnn_v1`、
+  `bounded_dynamic_tiny_model_v1` 与 `static_tiny_attention_v1`；设备自有
+  `profile_summary()` 也已覆盖 compile/runtime-shape、topology、transfer、queue、
+  descriptor、timing/outcome/DMA breakdown 等 host-side contract。
+- 实现过程摘要：这一轮保持 AI 边界收窄，优先推进 `devices/workload/host smoke/性能模型`
+  切片，不提前打开 Linux-facing driver、shared frontend、overlap、multi outstanding
+  queue 或完整 runtime。实现上先把 importer 和 automatic memory plan 收成受限、
+  fail-closed 的 host-side contract，再把现有 `timed-simple no-overlap` 与设备自有
+  `profile_summary()` 持续补齐为可测 staged metadata；最后把 direct device、guest bridge
+  和 manifest/profile readback 三条路径的生命周期与验证矩阵对齐到同一份事实来源。
+- 结果参考：[post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
+
 #### post-wave7-ai-demo-v1-plan
 
 - 原文件：`post_wave7_ai_demo_v1_plan.md`
