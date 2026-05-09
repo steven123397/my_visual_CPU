@@ -488,12 +488,11 @@ function renderDemoCard(demo, state) {
   const gateNote = renderDemoGateNote(demo, available, state);
 
   return `
-    <article class="${classes}" ${attrs}>
-      <div class="demo-card__topline">
-        <span>${escapeHtml(routeLabel)}</span>
-        <strong>${statusLabel}</strong>
+    <article class="${classes}" data-route-label="${escapeHtml(routeLabel)}" ${attrs}>
+      <div class="demo-card__title-row">
+        <h4>${escapeHtml(title)}</h4>
+        <strong class="demo-card__status">${statusLabel}</strong>
       </div>
-      <h4>${escapeHtml(title)}</h4>
       <p>${escapeHtml(summary)}</p>
       <div class="demo-card__meta">
         ${badge ? `<span>${escapeHtml(badge)}</span>` : ''}
@@ -504,6 +503,61 @@ function renderDemoCard(demo, state) {
         ${ops.slice(0, 4).map((item) => `<span>${escapeHtml(item)}</span>`).join('')}
       </div>
       ${gateNote}
+    </article>
+  `;
+}
+
+function renderCompactDemoCard(demo, state) {
+  const {
+    entry,
+    localToolAvailable,
+    topical,
+    available,
+    selected,
+    scenarioKey,
+  } = resolveDemoState(demo, state);
+  const routeLabel = demo.title;
+  const title = entry?.title ?? demo.title;
+  const summary = entry?.summary ?? demo.fallbackSummary ?? '';
+  const marker = entry?.workload?.expectedMarker ?? demo.marker ?? '';
+  const ops = entry?.workload?.ops ?? demo.panels ?? [];
+  const classes = [
+    'demo-card',
+    'demo-card--compact',
+    selected ? 'is-selected' : '',
+    available ? 'is-available' : 'is-soon',
+    localToolAvailable ? 'is-local-tool' : '',
+    topical ? 'is-topical' : '',
+    demo.gated && !available ? 'is-gated' : '',
+    isLinuxConsoleDemo(demo) && available ? 'is-ready' : '',
+  ].filter(Boolean).join(' ');
+  const attrs = available
+    ? (
+        localToolAvailable
+          ? `data-demo-tool="${escapeHtml(demo.localTool)}" role="button" tabindex="0"`
+          : topical
+            ? `data-scenario-key="${escapeHtml(scenarioKey)}" data-scenario-test="${escapeHtml(demo.scenarioTest ?? '')}" data-scenario-backend="${escapeHtml(demo.backend ?? state.backend)}" role="button" tabindex="0"`
+            : `data-demo-test="${escapeHtml(demo.test)}" data-demo-backend="${escapeHtml(demo.backend ?? state.backend)}" role="button" tabindex="0"`
+      )
+    : 'aria-disabled="true"';
+  const statusLabel = demoCardStatusLabel(demo, available, selected, topical);
+  return `
+    <article class="${classes}" data-route-label="${escapeHtml(routeLabel)}" ${attrs}>
+      <div class="demo-card__title-row">
+        <h4>${escapeHtml(title)}</h4>
+        <strong class="demo-card__status">${statusLabel}</strong>
+      </div>
+      <div class="demo-card__details">
+        <p>${escapeHtml(summary)}</p>
+        <div class="demo-card__meta">
+          <span>${escapeHtml(demo.backend ?? 'planned')}</span>
+          <span>${escapeHtml(marker)}</span>
+        </div>
+        <div class="demo-card__chips">
+          ${ops.slice(0, 4).map((item) => `<span>${escapeHtml(item)}</span>`).join('')}
+        </div>
+        ${renderDemoGateNote(demo, available, state)}
+      </div>
     </article>
   `;
 }
@@ -621,16 +675,6 @@ function selectedScenarioContext(state) {
   };
 }
 
-function renderSessionMetric(label, value, detail = '') {
-  return `
-    <article class="demo-workspace__session-metric">
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value)}</strong>
-      ${detail ? `<em>${escapeHtml(detail)}</em>` : ''}
-    </article>
-  `;
-}
-
 function renderScenarioFocusList(items = []) {
   return `
     <ul class="demo-workspace__focus-list">
@@ -646,17 +690,6 @@ function renderScenarioContract(context) {
       <strong>${escapeHtml(context.readyLabel)}</strong>
       ${renderScenarioFocusList(context.sessionContract)}
       <p>${escapeHtml(context.nextAction)}</p>
-    </article>
-  `;
-}
-
-function renderScenarioObservation(context) {
-  return `
-    <article class="demo-workspace__brief-card demo-workspace__brief-card--observation">
-      <span>Observation trail</span>
-      <strong>Follow the stage, then verify the machine.</strong>
-      ${renderScenarioFocusList(context.observationHints)}
-      <p>Keep the live stage, inspector stack, and evidence drawer aligned to the same claim.</p>
     </article>
   `;
 }
@@ -864,10 +897,10 @@ function renderRuntimeLane(context, state) {
 
 function renderLabNavigator(state) {
   return `
-    <aside class="demo-workspace__navigator">
+    <nav class="demo-workspace__navigator" aria-label="Lab navigator">
       <div class="demo-workspace__navigator-head">
-        <span>Lab navigator</span>
-        <strong>Choose a scenario family, then launch a session.</strong>
+        <span>Scenario navigator</span>
+        <strong>Choose a lab route.</strong>
       </div>
       <div class="demo-workspace__navigator-groups">
         ${DEMO_GROUPS.map((group) => `
@@ -877,12 +910,12 @@ function renderLabNavigator(state) {
               <p>${escapeHtml(group.summary)}</p>
             </div>
             <div class="demo-group__cards">
-              ${group.demos.map((demo) => renderDemoCard(demo, state)).join('')}
+              ${group.demos.map((demo) => renderCompactDemoCard(demo, state)).join('')}
             </div>
           </section>
         `).join('')}
       </div>
-    </aside>
+    </nav>
   `;
 }
 
@@ -1162,56 +1195,67 @@ function renderAuthPanel(state) {
 }
 
 function renderDemoWorkspace(state) {
+  return `
+    <div class="console-sidebar__workspace">
+      ${renderLinuxLoadProgress(state)}
+      ${renderLabNavigator(state)}
+    </div>
+  `;
+}
+
+function renderGuidePanel(state) {
   const context = selectedScenarioContext(state);
-  const showAiTinyModelPanel =
+  const syncControls = renderScenarioControls(context, state);
+  const linuxLane = renderLinuxLane(context);
+  const runtimeLane = renderRuntimeLane(context, state);
+  return `
+    <section class="guide-panel">
+      <div class="guide-panel__head">
+        <span>Guide</span>
+        <strong>${escapeHtml(context.title)}</strong>
+        <p>${escapeHtml(context.brief)}</p>
+      </div>
+      <div class="guide-panel__chips">
+        <span>${escapeHtml(context.groupTitle)}</span>
+        <span>${escapeHtml(context.sessionBackend)}</span>
+        <span>${escapeHtml(context.sessionState)}</span>
+        <span>${escapeHtml(context.marker)}</span>
+      </div>
+      <article class="guide-card">
+        <span>Scenario</span>
+        <strong>${escapeHtml(context.primaryStage)}</strong>
+        <p>${escapeHtml(context.summary)}</p>
+      </article>
+      ${renderScenarioContract(context)}
+      <article class="guide-card">
+        <span>What to watch</span>
+        <strong>Focus on the panels that matter for this route.</strong>
+        ${renderScenarioFocusList(context.inspectorFocus)}
+      </article>
+      ${renderScenarioEvidence(context)}
+      ${syncControls}
+      ${linuxLane}
+      ${runtimeLane}
+    </section>
+  `;
+}
+
+function shouldShowAiTinyModelPanel(state) {
+  const context = selectedScenarioContext(state);
+  return (
     context.groupTitle === 'AI Labs' ||
     state.aiTinyModel.templates.length > 0 ||
     state.aiTinyModel.runState !== 'idle' ||
     state.aiTinyModel.result !== null ||
-    state.aiTinyModel.error !== null;
-  return `
-    <div class="demo-workspace__intro">
-      <span>Lab workbench</span>
-      <strong>Run, control, inspect, and explain every scenario from one browser workbench.</strong>
-    </div>
-    <div class="demo-workspace__session-bar">
-      ${renderSessionMetric('Selected lab', context.groupTitle, context.readyLabel)}
-      ${renderSessionMetric('Scenario', context.title, state.runState)}
-      ${renderSessionMetric('Primary stage', context.primaryStage, context.sessionBackend)}
-      ${renderSessionMetric('Expected marker', context.marker, context.assetNote ? 'asset-aware' : 'snapshot-backed')}
-      ${renderSessionMetric('Next action', context.nextAction, context.sessionState)}
-    </div>
-    ${renderLinuxLoadProgress(state)}
-    <div class="demo-workspace__layout">
-      ${renderLabNavigator(state)}
-      <section class="demo-workspace__focus">
-        <div class="demo-workspace__focus-head">
-          <span>Scenario brief</span>
-          <strong>${escapeHtml(context.title)}</strong>
-          <p>${escapeHtml(context.brief)}</p>
-        </div>
-        <div class="demo-workspace__focus-grid">
-          <article class="demo-workspace__brief-card">
-            <span>Primary stage</span>
-            <strong>${escapeHtml(context.primaryStage)}</strong>
-            <p>${escapeHtml(context.summary)}</p>
-          </article>
-          ${renderScenarioControls(context, state)}
-          ${renderScenarioContract(context)}
-          <article class="demo-workspace__brief-card">
-            <span>Inspector focus</span>
-            <strong>Watch the machine where this scenario matters most.</strong>
-            ${renderScenarioFocusList(context.inspectorFocus)}
-          </article>
-          ${renderScenarioObservation(context)}
-          ${renderScenarioEvidence(context)}
-        </div>
-        ${renderLinuxLane(context)}
-        ${renderRuntimeLane(context, state)}
-        ${showAiTinyModelPanel ? renderAiTinyModelPanel(state) : ''}
-      </section>
-    </div>
-  `;
+    state.aiTinyModel.error !== null
+  );
+}
+
+function renderAiLabPanel(state) {
+  if (!shouldShowAiTinyModelPanel(state)) {
+    return '';
+  }
+  return renderAiTinyModelPanel(state);
 }
 
 export function renderApp(elements, state) {
@@ -1230,6 +1274,9 @@ export function renderApp(elements, state) {
   if (elements.demoWorkspace) {
     elements.demoWorkspace.innerHTML = renderDemoWorkspace(state);
   }
+  if (elements.guide) {
+    elements.guide.innerHTML = renderGuidePanel(state);
+  }
   if (elements.authPanel) {
     elements.authPanel.innerHTML = renderAuthPanel(state);
   }
@@ -1241,6 +1288,9 @@ export function renderApp(elements, state) {
   if (elements.workload) {
     elements.workload.innerHTML = renderWorkloadPanel(currentTest, snapshot);
   }
+  if (elements.aiLab) {
+    elements.aiLab.innerHTML = renderAiLabPanel(state);
+  }
   elements.predictor.innerHTML = renderPredictor(snapshot);
   elements.pipeline.innerHTML = snapshot
     ? `${renderPipelineBoard(snapshot)}${renderTimeline(timelineRows)}`
@@ -1249,8 +1299,8 @@ export function renderApp(elements, state) {
   if (elements.vector) {
     elements.vector.innerHTML = renderVectorPanel(snapshot, previous, currentTest, currentBackend);
   }
-  elements.devices.innerHTML = renderPlatformGroup(snapshot, state.layout.platformGroupOpen);
-  elements.registers.innerHTML = renderArchitectureGroup(snapshot, registers, state.layout.architectureGroupOpen);
+  elements.devices.innerHTML = renderPlatformGroup(snapshot);
+  elements.registers.innerHTML = renderArchitectureGroup(snapshot, registers);
   elements.csrs.innerHTML = '';
   elements.bus.innerHTML = '';
 

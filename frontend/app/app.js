@@ -27,7 +27,6 @@ import {
   pushSnapshot,
   setTerminalCollapsed,
   setTerminalFocus,
-  setInspectorGroupOpen,
   setLoadedSession,
   setLoadProgress,
   setAiTinyModelTemplates,
@@ -44,6 +43,7 @@ import {
   selectDemo,
   selectScenario,
   syncScenarioSessionSelection,
+  togglePanelCollapsed,
 } from './state.js';
 import { formatLoadErrorMessage } from './load_error_message.js';
 import { createTerminalInputPump } from './terminal_input_pump.js';
@@ -61,6 +61,7 @@ const elements = {
   terminal: document.querySelector('#terminal-slot'),
   summary: document.querySelector('#summary-slot'),
   workload: document.querySelector('#workload-slot'),
+  aiLab: document.querySelector('#ai-lab-slot'),
   predictor: document.querySelector('#predictor-slot'),
   pipeline: document.querySelector('#pipeline-slot'),
   events: document.querySelector('#events-slot'),
@@ -69,6 +70,7 @@ const elements = {
   registers: document.querySelector('#registers-slot'),
   csrs: document.querySelector('#csrs-slot'),
   bus: document.querySelector('#bus-slot'),
+  guide: document.querySelector('#guide-slot'),
   notice: document.querySelector('#notice'),
   authPanel: document.querySelector('#auth-panel'),
 };
@@ -78,9 +80,34 @@ function shouldConnectRealtime() {
   return !state.auth.required || state.auth.authenticated;
 }
 
+function applyPanelCollapses() {
+  const collapsed = new Set(state.layout.collapsedPanels);
+  document.querySelectorAll('.panel').forEach((panel) => {
+    const panelClass = Array.from(panel.classList).find((c) => c.startsWith('panel-')) ?? '';
+    const isCollapsed = collapsed.has(panelClass);
+    panel.dataset.collapsed = String(isCollapsed);
+
+    const header = panel.querySelector('.panel-header');
+    if (!header) {
+      return;
+    }
+    let toggle = header.querySelector('.panel-toggle');
+    if (!toggle) {
+      toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'panel-toggle';
+      toggle.dataset.panelClass = panelClass;
+      header.appendChild(toggle);
+    }
+    toggle.textContent = isCollapsed ? '+' : '−';
+    toggle.setAttribute('aria-label', isCollapsed ? '展开面板' : '折叠面板');
+  });
+}
+
 function paint() {
   updateControls(elements, state);
   renderApp(elements, state);
+  applyPanelCollapses();
 }
 
 function showNotice(message, kind = 'info') {
@@ -318,14 +345,6 @@ async function init() {
 
   document.addEventListener('click', async (event) => {
     let needsPaint = false;
-    const summary = event.target.closest?.('.panel-group__summary[data-layout-key]');
-    if (summary) {
-      const layoutKey = summary.dataset.layoutKey;
-      event.preventDefault();
-      setInspectorGroupOpen(state, layoutKey, !state.layout[layoutKey]);
-      needsPaint = true;
-    }
-
     const demoCard = event.target.closest?.('.demo-card[data-demo-test]');
     if (demoCard) {
       event.preventDefault();
@@ -408,6 +427,18 @@ async function init() {
       event.preventDefault();
       setTerminalCollapsed(state, !state.layout.terminalCollapsed);
       needsPaint = true;
+    }
+
+    const panelToggle = event.target.closest?.('.panel-toggle');
+    if (panelToggle) {
+      event.preventDefault();
+      event.stopPropagation();
+      const panelClass = panelToggle.dataset.panelClass;
+      if (panelClass) {
+        togglePanelCollapsed(state, panelClass);
+        paint();
+      }
+      return;
     }
 
     const shouldFocusTerminal =

@@ -1,5 +1,5 @@
 import { classifyEventTone } from '../../state.js';
-import { card, groupPanel, renderMetricPill } from './shared.js';
+import { card, renderMetricPill } from './shared.js';
 
 export function renderEvents(snapshot) {
   const events = snapshot?.events ?? [];
@@ -218,33 +218,37 @@ export function renderBus(snapshot) {
   );
 }
 
-export function renderArchitectureGroup(snapshot, registers, isOpen = false) {
-  return groupPanel(
-    '架构状态',
-    'CSR / Trap · 通用寄存器',
-    [
-      renderCsrs(snapshot),
-      renderRegisters(registers),
-    ],
-    'architectureGroupOpen',
-    isOpen,
-    'panel-group-architecture',
-  );
+export function renderArchitectureGroup(snapshot, registers) {
+  return `
+    <section class="panel panel-section panel-architecture-grid">
+      <div class="panel-header">
+        <h2>架构状态</h2>
+        <span>CSR / Trap · 通用寄存器</span>
+      </div>
+      <div class="panel-section__grid panel-section__grid--architecture">
+        ${renderCsrs(snapshot)}
+        ${renderRegisters(registers)}
+      </div>
+    </section>
+  `;
 }
 
-export function renderPlatformGroup(snapshot, isOpen = false) {
-  return groupPanel(
-    '平台与 I/O',
-    '设备状态 · AI accelerator · L1D cache · 总线访问 · 事件流',
-    [
-      renderDevices(snapshot),
-      renderAiAccelerator(snapshot),
-      renderL1DataCache(snapshot),
-      renderBus(snapshot),
-      renderEvents(snapshot),
-    ],
-    'platformGroupOpen',
-    isOpen,
-    'panel-group-platform',
-  );
+export function renderPlatformGroup(snapshot) {
+  return `
+    <section class="panel panel-section panel-platform-grid">
+      <div class="panel-header">
+        <h2>平台与 I/O</h2>
+        <span>设备状态 · AI accelerator · L1D cache · 总线访问 · 事件流</span>
+      </div>
+      <div class="panel-section__grid panel-section__grid--platform">
+        <div class="platform-device-stack">
+          ${renderDevices(snapshot)}
+          ${renderBus(snapshot)}
+          ${renderEvents(snapshot)}
+        </div>
+        ${renderAiAccelerator(snapshot)}
+        ${renderL1DataCache(snapshot)}
+      </div>
+    </section>
+  `;
 }

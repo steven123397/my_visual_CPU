@@ -12,6 +12,7 @@
   --shadow: 0 18px 52px rgba(23, 32, 39, 0.1);
   --sans: "Avenir Next", "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", "Consolas", monospace;
+  --ui-corner-radius: 5px;
 }
 
 * {
@@ -99,7 +100,7 @@ h1 {
   align-items: center;
   padding: 0 15px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--ui-corner-radius);
   text-decoration: none;
   background: rgba(255, 251, 242, 0.74);
 }
@@ -117,7 +118,7 @@ h1 {
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-corner-radius);
   box-shadow: var(--shadow);
   background: var(--line);
 }
@@ -163,7 +164,7 @@ h1 {
   margin: 26px 0;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-corner-radius);
   backdrop-filter: blur(18px);
   background: rgba(244, 239, 229, 0.86);
 }
@@ -183,7 +184,7 @@ h1 {
   scroll-margin-top: 118px;
   padding: clamp(24px, 5vw, 54px);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-corner-radius);
   background: var(--panel);
 }
 
@@ -225,7 +226,7 @@ h1 {
   min-height: 210px;
   padding: 22px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--ui-corner-radius);
   background: rgba(255, 255, 255, 0.36);
 }
 
@@ -252,7 +253,7 @@ h1 {
   overflow: hidden;
   margin-top: 24px;
   border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
+  border-radius: var(--ui-corner-radius);
   background: var(--line);
 }
 

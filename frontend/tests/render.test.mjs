@@ -14,16 +14,6 @@ function createSlot() {
   };
 }
 
-function createSlotWithQueries(queries = {}) {
-  return {
-    innerHTML: '',
-    dataset: {},
-    querySelector(selector) {
-      return queries[selector] ?? null;
-    },
-  };
-}
-
 function createElements() {
   return {
     desktop: createSlot(),
@@ -38,6 +28,8 @@ function createElements() {
     csrs: createSlot(),
     bus: createSlot(),
     demoWorkspace: createSlot(),
+    guide: createSlot(),
+    aiLab: createSlot(),
     authPanel: createSlot(),
     workload: createSlot(),
     vector: createSlot(),
@@ -493,8 +485,10 @@ test('renderApp keeps grouped inspector sections expanded when layout state requ
 
   renderApp(elements, state);
 
-  assert.match(elements.registers.innerHTML, /<details class="panel panel-group panel-group-architecture" data-layout-key="architectureGroupOpen" open>/);
-  assert.match(elements.devices.innerHTML, /<details class="panel panel-group panel-group-platform" data-layout-key="platformGroupOpen" open>/);
+  assert.match(elements.registers.innerHTML, /panel-architecture-grid/);
+  assert.match(elements.devices.innerHTML, /panel-platform-grid/);
+  assert.doesNotMatch(elements.registers.innerHTML, /<details/);
+  assert.doesNotMatch(elements.devices.innerHTML, /<details/);
 });
 
 test('renderApp marks the desktop layout when terminal is collapsed', () => {
@@ -599,6 +593,50 @@ test('renderApp marks the desktop layout when terminal is collapsed', () => {
   assert.match(elements.terminal.innerHTML, /展开 terminal/);
 });
 
+test('renderApp renders the redesigned three-column console surfaces', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'guest_interactive_os_demo',
+      menuLabel: 'guest_interactive_os_demo · interactive OS',
+      kind: 'guest',
+      backend: 'pipeline',
+      title: 'interactive_os Monitor',
+      summary: 'interactive monitor',
+      workload: {
+        category: 'guest',
+        expectedMarker: 'monitor> ',
+        ops: ['help', 'regs'],
+      },
+    },
+    {
+      name: 'guest_ai_accel_demo',
+      menuLabel: 'guest_ai_accel_demo · AI accel MMIO',
+      kind: 'guest',
+      backend: 'pipeline',
+      title: 'AI Accelerator Demo',
+      summary: 'AI accel smoke',
+      workload: {
+        category: 'ai-accelerator-demo',
+        expectedMarker: 'KMVAI',
+        ops: ['MMIO doorbell', 'DMA load/store'],
+      },
+    },
+  ];
+
+  const elements = createElements();
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Scenario navigator/);
+  assert.match(elements.demoWorkspace.innerHTML, /System Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /Linux Distro Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /AI Labs/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-demo-test="guest_ai_accel_demo"/);
+  assert.match(elements.guide.innerHTML, /Guide/);
+  assert.match(elements.guide.innerHTML, /Scenario/);
+  assert.match(elements.guide.innerHTML, /Evidence and boundary/);
+});
+
 test('renderApp presents Linux serial console as a gated route until runtime assets are configured', () => {
   const state = createAppState();
   state.tests = [
@@ -611,22 +649,7 @@ test('renderApp presents Linux serial console as a gated route until runtime ass
     },
   ];
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -660,22 +683,7 @@ test('renderApp explains the Linux serial console Image path diagnostic without 
     },
   };
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -708,39 +716,28 @@ test('renderApp lets the Linux serial console route select a configured linux_pr
     },
   ];
   state.selectedTest = 'linux_proto_console';
+  state.loadedSession = {
+    test: 'linux_proto_console',
+    backend: 'functional',
+  };
   state.backend = 'pipeline';
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
   assert.match(elements.demoWorkspace.innerHTML, /data-demo-test="linux_proto_console"/);
   assert.match(elements.demoWorkspace.innerHTML, /data-demo-backend="functional"/);
   assert.match(elements.demoWorkspace.innerHTML, /Ready/);
-  assert.match(elements.demoWorkspace.innerHTML, /Linux runtime/);
+  assert.match(elements.guide.innerHTML, /Linux Distro Labs/);
   assert.match(elements.demoWorkspace.innerHTML, /mycpu-linux# /);
-  assert.match(elements.demoWorkspace.innerHTML, /virtio-blk rootfs/);
-  assert.match(elements.demoWorkspace.innerHTML, /Session contract/);
-  assert.match(elements.demoWorkspace.innerHTML, /Asset Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
-  assert.match(elements.demoWorkspace.innerHTML, /Load the scenario to create a session and watch the primary stage/);
-  assert.match(elements.demoWorkspace.innerHTML, /Linux distro lane/);
-  assert.match(elements.demoWorkspace.innerHTML, /Capability ladder/);
-  assert.match(elements.demoWorkspace.innerHTML, /Curated distro matrix/);
+  assert.match(elements.workload.innerHTML, /virtio-blk rootfs/);
+  assert.match(elements.guide.innerHTML, /Session contract/);
+  assert.match(elements.guide.innerHTML, /Asset Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
+  assert.match(elements.guide.innerHTML, /Load the scenario to create a session and watch the primary stage/);
+  assert.match(elements.guide.innerHTML, /Linux distro lane/);
+  assert.match(elements.guide.innerHTML, /Capability ladder/);
+  assert.match(elements.guide.innerHTML, /Curated distro matrix/);
   assert.match(elements.demoWorkspace.innerHTML, /Alpine Distro Evidence/);
   assert.match(elements.demoWorkspace.innerHTML, /Capability &amp; ISA Matrix/);
   assert.match(elements.demoWorkspace.innerHTML, /is-selected/);
@@ -772,35 +769,20 @@ test('renderApp can focus Linux distro evidence topics without requiring a runna
   state.selectedScenarioTest = null;
   state.backend = 'functional';
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
   assert.match(elements.demoWorkspace.innerHTML, /Alpine Distro Evidence/);
-  assert.match(elements.demoWorkspace.innerHTML, /Topic ready/);
-  assert.match(elements.demoWorkspace.innerHTML, /Read the distro evidence, then open the live shell route/);
+  assert.match(elements.guide.innerHTML, /Topic ready/);
+  assert.match(elements.guide.innerHTML, /Read the distro evidence, then open the live shell route/);
   assert.match(elements.demoWorkspace.innerHTML, /Viewing topic|Open topic/);
-  assert.match(elements.demoWorkspace.innerHTML, /Open live shell/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-action="open-scenario-live"/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-scenario-backend="functional"/);
-  assert.match(elements.demoWorkspace.innerHTML, /Linux distro lane/);
-  assert.match(elements.demoWorkspace.innerHTML, /Capability ladder/);
-  assert.match(elements.demoWorkspace.innerHTML, /Curated distro matrix/);
+  assert.match(elements.guide.innerHTML, /Open live shell/);
+  assert.match(elements.guide.innerHTML, /data-action="open-scenario-live"/);
+  assert.match(elements.guide.innerHTML, /data-scenario-backend="pipeline"/);
+  assert.match(elements.guide.innerHTML, /Linux distro lane/);
+  assert.match(elements.guide.innerHTML, /Capability ladder/);
+  assert.match(elements.guide.innerHTML, /Curated distro matrix/);
 });
 
 test('renderApp shows a Linux boot progress strip while linux_proto_console is loading', () => {
@@ -834,22 +816,7 @@ test('renderApp shows a Linux boot progress strip while linux_proto_console is l
     label: 'Booting Linux',
   };
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -888,22 +855,7 @@ test('renderApp keeps normal demo loading free of Linux boot copy', () => {
     label: 'Loading demo',
   };
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -937,21 +889,7 @@ test('renderApp shows Linux console workload asset note for a loaded Linux sessi
     },
   ];
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -983,33 +921,17 @@ test('renderApp turns JIT runtime labs into a runtime evidence topic instead of 
   state.selectedScenarioTest = 'guest_vector_cnn_demo';
   state.backend = 'pipeline';
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-    authPanel: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
   assert.match(elements.demoWorkspace.innerHTML, /JIT \/ DBT Runtime Labs/);
-  assert.match(elements.demoWorkspace.innerHTML, /Runtime evidence topic/);
-  assert.match(elements.demoWorkspace.innerHTML, /Sample runtime dispatch/);
-  assert.match(elements.demoWorkspace.innerHTML, /Run JIT probe/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-action="run-jit-dispatch"/);
-  assert.match(elements.demoWorkspace.innerHTML, /Sync session|Session synced/);
-  assert.match(elements.demoWorkspace.innerHTML, /Sync a runtime-friendly workload, then run the JIT probe/);
+  assert.match(elements.guide.innerHTML, /Runtime evidence topic/);
+  assert.match(elements.guide.innerHTML, /Sample runtime dispatch/);
+  assert.match(elements.guide.innerHTML, /Run JIT probe/);
+  assert.match(elements.guide.innerHTML, /data-action="run-jit-dispatch"/);
+  assert.match(elements.guide.innerHTML, /Sync session|Session synced/);
+  assert.match(elements.guide.innerHTML, /Sync a runtime-friendly workload, then run the JIT probe/);
   assert.match(elements.demoWorkspace.innerHTML, /data-scenario-key="jit_runtime_lab"[\s\S]*Viewing topic/);
 });
 
@@ -1061,31 +983,15 @@ test('renderApp shows collected JIT dispatch evidence inside the runtime topic',
     },
   };
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-    authPanel: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
-  assert.match(elements.demoWorkspace.innerHTML, /Observed runtime dispatch/);
-  assert.match(elements.demoWorkspace.innerHTML, /lowered-ready/);
-  assert.match(elements.demoWorkspace.innerHTML, /hot-path-profile/);
-  assert.match(elements.demoWorkspace.innerHTML, /candidate executions 18/);
-  assert.match(elements.demoWorkspace.innerHTML, /cache hit/);
+  assert.match(elements.guide.innerHTML, /Observed runtime dispatch/);
+  assert.match(elements.guide.innerHTML, /lowered-ready/);
+  assert.match(elements.guide.innerHTML, /hot-path-profile/);
+  assert.match(elements.guide.innerHTML, /candidate executions 18/);
+  assert.match(elements.guide.innerHTML, /cache hit/);
 });
 
 
@@ -1168,26 +1074,14 @@ test('renderApp does not let stale closed DOM state override requested group exp
     events: [],
   });
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlotWithQueries({ '.panel-group': { open: false } }),
-    devices: createSlotWithQueries({ '.panel-group': { open: false } }),
-    registers: createSlotWithQueries({ '.panel-group': { open: false } }),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
-  assert.match(elements.registers.innerHTML, /data-layout-key="architectureGroupOpen" open/);
-  assert.match(elements.devices.innerHTML, /data-layout-key="platformGroupOpen" open/);
-  assert.equal(state.layout.architectureGroupOpen, true);
-  assert.equal(state.layout.platformGroupOpen, true);
+  assert.match(elements.registers.innerHTML, /panel-architecture-grid/);
+  assert.match(elements.devices.innerHTML, /panel-platform-grid/);
+  assert.doesNotMatch(elements.registers.innerHTML, /data-layout-key="architectureGroupOpen"/);
+  assert.doesNotMatch(elements.devices.innerHTML, /data-layout-key="platformGroupOpen"/);
 });
 
 test('renderApp shows vector workload guide, CNN panel, and live vector registers', () => {
@@ -1384,21 +1278,7 @@ test('renderApp shows vector workload guide, CNN panel, and live vector register
     events: [],
   });
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -1538,21 +1418,7 @@ test('renderApp binds workload and vector panels to the loaded session instead o
     events: [],
   });
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -1665,21 +1531,7 @@ test('renderApp preserves 64-bit vector lane precision in the register summary',
     events: [],
   });
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -1813,21 +1665,7 @@ test('renderApp shows AI accelerator workload guide and aggregate counters', () 
     events: [],
   });
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
@@ -1890,50 +1728,32 @@ test('renderApp shows a demo-first workspace with selectable workloads and futur
     },
   ];
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
-  assert.match(elements.demoWorkspace.innerHTML, /Lab navigator/);
+  assert.match(elements.demoWorkspace.innerHTML, /Scenario navigator/);
   assert.match(elements.demoWorkspace.innerHTML, /System Labs/);
   assert.match(elements.demoWorkspace.innerHTML, /Linux Distro Labs/);
   assert.match(elements.demoWorkspace.innerHTML, /Machine Labs/);
   assert.match(elements.demoWorkspace.innerHTML, /AI Labs/);
   assert.match(elements.demoWorkspace.innerHTML, /Runtime Labs/);
   assert.match(elements.demoWorkspace.innerHTML, /interactive_os Monitor/);
-  assert.match(elements.demoWorkspace.innerHTML, /Scenario brief/);
-  assert.match(elements.demoWorkspace.innerHTML, /Operate the guest monitor through the browser terminal/);
-  assert.match(elements.demoWorkspace.innerHTML, /Session contract/);
-  assert.match(elements.demoWorkspace.innerHTML, /Inspector focus/);
-  assert.match(elements.demoWorkspace.innerHTML, /Observation trail/);
-  assert.match(elements.demoWorkspace.innerHTML, /Evidence and boundary/);
+  assert.match(elements.guide.innerHTML, /Scenario/);
+  assert.match(elements.guide.innerHTML, /Operate the guest monitor through the browser terminal/);
+  assert.match(elements.guide.innerHTML, /Session contract/);
+  assert.match(elements.guide.innerHTML, /What to watch/);
+  assert.match(elements.guide.innerHTML, /Evidence and boundary/);
   assert.match(elements.demoWorkspace.innerHTML, /AI Accelerator/);
   assert.match(elements.demoWorkspace.innerHTML, /AI Accelerator Demo/);
   assert.match(elements.demoWorkspace.innerHTML, /Vector CNN/);
   assert.match(elements.demoWorkspace.innerHTML, /Minimal CNN Demo/);
   assert.match(elements.demoWorkspace.innerHTML, /JIT \/ DBT Runtime Labs/);
   assert.match(elements.demoWorkspace.innerHTML, /Open topic/);
-  assert.match(elements.demoWorkspace.innerHTML, /Selected lab/);
-  assert.match(elements.demoWorkspace.innerHTML, /Primary stage/);
-  assert.match(elements.demoWorkspace.innerHTML, /Next action/);
-  assert.match(elements.demoWorkspace.innerHTML, /Load the scenario to create a session and watch the primary stage/);
-  assert.match(elements.demoWorkspace.innerHTML, /Scenario controls/);
-  assert.match(elements.demoWorkspace.innerHTML, /Sync session|Session synced/);
+  assert.match(elements.guide.innerHTML, /Terminal \+ session summary/);
+  assert.match(elements.guide.innerHTML, /Load the scenario to create a session and watch the primary stage/);
+  assert.match(elements.guide.innerHTML, /Scenario controls/);
+  assert.match(elements.guide.innerHTML, /Sync session|Session synced/);
   assert.match(elements.demoWorkspace.innerHTML, /data-demo-test="guest_ai_accel_demo"/);
   assert.match(elements.demoWorkspace.innerHTML, /data-demo-backend="pipeline"/);
   assert.match(elements.demoWorkspace.innerHTML, /is-selected/);
@@ -2021,47 +1841,32 @@ test('renderApp shows the AI parameterized tiny model controls and profile resul
     },
   ];
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
-  assert.match(elements.demoWorkspace.innerHTML, /Parameterized Tiny Model/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-ai-template="dynamic_tiny_model"/);
-  assert.match(elements.demoWorkspace.innerHTML, /Expected marker/);
-  assert.match(elements.demoWorkspace.innerHTML, /What this proves/);
-  assert.match(elements.demoWorkspace.innerHTML, /Current boundary/);
-  assert.match(elements.demoWorkspace.innerHTML, /Observed evidence/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-ai-evidence="matched"/);
-  assert.match(elements.demoWorkspace.innerHTML, /Matched expected output/);
-  assert.match(elements.demoWorkspace.innerHTML, /Batch 2/);
-  assert.match(elements.demoWorkspace.innerHTML, /ReLU clamp path/);
-  assert.match(elements.demoWorkspace.innerHTML, /balanced returns 2\.5, 5\.5 and negative_clamp returns 0, 2\.5/);
-  assert.match(elements.demoWorkspace.innerHTML, /No custom graph upload or arbitrary model import/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-ai-param="batch"/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-ai-param="inputPreset"/);
-  assert.match(elements.demoWorkspace.innerHTML, /negative_clamp/);
-  assert.match(elements.demoWorkspace.innerHTML, /Run profile/);
-  assert.match(elements.demoWorkspace.innerHTML, /dynamic_bounded/);
-  assert.match(elements.demoWorkspace.innerHTML, /t0:2x3,t2:2x2,t3:2x2,t4:2x1/);
-  assert.match(elements.demoWorkspace.innerHTML, /0, 2\.5/);
-  assert.match(elements.demoWorkspace.innerHTML, /gemm/);
-  assert.match(elements.demoWorkspace.innerHTML, /pool_max/);
-  assert.match(elements.demoWorkspace.innerHTML, /Custom graph upload is disabled/);
+  assert.match(elements.aiLab.innerHTML, /Parameterized Tiny Model/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-template="dynamic_tiny_model"/);
+  assert.match(elements.aiLab.innerHTML, /Expected marker/);
+  assert.match(elements.aiLab.innerHTML, /What this proves/);
+  assert.match(elements.aiLab.innerHTML, /Current boundary/);
+  assert.match(elements.aiLab.innerHTML, /Observed evidence/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-evidence="matched"/);
+  assert.match(elements.aiLab.innerHTML, /Matched expected output/);
+  assert.match(elements.aiLab.innerHTML, /Batch 2/);
+  assert.match(elements.aiLab.innerHTML, /ReLU clamp path/);
+  assert.match(elements.aiLab.innerHTML, /balanced returns 2\.5, 5\.5 and negative_clamp returns 0, 2\.5/);
+  assert.match(elements.aiLab.innerHTML, /No custom graph upload or arbitrary model import/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-param="batch"/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-param="inputPreset"/);
+  assert.match(elements.aiLab.innerHTML, /negative_clamp/);
+  assert.match(elements.aiLab.innerHTML, /Run profile/);
+  assert.match(elements.aiLab.innerHTML, /dynamic_bounded/);
+  assert.match(elements.aiLab.innerHTML, /t0:2x3,t2:2x2,t3:2x2,t4:2x1/);
+  assert.match(elements.aiLab.innerHTML, /0, 2\.5/);
+  assert.match(elements.aiLab.innerHTML, /gemm/);
+  assert.match(elements.aiLab.innerHTML, /pool_max/);
+  assert.match(elements.aiLab.innerHTML, /Custom graph upload is disabled/);
 });
 
 test('renderApp shows the AI whitelist template selector and template-specific controls', () => {
@@ -2142,37 +1947,22 @@ test('renderApp shows the AI whitelist template selector and template-specific c
     runtimeShape: 'single_row_identity_head',
   };
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
-  assert.match(elements.demoWorkspace.innerHTML, /data-ai-param="template"/);
-  assert.match(elements.demoWorkspace.innerHTML, /dynamic_gemm/);
-  assert.match(elements.demoWorkspace.innerHTML, /dynamic_cnn/);
-  assert.match(elements.demoWorkspace.innerHTML, /tiny_attention_static/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-ai-param="runtimeShape"/);
-  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /data-ai-param="batch"/);
-  assert.match(elements.demoWorkspace.innerHTML, /single_row_identity_head/);
-  assert.match(elements.demoWorkspace.innerHTML, /Dynamic GEMM Profile/);
-  assert.match(elements.demoWorkspace.innerHTML, /gemm/);
-  assert.match(elements.demoWorkspace.innerHTML, /single_row_identity_head returns 1, 2, 3, 8/);
-  assert.match(elements.demoWorkspace.innerHTML, /runtime shape gating proves bounded dynamic GEMM path/);
-  assert.match(elements.demoWorkspace.innerHTML, /no arbitrary matrix sizes outside whitelist/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-param="template"/);
+  assert.match(elements.aiLab.innerHTML, /dynamic_gemm/);
+  assert.match(elements.aiLab.innerHTML, /dynamic_cnn/);
+  assert.match(elements.aiLab.innerHTML, /tiny_attention_static/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-param="runtimeShape"/);
+  assert.doesNotMatch(elements.aiLab.innerHTML, /data-ai-param="batch"/);
+  assert.match(elements.aiLab.innerHTML, /single_row_identity_head/);
+  assert.match(elements.aiLab.innerHTML, /Dynamic GEMM Profile/);
+  assert.match(elements.aiLab.innerHTML, /gemm/);
+  assert.match(elements.aiLab.innerHTML, /single_row_identity_head returns 1, 2, 3, 8/);
+  assert.match(elements.aiLab.innerHTML, /runtime shape gating proves bounded dynamic GEMM path/);
+  assert.match(elements.aiLab.innerHTML, /no arbitrary matrix sizes outside whitelist/);
 });
 
 test('renderApp shows AI tiny model validation errors without profile data', () => {
@@ -2193,27 +1983,12 @@ test('renderApp shows AI tiny model validation errors without profile data', () 
   state.aiTinyModel.runState = 'error';
   state.aiTinyModel.error = 'batch must be one of: 1, 2';
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
-  assert.match(elements.demoWorkspace.innerHTML, /batch must be one of: 1, 2/);
-  assert.doesNotMatch(elements.demoWorkspace.innerHTML, /ai-tiny-model__result/);
+  assert.match(elements.aiLab.innerHTML, /batch must be one of: 1, 2/);
+  assert.doesNotMatch(elements.aiLab.innerHTML, /ai-tiny-model__result/);
 });
 
 test('renderApp marks AI tiny model evidence as mismatch when actual output diverges from expected', () => {
@@ -2266,29 +2041,14 @@ test('renderApp marks AI tiny model evidence as mismatch when actual output dive
     ops: [],
   };
 
-  const elements = {
-    desktop: createSlot(),
-    debugInspector: createSlot(),
-    demoWorkspace: createSlot(),
-    terminal: createSlot(),
-    summary: createSlot(),
-    workload: createSlot(),
-    predictor: createSlot(),
-    pipeline: createSlot(),
-    events: createSlot(),
-    vector: createSlot(),
-    devices: createSlot(),
-    registers: createSlot(),
-    csrs: createSlot(),
-    bus: createSlot(),
-  };
+  const elements = createElements();
 
   renderApp(elements, state);
 
-  assert.match(elements.demoWorkspace.innerHTML, /Observed evidence/);
-  assert.match(elements.demoWorkspace.innerHTML, /data-ai-evidence="mismatch"/);
-  assert.match(elements.demoWorkspace.innerHTML, /Mismatch: actual output diverges from expected/);
-  assert.match(elements.demoWorkspace.innerHTML, /3x3 -&gt; 2x2 compact path/);
-  assert.match(elements.demoWorkspace.innerHTML, /15, 30/);
-  assert.match(elements.demoWorkspace.innerHTML, /expected 15, 31/);
+  assert.match(elements.aiLab.innerHTML, /Observed evidence/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-evidence="mismatch"/);
+  assert.match(elements.aiLab.innerHTML, /Mismatch: actual output diverges from expected/);
+  assert.match(elements.aiLab.innerHTML, /3x3 -&gt; 2x2 compact path/);
+  assert.match(elements.aiLab.innerHTML, /15, 30/);
+  assert.match(elements.aiLab.innerHTML, /expected 15, 31/);
 });

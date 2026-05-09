@@ -76,6 +76,7 @@ export function createAppState() {
       architectureGroupOpen: false,
       platformGroupOpen: false,
       terminalCollapsed: false,
+      collapsedPanels: [],
     },
   };
 }
@@ -352,6 +353,16 @@ export function setInspectorGroupOpen(state, key, open) {
     return;
   }
   state.layout[key] = open;
+}
+
+export function togglePanelCollapsed(state, panelClass) {
+  const set = new Set(state.layout.collapsedPanels);
+  if (set.has(panelClass)) {
+    set.delete(panelClass);
+  } else {
+    set.add(panelClass);
+  }
+  state.layout.collapsedPanels = Array.from(set);
 }
 
 export function normalizeTerminalInput(event) {

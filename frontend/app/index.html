@@ -13,6 +13,7 @@
         <div class="hero-copy-block">
           <p class="eyebrow">my_visual_CPU</p>
           <h1>Lab workbench</h1>
+          <span class="hero-kicker">Lab workspace</span>
           <p class="hero-copy">把系统 bring-up、Linux 发行版证据、AI accelerator workload 和 runtime instrumentation 收进同一个浏览器工作台。支持 <code>V-lite</code> 向量扩展、<code>conv→relu</code> CNN workload 和受控 Linux serial console；Linux 入口需要先配置 <code>MYCPU_LINUX_PROTO_CONSOLE_IMAGE</code>。</p>
         </div>
         <div class="hero-status-grid">
@@ -29,83 +30,90 @@
         </div>
       </header>
 
-      <section class="demo-workspace" aria-labelledby="demo-workspace-title">
-        <div class="demo-workspace__header">
-          <p class="eyebrow">Lab workspace</p>
-          <h2 id="demo-workspace-title">选择一个实验场景。</h2>
-          <p>从系统启动、Linux 发行版、机器观察、AI accelerator 到 runtime labs，把场景、观察面和证据链组织在一个工作台里。</p>
-        </div>
-        <div id="demo-workspace-slot"></div>
-      </section>
-
-      <section class="control-bar">
-        <div class="control-group control-group-auth">
-          <p class="control-group__title">访问控制</p>
-          <div class="control-group__body control-group__body-fields">
-            <div id="auth-panel"></div>
+      <section class="console-layout" aria-label="myCPU lab console">
+        <aside class="console-sidebar">
+          <div class="console-sidebar__brand">
+            <span>myCPU Lab</span>
+            <strong>控制台</strong>
+            <p>选择一个实验场景</p>
           </div>
-        </div>
+          <section class="control-bar" aria-label="session controls">
+            <div class="control-group control-group-auth">
+              <p class="control-group__title">访问控制</p>
+              <div class="control-group__body control-group__body-fields">
+                <div id="auth-panel"></div>
+              </div>
+            </div>
 
-        <div class="control-group control-group-session">
-          <p class="control-group__title">会话选择</p>
-          <div class="control-group__body control-group__body-fields">
-            <label>
-              <span>测试</span>
-              <select id="test-select"></select>
-            </label>
-            <label>
-              <span>后端</span>
-              <select id="backend-select">
-                <option value="pipeline">pipeline</option>
-                <option value="functional">functional</option>
-              </select>
-            </label>
-          </div>
-        </div>
+            <div class="control-group control-group-session">
+              <p class="control-group__title">会话选择</p>
+              <div class="control-group__body control-group__body-fields">
+                <label>
+                  <span>测试</span>
+                  <select id="test-select"></select>
+                </label>
+                <label>
+                  <span>后端</span>
+                  <select id="backend-select">
+                    <option value="pipeline">pipeline</option>
+                    <option value="functional">functional</option>
+                  </select>
+                </label>
+              </div>
+            </div>
 
-        <div class="control-group control-group-actions">
-          <p class="control-group__title">主操作</p>
-          <div class="control-group__body button-row button-row-primary">
-            <button id="load-button">Load</button>
-            <button id="run-button">Run</button>
-            <button id="pause-button">Pause</button>
-            <button id="reset-button">Reset</button>
-            <button id="terminate-button">Terminate</button>
-          </div>
-        </div>
+            <div class="control-group control-group-actions">
+              <p class="control-group__title">Run controls</p>
+              <div class="control-group__body button-row button-row-primary">
+                <button id="load-button">Load</button>
+                <button id="run-button">Run</button>
+                <button id="pause-button">Pause</button>
+                <button id="reset-button">Reset</button>
+                <button id="terminate-button">Terminate</button>
+              </div>
+            </div>
 
-        <div class="control-group control-group-detail">
-          <p class="control-group__title">精细控制</p>
-          <div class="control-group__body button-row button-row-secondary">
-            <button id="step-cycle-button">Step Cycle</button>
-            <button id="step-commit-button">Step Commit</button>
-          </div>
-        </div>
-      </section>
+            <div class="control-group control-group-detail">
+              <p class="control-group__title">精细控制</p>
+              <div class="control-group__body button-row button-row-secondary">
+                <button id="step-cycle-button">Step Cycle</button>
+                <button id="step-commit-button">Step Commit</button>
+              </div>
+            </div>
+          </section>
+          <div id="demo-workspace-slot"></div>
+        </aside>
 
-      <section id="notice" class="notice" data-kind="info">正在连接本地调试服务…</section>
+        <section class="console-main">
+          <section id="notice" class="notice" data-kind="info">正在连接本地调试服务…</section>
+          <section class="desktop-shell" id="desktop-shell" data-debug-open="true" data-terminal-collapsed="false">
+            <div class="desktop-stage">
+              <div class="terminal-stage">
+                <div id="terminal-slot"></div>
+              </div>
+              <aside class="stage-sidebar">
+                <div id="summary-slot"></div>
+                <div id="predictor-slot"></div>
+                <div id="workload-slot"></div>
+                <div id="ai-lab-slot"></div>
+              </aside>
+            </div>
+            <aside class="debug-inspector" id="debug-inspector" data-open="true">
+              <div class="debug-inspector-grid">
+                <div id="pipeline-slot"></div>
+                <div id="vector-slot"></div>
+                <div id="events-slot"></div>
+                <div id="devices-slot"></div>
+                <div id="csrs-slot"></div>
+                <div id="registers-slot"></div>
+                <div id="bus-slot"></div>
+              </div>
+            </aside>
+          </section>
+        </section>
 
-      <section class="desktop-shell" id="desktop-shell" data-debug-open="true" data-terminal-collapsed="false">
-        <div class="desktop-stage">
-          <div class="terminal-stage">
-            <div id="terminal-slot"></div>
-          </div>
-          <aside class="stage-sidebar">
-            <div id="summary-slot"></div>
-            <div id="workload-slot"></div>
-            <div id="predictor-slot"></div>
-          </aside>
-        </div>
-        <aside class="debug-inspector" id="debug-inspector" data-open="true">
-          <div class="debug-inspector-grid">
-            <div id="pipeline-slot"></div>
-            <div id="vector-slot"></div>
-            <div id="events-slot"></div>
-            <div id="devices-slot"></div>
-            <div id="csrs-slot"></div>
-            <div id="registers-slot"></div>
-            <div id="bus-slot"></div>
-          </div>
+        <aside class="console-guide" aria-label="scenario guide">
+          <div id="guide-slot"></div>
         </aside>
       </section>
     </main>

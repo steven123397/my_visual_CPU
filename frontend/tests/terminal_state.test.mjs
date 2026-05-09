@@ -28,6 +28,7 @@ test('createAppState starts with an open inspector and inactive terminal', () =>
     architectureGroupOpen: false,
     platformGroupOpen: false,
     terminalCollapsed: false,
+    collapsedPanels: [],
   });
 });
 
