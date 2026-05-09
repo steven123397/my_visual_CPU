@@ -1,6 +1,7 @@
 # Wave 7 远端云服务器开发与验证环境计划
 
-> **文档状态：** 执行中
+> **文档状态：** 执行中。远端服务器已以 `a8869a8` 作为正式部署基线完成环境搭建；
+> 当前计划继续跟踪从该部署基线拉取最新 `main` 后的升级、资产检查和远端 smoke。
 
 ## 文档定位
 
@@ -44,9 +45,9 @@
   - `docs/status/mainline_status.md`
   - `docs/index.md`
 
-- [ ] **步骤 1：** 固定远端机器的角色、目录约定、运行资产位置和环境变量契约。
-- [ ] **步骤 2：** 记录 `/`、`/docs`、`/console`、Linux `Image/rootfs`、AI profile、Spike 的边界。
-- [ ] **步骤 3：** 在主线状态文档中把该任务列为 Wave 7 当前下一步之一。
+- [x] **步骤 1：** 固定远端机器的角色、目录约定、运行资产位置和环境变量契约。
+- [x] **步骤 2：** 记录 `/`、`/docs`、`/console`、Linux `Image/rootfs`、AI profile、Spike 的边界。
+- [x] **步骤 3：** 在主线状态文档中把该任务列为 Wave 7 当前下一步之一。
 
 ### 任务 2：补远端部署支架
 
@@ -59,10 +60,10 @@
 - 修改：
   - `README.md`
 
-- [ ] **步骤 1：** 新增 `deploy/` 子树，固定远端单机部署目录和文件组织。
-- [ ] **步骤 2：** 提供 frontend service 的 systemd 样例和 env 样例。
-- [ ] **步骤 3：** 提供 nginx 反代样例，覆盖 `/`、`/console`、`/docs`、`/api/*` 和 WebSocket。
-- [ ] **步骤 4：** 明确这些文件是供远端 checkout 使用的模板，不要求在本地机器实际启用。
+- [x] **步骤 1：** 新增 `deploy/` 子树，固定远端单机部署目录和文件组织。
+- [x] **步骤 2：** 提供 frontend service 的 systemd 样例和 env 样例。
+- [x] **步骤 3：** 提供 nginx 反代样例，覆盖 `/`、`/console`、`/docs`、`/api/*` 和 WebSocket。
+- [x] **步骤 4：** 明确这些文件是供远端 checkout 使用的模板，不要求在本地机器实际启用。
 
 ### 任务 3：补远端运行资产与验证说明
 
@@ -74,10 +75,10 @@
   - `deploy/README.md`
   - `README.md`
 
-- [ ] **步骤 1：** 固定 Linux `Image/rootfs/DTB`、Spike、日志和临时目录的远端准备方式。
-- [ ] **步骤 2：** 提供最小远端 smoke：frontend、Linux gating、AI profile、Spike differential。
-- [ ] **步骤 3：** 明确哪些资产不进仓库、需要由运维或开发者手动放置。
-- [ ] **步骤 4：** 明确 smoke 的执行地点是远端服务器，不要求在本地继续承接部署侧验证。
+- [x] **步骤 1：** 固定 Linux `Image/rootfs/DTB`、Spike、日志和临时目录的远端准备方式。
+- [x] **步骤 2：** 提供最小远端 smoke：frontend、Linux gating、AI profile、Spike differential。
+- [x] **步骤 3：** 明确哪些资产不进仓库、需要由运维或开发者手动放置。
+- [x] **步骤 4：** 明确 smoke 的执行地点是远端服务器，不要求在本地继续承接部署侧验证。
 
 ### 任务 4：验证与回写
 
@@ -87,9 +88,25 @@
   - `docs/plan/history_plan.md`
   - `docs/index.md`
 
-- [ ] **步骤 1：** 运行本轮触达范围内的前端和文档相关验证。
-- [ ] **步骤 2：** 在 `mainline_status.md` 中更新当前状态、剩余风险和下一步。
+- [x] **步骤 1：** 运行本轮触达范围内的前端和文档相关验证。
+- [x] **步骤 2：** 在 `mainline_status.md` 中更新当前状态、剩余风险和下一步。
 - [ ] **步骤 3：** 完成后把结果归档到 `history_plan.md` 并删除本计划文件。
+
+### 任务 5：从 `a8869a8` 部署基线升级到当前 `main`
+
+**文件：**
+- 修改：
+  - `deploy/README.md`
+  - `deploy/operations.md`
+  - `deploy/scripts/remote_smoke.sh`
+  - `docs/status/mainline_status.md`
+
+- [x] **步骤 1：** 明确 `a8869a8..HEAD` 后远端可见变化：auth/controller、`Lab workbench`、AI `Demo V1`、Linux distribution runtime 后续 probe。
+- [x] **步骤 2：** 写入远端升级顺序：`git pull --ff-only`、重新构建 `myCPU`、重建 repo-generated Linux artifacts、安装 systemd/nginx 模板、重启服务。
+- [x] **步骤 3：** 明确升级前必须保留的 host-local 资产和配置：`runtime-assets/`、`logs/`、`tmp/`、`deploy/env/mycpu-frontend.env`。
+- [x] **步骤 4：** 补充 auth 环境检查，避免 `MYCPU_AUTH_ENABLED=1` 但 password hash 为空导致服务启动失败。
+- [x] **步骤 5：** 让 `remote_smoke.sh` 的 Linux readiness diagnostic 显式传入远端 Linux `Image` 环境变量，避免依赖调用 shell 的偶然环境。
+- [ ] **步骤 6：** 在远端 checkout 实际执行升级和 smoke 后，再回写完成态并归档本计划。
 
 ## 完成态回写要求
 

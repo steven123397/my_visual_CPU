@@ -101,6 +101,8 @@ require_file "Linux DTB" "$LINUX_DIR/linux.dtb" || linux_ready=0
 if [ "$linux_ready" -eq 1 ]; then
   run_optional "frontend Linux console readiness diagnostic" bash -lc '
     cd /srv/apps/my_visual_CPU/repo
+    export MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/srv/apps/my_visual_CPU/runtime-assets/linux/Image
+    export MYCPU_LINUX_PROTO_RUNTIME_IMAGE=/srv/apps/my_visual_CPU/runtime-assets/linux/Image
     node --input-type=module -e "
       import { linuxConsoleDiagnostic } from \"./frontend/server/tests_manifest.mjs\";
       const diagnostic = linuxConsoleDiagnostic();

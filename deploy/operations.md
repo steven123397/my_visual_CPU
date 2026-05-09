@@ -46,6 +46,76 @@ http://127.0.0.1:4173
   - `/srv/apps/my_visual_CPU/logs/nginx-error.log`
   - `/srv/apps/my_visual_CPU/logs/audit.log`
 
+## Upgrade From the `a8869a8` Deployment Baseline
+
+Use this flow when the live server already runs the `a8869a8` deployment and the
+repo should move to the current `main`.
+
+Preflight:
+
+```bash
+cd /srv/apps/my_visual_CPU/repo
+git rev-parse --short HEAD
+git status --short --branch
+
+ls -lh \
+  /srv/apps/my_visual_CPU/runtime-assets/linux/Image \
+  /srv/apps/my_visual_CPU/runtime-assets/linux/rootfs.ext4 \
+  /srv/apps/my_visual_CPU/runtime-assets/linux/linux.dtb \
+  /srv/apps/my_visual_CPU/runtime-assets/spike/bin/spike
+```
+
+If auth is enabled, verify the hash before restarting:
+
+```bash
+cd /srv/apps/my_visual_CPU/repo
+if rg -q '^MYCPU_AUTH_ENABLED=1' deploy/env/mycpu-frontend.env; then
+  rg '^MYCPU_AUTH_ADMIN_PASSWORD_HASH=scrypt\\$' deploy/env/mycpu-frontend.env
+fi
+```
+
+Upgrade the checkout and rebuild:
+
+```bash
+cd /srv/apps/my_visual_CPU/repo
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+
+deploy/scripts/prepare_runtime_dirs.sh
+
+cd myCPU
+make
+make build-workload WORKLOAD_NAME=linux_proto LINUX_PROTO_ROOTFS_MODE=block
+install -m 644 workloads/linux_proto/rootfs.ext4 /srv/apps/my_visual_CPU/runtime-assets/linux/rootfs.ext4
+install -m 644 workloads/linux_proto/mycpu_virt.dtb /srv/apps/my_visual_CPU/runtime-assets/linux/linux.dtb
+cd ..
+```
+
+Reinstall templates only after reviewing local edits:
+
+```bash
+sudo install -m 644 /srv/apps/my_visual_CPU/repo/deploy/systemd/mycpu-frontend.service /etc/systemd/system/mycpu-frontend.service
+sudo systemctl daemon-reload
+sudo systemctl restart mycpu-frontend.service
+
+sudo install -m 644 /srv/apps/my_visual_CPU/repo/deploy/nginx/mycpu.conf /etc/nginx/sites-available/mycpu
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Post-upgrade checks:
+
+```bash
+systemctl status --no-pager mycpu-frontend.service
+curl -k --resolve my-visual-cpu.site:443:127.0.0.1 https://my-visual-cpu.site/api/tests
+deploy/scripts/remote_smoke.sh
+```
+
+The upgrade should not overwrite `runtime-assets/`, `logs/`, `tmp/`, or the
+host-local `deploy/env/mycpu-frontend.env`. If `/api/tests` returns `401`, auth
+is enabled and the browser must log in before using `/console`.
+
 ## Daily Checks
 
 Check service status:

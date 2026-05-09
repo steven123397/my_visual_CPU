@@ -852,12 +852,12 @@ Observation trail -> Evidence / boundary`；`Linux Distro Labs` 也已从单一�
   session 配额、标准发行版镜像支持、任意用户镜像上传和更深的 demo-specific
   控制台页面仍未实现。
 - 用户已把 `Wave 7` 的部署目标明确为“另一台云服务器上的完整开发/验证环境”，而不是
-  “本机 dev server 的简单公网暴露”。当前 active 目标已收口为：在远端单机上复现
-  `myCPU` 构建、frontend/debug-cli、Linux `Image/rootfs`、AI 参数化小模型白名单 profile
-  和 `Spike` 差分联调，并为 `/`、`/console`、`/docs` 提供受控 service / reverse proxy /
- 运行资产目录约定。后续与部署、运维、资产放置、service 启停和 smoke 直接相关的工作，
- 也应默认在远端服务器上的仓库 checkout 中执行，而不是继续在本地开发环境里做 server-specific
- 改动。对应设计与计划分别见
+  “本机 dev server 的简单公网暴露”。远端服务器已经以 `a8869a8` 作为正式部署基线完成环境
+  搭建；当前 active 目标转为从该基线拉取最新 `main` 后的升级验证。升级时需要保留
+  `/srv/apps/my_visual_CPU/runtime-assets/`、`logs/`、`tmp/` 和 host-local
+  `deploy/env/mycpu-frontend.env`，重新构建 `myCPU`，重建 repo-generated
+  `linux_proto` rootfs / DTB，检查 auth hash，并在重启 systemd / nginx 后运行
+  `deploy/scripts/remote_smoke.sh`。对应设计与计划分别见
   [../design/wave7_remote_cloud_dev_environment_design.md](../design/wave7_remote_cloud_dev_environment_design.md)
   和 [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)。
 - `debug/frontend`、`pipeline` 和 guest runtime 都已形成可维护边界，但后续
@@ -931,9 +931,9 @@ Observation trail -> Evidence / boundary`；`Linux Distro Labs` 也已从单一�
    扩 op 组合或更多模板，仍必须保持 server-side whitelist，不开放任意 graph package。
 14. `Wave 7` 当前活跃计划已切到远端云服务器开发/验证环境：
    [wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)。
-   当前目标不是在本机简单公网暴露 frontend，而是在另一台远端单机上复现完整开发/验证能力，
-   包括 `myCPU` 构建、frontend/debug-cli、Linux `Image/rootfs`、AI 参数化小模型白名单 profile、
-   `Spike` 差分联调，以及对应的 systemd / nginx / 运行资产目录约定和最小 smoke。
+   远端服务器已经以 `a8869a8` 作为正式部署基线完成环境搭建；当前近端任务是按
+   `deploy/operations.md` 从该基线升级到最新 `main`，并验证 auth/controller、
+   `Post-Wave 7` 控制台、AI `Demo V1`、Linux console readiness 和 Spike smoke。
 15. Wave 7 之后的新主线定为两条：一是像 QEMU 那样跑通标准 Debian / Alpine /
    RISC-V 发行版镜像；二是 AI accelerator 支持用户自己的 AI 任务，并逐步逼近商用
    NPU 的 tile scheduler、DMA / compute overlap、multi outstanding queue、Linux-facing

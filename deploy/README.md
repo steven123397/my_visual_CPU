@@ -71,6 +71,10 @@ MYCPU_AUTH_SESSION_LIMIT=3
 MYCPU_AUDIT_LOG_PATH=/srv/apps/my_visual_CPU/logs/audit.log
 ```
 
+The checked-in env example keeps `MYCPU_AUTH_ENABLED=0` so that copying the file
+without a password hash does not break service startup. Turn it to `1` only
+after generating and storing a real `scrypt$...` hash.
+
 This auth layer is designed for the current single-session debug server model:
 
 - no public self-registration
@@ -108,6 +112,72 @@ sudo systemctl reload nginx
 The debug CLI is not exposed directly. Browser requests enter through nginx,
 then nginx proxies to the local Node debug server, and the Node server spawns
 `mycpu --debug-cli` as a local child process.
+
+## Upgrade an Existing `a8869a8` Deployment
+
+If the remote host is already running the `a8869a8` deployment baseline, pulling
+the current `main` does not require replacing the runtime asset directory. Keep
+these host-local files in place:
+
+```text
+/srv/apps/my_visual_CPU/runtime-assets/linux/Image
+/srv/apps/my_visual_CPU/runtime-assets/linux/rootfs.ext4
+/srv/apps/my_visual_CPU/runtime-assets/linux/linux.dtb
+/srv/apps/my_visual_CPU/runtime-assets/spike/bin/spike
+/srv/apps/my_visual_CPU/repo/deploy/env/mycpu-frontend.env
+```
+
+The current `main` adds or widens several server-visible surfaces compared with
+`a8869a8`:
+
+- the authenticated controller layer for `/console` mutations and terminal
+  input
+- the `Post-Wave 7` three-column Lab console layout
+- the AI `Demo V1` packaging and server-side profile path
+- additional Linux distribution runtime probes and docs
+
+Before restarting the service, make sure the service environment is still
+valid. If `MYCPU_AUTH_ENABLED=1`, `MYCPU_AUTH_ADMIN_PASSWORD_HASH` must contain
+a real `scrypt$...` hash; a blank value makes the Node service fail fast.
+
+Run the upgrade from the remote checkout:
+
+```bash
+cd /srv/apps/my_visual_CPU/repo
+git status --short --branch
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+
+deploy/scripts/prepare_runtime_dirs.sh
+
+cd myCPU
+make
+make build-workload WORKLOAD_NAME=linux_proto LINUX_PROTO_ROOTFS_MODE=block
+install -m 644 workloads/linux_proto/rootfs.ext4 /srv/apps/my_visual_CPU/runtime-assets/linux/rootfs.ext4
+install -m 644 workloads/linux_proto/mycpu_virt.dtb /srv/apps/my_visual_CPU/runtime-assets/linux/linux.dtb
+cd ..
+
+sudo install -m 644 deploy/systemd/mycpu-frontend.service /etc/systemd/system/mycpu-frontend.service
+sudo systemctl daemon-reload
+sudo systemctl restart mycpu-frontend.service
+
+sudo install -m 644 deploy/nginx/mycpu.conf /etc/nginx/sites-available/mycpu
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Then run:
+
+```bash
+deploy/scripts/remote_smoke.sh
+curl -k --resolve my-visual-cpu.site:443:127.0.0.1 https://my-visual-cpu.site/api/tests
+```
+
+Expected `/api/tests` result: HTTP `200`. If auth is enabled, authenticate in
+the browser before using `/console`; mutating actions such as `Load`, `Run`,
+`Reset`, `Terminate`, AI profile runs, and terminal input require controller
+ownership.
 
 ## Verification
 
