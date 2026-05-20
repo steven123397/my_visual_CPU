@@ -1462,11 +1462,10 @@ test('GET / presents project-specific evidence instead of a generic landing page
     assert.doesNotMatch(body, /不开放任意 AI 模型上传/);
     assert.doesNotMatch(body, /技术评审/);
     assert.doesNotMatch(body, /招聘面试官/);
-    assert.match(body, /\/source\/showcase\/frontend_overview\.png/);
-    assert.match(body, /\/source\/showcase\/pipeline_timeline\.png/);
-    assert.match(body, /\/source\/showcase\/interactive_terminal\.png/);
-    assert.match(body, /\/source\/showcase\/auto-code-image-905\.png/);
-    assert.match(body, /\/source\/showcase\/vector_panel\.png/);
+    assert.match(body, /\/source\/showcase\/ppt_screenshot_console_overview\.png/);
+    assert.match(body, /\/source\/showcase\/ppt_screenshot_pipeline\.png/);
+    assert.match(body, /\/source\/showcase\/ppt_screenshot_terminal\.png/);
+    assert.match(body, /\/source\/showcase\/ppt_screenshot_ai_or_vecto\.png/);
     assert.match(body, /src="\/home\.js"/);
   } finally {
     await server.close();
@@ -1539,7 +1538,7 @@ test('GET /source/showcase serves homepage screenshot assets', async () => {
   });
 
   try {
-    const response = await fetch(`${server.baseUrl}/source/showcase/frontend_overview.png`);
+    const response = await fetch(`${server.baseUrl}/source/showcase/ppt_screenshot_console_overview.png`);
     const body = await response.arrayBuffer();
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type') ?? '', /image\/png/);

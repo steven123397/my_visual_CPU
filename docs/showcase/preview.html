@@ -1,817 +1,1029 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>myCPU 项目汇报 HTML 预览</title>
-    <style>
-      :root {
-        --paper: #f5eddc;
-        --paper-deep: #e4d4b8;
-        --ink: #172126;
-        --muted: #68727a;
-        --line: rgba(23, 33, 38, 0.14);
-        --copper: #b35d2f;
-        --copper-dark: #72371d;
-        --cyan: #1c7780;
-        --cyan-soft: rgba(28, 119, 128, 0.14);
-        --terminal: #08151a;
-        --terminal-2: #10262d;
-        --terminal-ink: #d8f1e7;
-        --panel: rgba(255, 250, 239, 0.78);
-        --panel-solid: #fff8ea;
-        --shadow: 0 28px 80px rgba(49, 41, 29, 0.18);
-        --serif: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
-        --sans: "Avenir Next", "Gill Sans", "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
-        --mono: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
-      body {
-        margin: 0;
-        color: var(--ink);
-        font-family: var(--sans);
-        background:
-          radial-gradient(circle at 8% 6%, rgba(179, 93, 47, 0.22), transparent 28rem),
-          radial-gradient(circle at 94% 16%, rgba(28, 119, 128, 0.18), transparent 30rem),
-          linear-gradient(135deg, var(--paper), var(--paper-deep));
-      }
-
-      body::before {
-        position: fixed;
-        inset: 0;
-        z-index: -2;
-        content: "";
-        background:
-          linear-gradient(rgba(23, 33, 38, 0.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(23, 33, 38, 0.04) 1px, transparent 1px);
-        background-size: 34px 34px;
-        mask-image: radial-gradient(circle at center, #000 15%, transparent 84%);
-      }
-
-      body::after {
-        position: fixed;
-        inset: 0;
-        z-index: -1;
-        content: "";
-        pointer-events: none;
-        opacity: 0.12;
-        background-image:
-          repeating-linear-gradient(0deg, rgba(23, 33, 38, 0.4) 0, rgba(23, 33, 38, 0.4) 1px, transparent 1px, transparent 7px);
-        mix-blend-mode: multiply;
-      }
-
-      a {
-        color: inherit;
-      }
-
-      .page {
-        width: min(1180px, calc(100% - 40px));
-        margin: 0 auto;
-        padding: 28px 0 72px;
-      }
-
-      .topbar {
-        position: sticky;
-        top: 14px;
-        z-index: 10;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 24px;
-        padding: 10px 12px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: rgba(255, 250, 239, 0.72);
-        box-shadow: 0 18px 60px rgba(49, 41, 29, 0.12);
-        backdrop-filter: blur(18px);
-      }
-
-      .brand {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding-left: 8px;
-        font-weight: 800;
-        letter-spacing: 0.02em;
-      }
-
-      .brand-mark {
-        display: inline-grid;
-        width: 28px;
-        height: 28px;
-        place-items: center;
-        border-radius: 50%;
-        color: #fff9ee;
-        background: linear-gradient(135deg, var(--copper), var(--cyan));
-        font-family: var(--mono);
-        font-size: 12px;
-      }
-
-      .nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 8px;
-      }
-
-      .nav a {
-        padding: 8px 12px;
-        border-radius: 999px;
-        color: var(--muted);
-        font-size: 13px;
-        text-decoration: none;
-      }
-
-      .nav a:hover {
-        color: var(--ink);
-        background: rgba(23, 33, 38, 0.07);
-      }
-
-      .panel {
-        border: 1px solid var(--line);
-        border-radius: 34px;
-        background: var(--panel);
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(20px);
-      }
-
-      .section {
-        margin: 28px 0;
-        animation: reveal 0.8s ease both;
-      }
-
-      .hero {
-        position: relative;
-        display: grid;
-        min-height: 680px;
-        grid-template-columns: minmax(0, 1.05fr) minmax(380px, 0.95fr);
-        gap: 28px;
-        overflow: hidden;
-        padding: clamp(28px, 5vw, 58px);
-      }
-
-      .hero::before {
-        position: absolute;
-        inset: auto -10% -34% 42%;
-        height: 420px;
-        content: "";
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(28, 119, 128, 0.22), transparent 65%);
-      }
-
-      .eyebrow {
-        margin: 0 0 18px;
-        color: var(--copper-dark);
-        font-family: var(--mono);
-        font-size: 13px;
-        font-weight: 800;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-      }
-
-      h1,
-      h2,
-      h3 {
-        margin: 0;
-        font-family: var(--serif);
-        letter-spacing: -0.04em;
-      }
-
-      h1 {
-        max-width: 760px;
-        font-size: clamp(48px, 8vw, 96px);
-        line-height: 0.93;
-      }
-
-      .lead {
-        max-width: 650px;
-        margin: 28px 0 0;
-        color: #39464e;
-        font-size: clamp(18px, 2.3vw, 24px);
-        line-height: 1.65;
-      }
-
-      .hero-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 34px;
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 14px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.44);
-        color: #405059;
-        font-size: 14px;
-      }
-
-      .pill strong {
-        color: var(--ink);
-      }
-
-      .hero-visual {
-        position: relative;
-        align-self: center;
-        min-height: 560px;
-      }
-
-      .screen-stack {
-        position: absolute;
-        inset: 0;
-      }
-
-      .screen {
-        position: absolute;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.38);
-        border-radius: 26px;
-        background: #111f24;
-        box-shadow: 0 24px 70px rgba(8, 21, 26, 0.28);
-      }
-
-      .screen img {
-        display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      .screen-main {
-        inset: 34px 16px 118px 0;
-        transform: rotate(-2.2deg);
-      }
-
-      .screen-side {
-        right: 0;
-        bottom: 32px;
-        width: 48%;
-        height: 42%;
-        transform: rotate(4deg);
-      }
-
-      .screen-terminal {
-        left: 24px;
-        right: 78px;
-        bottom: 0;
-        height: 190px;
-        padding: 18px;
-        color: var(--terminal-ink);
-        background:
-          linear-gradient(135deg, rgba(28, 119, 128, 0.13), transparent),
-          linear-gradient(180deg, var(--terminal), var(--terminal-2));
-      }
-
-      .term-title {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 16px;
-        color: #8fb3ad;
-        font-family: var(--mono);
-        font-size: 12px;
-      }
-
-      .term-lines {
-        margin: 0;
-        color: #daf6ed;
-        font-family: var(--mono);
-        font-size: 13px;
-        line-height: 1.65;
-        white-space: pre-wrap;
-      }
-
-      .blink {
-        display: inline-block;
-        width: 8px;
-        height: 15px;
-        margin-left: 3px;
-        transform: translateY(2px);
-        background: #f0b65f;
-        animation: cursor 1.2s steps(2, start) infinite;
-      }
-
-      .section-head {
-        display: grid;
-        grid-template-columns: minmax(0, 0.82fr) minmax(260px, 0.38fr);
-        gap: 28px;
-        align-items: end;
-        margin-bottom: 18px;
-      }
-
-      .section-kicker {
-        margin: 0 0 10px;
-        color: var(--copper-dark);
-        font-family: var(--mono);
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-      }
-
-      h2 {
-        font-size: clamp(34px, 5vw, 58px);
-        line-height: 1;
-      }
-
-      .section-note {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.7;
-      }
-
-      .architecture {
-        padding: 34px;
-      }
-
-      .arch-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 14px;
-      }
-
-      .arch-card {
-        position: relative;
-        min-height: 330px;
-        padding: 24px;
-        overflow: hidden;
-        border: 1px solid var(--line);
-        border-radius: 26px;
-        background: rgba(255, 255, 255, 0.42);
-      }
-
-      .arch-card::after {
-        position: absolute;
-        right: -28px;
-        bottom: -28px;
-        width: 126px;
-        height: 126px;
-        content: "";
-        border: 1px solid rgba(179, 93, 47, 0.28);
-        border-radius: 50%;
-      }
-
-      .arch-card strong {
-        display: block;
-        color: var(--copper-dark);
-        font-family: var(--mono);
-        font-size: 12px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }
-
-      .arch-card h3 {
-        margin-top: 18px;
-        font-size: 29px;
-        line-height: 1.05;
-      }
-
-      .arch-card p {
-        color: #46535a;
-        line-height: 1.75;
-      }
-
-      .mini-flow {
-        display: grid;
-        gap: 8px;
-        margin-top: 18px;
-        color: var(--terminal-ink);
-        font-family: var(--mono);
-        font-size: 12px;
-      }
-
-      .mini-flow span {
-        display: block;
-        padding: 9px 10px;
-        border-radius: 12px;
-        background: #12252b;
-      }
-
-      .evidence {
-        display: grid;
-        grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.55fr);
-        gap: 18px;
-        align-items: stretch;
-        padding: 18px;
-      }
-
-      .evidence-shot {
-        overflow: hidden;
-        min-height: 520px;
-        border-radius: 26px;
-        background: #10242a;
-      }
-
-      .evidence-shot img {
-        display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      .evidence-copy {
-        display: grid;
-        gap: 14px;
-      }
-
-      .dark-card {
-        padding: 24px;
-        border-radius: 26px;
-        color: #f6ead7;
-        background:
-          radial-gradient(circle at 95% 4%, rgba(28, 119, 128, 0.34), transparent 38%),
-          linear-gradient(180deg, #14262b, #08151a);
-      }
-
-      .dark-card h3 {
-        font-size: 34px;
-      }
-
-      .dark-card p {
-        color: rgba(246, 234, 215, 0.74);
-        line-height: 1.75;
-      }
-
-      .metric-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-
-      .metric {
-        padding: 16px;
-        border: 1px solid rgba(246, 234, 215, 0.16);
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.06);
-      }
-
-      .metric b {
-        display: block;
-        color: #f3bd70;
-        font-family: var(--serif);
-        font-size: 30px;
-        line-height: 1;
-      }
-
-      .metric span {
-        display: block;
-        margin-top: 8px;
-        color: rgba(246, 234, 215, 0.68);
-        font-size: 13px;
-      }
-
-      .video-placeholder {
-        position: relative;
-        display: grid;
-        min-height: 210px;
-        place-items: center;
-        overflow: hidden;
-        border: 1px dashed rgba(246, 234, 215, 0.34);
-        border-radius: 26px;
-        color: rgba(246, 234, 215, 0.72);
-        background:
-          linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-          linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-          rgba(8, 21, 26, 0.86);
-        background-size: 24px 24px;
-        font-family: var(--mono);
-        text-align: center;
-      }
-
-      .video-placeholder::before {
-        position: absolute;
-        width: 86px;
-        height: 86px;
-        content: "";
-        border: 1px solid rgba(243, 189, 112, 0.5);
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(243, 189, 112, 0.24), transparent 58%);
-      }
-
-      .video-placeholder span {
-        position: relative;
-        z-index: 1;
-        max-width: 260px;
-        line-height: 1.8;
-      }
-
-      .timeline {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 10px;
-        padding: 18px;
-        border-radius: 28px;
-        background: rgba(255, 248, 234, 0.54);
-      }
-
-      .phase {
-        padding: 18px;
-        border: 1px solid var(--line);
-        border-radius: 20px;
-        background: rgba(255, 255, 255, 0.36);
-      }
-
-      .phase b {
-        color: var(--copper-dark);
-        font-family: var(--mono);
-        font-size: 12px;
-        letter-spacing: 0.12em;
-      }
-
-      .phase p {
-        margin: 10px 0 0;
-        color: #4b5960;
-        line-height: 1.55;
-      }
-
-      @keyframes reveal {
-        from {
-          opacity: 0;
-          transform: translateY(22px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      @keyframes cursor {
-        0%,
-        45% {
-          opacity: 1;
-        }
-        46%,
-        100% {
-          opacity: 0;
-        }
-      }
-
-      @media (max-width: 980px) {
-        .hero,
-        .section-head,
-        .evidence {
-          grid-template-columns: 1fr;
-        }
-
-        .hero-visual {
-          min-height: 500px;
-        }
-
-        .arch-grid,
-        .timeline {
-          grid-template-columns: 1fr;
-        }
-
-        .evidence-shot {
-          min-height: 360px;
-        }
-      }
-
-      @media (max-width: 680px) {
-        .page {
-          width: min(100% - 24px, 1180px);
-          padding-top: 12px;
-        }
-
-        .topbar {
-          position: static;
-          align-items: flex-start;
-          border-radius: 22px;
-          flex-direction: column;
-        }
-
-        .nav {
-          justify-content: flex-start;
-        }
-
-        .hero,
-        .architecture {
-          padding: 22px;
-          border-radius: 24px;
-        }
-
-        .hero-visual {
-          min-height: 440px;
-        }
-
-        .screen-main {
-          inset: 12px 0 148px 0;
-        }
-
-        .screen-side {
-          display: none;
-        }
-
-        .screen-terminal {
-          left: 0;
-          right: 0;
-        }
-
-        .metric-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <main class="page">
-      <header class="topbar" aria-label="页面导航">
-        <div class="brand">
-          <span class="brand-mark">rv</span>
-          <span>myCPU 汇报预览</span>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>myCPU 结题汇报 - 基于 RISC-V 的指令集模拟器设计与实现</title>
+<style>
+:root {
+  --paper: #f5eddc;
+  --paper-deep: #e4d4b8;
+  --ink: #172126;
+  --muted: #68727a;
+  --line: rgba(23,33,38,0.14);
+  --line-strong: rgba(23,33,38,0.24);
+  --copper: #b35d2f;
+  --copper-dark: #72371d;
+  --cyan: #1c7780;
+  --cyan-deep: #0e4f56;
+  --cyan-soft: rgba(28,119,128,0.14);
+  --green: #4f7d4f;
+  --amber: #d18a31;
+  --terminal: #08151a;
+  --terminal-2: #10262d;
+  --terminal-ink: #d8f1e7;
+  --panel: rgba(255,250,239,0.78);
+  --panel-solid: #fff8ea;
+  --shadow: 0 28px 80px rgba(49,41,29,0.18);
+  --serif: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  --sans: "Avenir Next", "Gill Sans", "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
+  --mono: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--sans);
+  background:
+    radial-gradient(circle at 8% 6%, rgba(179,93,47,0.20), transparent 28rem),
+    radial-gradient(circle at 94% 16%, rgba(28,119,128,0.18), transparent 30rem),
+    linear-gradient(135deg, var(--paper), var(--paper-deep));
+}
+body::before {
+  position: fixed; inset: 0; z-index: -2; content: "";
+  background:
+    linear-gradient(rgba(23,33,38,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23,33,38,0.04) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: radial-gradient(circle at center, #000 15%, transparent 84%);
+}
+body::after {
+  position: fixed; inset: 0; z-index: -1; content: ""; pointer-events: none; opacity: 0.12;
+  background-image: repeating-linear-gradient(0deg, rgba(23,33,38,0.4) 0, rgba(23,33,38,0.4) 1px, transparent 1px, transparent 7px);
+  mix-blend-mode: multiply;
+}
+.page {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 28px 0 72px;
+}
+.topbar {
+  position: sticky; top: 14px; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 24px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: rgba(255,250,239,0.72);
+  box-shadow: 0 18px 60px rgba(49,41,29,0.12);
+  backdrop-filter: blur(18px);
+}
+.brand {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding-left: 8px; font-weight: 800;
+}
+.brand-mark {
+  display: inline-grid; width: 28px; height: 28px; place-items: center;
+  border-radius: 50%; color: #fff9ee;
+  background: linear-gradient(135deg, var(--copper), var(--cyan));
+  font-family: var(--mono); font-size: 12px;
+}
+.nav {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
+}
+.nav a {
+  padding: 8px 11px; border-radius: 999px; color: var(--muted); font-size: 13px; text-decoration: none;
+}
+.nav a:hover { color: var(--ink); background: rgba(23,33,38,0.07); }
+.panel {
+  border: 1px solid var(--line); border-radius: 34px;
+  background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(20px);
+}
+.section { margin: 28px 0; animation: reveal 0.8s ease both; }
+
+/* Hero */
+.hero {
+  position: relative; display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 30px; overflow: hidden;
+  padding: 56px; min-height: 650px;
+}
+.hero::before {
+  position: absolute; inset: auto -10% -34% 42%; height: 420px; content: "";
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(28,119,128,0.22), transparent 65%);
+}
+.eyebrow {
+  margin: 0 0 18px; color: var(--copper-dark);
+  font-family: var(--mono); font-size: 13px; font-weight: 800;
+  letter-spacing: 0.18em; text-transform: uppercase;
+}
+h1, h2, h3 { margin: 0; font-family: var(--serif); letter-spacing: 0; }
+h1 { max-width: 780px; font-size: 76px; line-height: 0.98; }
+h2 { font-size: 48px; line-height: 1.05; }
+h3 { font-size: 28px; line-height: 1.12; }
+.lead {
+  max-width: 660px; margin: 28px 0 0;
+  color: #39464e; font-size: 20px; line-height: 1.68;
+}
+.hero-actions {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 34px;
+}
+.pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 38px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 999px;
+  background: rgba(255,255,255,0.44); color: #405059; font-size: 14px;
+}
+.pill strong { color: var(--ink); }
+.hero-visual {
+  position: relative; align-self: center; min-height: 500px;
+}
+.screen-stack { position: absolute; inset: 0; }
+.screen {
+  position: absolute; overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.38); border-radius: 26px;
+  background: #111f24; box-shadow: 0 24px 70px rgba(8,21,26,0.28);
+}
+.screen-main { inset: 34px 16px 118px 0; transform: rotate(-2.2deg); }
+.screen-main img { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; }
+.screen-main::after {
+  position: absolute; inset: 0; content: "";
+  background: linear-gradient(180deg, rgba(8,21,26,0.08), rgba(8,21,26,0.36));
+}
+.screen-terminal {
+  left: 24px; right: 78px; bottom: 0; height: 190px; padding: 18px;
+  color: var(--terminal-ink);
+  background:
+    linear-gradient(135deg, rgba(28,119,128,0.13), transparent),
+    linear-gradient(180deg, var(--terminal), var(--terminal-2));
+}
+.term-title {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; color: #8fb3ad;
+  font-family: var(--mono); font-size: 12px;
+}
+.term-lines {
+  margin: 0; color: #daf6ed;
+  font-family: var(--mono); font-size: 13px; line-height: 1.65; white-space: pre-wrap;
+}
+.blink {
+  display: inline-block; width: 8px; height: 15px; margin-left: 3px;
+  transform: translateY(2px); background: #f0b65f;
+  animation: cursor 1.2s steps(2, start) infinite;
+}
+.hero-meta {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 28px; max-width: 690px;
+}
+.hero-meta span {
+  padding: 14px; border: 1px solid var(--line); border-radius: 18px;
+  color: #405059; background: rgba(255,255,255,0.34); font-size: 13px; line-height: 1.45;
+}
+.hero-meta b { display: block; margin-bottom: 5px; color: var(--copper-dark); font-family: var(--mono); font-size: 12px; }
+
+/* Section heads */
+.section-head {
+  display: grid; grid-template-columns: minmax(0, 0.82fr) minmax(260px, 0.38fr);
+  gap: 28px; align-items: end; margin-bottom: 18px;
+}
+.section-kicker {
+  margin: 0 0 10px; color: var(--copper-dark);
+  font-family: var(--mono); font-size: 12px; font-weight: 800;
+  letter-spacing: 0.16em; text-transform: uppercase;
+}
+.section-note { margin: 0; color: var(--muted); line-height: 1.7; }
+
+/* Talk track */
+.talk-track {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;
+  padding: 18px; border-radius: 28px; background: rgba(255,248,234,0.56);
+}
+.talk-step {
+  min-height: 190px; padding: 18px; border: 1px solid var(--line); border-radius: 20px;
+  background: rgba(255,255,255,0.38);
+}
+.talk-step b {
+  display: block; color: var(--copper-dark); font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+}
+.talk-step h3 { margin-top: 12px; font-size: 22px; }
+.talk-step p { margin: 10px 0 0; color: #4b5960; line-height: 1.55; font-size: 14px; }
+
+/* Metrics */
+.metrics-grid {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px;
+}
+.metric-card {
+  min-height: 150px; padding: 22px; border: 1px solid var(--line); border-radius: 26px;
+  background: rgba(255,255,255,0.42);
+}
+.metric-card b {
+  display: block; color: var(--copper); font-family: var(--serif);
+  font-size: 38px; line-height: 1;
+}
+.metric-card span {
+  display: block; margin-top: 10px; color: #4b5960; font-size: 14px; line-height: 1.55;
+}
+
+/* Problem */
+.story-grid {
+  display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 18px;
+}
+.story-panel { padding: 28px; }
+.compact-list {
+  display: grid; gap: 12px; margin-top: 22px;
+}
+.compact-item {
+  display: grid; grid-template-columns: 46px 1fr; gap: 14px; align-items: start;
+  padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,0.36);
+}
+.compact-item b {
+  display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%;
+  color: #fff9ee; background: linear-gradient(135deg, var(--copper), var(--cyan)); font-family: var(--mono);
+}
+.compact-item strong { display: block; margin-bottom: 4px; font-size: 16px; }
+.compact-item span { color: #4b5960; line-height: 1.55; font-size: 14px; }
+.terminal-panel {
+  padding: 24px; color: var(--terminal-ink);
+  background:
+    radial-gradient(circle at 96% 10%, rgba(28,119,128,0.34), transparent 34%),
+    linear-gradient(180deg, #14262b, #08151a);
+}
+.terminal-panel h3 { color: #fff8ea; font-size: 30px; }
+.terminal-panel p { color: rgba(246,234,215,0.72); line-height: 1.7; }
+.log-box {
+  margin-top: 20px; padding: 16px; border: 1px solid rgba(246,234,215,0.16); border-radius: 18px;
+  background: rgba(255,255,255,0.06); font-family: var(--mono); font-size: 13px; line-height: 1.7;
+}
+.log-box .ok { color: #9be7c4; }
+.log-box .warn { color: #f3bd70; }
+
+/* Architecture */
+.architecture { padding: 34px; }
+.layer-map {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+}
+.layer {
+  position: relative; min-height: 310px; padding: 24px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 26px;
+  background: rgba(255,255,255,0.42);
+}
+.layer::after {
+  position: absolute; right: -30px; bottom: -30px;
+  width: 128px; height: 128px; content: "";
+  border: 1px solid rgba(179,93,47,0.28); border-radius: 50%;
+}
+.layer strong {
+  display: block; color: var(--copper-dark);
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.layer h3 { margin-top: 18px; font-size: 27px; }
+.layer p { color: #46535a; line-height: 1.65; font-size: 15px; }
+.mini-flow {
+  display: grid; gap: 8px; margin-top: 18px;
+  color: var(--terminal-ink); font-family: var(--mono); font-size: 12px;
+}
+.mini-flow span {
+  display: block; padding: 9px 10px; border-radius: 12px; background: #12252b;
+}
+
+/* Timeline */
+.timeline {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;
+  padding: 18px; border-radius: 28px; background: rgba(255,248,234,0.54);
+}
+.phase {
+  padding: 18px; border: 1px solid var(--line); border-radius: 20px;
+  background: rgba(255,255,255,0.36);
+}
+.phase b {
+  color: var(--copper-dark); font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+}
+.phase h3 { margin-top: 10px; font-size: 21px; }
+.phase p { margin: 10px 0 0; color: #4b5960; line-height: 1.55; font-size: 14px; }
+
+/* Feature list */
+.feature-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+.feature-card {
+  padding: 22px; border: 1px solid var(--line); border-radius: 24px;
+  background: rgba(255,255,255,0.42);
+}
+.feature-card h4 {
+  margin: 0 0 10px; font-family: var(--serif); font-size: 22px;
+}
+.feature-card ul {
+  margin: 0; padding-left: 18px; color: #46535a; font-size: 14px; line-height: 1.78;
+}
+.feature-card .tagline {
+  display: inline-block; margin-bottom: 14px; padding: 5px 10px; border-radius: 999px;
+  color: var(--cyan-deep); background: var(--cyan-soft); font-family: var(--mono); font-size: 12px; font-weight: 800;
+}
+
+/* Deep dive */
+.deep-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+.deep-card {
+  min-height: 420px; padding: 24px; border-radius: 26px; border: 1px solid var(--line);
+  background: rgba(255,255,255,0.42);
+}
+.deep-card h3 { font-size: 30px; }
+.deep-card p { color: #46535a; line-height: 1.7; }
+.signal-stack { display: grid; gap: 9px; margin-top: 18px; }
+.signal {
+  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px;
+  background: rgba(255,248,234,0.62); font-family: var(--mono); font-size: 12px;
+}
+.signal i { font-style: normal; color: var(--muted); }
+.signal em { font-style: normal; color: var(--copper-dark); font-weight: 800; }
+
+/* Evidence */
+.evidence {
+  display: grid;
+  grid-template-columns: minmax(0, 0.94fr) minmax(360px, 0.56fr);
+  gap: 18px; align-items: stretch; padding: 18px;
+}
+.evidence-shot {
+  overflow: hidden; min-height: 500px; border-radius: 26px;
+  background: #10242a;
+}
+.evidence-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evidence-copy { display: grid; gap: 14px; }
+.dark-card {
+  padding: 24px; border-radius: 26px; color: #f6ead7;
+  background:
+    radial-gradient(circle at 95% 4%, rgba(28,119,128,0.34), transparent 38%),
+    linear-gradient(180deg, #14262b, #08151a);
+}
+.dark-card h3 { font-size: 32px; }
+.dark-card p { color: rgba(246,234,215,0.74); line-height: 1.75; }
+.metric-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+}
+.metric {
+  padding: 16px; border: 1px solid rgba(246,234,215,0.16); border-radius: 18px;
+  background: rgba(255,255,255,0.06);
+}
+.metric b {
+  display: block; color: #f3bd70; font-family: var(--serif);
+  font-size: 26px; line-height: 1.05;
+}
+.metric span {
+  display: block; margin-top: 8px;
+  color: rgba(246,234,215,0.68); font-size: 13px; line-height: 1.45;
+}
+.gallery-grid {
+  display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 14px; margin-top: 14px;
+}
+.shot-card {
+  overflow: hidden; border: 1px solid var(--line); border-radius: 24px;
+  background: rgba(255,255,255,0.42);
+}
+.shot-card img { width: 100%; height: 260px; object-fit: cover; display: block; }
+.shot-card.tall img { height: 542px; }
+.shot-card figcaption {
+  padding: 14px 16px; color: #46535a; font-size: 14px; line-height: 1.5;
+}
+.shot-card b { display: block; margin-bottom: 4px; color: var(--copper-dark); font-family: var(--mono); font-size: 12px; }
+
+/* Validation */
+.validation-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+}
+.validation-card {
+  padding: 22px; border: 1px solid var(--line); border-radius: 24px; background: rgba(255,255,255,0.42);
+}
+.validation-card b { color: var(--copper-dark); font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; }
+.validation-card h3 { margin-top: 12px; font-size: 24px; }
+.validation-card p { color: #46535a; line-height: 1.65; font-size: 14px; }
+.command-row {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px;
+}
+.command-row code {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: rgba(255,255,255,0.46); color: #34454d; font-family: var(--mono); font-size: 12px;
+}
+
+/* Boundary */
+.boundary-grid {
+  display: grid; grid-template-columns: 0.95fr 1.05fr; gap: 18px;
+}
+.boundary-card { padding: 28px; }
+.boundary-card h3 { font-size: 30px; }
+.boundary-card p { color: #46535a; line-height: 1.7; }
+.boundary-list {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px;
+}
+.boundary-item {
+  padding: 14px; border-radius: 18px; border: 1px solid var(--line); background: rgba(255,255,255,0.38);
+}
+.boundary-item b { display: block; margin-bottom: 8px; color: var(--copper-dark); font-family: var(--mono); font-size: 12px; }
+.boundary-item span { color: #46535a; line-height: 1.5; font-size: 14px; }
+
+/* Team */
+.team-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+.team-card {
+  padding: 24px; border: 1px solid var(--line); border-radius: 26px;
+  background: rgba(255,255,255,0.42);
+}
+.team-card h4 { margin: 0 0 8px; font-family: var(--serif); font-size: 22px; }
+.team-card .role {
+  display: inline-block; margin-bottom: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--cyan-soft); color: var(--copper-dark);
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+}
+.team-card p { margin: 0; color: #46535a; font-size: 14px; line-height: 1.7; }
+
+/* Footer */
+.footer {
+  margin-top: 40px; padding: 28px 34px; text-align: center; color: var(--muted); font-size: 13px;
+}
+
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes cursor {
+  0%,45% { opacity: 1; }
+  46%,100% { opacity: 0; }
+}
+
+@media (max-width: 1100px) {
+  .metrics-grid, .talk-track, .timeline { grid-template-columns: repeat(3, 1fr); }
+  .layer-map, .validation-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 980px) {
+  .hero, .section-head, .story-grid, .evidence, .boundary-grid { grid-template-columns: 1fr; }
+  .hero-visual { min-height: 420px; }
+  .feature-grid, .deep-grid, .team-grid { grid-template-columns: 1fr; }
+  .evidence-shot { min-height: 360px; }
+}
+@media (max-width: 680px) {
+  .page { width: min(100% - 24px, 1180px); padding-top: 12px; }
+  .topbar { position: static; align-items: flex-start; border-radius: 22px; flex-direction: column; }
+  .nav { justify-content: flex-start; }
+  .hero, .architecture, .story-panel, .boundary-card { padding: 22px; border-radius: 24px; }
+  h1 { font-size: 46px; }
+  h2 { font-size: 34px; }
+  .lead { font-size: 17px; }
+  .hero-visual { min-height: 390px; }
+  .screen-main { inset: 12px 0 158px 0; }
+  .screen-terminal { left: 0; right: 0; height: 176px; }
+  .hero-meta, .metrics-grid, .talk-track, .timeline, .layer-map, .validation-grid, .metric-grid, .boundary-list, .gallery-grid { grid-template-columns: 1fr; }
+  .shot-card img, .shot-card.tall img { height: 260px; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">rv</span>
+      <span>myCPU 结题汇报</span>
+    </div>
+    <nav class="nav">
+      <a href="#overview">概览</a>
+      <a href="#talk">10 分钟</a>
+      <a href="#metrics">规模</a>
+      <a href="#architecture">架构</a>
+      <a href="#timeline">演进</a>
+      <a href="#features">实现</a>
+      <a href="#evidence">证据</a>
+      <a href="#testing">验证</a>
+      <a href="#boundary">边界</a>
+      <a href="#team">团队</a>
+    </nav>
+  </header>
+
+  <section id="overview" class="section hero panel">
+    <div>
+      <p class="eyebrow">计算机系统结构 · 课程项目结题</p>
+      <h1>myCPU：一套能跑系统的 RISC-V 模拟器</h1>
+      <p class="lead">
+        这是一个已经可运行的模拟器原型。项目从指令解释出发，逐步接上特权级、Sv39、外设、Guest OS、真实 workload、调试前端和验证体系，目标不是“跑通一个样例”，而是做出一条可观察、可验证、可继续演进的系统链路。
+      </p>
+      <div class="hero-actions">
+        <span class="pill"><strong>RV64I / RV64M</strong> 共享语义</span>
+        <span class="pill"><strong>functional + pipeline</strong> 双后端</span>
+        <span class="pill"><strong>M / S / U + Sv39</strong> 系统级语义</span>
+        <span class="pill"><strong>xv6 / Linux-facing</strong> 真实 bring-up</span>
+        <span class="pill"><strong>浏览器 Lab</strong> 可视化调试</span>
+      </div>
+      <div class="hero-meta">
+        <span><b>定位</b>已可运行的系统模拟器，不是静态设计稿。</span>
+        <span><b>方法</b>reference-first，小步收口，用证据锁能力。</span>
+        <span><b>汇报重点</b>架构、实现、运行证据、验证与边界。</span>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="screen-stack">
+        <div class="screen screen-main">
+          <img src="ppt_screenshot_console_overview.png" alt="myCPU 浏览器调试台总览截图">
         </div>
-        <nav class="nav">
-          <a href="#overview">项目定位</a>
-          <a href="#architecture">架构核心</a>
-          <a href="#evidence">运行证据</a>
-          <a href="#timeline">阶段路线</a>
-        </nav>
-      </header>
-
-      <section id="overview" class="section hero panel">
-        <div>
-          <p class="eyebrow">10 minute defense narrative</p>
-          <h1>一颗能跑系统的 RISC-V 模拟器</h1>
-          <p class="lead">
-            myCPU 从 C 原型演进为模块化 C++ 架构，目标不是停留在指令解释器，而是把 CPU、MMU、trap、外设和 guest runtime 接成可运行的系统闭环。
-          </p>
-          <div class="hero-actions" aria-label="项目能力摘要">
-            <span class="pill"><strong>RV64I / RV64M</strong> 参考执行路径</span>
-            <span class="pill"><strong>pipeline</strong> rename + ROB + LSQ</span>
-            <span class="pill"><strong>Sv39</strong> M/S/U 特权路径</span>
-            <span class="pill"><strong>xv6 shell</strong> 真实 workload 证据</span>
-          </div>
-        </div>
-
-        <div class="hero-visual" aria-label="调试前端截图组合">
-          <div class="screen-stack">
-            <figure class="screen screen-main">
-              <img src="frontend_overview.png" alt="myCPU 浏览器调试台首屏截图">
-            </figure>
-            <figure class="screen screen-side">
-              <img src="vector_panel.png" alt="向量寄存器与 CNN workload 面板截图">
-            </figure>
-            <div class="screen screen-terminal" aria-label="终端输出摘要">
-              <div class="term-title">
-                <span>guest workload checkpoint</span>
-                <span>pipeline</span>
-              </div>
-              <pre class="term-lines">$ kernel_alpha_demo
+        <div class="screen screen-terminal">
+          <div class="term-title"><span>guest workload checkpoint</span><span>functional</span></div>
+          <pre class="term-lines">$ kernel_alpha_demo
 KMVPETDS
-$ guest_vector_cnn_demo
-V3OK
 $ xv6-riscv
-init: starting sh<span class="blink"></span></pre>
+init: starting sh
+$ guest_vector_cnn_demo
+V3OK<span class="blink"></span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="talk" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">10-minute narrative</p>
+        <h2>汇报讲述节奏</h2>
+      </div>
+      <p class="section-note">页面不是论文正文，每一屏只放关键词；口头展开时按这六段讲，整体约 10 分钟。</p>
+    </div>
+    <div class="talk-track panel">
+      <article class="talk-step">
+        <b>00:00 - 01:00</b>
+        <h3>问题定义</h3>
+        <p>为什么不能只做指令解释器：课程项目要证明 CPU、内存、特权、外设和系统软件能闭环。</p>
+      </article>
+      <article class="talk-step">
+        <b>01:00 - 02:20</b>
+        <h3>总体架构</h3>
+        <p>四层结构：Host Simulator、Platform MMIO、Guest Runtime、Debug Frontend。</p>
+      </article>
+      <article class="talk-step">
+        <b>02:20 - 04:30</b>
+        <h3>核心实现</h3>
+        <p>讲 ISA 真值来源、Sv39/trap、pipeline、设备平台和 guest OS bring-up。</p>
+      </article>
+      <article class="talk-step">
+        <b>04:30 - 06:30</b>
+        <h3>运行证据</h3>
+        <p>用 KMVPETDS、xv6 shell、Linux checkpoint、V3OK、AI profile 展示“真的跑起来”。</p>
+      </article>
+      <article class="talk-step">
+        <b>06:30 - 08:20</b>
+        <h3>验证体系</h3>
+        <p>分层测试、负向回归、Spike 差分和前端 Node 测试，说明结果可信。</p>
+      </article>
+      <article class="talk-step">
+        <b>08:20 - 10:00</b>
+        <h3>复盘与后续</h3>
+        <p>讲工程取舍、当前不夸大的边界，以及 Linux 发行版、AI、JIT、多核方向。</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="metrics" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">project scale</p>
+        <h2>工程规模</h2>
+      </div>
+      <p class="section-note">C++ 重构不是语言偏好，而是对复杂度增长的结构性响应：共享语义、后端分层、设备边界和测试门禁都需要稳定组织。</p>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <b>28K+</b>
+        <span>Host 模拟器核心 C/C++ 源码行</span>
+      </div>
+      <div class="metric-card">
+        <b>10K+</b>
+        <span>Guest runtime C / RISC-V ASM 源码行</span>
+      </div>
+      <div class="metric-card">
+        <b>18K+</b>
+        <span>前端与调试服务 HTML / CSS / JS 源码行</span>
+      </div>
+      <div class="metric-card">
+        <b>400</b>
+        <span>myCPU 与 frontend 测试 / 数据文件</span>
+      </div>
+      <div class="metric-card">
+        <b>39</b>
+        <span>README 固定的 make test 目标规模</span>
+      </div>
+      <div class="metric-card">
+        <b>246</b>
+        <span>截至当前快照的 Git 提交次数</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="problem" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">engineering problem</p>
+        <h2>我们解决的不是单点功能</h2>
+      </div>
+      <p class="section-note">一个系统模拟器真正难的地方，在于每层都要和其它层对齐：CPU 语义、外设时序、Guest 期望和调试证据不能互相脱节。</p>
+    </div>
+    <div class="story-grid">
+      <article class="story-panel panel">
+        <p class="eyebrow">design method</p>
+        <h3>reference-first + 可观察性</h3>
+        <div class="compact-list">
+          <div class="compact-item">
+            <b>1</b>
+            <div><strong>先保真值来源</strong><span>InstructionSemantics 和 functional backend 是语义基准，pipeline、JIT 原型都围绕它对齐。</span></div>
+          </div>
+          <div class="compact-item">
+            <b>2</b>
+            <div><strong>再扩系统边界</strong><span>从 ISA 到 CSR/trap，再到 MMU、总线、外设、Guest OS 和真实 workload。</span></div>
+          </div>
+          <div class="compact-item">
+            <b>3</b>
+            <div><strong>最后用证据收口</strong><span>每次扩功能都留下 marker、probe、负向测试或前端可观察面，避免“只在我机器上能跑”。</span></div>
+          </div>
+        </div>
+      </article>
+      <article class="terminal-panel panel">
+        <p class="eyebrow">what makes it hard</p>
+        <h3>系统级 bug 往往跨层出现</h3>
+        <p>例如一次 page fault 可能来自 ISA 译码、CSR 权限、Sv39 walk、TLB flush、外设地址区间或 Guest 初始化顺序。项目采用小步 guardrail，把这类跨层问题拆成可定位的检查点。</p>
+        <div class="log-box">
+          <div><span class="ok">✓</span> trap delegation / mret / sret</div>
+          <div><span class="ok">✓</span> Sv39 page walk / page fault</div>
+          <div><span class="ok">✓</span> UART / CLINT / PLIC / block storage</div>
+          <div><span class="warn">→</span> workload marker / debug snapshot / frontend panel</div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="architecture" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">system architecture</p>
+        <h2>系统总体架构</h2>
+      </div>
+      <p class="section-note">Host Simulator → Platform MMIO → Guest Runtime → Debug Frontend。四层分工清晰，运行时证据从底层一路投射到浏览器。</p>
+    </div>
+    <div class="architecture panel">
+      <div class="layer-map">
+        <article class="layer">
+          <strong>Host Layer</strong>
+          <h3>模拟器主体</h3>
+          <p>负责指令译码、共享语义、functional 参考路径、pipeline 后端和 JIT / DBT 原型边界。</p>
+          <div class="mini-flow">
+            <span>Decode → InstructionSemantics</span>
+            <span>functional reference</span>
+            <span>pipeline / JIT prototype</span>
+          </div>
+        </article>
+        <article class="layer">
+          <strong>Memory Layer</strong>
+          <h3>地址空间</h3>
+          <p>把 Sv39、TLB、RAM、MMIO、cache observation 和访问错误整理成统一访存合同。</p>
+          <div class="mini-flow">
+            <span>MMU → AddressSpace</span>
+            <span>Bus → RAM / MMIO</span>
+            <span>L1D / shadow cache observe</span>
+          </div>
+        </article>
+        <article class="layer">
+          <strong>Platform Layer</strong>
+          <h3>平台设备</h3>
+          <p>UART、CLINT、PLIC、块设备、virtio 路径和 AI Accelerator 通过设备合同接入。</p>
+          <div class="mini-flow">
+            <span>UART terminal</span>
+            <span>timer / external interrupt</span>
+            <span>block / AI MMIO device</span>
+          </div>
+        </article>
+        <article class="layer">
+          <strong>Product Layer</strong>
+          <h3>可视化工作台</h3>
+          <p>Node debug server + 浏览器前端，把 workload、terminal、pipeline 和 profile 数据组织成 Lab。</p>
+          <div class="mini-flow">
+            <span>debug CLI session</span>
+            <span>terminal / inspector</span>
+            <span>evidence / boundary drawer</span>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="timeline" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">project evolution</p>
+        <h2>从指令到系统的演进路线</h2>
+      </div>
+      <p class="section-note">这条时间线适合讲“为什么项目能逐步变大但没有失控”：每一阶段都有明确边界和验证口径。</p>
+    </div>
+    <div class="timeline panel">
+      <article class="phase">
+        <b>Phase 1</b>
+        <h3>可运行基线</h3>
+        <p>形成 RV64 基础语义、特权、trap、guest bring-up 与 Phase 1 冻结点。</p>
+      </article>
+      <article class="phase">
+        <b>Phase 3</b>
+        <h3>乱序执行</h3>
+        <p>pipeline 后端接入 rename、ROB、LSQ、最小 OoO execute 与 rollback 观察。</p>
+      </article>
+      <article class="phase">
+        <b>Wave 5</b>
+        <h3>Cache / Memory</h3>
+        <p>L1D 默认关闭 opt-in，shadow cache 证据，访存生命周期与边界 hardening。</p>
+      </article>
+      <article class="phase">
+        <b>Wave 6</b>
+        <h3>JIT / DBT</h3>
+        <p>完成 hot-path、translation contract、IR dry-run、host emitter 和 opt-in harness。</p>
+      </article>
+      <article class="phase">
+        <b>Wave 7</b>
+        <h3>产品化展示</h3>
+        <p>把首页、控制台、文档和 Linux serial console 整理成可体验入口。</p>
+      </article>
+      <article class="phase">
+        <b>Post-Wave 7</b>
+        <h3>两条新主线</h3>
+        <p>标准 Linux 发行版平台，以及用户自定义 AI 任务 / NPU 性能模型。</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="features" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">core implementations</p>
+        <h2>核心实现拆解</h2>
+      </div>
+      <p class="section-note">六个维度覆盖 CPU、内存、特权、微结构、系统软件和前端展示。每项都尽量有对应回归或可观察输出。</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <span class="tagline">ISA truth source</span>
+        <h4>ISA 与执行语义</h4>
+        <ul>
+          <li>RV64I / RV64M 为主体，保留 V-lite / AI 方向扩展。</li>
+          <li>InstructionSemantics 作为共享语义来源。</li>
+          <li>functional 负责可信参考，pipeline / JIT 原型对齐它。</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <span class="tagline">virtual memory</span>
+        <h4>内存与 Sv39</h4>
+        <ul>
+          <li>三级页表 walk、TLB、sfence.vma 和 page fault。</li>
+          <li>AddressSpace → Bus → RAM / MMIO 的统一路径。</li>
+          <li>L1D / shadow cache 当前以观察和 opt-in 为边界。</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <span class="tagline">privileged runtime</span>
+        <h4>特权与中断</h4>
+        <ul>
+          <li>M / S / U 三级特权模式。</li>
+          <li>trap delegation、mret / sret、CSR 访问控制。</li>
+          <li>timer interrupt 与 external interrupt 都有 guest 证据。</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <span class="tagline">microarchitecture</span>
+        <h4>Pipeline 后端</h4>
+        <ul>
+          <li>register rename、ROB、LSQ 和 OoO execute。</li>
+          <li>投机、flush、rollback 与 side-effect 边界。</li>
+          <li>通过 pipeline timeline 和 snapshot 做可视化观察。</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <span class="tagline">guest systems</span>
+        <h4>Guest 系统软件</h4>
+        <ul>
+          <li>kernel_alpha 达到 KMVPETDS 完成态。</li>
+          <li>interactive_os 提供串口 monitor。</li>
+          <li>xv6 在 virtio-blk board path 上稳定到 shell。</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <span class="tagline">lab product</span>
+        <h4>浏览器工作台</h4>
+        <ul>
+          <li>Load / Run / Pause / Reset / Terminate 会话流转。</li>
+          <li>terminal、pipeline、寄存器、CSR、向量和 AI profile 面板。</li>
+          <li>Post-Wave 7 已向 Lab workbench 重构。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="deep-dive" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">three deep dives</p>
+        <h2>三个适合展开讲的技术点</h2>
+      </div>
+      <p class="section-note">如果答辩老师追问细节，可以从这三块展开：它们最能体现系统结构课程项目的含金量。</p>
+    </div>
+    <div class="deep-grid">
+      <article class="deep-card">
+        <p class="eyebrow">01</p>
+        <h3>特权级 + Sv39</h3>
+        <p>这部分把普通指令模拟推进到系统级模拟：执行状态不仅有 GPR，还包括 privilege、CSR、页表、trap 和异常返回。</p>
+        <div class="signal-stack">
+          <div class="signal"><i>mstatus / satp</i><em>CSR state</em></div>
+          <div class="signal"><i>virtual address</i><em>page walk</em></div>
+          <div class="signal"><i>fault cause</i><em>trap path</em></div>
+          <div class="signal"><i>sret / mret</i><em>return</em></div>
+        </div>
+      </article>
+      <article class="deep-card">
+        <p class="eyebrow">02</p>
+        <h3>Pipeline 不复制语义</h3>
+        <p>pipeline 后端重点不是重新发明 ISA，而是在共享语义之上实现 rename、ROB、LSQ、提交边界和回滚观察。</p>
+        <div class="signal-stack">
+          <div class="signal"><i>decode</i><em>rename</em></div>
+          <div class="signal"><i>issue</i><em>OoO execute</em></div>
+          <div class="signal"><i>memory op</i><em>LSQ</em></div>
+          <div class="signal"><i>commit</i><em>ROB</em></div>
+        </div>
+      </article>
+      <article class="deep-card">
+        <p class="eyebrow">03</p>
+        <h3>真实 workload 驱动</h3>
+        <p>xv6、Linux-facing probe、AI demo 和浏览器 terminal 让系统从“单元测试能过”变成“能被用户操作和观察”。</p>
+        <div class="signal-stack">
+          <div class="signal"><i>kernel_alpha</i><em>KMVPETDS</em></div>
+          <div class="signal"><i>xv6-riscv</i><em>shell</em></div>
+          <div class="signal"><i>linux_proto</i><em>checkpoint</em></div>
+          <div class="signal"><i>AI profile</i><em>timing summary</em></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="evidence" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">running evidence</p>
+        <h2>运行证据</h2>
+      </div>
+      <p class="section-note">这一段建议现场重点讲：我们展示的不是“代码写了什么”，而是“系统实际跑到了哪里”。</p>
+    </div>
+    <div class="evidence panel">
+      <div class="evidence-shot">
+        <img src="ppt_screenshot_pipeline.png" alt="Pipeline timeline 可视化截图">
+      </div>
+      <aside class="evidence-copy">
+        <div class="dark-card">
+          <p class="eyebrow">selected proof</p>
+          <h3>六条关键证据链</h3>
+          <p>每条证据都对应一个系统能力：从内核 bring-up 到真实 workload，再到前端可观察和未来方向原型。</p>
+          <div class="metric-grid">
+            <div class="metric">
+              <b>KMVPETDS</b>
+              <span>kernel_alpha 8 阶段 bring-up 标记</span>
+            </div>
+            <div class="metric">
+              <b>xv6 shell</b>
+              <span>virtio-blk board path 稳定到 shell</span>
+            </div>
+            <div class="metric">
+              <b>timerfd ok</b>
+              <span>Linux-facing userland checkpoint 冻结点</span>
+            </div>
+            <div class="metric">
+              <b>V3OK</b>
+              <span>向量 CNN conv→relu 固定 demo</span>
+            </div>
+            <div class="metric">
+              <b>AI profile</b>
+              <span>MMIO AI accelerator timing / outcome 摘要</span>
+            </div>
+            <div class="metric">
+              <b>JIT opt-in</b>
+              <span>DBT translator、IR、host emitter 与 harness 原型</span>
             </div>
           </div>
         </div>
-      </section>
+      </aside>
+    </div>
+    <div class="gallery-grid">
+      <figure class="shot-card">
+        <img src="ppt_screenshot_terminal.png" alt="交互式终端截图">
+        <figcaption><b>interactive terminal</b>串口终端把 guest 的输出、命令和 prompt 暴露到浏览器，适合现场演示。</figcaption>
+      </figure>
+      <figure class="shot-card tall">
+        <img src="ppt_screenshot_ai_or_vecto.png" alt="向量寄存器面板截图">
+        <figcaption><b>vector / ML panel</b>向量寄存器和 ML workload 输出可在前端面板中观察，不只停留在 stdout。</figcaption>
+      </figure>
+    </div>
+  </section>
 
-      <section id="architecture" class="section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">architecture spine</p>
-            <h2>汇报只展开三条主线</h2>
+  <section id="testing" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">verification</p>
+        <h2>验证体系</h2>
+      </div>
+      <p class="section-note">项目的验证目标是避免“能跑但不可信”。因此测试不是单层的，而是 asm、host、guest、frontend、外部 oracle 多层组合。</p>
+    </div>
+    <div class="validation-grid">
+      <article class="validation-card">
+        <b>Layer 1</b>
+        <h3>指令 / 模块</h3>
+        <p>最小 asm、host unit 和模块 smoke 锁住 ISA、CSR、loader、MMU、设备和 helper 行为。</p>
+      </article>
+      <article class="validation-card">
+        <b>Layer 2</b>
+        <h3>Guest 回归</h3>
+        <p>kernel_alpha 正向 + 负向基线、interactive_os、xv6 shell 和 Linux probe 证明系统链路。</p>
+      </article>
+      <article class="validation-card">
+        <b>Layer 3</b>
+        <h3>前端 / 服务</h3>
+        <p>Node debug server、terminal input pump、render state 和 workload manifest 有独立 Node 测试。</p>
+      </article>
+      <article class="validation-card">
+        <b>Layer 4</b>
+        <h3>外部差分</h3>
+        <p>Spike differential 为高风险架构语义提供外部 oracle，尤其适合 trap 和 Sv39 子集。</p>
+      </article>
+    </div>
+    <div class="command-row">
+      <code>cd myCPU && make test</code>
+      <code>cd myCPU && make test-pipeline</code>
+      <code>cd frontend && node --test</code>
+      <code>SPIKE_PATH=/path/to/spike make test-host-spike_differential</code>
+    </div>
+  </section>
+
+  <section id="boundary" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">honest boundary</p>
+        <h2>边界与后续方向</h2>
+      </div>
+      <p class="section-note">结题汇报要清楚说明“已经完成什么”和“没有夸大什么”。这能体现工程可信度。</p>
+    </div>
+    <div class="boundary-grid">
+      <article class="boundary-card terminal-panel panel">
+        <p class="eyebrow">current boundary</p>
+        <h3>当前不做的事</h3>
+        <p>项目已有 JIT、cache、AI、Linux-facing 方向的原型和证据，但结题时不把它们包装成完整商用能力。</p>
+        <div class="log-box">
+          <div><span class="warn">!</span> 不默认启用正式 JIT backend</div>
+          <div><span class="warn">!</span> 不声称完整 Linux 发行版兼容</div>
+          <div><span class="warn">!</span> 不开放任意 AI 模型上传</div>
+          <div><span class="warn">!</span> 不声称 multicore / coherence 已完成</div>
+        </div>
+      </article>
+      <article class="boundary-card panel">
+        <p class="eyebrow">next engineering tasks</p>
+        <h3>下一阶段怎么继续</h3>
+        <div class="boundary-list">
+          <div class="boundary-item">
+            <b>Linux 发行版平台</b>
+            <span>继续推进 rootfs / Image / DTB、process / filesystem 和 capability 证据。</span>
           </div>
-          <p class="section-note">
-            这段用于替代 PPT 中最容易散的功能罗列：先讲执行流，再讲内存与特权，最后落到 guest kernel bring-up。
-          </p>
-        </div>
-
-        <div class="architecture panel">
-          <div class="arch-grid">
-            <article class="arch-card">
-              <strong>core 01</strong>
-              <h3>CPU 核心执行流</h3>
-              <p>
-                以 functional 作为 ISA 级 reference path，同时保留 pipeline 后端观察 rename、ROB、LSQ 和最小真实 OoO execute 边界。
-              </p>
-              <div class="mini-flow">
-                <span>decode</span>
-                <span>rename / issue</span>
-                <span>execute / commit</span>
-              </div>
-            </article>
-
-            <article class="arch-card">
-              <strong>core 02</strong>
-              <h3>内存与特权系统</h3>
-              <p>
-                用 Sv39、TLB、sfence.vma、M/S/U privilege 和 trap delegation 把“指令能跑”推进到“系统能隔离运行”。
-              </p>
-              <div class="mini-flow">
-                <span>virtual address</span>
-                <span>Sv39 page walk</span>
-                <span>fault / trap</span>
-              </div>
-            </article>
-
-            <article class="arch-card">
-              <strong>core 03</strong>
-              <h3>guest runtime 闭环</h3>
-              <p>
-                guest 侧从 boot、PMM、页表、trap runtime 到用户态任务，支撑 kernel_alpha 和更真实的 xv6 workload。
-              </p>
-              <div class="mini-flow">
-                <span>boot / PMM</span>
-                <span>trap runtime</span>
-                <span>kernel bring-up</span>
-              </div>
-            </article>
+          <div class="boundary-item">
+            <b>AI Accelerator</b>
+            <span>沿 task spec、profile summary 和 simulated cycles，推进更接近 NPU 的性能模型。</span>
+          </div>
+          <div class="boundary-item">
+            <b>JIT / DBT</b>
+            <span>从 opt-in harness 评估 workload-level scheduler、helper runtime 和默认 backend 边界。</span>
+          </div>
+          <div class="boundary-item">
+            <b>Cache / 多核</b>
+            <span>在现有 L1D / shadow cache 基础上评估 DMA coherence 和 multicore 前置条件。</span>
           </div>
         </div>
-      </section>
+      </article>
+    </div>
+  </section>
 
-      <section id="evidence" class="section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">evidence stage</p>
-            <h2>真实截图 + 录屏占位</h2>
-          </div>
-          <p class="section-note">
-            最终视频里，这一段可以切局部特写：左侧放真实截图，右侧替换成你录好的 xv6 shell 或 kernel_alpha 操作片段。
-          </p>
-        </div>
+  <section id="team" class="section">
+    <div class="section-head">
+      <div>
+        <p class="section-kicker">team</p>
+        <h2>团队协作</h2>
+      </div>
+      <p class="section-note">汇报时可按“主线 owner + 子系统负责人 + 交叉验收”的方式说明分工。</p>
+    </div>
+    <div class="team-grid">
+      <div class="team-card">
+        <h4>梁家琦</h4>
+        <span class="role">组长 / 总体架构</span>
+        <p>仓库主线维护、ISA / CSR / 内存与设备平台、guest runtime、前端调试链路、文档整理与最终联调。</p>
+      </div>
+      <div class="team-card">
+        <h4>杨皓宇</h4>
+        <span class="role">流水线与微结构</span>
+        <p>pipeline backend、分支预测、rename、ROB、LSQ、提交边界、flush / rollback 与可观察状态。</p>
+      </div>
+      <div class="team-card">
+        <h4>余健超</h4>
+        <span class="role">测试与验证</span>
+        <p>asm 指令级测试、unit / host / guest smoke、pipeline 回归、frontend 测试、Spike differential。</p>
+      </div>
+    </div>
+  </section>
 
-        <div class="evidence panel">
-          <figure class="evidence-shot">
-            <img src="pipeline_timeline.png" alt="pipeline timeline 调试截图">
-          </figure>
-          <aside class="evidence-copy">
-            <div class="dark-card">
-              <p class="eyebrow">selected proof</p>
-              <h3>不是静态设计图，而是可运行证据</h3>
-              <p>
-                讲解时可以按 kernel_alpha、xv6 shell、vector/CNN demo 三个证据展开。页面本身不代替实操录屏，只负责把证据放进清晰的叙事位置。
-              </p>
-              <div class="metric-grid">
-                <div class="metric">
-                  <b>10</b>
-                  <span>kernel_alpha 正负回归基线</span>
-                </div>
-                <div class="metric">
-                  <b>xv6</b>
-                  <span>virtio-blk path 下已到 shell</span>
-                </div>
-                <div class="metric">
-                  <b>V-lite</b>
-                  <span>conv -> relu CNN-style demo</span>
-                </div>
-                <div class="metric">
-                  <b>259</b>
-                  <span>展示材料记录的测试文件规模</span>
-                </div>
-              </div>
-            </div>
-            <div class="video-placeholder" aria-label="录屏占位">
-              <span>VIDEO SLOT<br>这里后续替换为真实实操录屏<br>xv6 shell / kernel_alpha / vector demo</span>
-            </div>
-          </aside>
-        </div>
-      </section>
+  <div class="footer panel">
+    大连理工大学 · 计算机系统结构 · 2026 年 5 月 · myCPU 已可运行的 RISC-V 模拟器原型
+  </div>
 
-      <section id="timeline" class="section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">closing frame</p>
-            <h2>最后用阶段路线收住边界</h2>
-          </div>
-          <p class="section-note">
-            答辩视频结尾不要说“所有方向都完成了”，而是明确当前成果、稳定化重点和后续阶段。
-          </p>
-        </div>
-        <div class="timeline panel">
-          <article class="phase">
-            <b>Phase 1</b>
-            <p>完成最小 OS / kernel bring-up，稳定 trap、MMU、外设和 guest runtime 主路径。</p>
-          </article>
-          <article class="phase">
-            <b>Phase 2</b>
-            <p>在统一 ISA 语义来源上维护 functional 与 pipeline 两种执行模型。</p>
-          </article>
-          <article class="phase">
-            <b>Phase 3</b>
-            <p>继续观察 rename、ROB、LSQ 和 OoO execute 的最小结构收益。</p>
-          </article>
-          <article class="phase">
-            <b>Phase 4</b>
-            <p>后续再评估 cache、DMA、multicore 等系统级扩展，不抢跑大范围功能面。</p>
-          </article>
-        </div>
-      </section>
-    </main>
-  </body>
+</main>
+</body>
 </html>

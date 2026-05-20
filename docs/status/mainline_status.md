@@ -6,7 +6,7 @@
 
 - 当前稳定快照
 - 当前优先级
-- active wave 与近端 blocker
+- active line 与近端 blocker
 - 当前仍然有效的风险 / 限制
 - 下一步工作
 
@@ -179,7 +179,7 @@ invalidation check / examined entries / non-invalidating event 计数和空 cach
 当前仍不实现默认 JIT backend、persistent cache、helper runtime execution、workload-level
 scheduler、multicore、coherence 或新的 memory consistency 模型，也不改变 guest 可见语义。
 
-当前 active wave 是 `Wave 7 / 产品化展示与在线调试平台收口`。产品官网壳层、首页
+`Wave 7 / 产品化展示与在线调试平台收口` 已进入历史收口态。产品官网壳层、首页
 和控制台 demo workspace v1 已完成：本地前端服务具备 `/`、`/console`、`/docs`
 三入口，首页采用面向用户的产品叙事展示已完成能力，`/console` 顶层已按
 `OS Bring-up`、`Machine Inspector`、`AI Accelerator`、`Runtime Labs` 组织体验入口，
@@ -235,8 +235,8 @@ Observation trail -> Evidence / boundary`；`Linux Distro Labs` 也已从单一�
 `POST /api/session/jit-dispatch` 把当前 loaded session 的 JIT / DBT dry-run summary
 接进专题工作台。AI Labs 这轮仍只保持现有 guest demo 与 parameterized tiny model，
 没有提前扩写尚未完成的 AI 分支内容。
-`Wave 7` 的剩余部署 / 运维工作已经转移到远端服务器上的仓库 checkout 继续推进；本地工作区
-现已正式打开两条 `Post-Wave 7` 新主线，并分别补齐独立文档入口：
+当前 active line 已经拆成两部分：远端服务器上的 `Wave 7` 部署 / 运维升级继续在远端
+checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，并分别补齐独立文档入口：
 - 标准 Linux 发行版平台：
   [../design/post_wave7_linux_distribution_platform_design.md](../design/post_wave7_linux_distribution_platform_design.md) /
   [linux_distribution_platform_status.md](linux_distribution_platform_status.md) /
@@ -304,9 +304,10 @@ Observation trail -> Evidence / boundary`；`Linux Distro Labs` 也已从单一�
   队列暴露 blocked load 的 state、load sequence id 和 store sequence id。这只增强
   debug snapshot / frontend 可观察性，不改变 replay、forwarding、commit boundary 或 guest
   可见语义。
-- 当前 active wave 是 `Wave 7 / 产品化展示与在线调试平台收口`，不是继续深挖 Linux
-  checkpoint 的 `Wave 3`，也不是默认 JIT backend、AI accelerator 后续专项或完整
-  multicore / coherence 专项。
+- 当前 active line 不再是单一 `Wave 7` 收尾：本地工作区以 `Post-Wave 7`
+  标准 Linux 发行版平台和用户 AI 任务 / NPU 性能模型为主；远端部署升级仍沿
+  `Wave 7` 远端云服务器计划推进。它不是继续深挖 Linux checkpoint 的 `Wave 3`，
+  也不是默认 JIT backend 或完整 multicore / coherence 专项。
 - 主线 `Wave 4` 的 AI accelerator 切片 A 已完成：`bounded dynamic shape`
   已从 `dynamic GEMM / FC-like` 扩到现有 op family 的正向或 fail-closed 合同，
   并新增 `dynamic_tiny_model` 动态小模型 workload。

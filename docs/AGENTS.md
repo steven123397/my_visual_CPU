@@ -19,7 +19,7 @@
 - [status](status)
   当前状态、风险、优先级和下一步。
 - [showcase](showcase)
-  项目展示材料、展示截图和 HTML 预览页。
+  项目展示材料、展示截图、PPT、讲稿、结题报告和 HTML 预览页。
 
 ## 文档分工
 
@@ -32,7 +32,7 @@
 - [README.md](../README.md)
   面向读者的项目概览，保持简洁，不承载实时状态流水账。
 - [showcase](showcase)
-  面向展示与汇报，不作为实时状态或执行计划来源。
+  面向展示与汇报，不作为实时状态或执行计划来源；课程结题材料统一收口在这里。
 
 ## 文档角色规则
 
@@ -45,11 +45,11 @@
 - `status/`
   只回答“当前是什么状态、当前优先级是什么、还有什么风险、下一步是什么”。
 - `showcase/`
-  只回答“对外怎么展示项目”。
+  只回答“对外怎么展示项目”，包括结题 PPT、讲稿、截图、报告和演示页。
 
 ## 单一事实来源规则
 
-- 仓库级实时主线状态、当前优先级、active wave 和近端 blocker，只写在 [status/mainline_status.md](status/mainline_status.md)。
+- 仓库级实时主线状态、当前优先级、active line / wave 和近端 blocker，只写在 [status/mainline_status.md](status/mainline_status.md)。
 - 不再维护并行的仓库级主线状态文档，例如 `project_priority_roadmap.md` 或 `xv6_linux_jit_status.md` 这一类拆分。
 - 专项状态文档只在确有独立跟踪价值时保留，例如 `kernel_alpha`、`NPU / TPU-like` 或 review findings。
 - `AGENTS.md` 只定义规则、方法、范围和验证要求，不复制实时状态正文。

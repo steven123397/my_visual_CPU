@@ -8,7 +8,7 @@
 
 1. 先读本文件，理解项目范围、全局约定和默认工作流。
 2. 进入具体子树后，再读对应子目录下的 `AGENTS.md`。
-3. 需要看实时进度、当前优先级、active wave 或近端 blocker 时，只看 [docs/status/mainline_status.md](docs/status/mainline_status.md)。
+3. 需要看实时进度、当前优先级、active line / wave 或近端 blocker 时，只看 [docs/status/mainline_status.md](docs/status/mainline_status.md)。
 
 本仓库只维护 `AGENTS.md` 体系，不再维护 `CLAUDE.md`。
 
@@ -24,7 +24,7 @@
 
 ## 单一事实来源
 
-- 仓库级实时状态、当前优先级、active wave、当前 blocker：
+- 仓库级实时状态、当前优先级、active line / wave、当前 blocker：
   - [docs/status/mainline_status.md](docs/status/mainline_status.md)
 - 专项状态只在确有独立持续跟踪价值时保留，例如：
   - [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)
@@ -43,9 +43,11 @@
 - [frontend](frontend)
   本地调试服务、浏览器前端和 Node 测试。
 - [docs](docs)
-  按 `background / design / plan / status / showcase` 组织的正式技术文档。
+  按 `background / design / plan / status / showcase` 组织的正式技术文档和展示材料。
 - [README.md](README.md)
   面向读者的项目概览、构建和运行说明。
+- [docs/showcase](docs/showcase)
+  课程结题、PPT、讲稿、截图、HTML 预览页和展示脚本材料。
 
 ## 子目录 AGENTS 索引
 

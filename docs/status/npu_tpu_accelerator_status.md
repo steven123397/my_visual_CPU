@@ -472,9 +472,9 @@
 
 ## 当前仍然有效的风险 / 限制
 
-- 当前主线 active wave 已切到 `Wave 4`，本方向重新进入近端推进；但推进范围仍限于
-  AI accelerator 的动态 shape、profile、workload 和观察面，不代表真实 cache /
-  DMA / multicore 已启动。
+- 仓库主线 `Wave 4` 的 AI accelerator 切片已经完成并归档；当前本方向的实时口径已经
+  切到 `Post-Wave 7 用户 AI 任务 + NPU 性能模型`。已完成的动态 shape、profile、
+  workload 和观察面不代表真实 cache / DMA / multicore 已启动。
 - 注意这里的 `Wave 4` 是仓库主线 wave；本状态文档中已完成的 AI accelerator
   Wave 1 / 2 / 3 是本方向局部历史阶段，不能把二者当成同一套编号。
 - `DMA-ready` contract、graph package、tensor golden model、独立 AI accelerator 控制面、`scratchpad/DMA engine`、第一版 compute engine、host graph packaging / profile 入口，以及 guest driver / guest demo / debug profile 可观察性当前都已有实现；这条线的剩余限制已经不再是“入口没接上”，而是更细的 timing / overlap / performance 模型还没展开。
