@@ -19,6 +19,7 @@ namespace {
 
 constexpr uint64_t kEntry = MEM_BASE;
 constexpr uint64_t kTrapVector = kEntry + 0x80;
+constexpr uint64_t kMachineExitVector = kEntry + 0xc0;
 constexpr uint64_t kDataAddr = kEntry + 0x100;
 constexpr uint32_t kNop = 0x00000013U;                    // addi x0, x0, 0
 constexpr uint32_t kAddiX1 = 0x00100093U;                // addi x1, x0, 1
@@ -48,6 +49,7 @@ constexpr uint32_t kInvalidStoreFunct3X6ToX20 = 0x006a7023U;
 constexpr uint32_t kSdX21ToX20 = 0x015a3023U;            // sd x21, 0(x20)
 constexpr uint32_t kFldF5FromX10 = 0x00053287U;          // fld f5, 0(x10)
 constexpr uint32_t kFaddDF6F5F10 = 0x02a28353U;          // fadd.d ft6, ft5, fa0
+constexpr uint32_t kFaddSF8F8F10 = 0x00a47453U;          // fadd.s fs0, fs0, fa0
 constexpr uint32_t kFaddSF9F9F10 = 0x00a4f4d3U;          // fadd.s fs1, fs1, fa0
 constexpr uint32_t kFsdF5ToX10Plus8 = 0x00553427U;       // fsd f5, 8(x10)
 constexpr uint32_t kFmvDXF10FromX0 = 0xf2000553U;        // fmv.d.x fa0, x0
@@ -156,6 +158,17 @@ bool expect(bool condition, const char* message) {
 
 [[maybe_unused]] void write32(Ram& ram, uint64_t addr, uint32_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
+}
+
+[[maybe_unused]] void init_fp_cpu(CPU& cpu) {
+    cpu_init(cpu, kEntry);
+    cpu.csr().write(CSR_MSTATUS, MSTATUS_FS_INITIAL, cpu.core());
+}
+
+[[maybe_unused]] void install_machine_exit_handler(Ram& ram, CPU& cpu) {
+    cpu.csr().write(CSR_MTVEC, kMachineExitVector, cpu.core());
+    write32(ram, kMachineExitVector + 0, kAddiA7Exit);
+    write32(ram, kMachineExitVector + 4, kEcall);
 }
 
 [[maybe_unused]] int run_until_halt_and_count_redirects(PipelineBackend& backend, CPU& cpu, int max_steps) {

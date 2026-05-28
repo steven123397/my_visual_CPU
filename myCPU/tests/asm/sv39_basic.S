@@ -5,6 +5,9 @@
 _start:
     li   s0, 0x10000000   # UART_BASE
 
+    la   t0, machine_trap
+    csrw mtvec, t0
+
     # 在 M-mode 下设置页表
     # 页表放在 0x80100000
     li   t0, 0x80100000
@@ -66,6 +69,20 @@ supervisor_main:
     sb   t0, 0(s0)
 
     # 退出
+    li   a7, 93
+    li   a0, 0
+success_exit:
+    ebreak
+
+machine_trap:
+    csrr t0, mcause
+    li   t1, 3
+    bne  t0, t1, fail
+
+    csrr t0, mepc
+    la   t1, success_exit
+    bne  t0, t1, fail
+
     li   a7, 93
     li   a0, 0
     ecall

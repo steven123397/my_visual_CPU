@@ -17,6 +17,9 @@ namespace {
 
 using namespace spike_differential;
 
+constexpr uint64_t kMachineExitVector = kEntry + 0xc0;
+constexpr uint32_t kEbreak = 0x00100073U;
+
 struct Snapshot {
     uint64_t pc{0};
     uint64_t instret{0};
@@ -44,6 +47,12 @@ bool expect(bool condition, const char* message) {
         return false;
     }
     return true;
+}
+
+void install_machine_exit_handler(CPU& cpu, Ram& ram) {
+    cpu.csr().write(CSR_MTVEC, kMachineExitVector, cpu.core());
+    write32(ram, kMachineExitVector + 0, kAddiA7Exit);
+    write32(ram, kMachineExitVector + 4, kEcall);
 }
 
 std::unique_ptr<ExecutionBackend> make_backend(BackendUnderTest kind, CPU& cpu, Bus& bus) {
@@ -407,8 +416,7 @@ int main() {
             {
                 kEcall,
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kAddiX5FromX0Plus256,
@@ -418,12 +426,13 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::User);
 
                 cpu.csr().write(CSR_MEDELEG, 1ULL << 8, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
@@ -431,18 +440,18 @@ int main() {
             {
                 kSret,
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {},
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
 
                 cpu.csr().write(CSR_SEPC, kEntry + 8, cpu.core());
                 cpu.csr().write(CSR_MSTATUS, 0, cpu.core());  // SPP=U, SPIE=0
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
@@ -506,8 +515,7 @@ int main() {
             {
                 0x00030067U,  // jalr x0, x6, 0
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 0x14139073U,  // csrw sepc, x7
@@ -543,6 +551,7 @@ int main() {
                 cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
                 cpu.csr().write(CSR_MEDELEG, 1ULL << 12, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
                 cpu.address_space().flush_tlb();
             },
         },
@@ -551,8 +560,7 @@ int main() {
             {
                 0x00030067U,  // jalr x0, x6, 0
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrwSepcX7,
@@ -560,13 +568,14 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(6, UART_BASE);
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
 
                 cpu.csr().write(CSR_MEDELEG, 1ULL << 1, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
             Scenario::PlatformFixture::UartPlic,
         },
@@ -575,8 +584,7 @@ int main() {
             {
                 kLwX1FromX10,
                 kAddiX2WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrwSepcX7,
@@ -599,6 +607,7 @@ int main() {
                 cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
                 cpu.csr().write(CSR_MEDELEG, 1ULL << 13, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
                 cpu.address_space().flush_tlb();
             },
         },
@@ -607,8 +616,7 @@ int main() {
             {
                 kSwX11ToX10,
                 kAddiX3WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrwSepcX7,
@@ -632,6 +640,7 @@ int main() {
                 cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
                 cpu.csr().write(CSR_MEDELEG, 1ULL << 15, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
                 cpu.address_space().flush_tlb();
             },
         },
@@ -640,8 +649,7 @@ int main() {
             {
                 kLwX1FromX10,
                 kAddiX4WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrwSepcX7,
@@ -677,6 +685,7 @@ int main() {
                 cpu.csr().write(CSR_SATP, kSatpSv39 | (kRootPageTable >> 12), cpu.core());
                 cpu.csr().write(CSR_MEDELEG, 1ULL << 13, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
                 cpu.address_space().flush_tlb();
             },
         },
@@ -685,8 +694,7 @@ int main() {
             {
                 kLwX1FromX10,
                 kAddiX2WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrwSepcX7,
@@ -694,13 +702,14 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(10, UART_BASE);
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
 
                 cpu.csr().write(CSR_MEDELEG, 1ULL << 5, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
             Scenario::PlatformFixture::UartPlic,
         },
@@ -709,8 +718,7 @@ int main() {
             {
                 kSwX11ToX10,
                 kAddiX3WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrwSepcX7,
@@ -718,7 +726,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(10, UART_BASE);
                 cpu.core().write_gpr(11, 0x41);
                 cpu.core().write_gpr(7, kEntry + 8);
@@ -726,6 +734,7 @@ int main() {
 
                 cpu.csr().write(CSR_MEDELEG, 1ULL << 7, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
             Scenario::PlatformFixture::UartPlic,
         },
@@ -734,8 +743,7 @@ int main() {
             {
                 kMret,
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -744,7 +752,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MIE_STIE);
                 cpu.core().write_gpr(7, kEntry + 8);
 
@@ -757,6 +765,7 @@ int main() {
                     cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
                 cpu.csr().write(CSR_MIP, MIE_STIE, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
@@ -764,8 +773,7 @@ int main() {
             {
                 kCsrwSipX5,
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -774,7 +782,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MIE_STIE);
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
@@ -783,6 +791,7 @@ int main() {
                 cpu.csr().write(CSR_SIE, MIE_STIE, cpu.core());
                 cpu.csr().write(CSR_MSTATUS, MSTATUS_SIE, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
@@ -790,8 +799,7 @@ int main() {
             {
                 kCsrwSieX5,
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -800,7 +808,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MIE_STIE);
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
@@ -809,6 +817,7 @@ int main() {
                 cpu.csr().write(CSR_MSTATUS, MSTATUS_SIE, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
                 cpu.csr().write(CSR_SIP, MIE_STIE, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
@@ -816,8 +825,7 @@ int main() {
             {
                 kCsrwSstatusX5,
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -826,7 +834,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MSTATUS_SIE);
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
@@ -835,14 +843,14 @@ int main() {
                 cpu.csr().write(CSR_SIE, MIE_STIE, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
                 cpu.csr().write(CSR_SIP, MIE_STIE, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
             "supervisor_timer_interrupt_at_cycle_start",
             {
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -851,7 +859,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MIE_STIE);
                 cpu.core().write_gpr(7, kEntry + 4);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
@@ -861,14 +869,14 @@ int main() {
                 cpu.csr().write(CSR_MSTATUS, MSTATUS_SIE, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
                 cpu.csr().write(CSR_SIP, MIE_STIE, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
             "user_mode_supervisor_timer_interrupt_at_cycle_start",
             {
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -877,7 +885,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MIE_STIE);
                 cpu.core().write_gpr(7, kEntry + 4);
                 cpu.core().set_privilege_mode(PrivilegeMode::User);
@@ -886,6 +894,7 @@ int main() {
                 cpu.csr().write(CSR_SIE, MIE_STIE, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
                 cpu.csr().write(CSR_SIP, MIE_STIE, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
@@ -893,8 +902,7 @@ int main() {
             {
                 kSret,
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -903,7 +911,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MIE_SEIE);
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
@@ -914,6 +922,7 @@ int main() {
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
                 cpu.csr().write(CSR_MIP, MIE_SEIE, cpu.core());
                 cpu.csr().write(CSR_MSTATUS, 0, cpu.core());  // SPP=U, SIE=0
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
@@ -921,8 +930,7 @@ int main() {
             {
                 kCsrwSipX5,
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -931,7 +939,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MIE_SEIE);
                 cpu.core().write_gpr(7, kEntry + 8);
                 cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
@@ -940,14 +948,14 @@ int main() {
                 cpu.csr().write(CSR_SIE, MIE_SEIE, cpu.core());
                 cpu.csr().write(CSR_MSTATUS, MSTATUS_SIE, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
         {
             "user_mode_supervisor_external_interrupt_at_cycle_start",
             {
                 kAddiX1WrongPath,
-                kAddiA7Exit,
-                kEcall,
+                kEbreak,
             },
             {
                 kCsrrcSipX5,
@@ -956,7 +964,7 @@ int main() {
             },
             {},
             128,
-            [](CPU& cpu, Ram&, Bus&) {
+            [](CPU& cpu, Ram& ram, Bus&) {
                 cpu.core().write_gpr(5, MIE_SEIE);
                 cpu.core().write_gpr(7, kEntry + 4);
                 cpu.core().set_privilege_mode(PrivilegeMode::User);
@@ -965,6 +973,7 @@ int main() {
                 cpu.csr().write(CSR_SIE, MIE_SEIE, cpu.core());
                 cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
                 cpu.csr().write(CSR_SIP, MIE_SEIE, cpu.core());
+                install_machine_exit_handler(cpu, ram);
             },
         },
     };

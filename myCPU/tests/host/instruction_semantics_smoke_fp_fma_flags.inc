@@ -1336,7 +1336,7 @@
     {
         CPU boundary_cpu;
         cpu_init(boundary_cpu, kEntry);
-        boundary_cpu.csr().write(CSR_MSTATUS, 0, boundary_cpu.core());
+        boundary_cpu.csr().write(CSR_MSTATUS, MSTATUS_FS_INITIAL, boundary_cpu.core());
         const CommitBoundaryResult boundary_result =
             apply_commit_boundary(boundary_cpu,
                                   bus,

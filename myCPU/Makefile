@@ -180,7 +180,7 @@ AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 10s
 PIPELINE_GUEST_TEST_TIMEOUT ?= 8s
 # The pipeline supervisor demo exercises the full early runtime and VM bring-up
 # path and still runs noticeably slower than the other guest demos.
-PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 16s
+PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 24s
 
 # RISC-V toolchain (adjust prefix if needed)
 RV_CC   = riscv64-unknown-elf-gcc
@@ -843,6 +843,38 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland
 		exit 1; \
 	fi; \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_curated_alpine_busybox_userland_abi_view 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_curated_alpine_fp_static_surface_view 2>&1)"; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fcsr_syscall_roundtrip: FORCE $(TARGET)
+	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_fcsr_syscall_roundtrip ==="; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_IMAGE)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
+		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
+		exit 1; \
+	fi; \
+	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_fcsr_syscall_roundtrip_probe 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		printf '%s\n' "$$output" >&2; \

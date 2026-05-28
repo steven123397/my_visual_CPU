@@ -16,6 +16,25 @@ namespace {
 
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 
+bool is_floating_csr_access(const Insn& insn) {
+    if (insn.opcode != 0x73 || insn.funct3 == 0) {
+        return false;
+    }
+    const uint32_t csr_addr = (insn.raw >> 20) & 0xFFFU;
+    return csr_addr == CSR_FFLAGS || csr_addr == CSR_FRM || csr_addr == CSR_FCSR;
+}
+
+bool requires_enabled_floating_state(const Insn& insn) {
+    return insn.opcode == 0x53 ||
+           insn.opcode == 0x43 ||
+           insn.opcode == 0x47 ||
+           insn.opcode == 0x4B ||
+           insn.opcode == 0x4F ||
+           is_standard_fp_load(insn) ||
+           is_standard_fp_store(insn) ||
+           is_floating_csr_access(insn);
+}
+
 InsnEffects illegal_instruction_effect(uint32_t raw) {
     InsnEffects effects;
     effects.trap.valid = true;
@@ -67,6 +86,11 @@ InsnEffects InstructionSemantics::execute(const Insn& insn, ExecutionContext& ct
 }
 
 InsnEffects InstructionSemantics::execute(const Insn& insn, ExecutionContext& ctx, const SemanticInputs& inputs) {
+    if (requires_enabled_floating_state(insn) &&
+        (ctx.csr().read(CSR_MSTATUS, ctx.core()) & MSTATUS_FS_MASK) == MSTATUS_FS_OFF) {
+        return illegal_instruction_effect(insn.raw);
+    }
+
     switch (insn.opcode) {
     case 0x37:
     case 0x17:

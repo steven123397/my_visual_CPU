@@ -124,6 +124,14 @@ supervisor_trap_fail:
     call platform_shutdown
 
 machine_trap:
+    csrr t0, mcause
+    li   t1, 9
+    bne  t0, t1, machine_trap_fail
+    li   t0, 93
+    bne  a7, t0, machine_trap_fail
+    ecall
+
+machine_trap_fail:
     li   a0, 'X'
     call platform_uart_putc
     li   a0, 1

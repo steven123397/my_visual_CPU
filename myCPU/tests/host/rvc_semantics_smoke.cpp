@@ -107,6 +107,7 @@ bool test_compressed_fsd_and_fld_use_fpr_bits() {
     cpu_init(cpu, kEntry);
 
     const uint64_t slot = kEntry + 0x100;
+    cpu.csr().write(CSR_MSTATUS, MSTATUS_FS_INITIAL, cpu.core());
     cpu.core().write_gpr(10, slot - 112);
     cpu.core().write_fpr(8, 0x8877665544332211ULL);
 

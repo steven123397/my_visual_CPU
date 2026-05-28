@@ -188,15 +188,15 @@ init 管理的 getty、密码 login、完整 process control、跨 reboot 持久
    `hpmcounter3-31 -> mhpmcounter3-31` alias 一致性，以免 guest 在 capability 视图上
    广告了 `zihpm` 却一读就陷入 illegal instruction；同时，当前也开始把 guest-visible
    `auxv` / `AT_HWCAP` 视图纳入同一条证据链，用真实 Alpine rootfs 上的
-   `od -An -tx8 -w16 /proc/self/auxv` 固化当前 `AT_HWCAP=0x1105`；同时也把外部 Alpine
+   `od -An -tx8 -w16 /proc/self/auxv` 固化当前 `AT_HWCAP=0x112d`；同时也把外部 Alpine
    rootfs 里的 `/bin/busybox` userland ABI 纳入同一条证据链，用离线提取 + host `readelf`
    固化 `Flags: 0x5, RVC, double-float ABI` 和
    `Tag_RISCV_arch: rv64...f...d...c...`。这说明当前 guest-visible capability 广告与
    外部 Alpine 用户态 ABI 事实已经可以被分别、稳定地观察，不再需要从单条 `awk` 路径反推；
-   同时，Linux 当前的 `AT_HWCAP=0x1105` 也已经能追到明确根因：它是从 DT
-   `riscv,isa = rv64imac_zicsr_zifencei` 里的单字母扩展直接折算出来的 `IMAC`，
-   因此当前 mismatch 不是“Linux 多广告了 F/D”，而是“guest 仍只广告 IMAC，
-   但外部 Alpine userland 确实是 lp64d/imafdc”；
+   同时，Linux 当前的 `AT_HWCAP=0x112d` 也已经能追到明确根因：它是从 DT
+   `riscv,isa = rv64imafdc_zicsr_zifencei` 里的单字母扩展直接折算出来的 `IMAFDC`，
+   因此当前这一段工作不再是解释 “IMAC vs lp64d/imafdc” mismatch，而是保持
+   DTB / boot log / `/proc/cpuinfo` / `auxv` 与真实外部 userland ABI 持续对齐；
    当前 host / pipeline 侧也已经把最小 `FS` / `SD` 合同接回 `mstatus/sstatus`，并在浮点
    提交后置 `FS=DIRTY`；但真实 Linux guest 在 trap / interrupt / context-switch
    路径里会按自身约定把 `FS` 清回 `INITIAL/CLEAN`，因此 real-rootfs `FS state`
@@ -385,8 +385,8 @@ init 管理的 getty、密码 login、完整 process control、跨 reboot 持久
 - 如果先做 frontend distro route，会把 UI 文案和未稳定的平台能力耦合起来。
 - 如果过早广告 F/D 或 hwcap 能力，真实用户态库可能进入未实现路径。
 - 如果只看 guest `AT_HWCAP` / `/proc/cpuinfo` 而不看真实外部用户态 ABI，容易把
-  “guest advertises IMAC but userland binary is lp64d/imafdc” 这种错层问题误判成单纯
-  `awk` 指令缺口。
+  capability 广告层与真实用户态 ABI 之间的错层问题误判成单纯 `awk` 指令缺口；这也是此前
+  `IMAC` 广告与 `lp64d/imafdc` BusyBox 事实不一致时暴露出来的具体风险。
 - 如果把真实 Linux `FS state` 语义简化成“任意时点 snapshot 必须保持 DIRTY”，会把
   内核 trap / interrupt / context-switch 自身对 `FS` 的整理语义误判成模拟器 FPU 语义缺失。
 - 如果真实 rootfs 写入测试直接操作原资产，可能污染后续验证；需要使用临时副本。

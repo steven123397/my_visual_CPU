@@ -5,6 +5,9 @@
 _start:
     li   s0, 0x10000000   # UART_BASE
 
+    la   t0, machine_trap
+    csrw mtvec, t0
+
     # Seed two physical backing pages with different values.
     li   t0, 0x80103000
     li   t1, 0x11111111
@@ -142,6 +145,20 @@ supervisor_main:
     sb   t0, 0(s0)
     li   t0, 'B'
     sb   t0, 0(s0)
+
+    li   a7, 93
+    li   a0, 0
+success_exit:
+    ebreak
+
+machine_trap:
+    csrr t0, mcause
+    li   t1, 3
+    bne  t0, t1, fail
+
+    csrr t0, mepc
+    la   t1, success_exit
+    bne  t0, t1, fail
 
     li   a7, 93
     li   a0, 0

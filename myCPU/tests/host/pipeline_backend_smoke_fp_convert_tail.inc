@@ -2,7 +2,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 3ULL << 5, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(7.5f));
@@ -35,7 +35,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(3.5f));
@@ -68,7 +68,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(3.25f));
@@ -101,7 +101,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 3ULL << 5, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(7.5f));
@@ -134,7 +134,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(3.5f));
@@ -167,7 +167,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 3ULL << 5, cpu.core());
         cpu.core().write_gpr(13, (1ULL << 53) + 1ULL);
@@ -196,7 +196,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 2ULL << 5, cpu.core());
         cpu.core().write_gpr(13, (1ULL << 53) + 1ULL);
@@ -225,7 +225,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(7.5f));
         write32(ram, kEntry + 0, kFcvtWSX10FromF10);
@@ -253,7 +253,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(std::numeric_limits<float>::infinity()));
@@ -287,7 +287,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0xffffffff7fc00000ULL);
@@ -321,7 +321,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(-std::numeric_limits<float>::infinity()));
@@ -355,7 +355,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(7.5f));
         write32(ram, kEntry + 0, kFcvtLSX10FromF10);
@@ -383,7 +383,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(std::numeric_limits<float>::infinity()));
@@ -416,7 +416,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0xffffffff7fc00000ULL);
@@ -449,7 +449,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(-std::numeric_limits<float>::infinity()));
@@ -482,7 +482,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(3000000000.0f));
         write32(ram, kEntry + 0, kFcvtWUSX10FromF10);
@@ -511,7 +511,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(-1.0f));
@@ -544,7 +544,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(std::numeric_limits<float>::infinity()));
@@ -577,7 +577,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0xffffffff7fc00000ULL);
@@ -610,7 +610,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(4294967296.0f));
         write32(ram, kEntry + 0, kFcvtLUSX10FromF10);
@@ -638,7 +638,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(-1.0f));
@@ -671,7 +671,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(std::numeric_limits<float>::infinity()));
@@ -704,7 +704,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0xffffffff7fc00000ULL);
@@ -737,7 +737,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, 0x401e000000000000ULL);  // 7.5
         write32(ram, kEntry + 0, kFcvtLDX13FromF10);
@@ -765,7 +765,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 2ULL << 5, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(-3.5));
@@ -798,7 +798,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(std::numeric_limits<double>::infinity()));
@@ -831,7 +831,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0x7ff8000000000000ULL);
@@ -864,7 +864,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(-std::numeric_limits<double>::infinity()));
@@ -897,7 +897,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(-1.0));
@@ -930,7 +930,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(std::numeric_limits<double>::infinity()));
@@ -963,7 +963,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0x7ff8000000000000ULL);
@@ -996,7 +996,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(3.25));
@@ -1029,7 +1029,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, double_to_raw_bits(4294967295.0));
         write32(ram, kEntry + 0, kFcvtWUDX10FromF10);
@@ -1057,7 +1057,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(-1.0));
@@ -1090,7 +1090,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(std::numeric_limits<double>::infinity()));
@@ -1123,7 +1123,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0x7ff8000000000000ULL);
@@ -1156,7 +1156,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(13, 4294967295ULL);
         write32(ram, kEntry + 0, kFcvtDWUDF15FromX13);
@@ -1184,7 +1184,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(13, 0x8000000000000000ULL);
         write32(ram, kEntry + 0, kFcvtDLUDF15FromX13);
@@ -1212,7 +1212,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(15, double_to_raw_bits(2.0));
         cpu.core().write_fpr(10, double_to_raw_bits(3.0));
@@ -1241,7 +1241,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(15, 0x7ff8000000000000ULL);
@@ -1271,7 +1271,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(15, 0x7ff8000000000000ULL);
@@ -1301,7 +1301,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 2ULL << 5, cpu.core());
         cpu.core().write_fpr(8, 0xc00c000000000000ULL);  // -3.5
@@ -1334,7 +1334,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(8, double_to_raw_bits(std::numeric_limits<double>::infinity()));
@@ -1368,7 +1368,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(8, 0x7ff8000000000000ULL);
@@ -1402,7 +1402,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(8, double_to_raw_bits(-std::numeric_limits<double>::infinity()));
@@ -1436,7 +1436,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(3.5));
@@ -1469,7 +1469,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(3.25));
@@ -1502,7 +1502,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(8, 0x400c000000000000ULL);  // 3.5
         write32(ram, kEntry + 0, 0xc20415d3U);           // fcvt.w.d a1, fs0, rtz
@@ -1530,7 +1530,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, 0xbff0000000000000ULL);  // -1.0
         write32(ram, kEntry + 0, 0x22a51953U);            // fneg.d fs2, fa0
@@ -1558,7 +1558,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, double_to_raw_bits(1.5));
         cpu.core().write_fpr(11, double_to_raw_bits(-2.0));
@@ -1583,7 +1583,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.5f));
         cpu.core().write_fpr(11, float_to_fpr_raw_bits(-2.0f));
@@ -1608,7 +1608,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.5f));
         cpu.core().write_fpr(11, float_to_fpr_raw_bits(-2.0f));
@@ -1634,7 +1634,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(-1.5f));
         cpu.core().write_fpr(11, float_to_fpr_raw_bits(-2.0f));
@@ -1660,7 +1660,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(10, 0x80000000ULL);
         write32(ram, kEntry + 0, kFmvWXF10FromX10);
@@ -1689,7 +1689,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.5f));
         cpu.core().write_fpr(11, float_to_fpr_raw_bits(2.5f));
@@ -1725,7 +1725,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(11, 0xffffffff7fc00000ULL);
@@ -1755,7 +1755,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0xffffffff7fc00000ULL);
@@ -1785,7 +1785,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(10, 7);
         write32(ram, kEntry + 0, kFcvtSWF15FromX10);
@@ -1810,7 +1810,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(10, 0xffffffffULL);
         write32(ram, kEntry + 0, kFcvtSWUF15FromX10);
@@ -1835,7 +1835,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(10, 1ULL << 40);
         write32(ram, kEntry + 0, kFcvtSLF15FromX10);
@@ -1860,7 +1860,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(10, 1ULL << 63);
         write32(ram, kEntry + 0, kFcvtSLUF15FromX10);
@@ -1885,7 +1885,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(2.25f));
         write32(ram, kEntry + 0, kFsqrtSF15FromF10);
@@ -1909,7 +1909,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 1ULL << 5, cpu.core());
         cpu.core().write_fpr(10, 0xffffffffbf800000ULL);
@@ -1938,7 +1938,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 2ULL << 5, cpu.core());
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(2.0f));
@@ -1967,7 +1967,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.5f));
         write32(ram, kEntry + 0, kFcvtDSF15FromF10);
@@ -1992,7 +1992,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.5f));
         cpu.core().write_fpr(11, float_to_fpr_raw_bits(2.25f));
@@ -2018,7 +2018,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0xffffffff7f800001ULL);
@@ -2048,7 +2048,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, double_to_raw_bits(1.5));
         cpu.core().write_fpr(11, double_to_raw_bits(2.25));
@@ -2074,7 +2074,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(10, 0x7ff0000000000001ULL);
@@ -2104,7 +2104,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, double_to_raw_bits(1.5));
         cpu.core().write_fpr(11, double_to_raw_bits(-2.0));
@@ -2129,7 +2129,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, double_to_raw_bits(-1.5));
         write32(ram, kEntry + 0, kFabsDF9F10);
@@ -2153,7 +2153,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.5f));
         write32(ram, kEntry + 0, kFcvtDSF15FromF10);
@@ -2177,7 +2177,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, double_to_raw_bits(1.5));
         write32(ram, kEntry + 0, kFcvtSDF15FromF10);
@@ -2201,7 +2201,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(15, 0x4002000000000000ULL);  // 2.25
         cpu.core().write_fpr(10, 0x4002000000000000ULL);  // 2.25
@@ -2230,7 +2230,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FRM, 0, cpu.core());
         cpu.core().write_fpr(18, float_to_fpr_raw_bits(5.75f));
@@ -2256,7 +2256,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(9, 0x401c000000000000ULL);   // 7.0
@@ -2298,7 +2298,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FFLAGS, 0, cpu.core());
         cpu.core().write_fpr(9, float_to_fpr_raw_bits(7.0f));
@@ -2332,7 +2332,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 1ULL << 5, cpu.core());
         cpu.core().write_fpr(9, float_to_fpr_raw_bits(0.0f));
@@ -2366,7 +2366,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 1ULL << 5, cpu.core());
         cpu.core().write_fpr(9, float_to_fpr_raw_bits(1.0f));
@@ -2396,7 +2396,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 1ULL << 5, cpu.core());
         cpu.core().write_fpr(10, 0xbff0000000000000ULL);  // -1.0
@@ -2425,7 +2425,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 1ULL << 5, cpu.core());
         cpu.core().write_fpr(10, 0x4000000000000000ULL);  // 2.0
@@ -2454,7 +2454,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 0, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(1.0e308));
@@ -2488,7 +2488,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.csr().write(CSR_FCSR, 0, cpu.core());
         cpu.core().write_fpr(10, double_to_raw_bits(1.0e-308));

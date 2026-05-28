@@ -27,8 +27,9 @@ bool writes_fp_destination(const Insn& insn) {
            is_fsgnj_d(insn) || is_fsgnjn_d(insn) || is_fsgnjx_d(insn) || is_fsgnj_s(insn) ||
            is_fsgnjn_s(insn) || is_fsgnjx_s(insn) || is_fadd_s(insn) || is_fsub_s(insn) || is_fmul_s(insn) || is_fdiv_s(insn) ||
            is_fadd_d(insn) || is_fsub_d(insn) || is_fmul_d(insn) ||
-           is_fdiv_d(insn) || is_fmax_s(insn) || is_fmin_s(insn) || is_fsqrt_s(insn) || is_fmadd_d(insn) ||
-           is_fmsub_d(insn) || is_fnmsub_d(insn) || is_fnmadd_d(insn) || is_fsqrt_d(insn) || is_fcvt_d_w(insn) ||
+           is_fdiv_d(insn) || is_fmax_s(insn) || is_fmin_s(insn) || is_fmax_d(insn) || is_fmin_d(insn) ||
+           is_fsqrt_s(insn) || is_fmadd_s(insn) || is_fmsub_s(insn) || is_fnmsub_s(insn) || is_fnmadd_s(insn) ||
+           is_fmadd_d(insn) || is_fmsub_d(insn) || is_fnmsub_d(insn) || is_fnmadd_d(insn) || is_fsqrt_d(insn) || is_fcvt_d_w(insn) ||
            is_fcvt_d_wu(insn) || is_fcvt_d_l(insn) || is_fcvt_d_lu(insn) ||
            is_fcvt_s_w(insn) || is_fcvt_s_wu(insn) || is_fcvt_s_l(insn) || is_fcvt_s_lu(insn) || is_fcvt_d_s(insn) || is_fcvt_s_d(insn);
 }

@@ -16,6 +16,7 @@ namespace {
 constexpr uint64_t kEntry = MEM_BASE;
 constexpr uint64_t kDataAddr = kEntry + 0x40;
 constexpr uint64_t kTrapVector = kEntry + 0x80;
+constexpr uint64_t kMachineExitVector = kEntry + 0xc0;
 constexpr uint64_t kRootPageTable = 0x80100000ULL;
 constexpr uint64_t kLevel1PageTable = 0x80101000ULL;
 constexpr uint64_t kLevel0PageTable = 0x80102000ULL;
@@ -195,9 +196,12 @@ bool test_pipeline_profile_counts_faulting_memory_observation() {
     write32(ram, kEntry + 0, kLwX6FromX10);
     write32(ram, kTrapVector + 0, kAddiA7Exit);
     write32(ram, kTrapVector + 4, kEcall);
+    write32(ram, kMachineExitVector + 0, kAddiA7Exit);
+    write32(ram, kMachineExitVector + 4, kEcall);
 
     cpu.core().write_gpr(10, 1ULL << 39);
     cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+    cpu.csr().write(CSR_MTVEC, kMachineExitVector, cpu.core());
     cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
     cpu.csr().write(CSR_MEDELEG, 1ULL << 13, cpu.core());
     cpu.csr().write(CSR_SATP, kSatpModeSv39 | (kRootPageTable >> 12), cpu.core());
@@ -213,8 +217,8 @@ bool test_pipeline_profile_counts_faulting_memory_observation() {
 
     return expect(cpu.core().halted(),
                   "faulting-memory profile smoke should halt via trap handler ecall") &&
-           expect(profile.total_traps == 1,
-                  "faulting-memory profile smoke should record the load page fault trap") &&
+           expect(profile.total_traps == 2,
+                  "faulting-memory profile smoke should record the load page fault and S-mode exit ecall traps") &&
            expect(profile.total_memory_observations == 1,
                   "faulting-memory profile smoke should count the faulting memory access") &&
            expect(unmapped != nullptr,

@@ -75,6 +75,7 @@
         bus.attach(clint);
         CPU cpu;
         cpu_init(cpu, kEntry);
+        install_machine_exit_handler(ram, cpu);
         cpu.csr().bind_clint(&clint);
         cpu.csr().write(CSR_STVEC, kTrapVector, cpu.core());
         cpu.csr().write(CSR_MIDELEG, MIE_STIE, cpu.core());
@@ -136,6 +137,7 @@
         bus.attach(uart);
         CPU cpu;
         cpu_init(cpu, kEntry);
+        install_machine_exit_handler(ram, cpu);
         plic.store(PLIC_BASE + PLIC_PRIORITY_OFFSET(PLIC_SOURCE_UART_THRE), 1, 4);
         plic.store(PLIC_BASE + PLIC_ENABLE_OFFSET(PLIC_CONTEXT_SUPERVISOR), 1U << PLIC_SOURCE_UART_THRE, 4);
         plic.store(PLIC_BASE + PLIC_THRESHOLD_OFFSET(PLIC_CONTEXT_SUPERVISOR), 0, 4);
@@ -207,6 +209,51 @@
             return 1;
         }
         if (!expect(cpu.csr().read(CSR_MCAUSE, cpu.core()) == 2, "illegal instruction should report illegal-instruction cause")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.core().set_privilege_mode(PrivilegeMode::User);
+        cpu.core().write_fpr(10, 0x0123456789abcdefULL);
+        cpu.csr().write(CSR_MSTATUS, MSTATUS_FS_OFF, cpu.core());
+        cpu.csr().write(CSR_MTVEC, kTrapVector, cpu.core());
+
+        write32(ram, kEntry + 0, kFmvXDA0FromF10);
+        write32(ram, kEntry + 4, kAddiX1WrongPath);
+        write32(ram, kTrapVector + 0, kNop);
+
+        PipelineBackend backend(cpu, bus);
+
+        for (int i = 0; i < 8 && cpu.core().pc() != kTrapVector; ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().privilege_mode() == PrivilegeMode::Machine,
+                    "pipeline U-mode fmv.x.d with FS=Off should trap for Linux lazy fstate restore")) {
+            return 1;
+        }
+        if (!expect(cpu.core().pc() == kTrapVector,
+                    "pipeline U-mode fmv.x.d with FS=Off should redirect to mtvec at commit")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_MCAUSE, cpu.core()) == 2,
+                    "pipeline U-mode fmv.x.d with FS=Off should report illegal-instruction cause")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_MEPC, cpu.core()) == kEntry,
+                    "pipeline U-mode fmv.x.d with FS=Off should capture the faulting pc in mepc")) {
+            return 1;
+        }
+        if (!expect(cpu.csr().read(CSR_MTVAL, cpu.core()) == kFmvXDA0FromF10,
+                    "pipeline U-mode fmv.x.d with FS=Off should report the raw instruction in mtval")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(10) == 0,
+                    "pipeline U-mode fmv.x.d with FS=Off must not commit stale FPR state into a0")) {
             return 1;
         }
     }
@@ -461,7 +508,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         ram.store(kDataAddr, 0x8877665544332211ULL, 8);
         cpu.core().write_gpr(10, kDataAddr);
@@ -495,7 +542,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         ram.store(kDataAddr, double_to_raw_bits(3.5), 8);
         cpu.core().write_gpr(10, kDataAddr);
@@ -522,7 +569,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.5f));
         cpu.core().write_fpr(11, double_to_raw_bits(2.0));
@@ -549,7 +596,7 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(10, 7);
         cpu.core().write_fpr(9, double_to_raw_bits(-10.0));
@@ -575,7 +622,35 @@
         Ram ram;
         Bus bus(ram);
         CPU cpu;
-        cpu_init(cpu, kEntry);
+        init_fp_cpu(cpu);
+
+        cpu.core().write_fpr(8, float_to_fpr_raw_bits(-10.0f));
+        cpu.core().write_fpr(10, float_to_fpr_raw_bits(2.0f));
+        cpu.core().write_fpr(11, float_to_fpr_raw_bits(3.0f));
+        cpu.core().write_fpr(12, float_to_fpr_raw_bits(4.0f));
+        write32(ram, kEntry + 0, kFmaddSF8F10F11F12);
+        write32(ram, kEntry + 4, kFaddSF8F8F10);
+        write32(ram, kEntry + 8, kAddiA7Exit);
+        write32(ram, kEntry + 12, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "pipeline fmadd.s consumer smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_fpr(8) == float_to_fpr_raw_bits(12.0f),
+                    "pipeline should not let a younger fadd.s read stale fs0 after fmadd.s")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        init_fp_cpu(cpu);
 
         cpu.core().write_gpr(11, 0x1122334455667788ULL);
         write32(ram, kEntry + 0, 0xf2058553U);  // fmv.d.x fa0, a1
@@ -599,4 +674,3 @@
             return 1;
         }
     }
-

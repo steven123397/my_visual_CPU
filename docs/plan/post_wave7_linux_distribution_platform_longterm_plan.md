@@ -304,10 +304,10 @@
   `hpmcounter3-31` / `mhpmcounter3-31` / `mhpmevent3-31` 的最小 host CSR 合同，以及
   `hpmcounter3-31 -> mhpmcounter3-31` alias 一致性，并用真实 Alpine procfs smoke 与
   `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view` 固化了
-  `mount -t proc proc /proc -> grep '^isa' /proc/cpuinfo -> rv64imac_zicntr_zicsr_zifencei_zihpm`；
+  `mount -t proc proc /proc -> grep '^isa' /proc/cpuinfo -> rv64imafdc_zicntr_zicsr_zifencei_zihpm`；
   当前还新增了 `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view`，
   用真实 Alpine rootfs 上的 `od -An -tx8 -w16 /proc/self/auxv` 固化当前
-  `AT_HWCAP=0x1105` 的 guest-visible 视图；当前还新增了
+  `AT_HWCAP=0x112d` 的 guest-visible 视图；当前还新增了
   `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view`，
   用离线提取 rootfs 中 `/bin/busybox` + host `readelf` 固化
   `double-float ABI` 与 `Tag_RISCV_arch: rv64...f...d...c...` 的真实外部用户态 ABI 事实；
@@ -440,8 +440,8 @@
   `CSR_FFLAGS.NX` 写回到 guest 可见 `fcsr` alias，并保留 rounding-mode bits；当前仍不把这扩写成完整 `.s/.d -> {w,wu,l,lu}`
   越界 / NaN / 饱和结果矩阵已经完成；
   当前仍不把 compare/minmax 这部分扩写成完整 IEEE754 角落语义已经完成；
-  此外，当前 `AT_HWCAP=0x1105` 的根因也已明确：Linux 只是按 DT `riscv,isa` 的
-  单字母集合折算出 `IMAC`，并没有独立广告 F/D；
+  此外，当前 `AT_HWCAP=0x112d` 的根因也已明确：Linux 只是按 DT `riscv,isa` 的
+  单字母集合折算出 `IMAFDC`，并没有额外广告不存在的扩展；
   当前还把最小 `mstatus/sstatus.FS` / `SD` 合同接回 host / pipeline 路径，浮点提交后会置
   `FS=DIRTY`，并已有 `atomic_semantics_smoke`、`instruction_semantics_smoke`、
   `pipeline_backend_smoke` 回归；但真实 Alpine `BusyBox awk` runtime 的 `FS state`
@@ -450,7 +450,11 @@
   `test-host-run_debug_cli_probe_linux_distribution_fs_state_guardrail`，用真实 rootfs 上的
   FP 用户态执行 -> timer / child-process roundtrip -> 后续 FP 用户态仍正确 这条最小
   正向证据替代不稳定 snapshot 断言；后续仍需继续评估更完整的 F/D arithmetic、异常和
-  `FS state` 合同。
+  `FS state` 合同；本轮又把 `c.fld` / `c.fldsp` / `c.fsd` / `c.fsdsp` 纳入离线
+  Alpine FP static-surface 支持集合，并用 `rvc_semantics_smoke` 固定 compressed FP 在
+  `FS=Initial` 下复用现有 `fld/fsd` 语义；同轮修正 `ReorderBuffer` older-FP writer
+  分类漂移，让 `fmadd.s` / `fmsub.s` / `fnmsub.s` / `fnmadd.s` 与 `fmin.d` / `fmax.d`
+  阻塞同寄存器年轻 FP consumer，避免新增支持面绕过 pipeline stale-FPR guardrail。
 - [ ] 不因 host unit 通过就声明发行版支持，必须回到真实 rootfs opt-in smoke 验证。
 - [ ] 文档明确已支持、未支持、刻意不广告的 ISA 能力。
 - [ ] 阶段完成后运行通用验证基线。

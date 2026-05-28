@@ -182,29 +182,36 @@
       CSR，并补上 `hpmcounter3-31 -> mhpmcounter3-31` alias 一致性；对应 host
       `atomic_semantics_smoke` 回归与
       `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa_view`
-      真实 Alpine procfs smoke 已新增并通过。当前真实外部 Alpine rootfs 已通过
-      `mount -t proc proc /proc -> grep '^isa' /proc/cpuinfo -> rv64imac_zicntr_zicsr_zifencei_zihpm`。
+      真实 Alpine procfs smoke 已新增并通过。后续 capability alignment 收口后，当前真实外部
+      Alpine rootfs 已更新为
+      `mount -t proc proc /proc -> grep '^isa' /proc/cpuinfo -> rv64imafdc_zicntr_zicsr_zifencei_zihpm`。
     - 同轮把一条最小 guest-visible `hwcap` 合同接回用户态探测路径：真实外部 Alpine rootfs
       现在已通过
       `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view`，
       用 `mount -t proc proc /proc -> od -An -tx8 -w16 /proc/self/auxv` 固化
-      `AT_HWCAP=0x1105` 的当前 guest 视图，避免后续 `hwcap` 广告在没有真实 rootfs 证据时漂移。
+      当时 `AT_HWCAP=0x1105` 的 guest 视图，避免后续 `hwcap` 广告在没有真实 rootfs 证据时漂移。
     - 同轮新增一条离线 Alpine userland ABI guardrail：
       `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view`
       直接从外部 Alpine ext4 rootfs 提取 `/bin/busybox`，并用 host `readelf` 固化
       `Flags: 0x5, RVC, double-float ABI` 与
       `Tag_RISCV_arch: rv64...f...d...c...`。这说明当前外部 Alpine BusyBox 用户态本身是
-      `double-float ABI` / `rv64imafdc...` 构建；它和 guest-visible `AT_HWCAP=0x1105`
-      (`IMAC`) 已经形成一条可重复观察的 capability gap 证据链，后续不再需要靠猜测判断。
+      `double-float ABI` / `rv64imafdc...` 构建；它和当时 guest-visible `AT_HWCAP=0x1105`
+      (`IMAC`) 形成了一条可重复观察的 capability gap 证据链，后续不再需要靠猜测判断。
+      本轮又把同一条离线 userland 事实链补成可执行静态面 guardrail：
+      `test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view`
+      会从外部 Alpine ext4 rootfs 同时提取 `/bin/busybox` 与 `/lib/ld-musl-riscv64.so.1`，
+      用 host `riscv64-unknown-elf-objdump` 盘点真实 FP / FP-CSR 助记符集合，并要求它们继续
+      落在当前 myCPU 已声明支持的最小用户态合同内。这样后续再有新的 Alpine userland 指令面漂移时，
+      不需要等动态 BusyBox smoke 撞上 illegal instruction 才被发现。
       同轮还补充了一次离线静态指令盘点：`/bin/busybox` 与 `/lib/ld-musl-riscv64.so.1`
       明确还会用到 `flt.d`、`fcvt.wu.d`、`fcvt.lu.d`，以及更远的 `fmadd.d/fmsub.d/fnmsub.d`
       和一批单精度 `*.s` 指令；因此这条主线当前的近端工作不再是“猜测 BusyBox 还会不会踩
       新路径”，而是沿真实外部 userland 静态面和动态 smoke 逐步收口最小缺口。
-    - 同轮还确认了当前 `AT_HWCAP=0x1105` 的根因路径：Linux RISC-V `elf_hwcap`
-      就是从 DT `riscv,isa` 单字母扩展集合折算而来，所以当前 guest-visible `IMAC`
+    - 同轮还确认了当时 `AT_HWCAP=0x1105` 的根因路径：Linux RISC-V `elf_hwcap`
+      就是从 DT `riscv,isa` 单字母扩展集合折算而来，所以当时 guest-visible `IMAC`
       与 `mycpu_virt.dts` 里的 `rv64imac_zicsr_zifencei` 是一致的，不是内核额外“漂移”
-      出来的视图；真正的矛盾点仍然是“guest 广告 IMAC，但外部 Alpine BusyBox userland
-      是 lp64d/imafdc”。
+      出来的视图；后续 capability alignment 收口已把这条广告链提升并对齐到
+      `rv64imafdc_zicsr_zifencei` / `AT_HWCAP=0x112d`。
     - 同轮把一条最小 `FS state` 合同接回 host / pipeline 执行路径：`mstatus/sstatus`
       现在已新增 `FS` / `SD` 位模型，浮点 load/store 与 `0x53` 浮点指令提交后会把
       `FS=DIRTY` 置回 guest 可见 CSR。对应 host 红绿已补到
@@ -376,6 +383,12 @@
       `instruction_semantics_smoke` / `pipeline_backend_smoke` 已新增并通过。当前仍不把这扩写成完整 `.s/.d -> {w,wu,l,lu}`
       越界 / NaN / 饱和结果矩阵已经完成。当前剩余重心已经不再是 double FMA opcode 缺口，而是单精度 `*.s`
       尾项、更完整异常/rounding/NaN 角落语义，以及 real-rootfs `FS state` / capability 收口。
+      本轮又把离线静态面声明与现有 RVC decode 对齐：`c.fld` / `c.fldsp` /
+      `c.fsd` / `c.fsdsp` 已纳入 Alpine FP static-surface 支持集合，`rvc_semantics_smoke`
+      也显式固定 compressed FP 在 `FS=Initial` 下复用现有 `fld/fsd` 语义。
+      同轮还修正 `ReorderBuffer` older-FP writer 分类漂移：`fmadd.s` /
+      `fmsub.s` / `fnmsub.s` / `fnmadd.s` 和 `fmin.d` / `fmax.d` 现在会阻塞同寄存器年轻
+      FP consumer，避免新增 F/D 支持面绕过 pipeline stale-FPR guardrail。
       动态路径已从最早的 musl loader `fmv.d.x` illegal instruction，
       前移到 BusyBox 后续 `F/D compare/convert` 与更完整的异常 / rounding / capability
       尾项，不再停留在早期 DTB/loader/首条 F/D move 缺口。
@@ -429,10 +442,13 @@
   `fmul.d 1e-308*1e-308` 的最小 `CSR_FFLAGS.UF` 写回合同，并补上了与 Linux
   `/proc/cpuinfo` `isa` 视图一致的最小 `hpmcounter3-31` / `mhpmcounter3-31` /
   `mhpmevent3-31` CSR 合同、`hpmcounter3-31 -> mhpmcounter3-31` alias 一致性，以及
-  `AT_HWCAP=0x1105` 的当前 guest-visible `auxv` 视图；同时，离线 Alpine BusyBox
+  `AT_HWCAP=0x112d` 的当前 guest-visible `auxv` 视图；同时，离线 Alpine BusyBox
   userland ABI guardrail 已确认 `/bin/busybox` 本身是 `double-float ABI` /
-  `rv64...f...d...c...` 构建。当前这条线已经有“guest advertises IMAC while userland binary
-  is lp64d/imafdc” 的明确证据；当前 host / pipeline 的最小 `FS=DIRTY` 合同也已落下，
+  `rv64...f...d...c...` 构建。本轮又把 `mycpu_virt` 的 DTB `riscv,isa` 广告正式提升到
+  `rv64imafdc_zicsr_zifencei`，并在真实外部 Alpine route 上重新通过
+  boot log `base ISA extensions` / `ELF capabilities`、`/proc/cpuinfo isa` 和
+  `AT_HWCAP` 三条 guest-visible capability guardrail，确认当前最小广告链已和外部
+  Alpine `lp64d/imafdc` 用户态 ABI 对齐；当前 host / pipeline 的最小 `FS=DIRTY` 合同也已落下，
   但真实 Alpine rootfs 上仍未形成稳定 `FS state` 正向 guardrail，因此目前没有把它保留成
   自动化 opt-in target；它仍然不是完整
   F/D arithmetic、FS dirty state、
@@ -457,11 +473,10 @@
 capability 尾项；`fdiv.d -> CSR_FFLAGS.DZ`、`fsqrt.d sqrt(-1.0) -> CSR_FFLAGS.NV`、
 `fsqrt.d sqrt(2.0) -> CSR_FFLAGS.NX`、`fmul.d 1e308*1e308 -> CSR_FFLAGS.OF`、
 `fmul.d 1e-308*1e-308 -> CSR_FFLAGS.UF`、`/proc/cpuinfo isa` 视图所需的最小
-`zihpm` CSR 合同、`AT_HWCAP=0x1105` 的当前 guest-visible `auxv` 视图，以及 Alpine BusyBox
+`zihpm` CSR 合同、`AT_HWCAP=0x112d` 的当前 guest-visible `auxv` 视图，以及 Alpine BusyBox
 `double-float ABI` / `rv64...f...d...c...` 的 userland ABI 事实都已不再是“未知项”；当前 blocker
-已经收窄到如何让 guest-visible capability 广告，以及真实 Linux trap/return 路径下更完整的 `FS state`
-可见合同，
-以及这条真实 userland ABI 事实收口一致。
+已经收窄到真实 Linux trap/return 路径下更完整的 `FS state` 可见合同，以及沿外部静态
+userland 指令面继续收口剩余最小 FP/CSR 缺口。
 五个阶段都较大，每个阶段彻底完成后才提交一次；其他中间 slice 不自动提交。
 
 ## 验证基线
@@ -478,6 +493,8 @@ capability 尾项；`fdiv.d -> CSR_FFLAGS.DZ`、`fsqrt.d sqrt(-1.0) -> CSR_FFLAG
 - `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view`
 - `cd myCPU && make test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view`
 - `cd myCPU && make test-host-atomic_semantics_smoke`
+- `cd myCPU && make test-host-reorder_buffer_smoke`
+- `cd myCPU && make test-host-rvc_semantics_smoke`
 - `cd myCPU && make test-host-xv6_boot_smoke`
 - `cd myCPU && make test-host-xv6_shell_smoke`
 - `cd myCPU && python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_make_build_workload_linux_proto_block_mode_builds_post_init_smoke_elf`

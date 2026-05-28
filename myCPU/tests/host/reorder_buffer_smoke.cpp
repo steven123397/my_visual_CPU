@@ -85,5 +85,33 @@ int main() {
         return 1;
     }
 
+    ReorderBuffer fp_rob;
+    fp_rob.allocate({
+        .sequence_id = 20,
+        .pc = 0x80000020,
+        .raw = 0x60b504c3U,  // fmadd.s fs1, fa0, fa1, fa2
+        .arch_rd = 0,
+        .phys_rd = 0,
+        .previous_phys_rd = 0,
+    });
+    if (!expect(fp_rob.has_older_fp_pending(21, 9, 0xffU, 0xffU),
+                "ROB should treat older fmadd.s as a pending FPR writer for younger consumers")) {
+        return 1;
+    }
+
+    ReorderBuffer minmax_rob;
+    minmax_rob.allocate({
+        .sequence_id = 30,
+        .pc = 0x80000030,
+        .raw = 0x2ab504d3U,  // fmin.d fs1, fa0, fa1
+        .arch_rd = 0,
+        .phys_rd = 0,
+        .previous_phys_rd = 0,
+    });
+    if (!expect(minmax_rob.has_older_fp_pending(31, 9, 0xffU, 0xffU),
+                "ROB should treat older fmin.d as a pending FPR writer for younger consumers")) {
+        return 1;
+    }
+
     return 0;
 }

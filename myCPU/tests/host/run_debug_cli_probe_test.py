@@ -26,6 +26,11 @@ DEFAULT_LINUX_PROTO_RUNTIME_IMAGE = (
 DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS = (
     MYCPU_DIR / "workloads" / "linux_proto" / "rootfs.ext4"
 )
+CURATED_ALPINE_GUEST_RISCV_ISA = "rv64imafdc_zicsr_zifencei"
+CURATED_ALPINE_PROC_CPUINFO_ISA = "rv64imafdc_zicntr_zicsr_zifencei_zihpm"
+CURATED_ALPINE_AT_HWCAP = 0x112D
+CURATED_ALPINE_AT_HWCAP_AUXV_LINE = f"{16:016x} {CURATED_ALPINE_AT_HWCAP:016x}"
+CURATED_ALPINE_BASE_ISA_EXTENSIONS = set("acdfim")
 LINUX_DISTRO_RUNTIME_PROFILES = {
     "filesystem_consistency": [
         ("cat /etc/os-release", "ID=alpine"),
@@ -381,6 +386,238 @@ def build_translation_plan_probe_flat_image(temp_dir: pathlib.Path) -> pathlib.P
     return bin_path
 
 
+def build_linux_fcsr_syscall_roundtrip_probe(temp_dir: pathlib.Path) -> pathlib.Path:
+    source_path = temp_dir / "linux_fcsr_syscall_roundtrip_probe.c"
+    elf_path = temp_dir / "linux_fcsr_syscall_roundtrip_probe.elf"
+    source_path.write_text(
+        textwrap.dedent(
+            """\
+            typedef unsigned long uint64_t;
+            typedef long int64_t;
+
+            struct timespec {
+                long tv_sec;
+                long tv_nsec;
+            };
+
+            static inline long linux_syscall0(long number) {
+                register long a7 __asm__("a7") = number;
+                register long a0 __asm__("a0");
+                __asm__ volatile("ecall" : "=r"(a0) : "r"(a7) : "memory");
+                return a0;
+            }
+
+            static inline long linux_syscall1(long number, long arg0) {
+                register long a0 __asm__("a0") = arg0;
+                register long a7 __asm__("a7") = number;
+                __asm__ volatile("ecall" : "+r"(a0) : "r"(a7) : "memory");
+                return a0;
+            }
+
+            static inline long linux_syscall2(long number, long arg0, long arg1) {
+                register long a0 __asm__("a0") = arg0;
+                register long a1 __asm__("a1") = arg1;
+                register long a7 __asm__("a7") = number;
+                __asm__ volatile("ecall" : "+r"(a0) : "r"(a1), "r"(a7) : "memory");
+                return a0;
+            }
+
+            static inline long linux_syscall3(long number, long arg0, long arg1, long arg2) {
+                register long a0 __asm__("a0") = arg0;
+                register long a1 __asm__("a1") = arg1;
+                register long a2 __asm__("a2") = arg2;
+                register long a7 __asm__("a7") = number;
+                __asm__ volatile("ecall" : "+r"(a0) : "r"(a1), "r"(a2), "r"(a7) : "memory");
+                return a0;
+            }
+
+            static inline long linux_write(int fd, const char *buffer, unsigned long size) {
+                return linux_syscall3(64, fd, (long)buffer, (long)size);
+            }
+
+            static inline long linux_exit(int code) {
+                return linux_syscall1(93, code);
+            }
+
+            static inline long linux_nanosleep(const struct timespec *request, struct timespec *remain) {
+                return linux_syscall2(101, (long)request, (long)remain);
+            }
+
+            static inline long linux_getpid(void) {
+                return linux_syscall0(172);
+            }
+
+            static inline uint64_t read_fcsr(void) {
+                uint64_t value;
+                __asm__ volatile("frcsr %0" : "=r"(value));
+                return value;
+            }
+
+            static inline void write_fcsr(uint64_t value) {
+                __asm__ volatile("fscsr zero, %0" :: "r"(value));
+            }
+
+            static inline uint64_t read_f1_bits(void) {
+                uint64_t value;
+                __asm__ volatile("fmv.x.d %0, f1" : "=r"(value));
+                return value;
+            }
+
+            static inline void write_f1_bits(uint64_t value) {
+                __asm__ volatile("fmv.d.x f1, %0" :: "r"(value));
+            }
+
+            static inline double convert_dynamic_rounding(int64_t value) {
+                double out;
+                __asm__ volatile("fcvt.d.l %0, %1, dyn" : "=f"(out) : "r"(value));
+                return out;
+            }
+
+            static void write_text(const char *text) {
+                unsigned long size = 0;
+                while (text[size] != '\\0') {
+                    size++;
+                }
+                (void)linux_write(1, text, size);
+            }
+
+            static void write_hex_u64(uint64_t value) {
+                static const char digits[] = "0123456789abcdef";
+                char out[19];
+                out[0] = '0';
+                out[1] = 'x';
+                for (int i = 0; i < 16; ++i) {
+                    const int shift = 60 - (i * 4);
+                    out[2 + i] = digits[(value >> shift) & 0xf];
+                }
+                out[18] = '\\0';
+                write_text(out);
+            }
+
+            static void write_fcsr_mismatch(
+                const char *label,
+                uint64_t before,
+                uint64_t after_convert,
+                uint64_t after_getpid,
+                uint64_t after_syscall,
+                uint64_t after_getpid_f1,
+                uint64_t after_syscall_f1) {
+                write_text("mycpu-fcsr-syscall-roundtrip:");
+                write_text(label);
+                write_text(" before=");
+                write_hex_u64(before);
+                write_text(" after-convert=");
+                write_hex_u64(after_convert);
+                write_text(" after-getpid=");
+                write_hex_u64(after_getpid);
+                write_text(" after-syscall=");
+                write_hex_u64(after_syscall);
+                write_text(" after-getpid-f1=");
+                write_hex_u64(after_getpid_f1);
+                write_text(" after-syscall-f1=");
+                write_hex_u64(after_syscall_f1);
+                write_text("\\n");
+            }
+
+            int main(void) {
+                const struct timespec request = {0, 1000000};
+                const uint64_t kFrmRdn = 2UL << 5;
+                const uint64_t kNx = 1UL;
+                const int64_t kInexact = 9007199254740993LL;
+                const uint64_t kF1Marker = 0x0123456789abcdefUL;
+                volatile double rounded = 0.0;
+                uint64_t before = 0;
+                uint64_t after_convert = 0;
+                uint64_t after_getpid = 0;
+                uint64_t after_syscall = 0;
+                uint64_t after_getpid_f1 = 0;
+                uint64_t after_syscall_f1 = 0;
+
+                write_fcsr(kFrmRdn);
+                before = read_fcsr();
+                if (before != kFrmRdn) {
+                    write_text("mycpu-fcsr-syscall-roundtrip:frm-program-failed\\n");
+                    return 11;
+                }
+
+                rounded = convert_dynamic_rounding(kInexact);
+                (void)rounded;
+                after_convert = read_fcsr();
+                if (after_convert != (kFrmRdn | kNx)) {
+                    write_text("mycpu-fcsr-syscall-roundtrip:convert-flags-failed\\n");
+                    return 12;
+                }
+                write_f1_bits(kF1Marker);
+
+                if (linux_getpid() <= 0) {
+                    write_text("mycpu-fcsr-syscall-roundtrip:getpid-failed\\n");
+                    return 13;
+                }
+                after_getpid = read_fcsr();
+                after_getpid_f1 = read_f1_bits();
+                if (after_getpid != (kFrmRdn | kNx)) {
+                    write_fcsr_mismatch("post-getpid-fcsr-mismatch", before, after_convert, after_getpid, 0, after_getpid_f1, 0);
+                    return 15;
+                }
+                if (after_getpid_f1 != kF1Marker) {
+                    write_fcsr_mismatch("post-getpid-fpr-mismatch", before, after_convert, after_getpid, 0, after_getpid_f1, 0);
+                    return 15;
+                }
+                if (linux_nanosleep(&request, (struct timespec *)0) != 0) {
+                    write_text("mycpu-fcsr-syscall-roundtrip:nanosleep-failed\\n");
+                    return 14;
+                }
+
+                after_syscall = read_fcsr();
+                after_syscall_f1 = read_f1_bits();
+                if (after_syscall != (kFrmRdn | kNx)) {
+                    write_fcsr_mismatch("post-syscall-fcsr-mismatch", before, after_convert, after_getpid, after_syscall, after_getpid_f1, after_syscall_f1);
+                    return 15;
+                }
+                if (after_syscall_f1 != kF1Marker) {
+                    write_fcsr_mismatch("post-syscall-fpr-mismatch", before, after_convert, after_getpid, after_syscall, after_getpid_f1, after_syscall_f1);
+                    return 15;
+                }
+
+                write_text("mycpu-fcsr-syscall-roundtrip:ok\\n");
+                return 0;
+            }
+
+            void _start(void) {
+                const int rc = main();
+                (void)linux_exit(rc);
+                for (;;) {
+                }
+            }
+            """
+        )
+    )
+
+    compile_proc = subprocess.run(
+        [
+            "riscv64-unknown-elf-gcc",
+            "-nostdlib",
+            "-static",
+            "-march=rv64imafdc",
+            "-mabi=lp64d",
+            "-O2",
+            "-Wl,-e,_start",
+            "-o",
+            str(elf_path),
+            str(source_path),
+        ],
+        cwd=MYCPU_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if compile_proc.returncode != 0:
+        raise AssertionError(compile_proc.stderr)
+
+    return elf_path
+
+
 def debug_cli_roundtrip(proc: subprocess.Popen[str], command: dict) -> dict:
     if proc.stdin is None or proc.stdout is None:
         raise AssertionError("debug CLI pipes were not created")
@@ -541,6 +778,129 @@ def extract_file_from_ext4_image(image_path: pathlib.Path, guest_path: str, host
                 f"debugfs reported success extracting {guest_path}, but host file is missing: {extracted_path}"
             )
         yield extracted_path
+
+
+@contextlib.contextmanager
+def mutable_ext4_image_copy(source_path: pathlib.Path):
+    with tempfile.TemporaryDirectory(prefix="mycpu-ext4-copy.") as temp_dir:
+        temp_path = pathlib.Path(temp_dir) / source_path.name
+        temp_path.write_bytes(source_path.read_bytes())
+        yield temp_path
+
+
+def install_file_into_ext4_image(
+    image_path: pathlib.Path,
+    host_path: pathlib.Path,
+    guest_path: str,
+    *,
+    mode: str | None = None,
+) -> None:
+    install_proc = subprocess.run(
+        [
+            "debugfs",
+            "-w",
+            "-R",
+            f"write {host_path} {guest_path}",
+            str(image_path),
+        ],
+        cwd=MYCPU_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if install_proc.returncode != 0:
+        raise AssertionError(
+            f"failed to install {host_path} into {image_path} at {guest_path}:\n"
+            f"stdout:\n{install_proc.stdout}\n"
+            f"stderr:\n{install_proc.stderr}"
+        )
+
+    if mode is not None:
+        chmod_proc = subprocess.run(
+            [
+                "debugfs",
+                "-w",
+                "-R",
+                f"sif {guest_path} mode {mode}",
+                str(image_path),
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if chmod_proc.returncode != 0:
+            raise AssertionError(
+                f"failed to chmod {guest_path} in {image_path} to {mode}:\n"
+                f"stdout:\n{chmod_proc.stdout}\n"
+                f"stderr:\n{chmod_proc.stderr}"
+            )
+
+
+STATIC_SURFACE_MNEMONIC_RE = re.compile(r"^\s*[0-9a-f]+:\s+(?:[0-9a-f]{2,8}\s+)+([a-z0-9_.]+)\b")
+STATIC_SURFACE_IGNORE_MNEMONICS = {"fence", "fence.i"}
+
+
+def supported_riscv_userland_fp_mnemonics() -> set[str]:
+    floating_ops_header = (MYCPU_DIR / "src" / "exec" / "floating_ops.h").read_text()
+    supported = {
+        mnemonic.replace("_", ".")
+        for mnemonic in re.findall(r"bool is_([a-z0-9_]+)\(const Insn& insn\);", floating_ops_header)
+    }
+    supported.update(
+        {
+            "fabs.d",
+            "fabs.s",
+            "c.fld",
+            "c.fldsp",
+            "c.fsd",
+            "c.fsdsp",
+            "fld",
+            "flw",
+            "fsd",
+            "fsw",
+            "fneg.s",
+            "fmv.s",
+            "frcsr",
+            "frflags",
+            "frrm",
+            "fscsr",
+            "fsflags",
+            "fsrm",
+        }
+    )
+    return supported
+
+
+def extract_riscv_static_surface_mnemonics(binary_path: pathlib.Path) -> set[str]:
+    objdump_proc = subprocess.run(
+        ["riscv64-unknown-elf-objdump", "-d", str(binary_path)],
+        cwd=MYCPU_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if objdump_proc.returncode != 0:
+        raise AssertionError(
+            f"failed to disassemble {binary_path}:\n"
+            f"stdout:\n{objdump_proc.stdout}\n"
+            f"stderr:\n{objdump_proc.stderr}"
+        )
+
+    mnemonics: set[str] = set()
+    for line in objdump_proc.stdout.splitlines():
+        match = STATIC_SURFACE_MNEMONIC_RE.match(line)
+        if not match:
+            continue
+        mnemonic = match.group(1)
+        if mnemonic in STATIC_SURFACE_IGNORE_MNEMONICS:
+            continue
+        if mnemonic.startswith("f") or mnemonic.startswith("c.f"):
+            mnemonics.add(mnemonic)
+    return mnemonics
 
 
 class RunDebugCliProbeTest(unittest.TestCase):
@@ -2196,7 +2556,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         generated_text = generated_dts.read_text()
         self.assertIn("linux,initrd-start = <0x0 0x84000000>;", generated_text)
         self.assertNotIn("linux,initrd-end = <0x0 0x84000000>;", generated_text)
-        self.assertIn('riscv,isa = "rv64imac_zicsr_zifencei";', generated_text)
+        self.assertIn(f'riscv,isa = "{CURATED_ALPINE_GUEST_RISCV_ISA}";', generated_text)
 
     def test_make_run_workload_linux_proto_forwards_optional_disk_alias(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2296,7 +2656,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertIn("root=/dev/vda", generated_text)
         self.assertNotIn("rdinit=/init", generated_text)
         self.assertIn("linux,initrd-end = <0x0 0x84000000>;", generated_text)
-        self.assertIn('riscv,isa = "rv64imac_zicsr_zifencei";', generated_text)
+        self.assertIn(f'riscv,isa = "{CURATED_ALPINE_GUEST_RISCV_ISA}";', generated_text)
 
     def test_make_run_workload_linux_proto_block_mode_uses_generated_disk(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2902,6 +3262,96 @@ class RunDebugCliProbeTest(unittest.TestCase):
             "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
             combined_output,
         )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view_target_requests_curated_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertNotIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_curated_alpine_fp_static_surface_view",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
+            combined_output,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_fcsr_syscall_roundtrip_target_requests_curated_env(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fcsr_syscall_roundtrip",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_IMAGE", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", proc.stdout)
+        self.assertIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", proc.stdout)
+        self.assertIn("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine", proc.stdout)
+        self.assertIn(
+            "tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_fcsr_syscall_roundtrip_probe",
+            proc.stdout,
+        )
+
+    def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_alpine_fcsr_syscall_roundtrip_target_fails_closed_without_rootfs(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fcsr_syscall_roundtrip",
+                "MYCPU_LINUX_DISTRO_CURATED_IMAGE=/tmp/Image",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
         self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
 
     def test_make_build_workload_linux_proto_block_mode_embeds_mininit_stage_markers(self) -> None:
@@ -3523,12 +3973,12 @@ class RunDebugCliProbeTest(unittest.TestCase):
             base_isa_match = re.search(r"riscv: base ISA extensions ([a-z0-9_]+)", boot_text)
             self.assertIsNotNone(base_isa_match, msg=boot_text)
             base_isa = base_isa_match.group(1)
-            self.assertEqual(set(base_isa), set("acim"))
+            self.assertEqual(set(base_isa), CURATED_ALPINE_BASE_ISA_EXTENSIONS)
 
             elf_caps_match = re.search(r"riscv: ELF capabilities ([a-z0-9_]+)", boot_text)
             self.assertIsNotNone(elf_caps_match, msg=boot_text)
             elf_caps = elf_caps_match.group(1)
-            self.assertEqual(set(elf_caps), set("acim"))
+            self.assertEqual(set(elf_caps), CURATED_ALPINE_BASE_ISA_EXTENSIONS)
             self.assertIn(prompt, boot_text)
 
             debug_cli_roundtrip(proc, {"cmd": "quit"})
@@ -3766,7 +4216,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
 
             procfs_contracts = [
                 ("mount -t proc proc /proc", prompt),
-                ("grep '^isa' /proc/cpuinfo", "rv64imac_zicntr_zicsr_zifencei_zihpm"),
+                ("grep '^isa' /proc/cpuinfo", CURATED_ALPINE_PROC_CPUINFO_ISA),
             ]
             for command_text, expected_text in procfs_contracts:
                 debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": f"{command_text}\r"})
@@ -3887,7 +4337,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
 
             auxv_contracts = [
                 ("mount -t proc proc /proc", prompt),
-                ('od -An -tx8 -w16 /proc/self/auxv | sed -n "1,32p"', "0000000000000010 0000000000001105"),
+                ('od -An -tx8 -w16 /proc/self/auxv | sed -n "1,32p"', CURATED_ALPINE_AT_HWCAP_AUXV_LINE),
             ]
             for command_text, expected_text in auxv_contracts:
                 debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": f"{command_text}\r"})
@@ -3955,6 +4405,212 @@ class RunDebugCliProbeTest(unittest.TestCase):
                 'Tag_RISCV_arch: "rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0',
                 attribute_proc.stdout,
             )
+
+    def test_linux_distribution_curated_alpine_fp_static_surface_view(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_DISTRO_RUNTIME") != "1":
+            self.skipTest(
+                "set MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 to run the Alpine FP static-surface guardrail"
+            )
+
+        rootfs_text = os.environ.get("MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS", "").strip()
+        if not rootfs_text:
+            self.skipTest(
+                "set MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS to run the Alpine FP static-surface guardrail"
+            )
+
+        disk_path = pathlib.Path(rootfs_text)
+        if not disk_path.is_file():
+            self.fail(f"missing external Alpine rootfs image: {disk_path}")
+
+        with extract_file_from_ext4_image(disk_path, "/bin/busybox", "busybox") as busybox_path:
+            with extract_file_from_ext4_image(
+                disk_path,
+                "/lib/ld-musl-riscv64.so.1",
+                "ld-musl-riscv64.so.1",
+            ) as ld_musl_path:
+                observed_surfaces = {
+                    "/bin/busybox": extract_riscv_static_surface_mnemonics(busybox_path),
+                    "/lib/ld-musl-riscv64.so.1": extract_riscv_static_surface_mnemonics(ld_musl_path),
+                }
+
+        supported_surface = supported_riscv_userland_fp_mnemonics()
+        required_surface = {
+            "/bin/busybox": {"fcvt.wu.d", "fcvt.lu.d", "flt.d", "fmadd.d"},
+            "/lib/ld-musl-riscv64.so.1": {"fadd.s", "fclass.d", "fsqrt.s", "frcsr", "fscsr"},
+        }
+        for guest_path, required_mnemonics in required_surface.items():
+            observed = observed_surfaces[guest_path]
+            self.assertTrue(
+                required_mnemonics.issubset(observed),
+                msg=(
+                    f"{guest_path} no longer exposes the expected Alpine userland FP anchors; "
+                    f"missing={sorted(required_mnemonics - observed)} observed={sorted(observed)}"
+                ),
+            )
+            unsupported = sorted(observed - supported_surface)
+            self.assertEqual(
+                unsupported,
+                [],
+                msg=(
+                    f"{guest_path} uses FP/userland mnemonics outside myCPU's current declared support surface: "
+                    f"{unsupported}"
+                ),
+            )
+
+    def test_linux_distribution_curated_alpine_capability_alignment_contract(self) -> None:
+        supported_surface = supported_riscv_userland_fp_mnemonics()
+
+        self.assertIn("fadd.s", supported_surface)
+        self.assertIn("fadd.d", supported_surface)
+        self.assertIn("c.fld", supported_surface)
+        self.assertIn("c.fldsp", supported_surface)
+        self.assertIn("c.fsd", supported_surface)
+        self.assertIn("c.fsdsp", supported_surface)
+        self.assertIn("fld", supported_surface)
+        self.assertIn("fsd", supported_surface)
+        self.assertEqual(CURATED_ALPINE_GUEST_RISCV_ISA, "rv64imafdc_zicsr_zifencei")
+        self.assertEqual(CURATED_ALPINE_PROC_CPUINFO_ISA, "rv64imafdc_zicntr_zicsr_zifencei_zihpm")
+        self.assertEqual(CURATED_ALPINE_AT_HWCAP, 0x112D)
+        self.assertEqual(
+            CURATED_ALPINE_AT_HWCAP,
+            (1 << 0) | (1 << 2) | (1 << 3) | (1 << 5) | (1 << 8) | (1 << 12),
+        )
+        self.assertEqual(CURATED_ALPINE_BASE_ISA_EXTENSIONS, set("acdfim"))
+
+    def test_linux_distribution_runtime_curated_alpine_fcsr_syscall_roundtrip_probe(self) -> None:
+        if os.environ.get("MYCPU_RUN_LINUX_DISTRO_RUNTIME") != "1":
+            self.skipTest(
+                "set MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 to run the real Linux distribution fcsr syscall roundtrip guardrail"
+            )
+
+        contract = resolve_linux_distro_shell_contract()
+        image_path = contract["image"]
+        disk_path = contract["disk"]
+        prompt = str(contract["prompt"])
+        bootargs = str(contract["bootargs"])
+
+        if os.environ.get("MYCPU_LINUX_DISTRO_RUNTIME_DISTRO") != "alpine":
+            self.skipTest(
+                "set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine fcsr syscall roundtrip guardrail"
+            )
+        if not image_path.is_file():
+            self.fail(f"missing linux distribution runtime Image: {image_path}")
+        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+            self.fail(
+                "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
+                "repo linux_proto rootfs is only for the mini shell guardrail"
+            )
+
+        with tempfile.TemporaryDirectory(prefix="mycpu-fcsr-probe.") as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            probe_path = build_linux_fcsr_syscall_roundtrip_probe(temp_path)
+            with mutable_ext4_image_copy(disk_path) as temp_rootfs:
+                install_file_into_ext4_image(
+                    temp_rootfs,
+                    probe_path,
+                    "/tmp/mycpu-fcsr-syscall-roundtrip",
+                    mode="0100755",
+                )
+
+                build_command = [
+                    "make",
+                    "build-workload",
+                    "WORKLOAD_NAME=linux_proto",
+                    "LINUX_PROTO_ROOTFS_MODE=block",
+                    f"LINUX_PROTO_IMAGE={image_path}",
+                    f"LINUX_PROTO_DISK={temp_rootfs}",
+                ]
+                if bootargs:
+                    build_command.append(f"LINUX_PROTO_BOOTARGS={bootargs}")
+
+                build_proc = subprocess.run(
+                    build_command,
+                    cwd=MYCPU_DIR,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+
+                with subprocess.Popen(
+                    ["./mycpu", "--debug-cli"],
+                    cwd=MYCPU_DIR,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                ) as proc:
+                    debug_cli_roundtrip(
+                        proc,
+                        {
+                            "cmd": "load",
+                            "image": "workloads/linux_proto/linux_sbi_shim.bin",
+                            "backend": "functional",
+                            "disk": str(temp_rootfs),
+                            "block_transport": "virtio-blk",
+                            "flat": True,
+                            "addr": 0x80000000,
+                        },
+                    )
+                    debug_cli_roundtrip(
+                        proc,
+                        {
+                            "cmd": "load_payload",
+                            "image": str(image_path),
+                            "addr": 0x80200000,
+                        },
+                    )
+                    debug_cli_roundtrip(
+                        proc,
+                        {
+                            "cmd": "load_payload",
+                            "image": "workloads/linux_proto/mycpu_virt.dtb",
+                            "addr": 0x87F00000,
+                        },
+                    )
+                    debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a0", "value": 0x0})
+                    debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a1", "value": 0x87F00000})
+                    debug_cli_roundtrip(proc, {"cmd": "set_gpr", "reg": "a2", "value": 0x80200000})
+                    debug_cli_roundtrip(
+                        proc,
+                        {
+                            "cmd": "run_until_uart_contains",
+                            "text": prompt,
+                            "max_steps": 300000000,
+                        },
+                    )
+                    boot_chunk = debug_cli_roundtrip(proc, {"cmd": "uart_output", "offset": 0})
+                    self.assertIn(prompt, boot_chunk.get("text", ""))
+                    offset = normalize_next_offset(boot_chunk)
+
+                    command_text = (
+                        "/tmp/mycpu-fcsr-syscall-roundtrip; "
+                        'printf " probe-status:%s" "$?"'
+                    )
+                    debug_cli_roundtrip(proc, {"cmd": "uart_input", "text": f"{command_text}\r"})
+                    command_chunk = debug_cli_roundtrip(
+                        proc,
+                        {
+                            "cmd": "run_until_new_uart_contains",
+                            "offset": offset,
+                            "text": prompt,
+                            "max_steps": 50000000,
+                        },
+                    )
+                    command_output = command_chunk.get("text", "")
+                    self.assertIn("mycpu-fcsr-syscall-roundtrip:ok", command_output)
+                    self.assertIn("probe-status:0", command_output)
+                    self.assertTrue(
+                        command_output.endswith(prompt),
+                        msg=f"expected shell chunk to end with prompt {prompt!r}, got {command_output!r}",
+                    )
+
+                    debug_cli_roundtrip(proc, {"cmd": "quit"})
+                    proc.wait(timeout=5)
+                    stderr = proc.stderr.read() if proc.stderr is not None else ""
+                    self.assertEqual(proc.returncode, 0, msg=stderr)
 
     def test_make_build_workload_linux_proto_block_mode_mininit_message_lengths_exclude_nul(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

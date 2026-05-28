@@ -22,23 +22,24 @@ namespace {
 
 constexpr uint64_t kDebugProgramAddr = 0x80000078ULL;
 
-constexpr std::array<uint32_t, 45> kSupervisorExternalProgram = {
-    0x10000437U, 0x0c0004b7U, 0x00000297U, 0x08428293U, 0x10529073U, 0x00100293U, 0x0254a423U,
-    0x40000293U, 0x00002337U, 0x0803031bU, 0x00648333U, 0x00532023U, 0x00201337U, 0x00648333U,
-    0x00032023U, 0x20000293U, 0x30329073U, 0x10429073U, 0x000012b7U, 0x8022829bU, 0x30029073U,
-    0x00200293U, 0x005400a3U, 0x00000297U, 0x01028293U, 0x34129073U, 0x30200073U, 0x0000006fU,
-    0x05000293U, 0x00540023U, 0x04500293U, 0x00540023U, 0x05d00893U, 0x00000513U, 0x00000073U,
-    0x00201337U, 0x0043031bU, 0x00648333U, 0x00032383U, 0x000400a3U, 0x00732023U, 0x00000297U,
-    0xfcc28293U, 0x14129073U, 0x10200073U,
+constexpr std::array<uint32_t, 49> kSupervisorExternalProgram = {
+    0x10000437U, 0x0c0004b7U, 0x00000297U, 0x09428293U, 0x10529073U, 0x00000297U, 0x07c28293U,
+    0x30529073U, 0x00100293U, 0x0254a423U, 0x40000293U, 0x00002337U, 0x0803031bU, 0x00648333U,
+    0x00532023U, 0x00201337U, 0x00648333U, 0x00032023U, 0x20000293U, 0x30329073U, 0x10429073U,
+    0x000012b7U, 0x8022829bU, 0x30029073U, 0x00200293U, 0x005400a3U, 0x00000297U, 0x01028293U,
+    0x34129073U, 0x30200073U, 0x0000006fU, 0x05000293U, 0x00540023U, 0x04500293U, 0x00540023U,
+    0x00100073U, 0x05d00893U, 0x00000513U, 0x00000073U, 0x00201337U, 0x0043031bU, 0x00648333U,
+    0x00032383U, 0x000400a3U, 0x00732023U, 0x00000297U, 0xfc828293U, 0x14129073U, 0x10200073U,
 };
 
-constexpr std::array<uint32_t, 39> kSupervisorTimerProgram = {
-    0x10000437U, 0x020004b7U, 0x00000297U, 0x06c28293U, 0x10529073U, 0x0000c2b7U, 0xff82829bU,
-    0x005482b3U, 0x0002b303U, 0x00430313U, 0x000043b7U, 0x007483b3U, 0x0063b023U, 0x02000293U,
-    0x30329073U, 0x10429073U, 0x000012b7U, 0x8022829bU, 0x30029073U, 0x00000297U, 0x01028293U,
-    0x34129073U, 0x30200073U, 0x0000006fU, 0x05400293U, 0x00540023U, 0x05d00893U, 0x00000513U,
-    0x00000073U, 0xfff00293U, 0x00004337U, 0x00648333U, 0x00533023U, 0x02000293U, 0x1442b073U,
-    0x00000297U, 0xfd428293U, 0x14129073U, 0x10200073U,
+constexpr std::array<uint32_t, 43> kSupervisorTimerProgram = {
+    0x10000437U, 0x020004b7U, 0x00000297U, 0x07c28293U, 0x10529073U, 0x00000297U, 0x06428293U,
+    0x30529073U, 0x0000c2b7U, 0xff82829bU, 0x005482b3U, 0x0002b303U, 0x00430313U, 0x000043b7U,
+    0x007483b3U, 0x0063b023U, 0x02000293U, 0x30329073U, 0x10429073U, 0x000012b7U, 0x8022829bU,
+    0x30029073U, 0x00000297U, 0x01028293U, 0x34129073U, 0x30200073U, 0x0000006fU, 0x05400293U,
+    0x00540023U, 0x00100073U, 0x05d00893U, 0x00000513U, 0x00000073U, 0xfff00293U, 0x00004337U,
+    0x00648333U, 0x00533023U, 0x02000293U, 0x1442b073U, 0x00000297U, 0xfd028293U, 0x14129073U,
+    0x10200073U,
 };
 
 constexpr std::array<uint32_t, 4> kPredictorProgram = {
@@ -278,7 +279,7 @@ int main() {
             external_final_output,
             {
                 "\"halted\":true",
-                "\"privilege\":\"S\"",
+                "\"privilege\":\"M\"",
                 "\"trap_flush\":true",
                 "\"recent_output\":\"PE\"",
                 "\"ier\":0",
@@ -295,13 +296,13 @@ int main() {
     }
     if (!expect_contains(
             external_final_output,
-            "\"total_traps\":1",
+            "\"total_traps\":2",
             "external interrupt final snapshot should lock total trap count in the execution profile")) {
         return 1;
     }
     if (!expect_contains(
             external_final_output,
-            "\"traps\":[{\"pc\":\"0x800000e4\",\"raw\":\"0x0\",\"cause\":\"0x8000000000000009\",\"privilege\":\"S\",\"interrupt\":true,\"count\":1}]",
+            "\"traps\":[{\"pc\":\"0x800000f0\",\"raw\":\"0x0\",\"cause\":\"0x8000000000000009\",\"privilege\":\"S\",\"interrupt\":true,\"count\":1},{\"pc\":\"0x80000104\",\"raw\":\"0x100073\",\"cause\":\"0x3\",\"privilege\":\"M\",\"interrupt\":false,\"count\":1}]",
             "external interrupt final snapshot should lock the delegated supervisor external trap profile")) {
         return 1;
     }
@@ -339,7 +340,7 @@ int main() {
             timer_final_output,
             {
                 "\"halted\":true",
-                "\"privilege\":\"S\"",
+                "\"privilege\":\"M\"",
                 "\"trap_flush\":true",
                 "\"recent_output\":\"T\"",
                 "\"timer_interrupt_pending\":false",

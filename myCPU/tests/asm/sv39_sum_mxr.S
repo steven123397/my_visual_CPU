@@ -151,7 +151,8 @@ after_sum_fault:
 
     li   a7, 93
     li   a0, 0
-    ecall
+success_exit:
+    ebreak
 
 supervisor_trap:
     csrr t0, scause
@@ -186,7 +187,17 @@ handle_sum_fault:
     sret
 
 machine_trap:
-    j    fail
+    csrr t0, mcause
+    li   t1, 3
+    bne  t0, t1, fail
+
+    csrr t0, mepc
+    la   t1, success_exit
+    bne  t0, t1, fail
+
+    li   a7, 93
+    li   a0, 0
+    ecall
 
 fail:
     sb   s1, 0(s0)

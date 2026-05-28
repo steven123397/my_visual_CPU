@@ -70,6 +70,23 @@ bool csr_instruction_writes(const Insn& insn) {
     }
 }
 
+bool is_floating_csr(uint32_t addr) {
+    switch (addr & 0xFFF) {
+    case CSR_FFLAGS:
+    case CSR_FRM:
+    case CSR_FCSR:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void mark_floating_csr_write(InsnEffects& effects, uint32_t addr) {
+    if (effects.csr_write.enable && is_floating_csr(addr)) {
+        effects.floating_state_touched = true;
+    }
+}
+
 uint64_t counter_access_mask(uint32_t addr) {
     const uint32_t csr = addr & 0xFFF;
     if ((csr >= CSR_HPMCOUNTER3 && csr <= CSR_HPMCOUNTER31) ||
@@ -147,7 +164,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
     case 0:
         if (is_ecall(insn)) {
             const uint64_t ecall_a7 = inputs.has_ecall_a7 ? inputs.ecall_a7 : core.read_gpr(17);
-            if (ecall_a7 == 93) {
+            if (core.privilege_mode() == PrivilegeMode::Machine && ecall_a7 == 93) {
                 effects.control.halt = true;
                 return effects;
             }
@@ -221,6 +238,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
         effects.csr_write.enable = true;
         effects.csr_write.addr = csr_addr;
         effects.csr_write.value = inputs.rs1v;
+        mark_floating_csr_write(effects, csr_addr);
         return effects;
     case 2:
         if (!csr_access_allowed(ctx, csr_addr, csr_instruction_writes(insn))) {
@@ -234,6 +252,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
             effects.csr_write.enable = true;
             effects.csr_write.addr = csr_addr;
             effects.csr_write.value = old | inputs.rs1v;
+            mark_floating_csr_write(effects, csr_addr);
         }
         return effects;
     case 3:
@@ -248,6 +267,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
             effects.csr_write.enable = true;
             effects.csr_write.addr = csr_addr;
             effects.csr_write.value = old & ~inputs.rs1v;
+            mark_floating_csr_write(effects, csr_addr);
         }
         return effects;
     case 5:
@@ -261,6 +281,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
         effects.csr_write.enable = true;
         effects.csr_write.addr = csr_addr;
         effects.csr_write.value = insn.rs1;
+        mark_floating_csr_write(effects, csr_addr);
         return effects;
     case 6:
         if (!csr_access_allowed(ctx, csr_addr, csr_instruction_writes(insn))) {
@@ -274,6 +295,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
             effects.csr_write.enable = true;
             effects.csr_write.addr = csr_addr;
             effects.csr_write.value = old | insn.rs1;
+            mark_floating_csr_write(effects, csr_addr);
         }
         return effects;
     case 7:
@@ -288,6 +310,7 @@ InsnEffects build_system_effects(const Insn& insn, ExecutionContext& ctx, const 
             effects.csr_write.enable = true;
             effects.csr_write.addr = csr_addr;
             effects.csr_write.value = old & ~static_cast<uint64_t>(insn.rs1);
+            mark_floating_csr_write(effects, csr_addr);
         }
         return effects;
     default:

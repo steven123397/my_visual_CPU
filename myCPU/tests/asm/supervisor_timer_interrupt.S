@@ -48,7 +48,8 @@ after_interrupt:
 
     li   a7, 93
     li   a0, 0
-    ecall
+success_exit:
+    ebreak
 
 .balign 32
 supervisor_vector_table:
@@ -105,7 +106,17 @@ supervisor_timer_handler:
     sret
 
 machine_trap:
-    j    fail
+    csrr t0, mcause
+    li   t1, 3
+    bne  t0, t1, fail
+
+    csrr t0, mepc
+    la   t1, success_exit
+    bne  t0, t1, fail
+
+    li   a7, 93
+    li   a0, 0
+    ecall
 
 fail:
     li   t0, 'X'
