@@ -31,9 +31,9 @@
 - 当前活跃计划：
   - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
   - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
-  - [../plan/course_os_kernel_alpha_stage1_plan.md](../plan/course_os_kernel_alpha_stage1_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
   - [../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan](../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan)
   - [../plan/history_plan.md#mainline-wave7-linux-console-loading-experience-plan](../plan/history_plan.md#mainline-wave7-linux-console-loading-experience-plan)

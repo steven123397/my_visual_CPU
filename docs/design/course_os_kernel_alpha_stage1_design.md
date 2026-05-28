@@ -12,8 +12,7 @@
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
   - [../status/mainline_status.md](../status/mainline_status.md)
 - 相关计划：
-  - [../plan/course_os_kernel_alpha_stage1_plan.md](../plan/course_os_kernel_alpha_stage1_plan.md)
-  - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
 
 ## 背景与问题
 
@@ -194,6 +193,6 @@ B 树目录索引用于优化目录项查找。教学级实现可采用简化 B 
 
 ## 当前有效性说明
 
-- 当前有效 / 历史语境：本文档当前有效，记录课程 OS 第一阶段设计定稿。
+- 当前有效 / 历史语境：本文档当前有效，记录课程 OS 第一阶段设计定稿；第一阶段实现已归档到 [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)。
 - 旧 `kernel_alpha` Phase 1 `KMVPETDS` 输出属于历史语境，当前课程 OS 行为以后续状态文档和实现门禁为准。
 - 如果相关工作进入实施或完成，实时状态应回写到 [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 或 [../status/mainline_status.md](../status/mainline_status.md)，执行 checklist 应进入 `docs/plan/` 或归档到 [../plan/history_plan.md](../plan/history_plan.md)。

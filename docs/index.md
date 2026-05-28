@@ -72,7 +72,7 @@
 - `kernel_alpha`
   - [design/course_os_kernel_alpha_stage1_design.md](design/course_os_kernel_alpha_stage1_design.md)
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
-  - [plan/course_os_kernel_alpha_stage1_plan.md](plan/course_os_kernel_alpha_stage1_plan.md)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage1-plan](plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)
   - [design/regression_completion_criteria.md](design/regression_completion_criteria.md)
 

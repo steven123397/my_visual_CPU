@@ -1,12 +1,15 @@
 #include <stdint.h>
 
 #include "console.h"
+#include "course_os_stage1.h"
 #include "kernel_alpha.h"
 #include "panic.h"
 #include "platform.h"
 
 void kernel_main(void) {
     kernel_runtime_t runtime;
+    course_os_stage1_t stage;
+    char summary[192];
 
     kernel_runtime_init(&runtime);
     if (!kernel_runtime_bind_self_interrupt_handlers(
@@ -28,11 +31,17 @@ void kernel_main(void) {
 
     if (!kernel_alpha_complete_platform_interrupt_readiness(&runtime,
                                                             64U,
-                                                            4096U) ||
-        !kernel_alpha_complete_storage_probe() ||
-        !kernel_alpha_complete_storage_signature_check()) {
+                                                            4096U)) {
         panic_shutdown();
     }
 
+    course_os_stage1_init(&stage);
+    if (!course_os_stage1_run(&stage) ||
+        !course_os_stage1_summary(&stage, summary, sizeof(summary))) {
+        panic_shutdown();
+    }
+
+    console_putc('|');
+    console_puts(summary);
     platform_shutdown(0);
 }

@@ -18,7 +18,7 @@ ATOMIC_ASM_TESTS = atomic_basic atomic_ordering_smoke
 ATOMIC_ASM_ELFS = $(ATOMIC_ASM_TESTS:%=tests/asm/%.elf)
 ATOMIC_ASM_DEPS = $(ATOMIC_ASM_ELFS:.elf=.d)
 FLAT_BIN_TESTS = hello
-UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract simple_l1_cache ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
+UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract simple_l1_cache ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands course_os_stage1 kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
 AI_ACCEL_QUEUE_UNIT_OBJS = tests/unit/ai_accel_queue_test.o tests/unit/ai_accel_queue_guest.o
 AI_ACCEL_QUEUE_UNIT_DEPS = $(AI_ACCEL_QUEUE_UNIT_OBJS:.o=.d)
@@ -52,6 +52,8 @@ SUPERVISOR_DEMO_SMOKE_UNIT_OBJS = tests/unit/supervisor_demo_smoke_test.o tests/
 SUPERVISOR_DEMO_SMOKE_UNIT_DEPS = $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS:.o=.d)
 MONITOR_COMMANDS_UNIT_OBJS = tests/unit/monitor_commands_test.o tests/unit/monitor_commands_guest.o tests/unit/vm_debug_guest.o
 MONITOR_COMMANDS_UNIT_DEPS = $(MONITOR_COMMANDS_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE1_UNIT_OBJS = tests/unit/course_os_stage1_test.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE1_UNIT_DEPS = $(COURSE_OS_STAGE1_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_COMMON_UNIT_OBJS = tests/unit/kernel_alpha_common_test.o tests/unit/kernel_alpha_common_guest.o
 KERNEL_ALPHA_COMMON_UNIT_DEPS = $(KERNEL_ALPHA_COMMON_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_STORAGE_UNIT_OBJS = tests/unit/kernel_alpha_storage_test.o tests/unit/kernel_alpha_storage_guest.o
@@ -90,7 +92,7 @@ LINUX_PROTO_GENERATED_INITRD_DIR = workloads/linux_proto/rootfs_staging
 LINUX_PROTO_GENERATED_DISK = workloads/linux_proto/rootfs.ext4
 LINUX_PROTO_GENERATED_DISK_DIR = workloads/linux_proto/rootfs_disk_staging
 LINUX_PROTO_GENERATED_DISK_BLOCKS ?= 8192
-GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/ai_accel.c guest/kernel/console.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
+GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/ai_accel.c guest/kernel/console.c guest/kernel/course_fs.c guest/kernel/course_memory.c guest/kernel/course_os_stage1.c guest/kernel/course_scheduler.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/procfs.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
 GUEST_KERNEL_ALPHA_COMMON_SRCS = guest/kernel_alpha/common.c guest/kernel_alpha/interrupt_contract.c guest/kernel_alpha/storage_contract.c
@@ -163,6 +165,7 @@ DEPS     += $(USER_TASK_BOOTSTRAP_UNIT_DEPS)
 DEPS     += $(USER_PROGRAM_UNIT_DEPS)
 DEPS     += $(USER_PROGRAM_SMOKE_UNIT_DEPS)
 DEPS     += $(MONITOR_COMMANDS_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE1_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_COMMON_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_STORAGE_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS)
@@ -1001,10 +1004,10 @@ test-pipeline-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_supervisor_demo,$(GUEST_SUPERVISOR_DEMO),KRN,$(PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPETDS,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=26 proc=ps/meminfo/schedstat/fsstat,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPETDS,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=26 proc=ps/meminfo/schedstat/fsstat,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_fault_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_FAULT_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(TEST_TIMEOUT),,,)
@@ -1082,7 +1085,7 @@ check-dtc-tool:
 
 clean:
 	@if [ -d $(XV6_EXTERNAL_DIR) ]; then $(WORKLOAD_CLEAN_COMMAND) >/dev/null; fi
-	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin tests/asm/*.d $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(INDEPENDENT_HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_BRINGUP_UNIT_OBJS) $(KERNEL_BRINGUP_UNIT_DEPS) $(VM_ADDRESS_SPACE_UNIT_OBJS) $(VM_ADDRESS_SPACE_UNIT_DEPS) $(VM_PROCESS_UNIT_OBJS) $(VM_PROCESS_UNIT_DEPS) $(VM_OBJECT_UNIT_OBJS) $(VM_OBJECT_UNIT_DEPS) $(VM_FAULT_UNIT_OBJS) $(VM_FAULT_UNIT_DEPS) $(TRAP_RUNTIME_UNIT_OBJS) $(TRAP_RUNTIME_UNIT_DEPS) $(TRAP_DISPATCH_UNIT_OBJS) $(TRAP_DISPATCH_UNIT_DEPS) $(USER_TASK_UNIT_OBJS) $(USER_TASK_UNIT_DEPS) $(USER_TASK_BOOTSTRAP_UNIT_OBJS) $(USER_TASK_BOOTSTRAP_UNIT_DEPS) $(USER_PROGRAM_UNIT_OBJS) $(USER_PROGRAM_UNIT_DEPS) $(USER_PROGRAM_SMOKE_UNIT_OBJS) $(USER_PROGRAM_SMOKE_UNIT_DEPS) $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS) $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS) $(MONITOR_COMMANDS_UNIT_OBJS) $(MONITOR_COMMANDS_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_AI_ACCEL_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(LINUX_PROTO_SBI_SHIM_ELF) $(LINUX_PROTO_SBI_SHIM_BIN) $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_MININIT_DEP) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_DEP) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_EXEC_DEP) $(LINUX_PROTO_GENERATED_INITRD) $(LINUX_PROTO_GENERATED_DISK) $(LINUX_PROTO_GENERATED_DTS) $(LINUX_PROTO_GENERATED_DTB)
+	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin tests/asm/*.d $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(INDEPENDENT_HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_BRINGUP_UNIT_OBJS) $(KERNEL_BRINGUP_UNIT_DEPS) $(VM_ADDRESS_SPACE_UNIT_OBJS) $(VM_ADDRESS_SPACE_UNIT_DEPS) $(VM_PROCESS_UNIT_OBJS) $(VM_PROCESS_UNIT_DEPS) $(VM_OBJECT_UNIT_OBJS) $(VM_OBJECT_UNIT_DEPS) $(VM_FAULT_UNIT_OBJS) $(VM_FAULT_UNIT_DEPS) $(TRAP_RUNTIME_UNIT_OBJS) $(TRAP_RUNTIME_UNIT_DEPS) $(TRAP_DISPATCH_UNIT_OBJS) $(TRAP_DISPATCH_UNIT_DEPS) $(USER_TASK_UNIT_OBJS) $(USER_TASK_UNIT_DEPS) $(USER_TASK_BOOTSTRAP_UNIT_OBJS) $(USER_TASK_BOOTSTRAP_UNIT_DEPS) $(USER_PROGRAM_UNIT_OBJS) $(USER_PROGRAM_UNIT_DEPS) $(USER_PROGRAM_SMOKE_UNIT_OBJS) $(USER_PROGRAM_SMOKE_UNIT_DEPS) $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS) $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS) $(MONITOR_COMMANDS_UNIT_OBJS) $(MONITOR_COMMANDS_UNIT_DEPS) $(COURSE_OS_STAGE1_UNIT_OBJS) $(COURSE_OS_STAGE1_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_AI_ACCEL_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(LINUX_PROTO_SBI_SHIM_ELF) $(LINUX_PROTO_SBI_SHIM_BIN) $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_MININIT_DEP) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_DEP) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_EXEC_DEP) $(LINUX_PROTO_GENERATED_INITRD) $(LINUX_PROTO_GENERATED_DISK) $(LINUX_PROTO_GENERATED_DTS) $(LINUX_PROTO_GENERATED_DTB)
 	rm -rf $(LINUX_PROTO_GENERATED_INITRD_DIR) $(LINUX_PROTO_GENERATED_DISK_DIR)
 	find src guest -type f \( -name '*.o' -o -name '*.d' \) -delete
 
@@ -1232,6 +1235,24 @@ tests/unit/vm_debug_guest.o: guest/kernel/vm_debug.c
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
 
 tests/unit/monitor_commands: $(MONITOR_COMMANDS_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_stage1_test.o: tests/unit/course_os_stage1.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_scheduler_guest.o: guest/kernel/course_scheduler.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_memory_guest.o: guest/kernel/course_memory.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_fs_guest.o: guest/kernel/course_fs.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/procfs_guest.o: guest/kernel/procfs.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage1: $(COURSE_OS_STAGE1_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/unit/kernel_alpha_common_test.o: tests/unit/kernel_alpha_common.c
