@@ -21,6 +21,15 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-05-29
+
+#### full-code-review-parallel-agent-plan
+
+- 原文件：`full_code_review_parallel_agent_plan.md`
+- 完成内容：完成基于 `63f64bd docs(规划): 收口课程 OS 分线协调基线` 的全仓库只读代码审查。审查覆盖 `ISA/reference truth`、`pipeline/JIT/DBT/cache runtime`、`platform/Linux distro/guest runtime/kernel_alpha`、`AI accelerator/NPU performance model`、`frontend/debug protocol/docs/test matrix` 五个方向，并额外检查代码本身是否臃肿冗余、职责堆叠、低效或重复事实来源。最终 active findings 已按 `必须修复 / 建议修改 / 仅记录` 回写到 [code_reself_status.md](../status/code_reself_status.md)。
+- 实现过程摘要：本轮以 coordinator + 只读 parallel agents 执行，不改生产代码、不格式化、不提交。Agent 原始结论由 coordinator 去重、抽查证据并过滤已知非目标；完整测试矩阵未作为本轮默认门禁，完成态仅运行文档空白检查。
+- 结果参考：[code_reself_status.md](../status/code_reself_status.md)
+
 ### 2026-05-05
 
 #### post-wave7-ai-user-tasks-npu-performance-plan
