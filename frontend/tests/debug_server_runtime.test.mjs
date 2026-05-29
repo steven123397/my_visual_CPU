@@ -326,7 +326,7 @@ test('createDebugServerRuntime applies Linux boot payloads and register seeds be
   await runtime.close();
 });
 
-test('createDebugServerRuntime reset re-arms Linux payloads and register seeds before waiting for prompt', async () => {
+test('createDebugServerRuntime reset lets C++ replay Linux payloads and only waits for prompt', async () => {
   const session = createFakeSession({ label: 'linux-reset', linuxPromptMode: true });
   const wsHub = createWsHub();
   const runtime = createDebugServerRuntime({
@@ -365,22 +365,10 @@ test('createDebugServerRuntime reset re-arms Linux payloads and register seeds b
   assert.match(result.terminal.text, /mycpu-linux# /);
   assert.deepEqual(session.callLog, [
     'reset',
-    'loadPayload:0x80200000',
-    'loadPayload:0x87f00000',
-    'setGpr:a0',
-    'setGpr:a1',
-    'setGpr:a2',
     'runUntilUartContains',
   ]);
-  assert.deepEqual(session.payloadLoads.slice(-2), [
-    { image: 'external/linux-riscv/arch/riscv/boot/Image', addr: '0x80200000' },
-    { image: 'workloads/linux_proto/mycpu_virt.dtb', addr: '0x87f00000' },
-  ]);
-  assert.deepEqual(session.gprSeeds.slice(-3), [
-    { reg: 'a0', value: '0x0' },
-    { reg: 'a1', value: '0x87f00000' },
-    { reg: 'a2', value: '0x80200000' },
-  ]);
+  assert.equal(session.payloadLoads.length, 2);
+  assert.equal(session.gprSeeds.length, 3);
   assert.deepEqual(session.runUntilCalls.slice(-1), [
     { text: 'mycpu-linux# ', maxSteps: 300000000, timeoutMs: 120000 },
   ]);
@@ -388,6 +376,51 @@ test('createDebugServerRuntime reset re-arms Linux payloads and register seeds b
     wsHub.messages.map((message) => message.type),
     ['snapshot', 'terminal'],
   );
+
+  await runtime.close();
+});
+
+test('createDebugServerRuntime repeated Linux resets do not append duplicate post-load actions', async () => {
+  const session = createFakeSession({ label: 'linux-reset-repeat', linuxPromptMode: true });
+  const runtime = createDebugServerRuntime({
+    createSession: async () => session,
+    wsHub: createWsHub(),
+  });
+  const entry = {
+    name: 'linux_proto_console',
+    image: 'workloads/linux_proto/linux_sbi_shim.bin',
+    payloads: [
+      { image: 'external/linux-riscv/arch/riscv/boot/Image', addr: '0x80200000' },
+      { image: 'workloads/linux_proto/mycpu_virt.dtb', addr: '0x87f00000' },
+    ],
+    gprSeeds: [
+      { reg: 'a0', value: '0x0' },
+      { reg: 'a1', value: '0x87f00000' },
+      { reg: 'a2', value: '0x80200000' },
+    ],
+    bootUntilUartText: 'mycpu-linux# ',
+    bootMaxSteps: 300000000,
+    bootRequestTimeoutMs: 120000,
+    terminalPrompt: 'mycpu-linux# ',
+  };
+
+  await runtime.load(entry, 'functional');
+  await runtime.reset();
+  await runtime.reset();
+
+  assert.equal(session.payloadLoads.length, 2);
+  assert.equal(session.gprSeeds.length, 3);
+  assert.deepEqual(
+    session.callLog.filter((item) => item.startsWith('loadPayload') || item.startsWith('setGpr')),
+    [
+      'loadPayload:0x80200000',
+      'loadPayload:0x87f00000',
+      'setGpr:a0',
+      'setGpr:a1',
+      'setGpr:a2',
+    ],
+  );
+  assert.equal(session.runUntilCalls.length, 3);
 
   await runtime.close();
 });

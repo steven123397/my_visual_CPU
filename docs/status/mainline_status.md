@@ -1003,6 +1003,10 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
 
 ## 验证基线
 
+- `cd myCPU && make test-fast-smoke`
+- `cd myCPU && make test-standard-regression`
+- `cd myCPU && make test-slow-guest`
+- `cd myCPU && make test-opt-in-external`
 - `cd myCPU && make test`
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`

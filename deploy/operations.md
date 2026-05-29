@@ -65,11 +65,16 @@ ls -lh \
   /srv/apps/my_visual_CPU/runtime-assets/spike/bin/spike
 ```
 
-If auth is enabled, verify the hash before restarting:
+Verify the auth hash before restarting. Remote production configs should not run
+with auth disabled unless `MYCPU_PUBLIC_UNAUTH_OK=1` is explicitly present for a
+development-only deployment:
 
 ```bash
 cd /srv/apps/my_visual_CPU/repo
-if rg -q '^MYCPU_AUTH_ENABLED=1' deploy/env/mycpu-frontend.env; then
+if rg -q '^MYCPU_AUTH_ENABLED=0' deploy/env/mycpu-frontend.env; then
+  rg '^MYCPU_PUBLIC_UNAUTH_OK=1' deploy/env/mycpu-frontend.env
+else
+  rg '^MYCPU_AUTH_ENABLED=1' deploy/env/mycpu-frontend.env
   rg '^MYCPU_AUTH_ADMIN_PASSWORD_HASH=scrypt\\$' deploy/env/mycpu-frontend.env
 fi
 ```
@@ -113,8 +118,9 @@ deploy/scripts/remote_smoke.sh
 ```
 
 The upgrade should not overwrite `runtime-assets/`, `logs/`, `tmp/`, or the
-host-local `deploy/env/mycpu-frontend.env`. If `/api/tests` returns `401`, auth
-is enabled and the browser must log in before using `/console`.
+host-local `deploy/env/mycpu-frontend.env`. `/api/tests` should return `401`
+before login when the remote auth layer is enabled; the browser must log in
+before using `/console`.
 
 ## Daily Checks
 
@@ -147,7 +153,7 @@ Expected results:
 
 - HTTP returns `301` to `https://my-visual-cpu.site/`
 - HTTPS `/` returns `200`
-- `/api/tests` returns `200`
+- `/api/tests` returns `401` before login, then `200` after browser login
 - `diagnostics.linuxConsole.status` is `ready` when `Image` exists
 
 Check auth audit activity:

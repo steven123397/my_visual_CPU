@@ -70,6 +70,10 @@ node frontend/server/debug_server.mjs --port=4173
 
 ```bash
 cd myCPU
+make test-fast-smoke
+make test-standard-regression
+make test-slow-guest
+make test-opt-in-external
 make test
 make test-pipeline
 make test-host-debug_cli_smoke

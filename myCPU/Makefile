@@ -104,6 +104,8 @@ LINUX_PROTO_GENERATED_INITRD_DIR = workloads/linux_proto/rootfs_staging
 LINUX_PROTO_GENERATED_DISK = workloads/linux_proto/rootfs.ext4
 LINUX_PROTO_GENERATED_DISK_DIR = workloads/linux_proto/rootfs_disk_staging
 LINUX_PROTO_GENERATED_DISK_BLOCKS ?= 8192
+LINUX_DISTRO_REJECT_REPO_ROOTFS = MYCPU_CHECK_ROOTFS="$$rootfs" python3 -c 'import os,sys; p=os.environ["MYCPU_CHECK_ROOTFS"]; base=os.path.realpath("$(LINUX_PROTO_GENERATED_DISK)"); cand=os.path.realpath(p if os.path.isabs(p) else os.path.join(os.getcwd(), p)); sys.exit(1 if cand == base else 0)'
+REQUIRE_EXTERNAL_LINUX_ROOTFS = rootfs="$(1)"; if [ -z "$$rootfs" ]; then echo "$(2)" >&2; exit 1; fi; $(LINUX_DISTRO_REJECT_REPO_ROOTFS) || { echo "$(2)" >&2; exit 1; }
 GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/ai_accel.c guest/kernel/console.c guest/kernel/course_fd.c guest/kernel/course_fs.c guest/kernel/course_memory.c guest/kernel/course_os_stage1.c guest/kernel/course_os_stage2.c guest/kernel/course_process.c guest/kernel/course_scheduler.c guest/kernel/course_shell.c guest/kernel/course_syscall.c guest/kernel/course_user_programs.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/procfs.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
@@ -251,7 +253,7 @@ else
 $(error unsupported WORKLOAD_RUN_MODE: $(WORKLOAD_RUN_MODE))
 endif
 
-.PHONY: all clean test test-pipeline check-riscv-toolchain check-dtc-tool FORCE build-workload build-workload-xv6 run-workload run-workload-xv6 smoke-workload smoke-workload-xv6
+.PHONY: all clean test test-pipeline test-fast-smoke test-standard-regression test-slow-guest test-opt-in-external check-riscv-toolchain check-dtc-tool FORCE build-workload build-workload-xv6 run-workload run-workload-xv6 smoke-workload smoke-workload-xv6
 
 all: $(TARGET)
 
@@ -387,6 +389,14 @@ $(LINUX_PROTO_GENERATED_DTB): $(LINUX_PROTO_GENERATED_DTS) | check-dtc-tool
 	$(DTC) -I dts -O dtb -o $@ $<
 
 test: $(TARGET) $(ASM_ELFS) $(ATOMIC_ASM_ELFS) $(FLAT_BIN_TESTS:%=tests/asm/%.bin) $(UNIT_TEST_BINS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_AI_ACCEL_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(ASM_TESTS:%=test-%) $(ATOMIC_ASM_TESTS:%=test-%) $(UNIT_TEST_NAMES:%=test-unit-%) test-host-instruction_semantics_smoke test-host-rvc_semantics_smoke test-host-atomic_semantics_smoke test-host-debug_cli_smoke test-host-debug_protocol_command_smoke test-host-execution_profile_smoke test-host-dbt_block_plan_smoke test-host-dbt_translator_smoke test-host-dbt_ir_eval_smoke test-host-dbt_ir_lowering_smoke test-host-dbt_block_cache_smoke test-host-dbt_executable_cache_smoke test-host-dbt_executable_memory_smoke test-host-dbt_helper_execution_bridge_smoke test-host-dbt_helper_replay_smoke test-host-dbt_host_emitter_smoke test-host-dbt_jit_engine_smoke test-host-dbt_reference_fallback_smoke test-host-dbt_reference_fallback_execution_smoke test-host-dbt_runtime_dispatch_smoke test-host-dbt_runtime_harness_smoke test-host-dbt_runtime_invalidation_smoke test-host-interpreter_dbt_prototype_smoke test-host-interactive_terminal_smoke test-host-vector_vlite_smoke test-host-vector_backend_smoke test-host-vector_operator_smoke test-host-vector_cnn_smoke test-host-vector_pipeline_smoke test-host-virtio_blk_smoke test-host-xv6_boot_smoke test-host-run_debug_cli_probe test-host-ai_tensor_golden_ops_smoke test-host-ai_accelerator_submit_smoke test-host-ai_accelerator_dma_smoke test-host-ai_accelerator_cnn_smoke test-host-ai_accelerator_gemm_smoke test-host-ai_accelerator_profile_smoke test-host-ai_accel_guest_smoke test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo test-guest-interactive_os_demo test-guest-ai_accel_demo test-guest-vector_demo test-guest-vector_cnn_demo $(FLAT_BIN_TESTS:%=test-flat-%)
+
+test-fast-smoke: $(TARGET) $(UNIT_TEST_BINS) test-host-debug_protocol_command_smoke test-host-instruction_semantics_smoke-core test-host-rvc_semantics_smoke test-host-atomic_semantics_smoke test-host-debug_cli_smoke test-host-interactive_terminal_smoke
+
+test-standard-regression: test test-pipeline
+
+test-slow-guest: test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo test-guest-interactive_os_demo test-guest-ai_accel_demo test-guest-vector_demo test-guest-vector_cnn_demo test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo test-pipeline-guest-interactive_os_demo test-pipeline-guest-ai_accel_demo test-pipeline-guest-vector_demo test-pipeline-guest-vector_cnn_demo test-host-xv6_boot_smoke test-host-xv6_shell_smoke run-workload-xv6
+
+test-opt-in-external: test-host-run_debug_cli_probe_linux_proto_runtime test-host-run_debug_cli_probe_linux_distribution_runtime test-host-run_debug_cli_probe_linux_distribution_curated_matrix test-host-spike_differential
 
 FORCE:
 
@@ -659,10 +669,7 @@ test-host-run_debug_cli_probe_linux_proto_runtime: FORCE $(TARGET)
 
 test-host-run_debug_cli_probe_linux_distribution_runtime: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_runtime ==="; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS),MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -673,10 +680,7 @@ test-host-run_debug_cli_probe_linux_distribution_runtime: FORCE $(TARGET)
 
 test-host-run_debug_cli_probe_linux_distribution_filesystem: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_filesystem ==="; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS),MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=filesystem_consistency python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -687,10 +691,7 @@ test-host-run_debug_cli_probe_linux_distribution_filesystem: FORCE $(TARGET)
 
 test-host-run_debug_cli_probe_linux_distribution_tty_login: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_tty_login ==="; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS),MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=tty_login_probe python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -701,10 +702,7 @@ test-host-run_debug_cli_probe_linux_distribution_tty_login: FORCE $(TARGET)
 
 test-host-run_debug_cli_probe_linux_distribution_process_control: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_process_control ==="; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS),MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=process_control python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -715,10 +713,7 @@ test-host-run_debug_cli_probe_linux_distribution_process_control: FORCE $(TARGET
 
 test-host-run_debug_cli_probe_linux_distribution_fs_state_guardrail: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_fs_state_guardrail ==="; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS),MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_PROFILE=fs_state_guardrail python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -729,10 +724,7 @@ test-host-run_debug_cli_probe_linux_distribution_fs_state_guardrail: FORCE $(TAR
 
 test-host-run_debug_cli_probe_linux_distribution_filesystem_persistence: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_filesystem_persistence ==="; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS),MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image); \
 	temp_rootfs="$$(mktemp /tmp/mycpu-distro-rootfs.XXXXXX.ext4)"; \
 	trap 'rm -f "$$temp_rootfs"' EXIT; \
 	cp "$(MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS)" "$$temp_rootfs"; \
@@ -750,10 +742,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell: FORCE $(T
 		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
 		exit 1; \
 	fi; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -768,10 +757,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell: FORCE $(T
 		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
 		exit 1; \
 	fi; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS must point to an external Debian rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS must point to an external Debian rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=debian python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_reaches_shell_prompt_and_command_when_requested 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -791,10 +777,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_isa_advertisemen
 		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
 		exit 1; \
 	fi; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_boot_log_reports_compressed_isa 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -809,10 +792,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_awk_fp: 
 		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
 		exit 1; \
 	fi; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_busybox_awk_fp_matrix 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -827,10 +807,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_proc_cpuinfo_isa
 		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
 		exit 1; \
 	fi; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_proc_cpuinfo_isa_view 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -845,10 +822,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view:
 		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
 		exit 1; \
 	fi; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_auxv_hwcap_view 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -859,10 +833,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_auxv_hwcap_view:
 
 test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland_abi_view ==="; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_curated_alpine_busybox_userland_abi_view 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -873,10 +844,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_busybox_userland
 
 test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view: FORCE $(TARGET)
 	@echo "=== host:run_debug_cli_probe_linux_distribution_curated_alpine_fp_static_surface_view ==="; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_curated_alpine_fp_static_surface_view 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
@@ -891,10 +859,7 @@ test-host-run_debug_cli_probe_linux_distribution_curated_alpine_fcsr_syscall_rou
 		echo "MYCPU_LINUX_DISTRO_CURATED_IMAGE must point to an external distribution Image" >&2; \
 		exit 1; \
 	fi; \
-	if [ -z "$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS)" ]; then \
-		echo "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image" >&2; \
-		exit 1; \
-	fi; \
+	$(call REQUIRE_EXTERNAL_LINUX_ROOTFS,$(MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS),MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS must point to an external Alpine rootfs image); \
 	output="$$(MYCPU_RUN_LINUX_DISTRO_RUNTIME=1 MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_linux_distribution_runtime_curated_alpine_fcsr_syscall_roundtrip_probe 2>&1)"; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \

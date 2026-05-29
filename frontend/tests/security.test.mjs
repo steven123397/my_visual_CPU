@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildPasswordHashForTests,
+  createSecurityManagerFromEnv,
   createSecurityManager,
   verifyPassword,
 } from '../server/security.mjs';
@@ -49,6 +50,24 @@ test('security manager enforces login before API access when enabled', async () 
   const session = manager.requireAuthentication(request, 'GET:/api/tests');
   assert.equal(session.username, 'admin');
   assert.equal(manager.authStateForRequest(request).controllerSession, false);
+});
+
+test('security manager requires explicit auth or public unauth opt-in for production env', () => {
+  assert.throws(
+    () => createSecurityManagerFromEnv({
+      NODE_ENV: 'production',
+      MYCPU_AUTH_ENABLED: '0',
+    }),
+    /MYCPU_AUTH_ENABLED=1 or MYCPU_PUBLIC_UNAUTH_OK=1/,
+  );
+
+  const manager = createSecurityManagerFromEnv({
+    NODE_ENV: 'production',
+    MYCPU_AUTH_ENABLED: '0',
+    MYCPU_PUBLIC_UNAUTH_OK: '1',
+  });
+
+  assert.equal(manager.enabled, false);
 });
 
 test('security manager limits concurrent authenticated sessions to three', async () => {

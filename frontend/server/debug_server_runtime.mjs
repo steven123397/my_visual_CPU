@@ -365,18 +365,6 @@ export function createDebugServerRuntime({
   }
 
   async function rearmSessionStateAfterReset(session, entry) {
-    for (const payload of entry.payloads ?? []) {
-      await normalizeCliResponse(
-        await session.loadPayload(payload.image, payload.addr),
-        'session loadPayload',
-      );
-    }
-    for (const seed of entry.gprSeeds ?? []) {
-      await normalizeCliResponse(
-        await session.setGpr(seed.reg, seed.value),
-        'session setGpr',
-      );
-    }
     const snapshot = entry.bootUntilUartText
       ? normalizeCliResponse(
           await session.runUntilUartContains(

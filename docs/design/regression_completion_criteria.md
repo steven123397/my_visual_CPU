@@ -98,8 +98,19 @@
 
 ## 验证基线
 
+- `cd myCPU && make test-fast-smoke`
+- `cd myCPU && make test-standard-regression`
+- `cd myCPU && make test-slow-guest`
+- `cd myCPU && make test-opt-in-external`
 - `cd myCPU && make test`
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`
 - `cd myCPU && make test-guest-supervisor_demo`
 - `cd myCPU && make test-guest-kernel_alpha_demo`
+
+分层 target 语义：
+
+- `test-fast-smoke`：host unit / host smoke 中不依赖外部资产、适合开发中快速回归的入口。
+- `test-standard-regression`：当前标准回归，等价覆盖既有 `make test` 与关键 pipeline guardrail。
+- `test-slow-guest`：guest demos、pipeline guest demos 与 `xv6` shell 类慢门禁。
+- `test-opt-in-external`：真实 Linux Image / 外部发行版 rootfs / Spike 等显式外部资产入口；缺资产时必须 fail-closed。

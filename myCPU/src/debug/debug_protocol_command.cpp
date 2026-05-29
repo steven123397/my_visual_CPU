@@ -1,7 +1,9 @@
 #include "debug_protocol_command.h"
 
+#include <cerrno>
 #include <cctype>
 #include <cstdlib>
+#include <limits>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -23,6 +25,30 @@ struct JsonValue {
 };
 
 using JsonObject = std::map<std::string, JsonValue>;
+
+uint64_t parse_u64_text(const std::string& text, int base) {
+    if (text.empty()) {
+        throw std::runtime_error("expected unsigned integer");
+    }
+    if (std::isspace(static_cast<unsigned char>(text.front())) != 0 ||
+        std::isspace(static_cast<unsigned char>(text.back())) != 0) {
+        throw std::runtime_error("unexpected whitespace in unsigned integer");
+    }
+    if (text.front() == '-') {
+        throw std::runtime_error("negative numbers are not supported");
+    }
+
+    errno = 0;
+    char* end = nullptr;
+    const unsigned long long parsed = std::strtoull(text.c_str(), &end, base);
+    if (errno == ERANGE || parsed > std::numeric_limits<uint64_t>::max()) {
+        throw std::runtime_error("unsigned integer out of range");
+    }
+    if (end == text.c_str() || *end != '\0') {
+        throw std::runtime_error("invalid unsigned integer");
+    }
+    return static_cast<uint64_t>(parsed);
+}
 
 void skip_whitespace(const std::string& text, size_t& pos) {
     while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos])) != 0) {
@@ -182,7 +208,7 @@ JsonValue parse_json_value(const std::string& text, size_t& pos) {
     }
     JsonValue value;
     value.type = JsonValue::Type::Number;
-    value.number_value = std::strtoull(text.substr(begin, pos - begin).c_str(), nullptr, 10);
+    value.number_value = parse_u64_text(text.substr(begin, pos - begin), 10);
     return value;
 }
 
@@ -278,7 +304,7 @@ uint64_t try_extract_u64(const JsonObject& object, const char* key, uint64_t def
         return value->number_value;
     }
     if (value->type == JsonValue::Type::String) {
-        return std::strtoull(value->string_value.c_str(), nullptr, 0);
+        return parse_u64_text(value->string_value, 0);
     }
     throw std::runtime_error(std::string("expected number for key: ") + key);
 }
@@ -289,7 +315,7 @@ uint64_t extract_u64(const JsonObject& object, const char* key) {
         return value.number_value;
     }
     if (value.type == JsonValue::Type::String) {
-        return std::strtoull(value.string_value.c_str(), nullptr, 0);
+        return parse_u64_text(value.string_value, 0);
     }
     throw std::runtime_error(std::string("expected number for key: ") + key);
 }

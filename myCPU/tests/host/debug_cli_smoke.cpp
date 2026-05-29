@@ -737,7 +737,14 @@ int main() {
                             nullptr);
         session.load_binary_payload(store_queue_binary.path, kDebugProgramAddr + 0x100);
         session.set_gpr("a1", 0x88000000ULL);
+        const size_t post_load_actions_after_setup = session.post_load_action_count();
         session.reset();
+        session.reset();
+
+        if (session.post_load_action_count() != post_load_actions_after_setup) {
+            std::fprintf(stderr, "debug session reset should not append duplicate post-load actions\n");
+            return 1;
+        }
 
         const DebugSnapshot snapshot = session.snapshot();
         if (snapshot.gpr[11] != 0x88000000ULL) {

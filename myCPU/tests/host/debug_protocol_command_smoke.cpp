@@ -143,6 +143,28 @@ int main() {
     if (!expect_parse_error("{\"cmd\":\"snapshot\"} trailing")) {
         return 1;
     }
+    if (!expect_parse_error("{\"cmd\":\"load\",\"image\":\"x.bin\",\"addr\":\"0x10junk\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"set_gpr\",\"reg\":\"a0\",\"value\":\"123abc\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"step_commit\",\"count\":\"-1\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"uart_output\",\"offset\":\"\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"run_until_halt\",\"max_steps\":\"18446744073709551616\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"run_until_new_uart_contains\","
+                            "\"offset\":\" 17\",\"text\":\">\",\"max_steps\":\"1\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"step_cycle\",\"count\":18446744073709551616}")) {
+        return 1;
+    }
 
     return 0;
 }

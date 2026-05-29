@@ -19,7 +19,25 @@
   - 本轮覆盖 `ISA/reference truth`、`pipeline/JIT/DBT/cache runtime`、`platform/Linux distro/guest runtime/kernel_alpha`、`AI accelerator/NPU performance model`、`frontend/debug protocol/docs/test matrix` 五个方向；`ISA/reference truth` 因范围较大拆成 `decode/semantics/functional backend` 与 `arch/trap/mem/loader` 两个窄审查。
   - 审查口径除正确性、合同、fail-closed 和文档事实来源外，也覆盖代码本身的臃肿冗余、职责堆叠、低效路径和重复事实来源。
   - 本轮未修改生产代码，也未运行完整回归矩阵；所有 finding 均保留建议验证命令。完成态文档检查覆盖 `git diff --check`。
-- 当前存在以下 active findings。
+- 当前存在以下 active findings；本轮已关闭项只保留简短结论。
+
+### 已关闭 findings
+
+- `2026-05-29` 已关闭 M6：Linux distribution rootfs gate 现在会拒绝 repo 内
+  `linux_proto/rootfs.ext4` 的相对路径、绝对路径和 symlink alias；curated Alpine /
+  Debian shell 入口也复用同一 external-rootfs gate。
+- `2026-05-29` 已关闭 M7：frontend Linux topic 已拆分 topic readable 与 runtime
+  loadable；缺 `linux_proto_console` manifest 时仍可阅读专题，但 `Sync session`、
+  `Load current scenario` 和 `Open live shell` 不再可用，也不会复用上一 session 的 workload 文案。
+- `2026-05-29` 已关闭 M8：reset re-arm 单一归属回到 C++ `DebugSession::reset()`；
+  Node reset 后只等待 boot marker，不再重复 append payload / GPR post-load action。
+- `2026-05-29` 已关闭 M9：远端 env 模板默认启用 auth 且 blank hash fail-fast；
+  production-like auth disabled 必须显式设置 `MYCPU_PUBLIC_UNAUTH_OK=1`。
+- `2026-05-29` 已关闭 S4：debug protocol 数字字段统一 strict parse，拒绝 trailing junk、
+  负号、空字符串、溢出和多余空白。
+- `2026-05-29` 已关闭 S16：`myCPU/Makefile` 已新增并文档化
+  `test-fast-smoke`、`test-standard-regression`、`test-slow-guest` 和 `test-opt-in-external`
+  分层入口。
 
 ### 必须修复
 
@@ -53,43 +71,19 @@
    - 风险：Sv39 / MPRV 下 VA 可映射到不同 PA；VA 看似 RAM 但 PA 是 MMIO 时可能提前执行 MMIO load，VA 看似非 RAM 但 PA 是 RAM 时可能错误 stall 或禁用 forwarding。
    - 建议动作：LSQ / StageSlot 携带翻译后的 PA 和 region；unknown / cross-page / fault 一律不可 forwarding 且按 non-speculative 处理。
    - 建议验证：`cd myCPU && make test-host-pipeline_speculation_contracts_smoke test-pipeline`，并新增 Sv39 VA->MMIO、VA->RAM alias smoke。
-6. 标准发行版 rootfs fail-closed 可被相对路径或 symlink 绕过。
-   - 影响范围：opt-in external rootfs gate。
-   - 证据：`myCPU/tests/host/run_debug_cli_probe_test.py` 的 Linux distro runtime 测试只用 `disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS` 比较；默认路径是绝对 `Path`，`MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS=workloads/linux_proto/rootfs.ext4` 或指向它的 symlink 不会相等。`myCPU/Makefile` 对 distro runtime targets 主要检查 env 非空。
-   - 风险：repo 内 `linux_proto/rootfs.ext4` 可能被误当作标准发行版外部 rootfs 证据，破坏标准发行版主线的 fail-closed 约定。
-   - 建议动作：对 rootfs 路径做 `resolve(strict=True)` / `samefile` 级别拒绝，并覆盖 curated Alpine / Debian 各入口；补相对路径和 symlink 负向测试。
-   - 建议验证：`cd myCPU && make test-host-run_debug_cli_probe`；再用相对 repo rootfs 路径运行 distro runtime target，预期应 fail-closed。
-7. Linux topic 绕过 manifest gating 暴露 live 控件。
-   - 影响范围：frontend runtime behavior / support claim。
-   - 证据：`frontend/server/tests_manifest.mjs` 在缺 Image 时不会暴露 `linux_proto_console`，`frontend/tests/debug_server.test.mjs` 也固定这一点；但 `frontend/app/render.js` 的 `resolveDemoState()` 把任意 `scenarioKey` 当作 `available`，后续会渲染 `Topic ready`、`Sync session`、`Load current scenario`、`Open live shell`。
-   - 风险：缺 runtime Image 时，catalog 仍给出可运行暗示；`Load current scenario` 可能加载上一个真实 workload，造成 Linux topic 与实际 session 不一致。
-   - 建议动作：拆开“topic 可读”和“runtime 可加载”；只有 `scenarioTest` 存在于 `/api/tests` 时才启用 Sync / Load / Open live。
-   - 建议验证：`cd frontend && node --test`。
-8. Linux reset re-arm 会重复持久化 payload / GPR post-load action。
-   - 影响范围：debug protocol / server boundary。
-   - 证据：`myCPU/src/debug/debug_session.cpp` 的 `reset()` 通过 `recreate_machine()` 已重放 `config_.post_load_actions`；`frontend/server/debug_server_runtime.mjs` 的 `rearmSessionStateAfterReset()` 在 reset 后又调用 `loadPayload()` / `setGpr()`，这些 C++ 方法会继续 append 到同一个 action 列表。
-   - 风险：同一 session 每次 reset 都增加一组 payload / GPR action；Linux Image / DTB 会被重复加载，reset 越跑越慢，最终可能表现为 timeout 或卡顿。
-   - 建议动作：明确 re-arm 单一归属；优先让 C++ reset 负责重放 payload / GPR，Node 只等待 boot marker 和读取 UART。
-   - 建议验证：`cd frontend && node --test`；`cd myCPU && make test-host-debug_cli_smoke`。
-9. 远端部署样例默认关闭认证但公开代理 mutating API。
-   - 影响范围：debug protocol / server security boundary。
-   - 证据：`deploy/env/mycpu-frontend.env.example` 默认 `MYCPU_AUTH_ENABLED=0`；`deploy/nginx/mycpu.conf` 公开代理 `/api/` 和 `/ws`；`frontend/server/debug_server.mjs` 在 auth disabled 时仍允许 Load / Run / Reset / Terminate / terminal input 等 mutating API。
-   - 风险：照 runbook 复制 env 后，公网入口可直接控制单 session debug server。
-   - 建议动作：远端模板 fail-closed：要求显式生成 hash 并启用 auth，或要求设置明确的 `MYCPU_PUBLIC_UNAUTH_OK=1` 才允许无认证部署。
-   - 建议验证：`cd frontend && node --test`；远端未登录请求 `/api/tests` 应返回 `401`。
-10. AI profile manifest 数值字段不是严格 `uint32` 解析。
+6. AI profile manifest 数值字段不是严格 `uint32` 解析。
     - 影响范围：host-only importer / manifest fail-closed。
     - 证据：`myCPU/src/platform/machine.cpp` 的 `parse_ai_profile_manifest_file()` 对 `max_ticks` / `source_tag` 使用 `std::stoul(value, nullptr, 0)` 后直接 cast 到 `uint32_t`，没有检查全字符串消费、负号和范围溢出。
     - 风险：`source_tag=4294967296` 会截断，`max_ticks=1junk` 会被当成 `1`，manifest 路径比 task-spec importer 更 fail-open。
     - 建议动作：新增 strict `parse_uint32` / `parse_uint32_nonzero`，检查 `pos == value.size()`、无符号、范围和空白。
     - 建议验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`，补 negative / oversized / trailing-junk manifest scalar 负例。
-11. AI profile 失败路径可能复用旧 summary。
+7. AI profile 失败路径可能复用旧 summary。
     - 影响范围：profile / observability schema。
     - 证据：`Machine::run_ai_profile_manifest()` 在 manifest parse 成功后才 reset AI 设备和 RAM，解析异常会保留上一轮 `profile_summary()`；`myCPU/src/devices/ai_accelerator.cpp` 的 accepted compute fault 路径只更新 completion outcome，`tile_count` / `scratchpad_peak_bytes` / `op_summaries` 只在 scheduler 成功后覆盖。
     - 风险：success 后再触发 malformed manifest 或 accepted compute fault，profile 可能显示新 fault + 旧 aggregate / op summary，破坏 fail-closed 和观察面真实性。
     - 建议动作：把 AI reset / profile clear 前移或用 guard 覆盖所有失败出口；accepted submission 开始时清空 aggregate / op summaries，compute fault completion 保持 outcome 但不复用旧 op summary。
     - 建议验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke test-host-ai_accelerator_gemm_smoke`。
-12. AI graph package memory plan 没有在 parser 阶段保证单一事实来源。
+8. AI graph package memory plan 没有在 parser 阶段保证单一事实来源。
     - 影响范围：device descriptor / future Linux-facing driver route。
     - 证据：`myCPU/src/devices/ai_graph_package.cpp` 的 `validate_ai_graph_package()` 只逐 entry 校验大小和 scratchpad budget，不拒绝重复或缺失 memory plan；设备随后按 `package.memory_plan` 构造 DMA load/store，scheduler 到 compute 前才发现 duplicate。
     - 风险：非法 memory plan 可进入 accepted submission，甚至先触发 DMA，再在 scheduler 才 fault；descriptor validation、DMA plan 和 scheduler 形成多套事实来源。
@@ -101,22 +95,20 @@
 1. DBT guest-store invalidation 只比对虚拟 PC range，物理代码页 synonym 自修改代码可能留下 stale executable contract。建议在 cache entry 记录 physical span / satp / 属性，无法可靠翻译时全局 invalidate；验证：`cd myCPU && make test-host-dbt_runtime_invalidation_smoke test-host-dbt_runtime_harness_smoke`。
 2. DBT helper store 的 LR/SC reservation invalidation 未处理跨页 store。建议复用 commit-boundary 逻辑，跨页或 PA span 不完整时 clear reservation；验证：`cd myCPU && make test-host-dbt_helper_execution_bridge_smoke test-host-dbt_runtime_harness_smoke`。
 3. `pipeline` profile 漏记 atomic memory observations。建议 pipeline 复用 functional atomic observation 逻辑；验证：`cd myCPU && make test-host-execution_profile_smoke test-pipeline`。
-4. debug CLI 数字字段解析对非法字符串静默取 0 / 前缀值。建议严格检查 `strtoull` end pointer / errno；验证：`cd myCPU && make test-host-debug_protocol_command_smoke test-host-debug_cli_smoke`。
-5. PLIC / MMIO 平台契约文档与当前 DTB / 常量不一致。`docs/design/platform_mmio_contract.md` 仍写 UART source 1，代码 / DTB 已是 virtio=1、AI=9、UART=10。建议更新文档并明确 SimpleStorage / Virtio transport 选择关系；验证：`cd myCPU && make test-host-virtio_blk_smoke test-host-xv6_shell_smoke`。
-6. `README.md` 仍把旧 `KMVPETDS` 写成当前 `kernel_alpha` 能力。建议改为历史 Phase 1 guardrail，并单独说明课程 OS stage1 接管线；验证：`rg -n "kernel_alpha = KMVPETDS|KMVPETDS" README.md docs/status docs/design myCPU/Makefile`。
-7. 通用 `kernel_runtime` helper 仍硬编码 demo storage signature。建议把 `'Stor'` signature guardrail 移到 kernel_alpha / demo 专用 helper，或重命名为明确 guardrail contract；验证：`cd myCPU && make test-unit-kernel_runtime test-unit-kernel_alpha_common test-guest-kernel_alpha_demo test-guest-supervisor_demo`。
-8. VirtQueue 在确认 used / status 写回前就消费 avail entry。建议延后提交 avail index，或失败路径尽量写 `VIRTIO_BLK_S_IOERR` 与 used entry；验证：`cd myCPU && make test-host-virtio_blk_smoke` 并补 bad descriptor / DMA fault host test。
-9. Graph package record reserved 字段未 fail-closed。建议对 tensor / op / memory-plan / dynamic-tensor record 的 reserved 字段统一非零 reject；验证：`cd myCPU && make test-unit-ai_graph_package`。
-10. Guest C ABI 仍把 runtime shape offset 命名为 `reserved0`。建议改名为 `runtime_shape_table_offset`，保留 ABI size assert，并补 guest queue unit；验证：`cd myCPU && make test-unit-ai_accel_queue test-host-ai_accel_guest_smoke`。
-11. AI profile 文本 / 结构缺少版本边界且字段明显膨胀。建议加 `profile_schema_version` / `timing_schema_version`，CLI 至少输出 `schema=ai_profile_v1`；验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`。
-12. `expected_output` 是 AI manifest 字段但 runner 忽略它。建议移除该 schema 字段或在 runner 中按 output 顺序比对；验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`。
-13. Sv39 leaf PTE reserved 高位未 fail-closed。建议为当前 Sv39 模型增加 leaf / non-leaf reserved mask，并补 leaf reserved-bit asm 回归；验证：`cd myCPU && make test-sv39_pagewalk_contracts test-pipeline-sv39_pagewalk_contracts`。
-14. `mstatus.MPP=2` 可被写入并在 `mret` 时解码为 M-mode。建议写 `mstatus` 时规整 MPP 到合法值，或在 `mret` 前明确处理 reserved MPP；验证：`cd myCPU && make test-privilege_transitions test-trap_state`。
-15. debug bus 观察面是单槽，容易被内部 fetch / page-walk 覆盖。建议增加 access source / kind，或为 guest data / MMIO commit 维护独立观察槽；验证：`cd myCPU && make test-host-debug_cli_smoke test-host-execution_profile_smoke`。
-16. 测试矩阵缺少一等 fast / standard / slow / external 分层入口。建议新增并文档化 `test-fast-smoke`、`test-standard-regression`、`test-slow-guest`、`test-opt-in-external` 等别名；验证：`cd myCPU && make -n test-fast-smoke test-standard-regression test-slow-guest`。
-17. `pipeline` LSQ 和 FP metadata 仍复制 shared semantics 指令事实。建议抽出共享 memory shape / FP source-dest descriptor，pipeline 只消费只读描述；验证：`cd myCPU && make test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-pipeline`。
-18. DBT guardrail 的 retired count 来自 IR 预期，不是 host executable 实测。建议 host ABI 返回 executed / retired count，或把字段明确标成 IR-expected；验证：`cd myCPU && make test-host-dbt_runtime_harness_smoke test-host-dbt_host_emitter_smoke`。
-19. DBT metadata / executable cache 是无界 vector + 线性查找。若只服务 smoke，建议明确 max entry / cap；若准备演进 runtime，改用 keyed map + LRU / 上限；验证：`cd myCPU && make test-host-dbt_executable_cache_smoke test-host-dbt_jit_engine_smoke test-host-dbt_runtime_harness_smoke`。
+4. PLIC / MMIO 平台契约文档与当前 DTB / 常量不一致。`docs/design/platform_mmio_contract.md` 仍写 UART source 1，代码 / DTB 已是 virtio=1、AI=9、UART=10。建议更新文档并明确 SimpleStorage / Virtio transport 选择关系；验证：`cd myCPU && make test-host-virtio_blk_smoke test-host-xv6_shell_smoke`。
+5. `README.md` 仍把旧 `KMVPETDS` 写成当前 `kernel_alpha` 能力。建议改为历史 Phase 1 guardrail，并单独说明课程 OS stage1 接管线；验证：`rg -n "kernel_alpha = KMVPETDS|KMVPETDS" README.md docs/status docs/design myCPU/Makefile`。
+6. 通用 `kernel_runtime` helper 仍硬编码 demo storage signature。建议把 `'Stor'` signature guardrail 移到 kernel_alpha / demo 专用 helper，或重命名为明确 guardrail contract；验证：`cd myCPU && make test-unit-kernel_runtime test-unit-kernel_alpha_common test-guest-kernel_alpha_demo test-guest-supervisor_demo`。
+7. VirtQueue 在确认 used / status 写回前就消费 avail entry。建议延后提交 avail index，或失败路径尽量写 `VIRTIO_BLK_S_IOERR` 与 used entry；验证：`cd myCPU && make test-host-virtio_blk_smoke` 并补 bad descriptor / DMA fault host test。
+8. Graph package record reserved 字段未 fail-closed。建议对 tensor / op / memory-plan / dynamic-tensor record 的 reserved 字段统一非零 reject；验证：`cd myCPU && make test-unit-ai_graph_package`。
+9. Guest C ABI 仍把 runtime shape offset 命名为 `reserved0`。建议改名为 `runtime_shape_table_offset`，保留 ABI size assert，并补 guest queue unit；验证：`cd myCPU && make test-unit-ai_accel_queue test-host-ai_accel_guest_smoke`。
+10. AI profile 文本 / 结构缺少版本边界且字段明显膨胀。建议加 `profile_schema_version` / `timing_schema_version`，CLI 至少输出 `schema=ai_profile_v1`；验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`。
+11. `expected_output` 是 AI manifest 字段但 runner 忽略它。建议移除该 schema 字段或在 runner 中按 output 顺序比对；验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`。
+12. Sv39 leaf PTE reserved 高位未 fail-closed。建议为当前 Sv39 模型增加 leaf / non-leaf reserved mask，并补 leaf reserved-bit asm 回归；验证：`cd myCPU && make test-sv39_pagewalk_contracts test-pipeline-sv39_pagewalk_contracts`。
+13. `mstatus.MPP=2` 可被写入并在 `mret` 时解码为 M-mode。建议写 `mstatus` 时规整 MPP 到合法值，或在 `mret` 前明确处理 reserved MPP；验证：`cd myCPU && make test-privilege_transitions test-trap_state`。
+14. debug bus 观察面是单槽，容易被内部 fetch / page-walk 覆盖。建议增加 access source / kind，或为 guest data / MMIO commit 维护独立观察槽；验证：`cd myCPU && make test-host-debug_cli_smoke test-host-execution_profile_smoke`。
+15. `pipeline` LSQ 和 FP metadata 仍复制 shared semantics 指令事实。建议抽出共享 memory shape / FP source-dest descriptor，pipeline 只消费只读描述；验证：`cd myCPU && make test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-pipeline`。
+16. DBT guardrail 的 retired count 来自 IR 预期，不是 host executable 实测。建议 host ABI 返回 executed / retired count，或把字段明确标成 IR-expected；验证：`cd myCPU && make test-host-dbt_runtime_harness_smoke test-host-dbt_host_emitter_smoke`。
+17. DBT metadata / executable cache 是无界 vector + 线性查找。若只服务 smoke，建议明确 max entry / cap；若准备演进 runtime，改用 keyed map + LRU / 上限；验证：`cd myCPU && make test-host-dbt_executable_cache_smoke test-host-dbt_jit_engine_smoke test-host-dbt_runtime_harness_smoke`。
 
 ### 仅记录
 
@@ -144,7 +136,7 @@
 
 ## 下一步
 
-1. 第一批整改优先处理 `必须修复` 中会直接造成 guest-visible divergence、fail-closed 破坏或安全边界问题的条目：RVC pipeline、RMM FP、Sv39 A/D side effect、LR/SC reservation lifecycle、pipeline VA/PA region 分类、Linux rootfs fail-closed、frontend gating/reset/auth，以及 AI manifest / profile / memory-plan fail-closed。
+1. 第一批整改继续处理 `必须修复` 中会直接造成 guest-visible divergence、fail-closed 破坏或安全边界问题的剩余条目：RVC pipeline、RMM FP、Sv39 A/D side effect、LR/SC reservation lifecycle、pipeline VA/PA region 分类，以及 AI manifest / profile / memory-plan fail-closed。
 2. 跨多个子系统的结构问题不要直接派零散修复 agent；优先拆成小计划，例如 `shared instruction metadata`、`AI profile schema v1`、`test matrix layering`、`DBT invalidation physical span`。
 3. 每条整改都应先补最窄红灯，再改代码，并按影响面选择 `make test`、`make test-pipeline`、`frontend node --test` 或外部资产 opt-in target。
 

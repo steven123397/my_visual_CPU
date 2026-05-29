@@ -461,7 +461,12 @@ export function createSecurityManager({
 
 export function createSecurityManagerFromEnv(env = process.env) {
   const enabled = parseBooleanEnv(env.MYCPU_AUTH_ENABLED, false);
+  const publicUnauthOk = parseBooleanEnv(env.MYCPU_PUBLIC_UNAUTH_OK, false);
+  const productionLike = env.NODE_ENV === 'production';
   if (!enabled) {
+    if (productionLike && !publicUnauthOk) {
+      throw new Error('public frontend deployment requires MYCPU_AUTH_ENABLED=1 or MYCPU_PUBLIC_UNAUTH_OK=1');
+    }
     return createSecurityManager({ enabled: false });
   }
   const username = String(env.MYCPU_AUTH_ADMIN_USERNAME ?? '').trim();

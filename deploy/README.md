@@ -61,7 +61,8 @@ SPIKE_PATH=/srv/apps/my_visual_CPU/runtime-assets/spike/bin/spike
 MYCPU_RUNTIME_TMPDIR=/srv/apps/my_visual_CPU/tmp
 ```
 
-The remote service can also enable the built-in minimal auth layer:
+The remote service must enable the built-in minimal auth layer before exposing
+`/api/` and `/ws` through nginx:
 
 ```bash
 MYCPU_AUTH_ENABLED=1
@@ -71,9 +72,10 @@ MYCPU_AUTH_SESSION_LIMIT=3
 MYCPU_AUDIT_LOG_PATH=/srv/apps/my_visual_CPU/logs/audit.log
 ```
 
-The checked-in env example keeps `MYCPU_AUTH_ENABLED=0` so that copying the file
-without a password hash does not break service startup. Turn it to `1` only
-after generating and storing a real `scrypt$...` hash.
+The checked-in env example keeps `MYCPU_AUTH_ENABLED=1` with a blank hash so that
+copying the file without generating credentials fails fast instead of opening a
+public mutating debug API. For a deliberately unauthenticated development-only
+deployment, set both `MYCPU_AUTH_ENABLED=0` and `MYCPU_PUBLIC_UNAUTH_OK=1`.
 
 This auth layer is designed for the current single-session debug server model:
 
@@ -174,8 +176,8 @@ deploy/scripts/remote_smoke.sh
 curl -k --resolve my-visual-cpu.site:443:127.0.0.1 https://my-visual-cpu.site/api/tests
 ```
 
-Expected `/api/tests` result: HTTP `200`. If auth is enabled, authenticate in
-the browser before using `/console`; mutating actions such as `Load`, `Run`,
+Expected `/api/tests` result before login: HTTP `401`. Authenticate in the
+browser before using `/console`; mutating actions such as `Load`, `Run`,
 `Reset`, `Terminate`, AI profile runs, and terminal input require controller
 ownership.
 

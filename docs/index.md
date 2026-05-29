@@ -60,6 +60,7 @@
 - `pipeline`
   - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
   - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+  - [design/regression_completion_criteria.md](design/regression_completion_criteria.md)
 
 - `Wave 5 / cache / memory-system`
   - [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)

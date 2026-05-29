@@ -192,6 +192,18 @@ CURATED_LINUX_DISTRO_RUNTIME_MATRIX = {
 }
 
 
+def is_repo_linux_proto_rootfs_alias(path: pathlib.Path) -> bool:
+    candidate = path
+    if not candidate.is_absolute():
+        candidate = MYCPU_DIR / candidate
+    try:
+        return candidate.resolve(strict=True).samefile(
+            DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS.resolve(strict=True)
+        )
+    except FileNotFoundError:
+        return candidate.resolve(strict=False) == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS.resolve(strict=False)
+
+
 def build_linux_dummy_flat_image(temp_dir: pathlib.Path) -> pathlib.Path:
     asm_path = temp_dir / "linux_dummy.S"
     elf_path = temp_dir / "linux_dummy.elf"
@@ -950,6 +962,16 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertEqual(contract["disk"], external_rootfs)
         self.assertEqual(contract["command"], "cat /etc/os-release")
         self.assertEqual(contract["expected"], "ID=")
+
+    def test_repo_rootfs_alias_detection_rejects_relative_and_symlink_paths(self) -> None:
+        relative_rootfs = pathlib.Path("workloads/linux_proto/rootfs.ext4")
+        self.assertTrue(is_repo_linux_proto_rootfs_alias(relative_rootfs))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            symlink_rootfs = pathlib.Path(temp_dir) / "repo-rootfs.ext4"
+            symlink_rootfs.symlink_to(DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS)
+
+            self.assertTrue(is_repo_linux_proto_rootfs_alias(symlink_rootfs))
 
     def test_resolve_linux_distro_shell_contract_prefers_explicit_shell_over_external_rootfs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2724,6 +2746,61 @@ class RunDebugCliProbeTest(unittest.TestCase):
             proc.stdout,
         )
 
+    def test_make_linux_distribution_runtime_target_rejects_repo_relative_rootfs_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image_path = pathlib.Path(temp_dir) / "Image"
+            image_path.write_bytes(b"dummy Image")
+            proc = subprocess.run(
+                [
+                    "make",
+                    "test-host-run_debug_cli_probe_linux_distribution_runtime",
+                    "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS=workloads/linux_proto/rootfs.ext4",
+                    f"MYCPU_LINUX_DISTRO_RUNTIME_IMAGE={image_path}",
+                ],
+                cwd=MYCPU_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_linux_distribution_runtime_target_rejects_repo_rootfs_symlink_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image_path = pathlib.Path(temp_dir) / "Image"
+            image_path.write_bytes(b"dummy Image")
+            symlink_rootfs = pathlib.Path(temp_dir) / "repo-rootfs.ext4"
+            symlink_rootfs.symlink_to(DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS)
+
+            proc = subprocess.run(
+                [
+                    "make",
+                    "test-host-run_debug_cli_probe_linux_distribution_runtime",
+                    f"MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS={symlink_rootfs}",
+                    f"MYCPU_LINUX_DISTRO_RUNTIME_IMAGE={image_path}",
+                ],
+                cwd=MYCPU_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+
+        self.assertNotEqual(proc.returncode, 0)
+        combined_output = proc.stdout + proc.stderr
+        self.assertIn(
+            "MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS must point to an external distribution rootfs image",
+            combined_output,
+        )
+        self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
     def test_make_test_host_run_debug_cli_probe_linux_distribution_filesystem_target_requests_profile(self) -> None:
         proc = subprocess.run(
             [
@@ -3017,6 +3094,66 @@ class RunDebugCliProbeTest(unittest.TestCase):
             combined_output,
         )
         self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_curated_distribution_targets_reject_repo_rootfs_aliases(self) -> None:
+        cases = [
+            (
+                "test-host-run_debug_cli_probe_linux_distribution_curated_alpine_shell",
+                "MYCPU_LINUX_DISTRO_CURATED_ALPINE_ROOTFS=workloads/linux_proto/rootfs.ext4",
+                "external Alpine rootfs image",
+            ),
+            (
+                "test-host-run_debug_cli_probe_linux_distribution_curated_debian_shell",
+                "MYCPU_LINUX_DISTRO_CURATED_DEBIAN_ROOTFS=workloads/linux_proto/rootfs.ext4",
+                "external Debian rootfs image",
+            ),
+        ]
+        for target, rootfs_var, expected_message in cases:
+            with self.subTest(target=target):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    image_path = pathlib.Path(temp_dir) / "Image"
+                    image_path.write_bytes(b"dummy Image")
+                    proc = subprocess.run(
+                        [
+                            "make",
+                            target,
+                            f"MYCPU_LINUX_DISTRO_CURATED_IMAGE={image_path}",
+                            rootfs_var,
+                        ],
+                        cwd=MYCPU_DIR,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        check=False,
+                    )
+
+                self.assertNotEqual(proc.returncode, 0)
+                combined_output = proc.stdout + proc.stderr
+                self.assertIn(expected_message, combined_output)
+                self.assertNotIn("MYCPU_RUN_LINUX_DISTRO_RUNTIME=1", combined_output)
+
+    def test_make_layered_regression_targets_are_declared(self) -> None:
+        proc = subprocess.run(
+            [
+                "make",
+                "-n",
+                "test-fast-smoke",
+                "test-standard-regression",
+                "test-slow-guest",
+                "test-opt-in-external",
+            ],
+            cwd=MYCPU_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("host:debug_protocol_command_smoke", proc.stdout)
+        self.assertIn("host:pipeline_backend_smoke", proc.stdout)
+        self.assertIn("guest_kernel_alpha_demo", proc.stdout)
+        self.assertIn("host:run_debug_cli_probe_linux_distribution_runtime", proc.stdout)
 
     def test_make_test_host_run_debug_cli_probe_linux_distribution_curated_matrix_target_runs_both_distros(self) -> None:
         proc = subprocess.run(
@@ -3764,7 +3901,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
 
         if not image_path.is_file():
             self.fail(f"missing linux distribution runtime Image: {image_path}")
-        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+        if is_repo_linux_proto_rootfs_alias(disk_path):
             self.fail(
                 "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
                 "repo linux_proto rootfs is only for the mini shell guardrail"
@@ -3893,7 +4030,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
             self.skipTest("set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine ISA advertisement guardrail")
         if not image_path.is_file():
             self.fail(f"missing linux distribution runtime Image: {image_path}")
-        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+        if is_repo_linux_proto_rootfs_alias(disk_path):
             self.fail(
                 "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
                 "repo linux_proto rootfs is only for the mini shell guardrail"
@@ -4000,7 +4137,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
             self.skipTest("set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine BusyBox awk FP guardrail")
         if not image_path.is_file():
             self.fail(f"missing linux distribution runtime Image: {image_path}")
-        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+        if is_repo_linux_proto_rootfs_alias(disk_path):
             self.fail(
                 "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
                 "repo linux_proto rootfs is only for the mini shell guardrail"
@@ -4135,7 +4272,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
             self.skipTest("set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine procfs ISA-view guardrail")
         if not image_path.is_file():
             self.fail(f"missing linux distribution runtime Image: {image_path}")
-        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+        if is_repo_linux_proto_rootfs_alias(disk_path):
             self.fail(
                 "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
                 "repo linux_proto rootfs is only for the mini shell guardrail"
@@ -4256,7 +4393,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
             self.skipTest("set MYCPU_LINUX_DISTRO_RUNTIME_DISTRO=alpine for the Alpine auxv HWCAP guardrail")
         if not image_path.is_file():
             self.fail(f"missing linux distribution runtime Image: {image_path}")
-        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+        if is_repo_linux_proto_rootfs_alias(disk_path):
             self.fail(
                 "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
                 "repo linux_proto rootfs is only for the mini shell guardrail"
@@ -4495,7 +4632,7 @@ class RunDebugCliProbeTest(unittest.TestCase):
             )
         if not image_path.is_file():
             self.fail(f"missing linux distribution runtime Image: {image_path}")
-        if disk_path == DEFAULT_LINUX_DISTRO_RUNTIME_ROOTFS:
+        if is_repo_linux_proto_rootfs_alias(disk_path):
             self.fail(
                 "linux distribution runtime requires explicit external MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS; "
                 "repo linux_proto rootfs is only for the mini shell guardrail"

@@ -774,7 +774,7 @@ test('renderApp can focus Linux distro evidence topics without requiring a runna
   renderApp(elements, state);
 
   assert.match(elements.demoWorkspace.innerHTML, /Alpine Distro Evidence/);
-  assert.match(elements.guide.innerHTML, /Topic ready/);
+  assert.match(elements.guide.innerHTML, /Runtime manifest ready/);
   assert.match(elements.guide.innerHTML, /Read the distro evidence, then open the live shell route/);
   assert.match(elements.demoWorkspace.innerHTML, /Viewing topic|Open topic/);
   assert.match(elements.guide.innerHTML, /Open live shell/);
@@ -783,6 +783,41 @@ test('renderApp can focus Linux distro evidence topics without requiring a runna
   assert.match(elements.guide.innerHTML, /Linux distro lane/);
   assert.match(elements.guide.innerHTML, /Capability ladder/);
   assert.match(elements.guide.innerHTML, /Curated distro matrix/);
+});
+
+test('renderApp keeps Linux distro topics readable but disables live controls without a runtime manifest', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'guest_interactive_os_demo',
+      menuLabel: 'guest_interactive_os_demo',
+      kind: 'guest',
+      backend: 'pipeline',
+      title: 'interactive_os Monitor',
+      summary: 'interactive monitor',
+    },
+  ];
+  state.selectedTest = 'guest_interactive_os_demo';
+  state.selectedScenario = 'linux_alpine_evidence';
+  state.selectedScenarioTest = null;
+  state.loadedSession = {
+    test: 'guest_interactive_os_demo',
+    backend: 'pipeline',
+  };
+
+  const elements = createElements();
+
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Alpine Distro Evidence/);
+  assert.match(elements.guide.innerHTML, /External asset required|Runtime Image required/);
+  assert.doesNotMatch(elements.guide.innerHTML, /Topic ready/);
+  assert.doesNotMatch(elements.guide.innerHTML, /Open live shell/);
+  assert.doesNotMatch(elements.guide.innerHTML, /data-action="open-scenario-live"/);
+  assert.doesNotMatch(elements.guide.innerHTML, /Load current scenario/);
+  assert.doesNotMatch(elements.guide.innerHTML, /data-action="load-current-session"/);
+  assert.match(elements.guide.innerHTML, /Sync session/);
+  assert.match(elements.guide.innerHTML, /disabled/);
 });
 
 test('renderApp shows a Linux boot progress strip while linux_proto_console is loading', () => {

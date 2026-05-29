@@ -63,6 +63,7 @@ public:
     TranslationPlanSnapshot translation_plan();
     DbtJitDryRunSummary jit_dispatch();
     DebugSnapshot snapshot() const;
+    size_t post_load_action_count() const;
 
 private:
     enum class ImageKind : uint8_t {

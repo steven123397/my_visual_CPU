@@ -2265,6 +2265,36 @@ test('auth-enabled server rejects unauthenticated API access and reports auth st
   }
 });
 
+test('production server rejects unauthenticated deployment template unless explicitly opted in', async () => {
+  await assert.rejects(
+    () => withEnv({
+      NODE_ENV: 'production',
+      MYCPU_AUTH_ENABLED: '0',
+    }, () => startServer({
+      port: 0,
+      createSession: createFakeSessionFactory(),
+    })),
+    /MYCPU_AUTH_ENABLED=1 or MYCPU_PUBLIC_UNAUTH_OK=1/,
+  );
+
+  const server = await withEnv({
+    NODE_ENV: 'production',
+    MYCPU_AUTH_ENABLED: '0',
+    MYCPU_PUBLIC_UNAUTH_OK: '1',
+  }, () => startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  }));
+
+  try {
+    const testsResponse = await getJsonWithCookie(server.baseUrl, '/api/tests');
+    assert.equal(testsResponse.status, 200);
+    assert.equal(testsResponse.body.auth.required, false);
+  } finally {
+    await server.close();
+  }
+});
+
 test('auth-enabled server grants login, enforces one controller, and limits concurrent sessions to three', async () => {
   const passwordHash = buildPasswordHashForTests('pw');
   const server = await withEnv({

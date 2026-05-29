@@ -323,9 +323,12 @@ function isLinuxConsoleDemo(demo) {
 
 function resolveDemoState(demo, state) {
   const entry = demo.test ? findManifestEntry(state, demo.test) : null;
+  const scenarioEntry = demo.scenarioTest ? findManifestEntry(state, demo.scenarioTest) : null;
   const localToolAvailable = demo.localTool === 'ai_tiny_model';
   const topical = typeof demo.scenarioKey === 'string' && demo.scenarioKey.length > 0;
-  const available = Boolean(entry) || localToolAvailable || topical;
+  const runtimeAvailable = Boolean(entry) || localToolAvailable || Boolean(scenarioEntry);
+  const topicAvailable = topical;
+  const available = runtimeAvailable || topicAvailable;
   const scenarioKey = demo.scenarioKey ?? demo.test ?? demo.localTool ?? demo.title;
   const selected = topical
     ? state.selectedScenario === scenarioKey
@@ -334,8 +337,11 @@ function resolveDemoState(demo, state) {
       : state.selectedScenario === scenarioKey;
   return {
     entry,
+    scenarioEntry,
     localToolAvailable,
     topical,
+    topicAvailable,
+    runtimeAvailable,
     available,
     selected,
     scenarioKey,
@@ -574,16 +580,18 @@ function selectedScenarioContext(state) {
     const { demo, group } = record;
     const resolved = resolveDemoState(demo, state);
     const runtimeEntry = resolved.entry
+      ?? resolved.scenarioEntry
       ?? findManifestEntry(state, demo.scenarioTest ?? '')
-      ?? findManifestEntry(state, state.selectedScenarioTest ?? '')
-      ?? selectedEntry;
+      ?? findManifestEntry(state, state.selectedScenarioTest ?? '');
     const entry = resolved.topical ? runtimeEntry : (resolved.entry ?? selectedEntry);
+    const displayEntry = resolved.topical ? null : entry;
     const marker = entry?.workload?.expectedMarker ?? demo.marker ?? '-';
     const assetNote = entry?.workload?.assetNote ?? demo.assetNote ?? '';
     const scenarioTest = resolvedScenarioTest(demo, entry, state);
-    const readyLabel = resolved.available
-      ? (resolved.localToolAvailable ? 'Host tool ready' : (resolved.topical ? 'Topic ready' : 'Manifest ready'))
-      : (demo.gated ? 'External asset required' : 'Planned');
+    const needsRuntimeManifest = resolved.topical && Boolean(demo.scenarioTest);
+    const readyLabel = resolved.runtimeAvailable
+      ? (resolved.localToolAvailable ? 'Host tool ready' : (resolved.topical ? 'Runtime manifest ready' : 'Manifest ready'))
+      : (demo.gated || needsRuntimeManifest ? 'External asset required' : 'Planned');
     const sessionBackend = resolved.topical
       ? (state.selectedScenarioBackend ?? demo.backend ?? state.backend ?? '-')
       : (state.loadedSession?.backend ?? demo.backend ?? state.backend ?? '-');
@@ -595,7 +603,7 @@ function selectedScenarioContext(state) {
     } else if ((demo.scenarioKey ?? '') === 'jit_runtime_lab') {
       topicalNextAction = 'Sync a runtime-friendly workload, then run the JIT probe to collect the current dry-run summary.';
     }
-    const nextAction = resolved.available
+    const nextAction = resolved.runtimeAvailable
       ? (resolved.topical
         ? topicalNextAction
         : sessionState === 'idle'
@@ -623,9 +631,9 @@ function selectedScenarioContext(state) {
       demo,
       entry,
       readyLabel,
-      title: entry?.title ?? demo.title ?? state.selectedTest,
-      summary: entry?.summary ?? demo.fallbackSummary ?? 'No scenario summary yet.',
-      brief: demo.brief ?? entry?.summary ?? demo.fallbackSummary ?? 'No scenario brief yet.',
+      title: displayEntry?.title ?? demo.title ?? state.selectedTest,
+      summary: displayEntry?.summary ?? demo.fallbackSummary ?? 'No scenario summary yet.',
+      brief: demo.brief ?? displayEntry?.summary ?? demo.fallbackSummary ?? 'No scenario brief yet.',
       primaryStage: demo.primaryStage ?? 'Terminal + inspector',
       inspectorFocus: demo.inspectorFocus ?? [],
       proves: demo.proves ?? [],
@@ -642,6 +650,7 @@ function selectedScenarioContext(state) {
       scenarioBackend: sessionBackend,
       topical: resolved.topical,
       selected: resolved.selected,
+      runtimeAvailable: resolved.runtimeAvailable,
     };
   }
 
@@ -710,11 +719,12 @@ function renderScenarioEvidence(context) {
 }
 
 function renderScenarioControls(context, state) {
-  const syncDisabled = !context.scenarioTest;
+  const runtimeAvailable = context.runtimeAvailable ?? Boolean(context.entry);
+  const syncDisabled = !context.scenarioTest || !runtimeAvailable;
   const syncLabel = state.selectedTest === context.scenarioTest
     ? 'Session synced'
     : 'Sync session';
-  const liveButton = context.groupTitle === 'Linux Distro Labs' && context.topical && context.scenarioTest
+  const liveButton = context.groupTitle === 'Linux Distro Labs' && context.topical && context.scenarioTest && runtimeAvailable
     ? `
       <button
         id="scenario-open-live-button"
@@ -727,6 +737,18 @@ function renderScenarioControls(context, state) {
         Open live shell
       </button>
     `
+    : '';
+  const loadButton = runtimeAvailable
+    ? `
+        <button
+          id="scenario-load-button"
+          type="button"
+          class="demo-workspace__action-button"
+          data-action="load-current-session"
+        >
+          Load current scenario
+        </button>
+      `
     : '';
   const probeButton = context.scenarioKey === 'jit_runtime_lab'
     ? `
@@ -755,14 +777,7 @@ function renderScenarioControls(context, state) {
         >
           ${escapeHtml(syncLabel)}
         </button>
-        <button
-          id="scenario-load-button"
-          type="button"
-          class="demo-workspace__action-button"
-          data-action="load-current-session"
-        >
-          Load current scenario
-        </button>
+        ${loadButton}
         ${liveButton}
         ${probeButton}
       </div>

@@ -261,6 +261,10 @@ DebugSnapshot DebugSession::snapshot() const {
     return snapshot;
 }
 
+size_t DebugSession::post_load_action_count() const {
+    return config_.post_load_actions.size();
+}
+
 void DebugSession::recreate_machine() {
     machine_ = std::make_unique<Machine>();
     machine_->set_backend_kind(config_.backend_kind);
