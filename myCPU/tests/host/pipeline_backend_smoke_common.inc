@@ -107,8 +107,11 @@ constexpr uint32_t kCsrrcSipX5 = 0x1442b073U;            // csrrc x0, sip, x5
 constexpr uint32_t kCsrwSepcX7 = 0x14139073U;            // csrw sepc, x7
 constexpr uint32_t kSret = 0x10200073U;                  // sret
 constexpr uint32_t kBltX1X2Loop = 0xfe20cee3U;           // blt x1, x2, -4
-constexpr uint64_t kMstatusFsDirty = 0x3ULL << 12;
+constexpr uint64_t kMstatusFsDirty = MSTATUS_FS_DIRTY;
 constexpr uint64_t kMstatusSd = 1ULL << 63;
+constexpr uint16_t kCAddiA0Minus1 = 0x157DU;             // c.addi a0, -1
+constexpr uint16_t kCBeqzA0Plus4 = 0xC111U;              // c.beqz a0, +4
+constexpr uint16_t kCAddiwA1Plus1 = 0x2585U;             // c.addiw a1, 1
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -147,6 +150,10 @@ bool expect(bool condition, const char* message) {
     return value;
 }
 
+[[maybe_unused]] constexpr uint32_t fp_with_rm(uint32_t raw, uint32_t rm) {
+    return (raw & ~(0x7U << 12)) | ((rm & 0x7U) << 12);
+}
+
 [[maybe_unused]] bool trace_contains_raw(const std::vector<RetireTraceEntry>& trace, uint32_t raw) {
     for (const RetireTraceEntry& entry : trace) {
         if (entry.raw == raw) {
@@ -157,6 +164,10 @@ bool expect(bool condition, const char* message) {
 }
 
 [[maybe_unused]] void write32(Ram& ram, uint64_t addr, uint32_t value) {
+    ram.write_bytes(addr, &value, sizeof(value));
+}
+
+[[maybe_unused]] void write16(Ram& ram, uint64_t addr, uint16_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
 }
 

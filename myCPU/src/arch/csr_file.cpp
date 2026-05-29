@@ -121,6 +121,15 @@ bool stimecmp_pending(const std::array<uint64_t, 4096>& regs,
     return sstc_enabled(regs) && current_time(clint, core) >= regs[CSR_STIMECMP];
 }
 
+uint64_t sanitize_mstatus(uint64_t value) {
+    value &= ~MSTATUS_SD;
+    const uint64_t mpp = (value & MSTATUS_MPP_MASK) >> MSTATUS_MPP_SHIFT;
+    if (mpp == 2ULL) {
+        value &= ~MSTATUS_MPP_MASK;
+    }
+    return with_sd_summary(value);
+}
+
 }
 
 CsrFile::CsrFile(const CsrFile& other)
@@ -226,8 +235,8 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
         return;
     }
     if (addr == CSR_SSTATUS) {
-        regs_[CSR_MSTATUS] = with_sd_summary((regs_[CSR_MSTATUS] & ~SSTATUS_STATUS_MASK) |
-                                             (value & SSTATUS_STATUS_MASK));
+        regs_[CSR_MSTATUS] = sanitize_mstatus((regs_[CSR_MSTATUS] & ~SSTATUS_STATUS_MASK) |
+                                              (value & SSTATUS_STATUS_MASK));
         return;
     }
     if (addr == CSR_FFLAGS) {
@@ -243,7 +252,7 @@ void CsrFile::write(uint32_t addr, uint64_t value) {
         return;
     }
     if (addr == CSR_MSTATUS) {
-        regs_[CSR_MSTATUS] = with_sd_summary(value & ~MSTATUS_SD);
+        regs_[CSR_MSTATUS] = sanitize_mstatus(value);
         return;
     }
     if (addr == CSR_SATP) {

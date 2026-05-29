@@ -76,6 +76,37 @@ struct AtomicRequest {
     bool non_speculative{true};
 };
 
+enum class RegisterOperandKind : uint8_t {
+    None,
+    Gpr,
+    Fpr,
+};
+
+struct InstructionRegisterDescriptor {
+    RegisterOperandKind rs1{RegisterOperandKind::None};
+    RegisterOperandKind rs2{RegisterOperandKind::None};
+    RegisterOperandKind rs3{RegisterOperandKind::None};
+    RegisterOperandKind rd{RegisterOperandKind::None};
+};
+
+struct InstructionMemoryDescriptor {
+    bool valid{false};
+    MemoryRequest::Kind kind{MemoryRequest::Kind::None};
+    MemoryRequest::Target target{MemoryRequest::Target::Integer};
+    int size{0};
+    bool sign_extend{false};
+    bool commit_at_boundary{false};
+    bool non_speculative{false};
+};
+
+struct InstructionAtomicDescriptor {
+    bool valid{false};
+    AtomicRequest::Kind kind{AtomicRequest::Kind::None};
+    int size{0};
+    bool aq{false};
+    bool rl{false};
+};
+
 struct VectorRequest {
     enum class Kind : uint8_t {
         None,

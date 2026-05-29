@@ -22,6 +22,9 @@ struct SemanticInputs {
 class InstructionSemantics {
 public:
     static bool supports(const Insn& insn);
+    static InstructionRegisterDescriptor describe_registers(const Insn& insn);
+    static InstructionMemoryDescriptor describe_memory(const Insn& insn);
+    static InstructionAtomicDescriptor describe_atomic(const Insn& insn);
     static InsnEffects execute(const Insn& insn, ExecutionContext& ctx);
     static InsnEffects execute(const Insn& insn, ExecutionContext& ctx, const SemanticInputs& inputs);
 };

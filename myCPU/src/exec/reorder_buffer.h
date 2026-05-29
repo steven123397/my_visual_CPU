@@ -17,6 +17,7 @@ struct RobAllocate {
     uint64_t sequence_id{0};
     uint64_t pc{0};
     uint32_t raw{0};
+    uint8_t insn_size{4};
     uint8_t arch_rd{0};
     uint32_t phys_rd{0};
     uint32_t previous_phys_rd{0};
@@ -40,6 +41,7 @@ struct RobEntry {
     uint64_t sequence_id{0};
     uint64_t pc{0};
     uint32_t raw{0};
+    uint8_t insn_size{4};
     uint8_t arch_rd{0};
     uint32_t phys_rd{0};
     uint32_t previous_phys_rd{0};

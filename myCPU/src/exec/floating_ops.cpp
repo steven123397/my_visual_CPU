@@ -201,6 +201,16 @@ bool resolve_rounding_mode(const Insn& insn, uint64_t frm, uint64_t& resolved_rm
     return true;
 }
 
+bool set_effective_rounding_mode(uint64_t rm, int& previous_mode);
+uint64_t floating_exception_flags_from_fenv();
+template <typename Float>
+Float round_to_nearest_max_magnitude(long double exact);
+template <typename Float>
+uint64_t classify_rounding_result_flags(long double exact, Float result, uint64_t base_flags);
+long double binary_exact_result(const Insn& insn, long double lhs, long double rhs);
+long double ternary_exact_result(const Insn& insn, long double lhs, long double rhs, long double addend);
+long double integer_to_float_exact_input(const Insn& insn, uint64_t rs1v);
+
 bool compute_binary_double_result(const Insn& insn,
                                   uint64_t frm,
                                   uint64_t rs1v,
@@ -213,28 +223,21 @@ bool compute_binary_double_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
     const double lhs = raw_bits_to_double(rs1v);
     const double rhs = raw_bits_to_double(rs2v);
-    const double result = op(lhs, rhs);
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    double result = op(lhs, rhs);
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        result = round_to_nearest_max_magnitude<double>(
+            binary_exact_result(insn, static_cast<long double>(lhs), static_cast<long double>(rhs)));
+        exception_flags = classify_rounding_result_flags<double>(
+            binary_exact_result(insn, static_cast<long double>(lhs), static_cast<long double>(rhs)),
+            result,
+            exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;
@@ -255,28 +258,19 @@ bool compute_binary_single_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
     const float lhs = raw_bits_to_float(rs1v);
     const float rhs = raw_bits_to_float(rs2v);
-    const float result = op(lhs, rhs);
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    float result = op(lhs, rhs);
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        const long double exact =
+            binary_exact_result(insn, static_cast<long double>(lhs), static_cast<long double>(rhs));
+        result = round_to_nearest_max_magnitude<float>(exact);
+        exception_flags = classify_rounding_result_flags<float>(exact, result, exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;
@@ -296,27 +290,17 @@ bool compute_unary_double_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
     const double lhs = raw_bits_to_double(rs1v);
-    const double result = op(lhs);
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    double result = op(lhs);
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        const long double exact = std::sqrt(static_cast<long double>(lhs));
+        result = round_to_nearest_max_magnitude<double>(exact);
+        exception_flags = classify_rounding_result_flags<double>(exact, result, exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;
@@ -336,27 +320,17 @@ bool compute_unary_single_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
     const float lhs = raw_bits_to_float(rs1v);
-    const float result = op(lhs);
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    float result = op(lhs);
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        const long double exact = std::sqrt(static_cast<long double>(lhs));
+        result = round_to_nearest_max_magnitude<float>(exact);
+        exception_flags = classify_rounding_result_flags<float>(exact, result, exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;
@@ -378,29 +352,22 @@ bool compute_ternary_double_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
     const double lhs = raw_bits_to_double(rs1v);
     const double rhs = raw_bits_to_double(rs2v);
     const double addend = raw_bits_to_double(rs3v);
-    const double result = op(lhs, rhs, addend);
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    double result = op(lhs, rhs, addend);
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        const long double exact = ternary_exact_result(insn,
+                                                       static_cast<long double>(lhs),
+                                                       static_cast<long double>(rhs),
+                                                       static_cast<long double>(addend));
+        result = round_to_nearest_max_magnitude<double>(exact);
+        exception_flags = classify_rounding_result_flags<double>(exact, result, exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;
@@ -422,29 +389,22 @@ bool compute_ternary_single_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
     const float lhs = raw_bits_to_float(rs1v);
     const float rhs = raw_bits_to_float(rs2v);
     const float addend = raw_bits_to_float(rs3v);
-    const float result = op(lhs, rhs, addend);
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    float result = op(lhs, rhs, addend);
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        const long double exact = ternary_exact_result(insn,
+                                                       static_cast<long double>(lhs),
+                                                       static_cast<long double>(rhs),
+                                                       static_cast<long double>(addend));
+        result = round_to_nearest_max_magnitude<float>(exact);
+        exception_flags = classify_rounding_result_flags<float>(exact, result, exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;
@@ -455,6 +415,113 @@ bool compute_ternary_single_result(const Insn& insn,
 
 uint64_t update_fcsr_flags(uint64_t current_fcsr, uint64_t exception_flags) {
     return (current_fcsr & ~FCSR_FFLAGS_MASK) | ((current_fcsr | exception_flags) & FCSR_FFLAGS_MASK);
+}
+
+uint64_t floating_exception_flags_from_fenv() {
+    uint64_t flags = 0;
+    if (std::fetestexcept(FE_INVALID) != 0) {
+        flags |= FCSR_FLAG_NV;
+    }
+    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
+        flags |= FCSR_FLAG_DZ;
+    }
+    if (std::fetestexcept(FE_OVERFLOW) != 0) {
+        flags |= FCSR_FLAG_OF;
+    }
+    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
+        flags |= FCSR_FLAG_UF;
+    }
+    if (std::fetestexcept(FE_INEXACT) != 0) {
+        flags |= FCSR_FLAG_NX;
+    }
+    return flags;
+}
+
+template <typename Float>
+Float round_to_nearest_max_magnitude(long double exact) {
+    const Float nearest = static_cast<Float>(exact);
+    if (!std::isfinite(exact) || !std::isfinite(nearest)) {
+        return nearest;
+    }
+
+    const long double nearest_wide = static_cast<long double>(nearest);
+    if (nearest_wide == exact) {
+        return nearest;
+    }
+
+    const Float adjacent = std::nextafter(
+        nearest,
+        exact > nearest_wide ? std::numeric_limits<Float>::infinity()
+                             : -std::numeric_limits<Float>::infinity());
+    if (!std::isfinite(adjacent)) {
+        return nearest;
+    }
+
+    const long double adjacent_wide = static_cast<long double>(adjacent);
+    const long double midpoint = nearest_wide + (adjacent_wide - nearest_wide) / 2.0L;
+    if (exact != midpoint) {
+        return nearest;
+    }
+    return std::fabs(adjacent_wide) > std::fabs(nearest_wide) ? adjacent : nearest;
+}
+
+template <typename Float>
+uint64_t classify_rounding_result_flags(long double exact, Float result, uint64_t base_flags) {
+    uint64_t flags = base_flags;
+    if (std::isfinite(exact)) {
+        if (std::fabs(exact) > static_cast<long double>(std::numeric_limits<Float>::max())) {
+            flags |= FCSR_FLAG_OF | FCSR_FLAG_NX;
+        } else if (exact != 0.0L && static_cast<long double>(result) != exact) {
+            flags |= FCSR_FLAG_NX;
+            if (std::fabs(exact) < static_cast<long double>(std::numeric_limits<Float>::min())) {
+                flags |= FCSR_FLAG_UF;
+            }
+        }
+    }
+    return flags;
+}
+
+bool set_effective_rounding_mode(uint64_t rm, int& previous_mode) {
+    return set_rounding_mode(rm == FCSR_FRM_RMM ? FCSR_FRM_RNE : rm, previous_mode);
+}
+
+long double binary_exact_result(const Insn& insn, long double lhs, long double rhs) {
+    if (is_fsub_s(insn) || is_fsub_d(insn)) {
+        return lhs - rhs;
+    }
+    if (is_fmul_s(insn) || is_fmul_d(insn)) {
+        return lhs * rhs;
+    }
+    if (is_fdiv_s(insn) || is_fdiv_d(insn)) {
+        return lhs / rhs;
+    }
+    return lhs + rhs;
+}
+
+long double ternary_exact_result(const Insn& insn, long double lhs, long double rhs, long double addend) {
+    if (is_fmsub_s(insn) || is_fmsub_d(insn)) {
+        return lhs * rhs - addend;
+    }
+    if (is_fnmsub_s(insn) || is_fnmsub_d(insn)) {
+        return -(lhs * rhs) + addend;
+    }
+    if (is_fnmadd_s(insn) || is_fnmadd_d(insn)) {
+        return -(lhs * rhs) - addend;
+    }
+    return lhs * rhs + addend;
+}
+
+long double integer_to_float_exact_input(const Insn& insn, uint64_t rs1v) {
+    if (is_fcvt_d_l(insn) || is_fcvt_s_l(insn)) {
+        return static_cast<long double>(static_cast<int64_t>(rs1v));
+    }
+    if (is_fcvt_d_lu(insn) || is_fcvt_s_lu(insn)) {
+        return static_cast<long double>(rs1v);
+    }
+    if (is_fcvt_d_wu(insn) || is_fcvt_s_wu(insn)) {
+        return static_cast<long double>(static_cast<uint32_t>(rs1v));
+    }
+    return static_cast<long double>(static_cast<int32_t>(static_cast<uint32_t>(rs1v)));
 }
 
 uint64_t compare_single_result_bits(const Insn& insn, uint64_t rs1v, uint64_t rs2v, uint64_t& exception_flags) {
@@ -563,30 +630,20 @@ bool compute_integer_to_double_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
-    const double result =
+    double result =
         is_fcvt_d_l(insn)  ? static_cast<double>(static_cast<int64_t>(rs1v))
         : is_fcvt_d_lu(insn) ? static_cast<double>(rs1v)
         : is_fcvt_d_wu(insn) ? static_cast<double>(static_cast<uint32_t>(rs1v))
                              : static_cast<double>(static_cast<int32_t>(static_cast<uint32_t>(rs1v)));
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        const long double exact = integer_to_float_exact_input(insn, rs1v);
+        result = round_to_nearest_max_magnitude<double>(exact);
+        exception_flags = classify_rounding_result_flags<double>(exact, result, exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;
@@ -605,26 +662,17 @@ bool compute_double_to_single_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
-    const float result = static_cast<float>(raw_bits_to_double(rs1v));
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    const double input = raw_bits_to_double(rs1v);
+    float result = static_cast<float>(input);
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        const long double exact = static_cast<long double>(input);
+        result = round_to_nearest_max_magnitude<float>(exact);
+        exception_flags = classify_rounding_result_flags<float>(exact, result, exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;
@@ -643,30 +691,20 @@ bool compute_integer_to_single_result(const Insn& insn,
         return false;
     }
     int previous_mode = FE_TONEAREST;
-    if (resolved_rm == FCSR_FRM_RMM || !set_rounding_mode(resolved_rm, previous_mode)) {
+    if (!set_effective_rounding_mode(resolved_rm, previous_mode)) {
         return false;
     }
     std::feclearexcept(FE_ALL_EXCEPT);
-    const float result =
+    float result =
         is_fcvt_s_l(insn)   ? static_cast<float>(static_cast<int64_t>(rs1v))
         : is_fcvt_s_lu(insn) ? static_cast<float>(rs1v)
         : is_fcvt_s_wu(insn) ? static_cast<float>(static_cast<uint32_t>(rs1v))
                              : static_cast<float>(static_cast<int32_t>(static_cast<uint32_t>(rs1v)));
-    exception_flags = 0;
-    if (std::fetestexcept(FE_INVALID) != 0) {
-        exception_flags |= FCSR_FLAG_NV;
-    }
-    if (std::fetestexcept(FE_DIVBYZERO) != 0) {
-        exception_flags |= FCSR_FLAG_DZ;
-    }
-    if (std::fetestexcept(FE_OVERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_OF;
-    }
-    if (std::fetestexcept(FE_UNDERFLOW) != 0) {
-        exception_flags |= FCSR_FLAG_UF;
-    }
-    if (std::fetestexcept(FE_INEXACT) != 0) {
-        exception_flags |= FCSR_FLAG_NX;
+    exception_flags = floating_exception_flags_from_fenv();
+    if (resolved_rm == FCSR_FRM_RMM) {
+        const long double exact = integer_to_float_exact_input(insn, rs1v);
+        result = round_to_nearest_max_magnitude<float>(exact);
+        exception_flags = classify_rounding_result_flags<float>(exact, result, exception_flags);
     }
     if (std::fesetround(previous_mode) != 0) {
         return false;

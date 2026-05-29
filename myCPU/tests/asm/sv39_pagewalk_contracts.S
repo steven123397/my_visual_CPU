@@ -1,4 +1,4 @@
-# sv39_pagewalk_contracts.S - 验证 superpage 对齐与 non-leaf PTE 保留位合同
+# sv39_pagewalk_contracts.S - 验证 superpage 对齐与 PTE reserved-bit 合同
 
 .section .text
 .global _start
@@ -11,6 +11,18 @@ _start:
     # non-leaf entry were incorrectly accepted.
     li   t0, 0x80104000
     li   t1, 0x12345678
+    sw   t1, 0(t0)
+
+    # Seed the backing page that would be reachable if a leaf high reserved bit
+    # were incorrectly accepted.
+    li   t0, 0x80105000
+    li   t1, 0x55667788
+    sw   t1, 0(t0)
+
+    # Seed the backing page that would be reachable if a non-leaf high reserved
+    # bit were incorrectly accepted.
+    li   t0, 0x80107000
+    li   t1, 0x99aabbcc
     sw   t1, 0(t0)
 
     # Root page table at 0x80100000
@@ -55,6 +67,25 @@ _start:
     add  t3, t0, t2
     sd   t1, 0(t3)
 
+    # Level-1[3] -> level-0 table at 0x80106000 for reserved-bit leaf tests.
+    li   t1, 0x80106
+    slli t1, t1, 10
+    ori  t1, t1, 0x1
+    li   t2, 24
+    add  t3, t0, t2
+    sd   t1, 0(t3)
+
+    # Level-1[4]: non-leaf pointer with high reserved bit set at 0x80800000.
+    li   t1, 0x80108
+    slli t1, t1, 10
+    ori  t1, t1, 0x1
+    li   t2, 1
+    slli t2, t2, 63
+    or   t1, t1, t2
+    li   t2, 32
+    add  t3, t0, t2
+    sd   t1, 0(t3)
+
     # Level-0[0] code page at 0x80000000.
     li   t0, 0x80102000
     li   t1, 0x80000
@@ -65,6 +96,23 @@ _start:
     # Level-0[0] under Level-1[2]: leaf that must never become reachable.
     li   t0, 0x80103000
     li   t1, 0x80104
+    slli t1, t1, 10
+    ori  t1, t1, 0x7
+    sd   t1, 0(t0)
+
+    # Level-0[0] under Level-1[3]: leaf with high reserved bit set.
+    li   t0, 0x80106000
+    li   t1, 0x80105
+    slli t1, t1, 10
+    ori  t1, t1, 0x7
+    li   t2, 1
+    slli t2, t2, 63
+    or   t1, t1, t2
+    sd   t1, 0(t0)
+
+    # Level-0[0] under Level-1[4]: leaf that must never become reachable.
+    li   t0, 0x80108000
+    li   t1, 0x80107
     slli t1, t1, 10
     ori  t1, t1, 0x7
     sd   t1, 0(t0)
@@ -94,6 +142,14 @@ _start:
 
 supervisor_main:
     li   s1, '1'
+    csrr s4, satp
+    csrw satp, zero
+    sfence.vma
+    li   t0, 0x80101008
+    ld   s3, 0(t0)
+    csrw satp, s4
+    sfence.vma
+
     li   t0, 0x80200000
 misaligned_superpage_fault_point:
     lw   t1, 0(t0)
@@ -107,6 +163,20 @@ reserved_non_leaf_fault_point:
     j    fail
 
 after_reserved_non_leaf_fault:
+    li   s1, '3'
+    li   t0, 0x80600000
+reserved_leaf_high_fault_point:
+    lw   t1, 0(t0)
+    j    fail
+
+after_reserved_leaf_high_fault:
+    li   s1, '4'
+    li   t0, 0x80800000
+reserved_non_leaf_high_fault_point:
+    lw   t1, 0(t0)
+    j    fail
+
+after_reserved_non_leaf_high_fault:
     li   t0, 'P'
     sb   t0, 0(s0)
     li   t0, 'W'
@@ -132,6 +202,12 @@ supervisor_trap:
     la   t2, reserved_non_leaf_fault_point
     beq  t0, t2, handle_reserved_non_leaf_fault
 
+    la   t2, reserved_leaf_high_fault_point
+    beq  t0, t2, handle_reserved_leaf_high_fault
+
+    la   t2, reserved_non_leaf_high_fault_point
+    beq  t0, t2, handle_reserved_non_leaf_high_fault
+
     j    fail
 
 handle_misaligned_superpage_fault:
@@ -139,6 +215,15 @@ handle_misaligned_superpage_fault:
     csrr t1, stval
     li   t2, 0x80200000
     bne  t1, t2, fail
+
+    csrr t4, satp
+    csrw satp, zero
+    sfence.vma
+    li   t0, 0x80101008
+    ld   t5, 0(t0)
+    csrw satp, t4
+    sfence.vma
+    bne  t5, s3, fail
 
     la   t0, after_misaligned_superpage_fault
     csrw sepc, t0
@@ -151,6 +236,26 @@ handle_reserved_non_leaf_fault:
     bne  t1, t2, fail
 
     la   t0, after_reserved_non_leaf_fault
+    csrw sepc, t0
+    sret
+
+handle_reserved_leaf_high_fault:
+    li   s2, 'L'
+    csrr t1, stval
+    li   t2, 0x80600000
+    bne  t1, t2, fail
+
+    la   t0, after_reserved_leaf_high_fault
+    csrw sepc, t0
+    sret
+
+handle_reserved_non_leaf_high_fault:
+    li   s2, 'H'
+    csrr t1, stval
+    li   t2, 0x80800000
+    bne  t1, t2, fail
+
+    la   t0, after_reserved_non_leaf_high_fault
     csrw sepc, t0
     sret
 

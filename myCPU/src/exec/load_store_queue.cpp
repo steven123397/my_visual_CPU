@@ -39,8 +39,19 @@ uint64_t size_mask(int size) {
     return (1ULL << (size * 8)) - 1ULL;
 }
 
-bool is_ram_range(const Bus& bus, uint64_t addr, int size) {
-    return bus.describe_region(addr, size).kind == PhysicalRegionKind::Ram;
+bool is_known_ram_range(const LsqAddressInfo& info) {
+    return !info.translation_fault &&
+           !info.crosses_page &&
+           info.paddr_valid &&
+           info.region_valid &&
+           info.region.kind == PhysicalRegionKind::Ram;
+}
+
+bool same_translated_span(const LsqEntry& entry, uint64_t paddr, int size) {
+    if (!is_known_ram_range(entry.address_info)) {
+        return false;
+    }
+    return ranges_overlap(entry.address_info.paddr, entry.size, paddr, size);
 }
 
 }  // namespace
@@ -82,12 +93,17 @@ void LoadStoreQueue::mark_order_ready(LsqIndex index) {
 }
 
 void LoadStoreQueue::mark_address_ready(LsqIndex index, uint64_t addr) {
+    mark_address_ready(index, addr, {});
+}
+
+void LoadStoreQueue::mark_address_ready(LsqIndex index, uint64_t addr, const LsqAddressInfo& info) {
     const auto it = find_entry(entries_, index);
     if (it == entries_.end()) {
         return;
     }
     it->address_ready = true;
     it->address = addr;
+    it->address_info = info;
     if (it->kind != LsqEntryKind::Store) {
         return;
     }
@@ -129,6 +145,13 @@ std::optional<LsqEntry> LoadStoreQueue::peek_oldest() const {
 }
 
 LsqLoadStatus LoadStoreQueue::classify_load(uint64_t sequence_id, uint64_t load_addr, int load_size) const {
+    return classify_load(sequence_id, load_addr, load_size, {});
+}
+
+LsqLoadStatus LoadStoreQueue::classify_load(uint64_t sequence_id,
+                                            uint64_t load_addr,
+                                            int load_size,
+                                            const LsqAddressInfo& load_info) const {
     for (const LsqEntry& entry : entries_) {
         if (entry.kind == LsqEntryKind::Load && entry.sequence_id == sequence_id &&
             entry.load_state == LsqLoadState::ReplayRequired) {
@@ -143,7 +166,11 @@ LsqLoadStatus LoadStoreQueue::classify_load(uint64_t sequence_id, uint64_t load_
         if (!entry.address_ready) {
             return make_load_status(LsqLoadState::BlockedByUnresolvedStore, sequence_id, entry.sequence_id);
         }
-        if (!entry.order_ready && ranges_overlap(entry.address, entry.size, load_addr, load_size)) {
+        const bool overlaps =
+            load_info.paddr_valid && entry.address_info.paddr_valid
+                ? same_translated_span(entry, load_info.paddr, load_size)
+                : ranges_overlap(entry.address, entry.size, load_addr, load_size);
+        if (!entry.order_ready && overlaps) {
             return make_load_status(LsqLoadState::BlockedByOverlappingStore, sequence_id, entry.sequence_id);
         }
     }
@@ -155,7 +182,7 @@ std::optional<LsqForwardResult> LoadStoreQueue::forwardable_load(const Bus& bus,
                                                                  uint64_t sequence_id,
                                                                  uint64_t load_addr,
                                                                  int load_size) const {
-    if (!is_ram_range(bus, load_addr, load_size)) {
+    if (bus.describe_region(load_addr, load_size).kind != PhysicalRegionKind::Ram) {
         return std::nullopt;
     }
 
@@ -170,7 +197,7 @@ std::optional<LsqForwardResult> LoadStoreQueue::forwardable_load(const Bus& bus,
         if (!ranges_overlap(entry.address, entry.size, load_addr, load_size)) {
             continue;
         }
-        if (entry.mmio || !is_ram_range(bus, entry.address, entry.size)) {
+        if (entry.mmio || bus.describe_region(entry.address, entry.size).kind != PhysicalRegionKind::Ram) {
             return std::nullopt;
         }
 
@@ -178,6 +205,44 @@ std::optional<LsqForwardResult> LoadStoreQueue::forwardable_load(const Bus& bus,
         const uint64_t store_end = entry.address + static_cast<uint64_t>(entry.size);
         if (entry.address <= load_addr && load_end <= store_end) {
             const uint64_t shift = (load_addr - entry.address) * 8;
+            return LsqForwardResult{
+                .value = (entry.data >> shift) & size_mask(load_size),
+                .store_sequence_id = entry.sequence_id,
+            };
+        }
+        return std::nullopt;
+    }
+
+    return std::nullopt;
+}
+
+std::optional<LsqForwardResult> LoadStoreQueue::forwardable_load(uint64_t sequence_id,
+                                                                 uint64_t,
+                                                                 int load_size,
+                                                                 const LsqAddressInfo& load_info) const {
+    if (!is_known_ram_range(load_info)) {
+        return std::nullopt;
+    }
+
+    for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
+        const LsqEntry& entry = *it;
+        if (entry.kind != LsqEntryKind::Store || entry.sequence_id >= sequence_id) {
+            continue;
+        }
+        if (!entry.address_ready || !entry.data_ready || !entry.order_ready) {
+            return std::nullopt;
+        }
+        if (!same_translated_span(entry, load_info.paddr, load_size)) {
+            continue;
+        }
+        if (entry.mmio || !is_known_ram_range(entry.address_info)) {
+            return std::nullopt;
+        }
+
+        const uint64_t load_end = load_info.paddr + static_cast<uint64_t>(load_size);
+        const uint64_t store_end = entry.address_info.paddr + static_cast<uint64_t>(entry.size);
+        if (entry.address_info.paddr <= load_info.paddr && load_end <= store_end) {
+            const uint64_t shift = (load_info.paddr - entry.address_info.paddr) * 8;
             return LsqForwardResult{
                 .value = (entry.data >> shift) & size_mask(load_size),
                 .store_sequence_id = entry.sequence_id,

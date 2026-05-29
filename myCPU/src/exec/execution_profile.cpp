@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "../mem/bus.h"
+
 namespace {
 
 bool is_control_flow_raw(uint32_t raw) {
@@ -40,6 +42,85 @@ std::vector<T> top_entries(std::vector<T> entries, Compare compare, size_t limit
 }
 
 }  // namespace
+
+PhysicalRegionInfo observed_region(const Bus& bus, uint64_t paddr, uint64_t bytes) {
+    const PhysicalSpanInfo span = bus.describe_span(paddr, bytes);
+    if (span.ok) {
+        return span.region;
+    }
+    return bus.describe_region(paddr, 1);
+}
+
+ExecutionMemoryObservation fault_memory_observation(uint64_t pc,
+                                                    uint32_t raw,
+                                                    bool write,
+                                                    uint64_t bytes) {
+    return ExecutionMemoryObservation{
+        .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
+        .region = make_unmapped_region_info(),
+        .write = write,
+        .fault = true,
+        .paddr_valid = false,
+        .paddr = 0,
+        .bytes = bytes,
+    };
+}
+
+std::optional<ExecutionMemoryObservation> make_atomic_memory_observation(
+    const Bus& bus,
+    const AtomicRequest& request,
+    uint64_t pc,
+    uint32_t raw,
+    const CommitBoundaryResult& result) {
+    if (request.kind == AtomicRequest::Kind::None) {
+        return std::nullopt;
+    }
+
+    const bool write = request.kind != AtomicRequest::Kind::LoadReserved;
+    const uint64_t bytes = result.atomic_bytes != 0 ? result.atomic_bytes : static_cast<uint64_t>(request.size);
+    if (bytes == 0) {
+        return std::nullopt;
+    }
+
+    if (result.atomic_memory_observed && result.atomic_paddr_valid) {
+        return ExecutionMemoryObservation{
+            .valid = true,
+            .pc_valid = true,
+            .pc = pc,
+            .raw = raw,
+            .region = observed_region(bus, result.atomic_paddr, bytes),
+            .write = result.atomic_write_observed,
+            .fault = false,
+            .paddr_valid = true,
+            .paddr = result.atomic_paddr,
+            .bytes = bytes,
+        };
+    }
+
+    if (!result.trap_taken) {
+        return std::nullopt;
+    }
+
+    if (!result.atomic_paddr_valid) {
+        return fault_memory_observation(pc, raw, write, bytes);
+    }
+
+    return ExecutionMemoryObservation{
+        .valid = true,
+        .pc_valid = true,
+        .pc = pc,
+        .raw = raw,
+        .region = observed_region(bus, result.atomic_paddr, bytes),
+        .write = write,
+        .fault = true,
+        .paddr_valid = true,
+        .paddr = result.atomic_paddr,
+        .bytes = bytes,
+    };
+}
 
 void ExecutionProfile::clear() {
     total_retirements_ = 0;

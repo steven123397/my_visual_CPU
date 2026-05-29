@@ -48,6 +48,12 @@ uint8_t saturating_decrement(uint8_t counter) {
     return counter == 0 ? 0 : static_cast<uint8_t>(counter - 1);
 }
 
+uint64_t fallthrough_pc(uint64_t pc, uint32_t raw) {
+    Insn insn{};
+    decode(raw, &insn);
+    return pc + static_cast<uint64_t>(insn.size != 0 ? insn.size : 4);
+}
+
 }  // namespace
 
 size_t BranchPredictor::index_for(uint64_t pc) {
@@ -61,7 +67,7 @@ PredictorQueryResult BranchPredictor::query(uint64_t pc, uint32_t raw) {
     switch (kind) {
     case ControlKind::Branch: {
         result.valid = true;
-        result.predicted_target = pc + 4;
+        result.predicted_target = fallthrough_pc(pc, raw);
 
         const Entry& entry = table_[index_for(pc)];
         if (entry.valid && entry.pc == pc) {
@@ -96,7 +102,8 @@ void BranchPredictor::update(const PredictorUpdate& update) {
         const bool table_hit = entry.valid && entry.pc == update.pc;
         const bool predicted_taken = update.prediction.valid && update.prediction.predicted_taken;
         const uint64_t predicted_target =
-            update.prediction.valid ? update.prediction.predicted_target : update.pc + 4;
+            update.prediction.valid ? update.prediction.predicted_target
+                                    : fallthrough_pc(update.pc, update.raw);
         const bool correct =
             predicted_taken == update.taken && (!predicted_taken || predicted_target == update.target);
         if (correct) {

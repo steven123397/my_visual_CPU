@@ -350,6 +350,7 @@ DebugSnapshot DebugSession::collect_snapshot() const {
     snapshot.csrs.satp = cpu.csr().read(CSR_SATP, core);
 
     snapshot.bus = machine().bus().last_access();
+    snapshot.guest_bus = machine().bus().last_guest_access();
 
     snapshot.devices.uart.ier = machine().uart().ier();
     snapshot.devices.uart.thre_interrupt_asserted = machine().uart().thre_interrupt_asserted();
@@ -411,16 +412,19 @@ void DebugSession::record_step_events(const DebugSnapshot& before, const DebugSn
     if (after.summary.instret != before.summary.instret) {
         append_event("commit", "instret advanced to " + std::to_string(after.summary.instret));
     }
-    if (after.bus.valid &&
-        (!before.bus.valid || before.bus.addr != after.bus.addr || before.bus.value != after.bus.value ||
-         before.bus.write != after.bus.write || before.bus.device != after.bus.device ||
-         before.bus.success != after.bus.success || before.bus.detail != after.bus.detail)) {
+    const DebugBusAccess& before_access = before.guest_bus.valid ? before.guest_bus : before.bus;
+    const DebugBusAccess& after_access = after.guest_bus.valid ? after.guest_bus : after.bus;
+    if (after_access.valid &&
+        (!before_access.valid || before_access.addr != after_access.addr || before_access.value != after_access.value ||
+         before_access.write != after_access.write || before_access.device != after_access.device ||
+         before_access.success != after_access.success || before_access.detail != after_access.detail ||
+         before_access.source != after_access.source || before_access.kind != after_access.kind)) {
         std::string detail =
-            after.bus.device + " " + (after.bus.write ? "write " : "read ") + hex_u64(after.bus.addr);
-        if (!after.bus.success && !after.bus.detail.empty()) {
-            detail += " failed: " + after.bus.detail;
+            after_access.device + " " + (after_access.write ? "write " : "read ") + hex_u64(after_access.addr);
+        if (!after_access.success && !after_access.detail.empty()) {
+            detail += " failed: " + after_access.detail;
         }
-        append_event(after.bus.write ? "store" : "load", detail);
+        append_event(after_access.write ? "store" : "load", detail);
     }
     if (after.summary.halted && !before.summary.halted) {
         append_event("halt", "program halted");

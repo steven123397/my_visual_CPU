@@ -26,8 +26,18 @@ class SimpleL1DataCache {
 public:
     explicit SimpleL1DataCache(SimpleL1DataCacheConfig config = {});
 
-    bool load(Bus& bus, uint64_t addr, int size, uint64_t& value);
-    bool store(Bus& bus, uint64_t addr, uint64_t value, int size);
+    bool load(Bus& bus,
+              uint64_t addr,
+              int size,
+              uint64_t& value,
+              const char* source = "guest-data",
+              const char* kind = "data-load");
+    bool store(Bus& bus,
+               uint64_t addr,
+               uint64_t value,
+               int size,
+               const char* source = "guest-data",
+               const char* kind = "data-store");
 
     void clear();
     void invalidate_range(uint64_t addr, uint64_t size);

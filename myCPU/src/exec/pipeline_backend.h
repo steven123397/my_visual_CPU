@@ -35,6 +35,7 @@ private:
     void step_ex();
     void step_id();
     void step_if();
+    uint64_t instruction_fallthrough_pc(const StageSlot& slot) const;
     bool try_service_interrupt_at_commit_boundary();
     void commit_next_state();
 

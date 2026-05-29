@@ -49,6 +49,10 @@ bool expect(bool condition, const char* message) {
     return true;
 }
 
+void write16(Ram& ram, uint64_t addr, uint16_t value) {
+    ram.write_bytes(addr, &value, sizeof(value));
+}
+
 void install_machine_exit_handler(CPU& cpu, Ram& ram) {
     cpu.csr().write(CSR_MTVEC, kMachineExitVector, cpu.core());
     write32(ram, kMachineExitVector + 0, kAddiA7Exit);
@@ -338,6 +342,26 @@ int main() {
             {},
             64,
             {},
+        },
+        {
+            "rvc_halfword_control_flow",
+            {},
+            {},
+            {},
+            128,
+            [](CPU& cpu, Ram& ram, Bus&) {
+                constexpr uint16_t kCAddiA0Minus1 = 0x157DU;  // c.addi a0, -1
+                constexpr uint16_t kCBeqzA0Plus4 = 0xC111U;   // c.beqz a0, +4
+                constexpr uint16_t kCAddiwA1Plus1 = 0x2585U;  // c.addiw a1, 1
+
+                cpu.core().write_gpr(10, 1);
+                write16(ram, kEntry + 0, kCAddiA0Minus1);
+                write16(ram, kEntry + 2, kCBeqzA0Plus4);
+                write16(ram, kEntry + 4, kCAddiwA1Plus1);
+                write16(ram, kEntry + 6, kCAddiwA1Plus1);
+                write32(ram, kEntry + 8, kAddiA7Exit);
+                write32(ram, kEntry + 12, kEcall);
+            },
         },
         {
             "predictable_branch_loop",

@@ -10,7 +10,6 @@
 #include "memory_ops.h"
 #include "pipeline_hazards.h"
 #include "vector_ops.h"
-#include "floating_ops.h"
 
 namespace {
 
@@ -40,20 +39,50 @@ bool is_control_flow_opcode(uint32_t opcode) {
     return opcode == 0x63 || opcode == 0x67 || opcode == 0x6F;
 }
 
-PhysicalRegionInfo describe_access_region(const Bus& bus, uint64_t addr, int size) {
-    return bus.describe_region(addr, size);
+LsqAddressInfo translate_memory_address(CPU& cpu,
+                                        Bus& bus,
+                                        uint64_t addr,
+                                        int size,
+                                        AccessType type) {
+    LsqAddressInfo info;
+    const uint64_t page_offset = addr & 0xfffULL;
+    info.crosses_page = page_offset + static_cast<uint64_t>(size) > 0x1000ULL;
+    if (info.crosses_page) {
+        return info;
+    }
+
+    const AddressSpace::TranslateResult translated =
+        cpu.address_space().translate_result(bus, addr, type, false);
+    if (!translated.ok) {
+        info.translation_fault = true;
+        return info;
+    }
+    info.paddr_valid = true;
+    info.paddr = translated.paddr;
+    const PhysicalSpanInfo span = bus.describe_span(translated.paddr, static_cast<uint64_t>(size));
+    info.region_valid = span.ok;
+    info.region = span.ok ? span.region : bus.describe_region(translated.paddr, 1);
+    return info;
 }
 
-bool is_ram_access(const Bus& bus, uint64_t addr, int size) {
-    return describe_access_region(bus, addr, size).kind == PhysicalRegionKind::Ram;
+bool is_known_ram_access(const LsqAddressInfo& info) {
+    return !info.translation_fault &&
+           !info.crosses_page &&
+           info.paddr_valid &&
+           info.region_valid &&
+           info.region.kind == PhysicalRegionKind::Ram;
 }
 
-bool is_known_mmio_access(const Bus& bus, uint64_t addr, int size) {
-    return describe_access_region(bus, addr, size).kind == PhysicalRegionKind::Mmio;
+bool is_known_mmio_access(const LsqAddressInfo& info) {
+    return !info.translation_fault &&
+           !info.crosses_page &&
+           info.paddr_valid &&
+           info.region_valid &&
+           info.region.kind == PhysicalRegionKind::Mmio;
 }
 
-bool needs_memory_issue_delay(const Bus& bus, uint64_t addr, int size) {
-    return is_ram_access(bus, addr, size) || !is_known_mmio_access(bus, addr, size);
+bool needs_memory_issue_delay(const LsqAddressInfo& info) {
+    return is_known_ram_access(info) || !is_known_mmio_access(info);
 }
 
 bool prediction_matches(const PredictorQueryResult& prediction,
@@ -163,12 +192,12 @@ void PipelineBackend::step_mem() {
     }
 
     switch (effects.mem.kind) {
-    case MemoryRequest::Kind::Load: {
-        const std::optional<LsqForwardResult> forwarded =
-            state_.lsq().forwardable_load(bus_,
-                                          state_.next_mem_wb.slot.sequence_id.value,
-                                          effects.mem.addr,
-                                          effects.mem.size);
+        case MemoryRequest::Kind::Load: {
+            const std::optional<LsqForwardResult> forwarded =
+                state_.lsq().forwardable_load(state_.next_mem_wb.slot.sequence_id.value,
+                                              effects.mem.addr,
+                                              effects.mem.size,
+                                              state_.next_mem_wb.slot.lsq_address_info);
         if (forwarded.has_value()) {
             if (effects.mem.target == MemoryRequest::Target::Float) {
                 effects.fp_write.enable = true;
@@ -288,13 +317,15 @@ void PipelineBackend::step_ex() {
     inputs.rs2v = pipeline_hazards::resolve_ex_operand(forwarding,
                                                        state_.id_ex.slot.rs2_phys,
                                                        state_.id_ex.slot.rs2v);
-    if (floating_rs1_from_fpr(state_.id_ex.slot.insn)) {
+    const InstructionRegisterDescriptor register_descriptor =
+        InstructionSemantics::describe_registers(state_.id_ex.slot.insn);
+    if (register_descriptor.rs1 == RegisterOperandKind::Fpr) {
         inputs.rs1v = cpu_.core().read_fpr(state_.id_ex.slot.insn.rs1);
     }
-    if (floating_rs2_from_fpr(state_.id_ex.slot.insn)) {
+    if (register_descriptor.rs2 == RegisterOperandKind::Fpr) {
         inputs.rs2v = cpu_.core().read_fpr(state_.id_ex.slot.insn.rs2);
     }
-    if (floating_rs3_from_fpr(state_.id_ex.slot.insn)) {
+    if (register_descriptor.rs3 == RegisterOperandKind::Fpr) {
         inputs.rs3v = cpu_.core().read_fpr(state_.id_ex.slot.insn.rs3);
     }
     if (state_.id_ex.slot.insn.opcode == 0x73 && state_.id_ex.slot.insn.funct3 != 0) {
@@ -334,9 +365,13 @@ void PipelineBackend::step_ex() {
     if (!completed_slot.effects.trap.valid) {
         switch (completed_slot.effects.mem.kind) {
         case MemoryRequest::Kind::Load:
-            if (!is_ram_access(bus_,
-                               completed_slot.effects.mem.addr,
-                               completed_slot.effects.mem.size)) {
+            completed_slot.lsq_address_info =
+                translate_memory_address(cpu_,
+                                         bus_,
+                                         completed_slot.effects.mem.addr,
+                                         completed_slot.effects.mem.size,
+                                         AccessType::Load);
+            if (!is_known_ram_access(completed_slot.lsq_address_info)) {
                 const std::optional<RobEntry> rob_head = state_.rob().peek_head();
                 if (!rob_head.has_value() ||
                     rob_head->index.value != completed_slot.rob_index.value) {
@@ -360,16 +395,21 @@ void PipelineBackend::step_ex() {
                 });
             }
             state_.lsq().mark_address_ready(completed_slot.lsq_index,
-                                            completed_slot.effects.mem.addr);
+                                            completed_slot.effects.mem.addr,
+                                            completed_slot.lsq_address_info);
             state_.next_ex_mem.slot = completed_slot;
             state_.next_ex_mem_cycles_remaining =
-                needs_memory_issue_delay(bus_,
-                                         completed_slot.effects.mem.addr,
-                                         completed_slot.effects.mem.size)
+                needs_memory_issue_delay(completed_slot.lsq_address_info)
                     ? 1
                     : 0;
             break;
         case MemoryRequest::Kind::Store:
+            completed_slot.lsq_address_info =
+                translate_memory_address(cpu_,
+                                         bus_,
+                                         completed_slot.effects.mem.addr,
+                                         completed_slot.effects.mem.size,
+                                         AccessType::Store);
             if (state_.ex_mem.slot.valid || state_.next_ex_mem.slot.valid) {
                 state_.next_id_ex.slot = state_.id_ex.slot;
                 state_.note_stall(PipelineStallReason::MemoryPathBusy);
@@ -377,15 +417,14 @@ void PipelineBackend::step_ex() {
             }
             if (completed_slot.lsq_index.value != 0) {
                 state_.lsq().mark_address_ready(completed_slot.lsq_index,
-                                                completed_slot.effects.mem.addr);
+                                                completed_slot.effects.mem.addr,
+                                                completed_slot.lsq_address_info);
                 state_.lsq().mark_data_ready(completed_slot.lsq_index,
                                              completed_slot.effects.mem.store_value);
             }
             state_.next_ex_mem.slot = completed_slot;
             state_.next_ex_mem_cycles_remaining =
-                needs_memory_issue_delay(bus_,
-                                         completed_slot.effects.mem.addr,
-                                         completed_slot.effects.mem.size)
+                needs_memory_issue_delay(completed_slot.lsq_address_info)
                     ? 1
                     : 0;
             break;
@@ -417,7 +456,7 @@ void PipelineBackend::step_ex() {
         const bool actual_taken = completed_slot.effects.control.redirect_pc;
         const uint64_t actual_target =
             actual_taken ? completed_slot.effects.control.target_pc
-                         : state_.id_ex.slot.pc + 4;
+                         : instruction_fallthrough_pc(state_.id_ex.slot);
         const bool correct =
             prediction_matches(state_.id_ex.slot.prediction, actual_taken, actual_target);
 

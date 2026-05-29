@@ -22,11 +22,12 @@ SimpleL1DataCache::SimpleL1DataCache(SimpleL1DataCacheConfig config) : config_(c
     }
 }
 
-bool SimpleL1DataCache::load(Bus& bus, uint64_t addr, int size, uint64_t& value) {
+bool SimpleL1DataCache::load(
+    Bus& bus, uint64_t addr, int size, uint64_t& value, const char* source, const char* kind) {
     ++stats_.loads;
     if (should_bypass(bus, addr, size)) {
         ++stats_.bypasses;
-        return bus.try_load(addr, size, value);
+        return bus.try_load_observed(addr, size, value, source, kind);
     }
 
     const uint64_t base = line_base(addr);
@@ -48,11 +49,12 @@ bool SimpleL1DataCache::load(Bus& bus, uint64_t addr, int size, uint64_t& value)
     return true;
 }
 
-bool SimpleL1DataCache::store(Bus& bus, uint64_t addr, uint64_t value, int size) {
+bool SimpleL1DataCache::store(
+    Bus& bus, uint64_t addr, uint64_t value, int size, const char* source, const char* kind) {
     ++stats_.stores;
     if (should_bypass(bus, addr, size)) {
         ++stats_.bypasses;
-        const bool stored = bus.try_store(addr, value, size);
+        const bool stored = bus.try_store_observed(addr, value, size, source, kind);
         if (stored) {
             invalidate_range(addr, static_cast<uint64_t>(size));
         }
@@ -66,7 +68,7 @@ bool SimpleL1DataCache::store(Bus& bus, uint64_t addr, uint64_t value, int size)
         ++stats_.misses;
     }
 
-    if (!bus.try_store(addr, value, size)) {
+    if (!bus.try_store_observed(addr, value, size, source, kind)) {
         return false;
     }
     ++stats_.write_through_stores;

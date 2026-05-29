@@ -32,6 +32,7 @@ constexpr uint64_t PTE_X = 1ULL << 3;
 constexpr uint64_t PTE_U = 1ULL << 4;
 constexpr uint64_t PTE_A = 1ULL << 6;
 constexpr uint64_t PTE_D = 1ULL << 7;
+constexpr uint64_t PTE_SV39_RESERVED_MASK = 0xFFC0000000000000ULL;
 
 constexpr int SV39_LEVELS = 3;
 constexpr int SV39_PTESIZE = 8;
@@ -84,6 +85,22 @@ uint64_t size_mask(int size) {
     return (1ULL << (size * 8)) - 1ULL;
 }
 
+const char* access_source(AccessType type) {
+    return type == AccessType::Instruction ? "fetch" : "guest-data";
+}
+
+const char* access_kind(AccessType type) {
+    switch (type) {
+    case AccessType::Instruction:
+        return "instruction-fetch";
+    case AccessType::Load:
+        return "data-load";
+    case AccessType::Store:
+        return "data-store";
+    }
+    return "unknown";
+}
+
 int page_chunk_size(uint64_t addr, int remaining) {
     const int until_boundary = static_cast<int>(SV39_PAGE_SIZE - (addr & SV39_PAGE_OFFSET_MASK));
     return remaining < until_boundary ? remaining : until_boundary;
@@ -108,7 +125,7 @@ PrivilegeMode decode_mpp(uint64_t mstatus) {
     case 3:
         return PrivilegeMode::Machine;
     default:
-        return PrivilegeMode::Machine;
+        return PrivilegeMode::User;
     }
 }
 
@@ -328,7 +345,7 @@ bool AddressSpace::update_pte_access_bits(
         return true;
     }
 
-    if (!bus.try_store(pte_addr, updated_pte, SV39_PTESIZE)) {
+    if (!bus.try_store_observed(pte_addr, updated_pte, SV39_PTESIZE, "page-walk", "pte-ad-update")) {
         fault = make_fault(access_fault_cause(type), vaddr);
         return false;
     }
@@ -392,9 +409,14 @@ AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr,
         }
 
         uint64_t chunk_value = 0;
-        const bool loaded = type == AccessType::Load
-                                ? try_data_load(bus, paddr, chunk, chunk_value)
-                                : bus.try_load(paddr, chunk, chunk_value);
+        const bool loaded =
+            type == AccessType::Load
+                ? try_data_load(bus, paddr, chunk, chunk_value)
+                : bus.try_load_observed(paddr,
+                                        chunk,
+                                        chunk_value,
+                                        access_source(type),
+                                        access_kind(type));
         if (!loaded) {
             result.fault = make_fault(access_fault_cause(type), current_addr);
             return result;
@@ -413,14 +435,14 @@ bool AddressSpace::try_data_load(Bus& bus, uint64_t paddr, int size, uint64_t& v
     if (l1_data_cache_ != nullptr && l1_data_cache_->enabled()) {
         return l1_data_cache_->load(bus, paddr, size, value);
     }
-    return bus.try_load(paddr, size, value);
+    return bus.try_load_observed(paddr, size, value, "guest-data", "data-load");
 }
 
 bool AddressSpace::try_data_store(Bus& bus, uint64_t paddr, uint64_t value, int size) {
     if (l1_data_cache_ != nullptr && l1_data_cache_->enabled()) {
         return l1_data_cache_->store(bus, paddr, value, size);
     }
-    return bus.try_store(paddr, value, size);
+    return bus.try_store_observed(paddr, value, size, "guest-data", "data-store");
 }
 
 void AddressSpace::apply_fault(const TrapRequest& fault) {
@@ -451,7 +473,7 @@ bool AddressSpace::walk_page_table(Bus& bus,
         uint64_t pte = 0;
 
         // Page table walk uses physical addresses directly, bypassing translation
-        if (!bus.try_load(pte_addr, SV39_PTESIZE, pte)) {
+        if (!bus.try_load_observed(pte_addr, SV39_PTESIZE, pte, "page-walk", "pte-read")) {
             fault = make_fault(access_fault_cause(type), vaddr);
             return false;
         }
@@ -461,16 +483,15 @@ bool AddressSpace::walk_page_table(Bus& bus,
             return false;
         }
 
+        if (pte & PTE_SV39_RESERVED_MASK) {
+            fault = make_fault(page_fault_cause(type), vaddr);
+            return false;
+        }
+
         const bool is_leaf = (pte & (PTE_R | PTE_W | PTE_X)) != 0;
 
         if (is_leaf) {
             if (!check_leaf_permissions(pte, type, effective_mode, vaddr, fault)) {
-                return false;
-            }
-
-            uint64_t updated_pte = pte;
-            if (update_access_bits &&
-                !update_pte_access_bits(bus, pte_addr, updated_pte, type, vaddr, fault)) {
                 return false;
             }
 
@@ -490,6 +511,12 @@ bool AddressSpace::walk_page_table(Bus& bus,
                     fault = make_fault(page_fault_cause(type), vaddr);
                     return false;
                 }
+            }
+
+            uint64_t updated_pte = pte;
+            if (update_access_bits &&
+                !update_pte_access_bits(bus, pte_addr, updated_pte, type, vaddr, fault)) {
+                return false;
             }
 
             paddr = (pte_ppn << 12) | page_offset;

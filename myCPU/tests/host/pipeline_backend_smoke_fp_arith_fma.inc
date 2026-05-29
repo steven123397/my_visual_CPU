@@ -188,7 +188,7 @@
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(2.0f));
         cpu.core().write_fpr(11, float_to_fpr_raw_bits(3.0f));
         cpu.core().write_fpr(12, float_to_fpr_raw_bits(4.0f));
-        write32(ram, kEntry + 0, kFmaddSF8F10F11F12);
+        write32(ram, kEntry + 0, fp_with_rm(kFmaddSF8F10F11F12, 7));
         write32(ram, kEntry + 4, kAddiA7Exit);
         write32(ram, kEntry + 8, kEcall);
 
@@ -271,6 +271,41 @@
         }
         if (!expect((cpu.csr().read(CSR_FCSR, cpu.core()) & ~0x1fULL) == (1ULL << 5),
                     "pipeline fmadd.s 1*1+2^-25 should preserve the current rounding-mode bits")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        init_fp_cpu(cpu);
+
+        cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
+        cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.0f));
+        cpu.core().write_fpr(11, float_to_fpr_raw_bits(1.0f));
+        cpu.core().write_fpr(12, float_to_fpr_raw_bits(std::ldexp(1.0f, -24)));
+        write32(ram, kEntry + 0, fp_with_rm(kFmaddSF8F10F11F12, 7));
+        write32(ram, kEntry + 4, kAddiA7Exit);
+        write32(ram, kEntry + 8, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "pipeline fmadd.s RMM smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_fpr(8) == float_to_fpr_raw_bits(1.00000011920928955078125f),
+                    "pipeline fmadd.s should obey frm=RMM and round a half-ulp tie away from zero")) {
+            return 1;
+        }
+        if (!expect((cpu.csr().read(CSR_FFLAGS, cpu.core()) & 0x1ULL) != 0,
+                    "pipeline fmadd.s RMM should set the inexact-operation flag")) {
+            return 1;
+        }
+        if (!expect((cpu.csr().read(CSR_FCSR, cpu.core()) & ~0x1fULL) == (4ULL << 5),
+                    "pipeline fmadd.s RMM should preserve the current rounding-mode bits")) {
             return 1;
         }
     }
@@ -1517,4 +1552,3 @@
             return 1;
         }
     }
-

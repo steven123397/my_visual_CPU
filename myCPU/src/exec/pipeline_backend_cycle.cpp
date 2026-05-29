@@ -21,32 +21,15 @@ uint64_t active_trap_cause(const CPU& cpu) {
     }
 }
 
-PhysicalRegionInfo observed_region(const Bus& bus, uint64_t paddr, uint64_t bytes) {
-    const PhysicalSpanInfo span = bus.describe_span(paddr, bytes);
-    if (span.ok) {
-        return span.region;
-    }
-    return bus.describe_region(paddr, 1);
+uint8_t decoded_instruction_size(uint32_t raw) {
+    Insn insn{};
+    decode(raw, &insn);
+    return insn.size != 0 ? insn.size : 4;
 }
 
 bool is_control_flow_raw(uint32_t raw) {
     const uint32_t opcode = raw & 0x7FU;
     return opcode == 0x63U || opcode == 0x67U || opcode == 0x6FU;
-}
-
-ExecutionMemoryObservation fault_memory_observation(uint64_t pc, uint32_t raw, bool write, uint64_t bytes) {
-    return ExecutionMemoryObservation{
-        .valid = true,
-        .pc_valid = true,
-        .pc = pc,
-        .raw = raw,
-        .region = make_unmapped_region_info(),
-        .write = write,
-        .fault = true,
-        .paddr_valid = false,
-        .paddr = 0,
-        .bytes = bytes,
-    };
 }
 
 std::optional<ExecutionMemoryObservation> make_scalar_memory_observation(CPU& cpu,
@@ -217,10 +200,15 @@ bool PipelineBackend::step_wb() {
     const std::optional<LsqEntry> lsq_entry =
         rob_head->lsq_index.value != 0 ? state_.lsq().peek(rob_head->lsq_index)
                                        : std::optional<LsqEntry>{};
+    StageSlot commit_slot{};
+    commit_slot.pc = rob_head->pc;
+    commit_slot.raw = rob_head->raw;
+    commit_slot.insn_size = rob_head->insn_size != 0 ? rob_head->insn_size
+                                                     : decoded_instruction_size(rob_head->raw);
 
     CommitBoundaryInput commit_input{
         .pc = rob_head->pc,
-        .next_pc = rob_head->pc + 4,
+        .next_pc = instruction_fallthrough_pc(commit_slot),
         .effects = rob_head->effects,
     };
     if (commit_input.effects.mem.kind == MemoryRequest::Kind::Load) {
@@ -229,7 +217,15 @@ bool PipelineBackend::step_wb() {
     commit_input.effects.rd_write = {};
     const CommitBoundaryResult result =
         apply_commit_boundary(cpu_, bus_, commit_input);
-    if (lsq_entry.has_value()) {
+    const std::optional<ExecutionMemoryObservation> atomic_observation =
+        make_atomic_memory_observation(bus_,
+                                       rob_head->effects.atomic,
+                                       rob_head->pc,
+                                       rob_head->raw,
+                                       result);
+    if (atomic_observation.has_value()) {
+        state_.record_memory(*atomic_observation);
+    } else if (lsq_entry.has_value()) {
         const std::optional<ExecutionMemoryObservation> observation =
             make_scalar_memory_observation(cpu_,
                                            bus_,
@@ -333,6 +329,12 @@ bool PipelineBackend::try_service_interrupt_at_commit_boundary() {
     state_.rollback_to_committed_state(cpu_.core());
     state_.flush(cpu_.core().pc());
     return true;
+}
+
+uint64_t PipelineBackend::instruction_fallthrough_pc(const StageSlot& slot) const {
+    const uint8_t size = slot.insn_size != 0 ? slot.insn_size
+                                             : decoded_instruction_size(slot.raw);
+    return slot.pc + static_cast<uint64_t>(size);
 }
 
 void PipelineBackend::commit_next_state() {

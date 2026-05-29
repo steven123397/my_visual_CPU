@@ -25,6 +25,9 @@ supervisor_ecall:
 machine_ecall:
     ecall
 
+mpp_reserved_entry:
+    ecall
+
 after_tests:
     li   t0, 'P'
     sb   t0, 0(s0)
@@ -46,6 +49,9 @@ trap_handler:
 
     li   t1, 2
     beq  t0, t1, handle_machine_ecall
+
+    li   t1, 3
+    beq  t0, t1, handle_reserved_mpp_ecall
 
     j    trap_fail
 
@@ -108,6 +114,34 @@ handle_machine_ecall:
 
     csrr t0, mepc
     la   t1, machine_ecall
+    bne  t0, t1, trap_fail
+
+    li   t0, 3
+    csrw mscratch, t0
+
+    li   t0, 0x1000      # MPP = reserved 2; write path must not preserve it as M
+    csrw mstatus, t0
+    csrr t1, mstatus
+    li   t2, 0x1800
+    and  t3, t1, t2
+    bnez t3, trap_fail
+
+    la   t0, mpp_reserved_entry
+    csrw mepc, t0
+    mret
+
+handle_reserved_mpp_ecall:
+    csrr t0, mcause
+    li   t1, 8
+    bne  t0, t1, trap_fail
+
+    csrr t0, mstatus
+    li   t1, 0x1800
+    and  t2, t0, t1
+    bnez t2, trap_fail
+
+    csrr t0, mepc
+    la   t1, mpp_reserved_entry
     bne  t0, t1, trap_fail
 
     li   t0, 0x1800      # stay in M when returning to test epilogue

@@ -80,6 +80,34 @@
         return 1;
     }
 
+    cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
+    cpu.core().write_fpr(10, float_to_fpr_raw_bits(1.0f));
+    cpu.core().write_fpr(11, float_to_fpr_raw_bits(1.0f));
+    cpu.core().write_fpr(12, float_to_fpr_raw_bits(std::ldexp(1.0f, -24)));
+    Insn fmadd_s_dyn{};
+    decode(fp_with_rm(0x60b50443U, 7), &fmadd_s_dyn);
+    const InsnEffects fmadd_s_rmm_effects = InstructionSemantics::execute(fmadd_s_dyn, ctx);
+    if (!expect(!fmadd_s_rmm_effects.trap.valid,
+                "fmadd.s dyn should accept frm=RMM instead of trapping as illegal")) {
+        return 1;
+    }
+    if (!expect(fmadd_s_rmm_effects.fp_write.enable,
+                "fmadd.s dyn frm=RMM should produce an fp register write")) {
+        return 1;
+    }
+    if (!expect(fmadd_s_rmm_effects.fp_write.value == float_to_fpr_raw_bits(1.00000011920928955078125f),
+                "fmadd.s dyn frm=RMM should round a half-ulp tie away from zero")) {
+        return 1;
+    }
+    if (!expect(fmadd_s_rmm_effects.csr_write.enable,
+                "fmadd.s dyn frm=RMM should produce a floating-point CSR write for inexact flags")) {
+        return 1;
+    }
+    if (!expect((fmadd_s_rmm_effects.csr_write.value & ~0x1fULL) == (4ULL << 5),
+                "fmadd.s dyn frm=RMM should preserve the current rounding-mode bits")) {
+        return 1;
+    }
+
     cpu.csr().write(CSR_FCSR, 2ULL << 5, cpu.core());
     cpu.core().write_fpr(10, float_to_fpr_raw_bits(std::numeric_limits<float>::max()));
     cpu.core().write_fpr(11, float_to_fpr_raw_bits(std::numeric_limits<float>::max()));
@@ -1268,6 +1296,28 @@
     }
     if (!expect((fsqrt_s_inexact_effects.csr_write.value & ~0x1fULL) == (2ULL << 5),
                 "fsqrt.s sqrt(2.0f) should preserve the current rounding-mode bits")) {
+        return 1;
+    }
+
+    cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
+    cpu.core().write_fpr(10, float_to_fpr_raw_bits(2.0f));
+    Insn fsqrt_s_dyn{};
+    decode(fp_with_rm(0x580507d3U, 7), &fsqrt_s_dyn);
+    const InsnEffects fsqrt_s_rmm_effects = InstructionSemantics::execute(fsqrt_s_dyn, ctx);
+    if (!expect(!fsqrt_s_rmm_effects.trap.valid,
+                "fsqrt.s dyn should accept frm=RMM instead of trapping as illegal")) {
+        return 1;
+    }
+    if (!expect(fsqrt_s_rmm_effects.fp_write.enable,
+                "fsqrt.s dyn frm=RMM should produce an fp register write")) {
+        return 1;
+    }
+    if (!expect(fsqrt_s_rmm_effects.csr_write.enable,
+                "fsqrt.s dyn frm=RMM should produce a floating-point CSR write for inexact flags")) {
+        return 1;
+    }
+    if (!expect((fsqrt_s_rmm_effects.csr_write.value & ~0x1fULL) == (4ULL << 5),
+                "fsqrt.s dyn frm=RMM should preserve the current rounding-mode bits")) {
         return 1;
     }
 

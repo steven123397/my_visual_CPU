@@ -1888,7 +1888,7 @@
         init_fp_cpu(cpu);
 
         cpu.core().write_fpr(10, float_to_fpr_raw_bits(2.25f));
-        write32(ram, kEntry + 0, kFsqrtSF15FromF10);
+        write32(ram, kEntry + 0, fp_with_rm(kFsqrtSF15FromF10, 7));
         write32(ram, kEntry + 4, kAddiA7Exit);
         write32(ram, kEntry + 8, kEcall);
 
@@ -1959,6 +1959,35 @@
         }
         if (!expect((cpu.csr().read(CSR_FCSR, cpu.core()) & ~0x1fULL) == (2ULL << 5),
                     "pipeline fsqrt.s sqrt(2.0f) should preserve the current rounding-mode bits")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        init_fp_cpu(cpu);
+
+        cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
+        cpu.core().write_fpr(10, float_to_fpr_raw_bits(2.0f));
+        write32(ram, kEntry + 0, kFsqrtSF15FromF10);
+        write32(ram, kEntry + 4, kAddiA7Exit);
+        write32(ram, kEntry + 8, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "pipeline fsqrt.s RMM smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect((cpu.csr().read(CSR_FFLAGS, cpu.core()) & 0x1ULL) != 0,
+                    "pipeline fsqrt.s RMM should set the inexact-operation flag")) {
+            return 1;
+        }
+        if (!expect((cpu.csr().read(CSR_FCSR, cpu.core()) & ~0x1fULL) == (4ULL << 5),
+                    "pipeline fsqrt.s RMM should preserve the current rounding-mode bits")) {
             return 1;
         }
     }
@@ -2193,6 +2222,34 @@
         }
         if (!expect(cpu.core().read_fpr(15) == float_to_fpr_raw_bits(1.5f),
                     "pipeline fcvt.s.d should narrow the source double into nan-boxed single-precision bits")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        init_fp_cpu(cpu);
+
+        cpu.core().write_fpr(10, double_to_raw_bits(1.0 + std::ldexp(1.0, -24)));
+        write32(ram, kEntry + 0, fp_with_rm(kFcvtSDF15FromF10, 4));
+        write32(ram, kEntry + 4, kAddiA7Exit);
+        write32(ram, kEntry + 8, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "pipeline fcvt.s.d RMM smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_fpr(15) == float_to_fpr_raw_bits(1.00000011920928955078125f),
+                    "pipeline fcvt.s.d should round a half-ulp tie away from zero with rm=RMM")) {
+            return 1;
+        }
+        if (!expect((cpu.csr().read(CSR_FFLAGS, cpu.core()) & 0x1ULL) != 0,
+                    "pipeline fcvt.s.d RMM should set the inexact-operation flag")) {
             return 1;
         }
     }

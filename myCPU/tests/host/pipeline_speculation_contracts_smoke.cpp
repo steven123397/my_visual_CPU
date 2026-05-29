@@ -28,6 +28,16 @@ constexpr uint32_t kLbX6FromX10Plus1 = 0x00150303U;
 constexpr uint32_t kSbX6ToX10Plus2 = 0x00650123U;  // sb x6, 2(x10)
 constexpr uint32_t kCsrwMepcX5 = 0x34129073U;      // csrw mepc, x5
 constexpr uint32_t kInvalidInsn = 0xffffffffU;
+constexpr uint64_t kPageTableRoot = MEM_BASE + 0x100000;
+constexpr uint64_t kPageTableL1 = MEM_BASE + 0x101000;
+constexpr uint64_t kPageTableL0 = MEM_BASE + 0x102000;
+constexpr uint64_t kSv39Mode = 8ULL << 60;
+constexpr uint64_t kPteValid = 1ULL << 0;
+constexpr uint64_t kPteRead = 1ULL << 1;
+constexpr uint64_t kPteWrite = 1ULL << 2;
+constexpr uint64_t kPteAccessed = 1ULL << 6;
+constexpr uint64_t kPteDirty = 1ULL << 7;
+constexpr uint64_t kDataLeafFlags = kPteValid | kPteRead | kPteWrite | kPteAccessed | kPteDirty;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -48,6 +58,24 @@ bool expect_contains(const std::string& haystack, const char* needle, const char
 
 void write32(Ram& ram, uint64_t addr, uint32_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
+}
+
+void write64(Ram& ram, uint64_t addr, uint64_t value) {
+    ram.write_bytes(addr, &value, sizeof(value));
+}
+
+uint64_t make_pte(uint64_t paddr, uint64_t flags) {
+    return ((paddr >> 12) << 10) | flags;
+}
+
+void install_sv39_4k_mapping(Ram& ram, uint64_t vaddr, uint64_t paddr) {
+    const uint64_t vpn0 = (vaddr >> 12) & 0x1ffULL;
+    const uint64_t vpn1 = (vaddr >> 21) & 0x1ffULL;
+    const uint64_t vpn2 = (vaddr >> 30) & 0x1ffULL;
+
+    write64(ram, kPageTableRoot + vpn2 * 8, make_pte(kPageTableL1, kPteValid));
+    write64(ram, kPageTableL1 + vpn1 * 8, make_pte(kPageTableL0, kPteValid));
+    write64(ram, kPageTableL0 + vpn0 * 8, make_pte(paddr, kDataLeafFlags));
 }
 
 bool run_until_halt(PipelineBackend& backend, CPU& cpu, int max_steps) {
@@ -618,7 +646,13 @@ int main() {
             .sequence_id = 1,
             .size = 1,
         });
-        lsq.mark_address_ready(older_store, kDataAddr + 1);
+        const LsqAddressInfo data_addr_info{
+            .paddr_valid = true,
+            .paddr = kDataAddr + 1,
+            .region_valid = true,
+            .region = bus.describe_region(kDataAddr + 1, 1),
+        };
+        lsq.mark_address_ready(older_store, kDataAddr + 1, data_addr_info);
         lsq.mark_data_ready(older_store, 0x7aULL);
         lsq.mark_order_ready(older_store);
 
@@ -649,7 +683,8 @@ int main() {
         state.ex_mem.slot.effects.mem.rd = 6;
         state.ex_mem.slot.effects.mem.size = 1;
         state.ex_mem.slot.effects.mem.sign_extend = true;
-        lsq.mark_address_ready(state.ex_mem.slot.lsq_index, kDataAddr + 1);
+        state.ex_mem.slot.lsq_address_info = data_addr_info;
+        lsq.mark_address_ready(state.ex_mem.slot.lsq_index, kDataAddr + 1, data_addr_info);
 
         backend.step();
         if (!expect(state.mem_wb.slot.valid && state.mem_wb.slot.effects.rd_write.enable &&
@@ -660,6 +695,88 @@ int main() {
         }
         if (!expect(ram.load(kDataAddr + 1, 1) == 0,
                     "forwarded load value must not come from prematurely updating RAM before store commit")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        Plic plic;
+        Uart16550 uart(plic);
+        uart.set_mirror_stdout(false);
+        bus.attach(plic);
+        bus.attach(uart);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
+        cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+
+        constexpr uint64_t kMmioShapedVa = UART_BASE + 0x20;
+        constexpr uint64_t kRamPa = kDataAddr + 0x40;
+        install_sv39_4k_mapping(ram, kMmioShapedVa, kRamPa);
+        cpu.csr().write(CSR_SATP, kSv39Mode | (kPageTableRoot >> 12), cpu.core());
+        cpu.address_space().flush_tlb();
+        cpu.core().write_gpr(10, kMmioShapedVa);
+
+        PipelineBackend backend(cpu, bus);
+        PipelineCoreState& state = backend.testing_state();
+        state.id_ex.slot.valid = true;
+        state.id_ex.slot.sequence_id.value = 1;
+        state.id_ex.slot.pc = kEntry;
+        state.id_ex.slot.raw = kLwX1FromX10;
+        state.id_ex.slot.insn.raw = kLwX1FromX10;
+        decode(kLwX1FromX10, &state.id_ex.slot.insn);
+        state.id_ex.slot.rs1v = kMmioShapedVa;
+
+        backend.step();
+        if (!expect(!state.stalled,
+                    "pipeline should classify a paged load by translated RAM PA, not by MMIO-shaped VA")) {
+            return 1;
+        }
+        if (!expect(state.next_ex_mem.slot.valid,
+                    "translated-RAM load should issue into the memory path even when the VA falls in an MMIO range")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        Plic plic;
+        Uart16550 uart(plic);
+        uart.set_mirror_stdout(false);
+        bus.attach(plic);
+        bus.attach(uart);
+
+        LoadStoreQueue lsq;
+        constexpr uint64_t kMmioShapedVa = UART_BASE + 0x30;
+        constexpr uint64_t kRamPa = kDataAddr + 0x80;
+        const LsqIndex older_store = lsq.enqueue_store({
+            .sequence_id = 1,
+            .size = 4,
+        });
+        const LsqIndex younger_load = lsq.enqueue_load({
+            .sequence_id = 2,
+            .rd = 6,
+            .size = 4,
+        });
+        lsq.mark_address_ready(older_store, kMmioShapedVa);
+        lsq.mark_data_ready(older_store, 0x88776655ULL);
+        lsq.mark_order_ready(older_store);
+        lsq.mark_address_ready(younger_load, kMmioShapedVa);
+
+        const LsqAddressInfo ram_alias_info{
+            .paddr_valid = true,
+            .paddr = kRamPa,
+            .region_valid = true,
+            .region = bus.describe_region(kRamPa, 4),
+        };
+        lsq.mark_address_ready(older_store, kMmioShapedVa, ram_alias_info);
+        lsq.mark_address_ready(younger_load, kMmioShapedVa, ram_alias_info);
+        const std::optional<LsqForwardResult> forwarded =
+            lsq.forwardable_load(2, kMmioShapedVa, 4, ram_alias_info);
+        if (!expect(forwarded.has_value() && forwarded->value == 0x88776655ULL,
+                    "LSQ forwarding should use translated RAM PA metadata instead of rejecting an MMIO-shaped VA")) {
             return 1;
         }
     }

@@ -90,6 +90,7 @@ const SimpleL1DataCache& CPU::l1_data_cache() const {
 void cpu_init(CPU& cpu, uint64_t entry) {
     cpu.core().reset(entry);
     cpu.csr().reset();
+    cpu.trap().clear_reservation();
     cpu.address_space().flush_tlb();
     cpu.l1_data_cache().clear();
 }

@@ -2,6 +2,7 @@
 
 #include "../cpu.h"
 #include "../isa/effects.h"
+#include "../isa/instruction_semantics.h"
 #include "../mem/bus.h"
 
 namespace {
@@ -68,95 +69,26 @@ bool is_standard_fp_store(const Insn& insn) {
 InsnEffects build_memory_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v, int64_t imm) {
     InsnEffects effects;
     effects.mem.addr = rs1v + static_cast<uint64_t>(imm);
-
-    switch (insn.opcode) {
-    case 0x03:
-        effects.mem.kind = MemoryRequest::Kind::Load;
-        effects.mem.rd = insn.rd;
-        switch (insn.funct3) {
-        case 0:
-            effects.mem.size = 1;
-            effects.mem.sign_extend = true;
-            return effects;
-        case 1:
-            effects.mem.size = 2;
-            effects.mem.sign_extend = true;
-            return effects;
-        case 2:
-            effects.mem.size = 4;
-            effects.mem.sign_extend = true;
-            return effects;
-        case 3:
-            effects.mem.size = 8;
-            return effects;
-        case 4:
-            effects.mem.size = 1;
-            return effects;
-        case 5:
-            effects.mem.size = 2;
-            return effects;
-        case 6:
-            effects.mem.size = 4;
-            return effects;
-        default:
-            return illegal_memory_effect(insn.raw);
-        }
-    case 0x07:
-        effects.mem.kind = MemoryRequest::Kind::Load;
-        effects.mem.target = MemoryRequest::Target::Float;
-        effects.mem.rd = insn.rd;
-        effects.floating_state_touched = true;
-        switch (insn.funct3) {
-        case 2:
-            effects.mem.size = 4;
-            return effects;
-        case 3:
-            effects.mem.size = 8;
-            return effects;
-        default:
-            return illegal_memory_effect(insn.raw);
-        }
-    case 0x23:
-        effects.mem.kind = MemoryRequest::Kind::Store;
-        effects.mem.store_value = rs2v;
-        effects.mem.commit_at_boundary = true;
-        effects.mem.non_speculative = true;
-        switch (insn.funct3) {
-        case 0:
-            effects.mem.size = 1;
-            return effects;
-        case 1:
-            effects.mem.size = 2;
-            return effects;
-        case 2:
-            effects.mem.size = 4;
-            return effects;
-        case 3:
-            effects.mem.size = 8;
-            return effects;
-        default:
-            return illegal_memory_effect(insn.raw);
-        }
-    case 0x27:
-        effects.mem.kind = MemoryRequest::Kind::Store;
-        effects.mem.target = MemoryRequest::Target::Float;
-        effects.mem.store_value = rs2v;
-        effects.mem.commit_at_boundary = true;
-        effects.mem.non_speculative = true;
-        effects.floating_state_touched = true;
-        switch (insn.funct3) {
-        case 2:
-            effects.mem.size = 4;
-            return effects;
-        case 3:
-            effects.mem.size = 8;
-            return effects;
-        default:
-            return illegal_memory_effect(insn.raw);
-        }
-    default:
+    const InstructionMemoryDescriptor descriptor = InstructionSemantics::describe_memory(insn);
+    if (!descriptor.valid) {
         return illegal_memory_effect(insn.raw);
     }
+
+    effects.mem.kind = descriptor.kind;
+    effects.mem.target = descriptor.target;
+    effects.mem.size = descriptor.size;
+    effects.mem.sign_extend = descriptor.sign_extend;
+    effects.mem.commit_at_boundary = descriptor.commit_at_boundary;
+    effects.mem.non_speculative = descriptor.non_speculative;
+    if (descriptor.kind == MemoryRequest::Kind::Load) {
+        effects.mem.rd = insn.rd;
+    } else if (descriptor.kind == MemoryRequest::Kind::Store) {
+        effects.mem.store_value = rs2v;
+    }
+    if (descriptor.target == MemoryRequest::Target::Float) {
+        effects.floating_state_touched = true;
+    }
+    return effects;
 }
 
 bool apply_memory_effects(CPU& cpu, Bus& bus, const InsnEffects& effects) {

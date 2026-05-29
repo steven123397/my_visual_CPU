@@ -414,6 +414,49 @@ bool test_functional_profile_counts_atomic_lr_sc_observations() {
                   "functional atomic profile smoke should record the first-touch miss");
 }
 
+bool test_pipeline_profile_counts_atomic_lr_sc_observations() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    write32(ram, kEntry + 0, encode_amo(0x02, false, false, 0, 10, 0x2, 5));
+    write32(ram, kEntry + 4, encode_amo(0x03, false, false, 11, 10, 0x2, 6));
+    write32(ram, kEntry + 8, kAddiA7Exit);
+    write32(ram, kEntry + 12, kEcall);
+    ram.store(kDataAddr, 0x11223344U, 4);
+
+    cpu.core().write_gpr(10, kDataAddr);
+    cpu.core().write_gpr(11, 0x55667788U);
+
+    PipelineBackend backend(cpu, bus);
+    for (int step = 0; step < 32 && !cpu.core().halted(); ++step) {
+        backend.step();
+    }
+
+    const ExecutionProfileSnapshot profile = backend.debug_snapshot().profile;
+    const ExecutionMemoryRegionEntry* ram_region = find_memory_region(profile, "ram");
+
+    return expect(cpu.core().halted(),
+                  "pipeline atomic profile smoke should halt via ecall") &&
+           expect(profile.total_memory_observations == 2,
+                  "pipeline atomic profile smoke should count lr/sc as two memory observations") &&
+           expect(ram_region != nullptr,
+                  "pipeline atomic profile smoke should classify lr/sc observations as RAM") &&
+           expect(ram_region->reads == 1,
+                  "pipeline atomic profile smoke should count lr as a read observation") &&
+           expect(ram_region->writes == 1,
+                  "pipeline atomic profile smoke should count successful sc as a write observation") &&
+           expect(ram_region->bytes == 8,
+                  "pipeline atomic profile smoke should preserve the lr/sc access widths") &&
+           expect(profile.shadow_cache.line_accesses == 2,
+                  "pipeline atomic profile smoke should count both atomic accesses in shadow cache") &&
+           expect(profile.shadow_cache.hits == 1,
+                  "pipeline atomic profile smoke should record the reused-line hit") &&
+           expect(profile.shadow_cache.misses == 1,
+                  "pipeline atomic profile smoke should record the first-touch miss");
+}
+
 }  // namespace
 
 int main() {
@@ -436,6 +479,9 @@ int main() {
         return 1;
     }
     if (!test_functional_profile_counts_atomic_lr_sc_observations()) {
+        return 1;
+    }
+    if (!test_pipeline_profile_counts_atomic_lr_sc_observations()) {
         return 1;
     }
     std::puts("execution_profile_smoke: PASS");

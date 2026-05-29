@@ -1400,3 +1400,54 @@
                 "fdiv.s 1/3 should preserve the current rounding-mode bits")) {
         return 1;
     }
+
+    cpu.csr().write(CSR_FCSR, 4ULL << 5, cpu.core());
+    cpu.core().write_fpr(9, float_to_fpr_raw_bits(1.0f));
+    cpu.core().write_fpr(10, float_to_fpr_raw_bits(3.0f));
+    const InsnEffects fdiv_s_rmm_effects = InstructionSemantics::execute(fdiv_s, ctx);
+    if (!expect(!fdiv_s_rmm_effects.trap.valid,
+                "fdiv.s dyn should accept frm=RMM instead of trapping as illegal")) {
+        return 1;
+    }
+    if (!expect(fdiv_s_rmm_effects.fp_write.enable,
+                "fdiv.s dyn frm=RMM should produce an fp register write")) {
+        return 1;
+    }
+    if (!expect(fdiv_s_rmm_effects.csr_write.enable,
+                "fdiv.s dyn frm=RMM should produce a floating-point CSR write for inexact flags")) {
+        return 1;
+    }
+    if (!expect((fdiv_s_rmm_effects.csr_write.value & ~0x1fULL) == (4ULL << 5),
+                "fdiv.s dyn frm=RMM should preserve the current rounding-mode bits")) {
+        return 1;
+    }
+
+    cpu.csr().write(CSR_FCSR, 0, cpu.core());
+    cpu.core().write_fpr(10, double_to_raw_bits(1.0 + std::ldexp(1.0, -24)));
+    Insn fcvt_s_d_rmm{};
+    decode(fp_with_rm(0x401507d3U, 4), &fcvt_s_d_rmm);  // fcvt.s.d fa5, fa0, rmm
+    if (!expect(InstructionSemantics::supports(fcvt_s_d_rmm),
+                "fcvt.s.d should be supported by instruction semantics")) {
+        return 1;
+    }
+    const InsnEffects fcvt_s_d_rmm_effects = InstructionSemantics::execute(fcvt_s_d_rmm, ctx);
+    if (!expect(!fcvt_s_d_rmm_effects.trap.valid,
+                "fcvt.s.d rm=RMM should accept a legal immediate rounding mode")) {
+        return 1;
+    }
+    if (!expect(fcvt_s_d_rmm_effects.fp_write.enable,
+                "fcvt.s.d rm=RMM should produce an fp register write")) {
+        return 1;
+    }
+    if (!expect(fcvt_s_d_rmm_effects.fp_write.value == float_to_fpr_raw_bits(1.00000011920928955078125f),
+                "fcvt.s.d rm=RMM should round the half-ulp tie away from zero")) {
+        return 1;
+    }
+    if (!expect(fcvt_s_d_rmm_effects.csr_write.enable,
+                "fcvt.s.d rm=RMM should produce a floating-point CSR write for inexact flags")) {
+        return 1;
+    }
+    if (!expect((fcvt_s_d_rmm_effects.csr_write.value & ~0x1fULL) == 0,
+                "fcvt.s.d rm=RMM should preserve the current dynamic rounding-mode bits")) {
+        return 1;
+    }

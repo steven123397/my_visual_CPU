@@ -87,6 +87,8 @@ struct DebugBusAccess {
     bool success{true};
     bool write{false};
     bool mmio{false};
+    std::string source{};
+    std::string kind{};
     uint64_t addr{0};
     uint64_t value{0};
     int size{0};
@@ -206,6 +208,7 @@ struct DebugSnapshot {
     DebugVectorSnapshot vector{};
     DebugCsrSnapshot csrs{};
     DebugBusAccess bus{};
+    DebugBusAccess guest_bus{};
     DebugDeviceSnapshot devices{};
     std::vector<DebugEvent> events{};
 };

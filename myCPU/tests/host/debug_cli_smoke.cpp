@@ -372,6 +372,8 @@ int main() {
                 "\"success\":false",
                 "\"write\":true",
                 "\"mmio\":true",
+                "\"source\":\"guest-data\"",
+                "\"kind\":\"mmio-commit\"",
                 "\"device\":\"uart\"",
                 "\"addr\":\"0x10000000\"",
                 "\"size\":4",

@@ -268,6 +268,28 @@ void append_l1_data_cache(std::ostringstream& out, const DebugL1DataCacheSnapsho
         << "}";
 }
 
+void append_bus_access(std::ostringstream& out, const DebugBusAccess& access) {
+    out << "{"
+        << "\"valid\":" << (access.valid ? "true" : "false")
+        << ",\"success\":" << (access.success ? "true" : "false")
+        << ",\"write\":" << (access.write ? "true" : "false")
+        << ",\"mmio\":" << (access.mmio ? "true" : "false")
+        << ",\"source\":";
+    append_json_string(out, access.source);
+    out << ",\"kind\":";
+    append_json_string(out, access.kind);
+    out << ",\"addr\":";
+    append_json_string(out, hex_u64(access.addr));
+    out << ",\"value\":";
+    append_json_string(out, hex_u64(access.value));
+    out << ",\"size\":" << access.size
+        << ",\"device\":";
+    append_json_string(out, access.device);
+    out << ",\"detail\":";
+    append_json_string(out, access.detail);
+    out << "}";
+}
+
 std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
     std::ostringstream out;
     out << "{"
@@ -390,21 +412,11 @@ std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
     append_json_string(out, hex_u64(snapshot.csrs.stvec));
     out << ",\"satp\":";
     append_json_string(out, hex_u64(snapshot.csrs.satp));
-    out << "},\"bus\":{"
-        << "\"valid\":" << (snapshot.bus.valid ? "true" : "false")
-        << ",\"success\":" << (snapshot.bus.success ? "true" : "false")
-        << ",\"write\":" << (snapshot.bus.write ? "true" : "false")
-        << ",\"mmio\":" << (snapshot.bus.mmio ? "true" : "false")
-        << ",\"addr\":";
-    append_json_string(out, hex_u64(snapshot.bus.addr));
-    out << ",\"value\":";
-    append_json_string(out, hex_u64(snapshot.bus.value));
-    out << ",\"size\":" << snapshot.bus.size
-        << ",\"device\":";
-    append_json_string(out, snapshot.bus.device);
-    out << ",\"detail\":";
-    append_json_string(out, snapshot.bus.detail);
-    out << "},\"devices\":{"
+    out << "},\"bus\":";
+    append_bus_access(out, snapshot.bus);
+    out << ",\"guest_bus\":";
+    append_bus_access(out, snapshot.guest_bus);
+    out << ",\"devices\":{"
         << "\"uart\":{"
         << "\"ier\":" << static_cast<unsigned>(snapshot.devices.uart.ier)
         << ",\"thre_interrupt_asserted\":" << (snapshot.devices.uart.thre_interrupt_asserted ? "true" : "false")

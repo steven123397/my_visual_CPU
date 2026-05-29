@@ -12,6 +12,7 @@
 
 #include "../../src/platform/machine.h"
 #include "../../src/platform/address_map.h"
+#include "../../src/isa/atomic_contract.h"
 
 namespace {
 
@@ -247,6 +248,29 @@ bool expect_payload_load_invalidates_enabled_l1d(Machine& machine,
                   "payload overwrite should invalidate the cached line before the next load");
 }
 
+bool expect_stale_store_conditional_fails(Machine& machine,
+                                          uint64_t addr,
+                                          uint32_t attempted_value,
+                                          uint16_t expected_memory,
+                                          const char* context) {
+    const AtomicApplyResult sc_result =
+        apply_atomic_request(machine.cpu(),
+                             machine.bus(),
+                             AtomicRequest{
+                                 .kind = AtomicRequest::Kind::StoreConditional,
+                                 .addr = addr,
+                                 .store_value = attempted_value,
+                                 .rd = 5,
+                                 .size = 4,
+                             });
+    uint64_t memory = 0;
+    return expect(sc_result.ok, context) &&
+           expect(sc_result.rd_write.enable && sc_result.rd_write.value == 1,
+                  "store-conditional should fail after reload clears the old reservation") &&
+           expect(machine.bus().try_load(addr, 2, memory) && memory == expected_memory,
+                  "failed store-conditional should not overwrite the reloaded bytes");
+}
+
 bool trigger_no_media_storage_error(Machine& machine) {
     machine.storage().clear_image();
     return expect(machine.bus().try_store(STORAGE_BASE + STORAGE_REG_COMMAND,
@@ -347,6 +371,44 @@ int main() {
                                                      kBinaryAddr,
                                                      second_bytes[0],
                                                      second_bytes[1])) {
+                std::remove(first_binary.c_str());
+                std::remove(second_binary.c_str());
+                std::remove(first_elf.c_str());
+                std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
+                return 1;
+            }
+        }
+
+        {
+            Machine machine;
+            machine.load_binary(first_binary, kBinaryAddr);
+            machine.cpu().trap().set_reservation(kBinaryAddr, 4);
+            machine.load_binary(second_binary, kBinaryAddr);
+            if (!expect_stale_store_conditional_fails(machine,
+                                                       kBinaryAddr,
+                                                       0xA5A5A5A5U,
+                                                       0x2211,
+                                                       "store-conditional apply should complete after image reload")) {
+                std::remove(first_binary.c_str());
+                std::remove(second_binary.c_str());
+                std::remove(first_elf.c_str());
+                std::remove(second_elf.c_str());
+                std::remove(storage_image.c_str());
+                return 1;
+            }
+        }
+
+        {
+            Machine machine;
+            machine.load_binary(first_binary, kBinaryAddr);
+            machine.cpu().trap().set_reservation(kBinaryAddr, 4);
+            machine.load_binary_payload(second_binary, kBinaryAddr);
+            if (!expect_stale_store_conditional_fails(machine,
+                                                       kBinaryAddr,
+                                                       0x5A5A5A5AU,
+                                                       0x2211,
+                                                       "store-conditional apply should complete after payload load")) {
                 std::remove(first_binary.c_str());
                 std::remove(second_binary.c_str());
                 std::remove(first_elf.c_str());

@@ -3,12 +3,15 @@
 #include <cstdint>
 #include <list>
 #include <map>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "../arch/core_state.h"
+#include "../isa/atomic_contract.h"
 #include "../mem/memory_region.h"
+#include "pipeline_commit_boundary.h"
 
 struct ExecutionRetireObservation {
     uint64_t pc{0};
@@ -134,6 +137,20 @@ struct ExecutionProfileSnapshot {
     std::vector<ExecutionMemoryRegionEntry> memory_regions{};
     std::vector<ExecutionPcCostEntry> pc_costs{};
 };
+
+class Bus;
+
+ExecutionMemoryObservation fault_memory_observation(uint64_t pc,
+                                                    uint32_t raw,
+                                                    bool write,
+                                                    uint64_t bytes);
+PhysicalRegionInfo observed_region(const Bus& bus, uint64_t paddr, uint64_t bytes);
+std::optional<ExecutionMemoryObservation> make_atomic_memory_observation(
+    const Bus& bus,
+    const AtomicRequest& request,
+    uint64_t pc,
+    uint32_t raw,
+    const CommitBoundaryResult& result);
 
 class ExecutionProfile {
 public:

@@ -40,7 +40,7 @@ PrivilegeMode decode_privilege_mode(uint64_t encoded) {
     case 3:
         return PrivilegeMode::Machine;
     default:
-        return PrivilegeMode::Machine;
+        return PrivilegeMode::User;
     }
 }
 

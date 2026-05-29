@@ -191,6 +191,42 @@
         Bus bus(ram);
         CPU cpu;
         cpu_init(cpu, kEntry);
+
+        cpu.core().write_gpr(10, 1);
+        write16(ram, kEntry + 0, kCAddiA0Minus1);
+        write16(ram, kEntry + 2, kCBeqzA0Plus4);
+        write16(ram, kEntry + 4, kCAddiwA1Plus1);
+        write16(ram, kEntry + 6, kCAddiwA1Plus1);
+        write32(ram, kEntry + 8, kAddiA7Exit);
+        write32(ram, kEntry + 12, kEcall);
+
+        PipelineBackend backend(cpu, bus);
+
+        for (int i = 0; i < 32 && !cpu.core().halted(); ++i) {
+            backend.step();
+        }
+        if (!expect(cpu.core().halted(), "pipeline RVC branch smoke should eventually halt")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(10) == 0,
+                    "pipeline should execute the compressed fallthrough instruction at pc + 2")) {
+            return 1;
+        }
+        if (!expect(cpu.core().read_gpr(11) == 1,
+                    "pipeline should redirect a compressed branch using halfword PCs")) {
+            return 1;
+        }
+        if (!expect(cpu.core().pc() == kEntry + 16,
+                    "pipeline compressed ecall should retire after halfword-packed code")) {
+            return 1;
+        }
+    }
+
+    {
+        Ram ram;
+        Bus bus(ram);
+        CPU cpu;
+        cpu_init(cpu, kEntry);
         cpu.csr().write(CSR_MTVEC, kTrapVector, cpu.core());
 
         write32(ram, kEntry + 0, kInvalidInsn);

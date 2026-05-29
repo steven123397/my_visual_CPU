@@ -19,7 +19,7 @@ bool expect(bool condition, const char* message) {
     return true;
 }
 
-constexpr uint64_t kMstatusFsDirty = 0x3ULL << 12;
+constexpr uint64_t kMstatusFsDirty = MSTATUS_FS_DIRTY;
 constexpr uint64_t kMstatusSd = 1ULL << 63;
 constexpr uint64_t kEntry = 0x80000000ULL;
 
@@ -50,6 +50,10 @@ constexpr uint64_t kEntry = 0x80000000ULL;
     static_assert(sizeof(single_bits) == sizeof(value));
     std::memcpy(&value, &single_bits, sizeof(single_bits));
     return value;
+}
+
+[[maybe_unused]] constexpr uint32_t fp_with_rm(uint32_t raw, uint32_t rm) {
+    return (raw & ~(0x7U << 12)) | ((rm & 0x7U) << 12);
 }
 
 }  // namespace

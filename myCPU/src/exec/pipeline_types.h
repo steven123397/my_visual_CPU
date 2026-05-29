@@ -17,6 +17,7 @@ struct StageSlot {
     SequenceId sequence_id{};
     uint64_t pc{0};
     uint32_t raw{0};
+    uint8_t insn_size{4};
     Insn insn{};
     PredictorQueryResult prediction{};
     uint64_t rs1v{0};
@@ -28,6 +29,7 @@ struct StageSlot {
     uint32_t previous_rd_phys{0};
     RobIndex rob_index{};
     LsqIndex lsq_index{};
+    LsqAddressInfo lsq_address_info{};
     InsnEffects effects{};
 };
 

@@ -2,8 +2,7 @@
 
 #include <algorithm>
 
-#include "floating_ops.h"
-#include "memory_ops.h"
+#include "../isa/instruction_semantics.h"
 #include "vector_ops.h"
 
 extern "C" {
@@ -16,22 +15,14 @@ bool is_vector_raw(uint32_t raw) {
     Insn insn{};
     decode(raw, &insn);
     insn.raw = raw;
-    if (is_standard_fp_load(insn) || is_standard_fp_store(insn)) {
+    if (InstructionSemantics::describe_memory(insn).valid) {
         return false;
     }
     return is_vector_opcode(insn.opcode);
 }
 
 bool writes_fp_destination(const Insn& insn) {
-    return is_standard_fp_load(insn) || is_fmv_d_x(insn) || is_fmv_w_x(insn) || is_fmv_d(insn) || is_fneg_d(insn) ||
-           is_fsgnj_d(insn) || is_fsgnjn_d(insn) || is_fsgnjx_d(insn) || is_fsgnj_s(insn) ||
-           is_fsgnjn_s(insn) || is_fsgnjx_s(insn) || is_fadd_s(insn) || is_fsub_s(insn) || is_fmul_s(insn) || is_fdiv_s(insn) ||
-           is_fadd_d(insn) || is_fsub_d(insn) || is_fmul_d(insn) ||
-           is_fdiv_d(insn) || is_fmax_s(insn) || is_fmin_s(insn) || is_fmax_d(insn) || is_fmin_d(insn) ||
-           is_fsqrt_s(insn) || is_fmadd_s(insn) || is_fmsub_s(insn) || is_fnmsub_s(insn) || is_fnmadd_s(insn) ||
-           is_fmadd_d(insn) || is_fmsub_d(insn) || is_fnmsub_d(insn) || is_fnmadd_d(insn) || is_fsqrt_d(insn) || is_fcvt_d_w(insn) ||
-           is_fcvt_d_wu(insn) || is_fcvt_d_l(insn) || is_fcvt_d_lu(insn) ||
-           is_fcvt_s_w(insn) || is_fcvt_s_wu(insn) || is_fcvt_s_l(insn) || is_fcvt_s_lu(insn) || is_fcvt_d_s(insn) || is_fcvt_s_d(insn);
+    return InstructionSemantics::describe_registers(insn).rd == RegisterOperandKind::Fpr;
 }
 
 }  // namespace
@@ -43,6 +34,7 @@ RobIndex ReorderBuffer::allocate(const RobAllocate& entry) {
         .sequence_id = entry.sequence_id,
         .pc = entry.pc,
         .raw = entry.raw,
+        .insn_size = entry.insn_size,
         .arch_rd = entry.arch_rd,
         .phys_rd = entry.phys_rd,
         .previous_phys_rd = entry.previous_phys_rd,

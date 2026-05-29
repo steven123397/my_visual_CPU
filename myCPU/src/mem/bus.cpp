@@ -12,11 +12,19 @@ bool ranges_overlap(const Device& lhs, const Device& rhs) {
     return lhs.base() < rhs.end() && rhs.base() < lhs.end();
 }
 
-void record_unmapped_access(DebugBusAccess& access, bool write, uint64_t addr, uint64_t value, int size) {
+void record_unmapped_access(DebugBusAccess& access,
+                            bool write,
+                            uint64_t addr,
+                            uint64_t value,
+                            int size,
+                            const char* source,
+                            const char* kind) {
     access.valid = true;
     access.success = false;
     access.write = write;
     access.mmio = false;
+    access.source = source != nullptr ? source : "";
+    access.kind = kind != nullptr ? kind : "";
     access.addr = addr;
     access.value = value;
     access.size = size;
@@ -59,6 +67,13 @@ bool validate_dma_request(const DmaTransaction& transaction, void* data, DmaTran
         return false;
     }
     return true;
+}
+
+const char* observed_kind_for_device(const Device& device, const char* source, const char* kind) {
+    if (source != nullptr && std::strcmp(source, "guest-data") == 0 && device.is_mmio()) {
+        return "mmio-commit";
+    }
+    return kind;
 }
 
 }  // namespace
@@ -129,34 +144,42 @@ PhysicalSpanInfo Bus::describe_span(uint64_t addr, uint64_t bytes) const {
 }
 
 bool Bus::try_load(uint64_t addr, int size, uint64_t& value) {
+    return try_load_observed(addr, size, value, "internal", "bus-load");
+}
+
+bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
+    return try_store_observed(addr, value, size, "internal", "bus-store");
+}
+
+bool Bus::try_load_observed(uint64_t addr, int size, uint64_t& value, const char* source, const char* kind) {
     if (Device* device = find_device(addr, size)) {
         try {
             value = device->load(addr, size);
-            record_access(*device, true, false, addr, value, size, "");
+            record_access(*device, true, false, addr, value, size, "", source, kind);
             return true;
         } catch (const std::exception& ex) {
-            record_access(*device, false, false, addr, 0, size, ex.what());
+            record_access(*device, false, false, addr, 0, size, ex.what(), source, kind);
             value = 0;
             return false;
         }
     }
-    record_unmapped_access(last_access_, false, addr, 0, size);
+    record_unmapped(false, addr, 0, size, source, kind);
     value = 0;
     return false;
 }
 
-bool Bus::try_store(uint64_t addr, uint64_t value, int size) {
+bool Bus::try_store_observed(uint64_t addr, uint64_t value, int size, const char* source, const char* kind) {
     if (Device* device = find_device(addr, size)) {
         try {
             device->store(addr, value, size);
-            record_access(*device, true, true, addr, value, size, "");
+            record_access(*device, true, true, addr, value, size, "", source, kind);
             return true;
         } catch (const std::exception& ex) {
-            record_access(*device, false, true, addr, value, size, ex.what());
+            record_access(*device, false, true, addr, value, size, ex.what(), source, kind);
             return false;
         }
     }
-    record_unmapped_access(last_access_, true, addr, value, size);
+    record_unmapped(true, addr, value, size, source, kind);
     return false;
 }
 
@@ -311,6 +334,10 @@ const DebugBusAccess& Bus::last_access() const {
     return last_access_;
 }
 
+const DebugBusAccess& Bus::last_guest_access() const {
+    return last_guest_access_;
+}
+
 void Bus::record_access(
     const Device& device,
     bool success,
@@ -318,14 +345,34 @@ void Bus::record_access(
     uint64_t addr,
     uint64_t value,
     int size,
-    const char* detail) {
+    const char* detail,
+    const char* source,
+    const char* kind) {
     last_access_.valid = true;
     last_access_.success = success;
     last_access_.write = write;
     last_access_.mmio = device.is_mmio();
+    last_access_.source = source != nullptr ? source : "";
+    last_access_.kind = observed_kind_for_device(device, source, kind);
     last_access_.addr = addr;
     last_access_.value = value;
     last_access_.size = size;
     last_access_.device = device.debug_name();
     last_access_.detail = detail != nullptr ? detail : "";
+    if (last_access_.source == "guest-data" || last_access_.kind == "mmio-commit") {
+        last_guest_access_ = last_access_;
+    }
+}
+
+void Bus::record_unmapped(
+    bool write,
+    uint64_t addr,
+    uint64_t value,
+    int size,
+    const char* source,
+    const char* kind) {
+    record_unmapped_access(last_access_, write, addr, value, size, source, kind);
+    if (last_access_.source == "guest-data" || last_access_.kind == "mmio-commit") {
+        last_guest_access_ = last_access_;
+    }
 }

@@ -212,7 +212,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
     switch (request.kind) {
     case AtomicRequest::Kind::LoadReserved: {
         uint64_t loaded = 0;
-        if (!bus.try_load(translated.paddr, request.size, loaded)) {
+        if (!bus.try_load_observed(translated.paddr, request.size, loaded, "guest-data", "atomic-load-reserved")) {
             result.trap = trap_request(CAUSE_LOAD_ACCESS_FAULT, request.addr);
             return result;
         }
@@ -232,9 +232,11 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
             result.ok = true;
             return result;
         }
-        if (!bus.try_store(translated.paddr,
-                           store_masked_value(request.store_value, request.size),
-                           request.size)) {
+        if (!bus.try_store_observed(translated.paddr,
+                                    store_masked_value(request.store_value, request.size),
+                                    request.size,
+                                    "guest-data",
+                                    "atomic-store-conditional")) {
             result.trap = trap_request(CAUSE_STORE_ACCESS_FAULT, request.addr);
             return result;
         }
@@ -255,7 +257,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
     case AtomicRequest::Kind::MinUnsigned:
     case AtomicRequest::Kind::MaxUnsigned: {
         uint64_t loaded = 0;
-        if (!bus.try_load(translated.paddr, request.size, loaded)) {
+        if (!bus.try_load_observed(translated.paddr, request.size, loaded, "guest-data", "atomic-load")) {
             result.trap = trap_request(CAUSE_STORE_ACCESS_FAULT, request.addr);
             return result;
         }
@@ -264,9 +266,11 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
                                                    loaded,
                                                    request.store_value,
                                                    request.size);
-        if (!bus.try_store(translated.paddr,
-                           store_masked_value(stored, request.size),
-                           request.size)) {
+        if (!bus.try_store_observed(translated.paddr,
+                                    store_masked_value(stored, request.size),
+                                    request.size,
+                                    "guest-data",
+                                    "atomic-store")) {
             result.trap = trap_request(CAUSE_STORE_ACCESS_FAULT, request.addr);
             return result;
         }

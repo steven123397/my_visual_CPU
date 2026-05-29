@@ -1,7 +1,6 @@
 #include "pipeline_hazards.h"
 
-#include "floating_ops.h"
-#include "memory_ops.h"
+#include "../isa/instruction_semantics.h"
 
 namespace {
 
@@ -32,99 +31,25 @@ bool forward_operand_from_slot(const StageSlot& slot, uint32_t phys, uint64_t& v
 namespace pipeline_hazards {
 
 bool reads_rs1(const Insn& insn) {
-    if (is_fmv_d_x(insn) || is_fmv_w_x(insn) || is_fcvt_d_w(insn) || is_fcvt_d_wu(insn) || is_fcvt_d_l(insn) || is_fcvt_d_lu(insn) ||
-        is_fcvt_s_w(insn) || is_fcvt_s_wu(insn) || is_fcvt_s_l(insn) || is_fcvt_s_lu(insn)) {
-        return true;
-    }
-    if (is_fcvt_w_d(insn) || is_fcvt_wu_d(insn) || is_fcvt_l_d(insn) || is_fcvt_lu_d(insn) || is_fcvt_w_s(insn) ||
-        is_fcvt_wu_s(insn) || is_fcvt_l_s(insn) || is_fcvt_lu_s(insn)) {
-        return false;
-    }
-    switch (insn.opcode) {
-    case 0x13:
-    case 0x1B:
-    case 0x33:
-    case 0x3B:
-    case 0x67:
-    case 0x63:
-    case 0x03:
-    case 0x07:
-    case 0x23:
-    case 0x27:
-        return true;
-    case 0x73:
-        switch (insn.funct3) {
-        case 1:
-        case 2:
-        case 3:
-            return true;
-        default:
-            return false;
-        }
-    default:
-        return false;
-    }
+    return InstructionSemantics::describe_registers(insn).rs1 == RegisterOperandKind::Gpr;
 }
 
 bool reads_rs2(const Insn& insn) {
-    if (is_standard_fp_store(insn)) {
-        return false;
-    }
-    if (is_fadd_s(insn) || is_fsub_s(insn) || is_fmul_s(insn) || is_fdiv_s(insn) ||
-        is_fadd_d(insn) || is_fsub_d(insn) || is_fmul_d(insn) || is_fdiv_d(insn) ||
-        is_fmax_s(insn) || is_fmin_s(insn) || is_fmax_d(insn) || is_fmin_d(insn) ||
-        is_fsgnj_d(insn) || is_fsgnjn_d(insn) || is_fsgnjx_d(insn) ||
-        is_fsgnj_s(insn) || is_fsgnjn_s(insn) || is_fsgnjx_s(insn) ||
-        is_feq_s(insn) || is_flt_s(insn) || is_fle_s(insn) ||
-        is_feq_d(insn) || is_flt_d(insn) || is_fle_d(insn)) {
-        return false;
-    }
-    switch (insn.opcode) {
-    case 0x33:
-    case 0x3B:
-    case 0x63:
-    case 0x23:
-        return true;
-    default:
-        return false;
-    }
+    return InstructionSemantics::describe_registers(insn).rs2 == RegisterOperandKind::Gpr;
 }
 
 bool writes_rd(const Insn& insn) {
-    if (is_standard_fp_load(insn)) {
-        return false;
-    }
-    if ((is_fmv_x_d(insn) || is_fmv_x_w(insn) || is_fcvt_w_d(insn) || is_fcvt_wu_d(insn) || is_fcvt_l_d(insn) || is_fcvt_lu_d(insn) ||
-         is_fcvt_w_s(insn) || is_fcvt_wu_s(insn) || is_fcvt_l_s(insn) || is_fcvt_lu_s(insn) ||
-         is_feq_s(insn) || is_flt_s(insn) || is_fle_s(insn) ||
-         is_feq_d(insn) || is_flt_d(insn) || is_fle_d(insn) || is_fclass_s(insn) || is_fclass_d(insn)) &&
-        insn.rd != 0) {
-        return true;
-    }
-    switch (insn.opcode) {
-    case 0x03:
-    case 0x13:
-    case 0x17:
-    case 0x1B:
-    case 0x33:
-    case 0x37:
-    case 0x3B:
-    case 0x67:
-    case 0x6F:
-        return insn.rd != 0;
-    case 0x73:
-        return insn.funct3 != 0 && insn.rd != 0;
-    default:
-        return false;
-    }
+    return InstructionSemantics::describe_registers(insn).rd == RegisterOperandKind::Gpr;
 }
 
 bool is_load_slot(const StageSlot& slot) {
-    return slot.valid && (slot.insn.opcode == 0x03 || is_standard_fp_load(slot.insn));
+    return slot.valid &&
+           InstructionSemantics::describe_memory(slot.insn).kind == MemoryRequest::Kind::Load;
 }
 
 bool is_store_slot(const StageSlot& slot) {
-    return slot.valid && (slot.insn.opcode == 0x23 || is_standard_fp_store(slot.insn));
+    return slot.valid &&
+           InstructionSemantics::describe_memory(slot.insn).kind == MemoryRequest::Kind::Store;
 }
 
 uint32_t inflight_dest_phys(const StageSlot& slot) {

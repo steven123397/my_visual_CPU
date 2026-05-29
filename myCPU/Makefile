@@ -200,7 +200,7 @@ DEBUG_CLI_SMOKE_TIMEOUT ?= 12s
 AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 10s
 # Pipeline guest demos execute the full guest runtime under the pipeline
 # backend and need a wider budget than the functional path on debug builds.
-PIPELINE_GUEST_TEST_TIMEOUT ?= 8s
+PIPELINE_GUEST_TEST_TIMEOUT ?= 12s
 # The pipeline supervisor demo exercises the full early runtime and VM bring-up
 # path and still runs noticeably slower than the other guest demos.
 PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 24s

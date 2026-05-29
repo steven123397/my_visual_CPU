@@ -5,6 +5,8 @@
 #include <optional>
 #include <vector>
 
+#include "../mem/memory_region.h"
+
 enum class LsqEntryKind : uint8_t {
     Load,
     Store,
@@ -41,6 +43,15 @@ struct LsqForwardResult {
     uint64_t store_sequence_id{0};
 };
 
+struct LsqAddressInfo {
+    bool translation_fault{false};
+    bool crosses_page{false};
+    bool paddr_valid{false};
+    uint64_t paddr{0};
+    bool region_valid{false};
+    PhysicalRegionInfo region{};
+};
+
 struct LsqLoadRequest {
     uint64_t sequence_id{0};
     uint8_t rd{0};
@@ -66,6 +77,7 @@ struct LsqEntry {
     bool order_ready{false};
     bool address_ready{false};
     uint64_t address{0};
+    LsqAddressInfo address_info{};
     bool data_ready{false};
     uint64_t data{0};
     bool sign_extend{false};
@@ -83,14 +95,23 @@ public:
     LsqIndex enqueue_store(const LsqStoreRequest& req);
     void mark_order_ready(LsqIndex index);
     void mark_address_ready(LsqIndex index, uint64_t addr);
+    void mark_address_ready(LsqIndex index, uint64_t addr, const LsqAddressInfo& info);
     void mark_data_ready(LsqIndex index, uint64_t value);
     std::optional<LsqEntry> peek(LsqIndex index) const;
     std::optional<LsqEntry> peek_oldest() const;
     LsqLoadStatus classify_load(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
+    LsqLoadStatus classify_load(uint64_t sequence_id,
+                                uint64_t load_addr,
+                                int load_size,
+                                const LsqAddressInfo& load_info) const;
     std::optional<LsqForwardResult> forwardable_load(const Bus& bus,
                                                      uint64_t sequence_id,
                                                      uint64_t load_addr,
                                                      int load_size) const;
+    std::optional<LsqForwardResult> forwardable_load(uint64_t sequence_id,
+                                                     uint64_t load_addr,
+                                                     int load_size,
+                                                     const LsqAddressInfo& load_info) const;
     LsqLoadStatus active_replay() const;
     LsqLoadStatus oldest_load_status() const;
     bool has_blocking_older_store(uint64_t sequence_id, uint64_t load_addr, int load_size) const;
