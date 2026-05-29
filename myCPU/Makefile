@@ -1004,10 +1004,10 @@ test-pipeline-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_supervisor_demo,$(GUEST_SUPERVISOR_DEMO),KRN,$(PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=26 proc=ps/meminfo/schedstat/fsstat,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=26 proc=ps/meminfo/schedstat/fsstat,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_fault_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_FAULT_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(TEST_TIMEOUT),,,)

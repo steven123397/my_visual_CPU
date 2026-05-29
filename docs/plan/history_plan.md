@@ -27,7 +27,7 @@
 
 - 原文件：`course_os_kernel_alpha_stage1_plan.md`
 - 完成内容：完成《操作系统课程设计》`kernel_alpha` 第一阶段落地，把正向 `kernel_alpha_demo` 从旧 `KMVPETDS` bring-up marker 切换为 `KMVPET|course-os-stage1 ...` 课程 OS 证据摘要；第一阶段覆盖 FCFS / RR / CFS-lite、Demand Paging / Clock / `kmalloc` / `kfree`、文件 / 目录 CRUD / `seek` / B 树目录索引，以及只读 `/proc/ps`、`/proc/meminfo`、`/proc/schedstat`、`/proc/fsstat`。
-- 实现过程摘要：先新增 `test-unit-course_os_stage1` 固定调度、内存、文件系统和 `/proc` 合同，再把实现拆到 `course_scheduler`、`course_memory`、`course_fs`、`procfs` 与 `course_os_stage1` 编排层，最后只让 `kernel_alpha/main.c` 调用稳定 summary；`course_fs` 维护每目录有序索引并用二分查找固定简化 B 树查找证据；旧 9 条 `kernel_alpha` 负向 demo 保持原 marker，继续作为 storage / interrupt / fault guardrail。
+- 实现过程摘要：先新增 `test-unit-course_os_stage1` 固定调度、内存、文件系统和 `/proc` 合同，再把实现拆到 `course_scheduler`、`course_memory`、`course_fs`、`procfs` 与 `course_os_stage1` 编排层，最后只让 `kernel_alpha/main.c` 调用稳定 summary；`course_fs` 维护每目录最小 B+ 树索引视图并暴露内部节点、叶节点和查找步数证据；旧 9 条 `kernel_alpha` 负向 demo 保持原 marker，继续作为 storage / interrupt / fault guardrail。
 - 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage1`、`cd myCPU && make test-guest-kernel_alpha_demo`、`cd myCPU && make test-unit-kernel_alpha_common test-unit-kernel_alpha_interrupt test-unit-kernel_alpha_storage`、9 条 `kernel_alpha` 负向 guest demo，以及相关 shared guest runtime 窄门禁；最终验证以本轮收尾命令输出为准。
 - 结果参考：[course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
 

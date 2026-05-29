@@ -118,7 +118,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 
 当前正向回归输出：
 
-- `KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=26 proc=ps/meminfo/schedstat/fsstat`
+- `KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat`
 
 ### `kernel_alpha_fault_demo`
 

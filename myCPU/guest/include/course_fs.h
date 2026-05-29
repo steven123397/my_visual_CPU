@@ -8,6 +8,10 @@
 #define COURSE_FS_MAX_NAME 24U
 #define COURSE_FS_MAX_DATA 128U
 #define COURSE_FS_MAX_DIR_INDEX_ENTRIES COURSE_FS_MAX_NODES
+#define COURSE_FS_BTREE_LEAF_CAPACITY 4U
+#define COURSE_FS_BTREE_MAX_LEAVES \
+    ((COURSE_FS_MAX_DIR_INDEX_ENTRIES + COURSE_FS_BTREE_LEAF_CAPACITY - 1U) / \
+     COURSE_FS_BTREE_LEAF_CAPACITY)
 
 typedef struct CourseFsStats {
     uint32_t file_creates;
@@ -19,6 +23,8 @@ typedef struct CourseFsStats {
     uint32_t path_resolves;
     uint32_t dir_index_lookups;
     uint32_t btree_compare_steps;
+    uint32_t btree_internal_nodes;
+    uint32_t btree_leaf_nodes;
 } course_fs_stats_t;
 
 typedef struct CourseFsNode {
@@ -30,6 +36,10 @@ typedef struct CourseFsNode {
     size_t size;
     int dir_index[COURSE_FS_MAX_DIR_INDEX_ENTRIES];
     size_t dir_index_count;
+    size_t btree_leaf_starts[COURSE_FS_BTREE_MAX_LEAVES];
+    size_t btree_leaf_counts[COURSE_FS_BTREE_MAX_LEAVES];
+    size_t btree_leaf_count;
+    size_t btree_internal_count;
 } course_fs_node_t;
 
 typedef struct CourseFs {

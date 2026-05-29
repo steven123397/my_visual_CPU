@@ -22,7 +22,7 @@ myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系�
 | 执行后端 | `functional` reference；`pipeline` 支持 rename / ROB / LSQ / OoO observation；JIT/DBT 为 opt-in harness |
 | 特权 / 内存 | M / S / U、trap delegation、`mret/sret`、Sv39、TLB、`sfence.vma`、page fault |
 | 平台设备 | UART、CLINT、PLIC、SimpleStorage、`virtio-blk`、MMIO AI accelerator |
-| Guest | `kernel_alpha = KMVPETDS`、`interactive_os`、`xv6-riscv` shell、Linux-facing console/probe |
+| Guest | `kernel_alpha` 课程 OS 第一阶段、`interactive_os`、`xv6-riscv` shell、Linux-facing console/probe |
 | Linux 发行版线 | 外部 Alpine / Debian rootfs 走 opt-in runtime 合同；仓库默认不携带真实 `Image/rootfs` |
 | AI 线 | task spec importer、bounded dynamic GEMM/CNN/tiny model、guest bridge、timed-simple profile summary |
 | 前端 | `/` 产品首页、`/console` Lab workbench、`/docs` 产品文档入口 |

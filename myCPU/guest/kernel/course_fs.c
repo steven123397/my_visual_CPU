@@ -91,6 +91,8 @@ static int find_child(course_fs_t* fs,
                       const char* name,
                       size_t name_len) {
     const course_fs_node_t* parent_node = NULL;
+    size_t leaf_low = 0;
+    size_t leaf_high = 0;
     size_t low = 0;
     size_t high = 0;
 
@@ -101,8 +103,35 @@ static int find_child(course_fs_t* fs,
     }
 
     parent_node = &fs->nodes[parent];
-    high = parent_node->dir_index_count;
     fs->stats.dir_index_lookups += 1U;
+    if (parent_node->dir_index_count == 0) {
+        return -1;
+    }
+
+    leaf_high = parent_node->btree_leaf_count;
+    while (leaf_low < leaf_high) {
+        const size_t mid = leaf_low + ((leaf_high - leaf_low) / 2U);
+        const size_t start = parent_node->btree_leaf_starts[mid];
+        const size_t count = parent_node->btree_leaf_counts[mid];
+        const int last_child_index =
+            parent_node->dir_index[start + count - 1U];
+        const course_fs_node_t* last_child = &fs->nodes[last_child_index];
+        const int cmp = cmp_cstr_len(last_child->name, name, name_len);
+
+        fs->stats.btree_compare_steps += 1U;
+        if (cmp < 0) {
+            leaf_low = mid + 1U;
+        } else {
+            leaf_high = mid;
+        }
+    }
+
+    if (leaf_low >= parent_node->btree_leaf_count) {
+        return -1;
+    }
+
+    low = parent_node->btree_leaf_starts[leaf_low];
+    high = low + parent_node->btree_leaf_counts[leaf_low];
     while (low < high) {
         const size_t mid = low + ((high - low) / 2U);
         const int child_index = parent_node->dir_index[mid];
@@ -121,6 +150,60 @@ static int find_child(course_fs_t* fs,
     }
 
     return -1;
+}
+
+static void rebuild_child_btree(course_fs_t* fs, int parent) {
+    course_fs_node_t* parent_node = NULL;
+    size_t entry = 0;
+    size_t leaf = 0;
+
+    if (fs == NULL || parent < 0 || parent >= (int)COURSE_FS_MAX_NODES ||
+        !fs->nodes[parent].used || !fs->nodes[parent].is_dir) {
+        return;
+    }
+
+    parent_node = &fs->nodes[parent];
+    parent_node->btree_leaf_count = 0;
+    parent_node->btree_internal_count = 0;
+
+    while (entry < parent_node->dir_index_count &&
+           leaf < COURSE_FS_BTREE_MAX_LEAVES) {
+        size_t count = parent_node->dir_index_count - entry;
+
+        if (count > COURSE_FS_BTREE_LEAF_CAPACITY) {
+            count = COURSE_FS_BTREE_LEAF_CAPACITY;
+        }
+        parent_node->btree_leaf_starts[leaf] = entry;
+        parent_node->btree_leaf_counts[leaf] = count;
+        parent_node->btree_leaf_count += 1U;
+        leaf += 1U;
+        entry += count;
+    }
+
+    if (parent_node->btree_leaf_count > 1U) {
+        parent_node->btree_internal_count = 1U;
+    }
+}
+
+static void refresh_btree_stats(course_fs_t* fs) {
+    int i = 0;
+    uint32_t internal_nodes = 0;
+    uint32_t leaf_nodes = 0;
+
+    if (fs == NULL) {
+        return;
+    }
+
+    for (i = 0; i < (int)COURSE_FS_MAX_NODES; ++i) {
+        if (fs->nodes[i].used && fs->nodes[i].is_dir &&
+            fs->nodes[i].dir_index_count > 0) {
+            leaf_nodes += (uint32_t)fs->nodes[i].btree_leaf_count;
+            internal_nodes += (uint32_t)fs->nodes[i].btree_internal_count;
+        }
+    }
+
+    fs->stats.btree_internal_nodes = internal_nodes;
+    fs->stats.btree_leaf_nodes = leaf_nodes;
 }
 
 static bool insert_child_index(course_fs_t* fs, int parent, int child) {
@@ -147,6 +230,8 @@ static bool insert_child_index(course_fs_t* fs, int parent, int child) {
     }
     parent_node->dir_index[pos] = child;
     parent_node->dir_index_count += 1U;
+    rebuild_child_btree(fs, parent);
+    refresh_btree_stats(fs);
     return true;
 }
 
@@ -169,6 +254,8 @@ static void remove_child_index(course_fs_t* fs, int parent, int child) {
                 j += 1U;
             }
             parent_node->dir_index_count -= 1U;
+            rebuild_child_btree(fs, parent);
+            refresh_btree_stats(fs);
             return;
         }
     }
@@ -266,6 +353,8 @@ void course_fs_init(course_fs_t* fs) {
         fs->nodes[i].name[0] = '\0';
         fs->nodes[i].size = 0;
         fs->nodes[i].dir_index_count = 0;
+        fs->nodes[i].btree_leaf_count = 0;
+        fs->nodes[i].btree_internal_count = 0;
     }
     fs->stats.file_creates = 0;
     fs->stats.dir_creates = 0;
@@ -276,6 +365,8 @@ void course_fs_init(course_fs_t* fs) {
     fs->stats.path_resolves = 0;
     fs->stats.dir_index_lookups = 0;
     fs->stats.btree_compare_steps = 0;
+    fs->stats.btree_internal_nodes = 0;
+    fs->stats.btree_leaf_nodes = 0;
 
     fs->nodes[0].used = true;
     fs->nodes[0].is_dir = true;

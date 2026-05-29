@@ -24,7 +24,7 @@
 - 内存模块：Demand Paging、Clock 页面置换、`kmalloc` / `kfree`。
 - 文件系统模块：文件 / 目录 CRUD、`seek`、B 树目录索引。
 
-旧 Phase 1 `KMVPETDS` 输出降级为 bring-up 历史基线；storage / PLIC / timer / fault 的负向 demo 继续保留为基础设施回归，但不再定义当前课程 OS 行为承诺。后续重点不是再争论是否保留 `kernel_alpha`，而是同步 `kernel_alpha_status.md` 口径、解冻 `kernel_alpha_demo` 行为门禁，并围绕课程 OS 第一阶段写出可执行计划。
+旧 Phase 1 `KMVPETDS` 输出降级为 bring-up 历史基线；storage / PLIC / timer / fault 的负向 demo 继续保留为基础设施回归，但不再定义当前课程 OS 行为承诺。课程 OS 第一阶段已经落地为 `KMVPET|course-os-stage1 ...` 正向证据面，后续重点不是再争论是否保留 `kernel_alpha`，而是保持课程 OS 第一阶段门禁稳定，并在进入 D 阶段扩展前另起设计和计划。
 
 **2. AI 加速器的设备契约**
 现在的接口是为 host smoke 设计的（task-spec 导入、profile 拉取）。如果路线是 "Linux-facing driver"，需要重新设计成 "DT node + ioctl + DMA descriptor + IRQ" 风格的真实设备契约。host smoke 接口可保留为底层 API，上面叠一层"真实设备视角"。越早确定方向越好。
@@ -81,7 +81,7 @@ Lab Workbench 是浏览器前端，靠 Node 调试服务和模拟器对话。这
 
 | 优先级 | 项目 | 原因 |
 |---|---|---|
-| P0 | kernel_alpha 课程 OS 口径同步与计划化（#1） | 决策已落定，需同步 status、测试门禁和第一阶段执行计划 |
+| P0 | kernel_alpha 课程 OS 第一阶段门禁维护（#1） | 第一阶段已落地，需守住当前正向证据面和旧负向 guardrail |
 | P0 | observability schema 统一（#3） | 所有"内核创新方向"的前置 |
 | P1 | AI 加速器设备契约重设计（#2） | 决定 6 个月路线能否落地 |
 | P1 | JIT dry-run 决断（#7） | 防止变成僵尸代码 |
@@ -145,7 +145,7 @@ kernel_alpha vs xv6 vs Alpine vs Debian 跑同一个 workload，对比 syscall t
 #### 短期（约 3 个月）：完成认知重构 + 补完基本面
 
 **认知重构（来自第一部分）：**
-- 同步 `kernel_alpha` 课程 OS 口径，并冻结第一阶段执行计划
+- 守住 `kernel_alpha` 课程 OS 第一阶段正向证据面和旧负向 guardrail
 - 提出统一 observability schema 的 design 文档
 - AI 加速器设备契约方向定调
 - JIT dry-run 决断
@@ -198,7 +198,7 @@ kernel_alpha vs xv6 vs Alpine vs Debian 跑同一个 workload，对比 syscall t
 
 ## 总结
 
-**第一部分的核心动作**：先把已经落定的 `kernel_alpha` 课程 OS 基线同步到 status / 计划 / 测试门禁，再做三件认知重构（AI 设备契约、observability schema、ISA 真值形式占位），再做四件结构层决断（Linux 冻结点、测试分层、JIT dry-run 出路、状态文档治理），再做四件工程清理（pipeline 标注、bounded-dynamic 文档化、frontend 协议、showcase 归档）。
+**第一部分的核心动作**：先守住已经落地的 `kernel_alpha` 课程 OS 第一阶段证据面和基础设施 guardrail，再做三件认知重构（AI 设备契约、observability schema、ISA 真值形式占位），再做四件结构层决断（Linux 冻结点、测试分层、JIT dry-run 出路、状态文档治理），再做四件工程清理（pipeline 标注、bounded-dynamic 文档化、frontend 协议、showcase 归档）。
 
 **第二部分的核心方向**：从"reference-first + observability + 协设计"这个内核长出八条创新方向，其中 observability 协议化、AI 协处理器协同仿真、Lab 协议化、pipeline 参数化、ISA 形式化是最值得押注的五条。
 

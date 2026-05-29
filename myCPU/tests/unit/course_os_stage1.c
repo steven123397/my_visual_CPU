@@ -149,8 +149,9 @@ static int test_course_fs_crud_seek_btree_stats(void) {
         stats.file_writes != 2U || stats.file_reads != 1U ||
         stats.path_resolves < 8U || stats.dir_index_lookups == 0U ||
         stats.btree_compare_steps == 0U ||
+        stats.btree_internal_nodes == 0U || stats.btree_leaf_nodes < 2U ||
         after_lookup.btree_compare_steps - before_lookup.btree_compare_steps >
-            6U ||
+            8U ||
         stats.file_deletes != 1U) {
         return fail("expected fs stats to expose CRUD/path/B-tree evidence");
     }
@@ -204,6 +205,8 @@ static int test_procfs_readonly_outputs(void) {
     if (!procfs_read(&procfs, "/proc/fsstat", out, sizeof(out)) ||
         !contains(out, "file_creates=") ||
         !contains(out, "path_resolves=") ||
+        !contains(out, "btree_internal_nodes=") ||
+        !contains(out, "btree_leaf_nodes=") ||
         !contains(out, "btree_compare_steps=")) {
         return fail("expected /proc/fsstat to expose fs stats");
     }

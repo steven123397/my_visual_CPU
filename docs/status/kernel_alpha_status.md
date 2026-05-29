@@ -9,6 +9,7 @@
 ## 关联文档
 
 - 相关设计：
+  - [../design/course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)
   - [../design/course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
@@ -24,9 +25,13 @@
 第一阶段已按 [../design/course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)
 落地：只覆盖进程、内存、文件系统 3 个模块的 9 个功能点，并提供只读 `/proc` 指标证据面。
 
+第二阶段已经定稿为“尽量补齐 A 方案全文要求 + COW / 崩溃隔离 / `/proc` 可观测创新线”，长期设计口径为
+[../design/course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)。
+第二阶段尚未完成实现；当前正向 demo 仍以第一阶段 marker 为准。
+
 当前 `guest_kernel_alpha_demo` 正向输出为：
 
-- `KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=26 proc=ps/meminfo/schedstat/fsstat`
+- `KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat`
 
 其中 `K/M/V/P/E/T` 继续证明基础 bring-up、PLIC、external interrupt 和 timer interrupt 仍可用；后半段 `course-os-stage1 ...` 固定课程 OS 第一阶段的调度、Demand Paging / Clock、文件系统索引和 `/proc` 证据摘要。
 
@@ -76,9 +81,10 @@
 
 ## 下一步
 
-1. 保持 `course_os_stage1` 作为课程 OS 第一阶段当前正向证据面，不把扩展池内容并入第一阶段。
-2. 后续若进入 D 阶段扩展，单独写设计和计划，再选择 AI/NPU、Pipeline / JIT 协同、前端 Lab 可视化或更完整文件系统方向。
-3. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
+1. 执行第二阶段前，先确认当前脏工作区和 Stage 1 窄门禁，再进入 syscall / FD / 进程主线。
+2. 第二阶段优先补齐 A 方案核心缺口：syscall、真实进程生命周期、FD / FS、用户程序、shell、管道和重定向。
+3. 第二阶段创新线固定为 COW Fork、用户态崩溃隔离和 `/proc` 可观测；AI/NPU、JIT/DBT、Pipeline-aware 调度留到后续阶段。
+4. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
 ## 验证基线
 
@@ -100,3 +106,10 @@
   - `cd myCPU && make test-unit-vm_process`
   - `cd myCPU && make test-unit-vm_fault`
   - `cd myCPU && make test-unit-user_task`
+- 第二阶段实施时，按活跃计划逐步新增并纳入：
+  - `cd myCPU && make test-unit-course_os_stage2_syscall`
+  - `cd myCPU && make test-unit-course_os_stage2_process`
+  - `cd myCPU && make test-unit-course_os_stage2_fd_fs`
+  - `cd myCPU && make test-unit-course_os_stage2_shell`
+  - `cd myCPU && make test-unit-course_os_stage2_cow_crash`
+  - `cd myCPU && make test-unit-course_os_stage2`

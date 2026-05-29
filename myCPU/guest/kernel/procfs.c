@@ -207,6 +207,16 @@ static bool read_fsstat(const procfs_t* procfs, char* out, size_t out_size) {
            append_key_value_u32(out,
                                 out_size,
                                 &used,
+                                "btree_internal_nodes",
+                                stats.btree_internal_nodes) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "btree_leaf_nodes",
+                                stats.btree_leaf_nodes) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
                                 "btree_compare_steps",
                                 stats.btree_compare_steps);
 }
