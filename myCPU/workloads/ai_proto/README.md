@@ -213,7 +213,8 @@ python3 workloads/ai_proto/pack_graph.py \
 - `<name>.input*.bin`
   输入 / 权重 tensor。
 - `<name>.output0.expected.bin`
-  预期输出。
+  预期输出；manifest 里的 `expected_output=` 会由 `--ai-profile-manifest` 按
+  `output=` 顺序比对，尺寸或内容不匹配时 profile run 会失败。
 - `<name>.manifest`
   host profile 入口读取的 manifest。
 - `<name>.memory_plan.txt`

@@ -55,7 +55,7 @@ static void ai_accel_demo_zero_buffers(void) {
     g_submit_queue[0].input_table_addr = 0;
     g_submit_queue[0].output_table_addr = 0;
     g_submit_queue[0].source_tag = 0;
-    g_submit_queue[0].reserved0 = 0;
+    g_submit_queue[0].runtime_shape_table_offset = 0;
 
     g_complete_queue[0].token = 0;
     g_complete_queue[0].status = 0;
@@ -115,6 +115,7 @@ static bool ai_accel_demo_submit(kernel_runtime_t* runtime) {
     descriptor.input_table_addr = (uint64_t)(uintptr_t)g_input_table;
     descriptor.output_table_addr = (uint64_t)(uintptr_t)g_output_table;
     descriptor.source_tag = AI_ACCEL_DEMO_SOURCE_TAG;
+    descriptor.runtime_shape_table_offset = 0;
 
     ai_accel_reset();
     ai_accel_enable_irqs(AI_ACCEL_IRQ_COMPLETION | AI_ACCEL_IRQ_FAULT);

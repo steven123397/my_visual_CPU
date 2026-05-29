@@ -154,6 +154,7 @@ int main(int argc, char* argv[]) {
             std::cout << "ai_profile"
                       << " name=" << result.workload_name
                       << " progress=" << progress
+                      << " schema=ai_profile_v1"
                       << " baseline=none"
                       << " manifest=" << result.manifest_path
                       << " graph_package=" << result.graph_package_path

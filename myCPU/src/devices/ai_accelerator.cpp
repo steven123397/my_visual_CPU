@@ -554,6 +554,8 @@ uint32_t AiAccelerator::counter_high(uint64_t value) const {
 }
 
 void AiAccelerator::refresh_profile_summary_metadata() {
+    profile_summary_.profile_schema_version = AI_ACCEL_PROFILE_SCHEMA_VERSION;
+    profile_summary_.timing_schema_version = AI_ACCEL_TIMING_SCHEMA_VERSION;
     profile_summary_.timing_model = AiAcceleratorTimingModel::TimedSimpleNoOverlap;
     profile_summary_.scheduler_ops_per_cycle = scheduler_.timing().ops_per_cycle;
     profile_summary_.scheduler_tile_setup_cycles = scheduler_.timing().tile_setup_cycles;
@@ -1102,6 +1104,9 @@ bool AiAccelerator::prepare_active_submission(const AiSubmissionDescriptor& desc
     active_submission_.profile_accepted = true;
     active_submission_.profile_completed = false;
     active_submission_valid_ = true;
+    profile_summary_.tile_count = 0;
+    profile_summary_.scratchpad_peak_bytes = 0;
+    profile_summary_.op_summaries.clear();
     update_profile_summary_submission_compile_contract();
     return true;
 }

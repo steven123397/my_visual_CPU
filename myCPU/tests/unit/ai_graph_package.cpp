@@ -125,6 +125,20 @@ bool expect_parse_failure(const AiGraphPackage& package, const char* needle) {
     return true;
 }
 
+bool expect_parse_bytes_failure(const std::vector<uint8_t>& bytes, const char* needle) {
+    std::string error;
+    AiGraphPackage parsed;
+    if (parse_ai_graph_package(bytes, parsed, error)) {
+        std::fprintf(stderr, "expected byte parse failure containing: %s\n", needle);
+        return false;
+    }
+    if (error.find(needle) == std::string::npos) {
+        std::fprintf(stderr, "unexpected byte parse error: %s\n", error.c_str());
+        return false;
+    }
+    return true;
+}
+
 AiGraphPackage make_dynamic_bounded_package() {
     AiGraphPackage package = make_valid_package();
     package.shape_mode = AiShapeMode::DynamicBounded;
@@ -407,6 +421,44 @@ int main() {
             return 1;
         }
 
+        AiGraphPackage duplicate_memory_plan = package;
+        duplicate_memory_plan.memory_plan.push_back(package.memory_plan[0]);
+        if (!expect(expect_parse_failure(duplicate_memory_plan, "duplicate memory plan"),
+                    "expected duplicate memory plan rejection")) {
+            return 1;
+        }
+
+        AiGraphPackage missing_output_memory_plan = package;
+        missing_output_memory_plan.memory_plan.pop_back();
+        if (!expect(expect_parse_failure(missing_output_memory_plan, "missing memory plan"),
+                    "expected missing output memory plan rejection")) {
+            return 1;
+        }
+
+        std::vector<uint8_t> reserved_tensor_bytes = bytes;
+        reserved_tensor_bytes[40 + 3] = 0x1;
+        if (!expect(expect_parse_bytes_failure(reserved_tensor_bytes, "tensor reserved"),
+                    "expected tensor reserved field rejection")) {
+            return 1;
+        }
+
+        std::vector<uint8_t> reserved_op_bytes = bytes;
+        const size_t op_offset = 40 + package.tensors.size() * 36;
+        reserved_op_bytes[op_offset + 3] = 0x1;
+        if (!expect(expect_parse_bytes_failure(reserved_op_bytes, "opcode reserved"),
+                    "expected opcode reserved field rejection")) {
+            return 1;
+        }
+
+        std::vector<uint8_t> reserved_memory_plan_bytes = bytes;
+        const size_t memory_plan_offset =
+            op_offset + package.ops.size() * 28 + package.dependencies.size() * 4;
+        reserved_memory_plan_bytes[memory_plan_offset + 2] = 0x1;
+        if (!expect(expect_parse_bytes_failure(reserved_memory_plan_bytes, "memory plan reserved"),
+                    "expected memory plan reserved field rejection")) {
+            return 1;
+        }
+
         AiGraphPackage invalid_opcode = package;
         invalid_opcode.ops[0].opcode = static_cast<AiOpCode>(0xFE);
         if (!expect(expect_parse_failure(invalid_opcode, "opcode"), "expected invalid opcode rejection")) {
@@ -435,6 +487,17 @@ int main() {
         if (!expect(!parse_ai_graph_package(reserved_header_bytes, reserved_header_parsed, error) &&
                         error.find("reserved") != std::string::npos,
                     "expected dynamic graph extended header reserved field rejection")) {
+            return 1;
+        }
+
+        std::vector<uint8_t> reserved_dynamic_tensor_bytes = bytes;
+        const size_t dynamic_tensor_offset =
+            56 + dynamic_package.tensors.size() * 36 + dynamic_package.ops.size() * 28 +
+            dynamic_package.dependencies.size() * 4 + dynamic_package.memory_plan.size() * 20;
+        reserved_dynamic_tensor_bytes[dynamic_tensor_offset + 2] = 0x1;
+        if (!expect(expect_parse_bytes_failure(reserved_dynamic_tensor_bytes,
+                                               "dynamic tensor reserved"),
+                    "expected dynamic tensor reserved field rejection")) {
             return 1;
         }
 

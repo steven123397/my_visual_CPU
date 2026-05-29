@@ -227,6 +227,25 @@ std::filesystem::path graph_with_faulty_pool_attr(const std::filesystem::path& s
     return destination;
 }
 
+std::filesystem::path graph_with_duplicate_memory_plan(const std::filesystem::path& source,
+                                                       const std::filesystem::path& destination) {
+    AiGraphPackage package{};
+    std::string error;
+    if (!parse_ai_graph_package(read_binary_file(source), package, error)) {
+        throw std::runtime_error("failed to parse source graph package: " + error);
+    }
+    if (package.memory_plan.empty()) {
+        throw std::runtime_error("duplicate memory plan graph source is missing memory plan entries");
+    }
+    package.memory_plan.push_back(package.memory_plan.front());
+    std::vector<uint8_t> bytes{};
+    if (!serialize_ai_graph_package(package, bytes, error)) {
+        throw std::runtime_error("failed to serialize duplicate memory plan graph package: " + error);
+    }
+    write_binary_file(destination, bytes);
+    return destination;
+}
+
 bool expect_profile_failure(const std::filesystem::path& manifest,
                             const char* expected_error,
                             const char* message) {
@@ -338,7 +357,9 @@ bool expect_resolved_memory_plan_summary_matches(const std::filesystem::path& su
 }
 
 bool expect_default_timing_model(const AiAcceleratorProfileSummary& summary, const char* context) {
-    return expect(summary.timing_model == AiAcceleratorTimingModel::TimedSimpleNoOverlap, context) &&
+    return expect(summary.profile_schema_version == 1, context) &&
+           expect(summary.timing_schema_version == 1, context) &&
+           expect(summary.timing_model == AiAcceleratorTimingModel::TimedSimpleNoOverlap, context) &&
            expect(summary.scheduler_ops_per_cycle == 32, context) &&
            expect(summary.scheduler_tile_setup_cycles == 1, context) &&
            expect(!summary.allow_dma_compute_overlap, context) &&
@@ -1199,6 +1220,45 @@ bool expect_manifest_failure_resets_device_state(const std::filesystem::path& su
            expect(summary.op_summaries.empty(), context);
 }
 
+bool expect_manifest_parse_failure_resets_device_state(const std::filesystem::path& success_manifest,
+                                                       const std::filesystem::path& failing_manifest,
+                                                       const char* expected_error,
+                                                       const char* context) {
+    Machine machine{};
+    const Machine::AiProfileRunResult success = machine.run_ai_profile_manifest(success_manifest.string());
+    if (!expect(success.completed, context) ||
+        !expect(success.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS, context)) {
+        return false;
+    }
+
+    bool threw = false;
+    try {
+        static_cast<void>(machine.run_ai_profile_manifest(failing_manifest.string()));
+    } catch (const std::runtime_error& ex) {
+        threw = true;
+        if (!expect(std::string(ex.what()).find(expected_error) != std::string::npos, context)) {
+            return false;
+        }
+    }
+    if (!expect(threw, context)) {
+        return false;
+    }
+
+    const AiAcceleratorProfileSummary& summary = machine.ai_accelerator().profile_summary();
+    return expect(machine.ai_accelerator().completion_count() == 0, context) &&
+           expect(machine.ai_accelerator().doorbell_count() == 0, context) &&
+           expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_NONE, context) &&
+           expect_default_timing_model(summary, context) &&
+           expect_submission_lifecycle(summary, false, false, context) &&
+           expect_submission_timing(summary, 0, 0, 0, 0, 0, 0, 0, context) &&
+           expect_submission_outcome(summary, AI_ACCEL_FAULT_NONE, 0, 0, context) &&
+           expect_submission_dma_breakdown(summary, 0, 0, 0, 0, context) &&
+           expect_empty_submission_compile_contract(summary, context) &&
+           expect(summary.tile_count == 0, context) &&
+           expect(summary.scratchpad_peak_bytes == 0, context) &&
+           expect(summary.op_summaries.empty(), context);
+}
+
 bool expect_manifest_timeout_state(const std::filesystem::path& manifest,
                                    uint64_t expected_ticks,
                                    uint32_t expected_graph_package_bytes,
@@ -1464,6 +1524,7 @@ bool expect_pack_and_profile(const std::filesystem::path& temp_dir,
 
     if (!expect_contains(profile.output, expected_name, "expected workload name in profile output") ||
         !expect_contains(profile.output, "progress=completed", "expected completed progress in profile output") ||
+        !expect_contains(profile.output, "schema=ai_profile_v1", "expected profile schema version in profile output") ||
         !expect_contains(profile.output, "baseline=none", "expected raw-counter baseline summary") ||
         !expect_contains(profile.output,
                          ("device_cycles=" + std::to_string(expected_device_cycles)).c_str(),
@@ -1575,6 +1636,7 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
     }
 
     if (!expect_contains(profile.output, "name=dynamic_gemm", "expected dynamic_gemm workload name") ||
+        !expect_contains(profile.output, "schema=ai_profile_v1", "expected dynamic_gemm profile schema") ||
         !expect_contains(profile.output, "shape_mode=dynamic_bounded", "expected dynamic shape mode summary") ||
         !expect_contains(profile.output, "runtime_shapes=t0:2x8,t2:2x4", "expected runtime shape summary") ||
         !expect_contains(profile.output, "device_cycles=15", "expected dynamic_gemm device cycle summary") ||
@@ -1701,6 +1763,7 @@ bool expect_pack_and_profile_task_spec_dynamic_gemm(const std::filesystem::path&
     }
 
     if (!expect_contains(profile.output, "name=custom_dynamic_gemm", "expected task-spec workload name") ||
+        !expect_contains(profile.output, "schema=ai_profile_v1", "expected task-spec profile schema") ||
         !expect_contains(profile.output, "shape_mode=dynamic_bounded", "expected task-spec shape mode summary") ||
         !expect_contains(profile.output, "runtime_shapes=t0:2x8,t2:2x4", "expected task-spec runtime shape summary") ||
         !expect_contains(profile.output, "device_cycles=15", "expected task-spec device cycle summary") ||
@@ -2910,6 +2973,55 @@ int main() {
                                                malformed_dir / "cnn.dup_name.manifest",
                                                "name",
                                                "cnn-duplicate");
+        const std::filesystem::path oversized_source_tag_manifest =
+            manifest_with_replaced_scalar_key(manifest,
+                                             malformed_dir / "cnn.oversized_source_tag.manifest",
+                                             "source_tag",
+                                             "4294967296");
+        const std::filesystem::path trailing_junk_max_ticks_manifest =
+            manifest_with_replaced_scalar_key(manifest,
+                                             malformed_dir / "cnn.trailing_junk_max_ticks.manifest",
+                                             "max_ticks",
+                                             "1junk");
+        const std::filesystem::path negative_max_ticks_manifest =
+            manifest_with_replaced_scalar_key(manifest,
+                                             malformed_dir / "cnn.negative_max_ticks.manifest",
+                                             "max_ticks",
+                                             "-1");
+        const std::filesystem::path empty_max_ticks_manifest =
+            manifest_with_replaced_scalar_key(manifest,
+                                             malformed_dir / "cnn.empty_max_ticks.manifest",
+                                             "max_ticks",
+                                             "");
+        const std::filesystem::path whitespace_max_ticks_manifest =
+            manifest_with_replaced_scalar_key(manifest,
+                                             malformed_dir / "cnn.whitespace_max_ticks.manifest",
+                                             "max_ticks",
+                                             " 128 ");
+        const std::filesystem::path duplicate_memory_plan_graph =
+            graph_with_duplicate_memory_plan(
+                malformed_dir / "cnn.graph.bin",
+                malformed_dir / "cnn.duplicate_memory_plan.graph.bin");
+        const std::string duplicate_memory_plan_graph_name =
+            duplicate_memory_plan_graph.filename().string();
+        const std::filesystem::path duplicate_memory_plan_manifest =
+            manifest_with_replaced_scalar_key(manifest,
+                                             malformed_dir / "cnn.duplicate_memory_plan.manifest",
+                                             "graph_package",
+                                             duplicate_memory_plan_graph_name.c_str());
+        std::vector<uint8_t> wrong_expected_output =
+            read_binary_file(malformed_dir / "cnn.output0.expected.bin");
+        if (!expect(!wrong_expected_output.empty(), "expected malformed expected_output fixture bytes")) {
+            std::filesystem::remove_all(temp_dir);
+            return 1;
+        }
+        wrong_expected_output.front() ^= 0x7fU;
+        write_binary_file(malformed_dir / "cnn.output0.wrong_expected.bin", wrong_expected_output);
+        const std::filesystem::path expected_output_mismatch_manifest =
+            manifest_with_replaced_scalar_key(manifest,
+                                             malformed_dir / "cnn.expected_output_mismatch.manifest",
+                                             "expected_output",
+                                             "cnn.output0.wrong_expected.bin");
         const std::filesystem::path dynamic_manifest = dynamic_malformed_dir / "dynamic_gemm.manifest";
         const std::filesystem::path dynamic_runtime_shape =
             dynamic_malformed_dir / "dynamic_gemm.runtime_shape.bin";
@@ -2979,6 +3091,24 @@ int main() {
             expect_profile_failure(duplicate_name_manifest,
                                    "duplicate AI profile manifest key: name",
                                    "expected ai profile manifest with duplicate name to fail") &&
+            expect_profile_failure(oversized_source_tag_manifest,
+                                   "source_tag",
+                                   "expected oversized source_tag manifest scalar to fail") &&
+            expect_profile_failure(trailing_junk_max_ticks_manifest,
+                                   "max_ticks",
+                                   "expected trailing-junk max_ticks manifest scalar to fail") &&
+            expect_profile_failure(negative_max_ticks_manifest,
+                                   "max_ticks",
+                                   "expected negative max_ticks manifest scalar to fail") &&
+            expect_profile_failure(empty_max_ticks_manifest,
+                                   "max_ticks",
+                                   "expected empty max_ticks manifest scalar to fail") &&
+            expect_profile_failure(whitespace_max_ticks_manifest,
+                                   "max_ticks",
+                                   "expected whitespace-wrapped max_ticks manifest scalar to fail") &&
+            expect_profile_failure(expected_output_mismatch_manifest,
+                                   "expected_output",
+                                   "expected expected_output mismatch manifest to fail") &&
             expect_profile_failure(missing_runtime_shape_manifest,
                                    "AI profile manifest is missing runtime shape table for dynamic graph",
                                    "expected dynamic manifest without runtime shape table to fail") &&
@@ -3146,6 +3276,16 @@ int main() {
                 bad_dims_runtime_shape_manifest,
                 "failed to resolve AI profile runtime shapes: runtime shape dims exceed bounded tensor dims",
                 "expected failing manifest rerun to reset device state") &&
+            expect_manifest_parse_failure_resets_device_state(
+                temp_dir / "cnn.manifest",
+                no_format_manifest,
+                "AI profile manifest is missing format",
+                "expected manifest parse failure rerun to reset device state") &&
+            expect_manifest_parse_failure_resets_device_state(
+                temp_dir / "cnn.manifest",
+                duplicate_memory_plan_manifest,
+                "failed to parse AI profile graph package: duplicate memory plan",
+                "expected invalid graph package rerun to reset device state before submission") &&
             expect_pack_and_profile(temp_dir,
                                     "gemm",
                                     "name=gemm",

@@ -48,9 +48,12 @@
   固定 workload 入口，frontend 也继续复用同一条 host 打包路径。
 - `2026-05-06` 已把性能模型第一刀继续收窄并正式落到设备自有合同：
   `AiAcceleratorProfileSummary` 现在固定暴露
+  `profile_schema_version=1`、`timing_schema_version=1`、
   `timing_model=TimedSimpleNoOverlap`、`scheduler_ops_per_cycle=32`、
   `scheduler_tile_setup_cycles=1`、`allow_dma_compute_overlap=false`、
   `dma_setup_cycles=2` 与 `dma_bytes_per_cycle=16`。
+  `--ai-profile-manifest` 文本出口也固定携带 `schema=ai_profile_v1`，让文本
+  profile 与设备 summary 明确落在同一版 host-side 合同。
   这一步不改执行语义，只把当前保守 `timed-simple no-overlap` 口径收成稳定 host-side
   事实来源，并由 `ai_accelerator_gemm_smoke` / `ai_accelerator_cnn_smoke` 覆盖成功路径、
   fault-stable 行为与 reset 后默认值。
@@ -77,6 +80,8 @@
   摘要；
   这让 manifest 路径与设备 smoke 共享同一套 host-side 事实来源，而不用先扩 shared
   CLI 或 frontend。
+  同一路径现在也把 manifest 的 `expected_output=` 收成 correctness gate：成功完成后按
+  `output=` 顺序逐个比对 expected output，尺寸或内容不匹配都会让 profile run 失败。
 - `2026-05-06` 同日继续补上 rerun 刷新合同：同一 `Machine` 连续执行不同
   manifest 后，后一次 workload 的 `AiProfileRunResult`、设备 `profile_summary()`、
   `completion_count / doorbell_count / last_fault` 都必须切到最新 workload，而不是残留或
