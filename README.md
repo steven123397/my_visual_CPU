@@ -22,7 +22,7 @@ myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系�
 | 执行后端 | `functional` reference；`pipeline` 支持 rename / ROB / LSQ / OoO observation；JIT/DBT 为 opt-in harness |
 | 特权 / 内存 | M / S / U、trap delegation、`mret/sret`、Sv39、TLB、`sfence.vma`、page fault |
 | 平台设备 | UART、CLINT、PLIC、SimpleStorage、`virtio-blk`、MMIO AI accelerator |
-| Guest | `kernel_alpha` 课程 OS 第一阶段、`interactive_os`、`xv6-riscv` shell、Linux-facing console/probe |
+| Guest | `kernel_alpha` 课程 OS 主线入口、`interactive_os`、`xv6-riscv` shell、Linux-facing console/probe |
 | Linux 发行版线 | 外部 Alpine / Debian rootfs 走 opt-in runtime 合同；仓库默认不携带真实 `Image/rootfs` |
 | AI 线 | task spec importer、bounded dynamic GEMM/CNN/tiny model、guest bridge、timed-simple profile summary |
 | 前端 | `/` 产品首页、`/console` Lab workbench、`/docs` 产品文档入口 |
@@ -101,6 +101,10 @@ SPIKE_PATH=/path/to/spike make test-host-spike_differential
 ```
 
 真实 Linux / 发行版 runtime 需要外部资产，仓库默认保持 fail-closed。相关环境变量和路线见 [docs/status/linux_distribution_platform_status.md](docs/status/linux_distribution_platform_status.md) 与 [deploy/README.md](deploy/README.md)。
+
+## kernel_alpha 口径
+
+`kernel_alpha` 当前是《操作系统课程设计》A 方案主线入口，不再以旧 Phase 1 `KMVPETDS` 正向输出作为当前能力承诺。当前正向 smoke 在基础 `K/M/V/P/E/T` bring-up 之后输出课程 OS Stage 1 和 Stage 2 summary；旧 `KMVPETDS` 仅作为历史 guardrail 记录，storage readiness / signature 合同由负向 demo 和 `kernel_alpha_*` 单元门禁继续覆盖。实时状态见 [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)。
 
 ## 仓库结构
 

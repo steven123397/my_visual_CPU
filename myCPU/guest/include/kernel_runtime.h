@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "kernel_bringup.h"
@@ -13,6 +14,10 @@ typedef struct KernelRuntime {
     vm_address_space_t* address_space;
     supervisor_runtime_interrupt_state_t interrupts;
 } kernel_runtime_t;
+
+typedef bool (*kernel_runtime_storage_lba0_predicate_t)(const uint8_t* block,
+                                                        size_t block_size,
+                                                        void* context);
 
 void kernel_runtime_init(kernel_runtime_t* runtime);
 trap_context_t* kernel_runtime_trap_context(kernel_runtime_t* runtime);
@@ -38,7 +43,11 @@ bool kernel_runtime_wait_platform_interrupts(
     uint64_t timer_delta,
     uint64_t timeout_delta);
 bool kernel_runtime_complete_storage_probe(char marker);
-bool kernel_runtime_complete_storage_signature_check(char marker);
+bool kernel_runtime_complete_storage_lba0_check(
+    char marker,
+    kernel_runtime_storage_lba0_predicate_t predicate,
+    void* context);
+bool kernel_runtime_complete_demo_storage_signature_guardrail(char marker);
 bool kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
     supervisor_runtime_interrupt_state_t* interrupts,
     uint64_t timer_delta,

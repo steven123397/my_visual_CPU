@@ -22,7 +22,8 @@
 
 ## 当前状态
 
-`kernel_alpha` 当前已经从 Phase 1 bring-up demo 切换为《操作系统课程设计》A 方案主线入口。
+`kernel_alpha` 当前已经从 Phase 1 bring-up demo 切换为《操作系统课程设计》A 方案主线入口；旧
+`KMVPETDS` 只保留为历史 guardrail，不再描述当前正向能力。
 第一阶段按 [../design/course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)
 落地进程、内存、文件系统 3 个模块的 9 个功能点，并提供只读 `/proc` 指标证据面。
 

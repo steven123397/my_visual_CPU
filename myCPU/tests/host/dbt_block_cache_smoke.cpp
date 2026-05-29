@@ -208,6 +208,38 @@ bool test_cache_global_invalidation_matrix_is_stable() {
            ok;
 }
 
+bool test_cache_evicts_oldest_entry_at_smoke_cap() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    DbtBlockCache cache;
+    for (size_t i = 0; i <= DbtBlockCache::kMaxEntries; ++i) {
+        const uint64_t pc = kEntry + static_cast<uint64_t>(i * 0x40);
+        const DbtTranslationUnit unit =
+            translate_program(ram, bus, cpu, pc, {kAddiX1One});
+        if (!expect(unit.ok, "cap setup should create accepted translation units") ||
+            !expect(cache.insert(unit), "cap setup should insert accepted unit")) {
+            return false;
+        }
+    }
+
+    const DbtTranslationUnit* oldest = cache.lookup(kEntry, kEntry);
+    const uint64_t newest_pc =
+        kEntry + static_cast<uint64_t>(DbtBlockCache::kMaxEntries * 0x40);
+    const DbtTranslationUnit* newest = cache.lookup(newest_pc, newest_pc);
+    const DbtBlockCacheStats stats = cache.stats();
+
+    return expect(cache.size() == DbtBlockCache::kMaxEntries,
+                  "metadata cache should stay bounded at the smoke cap") &&
+           expect(oldest == nullptr && newest != nullptr,
+                  "metadata cache should evict oldest entry when cap is exceeded") &&
+           expect(stats.max_entries == DbtBlockCache::kMaxEntries &&
+                      stats.evictions == 1,
+                  "metadata cache stats should expose cap and eviction count");
+}
+
 }  // namespace
 
 int main() {
@@ -221,6 +253,9 @@ int main() {
         return 1;
     }
     if (!test_cache_global_invalidation_matrix_is_stable()) {
+        return 1;
+    }
+    if (!test_cache_evicts_oldest_entry_at_smoke_cap()) {
         return 1;
     }
     std::puts("dbt_block_cache_smoke: PASS");

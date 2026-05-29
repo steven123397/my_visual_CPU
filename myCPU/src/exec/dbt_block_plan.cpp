@@ -304,6 +304,7 @@ DbtBlockPlan plan_fallback(uint64_t start_pc,
                            std::string boundary_kind = {},
                            DbtBoundaryKind boundary = DbtBoundaryKind::None,
                            DbtHelperPlan helper_plan = {},
+                           std::vector<DbtCodePhysicalSpan> code_spans = {},
                            std::vector<DbtDryRunIrOp> dry_run_ir = {}) {
     return DbtBlockPlan{
         .ok = false,
@@ -316,6 +317,7 @@ DbtBlockPlan plan_fallback(uint64_t start_pc,
         .boundary_kind = std::move(boundary_kind),
         .boundary = boundary,
         .helper_plan = helper_plan,
+        .code_spans = std::move(code_spans),
         .dry_run_ir = std::move(dry_run_ir),
     };
 }
@@ -358,11 +360,71 @@ bool ranges_overlap(uint64_t lhs_addr, uint64_t lhs_size, uint64_t rhs_addr, uin
     return lhs_addr < rhs_end && rhs_addr < lhs_end;
 }
 
+uint64_t code_page_chunk_size(uint64_t addr, uint64_t remaining) {
+    constexpr uint64_t kPageSize = 4096;
+    const uint64_t until_boundary = kPageSize - (addr & (kPageSize - 1));
+    return remaining < until_boundary ? remaining : until_boundary;
+}
+
+void append_unreliable_code_span(std::vector<DbtCodePhysicalSpan>& spans,
+                                 uint64_t vaddr,
+                                 uint64_t size,
+                                 uint64_t satp) {
+    spans.push_back(DbtCodePhysicalSpan{
+        .valid = false,
+        .requires_global_invalidation = true,
+        .vaddr = vaddr,
+        .size = size,
+        .satp = satp,
+    });
+}
+
+void append_code_physical_spans(CPU& cpu,
+                                Bus& bus,
+                                uint64_t pc,
+                                uint64_t size,
+                                std::vector<DbtCodePhysicalSpan>& spans) {
+    const uint64_t satp = cpu.csr().read(CSR_SATP, cpu.core());
+    uint64_t vaddr = pc;
+    uint64_t remaining = size;
+    while (remaining > 0) {
+        const uint64_t chunk = code_page_chunk_size(vaddr, remaining);
+        const AddressSpace::TranslateResult translated =
+            cpu.address_space().translate_result(bus,
+                                                 vaddr,
+                                                 AccessType::Instruction,
+                                                 false);
+        if (!translated.ok) {
+            append_unreliable_code_span(spans, pc, size, satp);
+            return;
+        }
+
+        const PhysicalSpanInfo physical_span = bus.describe_span(translated.paddr, chunk);
+        if (!physical_span.ok) {
+            append_unreliable_code_span(spans, pc, size, satp);
+            return;
+        }
+        spans.push_back(DbtCodePhysicalSpan{
+            .valid = true,
+            .requires_global_invalidation = false,
+            .vaddr = vaddr,
+            .paddr = translated.paddr,
+            .size = chunk,
+            .satp = satp,
+            .region = physical_span.region,
+        });
+
+        vaddr += chunk;
+        remaining -= chunk;
+    }
+}
+
 }  // namespace
 
 DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_pc) {
     uint64_t inlineable = 0;
     std::vector<DbtDryRunIrOp> dry_run_ir;
+    std::vector<DbtCodePhysicalSpan> code_spans;
     for (uint64_t pc = start_pc; pc <= end_pc;) {
         const FetchDecodeResult fetched = fetch_decode(cpu, bus, pc);
         if (!fetched.ok) {
@@ -375,10 +437,16 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  "fetch-fault",
                                  DbtBoundaryKind::FetchFault,
                                  {},
+                                 std::move(code_spans),
                                  std::move(dry_run_ir));
         }
 
         const Insn& insn = fetched.insn;
+        append_code_physical_spans(cpu,
+                                   bus,
+                                   pc,
+                                   instruction_size(insn),
+                                   code_spans);
         if (!InstructionSemantics::supports(insn)) {
             return plan_fallback(start_pc,
                                  end_pc,
@@ -389,6 +457,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  "unsupported",
                                  DbtBoundaryKind::Unsupported,
                                  {},
+                                 std::move(code_spans),
                                  std::move(dry_run_ir));
         }
         if (is_control_flow_instruction(insn)) {
@@ -401,6 +470,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  "control-flow",
                                  DbtBoundaryKind::ControlFlow,
                                  {},
+                                 std::move(code_spans),
                                  std::move(dry_run_ir));
         }
 
@@ -416,6 +486,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  fallback_boundary_kind(effects),
                                  fallback_boundary_enum(effects),
                                  {},
+                                 std::move(code_spans),
                                  std::move(dry_run_ir));
         }
         if (requires_helper(effects)) {
@@ -428,6 +499,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
                                  helper_boundary_kind(effects),
                                  helper_boundary_enum(effects),
                                  make_helper_plan(pc, insn, effects),
+                                 std::move(code_spans),
                                  std::move(dry_run_ir));
         }
 
@@ -441,6 +513,7 @@ DbtBlockPlan plan_dbt_block(CPU& cpu, Bus& bus, uint64_t start_pc, uint64_t end_
         .start_pc = start_pc,
         .end_pc = end_pc,
         .inlineable_instructions = inlineable,
+        .code_spans = std::move(code_spans),
         .dry_run_ir = std::move(dry_run_ir),
     };
 }

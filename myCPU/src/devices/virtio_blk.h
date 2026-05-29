@@ -44,6 +44,11 @@ private:
                        const VirtQueue::Chain& chain,
                        uint32_t& used_len,
                        std::string& error);
+    bool complete_with_status(Bus& bus,
+                              const VirtQueue::Descriptor& status_desc,
+                              uint8_t status,
+                              uint32_t& used_len,
+                              std::string& error) const;
     bool write_status(Bus& bus, uint64_t addr, uint8_t status, std::string& error) const;
 
     std::vector<uint8_t> data_{};

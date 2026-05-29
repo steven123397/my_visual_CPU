@@ -208,6 +208,37 @@ bool test_executable_cache_runtime_entry_owns_host_executable_and_invalidates() 
                   "runtime executable cache should count host executable lifecycle");
 }
 
+bool test_executable_cache_evicts_oldest_entry_at_smoke_cap() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kEntry);
+
+    DbtExecutableCacheDryRun cache;
+    for (size_t i = 0; i <= DbtExecutableCacheDryRun::kMaxEntries; ++i) {
+        const uint64_t pc = kEntry + static_cast<uint64_t>(i * 0x40);
+        const DbtRuntimeDispatchContract contract = lowered_contract(ram, bus, cpu, pc);
+        if (!expect(contract.ok, "executable cache cap setup should create lowered contracts") ||
+            !expect(cache.insert(contract), "executable cache cap setup should insert contract")) {
+            return false;
+        }
+    }
+
+    const DbtExecutableCacheLookup oldest = cache.lookup(kEntry, kEntry);
+    const uint64_t newest_pc =
+        kEntry + static_cast<uint64_t>(DbtExecutableCacheDryRun::kMaxEntries * 0x40);
+    const DbtExecutableCacheLookup newest = cache.lookup(newest_pc, newest_pc);
+    const DbtExecutableCacheDryRunStats stats = cache.stats();
+
+    return expect(cache.size() == DbtExecutableCacheDryRun::kMaxEntries,
+                  "executable cache should stay bounded at the smoke cap") &&
+           expect(!oldest.hit && newest.hit,
+                  "executable cache should evict oldest entry when cap is exceeded") &&
+           expect(stats.max_entries == DbtExecutableCacheDryRun::kMaxEntries &&
+                      stats.evictions == 1,
+                  "executable cache stats should expose cap and eviction count");
+}
+
 }  // namespace
 
 int main() {
@@ -221,6 +252,9 @@ int main() {
         return 1;
     }
     if (!test_executable_cache_runtime_entry_owns_host_executable_and_invalidates()) {
+        return 1;
+    }
+    if (!test_executable_cache_evicts_oldest_entry_at_smoke_cap()) {
         return 1;
     }
     std::puts("dbt_executable_cache_smoke: PASS");

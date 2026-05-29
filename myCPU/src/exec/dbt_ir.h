@@ -84,6 +84,7 @@ struct DbtTranslationUnit {
     std::string boundary_kind{};
     DbtBoundaryKind boundary{DbtBoundaryKind::None};
     DbtHelperPlan helper_plan{};
+    std::vector<DbtCodePhysicalSpan> code_spans{};
     std::vector<DbtIrInstruction> instructions{};
 };
 

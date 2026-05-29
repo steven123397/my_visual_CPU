@@ -1,5 +1,9 @@
 #include "kernel_alpha.h"
 
+static bool kernel_alpha_storage_signature_guardrail(const uint8_t* block,
+                                                     size_t block_size,
+                                                     void* context);
+
 void kernel_alpha_begin_plic_supervisor_phase(void) {
     kernel_runtime_begin_plic_supervisor_phase('P');
 }
@@ -23,5 +27,17 @@ bool kernel_alpha_complete_storage_probe(void) {
 }
 
 bool kernel_alpha_complete_storage_signature_check(void) {
-    return kernel_runtime_complete_storage_signature_check('S');
+    return kernel_runtime_complete_storage_lba0_check(
+        'S',
+        kernel_alpha_storage_signature_guardrail,
+        NULL);
+}
+
+static bool kernel_alpha_storage_signature_guardrail(const uint8_t* block,
+                                                     size_t block_size,
+                                                     void* context) {
+    (void)context;
+    return block != NULL && block_size >= 4U &&
+           block[0] == 'S' && block[1] == 't' &&
+           block[2] == 'o' && block[3] == 'r';
 }

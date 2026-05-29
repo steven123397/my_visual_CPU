@@ -11,11 +11,13 @@
 
 struct DbtExecutableCacheDryRunStats {
     size_t entries{0};
+    size_t max_entries{0};
     uint64_t lookups{0};
     uint64_t hits{0};
     uint64_t misses{0};
     uint64_t insertions{0};
     uint64_t replacements{0};
+    uint64_t evictions{0};
     uint64_t rejected_insertions{0};
     uint64_t invalidation_enforcements{0};
     uint64_t invalidations{0};
@@ -51,6 +53,8 @@ struct DbtExecutableCacheEntry {
 
 class DbtExecutableCacheDryRun {
 public:
+    static constexpr size_t kMaxEntries = 64;
+
     DbtExecutableCacheDryRun() = default;
     DbtExecutableCacheDryRun(const DbtExecutableCacheDryRun&) = delete;
     DbtExecutableCacheDryRun& operator=(const DbtExecutableCacheDryRun&) = delete;

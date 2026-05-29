@@ -21,6 +21,7 @@ public:
 
     struct Chain {
         uint16_t head_index{0};
+        uint16_t avail_index{0};
         std::vector<Descriptor> descriptors{};
     };
 
@@ -45,6 +46,7 @@ public:
 
     bool has_pending(Bus& bus, std::string& error) const;
     bool pop_chain(Bus& bus, Chain& chain, std::string& error);
+    bool commit_chain(const Chain& chain, std::string& error);
     bool push_used(Bus& bus, uint16_t head_index, uint32_t len, std::string& error);
 
 private:

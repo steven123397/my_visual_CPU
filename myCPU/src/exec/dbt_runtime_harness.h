@@ -33,7 +33,7 @@ struct DbtRuntimeHarnessResult {
     bool differential_checked{false};
     bool differential_matched{false};
     uint64_t next_pc{0};
-    uint64_t retired_instructions{0};
+    uint64_t ir_expected_retired_count{0};
 };
 
 struct DbtRuntimeHarnessStats {

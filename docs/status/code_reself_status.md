@@ -19,6 +19,7 @@
   - 本轮覆盖 `ISA/reference truth`、`pipeline/JIT/DBT/cache runtime`、`platform/Linux distro/guest runtime/kernel_alpha`、`AI accelerator/NPU performance model`、`frontend/debug protocol/docs/test matrix` 五个方向；`ISA/reference truth` 因范围较大拆成 `decode/semantics/functional backend` 与 `arch/trap/mem/loader` 两个窄审查。
   - 审查口径除正确性、合同、fail-closed 和文档事实来源外，也覆盖代码本身的臃肿冗余、职责堆叠、低效路径和重复事实来源。
   - 本轮未修改生产代码，也未运行完整回归矩阵；所有 finding 均保留建议验证命令。完成态文档检查覆盖 `git diff --check`。
+- `2026-05-29` 在 `code-reself-dbt-platform-guest` 分支关闭 8 条建议修改：DBT physical-code invalidation、DBT helper LR/SC invalidation、PLIC/MMIO 文档校准、KMVPETDS 历史口径、`kernel_runtime` storage signature 分层、VirtQueue avail commit 边界、DBT retired count 命名和 DBT smoke cache cap。
 - 当前存在以下 active findings。
 
 ### 必须修复
@@ -98,25 +99,17 @@
 
 ### 建议修改
 
-1. DBT guest-store invalidation 只比对虚拟 PC range，物理代码页 synonym 自修改代码可能留下 stale executable contract。建议在 cache entry 记录 physical span / satp / 属性，无法可靠翻译时全局 invalidate；验证：`cd myCPU && make test-host-dbt_runtime_invalidation_smoke test-host-dbt_runtime_harness_smoke`。
-2. DBT helper store 的 LR/SC reservation invalidation 未处理跨页 store。建议复用 commit-boundary 逻辑，跨页或 PA span 不完整时 clear reservation；验证：`cd myCPU && make test-host-dbt_helper_execution_bridge_smoke test-host-dbt_runtime_harness_smoke`。
-3. `pipeline` profile 漏记 atomic memory observations。建议 pipeline 复用 functional atomic observation 逻辑；验证：`cd myCPU && make test-host-execution_profile_smoke test-pipeline`。
-4. debug CLI 数字字段解析对非法字符串静默取 0 / 前缀值。建议严格检查 `strtoull` end pointer / errno；验证：`cd myCPU && make test-host-debug_protocol_command_smoke test-host-debug_cli_smoke`。
-5. PLIC / MMIO 平台契约文档与当前 DTB / 常量不一致。`docs/design/platform_mmio_contract.md` 仍写 UART source 1，代码 / DTB 已是 virtio=1、AI=9、UART=10。建议更新文档并明确 SimpleStorage / Virtio transport 选择关系；验证：`cd myCPU && make test-host-virtio_blk_smoke test-host-xv6_shell_smoke`。
-6. `README.md` 仍把旧 `KMVPETDS` 写成当前 `kernel_alpha` 能力。建议改为历史 Phase 1 guardrail，并单独说明课程 OS stage1 接管线；验证：`rg -n "kernel_alpha = KMVPETDS|KMVPETDS" README.md docs/status docs/design myCPU/Makefile`。
-7. 通用 `kernel_runtime` helper 仍硬编码 demo storage signature。建议把 `'Stor'` signature guardrail 移到 kernel_alpha / demo 专用 helper，或重命名为明确 guardrail contract；验证：`cd myCPU && make test-unit-kernel_runtime test-unit-kernel_alpha_common test-guest-kernel_alpha_demo test-guest-supervisor_demo`。
-8. VirtQueue 在确认 used / status 写回前就消费 avail entry。建议延后提交 avail index，或失败路径尽量写 `VIRTIO_BLK_S_IOERR` 与 used entry；验证：`cd myCPU && make test-host-virtio_blk_smoke` 并补 bad descriptor / DMA fault host test。
-9. Graph package record reserved 字段未 fail-closed。建议对 tensor / op / memory-plan / dynamic-tensor record 的 reserved 字段统一非零 reject；验证：`cd myCPU && make test-unit-ai_graph_package`。
-10. Guest C ABI 仍把 runtime shape offset 命名为 `reserved0`。建议改名为 `runtime_shape_table_offset`，保留 ABI size assert，并补 guest queue unit；验证：`cd myCPU && make test-unit-ai_accel_queue test-host-ai_accel_guest_smoke`。
-11. AI profile 文本 / 结构缺少版本边界且字段明显膨胀。建议加 `profile_schema_version` / `timing_schema_version`，CLI 至少输出 `schema=ai_profile_v1`；验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`。
-12. `expected_output` 是 AI manifest 字段但 runner 忽略它。建议移除该 schema 字段或在 runner 中按 output 顺序比对；验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`。
-13. Sv39 leaf PTE reserved 高位未 fail-closed。建议为当前 Sv39 模型增加 leaf / non-leaf reserved mask，并补 leaf reserved-bit asm 回归；验证：`cd myCPU && make test-sv39_pagewalk_contracts test-pipeline-sv39_pagewalk_contracts`。
-14. `mstatus.MPP=2` 可被写入并在 `mret` 时解码为 M-mode。建议写 `mstatus` 时规整 MPP 到合法值，或在 `mret` 前明确处理 reserved MPP；验证：`cd myCPU && make test-privilege_transitions test-trap_state`。
-15. debug bus 观察面是单槽，容易被内部 fetch / page-walk 覆盖。建议增加 access source / kind，或为 guest data / MMIO commit 维护独立观察槽；验证：`cd myCPU && make test-host-debug_cli_smoke test-host-execution_profile_smoke`。
-16. 测试矩阵缺少一等 fast / standard / slow / external 分层入口。建议新增并文档化 `test-fast-smoke`、`test-standard-regression`、`test-slow-guest`、`test-opt-in-external` 等别名；验证：`cd myCPU && make -n test-fast-smoke test-standard-regression test-slow-guest`。
-17. `pipeline` LSQ 和 FP metadata 仍复制 shared semantics 指令事实。建议抽出共享 memory shape / FP source-dest descriptor，pipeline 只消费只读描述；验证：`cd myCPU && make test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-pipeline`。
-18. DBT guardrail 的 retired count 来自 IR 预期，不是 host executable 实测。建议 host ABI 返回 executed / retired count，或把字段明确标成 IR-expected；验证：`cd myCPU && make test-host-dbt_runtime_harness_smoke test-host-dbt_host_emitter_smoke`。
-19. DBT metadata / executable cache 是无界 vector + 线性查找。若只服务 smoke，建议明确 max entry / cap；若准备演进 runtime，改用 keyed map + LRU / 上限；验证：`cd myCPU && make test-host-dbt_executable_cache_smoke test-host-dbt_jit_engine_smoke test-host-dbt_runtime_harness_smoke`。
+1. `pipeline` profile 漏记 atomic memory observations。建议 pipeline 复用 functional atomic observation 逻辑；验证：`cd myCPU && make test-host-execution_profile_smoke test-pipeline`。
+2. debug CLI 数字字段解析对非法字符串静默取 0 / 前缀值。建议严格检查 `strtoull` end pointer / errno；验证：`cd myCPU && make test-host-debug_protocol_command_smoke test-host-debug_cli_smoke`。
+3. Graph package record reserved 字段未 fail-closed。建议对 tensor / op / memory-plan / dynamic-tensor record 的 reserved 字段统一非零 reject；验证：`cd myCPU && make test-unit-ai_graph_package`。
+4. Guest C ABI 仍把 runtime shape offset 命名为 `reserved0`。建议改名为 `runtime_shape_table_offset`，保留 ABI size assert，并补 guest queue unit；验证：`cd myCPU && make test-unit-ai_accel_queue test-host-ai_accel_guest_smoke`。
+5. AI profile 文本 / 结构缺少版本边界且字段明显膨胀。建议加 `profile_schema_version` / `timing_schema_version`，CLI 至少输出 `schema=ai_profile_v1`；验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`。
+6. `expected_output` 是 AI manifest 字段但 runner 忽略它。建议移除该 schema 字段或在 runner 中按 output 顺序比对；验证：`cd myCPU && make test-host-ai_accelerator_profile_smoke`。
+7. Sv39 leaf PTE reserved 高位未 fail-closed。建议为当前 Sv39 模型增加 leaf / non-leaf reserved mask，并补 leaf reserved-bit asm 回归；验证：`cd myCPU && make test-sv39_pagewalk_contracts test-pipeline-sv39_pagewalk_contracts`。
+8. `mstatus.MPP=2` 可被写入并在 `mret` 时解码为 M-mode。建议写 `mstatus` 时规整 MPP 到合法值，或在 `mret` 前明确处理 reserved MPP；验证：`cd myCPU && make test-privilege_transitions test-trap_state`。
+9. debug bus 观察面是单槽，容易被内部 fetch / page-walk 覆盖。建议增加 access source / kind，或为 guest data / MMIO commit 维护独立观察槽；验证：`cd myCPU && make test-host-debug_cli_smoke test-host-execution_profile_smoke`。
+10. 测试矩阵缺少一等 fast / standard / slow / external 分层入口。建议新增并文档化 `test-fast-smoke`、`test-standard-regression`、`test-slow-guest`、`test-opt-in-external` 等别名；验证：`cd myCPU && make -n test-fast-smoke test-standard-regression test-slow-guest`。
+11. `pipeline` LSQ 和 FP metadata 仍复制 shared semantics 指令事实。建议抽出共享 memory shape / FP source-dest descriptor，pipeline 只消费只读描述；验证：`cd myCPU && make test-host-pipeline_backend_smoke test-host-backend_differential_smoke test-pipeline`。
 
 ### 仅记录
 

@@ -23,3 +23,4 @@ struct AtomicApplyResult {
 
 InsnEffects build_atomic_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v);
 AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& request);
+void invalidate_reservation_for_store(CPU& cpu, Bus& bus, uint64_t addr, int size);

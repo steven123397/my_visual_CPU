@@ -32,6 +32,10 @@ bool DbtBlockCache::insert(const DbtTranslationUnit& unit) {
         }
     }
 
+    if (entries_.size() >= kMaxEntries) {
+        entries_.erase(entries_.begin());
+        stats_.evictions += 1;
+    }
     entries_.push_back(unit);
     stats_.insertions += 1;
     return true;
@@ -105,5 +109,6 @@ size_t DbtBlockCache::size() const {
 DbtBlockCacheStats DbtBlockCache::stats() const {
     DbtBlockCacheStats copy = stats_;
     copy.entries = entries_.size();
+    copy.max_entries = kMaxEntries;
     return copy;
 }

@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <sstream>
 
+#include "../isa/atomic_contract.h"
 #include "memory_ops.h"
 
 namespace {
@@ -197,23 +198,13 @@ DbtHelperExecutionResult execute_dbt_helper_request(
         };
     }
     case DbtHelperExecutionKind::ScalarMemoryStore: {
-        AddressSpace::TranslateResult translated{};
-        if (request.size > 0) {
-            translated =
-                cpu.address_space().translate_result(bus, request.addr, AccessType::Store, false);
-        }
-
         const AddressSpace::AccessResult access =
             cpu.address_space().store_result(bus, request.addr, request.value, request.size);
+        invalidate_reservation_for_store(cpu, bus, request.addr, request.size);
         if (!access.ok) {
             return fault_result(request, access.fault);
         }
 
-        if (translated.ok) {
-            cpu.trap().invalidate_reservation(translated.paddr, request.size);
-        } else {
-            cpu.trap().clear_reservation();
-        }
         cpu.core().set_pc(next_pc);
         cpu.core().advance_instret();
         return DbtHelperExecutionResult{

@@ -86,10 +86,14 @@ int main() {
             return 1;
         }
 
-        if (!expect(!queue.has_pending(bus, error), "expected queue to be empty after pop") ||
-            !expect(error.empty(), "expected no error after queue drained") ||
+        if (!expect(queue.has_pending(bus, error), "expected queue to stay pending until commit") ||
+            !expect(error.empty(), "expected no error before queue commit") ||
             !expect(queue.push_used(bus, chain.head_index, 17, error), "expected used ring push to succeed") ||
-            !expect(error.empty(), "expected used ring push without error")) {
+            !expect(error.empty(), "expected used ring push without error") ||
+            !expect(queue.commit_chain(chain, error), "expected queue commit to succeed") ||
+            !expect(error.empty(), "expected queue commit without error") ||
+            !expect(!queue.has_pending(bus, error), "expected queue to be empty after commit") ||
+            !expect(error.empty(), "expected no error after queue drained")) {
             return 1;
         }
 
@@ -105,12 +109,40 @@ int main() {
             return 1;
         }
 
+        write_bytes(ram, desc_addr + 0 * sizeof(PackedDesc), &desc0, sizeof(desc0));
+        write_bytes(ram, desc_addr + 1 * sizeof(PackedDesc), &desc1, sizeof(desc1));
+        write_u16(ram, avail_addr + 2, 2);
+        write_u16(ram, avail_addr + 6, 0);
+
+        if (!expect(queue.pop_chain(bus, chain, error), "expected second chain pop to succeed") ||
+            !expect(error.empty(), "expected second chain pop without error")) {
+            return 1;
+        }
+        queue.set_used_addr(MEM_BASE + MEM_SIZE);
+        if (queue.push_used(bus, chain.head_index, 17, error)) {
+            return fail("expected unmapped used ring writeback to fail");
+        }
+        if (!expect(queue.has_pending(bus, error),
+                    "expected queue to keep avail entry pending after used writeback failure")) {
+            return 1;
+        }
+        queue.set_used_addr(used_addr);
+        if (!expect(queue.push_used(bus, chain.head_index, 17, error),
+                    "expected used ring retry to succeed") ||
+            !expect(queue.commit_chain(chain, error), "expected queue commit after retry to succeed")) {
+            return 1;
+        }
+        if (!expect(bus.try_load(used_addr + 2, 2, used_idx) && used_idx == 2,
+                    "expected used idx increment after retried writeback")) {
+            return 1;
+        }
+
         const PackedDesc loop_desc0{data_addr, 8, VIRTQ_DESC_F_NEXT, 1};
         const PackedDesc loop_desc1{status_addr, 1, VIRTQ_DESC_F_NEXT, 0};
         write_bytes(ram, desc_addr + 0 * sizeof(PackedDesc), &loop_desc0, sizeof(loop_desc0));
         write_bytes(ram, desc_addr + 1 * sizeof(PackedDesc), &loop_desc1, sizeof(loop_desc1));
-        write_u16(ram, avail_addr + 2, 2);
-        write_u16(ram, avail_addr + 4 + 2, 0);
+        write_u16(ram, avail_addr + 2, 3);
+        write_u16(ram, avail_addr + 4 + 4, 0);
 
         if (queue.pop_chain(bus, chain, error)) {
             return fail("expected looped descriptor chain to be rejected");

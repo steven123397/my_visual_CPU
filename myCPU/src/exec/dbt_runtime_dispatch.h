@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "dbt_helper_replay.h"
 #include "dbt_ir.h"
@@ -43,6 +44,7 @@ struct DbtRuntimeDispatchContract {
     uint32_t reject_raw{0};
     std::string reject_reason{};
     DbtHelperReplayKind helper_replay_kind{DbtHelperReplayKind::None};
+    std::vector<DbtCodePhysicalSpan> code_spans{};
 };
 
 DbtRuntimeDispatchContract plan_dbt_runtime_dispatch_contract(
