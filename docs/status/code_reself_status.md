@@ -11,7 +11,7 @@
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 当前计划：
-  - 当前无活跃计划。
+  - [../plan/code_reself_remediation_plan.md](../plan/code_reself_remediation_plan.md)
 
 ## 当前状态
 
