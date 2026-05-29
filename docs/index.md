@@ -27,6 +27,8 @@
 
 - `主线状态`
   - [status/mainline_status.md](status/mainline_status.md)
+  - [status/code_reself_status.md](status/code_reself_status.md)
+  - [plan/code_reself_remediation_plan.md](plan/code_reself_remediation_plan.md)
   - [plan/history_plan.md](plan/history_plan.md)
 
 - `Post-Wave 7 Linux`
