@@ -102,6 +102,7 @@ static trap_context_binding_snapshot_t capture_context_binding_snapshot(
     snapshot.supervisor_external_policy.post_handler = NULL;
     snapshot.supervisor_external_policy.post_context = NULL;
     snapshot.user_ecall_policy.user_runtime = NULL;
+    snapshot.user_ecall_policy.syscalls = NULL;
     snapshot.user_ecall_policy.validate = NULL;
     snapshot.user_ecall_policy.validate_context = NULL;
     snapshot.user_ecall_policy.resume_pc = 0;
@@ -424,9 +425,12 @@ void trap_context_init(trap_context_t* trap_context) {
     trap_context->supervisor_external_policy.post_handler = NULL;
     trap_context->supervisor_external_policy.post_context = NULL;
     trap_context->user_ecall_policy.user_runtime = NULL;
+    trap_context->user_ecall_policy.syscalls = NULL;
     trap_context->user_ecall_policy.validate = NULL;
     trap_context->user_ecall_policy.validate_context = NULL;
     trap_context->user_ecall_policy.resume_pc = 0;
+    trap_context->user_crash_policy.handler = NULL;
+    trap_context->user_crash_policy.context = NULL;
 }
 
 void trap_user_runtime_init(trap_user_runtime_t* user_runtime) {

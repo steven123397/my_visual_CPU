@@ -70,6 +70,23 @@ static bool append_u32(char* out,
     return true;
 }
 
+static bool append_i32(char* out,
+                       size_t out_size,
+                       size_t* used,
+                       int32_t value) {
+    uint32_t magnitude = 0;
+
+    if (value < 0) {
+        if (!append_char(out, out_size, used, '-')) {
+            return false;
+        }
+        magnitude = (uint32_t)(-(value + 1)) + 1U;
+    } else {
+        magnitude = (uint32_t)value;
+    }
+    return append_u32(out, out_size, used, magnitude);
+}
+
 static bool append_key_value_u32(char* out,
                                  size_t out_size,
                                  size_t* used,
@@ -81,11 +98,51 @@ static bool append_key_value_u32(char* out,
            append_char(out, out_size, used, '\n');
 }
 
+static bool append_key_value_i32(char* out,
+                                 size_t out_size,
+                                 size_t* used,
+                                 const char* key,
+                                 int32_t value) {
+    return append_str(out, out_size, used, key) &&
+           append_char(out, out_size, used, '=') &&
+           append_i32(out, out_size, used, value) &&
+           append_char(out, out_size, used, '\n');
+}
+
 static bool read_ps(const procfs_t* procfs, char* out, size_t out_size) {
     course_scheduler_summary_t summary;
     course_scheduler_task_stats_t stats[COURSE_SCHEDULER_MAX_TASKS];
     size_t used = 0;
     size_t i = 0;
+
+    if (procfs->processes != NULL) {
+        for (i = 0; i < COURSE_PROCESS_MAX_PROCESSES; ++i) {
+            const course_process_t* process =
+                course_process_at(procfs->processes, i);
+
+            if (process == NULL || process->state == COURSE_PROCESS_DEAD ||
+                process->state == COURSE_PROCESS_UNUSED) {
+                continue;
+            }
+            if (!append_str(out, out_size, &used, "pid=") ||
+                !append_u32(out, out_size, &used, process->pid) ||
+                !append_str(out, out_size, &used, " ppid=") ||
+                !append_u32(out, out_size, &used, process->ppid) ||
+                !append_str(out, out_size, &used, " state=") ||
+                !append_str(out,
+                            out_size,
+                            &used,
+                            course_process_state_name(process->state)) ||
+                !append_str(out, out_size, &used, " name=") ||
+                !append_str(out, out_size, &used, process->name) ||
+                !append_str(out, out_size, &used, " exit=") ||
+                !append_i32(out, out_size, &used, process->exit_code) ||
+                !append_char(out, out_size, &used, '\n')) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     if (!course_scheduler_summary(procfs->scheduler, &summary) ||
         !course_scheduler_task_stats(procfs->scheduler,
@@ -218,7 +275,147 @@ static bool read_fsstat(const procfs_t* procfs, char* out, size_t out_size) {
                                 out_size,
                                 &used,
                                 "btree_compare_steps",
-                                stats.btree_compare_steps);
+                                stats.btree_compare_steps) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "open_calls",
+                                stats.open_calls) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "close_calls",
+                                stats.close_calls) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "seek_calls",
+                                stats.seek_calls) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "max_files",
+                                stats.max_files) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "max_file_size",
+                                stats.max_file_size) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "max_depth",
+                                stats.max_depth);
+}
+
+static bool read_syscalls(const procfs_t* procfs, char* out, size_t out_size) {
+    course_syscall_stats_t stats;
+    size_t used = 0;
+    uint32_t i = 0;
+
+    if (procfs->syscalls == NULL ||
+        !course_syscall_stats(procfs->syscalls, &stats) ||
+        !append_key_value_u32(out,
+                              out_size,
+                              &used,
+                              "total_calls",
+                              stats.total_calls) ||
+        !append_key_value_u32(out,
+                              out_size,
+                              &used,
+                              "failures",
+                              stats.failures) ||
+        !append_key_value_i32(out,
+                              out_size,
+                              &used,
+                              "last_error",
+                              stats.last_error)) {
+        return false;
+    }
+
+    for (i = 0; i < COURSE_SYSCALL_COUNT; ++i) {
+        if (!append_key_value_u32(out,
+                                  out_size,
+                                  &used,
+                                  course_syscall_name(i),
+                                  stats.calls[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool read_cow(const procfs_t* procfs, char* out, size_t out_size) {
+    course_process_cow_stats_t stats;
+    size_t used = 0;
+
+    if (procfs->processes == NULL ||
+        !course_process_cow_stats(procfs->processes, &stats)) {
+        return false;
+    }
+
+    return append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "mapped_pages",
+                                stats.mapped_pages) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "shared_pages",
+                                stats.shared_pages) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "cow_faults",
+                                stats.cow_faults) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "copied_pages",
+                                stats.copied_pages);
+}
+
+static bool read_crashlog(const procfs_t* procfs, char* out, size_t out_size) {
+    size_t i = 0;
+    size_t used = 0;
+    const course_process_t* latest = NULL;
+
+    if (procfs->processes == NULL) {
+        return false;
+    }
+
+    for (i = 0; i < COURSE_PROCESS_MAX_PROCESSES; ++i) {
+        const course_process_t* process =
+            course_process_at(procfs->processes, i);
+
+        if (process == NULL ||
+            process->exit_code != COURSE_PROCESS_EXIT_CRASH ||
+            process->crash_reason[0] == '\0') {
+            continue;
+        }
+        if (latest == NULL || process->pid >= latest->pid) {
+            latest = process;
+        }
+    }
+
+    if (latest == NULL) {
+        return append_str(out, out_size, &used, "none\n");
+    }
+
+    return append_str(out, out_size, &used, "pid=") &&
+           append_u32(out, out_size, &used, latest->pid) &&
+           append_str(out, out_size, &used, " name=") &&
+           append_str(out, out_size, &used, latest->name) &&
+           append_str(out, out_size, &used, " sepc=") &&
+           append_u32(out, out_size, &used, (uint32_t)latest->crash_sepc) &&
+           append_str(out, out_size, &used, " scause=") &&
+           append_u32(out, out_size, &used, (uint32_t)latest->crash_scause) &&
+           append_str(out, out_size, &used, " stval=") &&
+           append_u32(out, out_size, &used, (uint32_t)latest->crash_stval) &&
+           append_str(out, out_size, &used, " reason=") &&
+           append_str(out, out_size, &used, latest->crash_reason) &&
+           append_char(out, out_size, &used, '\n');
 }
 
 void procfs_init(procfs_t* procfs,
@@ -232,6 +429,8 @@ void procfs_init(procfs_t* procfs,
     procfs->scheduler = scheduler;
     procfs->memory = memory;
     procfs->fs = fs;
+    procfs->syscalls = NULL;
+    procfs->processes = NULL;
 }
 
 bool procfs_read(const procfs_t* procfs,
@@ -256,6 +455,15 @@ bool procfs_read(const procfs_t* procfs,
     if (str_eq(path, "/proc/fsstat")) {
         return read_fsstat(procfs, out, out_size);
     }
+    if (str_eq(path, "/proc/syscalls")) {
+        return read_syscalls(procfs, out, out_size);
+    }
+    if (str_eq(path, "/proc/cow")) {
+        return read_cow(procfs, out, out_size);
+    }
+    if (str_eq(path, "/proc/crashlog")) {
+        return read_crashlog(procfs, out, out_size);
+    }
 
     return false;
 }
@@ -269,4 +477,24 @@ bool procfs_write(procfs_t* procfs,
     (void)data;
     (void)size;
     return false;
+}
+
+bool procfs_attach_syscalls(procfs_t* procfs,
+                            const course_syscall_t* syscalls) {
+    if (procfs == NULL || syscalls == NULL) {
+        return false;
+    }
+
+    procfs->syscalls = syscalls;
+    return true;
+}
+
+bool procfs_attach_processes(procfs_t* procfs,
+                             const course_process_table_t* processes) {
+    if (procfs == NULL || processes == NULL) {
+        return false;
+    }
+
+    procfs->processes = processes;
+    return true;
 }

@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "../../guest/kernel/vm_private.h"
+#include "../../guest/include/course_syscall.h"
 #include "../../guest/include/trap.h"
 
 static jmp_buf g_panic_env;
@@ -51,12 +52,28 @@ static uint64_t g_last_validate_epc = 0;
 static uint64_t g_last_validate_tval = 0;
 static void* g_last_validate_context = NULL;
 static bool g_user_ecall_validate_result = true;
+static int g_course_syscall_dispatch_calls = 0;
+static course_syscall_t* g_last_course_syscall_context = NULL;
+static uint32_t g_last_course_syscall_number = 0;
+static uint64_t g_last_course_syscall_arg0 = 0;
+static uint64_t g_last_course_syscall_arg1 = 0;
+static uint64_t g_last_course_syscall_arg2 = 0;
+static uint64_t g_last_course_syscall_arg3 = 0;
+static int64_t g_course_syscall_dispatch_result = 0;
+static int g_user_crash_handler_calls = 0;
+static uint64_t g_last_user_crash_cause = 0;
+static uint64_t g_last_user_crash_epc = 0;
+static uint64_t g_last_user_crash_tval = 0;
+static void* g_last_user_crash_context = NULL;
+static bool g_user_crash_handler_result = true;
 
 static void reset_stub_state(void);
 static int fail(const char* message);
 static int test_install_standard_user_runtime_policies(void);
 static int test_dispatch_page_fault_and_custom_handlers(void);
 static int test_dispatch_user_ecall_resume_policy(void);
+static int test_dispatch_user_ecall_syscall_policy(void);
+static int test_dispatch_user_crash_policy(void);
 static int test_default_timer_and_external_handlers(void);
 static void stub_interrupt_handler(uint64_t cause, void* context);
 static void stub_exception_handler(uint64_t cause,
@@ -70,6 +87,26 @@ static void stub_external_post_handler(uint64_t cause,
 static bool stub_user_ecall_validate(uint64_t epc,
                                      uint64_t tval,
                                      void* context);
+static bool stub_user_crash_handler(uint64_t cause,
+                                    uint64_t epc,
+                                    uint64_t tval,
+                                    void* context);
+
+int64_t course_syscall_dispatch(course_syscall_t* syscalls,
+                                uint32_t number,
+                                uint64_t arg0,
+                                uint64_t arg1,
+                                uint64_t arg2,
+                                uint64_t arg3) {
+    g_course_syscall_dispatch_calls += 1;
+    g_last_course_syscall_context = syscalls;
+    g_last_course_syscall_number = number;
+    g_last_course_syscall_arg0 = arg0;
+    g_last_course_syscall_arg1 = arg1;
+    g_last_course_syscall_arg2 = arg2;
+    g_last_course_syscall_arg3 = arg3;
+    return g_course_syscall_dispatch_result;
+}
 
 void panic_shutdown(void) {
     if (g_panic_armed) {
@@ -207,6 +244,20 @@ static void reset_stub_state(void) {
     g_last_validate_tval = 0;
     g_last_validate_context = NULL;
     g_user_ecall_validate_result = true;
+    g_course_syscall_dispatch_calls = 0;
+    g_last_course_syscall_context = NULL;
+    g_last_course_syscall_number = 0;
+    g_last_course_syscall_arg0 = 0;
+    g_last_course_syscall_arg1 = 0;
+    g_last_course_syscall_arg2 = 0;
+    g_last_course_syscall_arg3 = 0;
+    g_course_syscall_dispatch_result = 0;
+    g_user_crash_handler_calls = 0;
+    g_last_user_crash_cause = 0;
+    g_last_user_crash_epc = 0;
+    g_last_user_crash_tval = 0;
+    g_last_user_crash_context = NULL;
+    g_user_crash_handler_result = true;
 }
 
 static int fail(const char* message) {
@@ -254,6 +305,18 @@ static bool stub_user_ecall_validate(uint64_t epc,
     g_last_validate_tval = tval;
     g_last_validate_context = context;
     return g_user_ecall_validate_result;
+}
+
+static bool stub_user_crash_handler(uint64_t cause,
+                                    uint64_t epc,
+                                    uint64_t tval,
+                                    void* context) {
+    g_user_crash_handler_calls += 1;
+    g_last_user_crash_cause = cause;
+    g_last_user_crash_epc = epc;
+    g_last_user_crash_tval = tval;
+    g_last_user_crash_context = context;
+    return g_user_crash_handler_result;
 }
 
 static int test_install_standard_user_runtime_policies(void) {
@@ -404,6 +467,115 @@ static int test_dispatch_user_ecall_resume_policy(void) {
     return 0;
 }
 
+static int test_dispatch_user_ecall_syscall_policy(void) {
+    trap_context_t trap_context = {0};
+    course_syscall_t syscalls = {0};
+    trap_frame_t trap_frame = {0};
+
+    reset_stub_state();
+    if (!trap_context_install_user_syscall_policy(&trap_context, &syscalls)) {
+        return fail("expected user syscall policy install to succeed");
+    }
+
+    trap_frame.a0 = 1U;
+    trap_frame.a1 = 0x2000U;
+    trap_frame.a2 = 5U;
+    trap_frame.a3 = 9U;
+    trap_frame.a7 = COURSE_SYSCALL_WRITE;
+    g_course_syscall_dispatch_result = 5;
+    g_active_trap_context = &trap_context;
+    g_scause = RISCV_EXC_ECALL_FROM_U;
+    g_sepc = 0x7000;
+    g_stval = 0;
+    g_sstatus = RISCV_SSTATUS_SPIE;
+    if (setjmp(g_panic_env) != 0) {
+        return fail("did not expect panic during user syscall dispatch");
+    }
+    g_panic_armed = true;
+    supervisor_trap_dispatch_with_frame(&trap_frame);
+    g_panic_armed = false;
+
+    if (g_course_syscall_dispatch_calls != 1 ||
+        g_last_course_syscall_context != &syscalls ||
+        g_last_course_syscall_number != COURSE_SYSCALL_WRITE ||
+        g_last_course_syscall_arg0 != 1U ||
+        g_last_course_syscall_arg1 != 0x2000U ||
+        g_last_course_syscall_arg2 != 5U ||
+        g_last_course_syscall_arg3 != 9U ||
+        trap_frame.a0 != 5U ||
+        g_write_sepc_calls != 1 ||
+        g_last_written_sepc != 0x7004U) {
+        return fail("expected user ecall to dispatch syscall and resume next pc");
+    }
+
+    return 0;
+}
+
+static int test_dispatch_user_crash_policy(void) {
+    trap_context_t trap_context = {0};
+    int crash_cookie = 11;
+
+    reset_stub_state();
+    if (!trap_context_install_user_crash_policy(&trap_context,
+                                                stub_user_crash_handler,
+                                                &crash_cookie)) {
+        return fail("expected user crash policy install to succeed");
+    }
+
+    g_active_trap_context = &trap_context;
+    g_scause = RISCV_EXC_ILLEGAL_INSTRUCTION;
+    g_sepc = 0x8000;
+    g_stval = 0x1234;
+    g_sstatus = RISCV_SSTATUS_SPIE;
+    if (setjmp(g_panic_env) != 0) {
+        return fail("did not expect panic during user crash policy dispatch");
+    }
+    g_panic_armed = true;
+    supervisor_trap_dispatch();
+    g_panic_armed = false;
+
+    if (g_user_crash_handler_calls != 1 ||
+        g_last_user_crash_cause != RISCV_EXC_ILLEGAL_INSTRUCTION ||
+        g_last_user_crash_epc != 0x8000 ||
+        g_last_user_crash_tval != 0x1234 ||
+        g_last_user_crash_context != &crash_cookie ||
+        g_set_sstatus_bits_calls != 1 ||
+        g_last_set_sstatus_bits != RISCV_SSTATUS_SPP ||
+        g_write_sepc_calls != 1 ||
+        g_last_written_sepc != 0x8004U) {
+        return fail("expected user crash policy to record fatal user exception");
+    }
+
+    reset_stub_state();
+    if (!trap_context_install_user_crash_policy(&trap_context,
+                                                stub_user_crash_handler,
+                                                &crash_cookie)) {
+        return fail("expected user crash policy reinstall to succeed");
+    }
+    g_active_trap_context = &trap_context;
+    g_active_process = (vm_process_t*)&trap_context;
+    g_active_address_space = (vm_address_space_t*)&trap_context;
+    g_scause = RISCV_EXC_STORE_PAGE_FAULT;
+    g_sepc = 0x9000;
+    g_stval = 0x2222;
+    g_sstatus = RISCV_SSTATUS_SPIE;
+    g_vm_handle_page_fault_result = false;
+    if (setjmp(g_panic_env) != 0) {
+        return fail("did not expect panic during unhandled user page fault policy");
+    }
+    g_panic_armed = true;
+    supervisor_trap_dispatch();
+    g_panic_armed = false;
+    if (g_vm_handle_page_fault_calls != 1 ||
+        g_user_crash_handler_calls != 1 ||
+        g_last_user_crash_cause != RISCV_EXC_STORE_PAGE_FAULT ||
+        g_last_user_crash_tval != 0x2222) {
+        return fail("expected unhandled user page fault to become crash event");
+    }
+
+    return 0;
+}
+
 static int test_default_timer_and_external_handlers(void) {
     trap_context_t trap_context = {0};
     vm_address_space_t address_space = {
@@ -536,6 +708,8 @@ int main(void) {
     if (test_install_standard_user_runtime_policies() != 0 ||
         test_dispatch_page_fault_and_custom_handlers() != 0 ||
         test_dispatch_user_ecall_resume_policy() != 0 ||
+        test_dispatch_user_ecall_syscall_policy() != 0 ||
+        test_dispatch_user_crash_policy() != 0 ||
         test_default_timer_and_external_handlers() != 0 ||
         test_signal_delivery_rejects_inactive_runtime() != 0) {
         return 1;

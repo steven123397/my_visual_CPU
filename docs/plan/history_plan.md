@@ -23,6 +23,26 @@
 
 ### 2026-05-29
 
+#### course-os-kernel-alpha-stage2-plan
+
+- 原文件：`course_os_kernel_alpha_stage2_plan.md`
+- 完成内容：完成《操作系统课程设计》`kernel_alpha` 第二阶段落地，把正向
+  `kernel_alpha_demo` 扩展为 `KMVPET|course-os-stage1 ...|course-os-stage2 ...` 稳定
+  marker。第二阶段覆盖 syscall ABI、真实进程生命周期、FD / FS 统一 I/O、5 个课程用户程序、
+  shell、单级管道、重定向、COW Fork、用户态崩溃隔离，以及 `/proc/syscalls`、`/proc/cow`、
+  `/proc/crashlog` 可观测证据面。
+- 实现过程摘要：按计划先从 syscall、进程、FD / FS、shell 分层补齐 A 方案核心闭环，再落地
+  课程级 COW 匿名页引用、写后复制、父子数据隔离、trap 用户崩溃策略和 crashlog；最后新增
+  `course_os_stage2` 总编排层和 `test-unit-course_os_stage2`，让 `kernel_alpha/main.c` 只负责
+  bring-up 后串接 Stage 1 / Stage 2 summary。Stage 2 负向 guardrail 覆盖 bad syscall、
+  bad user pointer、bad fd、`/proc` 写拒绝、user crash isolated、COW write fault 和 pipe misuse。
+- 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage2_syscall`、
+  `make test-unit-course_os_stage2_process`、`make test-unit-course_os_stage2_fd_fs`、
+  `make test-unit-course_os_stage2_shell`、`make test-unit-course_os_stage2_cow_crash`、
+  `make test-unit-course_os_stage2`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo` 和 `git diff --check`；最终全量验证以本轮收尾命令输出为准。
+- 结果参考：[course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 #### course-os-kernel-alpha-stage1-plan
 
 - 原文件：`course_os_kernel_alpha_stage1_plan.md`

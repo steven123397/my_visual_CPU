@@ -12,6 +12,7 @@
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
   - [../status/mainline_status.md](../status/mainline_status.md)
 - 已完成计划：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage2-plan](../plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
 - 背景与创新来源：
   - [../background/操作系统课程设计-A方案-OS内核实现.md](../background/操作系统课程设计-A方案-OS内核实现.md)
@@ -213,6 +214,6 @@ shell 是第二阶段主展示入口，至少支持：
 
 ## 当前有效性说明
 
-- 当前有效：本文档作为课程 OS `kernel_alpha` 第二阶段的设计口径。
+- 当前有效：本文档作为课程 OS `kernel_alpha` 第二阶段已完成实现的设计口径。
 - 第一阶段完成态仍以 [../design/course_os_kernel_alpha_stage1_design.md](course_os_kernel_alpha_stage1_design.md) 和 [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan) 为准。
-- 第二阶段实时执行状态以 [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
+- 第二阶段完成态以 [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 和 [../plan/history_plan.md#course-os-kernel-alpha-stage2-plan](../plan/history_plan.md#course-os-kernel-alpha-stage2-plan) 为准。

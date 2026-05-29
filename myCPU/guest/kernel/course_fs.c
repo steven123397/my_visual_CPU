@@ -2,6 +2,8 @@
 
 #include <stddef.h>
 
+static unsigned char g_course_fs_data[COURSE_FS_MAX_NODES][COURSE_FS_MAX_DATA];
+
 static size_t cstr_len(const char* value) {
     size_t i = 0;
 
@@ -351,6 +353,8 @@ void course_fs_init(course_fs_t* fs) {
         fs->nodes[i].is_dir = false;
         fs->nodes[i].parent = -1;
         fs->nodes[i].name[0] = '\0';
+        fs->nodes[i].data_offset = (size_t)i * COURSE_FS_MAX_DATA;
+        fs->nodes[i].data_capacity = COURSE_FS_MAX_DATA;
         fs->nodes[i].size = 0;
         fs->nodes[i].dir_index_count = 0;
         fs->nodes[i].btree_leaf_count = 0;
@@ -367,12 +371,22 @@ void course_fs_init(course_fs_t* fs) {
     fs->stats.btree_compare_steps = 0;
     fs->stats.btree_internal_nodes = 0;
     fs->stats.btree_leaf_nodes = 0;
+    fs->stats.open_calls = 0;
+    fs->stats.close_calls = 0;
+    fs->stats.seek_calls = 0;
+    fs->stats.max_files = 128U;
+    fs->stats.max_file_size = COURSE_FS_MAX_DATA;
+    fs->stats.max_depth = 3U;
 
     fs->nodes[0].used = true;
     fs->nodes[0].is_dir = true;
     fs->nodes[0].parent = -1;
     fs->nodes[0].name[0] = '/';
     fs->nodes[0].name[1] = '\0';
+}
+
+void course_fs_mkfs(course_fs_t* fs) {
+    course_fs_init(fs);
 }
 
 bool course_fs_create(course_fs_t* fs, const char* path, bool directory) {
@@ -396,6 +410,8 @@ bool course_fs_create(course_fs_t* fs, const char* path, bool directory) {
     fs->nodes[node_index].used = true;
     fs->nodes[node_index].is_dir = directory;
     fs->nodes[node_index].parent = parent;
+    fs->nodes[node_index].data_offset = (size_t)node_index * COURSE_FS_MAX_DATA;
+    fs->nodes[node_index].data_capacity = COURSE_FS_MAX_DATA;
     fs->nodes[node_index].size = 0;
     fs->nodes[node_index].dir_index_count = 0;
     copy_name(fs->nodes[node_index].name, leaf, leaf_len);
@@ -460,7 +476,7 @@ bool course_fs_write(course_fs_t* fs,
     }
 
     node = &fs->nodes[node_index];
-    copy_bytes(&node->data[offset], data, size);
+    copy_bytes(&g_course_fs_data[node_index][offset], data, size);
     if (offset + size > node->size) {
         node->size = offset + size;
     }
@@ -486,7 +502,7 @@ bool course_fs_read(course_fs_t* fs,
         return false;
     }
 
-    read_bytes(out, &node->data[offset], size);
+    read_bytes(out, &g_course_fs_data[node_index][offset], size);
     fs->stats.file_reads += 1U;
     return true;
 }
@@ -495,11 +511,57 @@ bool course_fs_lookup(course_fs_t* fs, const char* path) {
     return resolve_path(fs, path, NULL, NULL, NULL) >= 0;
 }
 
+bool course_fs_size(course_fs_t* fs, const char* path, size_t* out_size) {
+    const int node_index = resolve_path(fs, path, NULL, NULL, NULL);
+
+    if (fs == NULL || out_size == NULL || node_index < 0 ||
+        fs->nodes[node_index].is_dir) {
+        return false;
+    }
+
+    *out_size = fs->nodes[node_index].size;
+    return true;
+}
+
 bool course_fs_stats(const course_fs_t* fs, course_fs_stats_t* out_stats) {
     if (fs == NULL || out_stats == NULL) {
         return false;
     }
 
-    *out_stats = fs->stats;
+    out_stats->file_creates = fs->stats.file_creates;
+    out_stats->dir_creates = fs->stats.dir_creates;
+    out_stats->file_reads = fs->stats.file_reads;
+    out_stats->file_writes = fs->stats.file_writes;
+    out_stats->file_deletes = fs->stats.file_deletes;
+    out_stats->dir_deletes = fs->stats.dir_deletes;
+    out_stats->path_resolves = fs->stats.path_resolves;
+    out_stats->dir_index_lookups = fs->stats.dir_index_lookups;
+    out_stats->btree_compare_steps = fs->stats.btree_compare_steps;
+    out_stats->btree_internal_nodes = fs->stats.btree_internal_nodes;
+    out_stats->btree_leaf_nodes = fs->stats.btree_leaf_nodes;
+    out_stats->open_calls = fs->stats.open_calls;
+    out_stats->close_calls = fs->stats.close_calls;
+    out_stats->seek_calls = fs->stats.seek_calls;
+    out_stats->max_files = fs->stats.max_files;
+    out_stats->max_file_size = fs->stats.max_file_size;
+    out_stats->max_depth = fs->stats.max_depth;
     return true;
+}
+
+void course_fs_record_open(course_fs_t* fs) {
+    if (fs != NULL) {
+        fs->stats.open_calls += 1U;
+    }
+}
+
+void course_fs_record_close(course_fs_t* fs) {
+    if (fs != NULL) {
+        fs->stats.close_calls += 1U;
+    }
+}
+
+void course_fs_record_seek(course_fs_t* fs) {
+    if (fs != NULL) {
+        fs->stats.seek_calls += 1U;
+    }
 }

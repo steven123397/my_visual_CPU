@@ -110,7 +110,7 @@ static int test_memory_demand_clock_and_kmalloc(void) {
 }
 
 static int test_course_fs_crud_seek_btree_stats(void) {
-    course_fs_t fs;
+    static course_fs_t fs;
     course_fs_stats_t before_lookup;
     course_fs_stats_t after_lookup;
     course_fs_stats_t stats;
@@ -162,7 +162,7 @@ static int test_course_fs_crud_seek_btree_stats(void) {
 static int test_procfs_readonly_outputs(void) {
     course_scheduler_t scheduler;
     course_memory_t memory;
-    course_fs_t fs;
+    static course_fs_t fs;
     procfs_t procfs;
     char out[512];
 

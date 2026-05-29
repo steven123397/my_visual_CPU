@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "course_syscall.h"
 #include "memory.h"
 #include "panic.h"
 #include "platform.h"
@@ -36,6 +37,75 @@ static bool user_runtime_external_signal_valid(
            user_runtime->external_signal.page != NULL &&
            user_runtime->external_signal.word_index <
                (MEMORY_PAGE_SIZE / sizeof(uint32_t));
+}
+
+static bool user_syscall_policy_valid(const trap_context_t* trap_context,
+                                      const trap_frame_t* frame,
+                                      uint64_t cause,
+                                      uint64_t tval) {
+    const uint64_t sstatus = riscv_read_sstatus();
+
+    return trap_context != NULL &&
+           trap_context->user_ecall_policy.syscalls != NULL &&
+           frame != NULL &&
+           cause == RISCV_EXC_ECALL_FROM_U &&
+           tval == 0 &&
+           (sstatus & RISCV_SSTATUS_SPP) == 0 &&
+           (sstatus & RISCV_SSTATUS_SPIE) != 0;
+}
+
+static bool user_exception_from_u_mode(void) {
+    const uint64_t sstatus = riscv_read_sstatus();
+
+    return (sstatus & RISCV_SSTATUS_SPP) == 0 &&
+           (sstatus & RISCV_SSTATUS_SPIE) != 0;
+}
+
+static bool handle_user_syscall_policy(const trap_context_t* trap_context,
+                                       trap_frame_t* frame,
+                                       uint64_t cause,
+                                       uint64_t epc,
+                                       uint64_t tval) {
+    int64_t result = 0;
+
+    if (trap_context == NULL ||
+        trap_context->user_ecall_policy.syscalls == NULL) {
+        return false;
+    }
+    if (!user_syscall_policy_valid(trap_context, frame, cause, tval)) {
+        panic_shutdown();
+    }
+
+    result = course_syscall_dispatch(trap_context->user_ecall_policy.syscalls,
+                                     (uint32_t)frame->a7,
+                                     frame->a0,
+                                     frame->a1,
+                                     frame->a2,
+                                     frame->a3);
+    frame->a0 = (uint64_t)result;
+    riscv_set_sstatus_bits(RISCV_SSTATUS_SPP);
+    riscv_write_sepc(epc + 4U);
+    return true;
+}
+
+static bool handle_user_crash_policy(const trap_context_t* trap_context,
+                                     uint64_t cause,
+                                     uint64_t epc,
+                                     uint64_t tval) {
+    if (trap_context == NULL ||
+        trap_context->user_crash_policy.handler == NULL ||
+        !user_exception_from_u_mode()) {
+        return false;
+    }
+
+    if (!trap_context->user_crash_policy.handler(
+            cause, epc, tval, trap_context->user_crash_policy.context)) {
+        return false;
+    }
+
+    riscv_set_sstatus_bits(RISCV_SSTATUS_SPP);
+    riscv_write_sepc(epc + 4U);
+    return true;
 }
 
 static bool user_runtime_signal_delivery_ready(
@@ -334,6 +404,7 @@ bool trap_context_install_user_runtime_resume_policy(
     }
 
     trap_context->user_ecall_policy.user_runtime = user_runtime;
+    trap_context->user_ecall_policy.syscalls = NULL;
     trap_context->user_ecall_policy.validate = NULL;
     trap_context->user_ecall_policy.validate_context = NULL;
     trap_context->user_ecall_policy.resume_pc = 0;
@@ -354,6 +425,7 @@ bool trap_context_install_user_ecall_resume_policy(
     }
 
     trap_context->user_ecall_policy.user_runtime = NULL;
+    trap_context->user_ecall_policy.syscalls = NULL;
     trap_context->user_ecall_policy.validate = validate;
     trap_context->user_ecall_policy.validate_context = validate_context;
     trap_context->user_ecall_policy.resume_pc = resume_pc;
@@ -362,6 +434,32 @@ bool trap_context_install_user_ecall_resume_policy(
         RISCV_EXC_ECALL_FROM_U,
         default_user_ecall_resume_handler,
         trap_context);
+}
+
+bool trap_context_install_user_syscall_policy(trap_context_t* trap_context,
+                                              course_syscall_t* syscalls) {
+    if (trap_context == NULL || syscalls == NULL) {
+        return false;
+    }
+
+    trap_context->user_ecall_policy.user_runtime = NULL;
+    trap_context->user_ecall_policy.syscalls = syscalls;
+    trap_context->user_ecall_policy.validate = NULL;
+    trap_context->user_ecall_policy.validate_context = NULL;
+    trap_context->user_ecall_policy.resume_pc = 0;
+    return true;
+}
+
+bool trap_context_install_user_crash_policy(trap_context_t* trap_context,
+                                            trap_user_crash_handler_t handler,
+                                            void* context) {
+    if (trap_context == NULL || handler == NULL) {
+        return false;
+    }
+
+    trap_context->user_crash_policy.handler = handler;
+    trap_context->user_crash_policy.context = context;
+    return true;
 }
 
 bool trap_context_install_interrupt_handler(trap_context_t* trap_context,
@@ -391,7 +489,7 @@ bool trap_context_install_exception_handler(trap_context_t* trap_context,
     return true;
 }
 
-void supervisor_trap_dispatch(void) {
+void supervisor_trap_dispatch_with_frame(trap_frame_t* frame) {
     const uint64_t scause = riscv_read_scause();
     const uint64_t cause = scause & ~RISCV_INTERRUPT_BIT;
     const trap_context_t* trap_context = runtime_context_active_trap_context();
@@ -413,9 +511,23 @@ void supervisor_trap_dispatch(void) {
             return;
         }
 
+        if (cause == RISCV_EXC_ECALL_FROM_U &&
+            trap_context->user_ecall_policy.syscalls != NULL &&
+            handle_user_syscall_policy(trap_context, frame, cause, epc, tval)) {
+            return;
+        }
+
+        if (handle_user_crash_policy(trap_context, cause, epc, tval)) {
+            return;
+        }
+
         dispatch_installed_exception(trap_context, cause, epc, tval);
         return;
     }
 
     dispatch_installed_interrupt(trap_context, cause);
+}
+
+void supervisor_trap_dispatch(void) {
+    supervisor_trap_dispatch_with_frame(NULL);
 }

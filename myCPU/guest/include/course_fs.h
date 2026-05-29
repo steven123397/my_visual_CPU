@@ -4,9 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define COURSE_FS_MAX_NODES 16U
-#define COURSE_FS_MAX_NAME 24U
-#define COURSE_FS_MAX_DATA 128U
+#define COURSE_FS_MAX_NODES 160U
+#define COURSE_FS_MAX_NAME 32U
+#define COURSE_FS_MAX_DATA 65536U
 #define COURSE_FS_MAX_DIR_INDEX_ENTRIES COURSE_FS_MAX_NODES
 #define COURSE_FS_BTREE_LEAF_CAPACITY 4U
 #define COURSE_FS_BTREE_MAX_LEAVES \
@@ -25,6 +25,12 @@ typedef struct CourseFsStats {
     uint32_t btree_compare_steps;
     uint32_t btree_internal_nodes;
     uint32_t btree_leaf_nodes;
+    uint32_t open_calls;
+    uint32_t close_calls;
+    uint32_t seek_calls;
+    uint32_t max_files;
+    uint32_t max_file_size;
+    uint32_t max_depth;
 } course_fs_stats_t;
 
 typedef struct CourseFsNode {
@@ -32,7 +38,8 @@ typedef struct CourseFsNode {
     bool is_dir;
     int parent;
     char name[COURSE_FS_MAX_NAME];
-    unsigned char data[COURSE_FS_MAX_DATA];
+    size_t data_offset;
+    size_t data_capacity;
     size_t size;
     int dir_index[COURSE_FS_MAX_DIR_INDEX_ENTRIES];
     size_t dir_index_count;
@@ -48,6 +55,7 @@ typedef struct CourseFs {
 } course_fs_t;
 
 void course_fs_init(course_fs_t* fs);
+void course_fs_mkfs(course_fs_t* fs);
 bool course_fs_mkdir(course_fs_t* fs, const char* path);
 bool course_fs_rmdir(course_fs_t* fs, const char* path);
 bool course_fs_create(course_fs_t* fs, const char* path, bool directory);
@@ -63,4 +71,8 @@ bool course_fs_read(course_fs_t* fs,
                     char* out,
                     size_t size);
 bool course_fs_lookup(course_fs_t* fs, const char* path);
+bool course_fs_size(course_fs_t* fs, const char* path, size_t* out_size);
 bool course_fs_stats(const course_fs_t* fs, course_fs_stats_t* out_stats);
+void course_fs_record_open(course_fs_t* fs);
+void course_fs_record_close(course_fs_t* fs);
+void course_fs_record_seek(course_fs_t* fs);

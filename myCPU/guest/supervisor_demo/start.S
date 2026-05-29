@@ -72,7 +72,8 @@ supervisor_trap:
     sd   t5, 224(sp)
     sd   t6, 232(sp)
 
-    call supervisor_trap_dispatch
+    mv   a0, sp
+    call supervisor_trap_dispatch_with_frame
 
     ld   ra, 0(sp)
     ld   gp, 8(sp)

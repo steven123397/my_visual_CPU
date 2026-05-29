@@ -5,12 +5,16 @@
 
 #include "course_fs.h"
 #include "course_memory.h"
+#include "course_process.h"
 #include "course_scheduler.h"
+#include "course_syscall.h"
 
 typedef struct Procfs {
     const course_scheduler_t* scheduler;
     const course_memory_t* memory;
     const course_fs_t* fs;
+    const course_syscall_t* syscalls;
+    const course_process_table_t* processes;
 } procfs_t;
 
 void procfs_init(procfs_t* procfs,
@@ -25,3 +29,7 @@ bool procfs_write(procfs_t* procfs,
                   const char* path,
                   const char* data,
                   size_t size);
+bool procfs_attach_syscalls(procfs_t* procfs,
+                            const course_syscall_t* syscalls);
+bool procfs_attach_processes(procfs_t* procfs,
+                             const course_process_table_t* processes);

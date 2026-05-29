@@ -2,14 +2,17 @@
 
 #include "console.h"
 #include "course_os_stage1.h"
+#include "course_os_stage2.h"
 #include "kernel_alpha.h"
 #include "panic.h"
 #include "platform.h"
 
 void kernel_main(void) {
     kernel_runtime_t runtime;
-    course_os_stage1_t stage;
-    char summary[192];
+    static course_os_stage1_t stage1;
+    static course_os_stage2_t stage2;
+    char stage1_summary[192];
+    char stage2_summary[192];
 
     kernel_runtime_init(&runtime);
     if (!kernel_runtime_bind_self_interrupt_handlers(
@@ -35,13 +38,25 @@ void kernel_main(void) {
         panic_shutdown();
     }
 
-    course_os_stage1_init(&stage);
-    if (!course_os_stage1_run(&stage) ||
-        !course_os_stage1_summary(&stage, summary, sizeof(summary))) {
+    course_os_stage1_init(&stage1);
+    if (!course_os_stage1_run(&stage1) ||
+        !course_os_stage1_summary(&stage1,
+                                  stage1_summary,
+                                  sizeof(stage1_summary))) {
+        panic_shutdown();
+    }
+
+    course_os_stage2_init(&stage2);
+    if (!course_os_stage2_run(&stage2) ||
+        !course_os_stage2_summary(&stage2,
+                                  stage2_summary,
+                                  sizeof(stage2_summary))) {
         panic_shutdown();
     }
 
     console_putc('|');
-    console_puts(summary);
+    console_puts(stage1_summary);
+    console_putc('|');
+    console_puts(stage2_summary);
     platform_shutdown(0);
 }
