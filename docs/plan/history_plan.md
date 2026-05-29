@@ -51,6 +51,13 @@
 - 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage1`、`cd myCPU && make test-guest-kernel_alpha_demo`、`cd myCPU && make test-unit-kernel_alpha_common test-unit-kernel_alpha_interrupt test-unit-kernel_alpha_storage`、9 条 `kernel_alpha` 负向 guest demo，以及相关 shared guest runtime 窄门禁；最终验证以本轮收尾命令输出为准。
 - 结果参考：[course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
+#### full-code-review-parallel-agent-plan
+
+- 原文件：`full_code_review_parallel_agent_plan.md`
+- 完成内容：完成基于 `63f64bd docs(规划): 收口课程 OS 分线协调基线` 的全仓库只读代码审查。审查覆盖 `ISA/reference truth`、`pipeline/JIT/DBT/cache runtime`、`platform/Linux distro/guest runtime/kernel_alpha`、`AI accelerator/NPU performance model`、`frontend/debug protocol/docs/test matrix` 五个方向，并额外检查代码本身是否臃肿冗余、职责堆叠、低效或重复事实来源。最终 active findings 已按 `必须修复 / 建议修改 / 仅记录` 回写到 [code_reself_status.md](../status/code_reself_status.md)。
+- 实现过程摘要：本轮以 coordinator + 只读 parallel agents 执行，不改生产代码、不格式化、不提交。Agent 原始结论由 coordinator 去重、抽查证据并过滤已知非目标；完整测试矩阵未作为本轮默认门禁，完成态仅运行文档空白检查。
+- 结果参考：[code_reself_status.md](../status/code_reself_status.md)
+
 ### 2026-05-05
 
 #### post-wave7-ai-user-tasks-npu-performance-plan
