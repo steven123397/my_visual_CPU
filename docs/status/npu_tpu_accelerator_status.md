@@ -46,6 +46,12 @@
 - `2026-05-02` 同日还把这套 task-spec lower / serialize 逻辑抽成共享 host-side 模块
   `myCPU/workloads/ai_proto/task_spec_lowering.py`；`pack_graph.py` 现在只保留 CLI /
   固定 workload 入口，frontend 也继续复用同一条 host 打包路径。
+- `2026-05-29` code review remediation 已关闭 AI manifest / profile / graph package
+  相关 finding：profile manifest 数值字段统一 strict `uint32` 解析；parse fault /
+  compute fault 不复用旧 summary；graph package parser 会拒绝 duplicate / missing
+  memory plan 和 reserved 字段；guest C ABI 字段已命名为
+  `runtime_shape_table_offset`；profile / timing schema 暴露版本；manifest
+  `expected_output` 已作为 output 顺序 correctness gate。
 - `2026-05-06` 已把性能模型第一刀继续收窄并正式落到设备自有合同：
   `AiAcceleratorProfileSummary` 现在固定暴露
   `profile_schema_version=1`、`timing_schema_version=1`、

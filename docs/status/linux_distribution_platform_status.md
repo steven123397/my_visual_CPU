@@ -55,6 +55,13 @@
     `MYCPU_LINUX_DISTRO_RUNTIME_ROOTFS=/path/to/rootfs.ext4`
   - 没有外部 rootfs 时，target 与 host unittest 都不会回落到 repo 自带
     `linux_proto/rootfs.ext4`
+- `2026-05-29` code review remediation 已关闭 Linux / frontend / deploy 相关 finding：
+  外部发行版 rootfs gate 会拒绝 repo 内 `linux_proto/rootfs.ext4` 的相对路径、绝对路径
+  和 symlink alias；Linux 专题页已拆分为 topic readable 与 runtime loadable；reset re-arm
+  单一归属回到 C++ `DebugSession::reset()`；远端 env 模板默认启用 auth 且 blank hash
+  fail-fast；debug protocol 数字字段改为 strict parse；默认测试矩阵也已分层为
+  `test-fast-smoke`、`test-standard-regression`、`test-slow-guest` 和
+  `test-opt-in-external`。
 - `2026-05-05` 已拿到两条真实外部 Alpine rootfs 正向证据：
   - `init=/init` 静态 `/init` 路线：`virtio-blk` 挂载外部 Alpine ext4，执行外部静态
     `/init`，到达 `mycpu-distro# `，输入 `cat /etc/os-release`，观察到 `ID=alpine`，

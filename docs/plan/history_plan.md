@@ -58,6 +58,21 @@
 - 实现过程摘要：本轮以 coordinator + 只读 parallel agents 执行，不改生产代码、不格式化、不提交。Agent 原始结论由 coordinator 去重、抽查证据并过滤已知非目标；完整测试矩阵未作为本轮默认门禁，完成态仅运行文档空白检查。
 - 结果参考：[code_reself_status.md](../status/code_reself_status.md)
 
+#### code-reself-remediation-plan
+
+- 原文件：`code_reself_remediation_plan.md`
+- 完成内容：完成 `2026-05-29` 全仓库代码复查整改收尾。四条整改线已合入本地主线，关闭 12 条
+  `必须修复` 与 19 条 `建议修改` active findings；整改范围覆盖 core / ISA / MMU /
+  pipeline、Linux / frontend / deploy security、AI manifest / profile / graph package、
+  DBT / executable cache / helper lifecycle、platform / guest / docs / test matrix。
+- 实现过程摘要：整改按 review finding 面拆成四条 code-reself 分支先行落地，再回到本地
+  `main` 做统一验证、状态文档收敛和计划归档。完成态只把当前结论、剩余长期观察项和验证证据
+  回写到 `status`；原执行 checklist 删除，不再作为并行事实来源。
+- 验证摘要：已运行 `cd myCPU && make test-fast-smoke`、`cd myCPU && make test-standard-regression`、
+  `cd myCPU && make test-pipeline`、`cd myCPU && make test`、`cd frontend && node --test`。
+  真实 Linux serial console e2e 和外部发行版 / Spike opt-in 门禁仍依赖显式外部资产，不作为默认无资产门禁。
+- 结果参考：[code_reself_status.md](../status/code_reself_status.md)、[mainline_status.md](../status/mainline_status.md)
+
 ### 2026-05-05
 
 #### post-wave7-ai-user-tasks-npu-performance-plan

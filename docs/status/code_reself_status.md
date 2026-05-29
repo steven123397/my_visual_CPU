@@ -10,8 +10,8 @@
 
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
-- 当前计划：
-  - [../plan/code_reself_remediation_plan.md](../plan/code_reself_remediation_plan.md)
+- 已完成计划归档：
+  - [../plan/history_plan.md#code-reself-remediation-plan](../plan/history_plan.md#code-reself-remediation-plan)
 
 ## 当前状态
 
@@ -24,7 +24,9 @@
   - `fix(core): close review correctness findings`
   - `fix(ai): harden profile and graph contracts`
   - `fix(code-reself): close dbt platform guest findings`
-- 当前 `必须修复` 与 `建议修改` active findings 已由四条整改线关闭；仍需完成合并后统一验证与计划归档。
+- `2026-05-29` 合并后统一验证已完成，整改计划已归档到
+  [../plan/history_plan.md#code-reself-remediation-plan](../plan/history_plan.md#code-reself-remediation-plan)；
+  当前 `必须修复` 与 `建议修改` active findings 均已关闭。
 
 ### 已关闭 findings
 
@@ -72,11 +74,25 @@
 
 ### 必须修复
 
-当前无 active `必须修复` finding；等待本轮合并后的统一验证和计划归档。
+当前无 active `必须修复` finding；本轮合并后统一验证和计划归档已完成。
 
 ### 建议修改
 
-当前无 active `建议修改` finding；等待本轮合并后的统一验证和计划归档。
+当前无 active `建议修改` finding；本轮合并后统一验证和计划归档已完成。
+
+### 关键验证
+
+`2026-05-29` 本轮合并后收尾已覆盖：
+
+- `cd myCPU && make test-fast-smoke`
+- `cd myCPU && make test-standard-regression`
+- `cd myCPU && make test-pipeline`
+- `cd myCPU && make test`
+- `cd frontend && node --test`
+
+`frontend` 默认测试中真实 Linux serial console e2e 仍保持显式 opt-in，未设置
+`MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1` 时按预期跳过。
+`test-opt-in-external` 依赖外部 Linux Image / rootfs 和 Spike 等资产，未作为默认无资产门禁运行。
 
 ### 仅记录
 
@@ -104,9 +120,9 @@
 
 ## 下一步
 
-1. 在本地主线完成四条整改线合并后的统一验证：`cd myCPU && make test-fast-smoke`、`cd myCPU && make test-standard-regression`、`cd myCPU && make test-pipeline`、`cd frontend && node --test`，必要时再跑外部资产 opt-in target。
-2. 验证通过后按 [../plan/code_reself_remediation_plan.md](../plan/code_reself_remediation_plan.md) 的完成态要求归档计划：回写关键验证、追加 [../plan/history_plan.md](../plan/history_plan.md)，并删除活跃 plan。
-3. 仅保留 `仅记录` 中尚未转入整改的长期观察项；不要把已关闭 finding 的执行流水账继续堆在本文档。
+1. 当前无 code review remediation 活跃计划；后续只保留 `仅记录` 中尚未转入整改的长期观察项。
+2. 若继续处理 `仅记录` 项，应先单独拆成新的设计 / 计划 / 验证边界，不回灌到本轮已归档整改计划。
+3. 不要把已关闭 finding 的执行流水账继续堆在本文档。
 
 ## 记录规则
 

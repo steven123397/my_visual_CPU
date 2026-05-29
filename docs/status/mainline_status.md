@@ -33,6 +33,7 @@
   - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#code-reself-remediation-plan](../plan/history_plan.md#code-reself-remediation-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
   - [../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan](../plan/history_plan.md#pipeline-lsq-blocked-load-observation-plan)
@@ -299,6 +300,11 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
   - functional `linux_proto` dummy-payload observation baseline
 - `debug/frontend`、`kernel_alpha` 十条基线、`make test` / `make test-pipeline`
   和现有 workload smoke 都已进入维护态。
+- `2026-05-29` 全仓库 code review remediation 已完成并归档；12 条
+  `必须修复` 与 19 条 `建议修改` active findings 已由四条整改线关闭，合并后守住
+  `test-fast-smoke`、`test-standard-regression`、`test-pipeline`、`make test`
+  与 `frontend` Node 测试。剩余长期观察项继续只在
+  [code_reself_status.md](code_reself_status.md) 维护，不作为当前主线 blocker。
 - `pipeline / LSQ` 观察合同在 2026-05-02 补上一条窄门禁：
   `LoadStoreQueue::oldest_load_status()` 会报告队列中最老的 blocked / replay load，
   `PipelineBackend::debug_snapshot()` 在没有当周期 decode 观察记录时，也会从 LSQ
