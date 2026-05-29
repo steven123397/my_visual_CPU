@@ -904,15 +904,11 @@ int main() {
                                                1,
                                                true,
                                                "expected stable GEMM compile contract after fault") ||
-            !expect(fault_profile.tile_count == 2, "expected GEMM tile profile to remain stable on fault") ||
-            !expect(fault_profile.scratchpad_peak_bytes == 36,
-                    "expected GEMM scratchpad peak to remain stable on fault") ||
-            !expect(fault_profile.op_summaries.size() == 2,
-                    "expected GEMM op summaries to remain stable on fault") ||
-            !expect_op_summary(fault_profile.op_summaries[0], 0, AiOpCode::Gemm, 8, 1, 1, 1,
-                               "expected stable GEMM op profile after fault") ||
-            !expect_op_summary(fault_profile.op_summaries[1], 1, AiOpCode::PoolMax, 4, 1, 1, 1,
-                               "expected stable pool op profile after fault") ||
+            !expect(fault_profile.tile_count == 0, "expected GEMM tile profile to clear on fault") ||
+            !expect(fault_profile.scratchpad_peak_bytes == 0,
+                    "expected GEMM scratchpad peak to clear on fault") ||
+            !expect(fault_profile.op_summaries.empty(),
+                    "expected GEMM op summaries to clear on fault") ||
             !expect(machine.ai_accelerator().completion_count() == 2, "expected GEMM completion count") ||
             !expect(machine.ai_accelerator().last_fault() == AI_ACCEL_FAULT_ILLEGAL_OP, "expected last GEMM fault") ||
             !expect(machine.plic().supervisor_has_pending(), "expected GEMM IRQ pending")) {

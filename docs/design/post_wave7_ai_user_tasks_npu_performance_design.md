@@ -243,10 +243,13 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
     manifest / debug 只读字段暴露，不随意扩大 guest ABI。
   - simulated cycles 仍是唯一正式性能口径，不引入“宿主机跑得更快就是设备更强”的表述。
   - 当前第一刀先把 `timed-simple no-overlap` 固定成稳定合同：
-    `AiAcceleratorProfileSummary` 必须暴露 `timing_model=TimedSimpleNoOverlap`、
+    `AiAcceleratorProfileSummary` 必须暴露 `profile_schema_version=1`、
+    `timing_schema_version=1`、`timing_model=TimedSimpleNoOverlap`、
     `scheduler_ops_per_cycle=32`、`scheduler_tile_setup_cycles=1`、
     `allow_dma_compute_overlap=false`、`dma_setup_cycles=2` 与
     `dma_bytes_per_cycle=16`。
+    `--ai-profile-manifest` 文本出口同步固定输出 `schema=ai_profile_v1`，用于让
+    profile 文本和设备自有 summary 明确绑定同一版 host-side 合同。
   - 同一份 `AiAcceleratorProfileSummary` 还应暴露最近一次成功 submission 的
     `queue / dma / compute / stall / completion / busy` aggregate timing delta，
     让 host-side smoke 能直接验证阶段边界，而不必先穿过共享 CLI 或更宽前端入口。
@@ -312,6 +315,10 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
     不新增 guest MMIO 字段，也不取代 `<name>.memory_plan.txt` /
     `<name>.resolved_memory_plan.txt` 两层 sidecar；三者必须继续共用同一份 graph package +
     runtime-shape resolve 事实来源。
+  - manifest schema 保留 `expected_output=` 字段，并把它作为 correctness gate：
+    `Machine::run_ai_profile_manifest()` 成功完成后必须按 `output=` 出现顺序逐个比对
+    `expected_output=` 文件；任一尺寸或内容不匹配都要 fail-closed，不能只写
+    `*.actual.bin` 后把结果交给外部脚本再判断。
   - 这条 manifest/profile readback 一致性至少要继续覆盖当前稳定 guardrail：
     `cnn`、`gemm`、`tiny_model`、`dynamic_gemm`、`dynamic_tiny_model`、`dynamic_cnn`、
     `custom_dynamic_gemm`、`custom_dynamic_cnn` 与 `tiny_attention_static`。

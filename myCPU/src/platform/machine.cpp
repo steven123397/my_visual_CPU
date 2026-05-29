@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -63,6 +64,7 @@ struct ParsedAiProfileManifest {
     std::filesystem::path runtime_shape_table_path{};
     std::vector<std::filesystem::path> input_paths{};
     std::vector<std::filesystem::path> output_paths{};
+    std::vector<std::filesystem::path> expected_output_paths{};
     uint32_t max_ticks{128};
     uint32_t source_tag{0};
 };
@@ -82,6 +84,38 @@ std::string trim(const std::string& value) {
     }
     const size_t last = value.find_last_not_of(" \t\r\n");
     return value.substr(first, last - first + 1);
+}
+
+uint32_t parse_uint32_manifest_scalar(const std::string& field,
+                                      const std::string& raw_value,
+                                      bool require_nonzero) {
+    if (raw_value.empty()) {
+        throw std::runtime_error("AI profile manifest " + field + " must be a uint32");
+    }
+    if (trim(raw_value) != raw_value) {
+        throw std::runtime_error("AI profile manifest " + field + " must not contain surrounding whitespace");
+    }
+    if (!raw_value.empty() && raw_value[0] == '-') {
+        throw std::runtime_error("AI profile manifest " + field + " must be a uint32");
+    }
+
+    size_t pos = 0;
+    unsigned long value = 0;
+    try {
+        value = std::stoul(raw_value, &pos, 0);
+    } catch (const std::exception&) {
+        throw std::runtime_error("AI profile manifest " + field + " must be a uint32");
+    }
+    if (pos != raw_value.size()) {
+        throw std::runtime_error("AI profile manifest " + field + " must consume the full uint32 value");
+    }
+    if (value > std::numeric_limits<uint32_t>::max()) {
+        throw std::runtime_error("AI profile manifest " + field + " must fit in uint32");
+    }
+    if (require_nonzero && value == 0) {
+        throw std::runtime_error("AI profile manifest " + field + " must be non-zero");
+    }
+    return static_cast<uint32_t>(value);
 }
 
 std::vector<uint8_t> read_binary_file(const std::filesystem::path& path) {
@@ -130,7 +164,8 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
             throw std::runtime_error("invalid AI profile manifest line: " + trimmed);
         }
         const std::string key = trim(trimmed.substr(0, eq));
-        const std::string value = trim(trimmed.substr(eq + 1));
+        const std::string raw_value = trimmed.substr(eq + 1);
+        const std::string value = trim(raw_value);
         if (key == "format") {
             if (seen_format) {
                 throw std::runtime_error("duplicate AI profile manifest key: format");
@@ -162,19 +197,19 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
         } else if (key == "output") {
             manifest.output_paths.push_back(base_dir / value);
         } else if (key == "expected_output") {
-            continue;
+            manifest.expected_output_paths.push_back(base_dir / value);
         } else if (key == "max_ticks") {
             if (seen_max_ticks) {
                 throw std::runtime_error("duplicate AI profile manifest key: max_ticks");
             }
             seen_max_ticks = true;
-            manifest.max_ticks = static_cast<uint32_t>(std::stoul(value, nullptr, 0));
+            manifest.max_ticks = parse_uint32_manifest_scalar("max_ticks", raw_value, true);
         } else if (key == "source_tag") {
             if (seen_source_tag) {
                 throw std::runtime_error("duplicate AI profile manifest key: source_tag");
             }
             seen_source_tag = true;
-            manifest.source_tag = static_cast<uint32_t>(std::stoul(value, nullptr, 0));
+            manifest.source_tag = parse_uint32_manifest_scalar("source_tag", raw_value, false);
         } else {
             throw std::runtime_error("unknown AI profile manifest key: " + key);
         }
@@ -194,6 +229,9 @@ ParsedAiProfileManifest parse_ai_profile_manifest_file(const std::string& manife
     }
     if (manifest.output_paths.empty()) {
         throw std::runtime_error("AI profile manifest is missing output files");
+    }
+    if (manifest.expected_output_paths.empty()) {
+        throw std::runtime_error("AI profile manifest is missing expected_output files");
     }
     if (manifest.max_ticks == 0) {
         throw std::runtime_error("AI profile manifest max_ticks must be non-zero");
@@ -436,16 +474,16 @@ void Machine::attach_storage_image(const std::string& path,
 }
 
 Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& manifest_path) {
+    Ram cleared_ram;
+    ram_.swap(cleared_ram);
+    loaded_ = false;
+    store_u32_checked(bus_, AI_ACCEL_REG_CONTROL, AI_ACCEL_CONTROL_RESET, "control");
+
     const ParsedAiProfileManifest manifest = parse_ai_profile_manifest_file(manifest_path);
     AiProfileRunResult result{};
     result.workload_name = manifest.name;
     result.manifest_path = manifest.manifest_path.string();
     result.graph_package_path = manifest.graph_package_path.string();
-
-    Ram cleared_ram;
-    ram_.swap(cleared_ram);
-    loaded_ = false;
-    store_u32_checked(bus_, AI_ACCEL_REG_CONTROL, AI_ACCEL_CONTROL_RESET, "control");
 
     const std::vector<uint8_t> graph_bytes = read_binary_file(manifest.graph_package_path);
     result.graph_package_bytes = static_cast<uint32_t>(graph_bytes.size());
@@ -502,11 +540,15 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
     if (manifest.output_paths.size() != expected_outputs) {
         throw std::runtime_error("AI profile manifest output count does not match graph package");
     }
+    if (manifest.expected_output_paths.size() != expected_outputs) {
+        throw std::runtime_error("AI profile manifest expected_output count does not match graph package");
+    }
 
     std::vector<uint64_t> input_table(concrete_package.tensors.size(), 0);
     std::vector<uint64_t> output_table(concrete_package.tensors.size(), 0);
     struct OutputBinding {
         std::filesystem::path path{};
+        std::filesystem::path expected_path{};
         uint64_t addr{0};
         uint64_t size{0};
     };
@@ -535,7 +577,11 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
             const std::vector<uint8_t> zeros(static_cast<size_t>(bytes), 0);
             write_ram_bytes(ram_, tensor_addr, zeros);
             output_table[tensor_index] = tensor_addr;
-            outputs.push_back(OutputBinding{manifest.output_paths[output_index++], tensor_addr, bytes});
+            outputs.push_back(OutputBinding{manifest.output_paths[output_index],
+                                            manifest.expected_output_paths[output_index],
+                                            tensor_addr,
+                                            bytes});
+            ++output_index;
             tensor_addr = align_up(tensor_addr + bytes, 64);
             break;
         }
@@ -651,6 +697,17 @@ Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& 
             std::vector<uint8_t> bytes(static_cast<size_t>(output.size), 0);
             for (size_t i = 0; i < bytes.size(); ++i) {
                 bytes[i] = static_cast<uint8_t>(ram_.load(output.addr + i, 1) & 0xffU);
+            }
+            const std::vector<uint8_t> expected_bytes = read_binary_file(output.expected_path);
+            if (expected_bytes.size() != bytes.size()) {
+                throw std::runtime_error(
+                    "AI profile manifest expected_output byte size does not match output tensor: " +
+                    output.expected_path.string());
+            }
+            if (bytes != expected_bytes) {
+                throw std::runtime_error(
+                    "AI profile manifest expected_output mismatch: " +
+                    output.expected_path.string());
             }
             write_binary_file(output.path, bytes);
         }

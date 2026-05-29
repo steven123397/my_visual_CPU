@@ -93,6 +93,8 @@ inline constexpr uint32_t AI_ACCEL_CAPABILITIES =
     AI_ACCEL_CAP_STATIC_GRAPH | AI_ACCEL_CAP_PROFILE;
 
 inline constexpr uint32_t AI_ACCEL_MAX_GRAPH_PACKAGE_BYTES = 1024 * 1024;
+inline constexpr uint32_t AI_ACCEL_PROFILE_SCHEMA_VERSION = 1;
+inline constexpr uint32_t AI_ACCEL_TIMING_SCHEMA_VERSION = 1;
 
 using AiAcceleratorOpProfileSummary = AiOpProfileSummary;
 
@@ -101,6 +103,8 @@ enum class AiAcceleratorTimingModel : uint8_t {
 };
 
 struct AiAcceleratorProfileSummary {
+    uint32_t profile_schema_version{AI_ACCEL_PROFILE_SCHEMA_VERSION};
+    uint32_t timing_schema_version{AI_ACCEL_TIMING_SCHEMA_VERSION};
     AiAcceleratorTimingModel timing_model{AiAcceleratorTimingModel::TimedSimpleNoOverlap};
     uint32_t scheduler_ops_per_cycle{0};
     uint32_t scheduler_tile_setup_cycles{0};

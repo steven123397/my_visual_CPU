@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -208,10 +209,27 @@ static int test_completion_tail_and_dequeue_contract(void) {
                : fail("expected completion tail sync to reject queue overflow");
 }
 
+static int test_submission_descriptor_runtime_shape_offset_contract(void) {
+    ai_accel_submission_descriptor_t descriptor;
+    memset(&descriptor, 0, sizeof(descriptor));
+    descriptor.runtime_shape_table_offset = 0x240U;
+
+    if (sizeof(ai_accel_submission_descriptor_t) != 48U) {
+        return fail("expected AI accel submission descriptor ABI size to remain 48 bytes");
+    }
+    if (offsetof(ai_accel_submission_descriptor_t, runtime_shape_table_offset) != 44U) {
+        return fail("expected runtime shape table offset field at submission descriptor byte 44");
+    }
+    return descriptor.runtime_shape_table_offset == 0x240U
+               ? 0
+               : fail("expected runtime shape table offset field to be writable");
+}
+
 int main(void) {
     if (test_queue_init_validation() != 0 ||
         test_submission_enqueue_contract() != 0 ||
-        test_completion_tail_and_dequeue_contract() != 0) {
+        test_completion_tail_and_dequeue_contract() != 0 ||
+        test_submission_descriptor_runtime_shape_offset_contract() != 0) {
         return 1;
     }
 

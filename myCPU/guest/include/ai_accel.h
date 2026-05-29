@@ -68,7 +68,7 @@ typedef struct AiAccelSubmissionDescriptor {
     uint64_t input_table_addr;
     uint64_t output_table_addr;
     uint32_t source_tag;
-    uint32_t reserved0;
+    uint32_t runtime_shape_table_offset;
 } ai_accel_submission_descriptor_t;
 
 typedef struct AiAccelCompletionEntry {

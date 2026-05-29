@@ -1,6 +1,7 @@
 #include "ai_graph_package.h"
 
 #include <limits>
+#include <vector>
 
 namespace {
 
@@ -642,11 +643,17 @@ bool validate_ai_graph_package(const AiGraphPackage& package, std::string& error
         }
     }
 
+    std::vector<const AiMemoryPlanEntry*> memory_plan_by_tensor(package.tensors.size(), nullptr);
     for (const AiMemoryPlanEntry& entry : package.memory_plan) {
         if (entry.tensor_index >= package.tensors.size()) {
             error = "memory plan tensor index is out of range";
             return false;
         }
+        if (memory_plan_by_tensor[entry.tensor_index] != nullptr) {
+            error = "duplicate memory plan entry for tensor";
+            return false;
+        }
+        memory_plan_by_tensor[entry.tensor_index] = &entry;
         const AiTensorMetadata& tensor = package.tensors[entry.tensor_index];
         const uint64_t expected_bytes = tensor_byte_size(tensor);
         if (entry.byte_size != expected_bytes) {
@@ -660,6 +667,26 @@ bool validate_ai_graph_package(const AiGraphPackage& package, std::string& error
         if (static_cast<uint64_t>(entry.scratchpad_offset) + entry.scratchpad_bytes >
             package.scratchpad_budget_bytes) {
             error = "scratchpad budget is exceeded";
+            return false;
+        }
+    }
+
+    auto require_memory_plan = [&](uint16_t tensor_index) -> bool {
+        if (tensor_index == kAiInvalidTensorIndex) {
+            return true;
+        }
+        if (tensor_index >= memory_plan_by_tensor.size() ||
+            memory_plan_by_tensor[tensor_index] == nullptr) {
+            error = "missing memory plan for opcode tensor";
+            return false;
+        }
+        return true;
+    };
+    for (const AiOpDescriptor& op : package.ops) {
+        if (!require_memory_plan(op.input0) ||
+            !require_memory_plan(op.input1) ||
+            !require_memory_plan(op.input2) ||
+            !require_memory_plan(op.output)) {
             return false;
         }
     }
@@ -700,7 +727,7 @@ bool validate_ai_graph_package(const AiGraphPackage& package, std::string& error
             error = "dynamic tensor max tensor bytes do not match tensor";
             return false;
         }
-        const AiMemoryPlanEntry* memory_plan = find_memory_plan_entry(package, metadata.tensor_index);
+        const AiMemoryPlanEntry* memory_plan = memory_plan_by_tensor[metadata.tensor_index];
         if (memory_plan == nullptr || memory_plan->byte_size != metadata.max_tensor_bytes) {
             error = "dynamic tensor memory plan bytes do not match max tensor bytes";
             return false;
@@ -1056,6 +1083,10 @@ bool parse_ai_graph_package(
             error = "tensor table truncated";
             return false;
         }
+        if (reserved != 0) {
+            error = "tensor reserved field must be zero";
+            return false;
+        }
         tensor.dtype = static_cast<AiDataType>(dtype);
         tensor.role = static_cast<AiTensorRole>(role);
         for (uint32_t& dim : tensor.dims) {
@@ -1086,6 +1117,10 @@ bool parse_ai_graph_package(
             !read_u16(bytes, pos, op.input0) || !read_u16(bytes, pos, op.input1) ||
             !read_u16(bytes, pos, op.input2) || !read_u16(bytes, pos, op.output)) {
             error = "opcode table truncated";
+            return false;
+        }
+        if (reserved != 0) {
+            error = "opcode reserved field must be zero";
             return false;
         }
         op.opcode = static_cast<AiOpCode>(opcode);
@@ -1124,6 +1159,10 @@ bool parse_ai_graph_package(
             error = "memory plan table truncated";
             return false;
         }
+        if (reserved != 0) {
+            error = "memory plan reserved field must be zero";
+            return false;
+        }
         package.memory_plan.push_back(entry);
     }
 
@@ -1136,6 +1175,10 @@ bool parse_ai_graph_package(
             !read_u16(bytes, pos, reserved) ||
             !read_u32(bytes, pos, metadata.max_tensor_bytes)) {
             error = "dynamic tensor table truncated";
+            return false;
+        }
+        if (reserved != 0) {
+            error = "dynamic tensor reserved field must be zero";
             return false;
         }
         package.dynamic_tensors.push_back(metadata);
