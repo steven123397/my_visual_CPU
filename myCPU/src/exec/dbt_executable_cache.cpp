@@ -22,6 +22,55 @@ bool cacheable_lowered_contract(const DbtRuntimeDispatchContract& contract) {
            !contract.executed_guest_code;
 }
 
+bool ranges_overlap(uint64_t lhs_addr, uint64_t lhs_size, uint64_t rhs_addr, uint64_t rhs_size) {
+    if (lhs_size == 0 || rhs_size == 0) {
+        return false;
+    }
+    const uint64_t lhs_end = lhs_addr + lhs_size;
+    const uint64_t rhs_end = rhs_addr + rhs_size;
+    return lhs_addr < rhs_end && rhs_addr < lhs_end;
+}
+
+bool range_event(DbtInvalidationEventKind kind) {
+    return kind == DbtInvalidationEventKind::GuestStore ||
+           kind == DbtInvalidationEventKind::PayloadLoad;
+}
+
+DbtInvalidationPlan plan_physical_span_invalidation(
+    DbtInvalidationEventKind kind,
+    uint64_t event_addr,
+    uint64_t event_size,
+    const DbtRuntimeDispatchContract& contract) {
+    if (!range_event(kind)) {
+        return DbtInvalidationPlan{.reason = "not-range-event"};
+    }
+
+    for (const DbtCodePhysicalSpan& span : contract.code_spans) {
+        if (span.requires_global_invalidation) {
+            return DbtInvalidationPlan{
+                .invalidates = true,
+                .reason = "code-span-unreliable",
+            };
+        }
+        if (!span.valid) {
+            return DbtInvalidationPlan{
+                .invalidates = true,
+                .reason = "code-span-unreliable",
+            };
+        }
+        if (ranges_overlap(event_addr, event_size, span.paddr, span.size)) {
+            return DbtInvalidationPlan{
+                .invalidates = true,
+                .reason = kind == DbtInvalidationEventKind::GuestStore
+                              ? "guest-store-overlaps-physical-code"
+                              : "payload-overlaps-physical-code",
+            };
+        }
+    }
+
+    return DbtInvalidationPlan{.reason = "physical-range-disjoint"};
+}
+
 std::string empty_event_reason(DbtInvalidationEventKind kind) {
     const DbtInvalidationPlan plan = plan_dbt_block_invalidation_event(kind, 0, 0, 0, 0);
     if (!plan.reason.empty()) {
@@ -91,6 +140,11 @@ bool DbtExecutableCacheDryRun::insert_entry(const DbtRuntimeDispatchContract& co
         }
     }
 
+    if (entries_.size() >= kMaxEntries) {
+        release_entry_host_executable(entries_.front());
+        entries_.erase(entries_.begin());
+        stats_.evictions += 1;
+    }
     entries_.push_back(next);
     stats_.insertions += 1;
     if (next.has_host_executable) {
@@ -139,9 +193,13 @@ DbtExecutableCacheInvalidationResult DbtExecutableCacheDryRun::enforce_invalidat
                                               event_size,
                                               it->contract.start_pc,
                                               it->contract.end_pc);
-        if (plan.invalidates) {
+        const DbtInvalidationPlan physical_plan =
+            plan_physical_span_invalidation(kind, event_addr, event_size, it->contract);
+        const DbtInvalidationPlan effective_plan =
+            plan.invalidates ? plan : physical_plan;
+        if (effective_plan.invalidates) {
             if (result.reason.empty()) {
-                result.reason = plan.reason;
+                result.reason = effective_plan.reason;
             }
             release_entry_host_executable(*it);
             it = entries_.erase(it);
@@ -182,6 +240,7 @@ size_t DbtExecutableCacheDryRun::size() const {
 DbtExecutableCacheDryRunStats DbtExecutableCacheDryRun::stats() const {
     DbtExecutableCacheDryRunStats copy = stats_;
     copy.entries = entries_.size();
+    copy.max_entries = kMaxEntries;
     return copy;
 }
 

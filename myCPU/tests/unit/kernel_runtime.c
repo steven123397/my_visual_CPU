@@ -84,6 +84,9 @@ static void reset_stub_state(void);
 static int fail(const char* message);
 static void stub_timer_post_handler(void* context);
 static void stub_external_post_handler(uint32_t source_id, void* context);
+static bool storage_block_has_data_prefix(const uint8_t* block,
+                                          size_t block_size,
+                                          void* context);
 static int test_runtime_init_and_bind_self_handlers(void);
 static int test_runtime_entry_bringup_helper(void);
 static int test_runtime_reuse_resets_interrupt_state(void);
@@ -97,6 +100,7 @@ static int test_external_wait_helper(void);
 static int test_next_external_wait_helper(void);
 static int test_timer_wait_helper(void);
 static int test_storage_probe_helper(void);
+static int test_storage_lba0_predicate_helper(void);
 static int test_storage_signature_helper(void);
 static int test_storage_platform_tail_helper(void);
 
@@ -467,6 +471,20 @@ static void stub_timer_post_handler(void* context) {
 static void stub_external_post_handler(uint32_t source_id, void* context) {
     (void)source_id;
     (void)context;
+}
+
+static bool storage_block_has_data_prefix(const uint8_t* block,
+                                          size_t block_size,
+                                          void* context) {
+    int* call_count = (int*)context;
+
+    if (call_count != NULL) {
+        *call_count += 1;
+    }
+
+    return block != NULL && block_size >= 4U &&
+           block[0] == 'D' && block[1] == 'a' &&
+           block[2] == 't' && block[3] == 'a';
 }
 
 static int test_runtime_init_and_bind_self_handlers(void) {
@@ -1079,11 +1097,56 @@ static int test_storage_probe_helper(void) {
     return 0;
 }
 
+static int test_storage_lba0_predicate_helper(void) {
+    int predicate_calls = 0;
+
+    reset_stub_state();
+    g_storage_page_allocated = true;
+    memcpy(g_storage_page, "Data", 4);
+    if (!kernel_runtime_complete_storage_lba0_check(
+            'R',
+            storage_block_has_data_prefix,
+            &predicate_calls)) {
+        return fail("expected runtime storage LBA0 helper to accept predicate-specific prefix");
+    }
+
+    if (predicate_calls != 1 ||
+        g_storage_read_block_calls != 1 ||
+        g_storage_read_block_lba != 0U ||
+        g_last_freed_page != g_storage_page ||
+        g_console_char_count != 1 ||
+        g_console_chars[0] != 'R') {
+        return fail("expected runtime storage LBA0 helper to read, validate, free and print");
+    }
+
+    reset_stub_state();
+    g_storage_page_allocated = true;
+    memcpy(g_storage_page, "Stor", 4);
+    predicate_calls = 0;
+    if (kernel_runtime_complete_storage_lba0_check(
+            'R',
+            storage_block_has_data_prefix,
+            &predicate_calls)) {
+        return fail("expected runtime storage LBA0 helper to reject predicate mismatch");
+    }
+    if (predicate_calls != 1 || g_last_freed_page != g_storage_page) {
+        return fail("expected runtime storage LBA0 helper to validate and free failed block");
+    }
+
+    reset_stub_state();
+    g_storage_page_allocated = true;
+    if (kernel_runtime_complete_storage_lba0_check('R', NULL, NULL)) {
+        return fail("expected runtime storage LBA0 helper to reject null predicate");
+    }
+
+    return 0;
+}
+
 static int test_storage_signature_helper(void) {
     reset_stub_state();
     g_storage_page_allocated = true;
     memcpy(g_storage_page, "Stor", 4);
-    if (!kernel_runtime_complete_storage_signature_check('S')) {
+    if (!kernel_runtime_complete_demo_storage_signature_guardrail('S')) {
         return fail("expected runtime storage signature helper to accept Stor prefix");
     }
 
@@ -1096,7 +1159,7 @@ static int test_storage_signature_helper(void) {
     reset_stub_state();
     g_storage_page_allocated = true;
     memcpy(g_storage_page, "Fail", 4);
-    if (kernel_runtime_complete_storage_signature_check('S')) {
+    if (kernel_runtime_complete_demo_storage_signature_guardrail('S')) {
         return fail("expected runtime storage signature helper to reject bad signature");
     }
     if (g_last_freed_page != g_storage_page) {
@@ -1106,7 +1169,7 @@ static int test_storage_signature_helper(void) {
     reset_stub_state();
     g_storage_page_allocated = true;
     g_storage_read_block_result = 1U;
-    if (kernel_runtime_complete_storage_signature_check('S')) {
+    if (kernel_runtime_complete_demo_storage_signature_guardrail('S')) {
         return fail("expected runtime storage signature helper to propagate storage read failure");
     }
     if (g_last_freed_page != g_storage_page) {
@@ -1116,7 +1179,7 @@ static int test_storage_signature_helper(void) {
     reset_stub_state();
     g_storage_page_allocated = true;
     memcpy(g_storage_page, "Stor", 4);
-    if (!kernel_runtime_complete_storage_signature_check('\0') ||
+    if (!kernel_runtime_complete_demo_storage_signature_guardrail('\0') ||
         g_console_char_count != 0) {
         return fail("expected runtime storage signature helper to allow silent marker");
     }
@@ -1196,6 +1259,7 @@ int main(void) {
         test_next_external_wait_helper() != 0 ||
         test_timer_wait_helper() != 0 ||
         test_storage_probe_helper() != 0 ||
+        test_storage_lba0_predicate_helper() != 0 ||
         test_storage_signature_helper() != 0 ||
         test_storage_platform_tail_helper() != 0) {
         return 1;

@@ -187,7 +187,7 @@ DbtRuntimeHarnessResult execute_with_guardrail(CPU& cpu,
         .differential_checked = true,
         .differential_matched = differential_matched,
         .next_pc = next_pc,
-        .retired_instructions = expected.retired_instructions,
+        .ir_expected_retired_count = expected.retired_instructions,
     };
 
     if (differential_matched) {
@@ -492,7 +492,7 @@ std::string format_dbt_runtime_harness_result(const DbtRuntimeHarnessResult& res
         << " start=" << hex_u64(result.start_pc)
         << " end=" << hex_u64(result.end_pc)
         << " next-pc=" << hex_u64(result.next_pc)
-        << " retired=" << result.retired_instructions
+        << " ir-expected-retired=" << result.ir_expected_retired_count
         << " fallback=" << bool_name(result.fallback_required)
         << " differential-checked=" << bool_name(result.differential_checked)
         << " differential-matched=" << bool_name(result.differential_matched)

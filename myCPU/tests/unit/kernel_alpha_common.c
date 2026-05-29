@@ -42,6 +42,12 @@ static bool g_runtime_storage_probe_result = true;
 static int g_runtime_storage_signature_markers[4];
 static size_t g_runtime_storage_signature_marker_count = 0;
 static bool g_runtime_storage_signature_result = true;
+static int g_runtime_storage_lba0_markers[4];
+static size_t g_runtime_storage_lba0_marker_count = 0;
+static kernel_runtime_storage_lba0_predicate_t g_runtime_storage_lba0_predicate =
+    NULL;
+static void* g_runtime_storage_lba0_context = NULL;
+static uint8_t g_runtime_storage_lba0_block[512];
 
 static void reset_stub_state(void);
 static int fail(const char* message);
@@ -178,7 +184,7 @@ bool kernel_runtime_complete_storage_probe(char marker) {
     return g_runtime_storage_probe_result;
 }
 
-bool kernel_runtime_complete_storage_signature_check(char marker) {
+bool kernel_runtime_complete_demo_storage_signature_guardrail(char marker) {
     if (g_runtime_storage_signature_marker_count <
         (sizeof(g_runtime_storage_signature_markers) /
          sizeof(g_runtime_storage_signature_markers[0]))) {
@@ -186,6 +192,24 @@ bool kernel_runtime_complete_storage_signature_check(char marker) {
             [g_runtime_storage_signature_marker_count++] = (unsigned char)marker;
     }
     return g_runtime_storage_signature_result;
+}
+
+bool kernel_runtime_complete_storage_lba0_check(
+    char marker,
+    kernel_runtime_storage_lba0_predicate_t predicate,
+    void* context) {
+    if (g_runtime_storage_lba0_marker_count <
+        (sizeof(g_runtime_storage_lba0_markers) /
+         sizeof(g_runtime_storage_lba0_markers[0]))) {
+        g_runtime_storage_lba0_markers[g_runtime_storage_lba0_marker_count++] =
+            (unsigned char)marker;
+    }
+    g_runtime_storage_lba0_predicate = predicate;
+    g_runtime_storage_lba0_context = context;
+    return predicate != NULL &&
+           predicate(g_runtime_storage_lba0_block,
+                     sizeof(g_runtime_storage_lba0_block),
+                     context);
 }
 
 static void reset_stub_state(void) {
@@ -227,6 +251,15 @@ static void reset_stub_state(void) {
            sizeof(g_runtime_storage_signature_markers));
     g_runtime_storage_signature_marker_count = 0;
     g_runtime_storage_signature_result = true;
+    memset(g_runtime_storage_lba0_markers,
+           0,
+           sizeof(g_runtime_storage_lba0_markers));
+    g_runtime_storage_lba0_marker_count = 0;
+    g_runtime_storage_lba0_predicate = NULL;
+    g_runtime_storage_lba0_context = NULL;
+    memset(g_runtime_storage_lba0_block,
+           0,
+           sizeof(g_runtime_storage_lba0_block));
 }
 
 static int fail(const char* message) {
@@ -333,20 +366,24 @@ static int test_complete_storage_probe(void) {
 
 static int test_complete_storage_signature_check(void) {
     reset_stub_state();
+    memcpy(g_runtime_storage_lba0_block, "Stor", 4);
     if (!kernel_alpha_complete_storage_signature_check()) {
         return fail("expected storage signature helper to accept Stor prefix");
     }
 
-    if (g_runtime_storage_signature_marker_count != 1 ||
-        g_runtime_storage_signature_markers[0] != 'S' ||
+    if (g_runtime_storage_lba0_marker_count != 1 ||
+        g_runtime_storage_lba0_markers[0] != 'S' ||
+        g_runtime_storage_lba0_predicate == NULL ||
+        g_runtime_storage_lba0_context != NULL ||
+        g_runtime_storage_signature_marker_count != 0 ||
         g_storage_read_block_lba != UINT64_MAX ||
         g_last_freed_page != NULL ||
         g_console_char_count != 0) {
-        return fail("expected alpha storage signature helper to delegate to kernel_runtime");
+        return fail("expected alpha storage signature helper to delegate predicate guardrail to kernel_runtime");
     }
 
     reset_stub_state();
-    g_runtime_storage_signature_result = false;
+    memcpy(g_runtime_storage_lba0_block, "Fail", 4);
     if (kernel_alpha_complete_storage_signature_check()) {
         return fail("expected delegated storage signature failure to propagate");
     }

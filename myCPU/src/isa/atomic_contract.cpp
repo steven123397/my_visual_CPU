@@ -10,6 +10,7 @@ namespace {
 constexpr uint64_t CAUSE_ILLEGAL_INSN = 2;
 constexpr uint64_t CAUSE_LOAD_ACCESS_FAULT = 5;
 constexpr uint64_t CAUSE_STORE_ACCESS_FAULT = 7;
+constexpr uint64_t kPageSize = 4096;
 
 TrapRequest trap_request(uint64_t cause, uint64_t tval) {
     TrapRequest trap;
@@ -111,6 +112,14 @@ bool is_misaligned(uint64_t addr, int size) {
     return size == 4 ? (addr & 0x3ULL) != 0 : (addr & 0x7ULL) != 0;
 }
 
+bool access_crosses_page(uint64_t addr, int size) {
+    if (size <= 0) {
+        return false;
+    }
+    const uint64_t page_offset = addr & (kPageSize - 1);
+    return page_offset + static_cast<uint64_t>(size) > kPageSize;
+}
+
 AtomicRequest::Kind decode_atomic_kind(const Insn& insn) {
     switch (insn.funct5) {
     case 0x02:
@@ -141,6 +150,21 @@ AtomicRequest::Kind decode_atomic_kind(const Insn& insn) {
 }
 
 }  // namespace
+
+void invalidate_reservation_for_store(CPU& cpu, Bus& bus, uint64_t addr, int size) {
+    if (size <= 0 || access_crosses_page(addr, size)) {
+        cpu.trap().clear_reservation();
+        return;
+    }
+
+    const AddressSpace::TranslateResult translated =
+        cpu.address_space().translate_result(bus, addr, AccessType::Store, false);
+    if (translated.ok) {
+        cpu.trap().invalidate_reservation(translated.paddr, size);
+    } else {
+        cpu.trap().clear_reservation();
+    }
+}
 
 InsnEffects build_atomic_effects(const Insn& insn, uint64_t rs1v, uint64_t rs2v) {
     const AtomicRequest::Kind kind = decode_atomic_kind(insn);

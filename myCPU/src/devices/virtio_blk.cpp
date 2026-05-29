@@ -117,6 +117,9 @@ bool VirtioBlk::notify_queue(Bus& bus,
         if (!queue.push_used(bus, chain.head_index, used_len, error)) {
             return false;
         }
+        if (!queue.commit_chain(chain, error)) {
+            return false;
+        }
         ++completed;
     }
     return error.empty();
@@ -148,7 +151,11 @@ bool VirtioBlk::process_chain(Bus& bus,
     RequestHeader header{};
     if (!bus.dma_load_bytes(header_desc.addr, &header, sizeof(header))) {
         error = "virtio-blk failed to DMA-load request header";
-        return false;
+        return complete_with_status(bus,
+                                    status_desc,
+                                    VIRTIO_BLK_S_IOERR,
+                                    used_len,
+                                    error);
     }
 
     uint64_t total_data_len = 0;
@@ -177,8 +184,11 @@ bool VirtioBlk::process_chain(Bus& bus,
         for (size_t i = 1; i + 1 < chain.descriptors.size(); ++i) {
             const VirtQueue::Descriptor& desc = chain.descriptors[i];
             if (!bus.dma_store_bytes(desc.addr, data_.data() + image_offset + copied, desc.len)) {
-                error = "virtio-blk failed to DMA-store read payload";
-                return false;
+                return complete_with_status(bus,
+                                            status_desc,
+                                            VIRTIO_BLK_S_IOERR,
+                                            used_len,
+                                            error);
             }
             copied += desc.len;
         }
@@ -188,13 +198,24 @@ bool VirtioBlk::process_chain(Bus& bus,
         for (size_t i = 1; i + 1 < chain.descriptors.size(); ++i) {
             const VirtQueue::Descriptor& desc = chain.descriptors[i];
             if (!bus.dma_load_bytes(desc.addr, data_.data() + image_offset + copied, desc.len)) {
-                error = "virtio-blk failed to DMA-load write payload";
-                return false;
+                return complete_with_status(bus,
+                                            status_desc,
+                                            VIRTIO_BLK_S_IOERR,
+                                            used_len,
+                                            error);
             }
             copied += desc.len;
         }
     }
 
+    return complete_with_status(bus, status_desc, status, used_len, error);
+}
+
+bool VirtioBlk::complete_with_status(Bus& bus,
+                                     const VirtQueue::Descriptor& status_desc,
+                                     uint8_t status,
+                                     uint32_t& used_len,
+                                     std::string& error) const {
     if (!write_status(bus, status_desc.addr, status, error)) {
         return false;
     }

@@ -30,7 +30,9 @@
 | 基地址 | 大小 | 设备 |
 |---|---:|---|
 | `0x10000000` | `0x8` | UART |
-| `0x10001000` | `0x400` | `SimpleStorage` |
+| `0x10001000` | `0x400` | `SimpleStorage` when `simple_storage` transport is selected |
+| `0x10001000` | `0x1000` | Virtio MMIO block device when `virtio-blk` transport is selected |
+| `0x10002000` | `0x1000` | MMIO AI accelerator |
 | `0x02000000` | `0x10000` | CLINT |
 | `0x0c000000` | `0x300000` | PLIC |
 | `0x80000000` | `128 MiB` | RAM |
@@ -90,7 +92,9 @@
 
 | Source ID | 说明 |
 |---:|---|
-| `1` | UART THRE interrupt |
+| `1` | Virtio MMIO block interrupt |
+| `9` | MMIO AI accelerator interrupt |
+| `10` | UART THRE interrupt |
 
 ### Context
 
@@ -122,9 +126,21 @@
 
 ### 当前限制
 
-- 目前只实现了 UART THRE 这一条外部中断源。
+- 目前只服务 `virtio-blk`、MMIO AI accelerator 和 UART THRE 这三类外部中断源；`riscv,ndev` / source array 上限因此覆盖到 source `10`。
 - 只覆盖 machine/supervisor 两个 context。
 - 没有优先级抢占、嵌套或更复杂的 PLIC 语义。
+
+当前 Linux / xv6 board DTS 只暴露 UART source `10` 和 `virtio-blk` source `1`；AI accelerator source `9` 是模拟器和 host smoke 可用的平台源，当前不进入通用 Linux board profile。
+
+## Block Transport 选择关系
+
+`0x10001000` 是当前平台的块设备 transport 复用窗口，运行时只能绑定其中一种块设备：
+
+- 默认 `simple_storage` transport 绑定 `SimpleStorage`，寄存器窗口大小为 `0x400`，供 guest runtime、`kernel_alpha` 和 storage 负向合同使用。
+- `virtio-blk` transport 绑定 Virtio MMIO block device，寄存器窗口大小为 `0x1000`，供 xv6 / Linux-facing board profile 使用；对应 DTB `virtio_mmio@10001000` 的 PLIC source 为 `1`。
+- 选择 `virtio-blk` 后，不再支持 `SimpleStorage` 专用的 `--disk-not-ready` / `--disk-bad-magic` 注入语义。
+
+这意味着 guest-visible block device ABI 由启动入口选择决定，而不是两个设备同时出现在同一地址窗口。
 
 ## SimpleStorage
 

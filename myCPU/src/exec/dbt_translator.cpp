@@ -56,6 +56,7 @@ DbtTranslationUnit reject_from_plan(const DbtBlockPlan& plan) {
         .boundary_kind = plan.boundary_kind,
         .boundary = plan.boundary,
         .helper_plan = plan.helper_plan,
+        .code_spans = plan.code_spans,
     };
 }
 
@@ -70,6 +71,7 @@ DbtTranslationUnit reject_unsupported_ir(const DbtBlockPlan& plan, const DbtDryR
         .reject_reason = "unsupported-ir",
         .boundary_kind = "unsupported-ir",
         .boundary = DbtBoundaryKind::Unsupported,
+        .code_spans = plan.code_spans,
     };
 }
 
@@ -288,6 +290,7 @@ DbtTranslationUnit translate_dbt_block(const DbtBlockPlan& plan) {
         .ok = true,
         .start_pc = plan.start_pc,
         .end_pc = plan.end_pc,
+        .code_spans = plan.code_spans,
     };
     unit.instructions.reserve(plan.dry_run_ir.size() + 1);
 

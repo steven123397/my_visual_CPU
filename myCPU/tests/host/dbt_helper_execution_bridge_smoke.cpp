@@ -16,6 +16,18 @@ constexpr uint32_t kRawStore = 0x0062a023U;  // sw x6, 0(x5)
 constexpr uint32_t kRawCsr = 0x300312f3U;    // csrrw x5, mstatus, x6
 constexpr uint32_t kRawAtomic = 0x0462a2afU; // amoadd.w x5, x6, (x5)
 constexpr uint32_t kRawVector = 0x042082d7U; // vdot.vv v5, v1, v2
+constexpr uint64_t kSv39Mode = 8ULL << 60;
+constexpr uint64_t kRootPageTable = kData + 0x10000;
+constexpr uint64_t kLevel1PageTable = kData + 0x11000;
+constexpr uint64_t kLevel0PageTable = kData + 0x12000;
+constexpr uint64_t kMappedPagePa = kData + 0x20000;
+constexpr uint64_t kMappedVa = 0x40000000ULL;
+constexpr uint64_t kCrossPageStoreVa = kMappedVa + 4094;
+constexpr uint64_t kPteV = 1ULL << 0;
+constexpr uint64_t kPteR = 1ULL << 1;
+constexpr uint64_t kPteW = 1ULL << 2;
+constexpr uint64_t kPteA = 1ULL << 6;
+constexpr uint64_t kPteD = 1ULL << 7;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -23,6 +35,34 @@ bool expect(bool condition, const char* message) {
         return false;
     }
     return true;
+}
+
+void write64(Ram& ram, uint64_t addr, uint64_t value) {
+    ram.write_bytes(addr, &value, sizeof(value));
+}
+
+uint64_t pte_for(uint64_t paddr, uint64_t flags) {
+    return ((paddr >> 12) << 10) | flags;
+}
+
+uint64_t vpn(uint64_t vaddr, int level) {
+    return (vaddr >> (12 + level * 9)) & 0x1ffULL;
+}
+
+void map_single_sv39_data_page(Ram& ram, CPU& cpu) {
+    write64(ram,
+            kRootPageTable + vpn(kMappedVa, 2) * 8,
+            pte_for(kLevel1PageTable, kPteV));
+    write64(ram,
+            kLevel1PageTable + vpn(kMappedVa, 1) * 8,
+            pte_for(kLevel0PageTable, kPteV));
+    write64(ram,
+            kLevel0PageTable + vpn(kMappedVa, 0) * 8,
+            pte_for(kMappedPagePa, kPteV | kPteR | kPteW | kPteA | kPteD));
+
+    cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+    cpu.csr().write(CSR_SATP, kSv39Mode | (kRootPageTable >> 12), cpu.core());
+    cpu.address_space().flush_tlb();
 }
 
 DbtHelperReplayPlan scalar_load_replay() {
@@ -321,6 +361,29 @@ bool test_helper_execution_bridge_rejects_faulting_scalar_memory_store_without_c
                   "faulting store helper formatter should expose trap state");
 }
 
+bool test_helper_execution_bridge_clears_reservation_on_uncertain_cross_page_store() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kPc);
+    map_single_sv39_data_page(ram, cpu);
+    cpu.trap().set_reservation(kMappedPagePa + 128, 4);
+
+    const DbtHelperExecutionRequest request =
+        plan_dbt_helper_execution_bridge(
+            scalar_store_replay(kCrossPageStoreVa, 4, 0x11223344));
+    const DbtHelperExecutionResult result =
+        execute_dbt_helper_request(cpu, bus, request);
+    const bool reservation_still_matches =
+        cpu.trap().reservation_matches(kMappedPagePa + 128, 4);
+
+    return expect(request.ok, "cross-page store helper request should be valid") &&
+           expect(!result.ok && result.trap_taken && !result.retired,
+                  "cross-page store into unmapped second page should fault") &&
+           expect(!reservation_still_matches,
+                  "uncertain cross-page helper store should clear LR reservation");
+}
+
 }  // namespace
 
 int main() {
@@ -343,6 +406,9 @@ int main() {
         return 1;
     }
     if (!test_helper_execution_bridge_rejects_faulting_scalar_memory_store_without_commit()) {
+        return 1;
+    }
+    if (!test_helper_execution_bridge_clears_reservation_on_uncertain_cross_page_store()) {
         return 1;
     }
     std::puts("dbt_helper_execution_bridge_smoke: PASS");

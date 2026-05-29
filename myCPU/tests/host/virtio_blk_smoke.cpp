@@ -7,12 +7,14 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <unistd.h>
 
 #include "../../src/devices/plic.h"
 #include "../../src/devices/virtio_blk.h"
 #include "../../src/devices/virtio_mmio.h"
+#include "../../src/mem/memory_region.h"
 #include "../../src/mem/bus.h"
 #include "../../src/mem/ram.h"
 #include "../../src/platform/address_map.h"
@@ -32,12 +34,60 @@ struct PackedBlkReqHeader {
     uint64_t sector;
 };
 
+class DmaFailWindow final : public Device {
+public:
+    DmaFailWindow(uint64_t base, size_t size, size_t fail_after_writes)
+        : Device(base, size),
+          bytes_(size, 0),
+          fail_after_writes_(fail_after_writes) {}
+
+    uint64_t load(uint64_t addr, int size) override {
+        if (size != 1) {
+            invalid_access(addr, size);
+        }
+        return bytes_.at(static_cast<size_t>(addr - base()));
+    }
+
+    void store(uint64_t addr, uint64_t value, int size) override {
+        if (size != 1) {
+            invalid_access(addr, size);
+        }
+        if (write_count_ >= fail_after_writes_) {
+            throw std::runtime_error("forced virtio DMA write failure");
+        }
+        bytes_.at(static_cast<size_t>(addr - base())) =
+            static_cast<uint8_t>(value & 0xffU);
+        ++write_count_;
+    }
+
+    PhysicalRegionInfo region_info() const override {
+        return {
+            .kind = PhysicalRegionKind::Ram,
+            .cacheable = false,
+            .dma_visible = true,
+            .has_side_effect = false,
+            .supports_burst = true,
+            .label = "virtio-dma-fail-window",
+        };
+    }
+
+    const char* debug_name() const override {
+        return "virtio_dma_fail_window";
+    }
+
+private:
+    std::vector<uint8_t> bytes_{};
+    size_t fail_after_writes_{0};
+    size_t write_count_{0};
+};
+
 constexpr uint64_t kDescAddr = MEM_BASE + 0x1000;
 constexpr uint64_t kAvailAddr = MEM_BASE + 0x2000;
 constexpr uint64_t kUsedAddr = MEM_BASE + 0x3000;
 constexpr uint64_t kHeaderAddr = MEM_BASE + 0x4000;
 constexpr uint64_t kDataAddr = MEM_BASE + 0x5000;
 constexpr uint64_t kStatusAddr = MEM_BASE + 0x6000;
+constexpr uint64_t kDmaFailAddr = 0x90000000;
 
 int fail(const char* message) {
     std::fprintf(stderr, "%s\n", message);
@@ -258,6 +308,74 @@ int main() {
             !expect(bus.try_load(kDataAddr + 1, 1, second) && second == 'r', "expected persisted second byte") ||
             !expect(bus.try_load(kDataAddr + 2, 1, third) && third == 'i', "expected persisted third byte") ||
             !expect(bus.try_load(kDataAddr + 3, 1, fourth) && fourth == 't', "expected persisted fourth byte")) {
+            std::remove(image_path.c_str());
+            return 1;
+        }
+
+        DmaFailWindow dma_fail(kDmaFailAddr, VIRTIO_BLK_SECTOR_SIZE, 0);
+        bus.attach(dma_fail);
+        const PackedDesc dma_fault_desc0{kHeaderAddr, sizeof(PackedBlkReqHeader), VIRTQ_DESC_F_NEXT, 1};
+        const PackedDesc dma_fault_desc1{kDmaFailAddr,
+                                         VIRTIO_BLK_SECTOR_SIZE,
+                                         VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE,
+                                         2};
+        const PackedDesc dma_fault_desc2{kStatusAddr, 1, VIRTQ_DESC_F_WRITE, 0};
+        write_bytes(ram, kDescAddr + 0 * sizeof(PackedDesc), &dma_fault_desc0, sizeof(dma_fault_desc0));
+        write_bytes(ram, kDescAddr + 1 * sizeof(PackedDesc), &dma_fault_desc1, sizeof(dma_fault_desc1));
+        write_bytes(ram, kDescAddr + 2 * sizeof(PackedDesc), &dma_fault_desc2, sizeof(dma_fault_desc2));
+        write_u16(ram, kAvailAddr + 2, 4);
+        write_u16(ram, kAvailAddr + 10, 0);
+        write_bytes(ram, kHeaderAddr, &read_header, sizeof(read_header));
+        ram.fill(kStatusAddr, 0xCC, 1);
+
+        if (!store_reg(bus, VIRTIO_MMIO_REG_QUEUE_NOTIFY, 0, "queue notify dma fault") ||
+            !expect(bus.try_load(kStatusAddr, 1, status) && status == VIRTIO_BLK_S_IOERR,
+                    "expected DMA read payload fault to write IOERR status") ||
+            !expect(bus.try_load(kUsedAddr + 2, 2, used_idx) && used_idx == 4,
+                    "expected used idx increment after DMA fault IOERR") ||
+            !load_reg(bus,
+                      VIRTIO_MMIO_REG_INTERRUPT_STATUS,
+                      VIRTIO_MMIO_INTERRUPT_USED_BUFFER,
+                      "expected interrupt after DMA fault IOERR")) {
+            std::remove(image_path.c_str());
+            return 1;
+        }
+
+        if (!store_reg(bus,
+                       VIRTIO_MMIO_REG_INTERRUPT_ACK,
+                       VIRTIO_MMIO_INTERRUPT_USED_BUFFER,
+                       "interrupt ack after DMA fault")) {
+            std::remove(image_path.c_str());
+            return 1;
+        }
+
+        const PackedDesc bad_status_desc0{kHeaderAddr, sizeof(PackedBlkReqHeader), VIRTQ_DESC_F_NEXT, 1};
+        const PackedDesc bad_status_desc1{kDataAddr, VIRTIO_BLK_SECTOR_SIZE, VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE, 2};
+        const PackedDesc bad_status_desc2{UART_BASE, 1, VIRTQ_DESC_F_WRITE, 0};
+        write_bytes(ram, kDescAddr + 0 * sizeof(PackedDesc), &bad_status_desc0, sizeof(bad_status_desc0));
+        write_bytes(ram, kDescAddr + 1 * sizeof(PackedDesc), &bad_status_desc1, sizeof(bad_status_desc1));
+        write_bytes(ram, kDescAddr + 2 * sizeof(PackedDesc), &bad_status_desc2, sizeof(bad_status_desc2));
+        write_u16(ram, kAvailAddr + 2, 5);
+        write_u16(ram, kAvailAddr + 12, 0);
+        write_bytes(ram, kHeaderAddr, &read_header, sizeof(read_header));
+
+        if (bus.try_store(VIRTIO_MMIO_BASE + VIRTIO_MMIO_REG_QUEUE_NOTIFY, 0, 4)) {
+            std::remove(image_path.c_str());
+            return fail("expected bad status descriptor notify to fail");
+        }
+        if (!expect(bus.try_load(kUsedAddr + 2, 2, used_idx) && used_idx == 4,
+                    "expected used idx unchanged when status writeback fails")) {
+            std::remove(image_path.c_str());
+            return 1;
+        }
+        const PackedDesc good_status_desc2{kStatusAddr, 1, VIRTQ_DESC_F_WRITE, 0};
+        write_bytes(ram, kDescAddr + 2 * sizeof(PackedDesc), &good_status_desc2, sizeof(good_status_desc2));
+        ram.fill(kStatusAddr, 0xBB, 1);
+        if (!store_reg(bus, VIRTIO_MMIO_REG_QUEUE_NOTIFY, 0, "queue notify bad status retry") ||
+            !expect(bus.try_load(kStatusAddr, 1, status) && status == VIRTIO_BLK_S_OK,
+                    "expected repaired status descriptor to complete") ||
+            !expect(bus.try_load(kUsedAddr + 2, 2, used_idx) && used_idx == 5,
+                    "expected used idx increment after repaired status descriptor")) {
             std::remove(image_path.c_str());
             return 1;
         }

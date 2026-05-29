@@ -249,8 +249,8 @@ bool test_opt_in_runtime_harness_executes_single_integer_block_with_reference_gu
     return expect(result.ok, "opt-in runtime harness should execute pure integer block") &&
            expect(result.executed_host_code && result.used_executable_memory,
                   "opt-in runtime harness should use emitted host code and executable memory") &&
-           expect(result.retired_instructions == program.size(),
-                  "opt-in runtime harness should retire all block instructions") &&
+           expect(result.ir_expected_retired_count == program.size(),
+                  "opt-in runtime harness should expose IR-expected retired count explicitly") &&
            expect(result.next_pc == ref_cpu.core().pc() && jit_cpu.core().pc() == ref_cpu.core().pc(),
                   "opt-in runtime harness should commit fallthrough PC") &&
            expect(jit_cpu.core().instret() == ref_cpu.core().instret(),
@@ -394,7 +394,7 @@ bool test_opt_in_runtime_harness_executes_expanded_pure_integer_matrix() {
     return expect(result.ok, "runtime harness should execute expanded pure integer matrix") &&
            expect(result.executed_host_code && result.used_executable_memory,
                   "expanded pure integer matrix should use executable host code") &&
-           expect(result.retired_instructions == program.size(),
+           expect(result.ir_expected_retired_count == program.size(),
                   "expanded pure integer matrix should retire all instructions") &&
            expect(result.next_pc == ref_cpu.core().pc() &&
                       jit_cpu.core().pc() == ref_cpu.core().pc(),

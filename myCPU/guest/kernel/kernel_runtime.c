@@ -17,6 +17,9 @@ uint64_t riscv_read_satp(void);
 #endif
 
 static bool kernel_runtime_destroy_owned_address_space(kernel_runtime_t* runtime);
+static bool demo_storage_signature_guardrail(const uint8_t* block,
+                                             size_t block_size,
+                                             void* context);
 
 void kernel_runtime_init(kernel_runtime_t* runtime) {
     if (runtime == NULL) {
@@ -188,18 +191,21 @@ bool kernel_runtime_complete_storage_probe(char marker) {
     return true;
 }
 
-bool kernel_runtime_complete_storage_signature_check(char marker) {
+bool kernel_runtime_complete_storage_lba0_check(
+    char marker,
+    kernel_runtime_storage_lba0_predicate_t predicate,
+    void* context) {
     uint8_t* storage_page = (uint8_t*)pmm_alloc_page();
-    const bool valid_signature =
-        storage_page != NULL && storage_read_block(0, storage_page) == 0 &&
-        storage_page[0] == 'S' && storage_page[1] == 't' &&
-        storage_page[2] == 'o' && storage_page[3] == 'r';
+    const bool accepted =
+        storage_page != NULL && predicate != NULL &&
+        storage_read_block(0, storage_page) == 0 &&
+        predicate(storage_page, STORAGE_BLOCK_SIZE, context);
     bool freed = false;
 
     if (storage_page != NULL) {
         freed = pmm_free_page(storage_page);
     }
-    if (storage_page == NULL || !valid_signature || !freed) {
+    if (storage_page == NULL || !accepted || !freed) {
         return false;
     }
 
@@ -209,14 +215,30 @@ bool kernel_runtime_complete_storage_signature_check(char marker) {
     return true;
 }
 
+bool kernel_runtime_complete_demo_storage_signature_guardrail(char marker) {
+    return kernel_runtime_complete_storage_lba0_check(
+        marker,
+        demo_storage_signature_guardrail,
+        NULL);
+}
+
 bool kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
     supervisor_runtime_interrupt_state_t* interrupts,
     uint64_t timer_delta,
     uint64_t timeout_delta) {
-    return kernel_runtime_complete_storage_signature_check('\0') &&
+    return kernel_runtime_complete_demo_storage_signature_guardrail('\0') &&
            kernel_runtime_wait_platform_interrupts(interrupts,
                                                    timer_delta,
                                                    timeout_delta);
+}
+
+static bool demo_storage_signature_guardrail(const uint8_t* block,
+                                             size_t block_size,
+                                             void* context) {
+    (void)context;
+    return block != NULL && block_size >= 4U &&
+           block[0] == 'S' && block[1] == 't' &&
+           block[2] == 'o' && block[3] == 'r';
 }
 
 bool kernel_runtime_bind_self_interrupt_handlers(

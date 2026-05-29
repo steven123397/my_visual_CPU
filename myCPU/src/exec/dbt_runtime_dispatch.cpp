@@ -36,6 +36,7 @@ DbtRuntimeDispatchContract base_contract(const DbtJitDryRunResult& result) {
         .reject_raw = result.translation.reject_raw,
         .reject_reason = result.translation.reject_reason.empty() ? "none" : result.translation.reject_reason,
         .helper_replay_kind = result.helper_replay.kind,
+        .code_spans = result.translation.code_spans,
     };
 }
 

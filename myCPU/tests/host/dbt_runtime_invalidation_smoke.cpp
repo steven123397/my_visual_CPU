@@ -15,6 +15,18 @@ namespace {
 
 constexpr uint64_t kEntry = MEM_BASE;
 constexpr uint32_t kAddiX1One = 0x00100093U;  // addi x1, x0, 1
+constexpr uint64_t kSv39Mode = 8ULL << 60;
+constexpr uint64_t kAliasRootPageTable = MEM_BASE + 0x10000;
+constexpr uint64_t kAliasLevel1PageTable = MEM_BASE + 0x11000;
+constexpr uint64_t kAliasLevel0PageTable = MEM_BASE + 0x12000;
+constexpr uint64_t kAliasCodePa = MEM_BASE + 0x40000;
+constexpr uint64_t kAliasCodeVaA = 0x40000000;
+constexpr uint64_t kAliasCodeVaB = 0x40001000;
+constexpr uint64_t kPteV = 1ULL << 0;
+constexpr uint64_t kPteR = 1ULL << 1;
+constexpr uint64_t kPteX = 1ULL << 3;
+constexpr uint64_t kPteA = 1ULL << 6;
+constexpr uint64_t kPteD = 1ULL << 7;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -28,11 +40,48 @@ void write32(Ram& ram, uint64_t addr, uint32_t value) {
     ram.write_bytes(addr, &value, sizeof(value));
 }
 
+void write64(Ram& ram, uint64_t addr, uint64_t value) {
+    ram.write_bytes(addr, &value, sizeof(value));
+}
+
+uint64_t pte_for(uint64_t paddr, uint64_t flags) {
+    return ((paddr >> 12) << 10) | flags;
+}
+
+uint64_t vpn(uint64_t vaddr, int level) {
+    return (vaddr >> (12 + level * 9)) & 0x1ffULL;
+}
+
+void map_alias_code_page(Ram& ram, CPU& cpu) {
+    write32(ram, kAliasCodePa, kAddiX1One);
+    write64(ram,
+            kAliasRootPageTable + vpn(kAliasCodeVaA, 2) * 8,
+            pte_for(kAliasLevel1PageTable, kPteV));
+    write64(ram,
+            kAliasLevel1PageTable + vpn(kAliasCodeVaA, 1) * 8,
+            pte_for(kAliasLevel0PageTable, kPteV));
+    write64(ram,
+            kAliasLevel0PageTable + vpn(kAliasCodeVaA, 0) * 8,
+            pte_for(kAliasCodePa, kPteV | kPteR | kPteX | kPteA | kPteD));
+    write64(ram,
+            kAliasLevel0PageTable + vpn(kAliasCodeVaB, 0) * 8,
+            pte_for(kAliasCodePa, kPteV | kPteR | kPteX | kPteA | kPteD));
+
+    cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+    cpu.csr().write(CSR_SATP, kSv39Mode | (kAliasRootPageTable >> 12), cpu.core());
+    cpu.address_space().flush_tlb();
+}
+
 DbtRuntimeDispatchContract lowered_contract(Ram& ram,
                                              Bus& bus,
                                              CPU& cpu,
                                              uint64_t pc) {
     write32(ram, pc, kAddiX1One);
+    DbtJitEngineDryRun engine;
+    return plan_dbt_runtime_dispatch_contract(engine.dry_run_block(cpu, bus, pc, pc));
+}
+
+DbtRuntimeDispatchContract mapped_lowered_contract(Bus& bus, CPU& cpu, uint64_t pc) {
     DbtJitEngineDryRun engine;
     return plan_dbt_runtime_dispatch_contract(engine.dry_run_block(cpu, bus, pc, pc));
 }
@@ -185,6 +234,45 @@ bool test_runtime_hook_releases_runtime_host_executable_on_overlap() {
                   "runtime invalidation hook should release invalidated host executable");
 }
 
+bool test_runtime_hook_invalidates_physical_synonym_code_store() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    cpu_init(cpu, kAliasCodeVaA);
+    map_alias_code_page(ram, cpu);
+
+    DbtExecutableCacheDryRun cache;
+    const DbtRuntimeDispatchContract first =
+        mapped_lowered_contract(bus, cpu, kAliasCodeVaA);
+    const DbtRuntimeDispatchContract second =
+        mapped_lowered_contract(bus, cpu, kAliasCodeVaB);
+    const bool inserted_first = cache.insert(first);
+    const bool inserted_second = cache.insert(second);
+
+    const DbtRuntimeInvalidationHookResult result =
+        apply_dbt_runtime_invalidation_hook(cache, DbtRuntimeInvalidationEvent{
+                                                       .kind = DbtInvalidationEventKind::GuestStore,
+                                                       .addr = kAliasCodePa,
+                                                       .size = 4,
+                                                   });
+    const DbtExecutableCacheLookup first_lookup =
+        cache.lookup(kAliasCodeVaA, kAliasCodeVaA);
+    const DbtExecutableCacheLookup second_lookup =
+        cache.lookup(kAliasCodeVaB, kAliasCodeVaB);
+
+    return expect(first.ok && second.ok,
+                  "physical synonym setup should create lowered contracts") &&
+           expect(inserted_first && inserted_second,
+                  "physical synonym setup should cache both virtual aliases") &&
+           expect(result.ok && result.invalidated && result.entries_removed == 2 &&
+                      result.entries_examined == 2 &&
+                      result.reason == "guest-store-overlaps-physical-code" &&
+                      result.stale_dispatch_prevented,
+                  "guest store to physical code page should invalidate both virtual aliases") &&
+           expect(!first_lookup.hit && !second_lookup.hit,
+                  "physical synonym invalidation should remove all stale aliases");
+}
+
 }  // namespace
 
 int main() {
@@ -201,6 +289,9 @@ int main() {
         return 1;
     }
     if (!test_runtime_hook_releases_runtime_host_executable_on_overlap()) {
+        return 1;
+    }
+    if (!test_runtime_hook_invalidates_physical_synonym_code_store()) {
         return 1;
     }
     std::puts("dbt_runtime_invalidation_smoke: PASS");

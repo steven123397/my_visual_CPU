@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "../mem/memory_region.h"
+
 class CPU;
 class Bus;
 struct ExecutionProfileSnapshot;
@@ -75,6 +77,16 @@ struct DbtDryRunIrOp {
     uint8_t rd{0};
 };
 
+struct DbtCodePhysicalSpan {
+    bool valid{false};
+    bool requires_global_invalidation{false};
+    uint64_t vaddr{0};
+    uint64_t paddr{0};
+    uint64_t size{0};
+    uint64_t satp{0};
+    PhysicalRegionInfo region{};
+};
+
 struct DbtHelperPlan {
     bool required{false};
     DbtHelperKind kind{DbtHelperKind::None};
@@ -111,6 +123,7 @@ struct DbtBlockPlan {
     std::string boundary_kind{};
     DbtBoundaryKind boundary{DbtBoundaryKind::None};
     DbtHelperPlan helper_plan{};
+    std::vector<DbtCodePhysicalSpan> code_spans{};
     std::vector<DbtDryRunIrOp> dry_run_ir{};
 };
 

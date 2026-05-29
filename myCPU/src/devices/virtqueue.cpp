@@ -108,7 +108,8 @@ bool VirtQueue::pop_chain(Bus& bus, Chain& chain, std::string& error) {
     }
 
     uint16_t head_index = 0;
-    const uint64_t ring_addr = avail_addr_ + 4 + 2 * static_cast<uint64_t>(next_avail_idx_ % size_);
+    const uint16_t chain_avail_idx = next_avail_idx_;
+    const uint64_t ring_addr = avail_addr_ + 4 + 2 * static_cast<uint64_t>(chain_avail_idx % size_);
     if (!load_u16(bus, ring_addr, head_index, error)) {
         return false;
     }
@@ -147,6 +148,26 @@ bool VirtQueue::pop_chain(Bus& bus, Chain& chain, std::string& error) {
     }
 
     chain.head_index = head_index;
+    chain.avail_index = chain_avail_idx;
+    return true;
+}
+
+bool VirtQueue::commit_chain(const Chain& chain, std::string& error) {
+    error.clear();
+    if (!configured()) {
+        error = "virtqueue is not configured";
+        return false;
+    }
+
+    if (chain.head_index >= size_) {
+        error = "virtqueue commit head out of range";
+        return false;
+    }
+    if (chain.avail_index != next_avail_idx_) {
+        error = "virtqueue commit index mismatch";
+        return false;
+    }
+
     ++next_avail_idx_;
     return true;
 }

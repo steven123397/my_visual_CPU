@@ -10,10 +10,12 @@
 
 struct DbtBlockCacheStats {
     size_t entries{0};
+    size_t max_entries{0};
     uint64_t lookups{0};
     uint64_t hits{0};
     uint64_t misses{0};
     uint64_t insertions{0};
+    uint64_t evictions{0};
     uint64_t rejected_insertions{0};
     uint64_t invalidation_checks{0};
     uint64_t invalidations{0};
@@ -30,6 +32,8 @@ struct DbtBlockCacheInvalidationResult {
 
 class DbtBlockCache {
 public:
+    static constexpr size_t kMaxEntries = 64;
+
     bool insert(const DbtTranslationUnit& unit);
     const DbtTranslationUnit* lookup(uint64_t start_pc, uint64_t end_pc);
     DbtBlockCacheInvalidationResult invalidate(DbtInvalidationEventKind kind,
