@@ -1,5 +1,8 @@
 #include "course_syscall.h"
 
+#include "course_fd.h"
+#include "course_process.h"
+
 static void clear_buffer(char* buffer, size_t size) {
     size_t i = 0;
 
@@ -99,6 +102,195 @@ static int64_t dispatch_write(course_syscall_t* syscalls,
     return COURSE_SYSCALL_ERR_BAD_FD;
 }
 
+static bool user_string_valid(const course_syscall_t* syscalls,
+                              uintptr_t user_ptr,
+                              size_t* out_len) {
+    const char* value = (const char*)user_ptr;
+    size_t i = 0;
+
+    if (out_len != 0) {
+        *out_len = 0;
+    }
+    if (syscalls == 0 || value == 0 ||
+        !course_syscall_user_range_valid(syscalls, user_ptr, 1U)) {
+        return false;
+    }
+    while (course_syscall_user_range_valid(syscalls, user_ptr, i + 1U)) {
+        if (value[i] == '\0') {
+            if (out_len != 0) {
+                *out_len = i;
+            }
+            return true;
+        }
+        i += 1U;
+    }
+    return false;
+}
+
+static int64_t dispatch_read(course_syscall_t* syscalls,
+                             uint64_t fd,
+                             uintptr_t user_ptr,
+                             size_t size) {
+    if (syscalls == 0 || syscalls->fd_table == 0) {
+        return COURSE_SYSCALL_ERR_BAD_FD;
+    }
+    if (!course_syscall_user_range_valid(syscalls, user_ptr, size)) {
+        return COURSE_SYSCALL_ERR_BAD_USER_POINTER;
+    }
+    return (int64_t)course_fd_read(syscalls->fd_table,
+                                   (int)fd,
+                                   (char*)user_ptr,
+                                   size);
+}
+
+static int64_t dispatch_open(course_syscall_t* syscalls,
+                             uintptr_t path_ptr,
+                             uint32_t flags) {
+    if (syscalls == 0 || syscalls->fd_table == 0) {
+        return COURSE_SYSCALL_ERR_BAD_FD;
+    }
+    if (!user_string_valid(syscalls, path_ptr, 0)) {
+        return COURSE_SYSCALL_ERR_BAD_USER_POINTER;
+    }
+    return (int64_t)course_fd_open(syscalls->fd_table,
+                                   (const char*)path_ptr,
+                                   flags);
+}
+
+static int64_t dispatch_close(course_syscall_t* syscalls, uint64_t fd) {
+    if (syscalls == 0 || syscalls->fd_table == 0) {
+        return COURSE_SYSCALL_ERR_BAD_FD;
+    }
+    return (int64_t)course_fd_close(syscalls->fd_table, (int)fd);
+}
+
+static int64_t dispatch_seek(course_syscall_t* syscalls,
+                             uint64_t fd,
+                             size_t offset) {
+    if (syscalls == 0 || syscalls->fd_table == 0) {
+        return COURSE_SYSCALL_ERR_BAD_FD;
+    }
+    return (int64_t)course_fd_seek(syscalls->fd_table, (int)fd, offset);
+}
+
+static int64_t dispatch_fork(course_syscall_t* syscalls,
+                             uintptr_t child_name_ptr) {
+    course_process_t* child = 0;
+    const char* child_name = (const char*)child_name_ptr;
+
+    if (syscalls == 0 || syscalls->process_table == 0) {
+        return COURSE_SYSCALL_ERR_NO_MEMORY;
+    }
+    if (child_name_ptr != 0U &&
+        !user_string_valid(syscalls, child_name_ptr, 0)) {
+        return COURSE_SYSCALL_ERR_BAD_USER_POINTER;
+    }
+    child = course_process_fork(syscalls->process_table,
+                                syscalls->pid,
+                                child_name_ptr != 0U ? child_name : "child");
+    return child != 0 ? (int64_t)child->pid : COURSE_SYSCALL_ERR_NO_MEMORY;
+}
+
+static int64_t dispatch_exec(course_syscall_t* syscalls,
+                             uintptr_t program_ptr,
+                             uintptr_t argv_ptr) {
+    const char* argv = "";
+    int32_t result = 0;
+
+    if (syscalls == 0 || syscalls->process_table == 0) {
+        return COURSE_SYSCALL_ERR_NO_MEMORY;
+    }
+    if (!user_string_valid(syscalls, program_ptr, 0)) {
+        return COURSE_SYSCALL_ERR_BAD_USER_POINTER;
+    }
+    if (argv_ptr != 0U) {
+        if (!user_string_valid(syscalls, argv_ptr, 0)) {
+            return COURSE_SYSCALL_ERR_BAD_USER_POINTER;
+        }
+        argv = (const char*)argv_ptr;
+    }
+    result = course_process_exec(syscalls->process_table,
+                                 syscalls->pid,
+                                 (const char*)program_ptr,
+                                 argv);
+    if (result == COURSE_PROCESS_OK) {
+        return COURSE_SYSCALL_OK;
+    }
+    if (result == COURSE_PROCESS_ERR_NO_SUCH_PROGRAM ||
+        result == COURSE_PROCESS_ERR_BAD_ELF) {
+        return COURSE_SYSCALL_ERR_NO_SUCH_FILE;
+    }
+    return COURSE_SYSCALL_ERR_NO_MEMORY;
+}
+
+static int64_t dispatch_waitpid(course_syscall_t* syscalls,
+                                uint32_t child_pid,
+                                uintptr_t status_ptr) {
+    int32_t status = 0;
+    int32_t result = 0;
+
+    if (syscalls == 0 || syscalls->process_table == 0) {
+        return COURSE_SYSCALL_ERR_NO_CHILD;
+    }
+    if (status_ptr != 0U &&
+        !course_syscall_user_range_valid(syscalls,
+                                         status_ptr,
+                                         sizeof(status))) {
+        return COURSE_SYSCALL_ERR_BAD_USER_POINTER;
+    }
+    result = course_process_waitpid(syscalls->process_table,
+                                    syscalls->pid,
+                                    child_pid,
+                                    &status);
+    if (result != COURSE_PROCESS_OK) {
+        return COURSE_SYSCALL_ERR_NO_CHILD;
+    }
+    if (status_ptr != 0U) {
+        *(int32_t*)status_ptr = status;
+    }
+    return COURSE_SYSCALL_OK;
+}
+
+static int64_t dispatch_wait(course_syscall_t* syscalls, uintptr_t status_ptr) {
+    int32_t status = 0;
+    int32_t result = 0;
+
+    if (syscalls == 0 || syscalls->process_table == 0) {
+        return COURSE_SYSCALL_ERR_NO_CHILD;
+    }
+    if (status_ptr != 0U &&
+        !course_syscall_user_range_valid(syscalls,
+                                         status_ptr,
+                                         sizeof(status))) {
+        return COURSE_SYSCALL_ERR_BAD_USER_POINTER;
+    }
+    result = course_process_wait(syscalls->process_table,
+                                 syscalls->pid,
+                                 &status);
+    if (result != COURSE_PROCESS_OK) {
+        return COURSE_SYSCALL_ERR_NO_CHILD;
+    }
+    if (status_ptr != 0U) {
+        *(int32_t*)status_ptr = status;
+    }
+    return COURSE_SYSCALL_OK;
+}
+
+static int64_t dispatch_exit(course_syscall_t* syscalls, int32_t exit_code) {
+    if (syscalls == 0) {
+        return COURSE_SYSCALL_ERR_INVALID_SYSCALL;
+    }
+    syscalls->exited = true;
+    syscalls->exit_code = exit_code;
+    if (syscalls->process_table != 0 &&
+        !course_process_exit(syscalls->process_table,
+                             syscalls->pid,
+                             exit_code)) {
+        return COURSE_SYSCALL_ERR_NO_CHILD;
+    }
+    return COURSE_SYSCALL_OK;
+}
+
 void course_syscall_init(course_syscall_t* syscalls,
                          uint32_t pid,
                          uintptr_t user_base,
@@ -116,6 +308,8 @@ void course_syscall_init(course_syscall_t* syscalls,
     syscalls->exit_code = 0;
     syscalls->stdout_size = 0;
     syscalls->stderr_size = 0;
+    syscalls->fd_table = 0;
+    syscalls->process_table = 0;
     clear_buffer(syscalls->stdout_buffer, sizeof(syscalls->stdout_buffer));
     clear_buffer(syscalls->stderr_buffer, sizeof(syscalls->stderr_buffer));
     syscalls->stats.total_calls = 0;
@@ -140,13 +334,37 @@ int64_t course_syscall_dispatch(course_syscall_t* syscalls,
     }
 
     switch (number) {
+    case COURSE_SYSCALL_READ:
+        result = dispatch_read(syscalls, arg0, (uintptr_t)arg1, (size_t)arg2);
+        break;
     case COURSE_SYSCALL_WRITE:
         result = dispatch_write(syscalls, arg0, (uintptr_t)arg1, (size_t)arg2);
         break;
+    case COURSE_SYSCALL_OPEN:
+        result = dispatch_open(syscalls, (uintptr_t)arg0, (uint32_t)arg1);
+        break;
+    case COURSE_SYSCALL_CLOSE:
+        result = dispatch_close(syscalls, arg0);
+        break;
+    case COURSE_SYSCALL_SEEK:
+        result = dispatch_seek(syscalls, arg0, (size_t)arg1);
+        break;
     case COURSE_SYSCALL_EXIT:
-        syscalls->exited = true;
-        syscalls->exit_code = (int32_t)arg0;
-        result = COURSE_SYSCALL_OK;
+        result = dispatch_exit(syscalls, (int32_t)arg0);
+        break;
+    case COURSE_SYSCALL_FORK:
+        result = dispatch_fork(syscalls, (uintptr_t)arg0);
+        break;
+    case COURSE_SYSCALL_EXEC:
+        result = dispatch_exec(syscalls, (uintptr_t)arg0, (uintptr_t)arg1);
+        break;
+    case COURSE_SYSCALL_WAIT:
+        result = dispatch_wait(syscalls, (uintptr_t)arg0);
+        break;
+    case COURSE_SYSCALL_WAITPID:
+        result = dispatch_waitpid(syscalls,
+                                  (uint32_t)arg0,
+                                  (uintptr_t)arg1);
         break;
     case COURSE_SYSCALL_GETPID:
         result = (int64_t)syscalls->pid;
@@ -189,6 +407,25 @@ bool course_syscall_stats(const course_syscall_t* syscalls,
     for (i = 0; i < COURSE_SYSCALL_COUNT; ++i) {
         out_stats->calls[i] = syscalls->stats.calls[i];
     }
+    return true;
+}
+
+bool course_syscall_attach_fd_table(course_syscall_t* syscalls,
+                                    struct CourseFdTable* fd_table) {
+    if (syscalls == 0 || fd_table == 0) {
+        return false;
+    }
+    syscalls->fd_table = fd_table;
+    return true;
+}
+
+bool course_syscall_attach_process_table(
+    course_syscall_t* syscalls,
+    struct CourseProcessTable* process_table) {
+    if (syscalls == 0 || process_table == 0) {
+        return false;
+    }
+    syscalls->process_table = process_table;
     return true;
 }
 

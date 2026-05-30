@@ -6,6 +6,9 @@
 
 #define COURSE_SYSCALL_IO_BUFFER_SIZE 256U
 
+struct CourseFdTable;
+struct CourseProcessTable;
+
 typedef enum CourseSyscallNumber {
     COURSE_SYSCALL_READ = 0,
     COURSE_SYSCALL_WRITE = 1,
@@ -52,6 +55,8 @@ typedef struct CourseSyscall {
     char stderr_buffer[COURSE_SYSCALL_IO_BUFFER_SIZE];
     size_t stderr_size;
     course_syscall_stats_t stats;
+    struct CourseFdTable* fd_table;
+    struct CourseProcessTable* process_table;
 } course_syscall_t;
 
 void course_syscall_init(course_syscall_t* syscalls,
@@ -69,6 +74,11 @@ bool course_syscall_user_range_valid(const course_syscall_t* syscalls,
                                      size_t size);
 bool course_syscall_stats(const course_syscall_t* syscalls,
                           course_syscall_stats_t* out_stats);
+bool course_syscall_attach_fd_table(course_syscall_t* syscalls,
+                                    struct CourseFdTable* fd_table);
+bool course_syscall_attach_process_table(
+    course_syscall_t* syscalls,
+    struct CourseProcessTable* process_table);
 bool course_syscall_stdout_equals(const course_syscall_t* syscalls,
                                   const char* expected);
 bool course_syscall_stderr_equals(const course_syscall_t* syscalls,

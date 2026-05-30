@@ -108,7 +108,7 @@ SPIKE_PATH=/path/to/spike make test-host-spike_differential
 
 ## kernel_alpha 口径
 
-`kernel_alpha` 当前是《操作系统课程设计》A 方案主线入口，不再以旧 Phase 1 `KMVPETDS` 正向输出作为当前能力承诺。当前正向 smoke 在基础 `K/M/V/P/E/T` bring-up 之后输出课程 OS Stage 1 和 Stage 2 summary；旧 `KMVPETDS` 仅作为历史 guardrail 记录，storage readiness / signature 合同由负向 demo 和 `kernel_alpha_*` 单元门禁继续覆盖。实时状态见 [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)。
+`kernel_alpha` 当前是《操作系统课程设计》A 方案主线入口，不再以旧 Phase 1 `KMVPETDS` 正向输出作为当前能力承诺。当前正向 smoke 在基础 `K/M/V/P/E/T` bring-up 之后输出课程 OS Stage 1 / Stage 2 / Stage 3 summary；旧 `KMVPETDS` 仅作为历史 guardrail 记录，storage readiness / signature 合同由负向 demo 和 `kernel_alpha_*` 单元门禁继续覆盖。实时状态见 [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)。
 
 ## 仓库结构
 

@@ -1,5 +1,6 @@
 #include "course_shell.h"
 
+#include "course_libc.h"
 #include "course_user_programs.h"
 
 static size_t str_len(const char* value) {
@@ -235,6 +236,7 @@ void course_shell_init(course_shell_t* shell) {
     procfs_init(&shell->procfs, &shell->scheduler, &shell->memory, &shell->fs);
     procfs_attach_processes(&shell->procfs, &shell->processes);
     course_fd_table_init(&shell->fds, &shell->fs, &shell->procfs);
+    procfs_attach_fd_table(&shell->procfs, shell->shell_pid, &shell->fds);
     (void)course_fd_set_cwd(&shell->fds, "/");
     shell->transcript[0] = '\0';
     shell->transcript_size = 0;
@@ -258,13 +260,275 @@ static bool read_all_fd(course_fd_table_t* fds,
     return true;
 }
 
+static bool line_ignored(const char* line, bool first_line) {
+    const char* p = line;
+
+    if (p == 0) {
+        return true;
+    }
+    while (*p == ' ') {
+        p += 1;
+    }
+    if (*p == '\0') {
+        return true;
+    }
+    if (first_line && p[0] == '#' && p[1] == '!') {
+        return true;
+    }
+    return *p == '#';
+}
+
+static bool run_script(course_shell_t* shell,
+                       const char* path,
+                       char* out,
+                       size_t out_size) {
+    char script[1024];
+    char line[160];
+    char line_out[512];
+    size_t used = 0;
+    size_t pos = 0;
+    uint32_t line_no = 1U;
+    int fd = 0;
+    bool ok = false;
+
+    if (shell == 0 || path == 0 || out == 0 || out_size == 0) {
+        return false;
+    }
+    out[0] = '\0';
+    fd = course_fd_open(&shell->fds, path, COURSE_FD_OPEN_READ);
+    if (fd < 0) {
+        return false;
+    }
+    ok = read_all_fd(&shell->fds, fd, script, sizeof(script));
+    (void)course_fd_close(&shell->fds, fd);
+    if (!ok) {
+        return false;
+    }
+
+    while (script[pos] != '\0') {
+        size_t len = 0;
+        size_t i = 0;
+
+        while (script[pos + len] != '\0' && script[pos + len] != '\n') {
+            len += 1U;
+        }
+        while (len > 0U && script[pos + len - 1U] == '\r') {
+            len -= 1U;
+        }
+        if (len >= sizeof(line)) {
+            len = sizeof(line) - 1U;
+        }
+        for (i = 0; i < len; ++i) {
+            line[i] = script[pos + i];
+        }
+        line[len] = '\0';
+
+        if (!line_ignored(line, line_no == 1U)) {
+            if (!course_shell_run_line(shell, line, line_out, sizeof(line_out))) {
+                (void)append_str(out, out_size, &used, line_out);
+                (void)append_str(out, out_size, &used, "line=");
+                (void)append_u32(out, out_size, &used, line_no);
+                (void)append_str(out, out_size, &used, " command=");
+                (void)append_str(out, out_size, &used, line);
+                (void)append_char(out, out_size, &used, '\n');
+                return false;
+            }
+            if (!append_str(out, out_size, &used, line_out)) {
+                return false;
+            }
+        }
+
+        if (script[pos + len] == '\0') {
+            break;
+        }
+        pos += len + 1U;
+        line_no += 1U;
+    }
+
+    return true;
+}
+
+static bool copy_cstr_to_user(char* out, size_t out_size, const char* value) {
+    if (out == 0 || out_size == 0 || value == 0) {
+        return false;
+    }
+    copy_token(out, out_size, value, str_len(value));
+    return true;
+}
+
+static bool run_program_libc_effect(course_shell_t* shell,
+                                    const course_shell_simple_command_t* command,
+                                    const course_user_program_t* program,
+                                    uint32_t pid,
+                                    char* stdout_buffer,
+                                    size_t stdout_size) {
+    char user_memory[512];
+    char* path = &user_memory[0];
+    char* data = &user_memory[128];
+    char* read_buffer = &user_memory[256];
+    course_syscall_t syscalls;
+    course_libc_t libc;
+    size_t i = 0;
+
+    if (shell == 0 || command == 0 || program == 0 ||
+        stdout_buffer == 0 || stdout_size == 0) {
+        return false;
+    }
+    for (i = 0; i < sizeof(user_memory); ++i) {
+        user_memory[i] = '\0';
+    }
+    stdout_buffer[0] = '\0';
+    course_syscall_init(&syscalls,
+                        pid,
+                        (uintptr_t)user_memory,
+                        sizeof(user_memory));
+    if (!course_syscall_attach_fd_table(&syscalls, &shell->fds) ||
+        !course_syscall_attach_process_table(&syscalls, &shell->processes)) {
+        return false;
+    }
+    course_libc_init(&libc, &syscalls);
+
+    if (program->kind == COURSE_USER_PROGRAM_HELLO) {
+        if (!copy_cstr_to_user(data, 128U, "hello from libc\n") ||
+            course_libc_write(&libc, 1, data, str_len(data)) < 0) {
+            return false;
+        }
+    } else if (program->kind == COURSE_USER_PROGRAM_ECHO) {
+        if (!copy_cstr_to_user(data,
+                               128U,
+                               command->argc > 1U ? command->argv[1] : "") ||
+            course_libc_write(&libc, 1, data, str_len(data)) < 0) {
+            return false;
+        }
+    } else if (program->kind == COURSE_USER_PROGRAM_CAT) {
+        int fd = 0;
+        int64_t read_size = 0;
+
+        if (command->argc < 2U ||
+            !copy_cstr_to_user(path, 128U, command->argv[1])) {
+            return false;
+        }
+        fd = (int)course_libc_open(&libc, path, COURSE_FD_OPEN_READ);
+        if (fd < 0) {
+            return false;
+        }
+        read_size = course_libc_read(&libc, fd, read_buffer, 127U);
+        if (read_size < 0 ||
+            course_libc_write(&libc,
+                              1,
+                              read_buffer,
+                              (size_t)read_size) != read_size ||
+            course_libc_close(&libc, fd) != 0) {
+            return false;
+        }
+    }
+
+    copy_token(stdout_buffer,
+               stdout_size,
+               syscalls.stdout_buffer,
+               str_len(syscalls.stdout_buffer));
+    return true;
+}
+
+static bool run_program_command(course_shell_t* shell,
+                                const course_shell_simple_command_t* command,
+                                char* out,
+                                size_t out_size) {
+    size_t used = 0;
+    course_user_program_t program;
+    course_process_t* child = 0;
+    int32_t status = 0;
+    char program_stdout[COURSE_SYSCALL_IO_BUFFER_SIZE];
+
+    if (shell == 0 || command == 0 || command->argc == 0 || out == 0 ||
+        out_size == 0 ||
+        !course_user_program_lookup(command->argv[0], &program)) {
+        return false;
+    }
+
+    out[0] = '\0';
+    child = course_process_fork(&shell->processes, shell->shell_pid, program.name);
+    if (child == 0 ||
+        course_process_exec(&shell->processes,
+                            child->pid,
+                            program.name,
+                            command->argc > 1U ? command->argv[1] : "") !=
+            COURSE_PROCESS_OK) {
+        return false;
+    }
+    if (!run_program_libc_effect(shell,
+                                 command,
+                                 &program,
+                                 child->pid,
+                                 program_stdout,
+                                 sizeof(program_stdout))) {
+        return false;
+    }
+    if (program.kind == COURSE_USER_PROGRAM_FORKTEST) {
+        if (!child->user_pages[0].mapped &&
+            !course_process_map_user_page(&shell->processes,
+                                          child->pid,
+                                          0U,
+                                          (uint8_t)'F')) {
+            return false;
+        }
+    }
+    if (program.kind == COURSE_USER_PROGRAM_CRASH) {
+        if (!course_process_record_crash(&shell->processes,
+                                         child->pid,
+                                         program.entry_pc,
+                                         13U,
+                                         0xDEADU,
+                                         "user-crash")) {
+            return false;
+        }
+    } else if (!course_process_exit(&shell->processes, child->pid, 0)) {
+        return false;
+    }
+    if (course_process_waitpid(&shell->processes,
+                               shell->shell_pid,
+                               child->pid,
+                               &status) != COURSE_PROCESS_OK) {
+        return false;
+    }
+    if (program.kind == COURSE_USER_PROGRAM_CRASH) {
+        return append_str(out, out_size, &used, "program=") &&
+               append_str(out, out_size, &used, program.name) &&
+               append_str(out, out_size, &used, " exit=-128 crash=isolated\n");
+    }
+    if (program.kind == COURSE_USER_PROGRAM_FORKTEST) {
+        course_process_cow_stats_t stats;
+
+        if (!course_process_cow_stats(&shell->processes, &stats)) {
+            return false;
+        }
+        return append_str(out, out_size, &used, "program=") &&
+               append_str(out, out_size, &used, program.name) &&
+               append_str(out, out_size, &used, " exit=") &&
+               append_u32(out, out_size, &used, (uint32_t)status) &&
+               (program_stdout[0] == '\0' ||
+                (append_str(out, out_size, &used, " stdout=") &&
+                 append_str(out, out_size, &used, program_stdout))) &&
+               append_str(out, out_size, &used, " cow_shared=") &&
+               append_u32(out, out_size, &used, stats.shared_pages) &&
+               append_char(out, out_size, &used, '\n');
+    }
+    return append_str(out, out_size, &used, "program=") &&
+           append_str(out, out_size, &used, program.name) &&
+           append_str(out, out_size, &used, " exit=") &&
+           append_u32(out, out_size, &used, (uint32_t)status) &&
+           (program_stdout[0] == '\0' ||
+            (append_str(out, out_size, &used, " stdout=") &&
+             append_str(out, out_size, &used, program_stdout))) &&
+           append_char(out, out_size, &used, '\n');
+}
+
 static bool run_simple(course_shell_t* shell,
                        const course_shell_simple_command_t* command,
                        const char* stdin_text,
                        char* out,
                        size_t out_size) {
     size_t used = 0;
-    course_user_program_t program;
 
     if (shell == 0 || command == 0 || command->argc == 0 || out == 0 ||
         out_size == 0) {
@@ -315,6 +579,12 @@ static bool run_simple(course_shell_t* shell,
         }
         return append_str(out, out_size, &used, stdin_text);
     }
+    if (str_eq(command->argv[0], "sh")) {
+        if (command->argc < 2U) {
+            return false;
+        }
+        return run_script(shell, command->argv[1], out, out_size);
+    }
     if (str_eq(command->argv[0], "ps")) {
         int fd = course_fd_open(&shell->fds, "/proc/ps", COURSE_FD_OPEN_READ);
         bool ok = false;
@@ -346,73 +616,24 @@ static bool run_simple(course_shell_t* shell,
     if (str_eq(command->argv[0], "exit")) {
         return append_str(out, out_size, &used, "exit\n");
     }
+    if (str_eq(command->argv[0], "exec")) {
+        course_shell_simple_command_t exec_command;
+        size_t i = 0;
 
-    if (!course_user_program_lookup(command->argv[0], &program)) {
-        return false;
+        if (command->argc < 2U) {
+            return false;
+        }
+        exec_command.argc = command->argc - 1U;
+        for (i = 0; i < exec_command.argc; ++i) {
+            copy_token(exec_command.argv[i],
+                       sizeof(exec_command.argv[i]),
+                       command->argv[i + 1U],
+                       str_len(command->argv[i + 1U]));
+        }
+        return run_program_command(shell, &exec_command, out, out_size);
     }
-    {
-        course_process_t* child =
-            course_process_fork(&shell->processes, shell->shell_pid, program.name);
-        int32_t status = 0;
 
-        if (child == 0 ||
-            course_process_exec(&shell->processes,
-                                child->pid,
-                                program.name,
-                                command->argc > 1U ? command->argv[1] : "") !=
-                COURSE_PROCESS_OK) {
-            return false;
-        }
-        if (program.kind == COURSE_USER_PROGRAM_FORKTEST &&
-            !course_process_map_user_page(&shell->processes,
-                                          child->pid,
-                                          0U,
-                                          (uint8_t)'F')) {
-            return false;
-        }
-        if (program.kind == COURSE_USER_PROGRAM_CRASH) {
-            if (!course_process_record_crash(&shell->processes,
-                                             child->pid,
-                                             program.entry_pc,
-                                             13U,
-                                             0xDEADU,
-                                             "user-crash")) {
-                return false;
-            }
-        } else if (!course_process_exit(&shell->processes, child->pid, 0)) {
-            return false;
-        }
-        if (course_process_waitpid(&shell->processes,
-                                   shell->shell_pid,
-                                   child->pid,
-                                   &status) != COURSE_PROCESS_OK) {
-            return false;
-        }
-        if (program.kind == COURSE_USER_PROGRAM_CRASH) {
-            return append_str(out, out_size, &used, "program=") &&
-                   append_str(out, out_size, &used, program.name) &&
-                   append_str(out, out_size, &used, " exit=-128 crash=isolated\n");
-        }
-        if (program.kind == COURSE_USER_PROGRAM_FORKTEST) {
-            course_process_cow_stats_t stats;
-
-            if (!course_process_cow_stats(&shell->processes, &stats)) {
-                return false;
-            }
-            return append_str(out, out_size, &used, "program=") &&
-                   append_str(out, out_size, &used, program.name) &&
-                   append_str(out, out_size, &used, " exit=") &&
-                   append_u32(out, out_size, &used, (uint32_t)status) &&
-                   append_str(out, out_size, &used, " cow_shared=") &&
-                   append_u32(out, out_size, &used, stats.shared_pages) &&
-                   append_char(out, out_size, &used, '\n');
-        }
-        return append_str(out, out_size, &used, "program=") &&
-               append_str(out, out_size, &used, program.name) &&
-               append_str(out, out_size, &used, " exit=") &&
-               append_u32(out, out_size, &used, (uint32_t)status) &&
-               append_char(out, out_size, &used, '\n');
-    }
+    return run_program_command(shell, command, out, out_size);
 }
 
 bool course_shell_run_line(course_shell_t* shell,

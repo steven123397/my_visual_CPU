@@ -851,3 +851,13 @@
 - 完成内容：补齐 `user_program_smoke` 的 `active-memory / interrupt round` 更窄直测，并把 C++ `debug_session.cpp`、`interactive_terminal_smoke.cpp` 的预算常量收口到共享命名入口。
 - 实现过程摘要：继续在主集成线以“先窄门禁、后总验证”的方式推进；guest 侧只扩 host stub 与直测，不改 `user_program_smoke` public surface，C++ 侧新增 `debug_budget.h` 统一 `step_commit` 与 interactive boot/command budget，然后重新跑 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd frontend && node --test`。
 - 结果参考：[mainline_status.md](../status/mainline_status.md)
+
+### 2026-05-30
+
+#### course-os-kernel-alpha-stage3-plan
+
+- 原文件：`course_os_kernel_alpha_stage3_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 3，补齐教学级 ELF / libc / 真实用户程序、FCFS / RR / CFS-lite 指标化、semaphore / mutex、Sv39 fault-driven COW 证据链、FS `mkfs` / `seek` / `unlink` / `rmdir`、shell 脚本模式，以及 `/proc/cpuinfo`、`/proc/uptime`、`/proc/<pid>/status`、`/proc/<pid>/fd`、`/proc/<pid>/maps`。
+- 实现过程摘要：按 ELF/libc、调度/同步、VM/COW、FS/shell、procfs 和总编排六条窄切片 TDD 推进；新增 `course_os_stage3` 总编排层，并把 Stage 3 marker 串入 functional / pipeline `kernel_alpha_demo`。
+- 验证摘要：新增 `test-unit-course_os_stage3_elf`、`test-unit-course_os_stage3_sched_sync`、`test-unit-course_os_stage3_vm`、`test-unit-course_os_stage3_fs_shell`、`test-unit-course_os_stage3_proc`、`test-unit-course_os_stage3`，并由 `test-guest-kernel_alpha_demo` / `test-pipeline-guest-kernel_alpha_demo` 验证完整 marker。
+- 结果参考：[course_os_kernel_alpha_stage3_design.md](../design/course_os_kernel_alpha_stage3_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)

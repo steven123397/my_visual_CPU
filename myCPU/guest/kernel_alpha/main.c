@@ -3,6 +3,7 @@
 #include "console.h"
 #include "course_os_stage1.h"
 #include "course_os_stage2.h"
+#include "course_os_stage3.h"
 #include "kernel_alpha.h"
 #include "panic.h"
 #include "platform.h"
@@ -11,8 +12,10 @@ void kernel_main(void) {
     kernel_runtime_t runtime;
     static course_os_stage1_t stage1;
     static course_os_stage2_t stage2;
+    static course_os_stage3_t stage3;
     char stage1_summary[192];
     char stage2_summary[192];
+    char stage3_summary[192];
 
     kernel_runtime_init(&runtime);
     if (!kernel_runtime_bind_self_interrupt_handlers(
@@ -54,9 +57,19 @@ void kernel_main(void) {
         panic_shutdown();
     }
 
+    course_os_stage3_init(&stage3);
+    if (!course_os_stage3_run(&stage3) ||
+        !course_os_stage3_summary(&stage3,
+                                  stage3_summary,
+                                  sizeof(stage3_summary))) {
+        panic_shutdown();
+    }
+
     console_putc('|');
     console_puts(stage1_summary);
     console_putc('|');
     console_puts(stage2_summary);
+    console_putc('|');
+    console_puts(stage3_summary);
     platform_shutdown(0);
 }

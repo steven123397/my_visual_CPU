@@ -267,6 +267,9 @@ int course_fd_seek(course_fd_table_t* table, int fd, size_t offset) {
     if (entry == 0) {
         return COURSE_FD_ERR_BAD_FD;
     }
+    if (entry->kind != COURSE_FD_KIND_FILE) {
+        return COURSE_FD_ERR_PERMISSION_DENIED;
+    }
     entry->offset = offset;
     if (table->fs != 0) {
         course_fs_record_seek(table->fs);

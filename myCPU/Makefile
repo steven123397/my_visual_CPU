@@ -18,7 +18,7 @@ ATOMIC_ASM_TESTS = atomic_basic atomic_ordering_smoke
 ATOMIC_ASM_ELFS = $(ATOMIC_ASM_TESTS:%=tests/asm/%.elf)
 ATOMIC_ASM_DEPS = $(ATOMIC_ASM_ELFS:.elf=.d)
 FLAT_BIN_TESTS = hello
-UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract simple_l1_cache ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands course_os_stage1 course_os_stage2_syscall course_os_stage2_process course_os_stage2_fd_fs course_os_stage2_shell course_os_stage2_cow_crash course_os_stage2 kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
+UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract simple_l1_cache ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands course_os_stage1 course_os_stage2_syscall course_os_stage2_process course_os_stage2_fd_fs course_os_stage2_shell course_os_stage2_cow_crash course_os_stage2 course_os_stage3_elf course_os_stage3_sched_sync course_os_stage3_vm course_os_stage3_fs_shell course_os_stage3_proc course_os_stage3 kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
 AI_ACCEL_QUEUE_UNIT_OBJS = tests/unit/ai_accel_queue_test.o tests/unit/ai_accel_queue_guest.o
 AI_ACCEL_QUEUE_UNIT_DEPS = $(AI_ACCEL_QUEUE_UNIT_OBJS:.o=.d)
@@ -52,20 +52,32 @@ SUPERVISOR_DEMO_SMOKE_UNIT_OBJS = tests/unit/supervisor_demo_smoke_test.o tests/
 SUPERVISOR_DEMO_SMOKE_UNIT_DEPS = $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS:.o=.d)
 MONITOR_COMMANDS_UNIT_OBJS = tests/unit/monitor_commands_test.o tests/unit/monitor_commands_guest.o tests/unit/vm_debug_guest.o
 MONITOR_COMMANDS_UNIT_DEPS = $(MONITOR_COMMANDS_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE1_UNIT_OBJS = tests/unit/course_os_stage1_test.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE1_UNIT_OBJS = tests/unit/course_os_stage1_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE1_UNIT_DEPS = $(COURSE_OS_STAGE1_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_SYSCALL_UNIT_OBJS = tests/unit/course_os_stage2_syscall_test.o tests/unit/course_syscall_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_SYSCALL_UNIT_OBJS = tests/unit/course_os_stage2_syscall_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_syscall_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_SYSCALL_UNIT_DEPS = $(COURSE_OS_STAGE2_SYSCALL_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_PROCESS_UNIT_OBJS = tests/unit/course_os_stage2_process_test.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/course_syscall_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_PROCESS_UNIT_OBJS = tests/unit/course_os_stage2_process_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/course_syscall_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_PROCESS_UNIT_DEPS = $(COURSE_OS_STAGE2_PROCESS_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_FD_FS_UNIT_OBJS = tests/unit/course_os_stage2_fd_fs_test.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_FD_FS_UNIT_OBJS = tests/unit/course_os_stage2_fd_fs_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_FD_FS_UNIT_DEPS = $(COURSE_OS_STAGE2_FD_FS_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_SHELL_UNIT_OBJS = tests/unit/course_os_stage2_shell_test.o tests/unit/course_shell_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_SHELL_UNIT_OBJS = tests/unit/course_os_stage2_shell_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_SHELL_UNIT_DEPS = $(COURSE_OS_STAGE2_SHELL_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_COW_CRASH_UNIT_OBJS = tests/unit/course_os_stage2_cow_crash_test.o tests/unit/course_shell_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_COW_CRASH_UNIT_OBJS = tests/unit/course_os_stage2_cow_crash_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_COW_CRASH_UNIT_DEPS = $(COURSE_OS_STAGE2_COW_CRASH_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_UNIT_OBJS = tests/unit/course_os_stage2_test.o tests/unit/course_os_stage2_guest.o tests/unit/course_shell_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_UNIT_OBJS = tests/unit/course_os_stage2_test.o tests/unit/course_os_stage2_guest.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_UNIT_DEPS = $(COURSE_OS_STAGE2_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE3_ELF_UNIT_OBJS = tests/unit/course_os_stage3_elf_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE3_ELF_UNIT_DEPS = $(COURSE_OS_STAGE3_ELF_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE3_SCHED_SYNC_UNIT_OBJS = tests/unit/course_os_stage3_sched_sync_test.o tests/unit/course_sync_guest.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE3_SCHED_SYNC_UNIT_DEPS = $(COURSE_OS_STAGE3_SCHED_SYNC_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE3_VM_UNIT_OBJS = tests/unit/course_os_stage3_vm_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE3_VM_UNIT_DEPS = $(COURSE_OS_STAGE3_VM_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE3_FS_SHELL_UNIT_OBJS = tests/unit/course_os_stage3_fs_shell_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE3_FS_SHELL_UNIT_DEPS = $(COURSE_OS_STAGE3_FS_SHELL_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE3_PROC_UNIT_OBJS = tests/unit/course_os_stage3_proc_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE3_PROC_UNIT_DEPS = $(COURSE_OS_STAGE3_PROC_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE3_UNIT_OBJS = tests/unit/course_os_stage3_test.o tests/unit/course_os_stage3_guest.o tests/unit/course_sync_guest.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE3_UNIT_DEPS = $(COURSE_OS_STAGE3_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_COMMON_UNIT_OBJS = tests/unit/kernel_alpha_common_test.o tests/unit/kernel_alpha_common_guest.o
 KERNEL_ALPHA_COMMON_UNIT_DEPS = $(KERNEL_ALPHA_COMMON_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_STORAGE_UNIT_OBJS = tests/unit/kernel_alpha_storage_test.o tests/unit/kernel_alpha_storage_guest.o
@@ -106,7 +118,7 @@ LINUX_PROTO_GENERATED_DISK_DIR = workloads/linux_proto/rootfs_disk_staging
 LINUX_PROTO_GENERATED_DISK_BLOCKS ?= 8192
 LINUX_DISTRO_REJECT_REPO_ROOTFS = MYCPU_CHECK_ROOTFS="$$rootfs" python3 -c 'import os,sys; p=os.environ["MYCPU_CHECK_ROOTFS"]; base=os.path.realpath("$(LINUX_PROTO_GENERATED_DISK)"); cand=os.path.realpath(p if os.path.isabs(p) else os.path.join(os.getcwd(), p)); sys.exit(1 if cand == base else 0)'
 REQUIRE_EXTERNAL_LINUX_ROOTFS = rootfs="$(1)"; if [ -z "$$rootfs" ]; then echo "$(2)" >&2; exit 1; fi; $(LINUX_DISTRO_REJECT_REPO_ROOTFS) || { echo "$(2)" >&2; exit 1; }
-GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/ai_accel.c guest/kernel/console.c guest/kernel/course_fd.c guest/kernel/course_fs.c guest/kernel/course_memory.c guest/kernel/course_os_stage1.c guest/kernel/course_os_stage2.c guest/kernel/course_process.c guest/kernel/course_scheduler.c guest/kernel/course_shell.c guest/kernel/course_syscall.c guest/kernel/course_user_programs.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/procfs.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
+GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/ai_accel.c guest/kernel/console.c guest/kernel/course_elf_loader.c guest/kernel/course_fd.c guest/kernel/course_fs.c guest/kernel/course_libc.c guest/kernel/course_memory.c guest/kernel/course_os_stage1.c guest/kernel/course_os_stage2.c guest/kernel/course_os_stage3.c guest/kernel/course_process.c guest/kernel/course_scheduler.c guest/kernel/course_shell.c guest/kernel/course_sync.c guest/kernel/course_syscall.c guest/kernel/course_user_programs.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/procfs.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
 GUEST_KERNEL_ALPHA_COMMON_SRCS = guest/kernel_alpha/common.c guest/kernel_alpha/interrupt_contract.c guest/kernel_alpha/storage_contract.c
@@ -186,6 +198,12 @@ DEPS     += $(COURSE_OS_STAGE2_FD_FS_UNIT_DEPS)
 DEPS     += $(COURSE_OS_STAGE2_SHELL_UNIT_DEPS)
 DEPS     += $(COURSE_OS_STAGE2_COW_CRASH_UNIT_DEPS)
 DEPS     += $(COURSE_OS_STAGE2_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE3_ELF_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE3_SCHED_SYNC_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE3_VM_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE3_FS_SHELL_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE3_PROC_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE3_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_COMMON_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_STORAGE_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS)
@@ -196,6 +214,7 @@ TEST_TIMEOUT ?= 3s
 AI_ACCEL_PROFILE_SMOKE_TIMEOUT ?= 10s
 XV6_SHELL_SMOKE_TIMEOUT ?= 300s
 SUPERVISOR_GUEST_TEST_TIMEOUT ?= 7s
+KERNEL_ALPHA_GUEST_TEST_TIMEOUT ?= 7s
 DEBUG_CLI_SMOKE_TIMEOUT ?= 12s
 AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 10s
 # Pipeline guest demos execute the full guest runtime under the pipeline
@@ -987,10 +1006,10 @@ test-pipeline-guest-supervisor_demo: FORCE $(TARGET) $(GUEST_SUPERVISOR_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_supervisor_demo,$(GUEST_SUPERVISOR_DEMO),KRN,$(PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog|course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid,$(KERNEL_ALPHA_GUEST_TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog|course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_fault_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_FAULT_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(TEST_TIMEOUT),,,)
@@ -1068,7 +1087,7 @@ check-dtc-tool:
 
 clean:
 	@if [ -d $(XV6_EXTERNAL_DIR) ]; then $(WORKLOAD_CLEAN_COMMAND) >/dev/null; fi
-	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin tests/asm/*.d $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(INDEPENDENT_HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_BRINGUP_UNIT_OBJS) $(KERNEL_BRINGUP_UNIT_DEPS) $(VM_ADDRESS_SPACE_UNIT_OBJS) $(VM_ADDRESS_SPACE_UNIT_DEPS) $(VM_PROCESS_UNIT_OBJS) $(VM_PROCESS_UNIT_DEPS) $(VM_OBJECT_UNIT_OBJS) $(VM_OBJECT_UNIT_DEPS) $(VM_FAULT_UNIT_OBJS) $(VM_FAULT_UNIT_DEPS) $(TRAP_RUNTIME_UNIT_OBJS) $(TRAP_RUNTIME_UNIT_DEPS) $(TRAP_DISPATCH_UNIT_OBJS) $(TRAP_DISPATCH_UNIT_DEPS) $(USER_TASK_UNIT_OBJS) $(USER_TASK_UNIT_DEPS) $(USER_TASK_BOOTSTRAP_UNIT_OBJS) $(USER_TASK_BOOTSTRAP_UNIT_DEPS) $(USER_PROGRAM_UNIT_OBJS) $(USER_PROGRAM_UNIT_DEPS) $(USER_PROGRAM_SMOKE_UNIT_OBJS) $(USER_PROGRAM_SMOKE_UNIT_DEPS) $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS) $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS) $(MONITOR_COMMANDS_UNIT_OBJS) $(MONITOR_COMMANDS_UNIT_DEPS) $(COURSE_OS_STAGE1_UNIT_OBJS) $(COURSE_OS_STAGE1_UNIT_DEPS) $(COURSE_OS_STAGE2_SYSCALL_UNIT_OBJS) $(COURSE_OS_STAGE2_SYSCALL_UNIT_DEPS) $(COURSE_OS_STAGE2_PROCESS_UNIT_OBJS) $(COURSE_OS_STAGE2_PROCESS_UNIT_DEPS) $(COURSE_OS_STAGE2_FD_FS_UNIT_OBJS) $(COURSE_OS_STAGE2_FD_FS_UNIT_DEPS) $(COURSE_OS_STAGE2_SHELL_UNIT_OBJS) $(COURSE_OS_STAGE2_SHELL_UNIT_DEPS) $(COURSE_OS_STAGE2_COW_CRASH_UNIT_OBJS) $(COURSE_OS_STAGE2_COW_CRASH_UNIT_DEPS) $(COURSE_OS_STAGE2_UNIT_OBJS) $(COURSE_OS_STAGE2_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_AI_ACCEL_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(LINUX_PROTO_SBI_SHIM_ELF) $(LINUX_PROTO_SBI_SHIM_BIN) $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_MININIT_DEP) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_DEP) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_EXEC_DEP) $(LINUX_PROTO_GENERATED_INITRD) $(LINUX_PROTO_GENERATED_DISK) $(LINUX_PROTO_GENERATED_DTS) $(LINUX_PROTO_GENERATED_DTB)
+	rm -f $(TARGET) tests/asm/*.elf tests/asm/*.bin tests/asm/*.d $(UNIT_TEST_BINS) $(HOST_TEST_BINS) $(INDEPENDENT_HOST_TEST_BINS) $(SUPERVISOR_RUNTIME_UNIT_OBJS) $(SUPERVISOR_RUNTIME_UNIT_DEPS) $(KERNEL_RUNTIME_UNIT_OBJS) $(KERNEL_RUNTIME_UNIT_DEPS) $(KERNEL_BRINGUP_UNIT_OBJS) $(KERNEL_BRINGUP_UNIT_DEPS) $(VM_ADDRESS_SPACE_UNIT_OBJS) $(VM_ADDRESS_SPACE_UNIT_DEPS) $(VM_PROCESS_UNIT_OBJS) $(VM_PROCESS_UNIT_DEPS) $(VM_OBJECT_UNIT_OBJS) $(VM_OBJECT_UNIT_DEPS) $(VM_FAULT_UNIT_OBJS) $(VM_FAULT_UNIT_DEPS) $(TRAP_RUNTIME_UNIT_OBJS) $(TRAP_RUNTIME_UNIT_DEPS) $(TRAP_DISPATCH_UNIT_OBJS) $(TRAP_DISPATCH_UNIT_DEPS) $(USER_TASK_UNIT_OBJS) $(USER_TASK_UNIT_DEPS) $(USER_TASK_BOOTSTRAP_UNIT_OBJS) $(USER_TASK_BOOTSTRAP_UNIT_DEPS) $(USER_PROGRAM_UNIT_OBJS) $(USER_PROGRAM_UNIT_DEPS) $(USER_PROGRAM_SMOKE_UNIT_OBJS) $(USER_PROGRAM_SMOKE_UNIT_DEPS) $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS) $(SUPERVISOR_DEMO_SMOKE_UNIT_DEPS) $(MONITOR_COMMANDS_UNIT_OBJS) $(MONITOR_COMMANDS_UNIT_DEPS) $(COURSE_OS_STAGE1_UNIT_OBJS) $(COURSE_OS_STAGE1_UNIT_DEPS) $(COURSE_OS_STAGE2_SYSCALL_UNIT_OBJS) $(COURSE_OS_STAGE2_SYSCALL_UNIT_DEPS) $(COURSE_OS_STAGE2_PROCESS_UNIT_OBJS) $(COURSE_OS_STAGE2_PROCESS_UNIT_DEPS) $(COURSE_OS_STAGE2_FD_FS_UNIT_OBJS) $(COURSE_OS_STAGE2_FD_FS_UNIT_DEPS) $(COURSE_OS_STAGE2_SHELL_UNIT_OBJS) $(COURSE_OS_STAGE2_SHELL_UNIT_DEPS) $(COURSE_OS_STAGE2_COW_CRASH_UNIT_OBJS) $(COURSE_OS_STAGE2_COW_CRASH_UNIT_DEPS) $(COURSE_OS_STAGE2_UNIT_OBJS) $(COURSE_OS_STAGE2_UNIT_DEPS) $(COURSE_OS_STAGE3_ELF_UNIT_OBJS) $(COURSE_OS_STAGE3_ELF_UNIT_DEPS) $(COURSE_OS_STAGE3_SCHED_SYNC_UNIT_OBJS) $(COURSE_OS_STAGE3_SCHED_SYNC_UNIT_DEPS) $(COURSE_OS_STAGE3_VM_UNIT_OBJS) $(COURSE_OS_STAGE3_VM_UNIT_DEPS) $(COURSE_OS_STAGE3_FS_SHELL_UNIT_OBJS) $(COURSE_OS_STAGE3_FS_SHELL_UNIT_DEPS) $(COURSE_OS_STAGE3_PROC_UNIT_OBJS) $(COURSE_OS_STAGE3_PROC_UNIT_DEPS) $(COURSE_OS_STAGE3_UNIT_OBJS) $(COURSE_OS_STAGE3_UNIT_DEPS) $(KERNEL_ALPHA_COMMON_UNIT_OBJS) $(KERNEL_ALPHA_COMMON_UNIT_DEPS) $(KERNEL_ALPHA_STORAGE_UNIT_OBJS) $(KERNEL_ALPHA_STORAGE_UNIT_DEPS) $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS) $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS) $(GUEST_SUPERVISOR_DEMO) $(GUEST_KERNEL_ALPHA_DEMO) $(GUEST_KERNEL_ALPHA_FAULT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_AI_ACCEL_DEMO) $(GUEST_VECTOR_DEMO) $(GUEST_VECTOR_CNN_DEMO) $(LINUX_PROTO_SBI_SHIM_ELF) $(LINUX_PROTO_SBI_SHIM_BIN) $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_MININIT_ELF) $(LINUX_PROTO_MININIT_DEP) $(LINUX_PROTO_POSTINIT_ELF) $(LINUX_PROTO_POSTINIT_DEP) $(LINUX_PROTO_POSTINIT_EXEC_ELF) $(LINUX_PROTO_POSTINIT_EXEC_DEP) $(LINUX_PROTO_GENERATED_INITRD) $(LINUX_PROTO_GENERATED_DISK) $(LINUX_PROTO_GENERATED_DTS) $(LINUX_PROTO_GENERATED_DTB)
 	rm -rf $(LINUX_PROTO_GENERATED_INITRD_DIR) $(LINUX_PROTO_GENERATED_DISK_DIR)
 	find src guest -type f \( -name '*.o' -o -name '*.d' \) -delete
 
@@ -1290,6 +1309,54 @@ tests/unit/course_os_stage2_guest.o: guest/kernel/course_os_stage2.c
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
 
 tests/unit/course_os_stage2: $(COURSE_OS_STAGE2_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_stage3_elf_test.o: tests/unit/course_os_stage3_elf.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_elf_loader_guest.o: guest/kernel/course_elf_loader.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_libc_guest.o: guest/kernel/course_libc.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage3_elf: $(COURSE_OS_STAGE3_ELF_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_stage3_sched_sync_test.o: tests/unit/course_os_stage3_sched_sync.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_sync_guest.o: guest/kernel/course_sync.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage3_sched_sync: $(COURSE_OS_STAGE3_SCHED_SYNC_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_stage3_vm_test.o: tests/unit/course_os_stage3_vm.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage3_vm: $(COURSE_OS_STAGE3_VM_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_stage3_fs_shell_test.o: tests/unit/course_os_stage3_fs_shell.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage3_fs_shell: $(COURSE_OS_STAGE3_FS_SHELL_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_stage3_proc_test.o: tests/unit/course_os_stage3_proc.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage3_proc: $(COURSE_OS_STAGE3_PROC_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_stage3_test.o: tests/unit/course_os_stage3.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage3_guest.o: guest/kernel/course_os_stage3.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage3: $(COURSE_OS_STAGE3_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/unit/kernel_alpha_common_test.o: tests/unit/kernel_alpha_common.c

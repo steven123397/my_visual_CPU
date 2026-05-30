@@ -205,6 +205,7 @@ static bool run_rr(course_scheduler_t* scheduler, uint32_t time_slice) {
         if (task->remaining_time == 0) {
             task->completion_time = now;
         } else {
+            scheduler->summary.preempt_count += 1U;
             queue[queue_count] = task_index;
             queue_count += 1U;
         }
@@ -263,6 +264,13 @@ static void update_wait_turnaround(course_scheduler_t* scheduler) {
         scheduler->summary.total_wait_time += wait;
         scheduler->summary.total_turnaround_time += turnaround;
     }
+    if (scheduler->task_count != 0U) {
+        scheduler->summary.average_wait_time =
+            scheduler->summary.total_wait_time / (uint32_t)scheduler->task_count;
+        scheduler->summary.average_turnaround_time =
+            scheduler->summary.total_turnaround_time /
+            (uint32_t)scheduler->task_count;
+    }
 }
 
 void course_scheduler_init(course_scheduler_t* scheduler) {
@@ -275,8 +283,13 @@ void course_scheduler_init(course_scheduler_t* scheduler) {
     scheduler->task_count = 0;
     scheduler->summary.policy = COURSE_SCHED_POLICY_FCFS;
     scheduler->summary.context_switches = 0;
+    scheduler->summary.time_slice = 0;
+    scheduler->summary.preempt_count = 0;
     scheduler->summary.total_wait_time = 0;
     scheduler->summary.total_turnaround_time = 0;
+    scheduler->summary.average_wait_time = 0;
+    scheduler->summary.average_turnaround_time = 0;
+    scheduler->summary.last_policy_name = "FCFS";
     for (i = 0; i < COURSE_SCHED_POLICY_COUNT; ++i) {
         scheduler->summary.policy_runs[i] = 0;
     }
@@ -327,8 +340,14 @@ bool course_scheduler_run(course_scheduler_t* scheduler,
     reset_runtime_fields(scheduler);
     scheduler->summary.policy = policy;
     scheduler->summary.context_switches = 0;
+    scheduler->summary.time_slice =
+        policy == COURSE_SCHED_POLICY_FCFS ? 0U : time_slice;
+    scheduler->summary.preempt_count = 0;
     scheduler->summary.total_wait_time = 0;
     scheduler->summary.total_turnaround_time = 0;
+    scheduler->summary.average_wait_time = 0;
+    scheduler->summary.average_turnaround_time = 0;
+    scheduler->summary.last_policy_name = course_scheduler_policy_name(policy);
 
     switch (policy) {
     case COURSE_SCHED_POLICY_FCFS:

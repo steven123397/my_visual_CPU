@@ -9,13 +9,17 @@
 ## 关联文档
 
 - 相关设计：
+  - [../design/course_os_kernel_alpha_stage3_design.md](../design/course_os_kernel_alpha_stage3_design.md)
   - [../design/course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)
   - [../design/course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
+- 当前计划：
+  - 无活跃 Stage 计划；Stage 3 已完成并归档。
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage3-plan](../plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage2-plan](../plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [../plan/history_plan.md#kernel-alpha-storage-error-contract-plan](../plan/history_plan.md#kernel-alpha-storage-error-contract-plan)
@@ -32,10 +36,10 @@
 shell、单级管道、重定向、COW Fork、用户态崩溃隔离，以及 `/proc/syscalls`、`/proc/cow`、
 `/proc/crashlog` 可观测证据。
 
-Stage 2 新增 `course_os_stage2` 总编排层，不把 demo 流程堆在 `kernel_alpha/main.c`；正向
+Stage 2 新增 `course_os_stage2` 总编排层，不把 demo 流程堆在 `kernel_alpha/main.c`；Stage 2 完成时
 `kernel_alpha_demo` 会在 `K/M/V/P/E/T` 基础 bring-up 后依次输出 Stage 1 与 Stage 2 summary。
 
-当前 `guest_kernel_alpha_demo` 正向输出为：
+Stage 2 基线输出曾固定为：
 
 - `KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog`
 
@@ -43,6 +47,20 @@ Stage 2 新增 `course_os_stage2` 总编排层，不把 demo 流程堆在 `kerne
 `course-os-stage1 ...` 固定第一阶段调度、Demand Paging / Clock、文件系统索引和 `/proc` 证据摘要；
 `course-os-stage2 ...` 固定第二阶段 syscall、进程、FD / FS、shell、管道、COW、crash isolation
 和扩展 `/proc` 证据摘要。
+
+第三阶段按 [../design/course_os_kernel_alpha_stage3_design.md](../design/course_os_kernel_alpha_stage3_design.md)
+完成“课程满分基线真实化”：教学级 ELF / libc、真实用户程序、FCFS / RR 指标化、
+semaphore / mutex、Sv39 fault-driven COW 证据链、`mkfs` / `seek` / `unlink` / `rmdir`、
+shell 脚本模式，以及 `/proc/cpuinfo`、`/proc/uptime`、`/proc/<pid>/status`、`/proc/<pid>/fd`、
+`/proc/<pid>/maps`。
+
+当前 `guest_kernel_alpha_demo` 正向输出为 Stage 1 + Stage 2 + Stage 3 串联：
+
+- `KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog|course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid`
+
+Stage 3 稳定 marker 为：
+
+- `course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid`
 
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
@@ -71,6 +89,11 @@ Stage 2 新增 `course_os_stage2` 总编排层，不把 demo 流程堆在 `kerne
 
 ## 关键历史节点
 
+- `2026-05-30`
+  - 课程 OS 第三阶段实现完成，`kernel_alpha_demo` 正向 smoke 扩展为
+    `KMVPET|course-os-stage1 ...|course-os-stage2 ...|course-os-stage3 ...`。
+  - 新增 `course_elf_loader`、`course_libc`、`course_sync` 和 `course_os_stage3` 编排层，补齐 ELF / libc / 真实用户程序、FCFS / RR 指标化、semaphore / mutex、Sv39 COW 证据、FS / shell 脚本和扩展 `/proc`。
+  - 新增 Stage 3 六条单元门禁，并让 functional / pipeline `kernel_alpha_demo` 共同验证 Stage 3 marker。
 - `2026-05-29`
   - 课程 OS 第二阶段实现完成，`kernel_alpha_demo` 正向 smoke 扩展为
     `KMVPET|course-os-stage1 ...|course-os-stage2 ...`，覆盖 syscall、进程生命周期、FD / FS、
@@ -86,17 +109,17 @@ Stage 2 新增 `course_os_stage2` 总编排层，不把 demo 流程堆在 `kerne
 
 ## 当前仍然有效的风险 / 限制
 
-- 课程 OS 第二阶段仍是教学级内核闭环，不声明完整 POSIX shell、完整信号语义、多级管道、真实磁盘一致性、journaling、完整 ELF 动态链接或通用 Linux 用户态兼容。
+- 课程 OS 第三阶段仍是教学级满分基线，不声明完整 POSIX shell、完整信号语义、多级管道、真实磁盘一致性、journaling、完整 ELF 动态链接或通用 Linux 用户态兼容。
 - COW Fork 当前优先覆盖课程级匿名用户页，不扩展到文件系统 snapshot 或完整文件页 COW。
-- AI/NPU、JIT/DBT、Pipeline-aware scheduling、前端 Lab 面板、微内核和安全隔离不进入第二阶段完成范围。
+- AI/NPU、JIT/DBT、Pipeline-aware scheduling、前端 Lab 面板、微内核和安全隔离不进入 Stage 3 完成范围。
 - 旧 9 条负向 guest 回归仍是基础设施 guardrail；当前正向 `kernel_alpha_demo` 已不再检查旧 `D/S` marker。
 - `SimpleStorage` 仍然是单块、同步、无 completion interrupt、无宿主持久化回写的最小模型。
-- `/proc` 第二阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
+- `/proc` 第三阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
 
 ## 下一步
 
-1. 保持 Stage 2 marker、Stage 2 unit targets、functional / pipeline guest demo 和旧 9 条负向 demo 稳定。
-2. 若继续做课程 OS 后续阶段，优先单独设计 AI/NPU、JIT/DBT、Pipeline-aware 调度或前端 Lab 面板，不回头扩大 Stage 2 完成范围。
+1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 3 unit targets、functional / pipeline guest demo 和旧 9 条负向 demo 稳定。
+2. 如继续扩展，优先独立设计 Stage 4+ 创新线，例如全栈可观测 Lab、AI/NPU、JIT/DBT 或 Pipeline-aware 调度；不要回写扩大 Stage 3 完成范围。
 3. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
 ## 验证基线
@@ -127,3 +150,10 @@ Stage 2 新增 `course_os_stage2` 总编排层，不把 demo 流程堆在 `kerne
   - `cd myCPU && make test-unit-course_os_stage2_cow_crash`
   - `cd myCPU && make test-unit-course_os_stage2`
   - `cd myCPU && make test-pipeline-guest-kernel_alpha_demo`
+- Stage 3 当前固定门禁：
+  - `cd myCPU && make test-unit-course_os_stage3_elf`
+  - `cd myCPU && make test-unit-course_os_stage3_sched_sync`
+  - `cd myCPU && make test-unit-course_os_stage3_vm`
+  - `cd myCPU && make test-unit-course_os_stage3_fs_shell`
+  - `cd myCPU && make test-unit-course_os_stage3_proc`
+  - `cd myCPU && make test-unit-course_os_stage3`
