@@ -18,6 +18,7 @@ typedef struct CourseOsStage3 {
 } course_os_stage3_t;
 
 void course_os_stage3_init(course_os_stage3_t* stage);
+bool course_os_stage3_prepare_shell(course_os_stage3_t* stage);
 bool course_os_stage3_run(course_os_stage3_t* stage);
 bool course_os_stage3_summary(const course_os_stage3_t* stage,
                               char* out,

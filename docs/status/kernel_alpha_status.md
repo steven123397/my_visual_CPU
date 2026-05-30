@@ -9,16 +9,18 @@
 ## 关联文档
 
 - 相关设计：
+  - [../design/course_os_kernel_alpha_stage4_frontend_shell_design.md](../design/course_os_kernel_alpha_stage4_frontend_shell_design.md)
   - [../design/course_os_kernel_alpha_stage3_design.md](../design/course_os_kernel_alpha_stage3_design.md)
   - [../design/course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)
   - [../design/course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
-  - 无活跃 Stage 计划；Stage 3 已完成并归档。
+  - 无活跃 Stage 计划；Stage 4 已完成并归档。
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage3-plan](../plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage2-plan](../plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
@@ -62,6 +64,12 @@ Stage 3 稳定 marker 为：
 
 - `course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid`
 
+Stage 4 已完成前端交互 shell 接入。该阶段没有修改 `kernel_alpha_demo` 的一次性
+Stage 1 / Stage 2 / Stage 3 summary，而是新增独立 `guest_course_os_shell_demo`，
+启动后进入 `course-os> ` prompt，并通过 `/console` 的 manifest / terminal / Lab workbench
+展示 Stage 3 已完成的课程 shell、FD / FS、procfs、ELF / libc、COW 和 crash isolation 能力。
+前端继续复用现有 debug session 和 UART terminal 合同，没有新增并行执行协议。
+
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
 - `K`：进入独立 kernel 入口
@@ -90,6 +98,10 @@ Stage 3 稳定 marker 为：
 ## 关键历史节点
 
 - `2026-05-30`
+  - 课程 OS Stage 4 前端交互 shell 完成，新增独立 `guest_course_os_shell_demo`、
+    `course-os> ` prompt、proc 快捷命令、functional / pipeline guest 回归、
+    `/console` manifest、Course OS Shell Lab 卡片和 terminal 文案。
+  - Stage 4 保持 `kernel_alpha_demo` 的 Stage 1 / Stage 2 / Stage 3 marker 不变，并继续保留旧 9 条负向 demo 作为基础设施 guardrail。
   - 课程 OS 第三阶段实现完成，`kernel_alpha_demo` 正向 smoke 扩展为
     `KMVPET|course-os-stage1 ...|course-os-stage2 ...|course-os-stage3 ...`。
   - 新增 `course_elf_loader`、`course_libc`、`course_sync` 和 `course_os_stage3` 编排层，补齐 ELF / libc / 真实用户程序、FCFS / RR 指标化、semaphore / mutex、Sv39 COW 证据、FS / shell 脚本和扩展 `/proc`。
@@ -111,15 +123,16 @@ Stage 3 稳定 marker 为：
 
 - 课程 OS 第三阶段仍是教学级满分基线，不声明完整 POSIX shell、完整信号语义、多级管道、真实磁盘一致性、journaling、完整 ELF 动态链接或通用 Linux 用户态兼容。
 - COW Fork 当前优先覆盖课程级匿名用户页，不扩展到文件系统 snapshot 或完整文件页 COW。
-- AI/NPU、JIT/DBT、Pipeline-aware scheduling、前端 Lab 面板、微内核和安全隔离不进入 Stage 3 完成范围。
+- AI/NPU、JIT/DBT、Pipeline-aware scheduling、微内核和安全隔离不进入 Stage 3 / Stage 4 完成范围。
+- Stage 4 `guest_course_os_shell_demo` 是课程级 shell 展示入口，不声明完整 POSIX shell、完整 Linux shell、job control 或通用用户态兼容。
 - 旧 9 条负向 guest 回归仍是基础设施 guardrail；当前正向 `kernel_alpha_demo` 已不再检查旧 `D/S` marker。
 - `SimpleStorage` 仍然是单块、同步、无 completion interrupt、无宿主持久化回写的最小模型。
 - `/proc` 第三阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
 
 ## 下一步
 
-1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 3 unit targets、functional / pipeline guest demo 和旧 9 条负向 demo 稳定。
-2. 如继续扩展，优先独立设计 Stage 4+ 创新线，例如全栈可观测 Lab、AI/NPU、JIT/DBT 或 Pipeline-aware 调度；不要回写扩大 Stage 3 完成范围。
+1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
+2. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立 Stage 5+ 方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
 3. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
 ## 验证基线
@@ -157,3 +170,11 @@ Stage 3 稳定 marker 为：
   - `cd myCPU && make test-unit-course_os_stage3_fs_shell`
   - `cd myCPU && make test-unit-course_os_stage3_proc`
   - `cd myCPU && make test-unit-course_os_stage3`
+- Stage 4 当前固定门禁：
+  - `cd myCPU && make test-unit-course_os_stage2_shell`
+  - `cd myCPU && make test-unit-course_os_stage3_fs_shell`
+  - `cd myCPU && make test-unit-course_os_stage3_proc`
+  - `cd myCPU && make test-host-course_os_shell_terminal_smoke`
+  - `cd myCPU && make test-guest-course_os_shell_demo`
+  - `cd myCPU && make test-pipeline-guest-course_os_shell_demo`
+  - `cd frontend && node --test`

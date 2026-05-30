@@ -637,6 +637,43 @@ test('renderApp renders the redesigned three-column console surfaces', () => {
   assert.match(elements.guide.innerHTML, /Evidence and boundary/);
 });
 
+test('renderApp exposes Course OS Shell as a selectable system lab', () => {
+  const state = createAppState();
+  state.tests = [
+    {
+      name: 'guest_course_os_shell_demo',
+      menuLabel: 'guest_course_os_shell_demo · Course OS shell',
+      kind: 'guest',
+      backend: 'pipeline',
+      title: 'Course OS Shell',
+      badge: 'Course OS',
+      summary: 'Stage 4 course shell terminal',
+      workload: {
+        stage: 'Course OS Stage 4',
+        category: 'course-os-shell',
+        expectedMarker: 'course-os> ',
+        ops: ['terminal', 'procfs', 'FD / FS', 'COW'],
+      },
+    },
+  ];
+  state.selectedTest = 'guest_course_os_shell_demo';
+  state.loadedSession = {
+    test: 'guest_course_os_shell_demo',
+    backend: 'pipeline',
+  };
+
+  const elements = createElements();
+  renderApp(elements, state);
+
+  assert.match(elements.demoWorkspace.innerHTML, /Course OS Shell/);
+  assert.match(elements.demoWorkspace.innerHTML, /course-os&gt; /);
+  assert.match(elements.demoWorkspace.innerHTML, /procfs/);
+  assert.match(elements.demoWorkspace.innerHTML, /COW/);
+  assert.match(elements.demoWorkspace.innerHTML, /data-demo-test="guest_course_os_shell_demo"/);
+  assert.match(elements.guide.innerHTML, /Course OS shell/);
+  assert.match(elements.guide.innerHTML, /not a Linux shell|不是 Linux shell/);
+});
+
 test('renderApp presents Linux serial console as a gated route until runtime assets are configured', () => {
   const state = createAppState();
   state.tests = [

@@ -92,10 +92,54 @@ static int test_redirection_and_pipe_execution(void) {
     return 0;
 }
 
+static int expect_shell_command_contains(course_shell_t* shell,
+                                         const char* command,
+                                         const char* expected) {
+    char out[1024];
+
+    if (!course_shell_run_line(shell, command, out, sizeof(out)) ||
+        !contains(out, expected)) {
+        fprintf(stderr,
+                "expected `%s` to include `%s`, got:\n%s\n",
+                command,
+                expected,
+                out);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int test_proc_shortcut_commands(void) {
+    static course_shell_t shell;
+
+    course_shell_init(&shell);
+    if (expect_shell_command_contains(&shell, "meminfo", "total=") != 0 ||
+        expect_shell_command_contains(&shell, "schedstat", "policy=") != 0 ||
+        expect_shell_command_contains(&shell, "fsstat", "file_creates=") != 0 ||
+        expect_shell_command_contains(&shell, "syscalls", "total_calls=") != 0 ||
+        expect_shell_command_contains(&shell, "cow", "leak_free=") != 0 ||
+        expect_shell_command_contains(&shell, "crashlog", "none") != 0 ||
+        expect_shell_command_contains(&shell, "cpuinfo", "isa=rv64im") != 0 ||
+        expect_shell_command_contains(&shell, "uptime", "ticks=") != 0 ||
+        expect_shell_command_contains(&shell, "status", "pid=1") != 0 ||
+        expect_shell_command_contains(&shell, "fd", "fd=0 kind=stdio") != 0 ||
+        expect_shell_command_contains(&shell, "maps", "stack") != 0 ||
+        expect_shell_command_contains(&shell, "status 1", "pid=1") != 0 ||
+        expect_shell_command_contains(&shell, "fd 1", "fd=0 kind=stdio") != 0 ||
+        expect_shell_command_contains(&shell, "maps 1", "stack") != 0 ||
+        expect_shell_command_contains(&shell, "help", "meminfo schedstat fsstat") != 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_parser_pipeline_and_redirection() != 0 ||
         test_builtins_external_programs_and_transcript() != 0 ||
-        test_redirection_and_pipe_execution() != 0) {
+        test_redirection_and_pipe_execution() != 0 ||
+        test_proc_shortcut_commands() != 0) {
         return 1;
     }
 

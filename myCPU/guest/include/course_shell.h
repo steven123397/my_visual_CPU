@@ -34,6 +34,7 @@ typedef struct CourseShell {
     course_process_table_t processes;
     procfs_t procfs;
     course_fd_table_t fds;
+    course_syscall_t syscalls;
     char transcript[COURSE_SHELL_MAX_TRANSCRIPT];
     size_t transcript_size;
     uint32_t shell_pid;

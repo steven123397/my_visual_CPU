@@ -37,6 +37,26 @@ const DEMO_GROUPS = [
         boundary: 'This route is a curated monitor session, not a general-purpose userland shell.',
       },
       {
+        title: 'Course OS Shell',
+        test: 'guest_course_os_shell_demo',
+        backend: 'pipeline',
+        fallbackSummary: '通过 course-os> prompt 操作课程 OS shell，观察 procfs、FD / FS、pipe、ELF / libc 和 COW / crash evidence。',
+        marker: 'course-os> ',
+        panels: ['terminal', 'procfs', 'FD / FS', 'COW'],
+        brief: 'Operate the Stage 4 Course OS shell through the browser terminal while keeping Stage 1 / Stage 2 / Stage 3 evidence available as commands.',
+        primaryStage: 'Terminal + Course OS evidence',
+        inspectorFocus: [
+          'Prompt settling after each Course OS command',
+          'procfs shortcuts for scheduler, memory, filesystem, syscall, COW, and crash evidence',
+          'FD / FS redirection, pipe, and ELF / libc program output',
+        ],
+        proves: [
+          'The browser terminal, debug CLI session, UART, and Course OS shell form one closed interactive loop.',
+          'procfs, FD / FS, pipe / redirection, ELF / libc, COW, and crash evidence are observable through guest commands.',
+        ],
+        boundary: 'This is a course-level shell and not a Linux shell or full POSIX-compatible userland.',
+      },
+      {
         title: 'Supervisor Platform',
         test: 'guest_supervisor_demo',
         backend: 'pipeline',

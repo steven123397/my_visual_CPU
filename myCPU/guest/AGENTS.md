@@ -17,6 +17,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `user_program_t` / `user_program_smoke_t`
 - `supervisor_demo_smoke`
 - 独立 `kernel_alpha` 课程 OS Stage 1 / Stage 2 / Stage 3 入口与 negative demos
+- 独立 `course_os_shell` 课程 OS Stage 4 浏览器 terminal shell demo
 - 独立 `interactive_os` 串口 monitor demo
 
 当前已经能完成：
@@ -28,6 +29,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - delegated timer / external interrupt return
 - 单用户生命周期和清理 smoke
 - 独立 kernel alpha 的课程 OS Stage 1 / Stage 2 / Stage 3 正向 smoke 与九条负向回归
+- 独立 `course_os_shell` 的 `course-os> ` prompt、proc 快捷命令和 `/console` terminal 闭环
 - 独立 `interactive_os` 的 browser/front-end 终端壳闭环与 monitor 命令集
 - `guest_supervisor_demo`、`kernel_alpha` 课程 OS 正向 smoke 与 9 条 `kernel_alpha` 负向 demo 当前共同构成 guest 核心门禁，回归收口口径见 [docs/design/regression_completion_criteria.md](../../docs/design/regression_completion_criteria.md)
 - 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 guest runtime 调整默认按 post-Phase1 hardening 理解。
@@ -66,7 +68,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `user_program_smoke.c`：标准用户 smoke 编排 helper，当前收口 standard plan 校验、prepare、active memory 与 enter round 最小 orchestration
 - `supervisor_demo_smoke.c`：`guest_supervisor_demo` 的最小 `KRN` bring-up orchestration，当前复用 `user_program_smoke` 与 `supervisor_runtime`，不再散落手写 lifecycle / prepare / platform tail
 
-### 入口与编排层：`supervisor_demo` / `kernel_alpha` / `interactive_os`
+### 入口与编排层：`supervisor_demo` / `kernel_alpha` / `course_os_shell` / `interactive_os`
 
 - [supervisor_demo/main.c](supervisor_demo/main.c)
   只负责最小入口编排：`kernel_runtime` 初始化、PLIC supervisor 初始化、入口级 trap bring-up，以及调用 `supervisor_demo_smoke_run()`。
@@ -98,6 +100,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   `kernel_alpha` storage 负向回归共享的合同 helper：当前收口 no-media / not-ready / bad-magic / bad-block-count / lba-range / bad-command 六条独立路径的公共协议检查。
 - [interactive_os/main.c](interactive_os/main.c)
   独立 `interactive_os` 入口。当前复用 `kernel_runtime_run_identity_superpage_bringup()` 完成最小 bring-up，再进入串口 monitor 主循环，不承载 `kernel_alpha` 的 bring-up 合同。
+- [course_os_shell/main.c](course_os_shell/main.c)
+  独立 `guest_course_os_shell_demo` 入口。当前复用 identity-superpage bring-up 和 `course_os_stage3_prepare_shell()`，进入常驻 `course-os> ` UART shell，不改变 `kernel_alpha_demo` 的一次性 Stage 1 / Stage 2 / Stage 3 marker 合同。
 - [kernel/console_input.c](kernel/console_input.c)
   轮询式 UART 输入与最小行编辑。
 - [kernel/monitor.c](kernel/monitor.c)
@@ -299,9 +303,10 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
 2. 继续把 `kernel_alpha_demo` 的课程 OS Stage 1 / Stage 2 / Stage 3 输出、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 守在稳定输出上；它们当前就是 guest 核心门禁的一部分。
-3. 继续把 guest 生命周期相关回归优先压在 `test-unit-supervisor_demo_smoke` 与 `test-unit-user_program_smoke` 这类窄单测上，尤其是 standard plan、prepare、active memory、interrupt round 和 platform tail 这几类 smoke orchestration 边界。
-4. 守住 [kernel/vm.c](kernel/vm.c) / [kernel/vm_address_space.c](kernel/vm_address_space.c) / [kernel/vm_process.c](kernel/vm_process.c) / [kernel/vm_object.c](kernel/vm_object.c) / [kernel/vm_fault.c](kernel/vm_fault.c) 以及 [kernel/trap.c](kernel/trap.c) / [kernel/trap_dispatch.c](kernel/trap_dispatch.c) 的分层，不要因为修 bug 再把职责揉回大文件或 demo 入口。
-5. 当前 guest 子线以 bug-driven hardening 和边界维护为主，不再把重点放在继续扩新的 bring-up 功能面；`interactive_os` 仍主要服务于 monitor / terminal / 调试链路验证，而不是新的产品主线。
+3. 继续把 `course_os_shell` 守在独立 terminal 展示入口上，不要把浏览器交互需求回灌进 `kernel_alpha_demo` 的一次性 marker smoke。
+4. 继续把 guest 生命周期相关回归优先压在 `test-unit-supervisor_demo_smoke` 与 `test-unit-user_program_smoke` 这类窄单测上，尤其是 standard plan、prepare、active memory、interrupt round 和 platform tail 这几类 smoke orchestration 边界。
+5. 守住 [kernel/vm.c](kernel/vm.c) / [kernel/vm_address_space.c](kernel/vm_address_space.c) / [kernel/vm_process.c](kernel/vm_process.c) / [kernel/vm_object.c](kernel/vm_object.c) / [kernel/vm_fault.c](kernel/vm_fault.c) 以及 [kernel/trap.c](kernel/trap.c) / [kernel/trap_dispatch.c](kernel/trap_dispatch.c) 的分层，不要因为修 bug 再把职责揉回大文件或 demo 入口。
+6. 当前 guest 子线以 bug-driven hardening 和边界维护为主，不再把重点放在继续扩新的 bring-up 功能面；`interactive_os` 仍主要服务于 monitor / terminal / 调试链路验证，而不是新的产品主线。
 
 ## 验证要求
 
@@ -338,6 +343,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `cd myCPU && make test-guest-kernel_alpha_storage_bad_command_demo`
 - `cd myCPU && make test-guest-kernel_alpha_plic_not_ready_demo`
 - `cd myCPU && make test-guest-kernel_alpha_timer_not_ready_demo`
+- `cd myCPU && make test-guest-course_os_shell_demo`
+- `cd myCPU && make test-pipeline-guest-course_os_shell_demo`
 - `cd myCPU && make test-pipeline-guest-kernel_alpha_demo`
 
 通常仍应回归：

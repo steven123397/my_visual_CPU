@@ -46,8 +46,10 @@
 
 - `前端 / Lab workbench`
   - [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
+  - [design/course_os_kernel_alpha_stage4_frontend_shell_design.md](design/course_os_kernel_alpha_stage4_frontend_shell_design.md)
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
   - [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
   - [plan/history_plan.md#post-wave7-frontend-lab-product-plan](plan/history_plan.md#post-wave7-frontend-lab-product-plan)
   - [plan/history_plan.md#post-wave7-frontend-lab-completion-plan](plan/history_plan.md#post-wave7-frontend-lab-completion-plan)
 
@@ -73,6 +75,8 @@
   - [plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan](plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan)
 
 - `kernel_alpha`
+  - [design/course_os_kernel_alpha_stage4_frontend_shell_design.md](design/course_os_kernel_alpha_stage4_frontend_shell_design.md)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
   - [design/course_os_kernel_alpha_stage3_design.md](design/course_os_kernel_alpha_stage3_design.md)
   - [plan/history_plan.md#course-os-kernel-alpha-stage3-plan](plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
   - [design/course_os_kernel_alpha_stage2_design.md](design/course_os_kernel_alpha_stage2_design.md)

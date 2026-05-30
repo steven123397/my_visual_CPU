@@ -48,10 +48,25 @@ export const INTERACTIVE_OS_COMMAND_BUDGET = Object.freeze({
   maxSteps: 500000,
 });
 
+export const COURSE_OS_SHELL_BOOT_BUDGET = Object.freeze({
+  maxSteps: 5000000,
+  prompt: 'course-os> ',
+});
+
+export const COURSE_OS_SHELL_COMMAND_BUDGET = Object.freeze({
+  maxSteps: 1000000,
+});
+
 export const interactiveOsBudgets = Object.freeze({
   bootMaxSteps: INTERACTIVE_OS_BOOT_BUDGET.maxSteps,
   commandMaxSteps: INTERACTIVE_OS_COMMAND_BUDGET.maxSteps,
   prompt: INTERACTIVE_OS_BOOT_BUDGET.prompt,
+});
+
+export const courseOsShellBudgets = Object.freeze({
+  bootMaxSteps: COURSE_OS_SHELL_BOOT_BUDGET.maxSteps,
+  commandMaxSteps: COURSE_OS_SHELL_COMMAND_BUDGET.maxSteps,
+  prompt: COURSE_OS_SHELL_BOOT_BUDGET.prompt,
 });
 
 export const terminalLimits = Object.freeze({

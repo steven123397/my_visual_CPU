@@ -854,6 +854,27 @@
 
 ### 2026-05-30
 
+#### course-os-kernel-alpha-stage4-frontend-shell-plan
+
+- 原文件：`course_os_kernel_alpha_stage4_frontend_shell_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 4 前端交互 shell，新增独立
+  `guest_course_os_shell_demo`、`course-os> ` prompt、proc 快捷命令和 Course OS Shell Lab。
+  `/console` 通过现有 manifest / debug session / terminal 合同加载该 guest，browser terminal
+  输入命令后等待新 `course-os> ` prompt；`kernel_alpha_demo` 的 Stage 1 / Stage 2 / Stage 3
+  marker 和旧 9 条负向 demo 合同保持不变。
+- 实现过程摘要：先在 `course_shell` 增加 `meminfo`、`schedstat`、`fsstat`、`syscalls`、
+  `cow`、`crashlog`、`cpuinfo`、`uptime`、`status [pid]`、`fd [pid]`、`maps [pid]`
+  这些 guest-side proc alias，再新增 `course_os_stage3_prepare_shell()` 和常驻
+  `guest/course_os_shell.elf` 入口；随后接入 Makefile guest / pipeline targets、frontend
+  server manifest、真实 debug-server e2e、`/console` System Labs 卡片和 Course OS terminal 文案。
+- 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage2_shell`、
+  `make test-unit-course_os_stage3_fs_shell`、`make test-unit-course_os_stage3_proc`、
+  `make test-host-course_os_shell_terminal_smoke`、`make test-guest-course_os_shell_demo`、
+  `make test-pipeline-guest-course_os_shell_demo`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test`、`make test-pipeline`、
+  `cd frontend && node --test` 和 `git diff --check`。
+- 结果参考：[course_os_kernel_alpha_stage4_frontend_shell_design.md](../design/course_os_kernel_alpha_stage4_frontend_shell_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 #### course-os-kernel-alpha-stage3-plan
 
 - 原文件：`course_os_kernel_alpha_stage3_plan.md`

@@ -245,8 +245,12 @@ void course_os_stage3_init(course_os_stage3_t* stage) {
     stage->proc_ok = false;
 }
 
+bool course_os_stage3_prepare_shell(course_os_stage3_t* stage) {
+    return stage != 0 && ensure_demo_files(&stage->shell);
+}
+
 bool course_os_stage3_run(course_os_stage3_t* stage) {
-    if (stage == 0 || !ensure_demo_files(&stage->shell)) {
+    if (stage == 0 || !course_os_stage3_prepare_shell(stage)) {
         return false;
     }
 

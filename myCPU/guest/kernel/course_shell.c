@@ -233,10 +233,23 @@ void course_shell_init(course_shell_t* shell) {
     course_process_table_init(&shell->processes);
     init = course_process_spawn(&shell->processes, 0U, "shell");
     shell->shell_pid = init != 0 ? init->pid : 0;
+    if (init != 0 &&
+        course_process_exec(&shell->processes,
+                            shell->shell_pid,
+                            "hello",
+                            "") == COURSE_PROCESS_OK) {
+        copy_token(init->name, sizeof(init->name), "shell", 5U);
+        init->argv[0] = '\0';
+    }
     procfs_init(&shell->procfs, &shell->scheduler, &shell->memory, &shell->fs);
     procfs_attach_processes(&shell->procfs, &shell->processes);
     course_fd_table_init(&shell->fds, &shell->fs, &shell->procfs);
     procfs_attach_fd_table(&shell->procfs, shell->shell_pid, &shell->fds);
+    course_syscall_init(&shell->syscalls, shell->shell_pid, 0U, 0U);
+    (void)course_syscall_attach_fd_table(&shell->syscalls, &shell->fds);
+    (void)course_syscall_attach_process_table(&shell->syscalls,
+                                              &shell->processes);
+    (void)procfs_attach_syscalls(&shell->procfs, &shell->syscalls);
     (void)course_fd_set_cwd(&shell->fds, "/");
     shell->transcript[0] = '\0';
     shell->transcript_size = 0;
@@ -523,6 +536,78 @@ static bool run_program_command(course_shell_t* shell,
            append_char(out, out_size, &used, '\n');
 }
 
+static bool read_proc_file(course_shell_t* shell,
+                           const char* path,
+                           char* out,
+                           size_t out_size) {
+    int fd = 0;
+    bool ok = false;
+
+    if (shell == 0 || path == 0) {
+        return false;
+    }
+    fd = course_fd_open(&shell->fds, path, COURSE_FD_OPEN_READ);
+    if (fd < 0) {
+        return false;
+    }
+    ok = read_all_fd(&shell->fds, fd, out, out_size);
+    (void)course_fd_close(&shell->fds, fd);
+    return ok;
+}
+
+static bool append_pid_path(char* path,
+                            size_t path_size,
+                            const char* suffix,
+                            uint32_t pid) {
+    size_t used = 0;
+
+    if (path == 0 || suffix == 0 || path_size == 0) {
+        return false;
+    }
+    path[0] = '\0';
+    return append_str(path, path_size, &used, "/proc/") &&
+           append_u32(path, path_size, &used, pid) &&
+           append_char(path, path_size, &used, '/') &&
+           append_str(path, path_size, &used, suffix);
+}
+
+static bool parse_pid_arg(const char* value, uint32_t* out_pid) {
+    uint32_t pid = 0;
+    size_t i = 0;
+
+    if (value == 0 || value[0] == '\0' || out_pid == 0) {
+        return false;
+    }
+    while (value[i] != '\0') {
+        if (value[i] < '0' || value[i] > '9') {
+            return false;
+        }
+        pid = pid * 10U + (uint32_t)(value[i] - '0');
+        i += 1U;
+    }
+    *out_pid = pid;
+    return true;
+}
+
+static bool read_pid_proc_file(course_shell_t* shell,
+                               const course_shell_simple_command_t* command,
+                               const char* suffix,
+                               char* out,
+                               size_t out_size) {
+    char path[COURSE_FD_MAX_PATH];
+    uint32_t pid = 0;
+
+    if (shell == 0 || command == 0) {
+        return false;
+    }
+    pid = shell->shell_pid;
+    if (command->argc > 1U && !parse_pid_arg(command->argv[1], &pid)) {
+        return false;
+    }
+    return append_pid_path(path, sizeof(path), suffix, pid) &&
+           read_proc_file(shell, path, out, out_size);
+}
+
 static bool run_simple(course_shell_t* shell,
                        const course_shell_simple_command_t* command,
                        const char* stdin_text,
@@ -537,7 +622,12 @@ static bool run_simple(course_shell_t* shell,
     out[0] = '\0';
 
     if (str_eq(command->argv[0], "help")) {
-        return append_str(out, out_size, &used, "help ls cat echo ps kill cd pwd exit\n");
+        return append_str(out,
+                          out_size,
+                          &used,
+                          "help ls cat echo ps kill cd pwd exit exec sh "
+                          "meminfo schedstat fsstat syscalls cow crashlog "
+                          "cpuinfo uptime status fd maps\n");
     }
     if (str_eq(command->argv[0], "pwd")) {
         return append_str(out, out_size, &used, course_fd_cwd(&shell->fds)) &&
@@ -586,26 +676,40 @@ static bool run_simple(course_shell_t* shell,
         return run_script(shell, command->argv[1], out, out_size);
     }
     if (str_eq(command->argv[0], "ps")) {
-        int fd = course_fd_open(&shell->fds, "/proc/ps", COURSE_FD_OPEN_READ);
-        bool ok = false;
-
-        if (fd < 0) {
-            return false;
-        }
-        ok = read_all_fd(&shell->fds, fd, out, out_size);
-        (void)course_fd_close(&shell->fds, fd);
-        return ok;
+        return read_proc_file(shell, "/proc/ps", out, out_size);
+    }
+    if (str_eq(command->argv[0], "meminfo")) {
+        return read_proc_file(shell, "/proc/meminfo", out, out_size);
+    }
+    if (str_eq(command->argv[0], "schedstat")) {
+        return read_proc_file(shell, "/proc/schedstat", out, out_size);
+    }
+    if (str_eq(command->argv[0], "fsstat")) {
+        return read_proc_file(shell, "/proc/fsstat", out, out_size);
+    }
+    if (str_eq(command->argv[0], "syscalls")) {
+        return read_proc_file(shell, "/proc/syscalls", out, out_size);
     }
     if (str_eq(command->argv[0], "cow")) {
-        int fd = course_fd_open(&shell->fds, "/proc/cow", COURSE_FD_OPEN_READ);
-        bool ok = false;
-
-        if (fd < 0) {
-            return false;
-        }
-        ok = read_all_fd(&shell->fds, fd, out, out_size);
-        (void)course_fd_close(&shell->fds, fd);
-        return ok;
+        return read_proc_file(shell, "/proc/cow", out, out_size);
+    }
+    if (str_eq(command->argv[0], "crashlog")) {
+        return read_proc_file(shell, "/proc/crashlog", out, out_size);
+    }
+    if (str_eq(command->argv[0], "cpuinfo")) {
+        return read_proc_file(shell, "/proc/cpuinfo", out, out_size);
+    }
+    if (str_eq(command->argv[0], "uptime")) {
+        return read_proc_file(shell, "/proc/uptime", out, out_size);
+    }
+    if (str_eq(command->argv[0], "status")) {
+        return read_pid_proc_file(shell, command, "status", out, out_size);
+    }
+    if (str_eq(command->argv[0], "fd")) {
+        return read_pid_proc_file(shell, command, "fd", out, out_size);
+    }
+    if (str_eq(command->argv[0], "maps")) {
+        return read_pid_proc_file(shell, command, "maps", out, out_size);
     }
     if (str_eq(command->argv[0], "ls")) {
         return append_str(out, out_size, &used, ".\n");

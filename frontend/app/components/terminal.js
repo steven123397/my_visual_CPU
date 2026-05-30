@@ -20,6 +20,12 @@ function terminalPresentation(activeTest) {
       target: 'Linux serial console',
     };
   }
+  if (activeTest === 'guest_course_os_shell_demo') {
+    return {
+      title: 'Course OS shell terminal',
+      target: 'Course OS shell',
+    };
+  }
 
   return {
     title: 'interactive_os terminal',
