@@ -5,7 +5,17 @@
 - **第一部分**：现有项目的升级与重构建议（先做认知重构，再做代码重构）。
 - **第二部分**：未来发展路线规划（不对标商用产品，从项目内核长出来的发展方向）。
 
-定位前提：项目当前已是可运行的 RISC-V 系统模拟器原型，具备 RV64IMAFDC、M/S/U + Sv39、virtio-blk、Alpine/Debian 真实 rootfs、MIO NPU/TPU-like 加速器、浏览器 Lab Workbench、reference-first 多后端 + Spike 差分能力。本文件不再重复这些既成事实，只回答"接下来怎么走"。
+定位前提：项目当前已是可运行的 RISC-V 系统模拟器原型，具备 RV64IMAFDC、M/S/U + Sv39、virtio-blk、Alpine/Debian 真实 rootfs、MMIO NPU / TPU-like 加速器、浏览器 Lab Workbench、reference-first 多后端 + Spike 差分能力。本文件不再重复这些既成事实，只回答"接下来怎么走"。
+
+## 当前执行口径（2026-05-29）
+
+后续任务按三条线组织，但不等强度并行：
+
+- **Linux / AI 主线**：继续作为近期产品工程主线。Linux 侧聚焦标准 Alpine / Debian 发行版平台剩余 capability、F/D / FS state 和 runtime 资产合同；AI 侧聚焦设备契约、bounded-dynamic shape、profile schema 和后续协同仿真故事。两条线都应继续以 `docs/status/mainline_status.md` 和各自专项 status 为实时事实来源。
+- **OS 课程设计线**：`kernel_alpha` Stage 1 / Stage 2 已完成，当前默认进入维护、验证和展示材料整理状态。除非课程交付明确要求新阶段，否则不继续扩大 Stage 2 范围。
+- **全项目升级改造线**：本文件承接战略改造方向，不直接替代 Linux / AI 的执行计划。近期第一刀应先做认知和协议边界：统一 observability schema、AI 设备契约定调、bounded-dynamic shape 文档化、frontend-simulator protocol 版本化，以及 JIT/DBT dry-run 去留决策。
+
+`2026-05-29` 全仓库 code review remediation 已完成并归档，四条 `code-reself-*` 整改线已合入本地主线，12 条 `必须修复` 与 19 条 `建议修改` active findings 已关闭；后续只保留 `code_reself_status.md` 中的长期观察项。
 
 ---
 
@@ -18,19 +28,19 @@
 **1. `kernel_alpha` 的定位已定：课程 OS 主线入口 + Phase 1 历史基线**
 当 Alpine/Debian 真实 Linux 已经能跑到 shell 后，`kernel_alpha` 不再承担“证明平台能启动 Linux-like runtime”的主线职责，也不应继续在“trap / device 测试床”和“完整教学 OS”之间摇摆。
 
-当前口径已经定为：`kernel_alpha` 接管《操作系统课程设计》第一阶段主线，目标限定为课程基本要求的 3 个模块、9 个功能点：
+当前口径已经定为：`kernel_alpha` 接管《操作系统课程设计》A 方案主线。第一阶段已完成课程基本要求的 3 个模块、9 个功能点：
 
 - 进程模块：FCFS、RR、CFS-lite。
 - 内存模块：Demand Paging、Clock 页面置换、`kmalloc` / `kfree`。
 - 文件系统模块：文件 / 目录 CRUD、`seek`、B 树目录索引。
 
-旧 Phase 1 `KMVPETDS` 输出降级为 bring-up 历史基线；storage / PLIC / timer / fault 的负向 demo 继续保留为基础设施回归，但不再定义当前课程 OS 行为承诺。课程 OS 第一阶段已经落地为 `KMVPET|course-os-stage1 ...` 正向证据面，后续重点不是再争论是否保留 `kernel_alpha`，而是保持课程 OS 第一阶段门禁稳定，并在进入 D 阶段扩展前另起设计和计划。
+第二阶段也已完成 A 方案核心闭环和创新线：syscall ABI、真实进程生命周期、FD / FS 统一 I/O、5 个课程用户程序、shell、单级管道、重定向、COW Fork、用户态崩溃隔离，以及 `/proc/syscalls`、`/proc/cow`、`/proc/crashlog` 可观测证据。正向 `kernel_alpha_demo` 当前固定为 `KMVPET|course-os-stage1 ...|course-os-stage2 ...` summary；旧 Phase 1 `KMVPETDS` 输出降级为 bring-up 历史基线，storage / PLIC / timer / fault 的 9 条负向 demo 继续保留为基础设施回归，但不再定义当前课程 OS 行为承诺。后续重点不是继续扩大 Stage 2 范围，而是保持 Stage 2 marker、unit targets、functional / pipeline guest demo 和旧负向 guardrail 稳定；若继续做课程 OS 后续阶段，必须另起设计和计划。
 
 **2. AI 加速器的设备契约**
 现在的接口是为 host smoke 设计的（task-spec 导入、profile 拉取）。如果路线是 "Linux-facing driver"，需要重新设计成 "DT node + ioctl + DMA descriptor + IRQ" 风格的真实设备契约。host smoke 接口可保留为底层 API，上面叠一层"真实设备视角"。越早确定方向越好。
 
 **3. observability 数据 schema 不统一**
-`AiAceleratorProfileSummary`、`ExecutionProfile`、`shadow_cache`、各种 kernel / guest trace 各说各话。建议提一份独立 design 文档定义 observation event schema，再把各模块的 profile 收敛到同一协议。**这件事不做，时间旅行 / 因果切片 / Lab 协议化全部受阻**。
+`AiAcceleratorProfileSummary`、`ExecutionProfile`、`shadow_cache`、各种 kernel / guest trace 各说各话。建议提一份独立 design 文档定义 observation event schema，再把各模块的 profile 收敛到同一协议。**这件事不做，时间旅行 / 因果切片 / Lab 协议化全部受阻**。
 
 **4. `InstructionSemantics` 的形式**
 作为 ISA 真值，长期看 C++ 代码形式不够。需要演化为表驱动 / DSL / 半结构化描述，是 ISA 形式化方向的前置。短期不必做，但需要在 design 里留"未来形态"占位，避免在它上面长出更多耦合。
@@ -43,13 +53,14 @@
 - 或声明 "Linux distro platform 已收口在 Alpine/Debian 真实 rootfs"，淡化或移除第四阶段冻结点。
 
 **6. 测试矩阵需要分层**
-AGENTS.md 列出的 test-unit / test-guest 已接近 30 个，缺乏分层。建议显式分为：
-- fast smoke（每次 commit）
-- standard regression（PR 默认）
-- slow guest（夜间）
-- opt-in differential（Spike 差分、JIT 差分）
+这项已经完成第一轮落地：`myCPU/Makefile` 当前已有并已文档化
+`test-fast-smoke`、`test-standard-regression`、`test-slow-guest` 和
+`test-opt-in-external`。`code_reself` 整改收尾也已用这套分层门禁重新验证：
+`test-fast-smoke`、`test-standard-regression`、`test-pipeline`、`make test`
+和 `frontend && node --test` 均作为默认无资产收尾证据；真实 Linux console e2e、
+外部发行版 rootfs、Spike 等仍保留为显式 opt-in。
 
-现在所有测试"看起来差不多重要"，长期会侵蚀开发节奏。
+后续重点不再是"有没有分层入口"，而是执行纪律：每条新计划必须明确使用哪一层门禁，外部资产门禁不能伪装成默认必跑项，慢速 guest 和 opt-in differential 需要有清晰触发条件。
 
 **7. JIT/DBT dry-run 长期 opt-in**
 host-smoke-only opt-in 状态如果再持续半年没有进展，会变成僵尸代码。必须做决断：
@@ -59,7 +70,8 @@ host-smoke-only opt-in 状态如果再持续半年没有进展，会变成僵尸
 两个方向都比"长期半成品"健康。
 
 **8. 状态文档的边界**
-专项 status 已经四份（kernel_alpha / npu_tpu / linux_distribution / code_reself），每多一份都在挑战"单一事实来源"。建议设规则：专项 status 每季度自审一次，进入维护态就归档到 `mainline_status.md` 一节，不再独立维护。
+专项 status 当前包括 `kernel_alpha`、`npu_tpu`、`linux_distribution` 和
+`code_reself`。其中 `code_reself` 已完成四条整改线合并、统一验证和计划归档，当前只保留长期观察项；`kernel_alpha` 已进入课程 OS Stage 2 完成态；Linux / AI 仍是活跃产品线。建议设规则：专项 status 每季度自审一次，进入维护态就归档到 `mainline_status.md` 一节，不再独立维护。
 
 ### 1.3 工程层（局部但实在）
 
@@ -81,11 +93,11 @@ Lab Workbench 是浏览器前端，靠 Node 调试服务和模拟器对话。这
 
 | 优先级 | 项目 | 原因 |
 |---|---|---|
-| P0 | kernel_alpha 课程 OS 第一阶段门禁维护（#1） | 第一阶段已落地，需守住当前正向证据面和旧负向 guardrail |
+| P0 | kernel_alpha 课程 OS Stage 2 门禁维护（#1） | Stage 2 已落地，需守住当前正向证据面和旧负向 guardrail |
 | P0 | observability schema 统一（#3） | 所有"内核创新方向"的前置 |
 | P1 | AI 加速器设备契约重设计（#2） | 决定 6 个月路线能否落地 |
 | P1 | JIT dry-run 决断（#7） | 防止变成僵尸代码 |
-| P1 | 测试矩阵分层（#6） | 直接影响开发节奏 |
+| P1 | 测试矩阵分层执行纪律（#6） | 分层入口已落地，后续要防止默认 / slow / opt-in 边界漂移 |
 | P2 | Linux 第四阶段冻结点处理（#5） | 文档可读性、路线清晰度 |
 | P2 | bounded-dynamic shape 文档化（#10） | AI 路线关键抽象 |
 | P2 | Frontend ↔ Simulator 协议（#11） | 长期维护成本 |
@@ -132,11 +144,11 @@ Evidence Drawer 是 view，Lab Workbench 是 shell。下一步是协议：定义
 kernel_alpha vs xv6 vs Alpine vs Debian 跑同一个 workload，对比 syscall trace、TLB 行为、IO 模式、调度路径。**这是项目天生具备但没被利用的资产**，做成"对比 lab"是独有产出。
 
 **8. AI 加速器从"设备"演化为"协设计实验对象"**
-现在 AI 加速器是 MIO 设备。下一步：让 op 集合可注册、调度策略可插拔、内存模型可参数化、DMA 行为可参数化。它不只是被调用的设备，而是"用户可二次开发的 AI 微架构原型"。bounded-dynamic shape 是这条路的安全壳，**要做强不要削弱**。
+现在 AI 加速器是 MMIO 设备。下一步：让 op 集合可注册、调度策略可插拔、内存模型可参数化、DMA 行为可参数化。它不只是被调用的设备，而是"用户可二次开发的 AI 微架构原型"。bounded-dynamic shape 是这条路的安全壳，**要做强不要削弱**。
 
 ### 2.3 方法论级演化（最容易被忽略，但回报最高）
 
-- **单一事实来源原则向代码层渗透**：文档已做到。代码里也要做——指令语义、设备 MIO 寄存器布局、AI op spec、Linux ABI 假设，每类都要有唯一来源，禁止"两份基本一致的定义"。
+- **单一事实来源原则向代码层渗透**：文档已做到。代码里也要做——指令语义、设备 MMIO 寄存器布局、AI op spec、Linux ABI 假设，每类都要有唯一来源，禁止"两份基本一致的定义"。
 - **opt-in 机制要有退场策略**：JIT dry-run、Spike 差分、shadow_cache 都是 opt-in。opt-in 不是终态，长期 opt-in 会僵化。每个 opt-in 都要有"什么时候推到默认 / 什么时候废弃"的判断。
 - **Wave 编号制要冻结**：Wave 1-7 是历史路径，Post-Wave 7 已有"补丁包"味道。建议冻结 wave 编号到 7，之后用功能线（Linux Distro / AI Co-Sim / Lab Platform / ISA Formalization）组织，避免无限累积。
 
@@ -145,15 +157,15 @@ kernel_alpha vs xv6 vs Alpine vs Debian 跑同一个 workload，对比 syscall t
 #### 短期（约 3 个月）：完成认知重构 + 补完基本面
 
 **认知重构（来自第一部分）：**
-- 守住 `kernel_alpha` 课程 OS 第一阶段正向证据面和旧负向 guardrail
+- 守住 `kernel_alpha` 课程 OS Stage 2 正向证据面和旧负向 guardrail
 - 提出统一 observability schema 的 design 文档
 - AI 加速器设备契约方向定调
 - JIT dry-run 决断
-- 测试矩阵分层
+- 固化测试矩阵分层执行纪律
 
 **基本面工程：**
 - F/D 浮点 ISA 收口（FMA 四件套、fsgnj、fmin/fmax、fclass、fcvt 舍入、fcsr 异常 flag、NaN box），通过 riscv-tests `rv64uf` / `rv64ud` 全集
-- AI 加速器从 timed-simple 推进到 tile scheduler + DMA / compute overlap + multi-outstanding que
+- AI 加速器从 timed-simple 推进到 tile scheduler + DMA / compute overlap + multi-outstanding queue
 - 前端 Lab Workbench 完成 Linux Distro / AI / Pipeline 三个 family 的 Evidence Drawer 标准化
 
 #### 中期（约 6 个月）：把内生创新跑到可演示
@@ -198,7 +210,7 @@ kernel_alpha vs xv6 vs Alpine vs Debian 跑同一个 workload，对比 syscall t
 
 ## 总结
 
-**第一部分的核心动作**：先守住已经落地的 `kernel_alpha` 课程 OS 第一阶段证据面和基础设施 guardrail，再做三件认知重构（AI 设备契约、observability schema、ISA 真值形式占位），再做四件结构层决断（Linux 冻结点、测试分层、JIT dry-run 出路、状态文档治理），再做四件工程清理（pipeline 标注、bounded-dynamic 文档化、frontend 协议、showcase 归档）。
+**第一部分的核心动作**：先守住已经落地的 `kernel_alpha` 课程 OS Stage 2 证据面和基础设施 guardrail，再做三件认知重构（AI 设备契约、observability schema、ISA 真值形式占位），再做四件结构层决断 / 固化（Linux 冻结点、测试分层执行纪律、JIT dry-run 出路、状态文档治理），再做四件工程清理（pipeline 标注、bounded-dynamic 文档化、frontend 协议、showcase 归档）。
 
 **第二部分的核心方向**：从"reference-first + observability + 协设计"这个内核长出八条创新方向，其中 observability 协议化、AI 协处理器协同仿真、Lab 协议化、pipeline 参数化、ISA 形式化是最值得押注的五条。
 
