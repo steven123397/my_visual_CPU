@@ -1,0 +1,241 @@
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "../../guest/include/linux_compat.h"
+
+static int fail(const char* message) {
+    fprintf(stderr, "%s\n", message);
+    return 1;
+}
+
+static bool contains(const char* haystack, const char* needle) {
+    return strstr(haystack, needle) != NULL;
+}
+
+static int test_rootfs_stat_reports_linux_metadata(void) {
+    linux_compat_stat_t stat;
+    linux_compat_trace_t trace;
+
+    if (linux_compat_stat_path("/bin/busybox", &stat, &trace) !=
+            LINUX_COMPAT_OK ||
+        !contains(trace.message, "stat: ok") ||
+        stat.directory ||
+        !stat.executable ||
+        stat.size == 0U ||
+        (stat.mode & LINUX_COMPAT_S_IFREG) != LINUX_COMPAT_S_IFREG ||
+        (stat.mode & LINUX_COMPAT_S_IXUSR) == 0U) {
+        return fail("expected /bin/busybox stat metadata to look executable");
+    }
+
+    if (linux_compat_stat_path("/usr/bin", &stat, &trace) != LINUX_COMPAT_OK ||
+        !stat.directory ||
+        stat.executable ||
+        stat.size != 0U ||
+        (stat.mode & LINUX_COMPAT_S_IFDIR) != LINUX_COMPAT_S_IFDIR) {
+        return fail("expected /usr/bin stat metadata to look like a directory");
+    }
+
+    if (linux_compat_stat_path("/missing", &stat, &trace) !=
+            LINUX_COMPAT_ERR_NO_SUCH_FILE ||
+        trace.errno_value != 2 ||
+        !contains(trace.message, "stat: no such file")) {
+        return fail("expected missing stat to fail with ENOENT");
+    }
+
+    return 0;
+}
+
+static int test_fd_openat_read_lseek_close_uses_rootfs_bytes(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    uint8_t bytes[4] = {0U, 0U, 0U, 0U};
+    int32_t fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+    fd = linux_compat_openat(&runtime,
+                             LINUX_COMPAT_AT_FDCWD,
+                             "/bin/busybox",
+                             LINUX_COMPAT_O_RDONLY,
+                             &trace);
+    if (fd < 3 || !contains(trace.message, "openat: ok")) {
+        return fail("expected openat to allocate a Linux compat fd");
+    }
+
+    if (linux_compat_read(&runtime, fd, bytes, sizeof(bytes), &trace) != 4 ||
+        bytes[0] != 0x7fU ||
+        bytes[1] != 'E' ||
+        bytes[2] != 'L' ||
+        bytes[3] != 'F') {
+        return fail("expected read to consume ELF bytes from the rootfs entry");
+    }
+
+    if (linux_compat_lseek(&runtime, fd, 0, 0U, &trace) != 0 ||
+        linux_compat_read(&runtime, fd, bytes, 1U, &trace) != 1 ||
+        bytes[0] != 0x7fU) {
+        return fail("expected lseek to reset the fd cursor");
+    }
+
+    if (linux_compat_close(&runtime, fd, &trace) != 0 ||
+        linux_compat_read(&runtime, fd, bytes, 1U, &trace) != -9) {
+        return fail("expected close to release the fd and later read to fail");
+    }
+
+    return 0;
+}
+
+static int test_syscall_dispatch_covers_help_output_minimum(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_stat_t stat;
+    linux_compat_dirent_t dirents[LINUX_COMPAT_MAX_DIRENTS];
+    linux_compat_trace_t trace;
+    uint8_t bytes[4] = {0U, 0U, 0U, 0U};
+    const char message[] = "BusyBox v1.36.1\n";
+    int32_t fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+    memset(&request, 0, sizeof(request));
+    memset(&response, 0, sizeof(response));
+
+    request.number = LINUX_COMPAT_SYS_BRK;
+    request.addr = 0U;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value < 0) {
+        return fail("expected brk(0) to return the current program break");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MMAP;
+    request.length = 4096U;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value < 0) {
+        return fail("expected mmap to reserve a deterministic anonymous range");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_NEWFSTATAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/bin/busybox";
+    request.stat = &stat;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        stat.size == 0U) {
+        return fail("expected newfstatat to expose rootfs file metadata");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_OPENAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/bin/busybox";
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value < 3) {
+        return fail("expected openat syscall to return a fd");
+    }
+    fd = (int32_t)response.value;
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_READ;
+    request.fd = fd;
+    request.read_buffer = bytes;
+    request.length = sizeof(bytes);
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != 4 ||
+        bytes[0] != 0x7fU) {
+        return fail("expected read syscall to return rootfs bytes");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_OPENAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/usr/bin";
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value < 3) {
+        return fail("expected openat syscall to open a rootfs directory");
+    }
+    fd = (int32_t)response.value;
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_GETDENTS64;
+    request.fd = fd;
+    request.dirents = dirents;
+    request.dirent_capacity = LINUX_COMPAT_MAX_DIRENTS;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value < 1 ||
+        strcmp(dirents[0].name, "git") != 0 ||
+        dirents[0].type != LINUX_COMPAT_DT_REG) {
+        return fail("expected getdents64 to enumerate /usr/bin");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_WRITE;
+    request.fd = 1;
+    request.write_buffer = message;
+    request.length = strlen(message);
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != (int64_t)strlen(message) ||
+        !contains(runtime.stdout_buffer, "BusyBox v")) {
+        return fail("expected write syscall to append to stdout buffer");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = 9999U;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL ||
+        response.value != -38 ||
+        trace.syscall_number != 9999U) {
+        return fail("expected unsupported syscall to fail closed with ENOSYS");
+    }
+
+    return 0;
+}
+
+static int test_linux_run_emits_help_instead_of_unsupported_syscall(void) {
+    const char* busybox_argv[] = {"/bin/busybox", "--help"};
+    const char* git_argv[] = {"/usr/bin/git", "-h"};
+    linux_compat_exec_request_t request;
+    linux_compat_trace_t trace;
+    char out[1024];
+
+    request.path = "/bin/busybox";
+    request.argc = 2U;
+    request.argv = busybox_argv;
+    if (linux_compat_run(&request, out, sizeof(out), &trace) != LINUX_COMPAT_OK ||
+        !contains(out, "BusyBox v") ||
+        !contains(out, "Usage: busybox") ||
+        contains(out, "unsupported syscall")) {
+        return fail("expected busybox help to complete through minimal syscalls");
+    }
+
+    request.path = "/usr/bin/git";
+    request.argc = 2U;
+    request.argv = git_argv;
+    if (linux_compat_run(&request, out, sizeof(out), &trace) != LINUX_COMPAT_OK ||
+        !contains(out, "usage: git") ||
+        contains(out, "unsupported syscall")) {
+        return fail("expected git -h to complete through minimal syscalls");
+    }
+
+    return 0;
+}
+
+int main(void) {
+    if (test_rootfs_stat_reports_linux_metadata() != 0 ||
+        test_fd_openat_read_lseek_close_uses_rootfs_bytes() != 0 ||
+        test_syscall_dispatch_covers_help_output_minimum() != 0 ||
+        test_linux_run_emits_help_instead_of_unsupported_syscall() != 0) {
+        return 1;
+    }
+
+    return 0;
+}

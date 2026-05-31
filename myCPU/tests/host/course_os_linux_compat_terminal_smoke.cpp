@@ -57,12 +57,14 @@ int main(int argc, char** argv) {
            << "{\"cmd\":\"uart_input\",\"text\":\"linux /bin/busybox --help\\r\"}\n"
            << run_until_uart_contains_command("linux-compat: path=/bin/busybox",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("unsupported syscall",
+           << run_until_uart_contains_command("BusyBox v",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
            << run_until_uart_contains_command("course-os> ",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
            << "{\"cmd\":\"uart_input\",\"text\":\"linux /usr/bin/git -h\\r\"}\n"
            << run_until_uart_contains_command("linux-compat: path=/usr/bin/git",
+                                              DebugBudget::kCourseOsShellCommandMaxSteps)
+           << run_until_uart_contains_command("usage: git",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
            << run_until_uart_contains_command("course-os> ",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
@@ -95,13 +97,23 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (!expect_contains(output,
-                         "unsupported syscall",
-                         "linux compat v0 should fail closed on syscall execution")) {
+                         "BusyBox v",
+                         "busybox help should complete through minimal Linux compat syscalls")) {
+        return 1;
+    }
+    if (!expect_contains(output,
+                         "Usage: busybox",
+                         "busybox help should include a usage line")) {
         return 1;
     }
     if (!expect_contains(output,
                          "linux-compat: path=/usr/bin/git",
                          "git path should use explicit linux compat launcher")) {
+        return 1;
+    }
+    if (!expect_contains(output,
+                         "usage: git",
+                         "git -h should emit a help usage line")) {
         return 1;
     }
     if (!expect_contains(output,

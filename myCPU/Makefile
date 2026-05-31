@@ -18,7 +18,7 @@ ATOMIC_ASM_TESTS = atomic_basic atomic_ordering_smoke
 ATOMIC_ASM_ELFS = $(ATOMIC_ASM_TESTS:%=tests/asm/%.elf)
 ATOMIC_ASM_DEPS = $(ATOMIC_ASM_ELFS:.elf=.d)
 FLAT_BIN_TESTS = hello
-UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract simple_l1_cache ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands course_os_stage1 course_os_stage2_syscall course_os_stage2_process course_os_stage2_fd_fs course_os_stage2_shell course_os_stage2_cow_crash course_os_stage2 course_os_stage3_elf course_os_stage3_sched_sync course_os_stage3_vm course_os_stage3_fs_shell course_os_stage3_proc course_os_stage3 course_os_stage5_linux_compat kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
+UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract simple_l1_cache ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands course_os_stage1 course_os_stage2_syscall course_os_stage2_process course_os_stage2_fd_fs course_os_stage2_shell course_os_stage2_cow_crash course_os_stage2 course_os_stage3_elf course_os_stage3_sched_sync course_os_stage3_vm course_os_stage3_fs_shell course_os_stage3_proc course_os_stage3 course_os_stage5_linux_compat course_os_stage6_linux_compat kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
 AI_ACCEL_QUEUE_UNIT_OBJS = tests/unit/ai_accel_queue_test.o tests/unit/ai_accel_queue_guest.o
 AI_ACCEL_QUEUE_UNIT_DEPS = $(AI_ACCEL_QUEUE_UNIT_OBJS:.o=.d)
@@ -80,6 +80,8 @@ COURSE_OS_STAGE3_UNIT_OBJS = tests/unit/course_os_stage3_test.o tests/unit/cours
 COURSE_OS_STAGE3_UNIT_DEPS = $(COURSE_OS_STAGE3_UNIT_OBJS:.o=.d)
 COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage5_linux_compat_test.o tests/unit/linux_compat_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/course_elf_loader_guest.o
 COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_DEPS = $(COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage6_linux_compat_test.o tests/unit/linux_compat_guest.o
+COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_DEPS = $(COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_COMMON_UNIT_OBJS = tests/unit/kernel_alpha_common_test.o tests/unit/kernel_alpha_common_guest.o
 KERNEL_ALPHA_COMMON_UNIT_DEPS = $(KERNEL_ALPHA_COMMON_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_STORAGE_UNIT_OBJS = tests/unit/kernel_alpha_storage_test.o tests/unit/kernel_alpha_storage_guest.o
@@ -1447,6 +1449,12 @@ tests/unit/linux_compat_guest.o: guest/kernel/linux_compat.c
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
 
 tests/unit/course_os_stage5_linux_compat: $(COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_stage6_linux_compat_test.o: tests/unit/course_os_stage6_linux_compat.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage6_linux_compat: $(COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/unit/kernel_alpha_common_test.o: tests/unit/kernel_alpha_common.c

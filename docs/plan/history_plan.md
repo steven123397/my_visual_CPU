@@ -906,3 +906,26 @@
 - 剩余风险：Stage 5 v0 不声明完整 Linux 用户态兼容；未启用自动 fallback，不支持网络 git、
   完整 vim、完整 gcc/rustc、完整 signal/futex、完整动态链接器或真实 rootfs 写语义。
 - 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan
+
+- 原文件：无独立计划文件；沿用 Linux compat Plus 设计和 `kernel_alpha_status` 下一步执行。
+- 完成内容：完成课程 OS `kernel_alpha` Stage 6 Linux compat rootfs / syscall 第一层语义，
+  新增最小 rootfs metadata / `stat`、FD 表、`openat/read/lseek/close`、`getdents64`、
+  `brk`、`mmap`、`write`、`clock_gettime`、`exit_group` 和 unsupported syscall fail-closed
+  合同；`linux /bin/busybox --help` 与 `linux /usr/bin/git -h` 现在输出稳定 help 文本，
+  不再以 unsupported syscall 作为正向路径预期。
+- 实现过程摘要：按 TDD 先新增 `course_os_stage6_linux_compat` unit target，并把 shell /
+  host terminal smoke 从 unsupported syscall 预期改成 help 输出预期；随后在旁路
+  `linux_compat_*` 内实现只读 rootfs 节点、Linux metadata、FD cursor、syscall dispatcher
+  和 help 执行路径。课程命令优先级、Stage 1 / Stage 2 / Stage 3 marker、Stage 4
+  `course-os> ` prompt 和直接 `git -h` fallback 关闭状态保持不变。
+- 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage6_linux_compat`、
+  `make test-unit-course_os_stage3_fs_shell`、`make test-unit-course_os_stage5_linux_compat`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、
+  `make test-guest-course_os_linux_compat_shell_demo` 和
+  `make test-pipeline-guest-course_os_linux_compat_shell_demo`；完整回归见本轮最终汇报。
+- 剩余风险：Stage 6 仍使用内置最小 rootfs catalog 和模拟 help 路径，不声明外部真实 rootfs
+  资产读取、动态链接器、完整 Linux shell、网络 git、完整 vim / gcc / rustc、signal/futex
+  或真实 rootfs 写语义已经完成。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
