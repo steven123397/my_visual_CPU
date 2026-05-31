@@ -282,6 +282,8 @@ Plus 每一刀都必须同时守住：
 ## 当前有效性说明
 
 - 当前有效：本文档作为 Stage 4 完成后开启 Linux 用户态兼容 plus 的设计边界。
-- 当前不是完成声明：`kernel_alpha` 仍未声明 Linux 用户态兼容，plus 尚未实现。
+- 当前不是完成声明：Stage 5 / Stage 6 / Stage 7 / Stage 8 已完成 Linux compat 入口、最小
+  syscall / rootfs 语义、外部 rootfs 资产链路和 loader / trace 诊断第一刀，但
+  `kernel_alpha` 仍未声明完整 Linux 用户态兼容。
 - 当前可复用基础：bring-up、Sv39、trap、user runtime、course shell、FD / FS、procfs、
   storage guardrail 和 frontend terminal 合同。

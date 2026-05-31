@@ -60,6 +60,8 @@ int main(int argc, char** argv) {
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
            << run_until_uart_contains_command("linux-compat: path=/bin/busybox",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
+           << run_until_uart_contains_command("loader=static interp=none",
+                                              DebugBudget::kCourseOsShellCommandMaxSteps)
            << run_until_uart_contains_command("BusyBox v",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
            << run_until_uart_contains_command("course-os> ",
@@ -85,6 +87,11 @@ int main(int argc, char** argv) {
     if (!expect_contains(output,
                          "linux-compat: path=/bin/busybox",
                          "external rootfs busybox should still launch through explicit linux command")) {
+        return 1;
+    }
+    if (!expect_contains(output,
+                         "loader=static interp=none",
+                         "external rootfs busybox should report static loader plan")) {
         return 1;
     }
     if (!expect_contains(output,

@@ -17,10 +17,11 @@
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
-  - 无活跃 Stage 计划；Stage 7 Linux compat 外部 rootfs 资产链路已完成并归档。
+  - 暂无活跃 Stage 8 计划；Stage 8 已归档到 [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)。
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
@@ -101,6 +102,15 @@ Stage 7 已完成 Linux compat 外部 rootfs 资产链路。显式 opt-in target
 stat / read / ELF inspect / help 路径。默认 `make test` 仍使用 builtin provider，不依赖外部
 rootfs、`debugfs` 或本机特定镜像。
 
+Stage 8 已完成 Linux compat loader / trace 收口。`linux_compat_loader` v0 现在能为 RV64
+`ET_EXEC` / `ET_DYN`、`PT_LOAD` 和 `PT_INTERP` 生成只读 load plan，并把显式
+`course-os> linux ...` run path 的输出扩展为 `loader=static|dynamic`、`interp=<path|none>`、
+`segments=<n>`、`stack=argv/envp/auxv` 和 `trace=...` 诊断。外部 rootfs generator 新增
+optional interpreter asset 记录，manifest 能区分 required / optional path 的 present / missing；
+`linux_compat_runtime` 也新增固定上限 syscall trace record buffer，为后续真实 trace-driven
+syscall 扩展提供稳定观察面。该阶段仍不声明真实动态链接器运行、真实 ELF 执行、完整 Linux
+syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成。
+
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
 - `K`：进入独立 kernel 入口
@@ -128,6 +138,12 @@ rootfs、`debugfs` 或本机特定镜像。
 
 ## 关键历史节点
 
+- `2026-05-31`
+  - 课程 OS Stage 8 Linux compat loader / trace 完成，新增只读 load-plan v0、optional
+    interpreter asset manifest、run path loader 诊断和 syscall trace record v0。
+  - Stage 8 保持显式 `linux ...` launcher、Stage 1 / Stage 2 / Stage 3 marker、Stage 4
+    `course-os> ` prompt、Stage 5 / Stage 6 / Stage 7 Linux compat guardrail 和直接
+    `git -h` fallback 关闭状态不变。
 - `2026-05-30`
   - 课程 OS Stage 4 前端交互 shell 完成，新增独立 `guest_course_os_shell_demo`、
     `course-os> ` prompt、proc 快捷命令、functional / pipeline guest 回归、
@@ -159,18 +175,19 @@ rootfs、`debugfs` 或本机特定镜像。
 - 旧 9 条负向 guest 回归仍是基础设施 guardrail；当前正向 `kernel_alpha_demo` 已不再检查旧 `D/S` marker。
 - `SimpleStorage` 仍然是单块、同步、无 completion interrupt、无宿主持久化回写的最小模型。
 - `/proc` 第三阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
-- Stage 7 只证明外部 rootfs asset ingestion，不声明动态链接器、真实 ELF 执行、完整 Linux
-  syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成；当前仍不支持网络
-  `git clone/push/pull`、完整 `vim`、完整 `gcc/rustc`、完整 signal/futex。
+- Stage 8 只证明 Linux compat load-plan / interpreter asset 记录和 syscall trace 诊断面，
+  不声明动态链接器、真实 ELF 执行、完整 Linux syscall 面、rootfs 写语义或自动 `git -h`
+  fallback 已完成；当前仍不支持网络 `git clone/push/pull`、完整 `vim`、完整
+  `gcc/rustc`、完整 signal/futex。
 - 课程级 ELF catalog、课程 syscall ABI、RAMFS、固定小进程表、教学 COW 和课程 shell 仍不能直接
   声明为 Linux ABI 兼容层；Linux ABI 扩展必须继续走旁路 `linux_compat_*` 模块和进程 ABI 分流。
 
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. Linux compat plus 下一步应从“外部 rootfs 资产读取”推进到动态 ELF / loader 边界或真实 trace
-   驱动 syscall；`fcntl/ioctl/getrandom/rt_sig*/futex/execve/wait4` 等后续语义继续按真实 trace
-   分阶段补齐，不要直接改大 `course_*` 教学模块，也不要提前启用自动 fallback。
+2. Stage 9+ 如继续推进 Linux compat，应基于 Stage 8 trace record 采样真实缺口，再分阶段补
+   `fcntl/ioctl/getrandom/rt_sig*/futex/execve/wait4` 等语义；不要直接改大 `course_*`
+   教学模块，也不要提前启用自动 fallback。
 3. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立 Stage 5+ 方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
 4. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
@@ -217,9 +234,10 @@ rootfs、`debugfs` 或本机特定镜像。
   - `cd myCPU && make test-guest-course_os_shell_demo`
   - `cd myCPU && make test-pipeline-guest-course_os_shell_demo`
   - `cd frontend && node --test`
-- Stage 5 / Stage 6 Linux compat 当前固定门禁：
+- Stage 5 / Stage 6 / Stage 7 / Stage 8 Linux compat 当前固定门禁：
   - `cd myCPU && make test-unit-course_os_stage5_linux_compat`
   - `cd myCPU && make test-unit-course_os_stage6_linux_compat`
+  - `cd myCPU && make test-unit-course_os_stage8_linux_compat_loader`
   - `cd myCPU && make test-unit-course_os_stage3_fs_shell`
   - `cd myCPU && make test-host-course_os_linux_compat_terminal_smoke`
   - `cd myCPU && make test-guest-course_os_linux_compat_shell_demo`

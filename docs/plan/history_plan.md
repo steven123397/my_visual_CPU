@@ -955,3 +955,29 @@
   完整 Linux syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成；网络 git、完整 vim /
   gcc / rustc、signal / futex 仍留给后续 trace-driven 阶段。
 - 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan
+
+- 原文件：`course_os_kernel_alpha_stage8_linux_compat_loader_trace_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 8 Linux compat loader / trace 收口，新增
+  `linux_compat_loader` 只读 load-plan v0、RV64 `ET_EXEC` / `ET_DYN` / `PT_LOAD` /
+  `PT_INTERP` 诊断、optional interpreter asset manifest、run path loader / stack / auxv
+  摘要，以及固定上限 syscall trace record buffer。
+- 实现过程摘要：按 TDD 先补 Stage 8 loader 红灯，再实现 static / dynamic load-plan；随后让
+  external rootfs generator 支持 `--optional-path`，使 interpreter 缺失只进入 manifest
+  诊断而不破坏 required asset 构建；最后把 `linux_compat_run()` 接入 load-plan 输出和
+  trace record 摘要。Stage 1 / Stage 2 / Stage 3 marker、Stage 4 `course-os> ` prompt、
+  Stage 5 / Stage 6 / Stage 7 Linux compat guardrail 和直接 `git -h` fallback 关闭状态保持不变。
+- 验证摘要：已运行 `cd myCPU && python3 -m unittest tests.host.linux_compat_rootfs_asset_test`、
+  `make test-unit-course_os_stage6_linux_compat`、`make test-unit-course_os_stage8_linux_compat_loader`、
+  带临时 rootfs 的 `make test-unit-course_os_stage7_linux_compat`、
+  `make test-host-course_os_linux_compat_terminal_smoke` 和带临时 rootfs 的
+  `make test-host-course_os_linux_compat_external_rootfs_smoke`；收口阶段补跑
+  `make test-unit-course_os_stage5_linux_compat`、`make test-guest-course_os_linux_compat_shell_demo`、
+  `make test-pipeline-guest-course_os_linux_compat_shell_demo`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test`、`make test-pipeline` 和
+  `git diff --check`。
+- 剩余风险：Stage 8 不声明真实动态链接器运行、真实 ELF 执行、完整 Linux syscall 面、
+  rootfs 写语义或自动 `git -h` fallback 已完成；`fcntl/ioctl/getrandom/rt_sig*/futex/execve/wait4`
+  等后续语义仍需按真实 trace 分阶段补齐。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)

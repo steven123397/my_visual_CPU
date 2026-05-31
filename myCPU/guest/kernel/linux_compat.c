@@ -1,4 +1,5 @@
 #include "linux_compat.h"
+#include "linux_compat_loader.h"
 #include "linux_compat_rootfs.h"
 
 static const char k_busybox_help[] =
@@ -145,6 +146,121 @@ static bool append_rootfs_source_line(char* out,
                       used,
                       linux_compat_rootfs_source_name()) &&
            append_char(out, out_size, used, '\n');
+}
+
+static const char* load_plan_type_name(const linux_compat_load_plan_t* plan) {
+    if (plan != 0 && plan->elf_type == 3U) {
+        return "dyn";
+    }
+    return "exec";
+}
+
+static const char* load_plan_loader_name(const linux_compat_load_plan_t* plan) {
+    if (plan != 0 && plan->elf_type == 3U) {
+        return "dynamic";
+    }
+    return "static";
+}
+
+static bool append_load_plan_summary(char* out,
+                                     size_t out_size,
+                                     size_t* used,
+                                     const linux_compat_load_plan_t* plan) {
+    return append_str(out, out_size, used, " elf=rv64-little type=") &&
+           append_str(out, out_size, used, load_plan_type_name(plan)) &&
+           append_str(out, out_size, used, " entry=") &&
+           append_u64_hex(out, out_size, used, plan != 0 ? plan->entry : 0U) &&
+           append_str(out, out_size, used, " loader=") &&
+           append_str(out, out_size, used, load_plan_loader_name(plan)) &&
+           append_str(out, out_size, used, " interp=") &&
+           append_str(out,
+                      out_size,
+                      used,
+                      plan != 0 && plan->requires_interp ? plan->interp_path
+                                                          : "none") &&
+           append_str(out, out_size, used, " segments=") &&
+           append_u64_dec(out,
+                          out_size,
+                          used,
+                          plan != 0 ? (uint64_t)plan->segment_count : 0U) &&
+           append_str(out, out_size, used, " stack=") &&
+           append_u64_dec(out,
+                          out_size,
+                          used,
+                          plan != 0 ? (uint64_t)plan->argv_count : 0U) &&
+           append_char(out, out_size, used, '/') &&
+           append_u64_dec(out,
+                          out_size,
+                          used,
+                          plan != 0 ? (uint64_t)plan->envp_count : 0U) &&
+           append_char(out, out_size, used, '/') &&
+           append_u64_dec(out,
+                          out_size,
+                          used,
+                          plan != 0 ? (uint64_t)plan->auxv_count : 0U);
+}
+
+static const char* linux_compat_syscall_name(uint64_t number) {
+    switch (number) {
+        case LINUX_COMPAT_SYS_OPENAT:
+            return "openat";
+        case LINUX_COMPAT_SYS_CLOSE:
+            return "close";
+        case LINUX_COMPAT_SYS_GETDENTS64:
+            return "getdents64";
+        case LINUX_COMPAT_SYS_LSEEK:
+            return "lseek";
+        case LINUX_COMPAT_SYS_READ:
+            return "read";
+        case LINUX_COMPAT_SYS_WRITE:
+            return "write";
+        case LINUX_COMPAT_SYS_NEWFSTATAT:
+            return "newfstatat";
+        case LINUX_COMPAT_SYS_CLOCK_GETTIME:
+            return "clock_gettime";
+        case LINUX_COMPAT_SYS_EXIT:
+            return "exit";
+        case LINUX_COMPAT_SYS_EXIT_GROUP:
+            return "exit_group";
+        case LINUX_COMPAT_SYS_BRK:
+            return "brk";
+        case LINUX_COMPAT_SYS_MUNMAP:
+            return "munmap";
+        case LINUX_COMPAT_SYS_MMAP:
+            return "mmap";
+        default:
+            return "unknown";
+    }
+}
+
+static bool append_trace_summary(char* out,
+                                 size_t out_size,
+                                 size_t* used,
+                                 const linux_compat_runtime_t* runtime) {
+    size_t i = 0;
+
+    if (!append_str(out, out_size, used, " trace=")) {
+        return false;
+    }
+    if (runtime == 0 || runtime->trace_count == 0U) {
+        return append_str(out, out_size, used, "none");
+    }
+    for (i = 0; i < runtime->trace_count; ++i) {
+        if (i != 0U && !append_char(out, out_size, used, '/')) {
+            return false;
+        }
+        if (!append_str(out,
+                        out_size,
+                        used,
+                        linux_compat_syscall_name(
+                            runtime->trace_records[i].number))) {
+            return false;
+        }
+    }
+    if (runtime->trace_truncated) {
+        return append_str(out, out_size, used, "+truncated");
+    }
+    return true;
 }
 
 static void clear_trace(linux_compat_trace_t* trace) {
@@ -481,6 +597,15 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
     runtime->stdout_size = 0;
     runtime->exited = false;
     runtime->exit_code = 0;
+    runtime->trace_count = 0;
+    runtime->trace_truncated = false;
+    for (i = 0; i < LINUX_COMPAT_MAX_TRACE_RECORDS; ++i) {
+        runtime->trace_records[i].number = 0;
+        runtime->trace_records[i].return_value = 0;
+        runtime->trace_records[i].errno_value = 0;
+        runtime->trace_records[i].pc = 0;
+        runtime->trace_records[i].message[0] = '\0';
+    }
 }
 
 static const linux_compat_rootfs_node_t* fd_node(
@@ -701,6 +826,34 @@ static uint64_t align_page(uint64_t value) {
     return (value + mask) & ~mask;
 }
 
+static void append_syscall_trace_record(
+    linux_compat_runtime_t* runtime,
+    const linux_compat_syscall_request_t* request,
+    int64_t return_value,
+    const linux_compat_trace_t* trace) {
+    linux_compat_syscall_trace_record_t* record = 0;
+
+    if (runtime == 0 || request == 0) {
+        return;
+    }
+    if (runtime->trace_count >= LINUX_COMPAT_MAX_TRACE_RECORDS) {
+        runtime->trace_truncated = true;
+        return;
+    }
+    record = &runtime->trace_records[runtime->trace_count];
+    runtime->trace_count += 1U;
+    record->number = request->number;
+    record->return_value = return_value;
+    record->errno_value =
+        trace != 0 ? trace->errno_value
+                   : (return_value < 0 ? (int32_t)(-return_value) : 0);
+    record->pc =
+        trace != 0 && trace->pc != 0U ? trace->pc : (uintptr_t)request->addr;
+    copy_str(record->message,
+             sizeof(record->message),
+             trace != 0 ? trace->message : "");
+}
+
 linux_compat_result_t linux_compat_syscall_dispatch(
     linux_compat_runtime_t* runtime,
     const linux_compat_syscall_request_t* request,
@@ -742,6 +895,11 @@ linux_compat_result_t linux_compat_syscall_dispatch(
         if (response != 0) {
             response->value = value;
         }
+        if (out_trace != 0) {
+            out_trace->syscall_number = request->number;
+            out_trace->pc = (uintptr_t)request->addr;
+        }
+        append_syscall_trace_record(runtime, request, value, out_trace);
         return result == LINUX_COMPAT_OK ? LINUX_COMPAT_OK : result;
     } else if (request->number == LINUX_COMPAT_SYS_OPENAT) {
         value = linux_compat_openat(runtime,
@@ -752,6 +910,11 @@ linux_compat_result_t linux_compat_syscall_dispatch(
         if (response != 0) {
             response->value = value;
         }
+        if (out_trace != 0) {
+            out_trace->syscall_number = request->number;
+            out_trace->pc = (uintptr_t)request->addr;
+        }
+        append_syscall_trace_record(runtime, request, value, out_trace);
         return value >= 0 ? LINUX_COMPAT_OK
                           : (value == -2 ? LINUX_COMPAT_ERR_NO_SUCH_FILE
                                          : LINUX_COMPAT_OK);
@@ -800,6 +963,7 @@ linux_compat_result_t linux_compat_syscall_dispatch(
             out_trace->syscall_number = request->number;
             out_trace->pc = (uintptr_t)request->addr;
         }
+        append_syscall_trace_record(runtime, request, -38, out_trace);
         return LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL;
     }
 
@@ -810,6 +974,7 @@ linux_compat_result_t linux_compat_syscall_dispatch(
         out_trace->syscall_number = request->number;
         out_trace->pc = (uintptr_t)request->addr;
     }
+    append_syscall_trace_record(runtime, request, value, out_trace);
     return LINUX_COMPAT_OK;
 }
 
@@ -819,7 +984,8 @@ linux_compat_result_t linux_compat_run(
     size_t out_size,
     linux_compat_trace_t* out_trace) {
     linux_compat_rootfs_entry_t entry;
-    linux_compat_elf_info_t elf;
+    linux_compat_rootfs_entry_t interp_entry;
+    linux_compat_load_plan_t load_plan;
     linux_compat_runtime_t runtime;
     linux_compat_syscall_request_t syscall;
     linux_compat_syscall_response_t response;
@@ -856,7 +1022,12 @@ linux_compat_result_t linux_compat_run(
         return result;
     }
 
-    result = linux_compat_inspect_elf(entry.data, entry.size, &elf, &trace);
+    result = linux_compat_build_load_plan(entry.data,
+                                          entry.size,
+                                          request->argc,
+                                          0U,
+                                          &load_plan,
+                                          &trace);
     if (result != LINUX_COMPAT_OK) {
         if (out_trace != 0) {
             *out_trace = trace;
@@ -870,6 +1041,45 @@ linux_compat_result_t linux_compat_run(
         (void)append_str(out, out_size, &used, trace.message);
         (void)append_char(out, out_size, &used, '\n');
         return result;
+    }
+
+    if (load_plan.requires_interp) {
+        result =
+            linux_compat_lookup(load_plan.interp_path, &interp_entry, &trace);
+        if (result != LINUX_COMPAT_OK) {
+            set_trace(out_trace,
+                      entry.path,
+                      trace.errno_value,
+                      "linux-compat: loader: interp missing");
+            (void)append_rootfs_source_line(out, out_size, &used);
+            (void)append_str(out, out_size, &used, "linux-compat: path=");
+            (void)append_str(out, out_size, &used, entry.path);
+            (void)append_str(out, out_size, &used, " argc=");
+            (void)append_u64_dec(out, out_size, &used, (uint64_t)request->argc);
+            (void)append_load_plan_summary(out, out_size, &used, &load_plan);
+            (void)append_str(out, out_size, &used, " errno=");
+            (void)append_u64_dec(out, out_size, &used, (uint64_t)trace.errno_value);
+            (void)append_str(out,
+                             out_size,
+                             &used,
+                             " loader reason=interp missing\n");
+            return result;
+        }
+        set_trace(out_trace,
+                  entry.path,
+                  9,
+                  "linux-compat: loader: dynamic linker not executed");
+        (void)append_rootfs_source_line(out, out_size, &used);
+        (void)append_str(out, out_size, &used, "linux-compat: path=");
+        (void)append_str(out, out_size, &used, entry.path);
+        (void)append_str(out, out_size, &used, " argc=");
+        (void)append_u64_dec(out, out_size, &used, (uint64_t)request->argc);
+        (void)append_load_plan_summary(out, out_size, &used, &load_plan);
+        (void)append_str(out,
+                         out_size,
+                         &used,
+                         " errno=9 loader reason=dynamic linker not executed\n");
+        return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
     }
 
     if (str_eq(entry.path, "/bin/busybox") &&
@@ -889,7 +1099,7 @@ linux_compat_result_t linux_compat_run(
                   "linux-compat: syscall: unsupported syscall");
         if (out_trace != 0) {
             out_trace->syscall_number = 0;
-            out_trace->pc = (uintptr_t)elf.entry;
+            out_trace->pc = (uintptr_t)load_plan.entry;
         }
 
         (void)append_rootfs_source_line(out, out_size, &used);
@@ -897,17 +1107,13 @@ linux_compat_result_t linux_compat_run(
         (void)append_str(out, out_size, &used, entry.path);
         (void)append_str(out, out_size, &used, " argc=");
         (void)append_u64_dec(out, out_size, &used, (uint64_t)request->argc);
-        (void)append_str(out, out_size, &used,
-                         " elf=rv64-little type=exec entry=");
-        (void)append_u64_hex(out, out_size, &used, elf.entry);
-        (void)append_str(out, out_size, &used, " phnum=");
-        (void)append_u64_dec(out, out_size, &used, (uint64_t)elf.phnum);
+        (void)append_load_plan_summary(out, out_size, &used, &load_plan);
         (void)append_str(out,
                          out_size,
                          &used,
                          " fail-closed unsupported syscall number=0 pc=");
-        (void)append_u64_hex(out, out_size, &used, elf.entry);
-        (void)append_str(out, out_size, &used, " errno=38\n");
+        (void)append_u64_hex(out, out_size, &used, load_plan.entry);
+        (void)append_str(out, out_size, &used, " errno=38 trace_index=0\n");
         return LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL;
     }
 
@@ -967,13 +1173,13 @@ linux_compat_result_t linux_compat_run(
     syscall.fd = 0;
     syscall.write_buffer = 0;
     syscall.length = 0;
-    syscall.addr = elf.entry;
+    syscall.addr = load_plan.entry;
     (void)linux_compat_syscall_dispatch(&runtime, &syscall, &response, &trace);
 
     set_trace(out_trace, entry.path, 0, "linux-compat: run: ok");
     if (out_trace != 0) {
         out_trace->syscall_number = LINUX_COMPAT_SYS_EXIT_GROUP;
-        out_trace->pc = (uintptr_t)elf.entry;
+        out_trace->pc = (uintptr_t)load_plan.entry;
     }
 
     (void)append_rootfs_source_line(out, out_size, &used);
@@ -981,14 +1187,13 @@ linux_compat_result_t linux_compat_run(
     (void)append_str(out, out_size, &used, entry.path);
     (void)append_str(out, out_size, &used, " argc=");
     (void)append_u64_dec(out, out_size, &used, (uint64_t)request->argc);
-    (void)append_str(out, out_size, &used, " elf=rv64-little type=exec entry=");
-    (void)append_u64_hex(out, out_size, &used, elf.entry);
-    (void)append_str(out, out_size, &used, " phnum=");
-    (void)append_u64_dec(out, out_size, &used, (uint64_t)elf.phnum);
+    (void)append_load_plan_summary(out, out_size, &used, &load_plan);
     (void)append_str(out,
                      out_size,
                      &used,
-                     " syscalls=openat/read/newfstatat/brk/mmap/write/exit_group\n");
+                     " syscalls=openat/read/newfstatat/brk/mmap/write/exit_group");
+    (void)append_trace_summary(out, out_size, &used, &runtime);
+    (void)append_char(out, out_size, &used, '\n');
     (void)append_str(out, out_size, &used, runtime.stdout_buffer);
     return LINUX_COMPAT_OK;
 }

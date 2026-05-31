@@ -59,6 +59,10 @@ int main(int argc, char** argv) {
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
            << run_until_uart_contains_command("linux-compat: path=/bin/busybox",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
+           << run_until_uart_contains_command("loader=static interp=none",
+                                              DebugBudget::kCourseOsShellCommandMaxSteps)
+           << run_until_uart_contains_command("segments=1 stack=2/0/6",
+                                              DebugBudget::kCourseOsShellCommandMaxSteps)
            << run_until_uart_contains_command("BusyBox v",
                                               DebugBudget::kCourseOsShellCommandMaxSteps)
            << run_until_uart_contains_command("course-os> ",
@@ -103,6 +107,16 @@ int main(int argc, char** argv) {
     if (!expect_contains(output,
                          "linux-compat: path=/bin/busybox",
                          "busybox should use explicit linux compat launcher")) {
+        return 1;
+    }
+    if (!expect_contains(output,
+                         "loader=static interp=none",
+                         "busybox should report static loader plan")) {
+        return 1;
+    }
+    if (!expect_contains(output,
+                         "segments=1 stack=2/0/6",
+                         "busybox should report segment and stack summary")) {
         return 1;
     }
     if (!expect_contains(output,

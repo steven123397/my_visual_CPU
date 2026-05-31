@@ -10,6 +10,7 @@
 #define LINUX_COMPAT_MAX_FDS 8U
 #define LINUX_COMPAT_MAX_STDOUT 512U
 #define LINUX_COMPAT_MAX_DIRENTS 8U
+#define LINUX_COMPAT_MAX_TRACE_RECORDS 16U
 #define LINUX_COMPAT_AT_FDCWD (-100)
 #define LINUX_COMPAT_O_RDONLY 0U
 #define LINUX_COMPAT_DT_DIR 4U
@@ -99,6 +100,14 @@ typedef struct LinuxCompatFd {
     size_t offset;
 } linux_compat_fd_t;
 
+typedef struct LinuxCompatSyscallTraceRecord {
+    uint64_t number;
+    int64_t return_value;
+    int32_t errno_value;
+    uintptr_t pc;
+    char message[LINUX_COMPAT_MAX_MESSAGE];
+} linux_compat_syscall_trace_record_t;
+
 typedef struct LinuxCompatRuntime {
     linux_compat_fd_t fds[LINUX_COMPAT_MAX_FDS];
     uint64_t program_break;
@@ -107,6 +116,9 @@ typedef struct LinuxCompatRuntime {
     size_t stdout_size;
     bool exited;
     int32_t exit_code;
+    linux_compat_syscall_trace_record_t trace_records[LINUX_COMPAT_MAX_TRACE_RECORDS];
+    size_t trace_count;
+    bool trace_truncated;
 } linux_compat_runtime_t;
 
 typedef struct LinuxCompatSyscallRequest {

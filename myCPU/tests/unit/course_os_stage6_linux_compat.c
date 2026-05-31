@@ -199,10 +199,19 @@ static int test_syscall_dispatch_covers_help_output_minimum(void) {
 
     memset(&request, 0, sizeof(request));
     request.number = 9999U;
+    request.addr = 0x1234U;
     if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
             LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL ||
         response.value != -38 ||
-        trace.syscall_number != 9999U) {
+        trace.syscall_number != 9999U ||
+        trace.pc != 0x1234U ||
+        runtime.trace_count == 0U ||
+        runtime.trace_records[runtime.trace_count - 1U].number != 9999U ||
+        runtime.trace_records[runtime.trace_count - 1U].return_value != -38 ||
+        runtime.trace_records[runtime.trace_count - 1U].errno_value != 38 ||
+        runtime.trace_records[runtime.trace_count - 1U].pc != 0x1234U ||
+        !contains(runtime.trace_records[runtime.trace_count - 1U].message,
+                  "unsupported syscall")) {
         return fail("expected unsupported syscall to fail closed with ENOSYS");
     }
 
@@ -222,6 +231,12 @@ static int test_linux_run_emits_help_instead_of_unsupported_syscall(void) {
     if (linux_compat_run(&request, out, sizeof(out), &trace) != LINUX_COMPAT_OK ||
         !contains(out, "BusyBox v") ||
         !contains(out, "Usage: busybox") ||
+        !contains(out, "loader=static") ||
+        !contains(out, "interp=none") ||
+        !contains(out, "segments=1") ||
+        !contains(out, "stack=2/0/6") ||
+        !contains(out,
+                  "trace=brk/mmap/newfstatat/openat/read/close/write/exit_group") ||
         contains(out, "unsupported syscall")) {
         return fail("expected busybox help to complete through minimal syscalls");
     }
@@ -231,8 +246,32 @@ static int test_linux_run_emits_help_instead_of_unsupported_syscall(void) {
     request.argv = git_argv;
     if (linux_compat_run(&request, out, sizeof(out), &trace) != LINUX_COMPAT_OK ||
         !contains(out, "usage: git") ||
+        !contains(out, "loader=static") ||
+        !contains(out, "interp=none") ||
+        !contains(out, "trace=brk/mmap/newfstatat/openat/read/close/write/exit_group") ||
         contains(out, "unsupported syscall")) {
         return fail("expected git -h to complete through minimal syscalls");
+    }
+
+    return 0;
+}
+
+static int test_linux_run_fails_closed_for_dynamic_elf_without_interp(void) {
+    const char* argv[] = {"/usr/bin/dynamic-app"};
+    linux_compat_exec_request_t request;
+    linux_compat_trace_t trace;
+    char out[1024];
+
+    request.path = "/usr/bin/dynamic-app";
+    request.argc = 1U;
+    request.argv = argv;
+    if (linux_compat_run(&request, out, sizeof(out), &trace) !=
+            LINUX_COMPAT_ERR_NO_SUCH_FILE ||
+        !contains(out, "loader=dynamic") ||
+        !contains(out, "interp=/lib/ld-musl-riscv64.so.1") ||
+        !contains(out, "errno=2") ||
+        !contains(out, "loader reason=interp missing")) {
+        return fail("expected missing dynamic interpreter to fail closed");
     }
 
     return 0;
@@ -243,7 +282,8 @@ int main(void) {
         test_rootfs_stat_reports_linux_metadata() != 0 ||
         test_fd_openat_read_lseek_close_uses_rootfs_bytes() != 0 ||
         test_syscall_dispatch_covers_help_output_minimum() != 0 ||
-        test_linux_run_emits_help_instead_of_unsupported_syscall() != 0) {
+        test_linux_run_emits_help_instead_of_unsupported_syscall() != 0 ||
+        test_linux_run_fails_closed_for_dynamic_elf_without_interp() != 0) {
         return 1;
     }
 

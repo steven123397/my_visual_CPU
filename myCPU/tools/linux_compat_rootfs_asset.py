@@ -11,6 +11,7 @@ import tempfile
 
 EM_RISCV = 243
 ET_EXEC = 2
+ET_DYN = 3
 
 
 class Source:
@@ -52,9 +53,9 @@ def inspect_rv64_elf(path: str, data: bytes) -> dict[str, int]:
         raise ValueError(f"{path}: unsupported ELF class/data")
     elf_type, machine = struct.unpack_from("<HH", data, 16)
     entry = struct.unpack_from("<Q", data, 24)[0]
-    if elf_type != ET_EXEC or machine != EM_RISCV:
+    if elf_type not in (ET_EXEC, ET_DYN) or machine != EM_RISCV:
         raise ValueError(f"{path}: unsupported ELF type/machine")
-    return {"entry": entry, "size": len(data)}
+    return {"entry": entry, "size": len(data), "type": elf_type}
 
 
 def c_string(value: str) -> str:
@@ -75,21 +76,80 @@ def mode_for_file(source: Source, guest_path: str) -> int:
         return 0o555
 
 
-def write_c_asset(out_c: pathlib.Path, source: Source, paths: list[str]) -> None:
-    entries = []
-    for index, guest_path in enumerate(paths):
-        data = read_source_file(source, guest_path)
-        elf = inspect_rv64_elf(guest_path, data)
-        entries.append(
-            {
-                "index": index,
-                "path": guest_path,
-                "data": data,
-                "entry": elf["entry"],
-                "size": elf["size"],
-                "mode": mode_for_file(source, guest_path),
-            }
+def collect_asset_records(
+    source: Source, required_paths: list[str], optional_paths: list[str]
+) -> list[dict]:
+    records = []
+    for required, paths in ((True, required_paths), (False, optional_paths)):
+        for guest_path in paths:
+            try:
+                data = read_source_file(source, guest_path)
+                elf = inspect_rv64_elf(guest_path, data)
+            except (OSError, RuntimeError, ValueError) as exc:
+                if required:
+                    raise
+                records.append(
+                    {
+                        "path": guest_path,
+                        "required": False,
+                        "present": False,
+                        "reason": str(exc),
+                    }
+                )
+                continue
+            records.append(
+                {
+                    "path": guest_path,
+                    "required": required,
+                    "present": True,
+                    "data": data,
+                    "entry": elf["entry"],
+                    "size": elf["size"],
+                    "type": elf["type"],
+                    "mode": mode_for_file(source, guest_path),
+                }
+            )
+    return records
+
+
+def directory_paths_for(paths: list[str]) -> list[str]:
+    dirs = {"/"}
+    for guest_path in paths:
+        current = pathlib.PurePosixPath(guest_path).parent
+        while str(current) not in ("", "."):
+            dirs.add(str(current))
+            if str(current) == "/":
+                break
+            current = current.parent
+    return sorted(dirs, key=lambda value: (value.count("/"), value))
+
+
+def dir_mode_for(path: str) -> str:
+    if path == "/":
+        return (
+            "LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | "
+            "LINUX_COMPAT_S_IWUSR | LINUX_COMPAT_S_IXUSR | "
+            "LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP | "
+            "LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH"
         )
+    return (
+        "LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | "
+        "LINUX_COMPAT_S_IXUSR | LINUX_COMPAT_S_IRGRP | "
+        "LINUX_COMPAT_S_IXGRP | LINUX_COMPAT_S_IROTH | "
+        "LINUX_COMPAT_S_IXOTH"
+    )
+
+
+def write_c_asset(
+    out_c: pathlib.Path,
+    source: Source,
+    required_paths: list[str],
+    optional_paths: list[str],
+) -> None:
+    records = collect_asset_records(source, required_paths, optional_paths)
+    entries = [record for record in records if record["present"]]
+    for index, entry in enumerate(entries):
+        entry["index"] = index
 
     lines = [
         "#include <stdbool.h>",
@@ -104,33 +164,16 @@ def write_c_asset(out_c: pathlib.Path, source: Source, paths: list[str]) -> None
             f"static const uint8_t k_asset_{entry['index']}[] = "
             f"{{{c_byte_array(entry['data'])}}};"
         )
-    lines.extend(
-        [
-            "",
-            "static const linux_compat_rootfs_node_t k_rootfs_nodes[] = {",
-            "    {\"/\", 0, 0, false, true, 1U,",
-            "     LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | "
-            "LINUX_COMPAT_S_IWUSR |",
-            "         LINUX_COMPAT_S_IXUSR | LINUX_COMPAT_S_IRGRP |",
-            "         LINUX_COMPAT_S_IXGRP | LINUX_COMPAT_S_IROTH |",
-            "         LINUX_COMPAT_S_IXOTH},",
-            "    {\"/bin\", 0, 0, false, true, 2U,",
-            "     LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | "
-            "LINUX_COMPAT_S_IXUSR |",
-            "         LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |",
-            "         LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH},",
-            "    {\"/usr\", 0, 0, false, true, 3U,",
-            "     LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | "
-            "LINUX_COMPAT_S_IXUSR |",
-            "         LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |",
-            "         LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH},",
-            "    {\"/usr/bin\", 0, 0, false, true, 4U,",
-            "     LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | "
-            "LINUX_COMPAT_S_IXUSR |",
-            "         LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |",
-            "         LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH},",
-        ]
-    )
+    lines.extend(["", "static const linux_compat_rootfs_node_t k_rootfs_nodes[] = {"])
+    directory_paths = directory_paths_for([entry["path"] for entry in entries])
+    for index, directory in enumerate(directory_paths):
+        lines.append(
+            "    {"
+            f"{c_string(directory)}, 0, 0, false, true, {index + 1}U, "
+            f"{dir_mode_for(directory)}"
+            "},"
+        )
+    file_inode_base = len(directory_paths) + 1
     for offset, entry in enumerate(entries):
         lines.append(
             "    {"
@@ -138,7 +181,7 @@ def write_c_asset(out_c: pathlib.Path, source: Source, paths: list[str]) -> None
             f"k_asset_{entry['index']}, "
             f"sizeof(k_asset_{entry['index']}), "
             "true, false, "
-            f"{5 + offset}U, "
+            f"{file_inode_base + offset}U, "
             "LINUX_COMPAT_S_IFREG | LINUX_COMPAT_S_IRUSR | "
             "LINUX_COMPAT_S_IXUSR | LINUX_COMPAT_S_IRGRP | "
             "LINUX_COMPAT_S_IXGRP | LINUX_COMPAT_S_IROTH | "
@@ -171,20 +214,24 @@ def write_c_asset(out_c: pathlib.Path, source: Source, paths: list[str]) -> None
 
 def write_manifest(out_manifest: pathlib.Path | None,
                    source: Source,
-                   paths: list[str]) -> None:
+                   required_paths: list[str],
+                   optional_paths: list[str]) -> None:
     if out_manifest is None:
         return
     files = []
-    for guest_path in paths:
-        data = read_source_file(source, guest_path)
-        elf = inspect_rv64_elf(guest_path, data)
-        files.append(
-            {
-                "path": guest_path,
-                "entry": elf["entry"],
-                "size": elf["size"],
-            }
-        )
+    for record in collect_asset_records(source, required_paths, optional_paths):
+        entry = {
+            "path": record["path"],
+            "required": record["required"],
+            "present": record["present"],
+        }
+        if record["present"]:
+            entry["entry"] = record["entry"]
+            entry["size"] = record["size"]
+            entry["type"] = record["type"]
+        else:
+            entry["reason"] = record["reason"]
+        files.append(entry)
     out_manifest.parent.mkdir(parents=True, exist_ok=True)
     out_manifest.write_text(
         json.dumps({"source": source.kind, "files": files}, separators=(",", ":"))
@@ -202,6 +249,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--out-c", type=pathlib.Path, required=True)
     parser.add_argument("--out-manifest", type=pathlib.Path)
     parser.add_argument("--path", action="append", default=[])
+    parser.add_argument("--optional-path", action="append", default=[])
     return parser.parse_args(argv)
 
 
@@ -224,8 +272,8 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         source = resolve_source(args)
-        write_c_asset(args.out_c, source, args.path)
-        write_manifest(args.out_manifest, source, args.path)
+        write_c_asset(args.out_c, source, args.path, args.optional_path)
+        write_manifest(args.out_manifest, source, args.path, args.optional_path)
     except (OSError, RuntimeError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
