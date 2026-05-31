@@ -1,114 +1,5 @@
 #include "linux_compat.h"
-
-static const uint8_t k_busybox_stub[128] = {
-    [0] = 0x7f,
-    [1] = 'E',
-    [2] = 'L',
-    [3] = 'F',
-    [4] = 2,
-    [5] = 1,
-    [6] = 1,
-    [16] = 2,
-    [18] = 0xf3,
-    [20] = 1,
-    [24] = 0x00,
-    [25] = 0x10,
-    [26] = 0x40,
-    [32] = 64,
-    [52] = 64,
-    [54] = 56,
-    [56] = 1,
-    [64] = 1,
-};
-
-static const uint8_t k_git_stub[128] = {
-    [0] = 0x7f,
-    [1] = 'E',
-    [2] = 'L',
-    [3] = 'F',
-    [4] = 2,
-    [5] = 1,
-    [6] = 1,
-    [16] = 2,
-    [18] = 0xf3,
-    [20] = 1,
-    [24] = 0x00,
-    [25] = 0x20,
-    [26] = 0x40,
-    [32] = 64,
-    [52] = 64,
-    [54] = 56,
-    [56] = 1,
-    [64] = 1,
-};
-
-typedef struct LinuxCompatRootfsNode {
-    const char* path;
-    const uint8_t* data;
-    size_t size;
-    bool executable;
-    bool directory;
-    uint64_t inode;
-    uint32_t mode;
-} linux_compat_rootfs_node_t;
-
-static const linux_compat_rootfs_node_t k_rootfs_nodes[] = {
-    {"/",
-     0,
-     0,
-     false,
-     true,
-     1U,
-     LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | LINUX_COMPAT_S_IWUSR |
-         LINUX_COMPAT_S_IXUSR | LINUX_COMPAT_S_IRGRP |
-         LINUX_COMPAT_S_IXGRP | LINUX_COMPAT_S_IROTH |
-         LINUX_COMPAT_S_IXOTH},
-    {"/bin",
-     0,
-     0,
-     false,
-     true,
-     2U,
-     LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | LINUX_COMPAT_S_IXUSR |
-         LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |
-         LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH},
-    {"/usr",
-     0,
-     0,
-     false,
-     true,
-     3U,
-     LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | LINUX_COMPAT_S_IXUSR |
-         LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |
-         LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH},
-    {"/usr/bin",
-     0,
-     0,
-     false,
-     true,
-     4U,
-     LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR | LINUX_COMPAT_S_IXUSR |
-         LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |
-         LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH},
-    {"/bin/busybox",
-     k_busybox_stub,
-     sizeof(k_busybox_stub),
-     true,
-     false,
-     5U,
-     LINUX_COMPAT_S_IFREG | LINUX_COMPAT_S_IRUSR | LINUX_COMPAT_S_IXUSR |
-         LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |
-         LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH},
-    {"/usr/bin/git",
-     k_git_stub,
-     sizeof(k_git_stub),
-     true,
-     false,
-     6U,
-     LINUX_COMPAT_S_IFREG | LINUX_COMPAT_S_IRUSR | LINUX_COMPAT_S_IXUSR |
-         LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |
-         LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH},
-};
+#include "linux_compat_rootfs.h"
 
 static const char k_busybox_help[] =
     "BusyBox v1.36.1 (myCPU linux-compat)\n"
@@ -245,6 +136,17 @@ static bool append_u64_hex(char* out,
     return true;
 }
 
+static bool append_rootfs_source_line(char* out,
+                                      size_t out_size,
+                                      size_t* used) {
+    return append_str(out, out_size, used, "linux-compat: rootfs=") &&
+           append_str(out,
+                      out_size,
+                      used,
+                      linux_compat_rootfs_source_name()) &&
+           append_char(out, out_size, used, '\n');
+}
+
 static void clear_trace(linux_compat_trace_t* trace) {
     if (trace == 0) {
         return;
@@ -327,9 +229,12 @@ static const linux_compat_rootfs_node_t* find_node(const char* path) {
     if (path == 0 || str_len(path) == 0U) {
         return 0;
     }
-    for (i = 0; i < sizeof(k_rootfs_nodes) / sizeof(k_rootfs_nodes[0]); ++i) {
-        if (str_eq(path, k_rootfs_nodes[i].path)) {
-            return &k_rootfs_nodes[i];
+    for (i = 0; i < linux_compat_rootfs_node_count(); ++i) {
+        const linux_compat_rootfs_node_t* node =
+            linux_compat_rootfs_node_at(i);
+
+        if (node != 0 && str_eq(path, node->path)) {
+            return node;
         }
     }
     return 0;
@@ -765,22 +670,24 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
                   "linux-compat: getdents64: bad buffer");
         return -22;
     }
-    for (i = 0; i < sizeof(k_rootfs_nodes) / sizeof(k_rootfs_nodes[0]); ++i) {
+    for (i = 0; i < linux_compat_rootfs_node_count(); ++i) {
+        const linux_compat_rootfs_node_t* child =
+            linux_compat_rootfs_node_at(i);
         char name[LINUX_COMPAT_MAX_PATH];
 
         if (count >= capacity) {
             break;
         }
-        if (!copy_basename_if_child(node->path,
-                                    k_rootfs_nodes[i].path,
+        if (child == 0 ||
+            !copy_basename_if_child(node->path,
+                                    child->path,
                                     name,
                                     sizeof(name))) {
             continue;
         }
-        dirents[count].inode = k_rootfs_nodes[i].inode;
+        dirents[count].inode = child->inode;
         dirents[count].type =
-            k_rootfs_nodes[i].directory ? LINUX_COMPAT_DT_DIR
-                                        : LINUX_COMPAT_DT_REG;
+            child->directory ? LINUX_COMPAT_DT_DIR : LINUX_COMPAT_DT_REG;
         copy_str(dirents[count].name, sizeof(dirents[count].name), name);
         count += 1U;
     }
@@ -940,6 +847,7 @@ linux_compat_result_t linux_compat_run(
         if (out_trace != 0) {
             *out_trace = trace;
         }
+        (void)append_rootfs_source_line(out, out_size, &used);
         (void)append_str(out, out_size, &used, "linux-compat: path=");
         (void)append_str(out, out_size, &used, trace.path);
         (void)append_str(out, out_size, &used, " errno=");
@@ -953,6 +861,7 @@ linux_compat_result_t linux_compat_run(
         if (out_trace != 0) {
             *out_trace = trace;
         }
+        (void)append_rootfs_source_line(out, out_size, &used);
         (void)append_str(out, out_size, &used, "linux-compat: path=");
         (void)append_str(out, out_size, &used, entry.path);
         (void)append_str(out, out_size, &used, " errno=");
@@ -983,6 +892,7 @@ linux_compat_result_t linux_compat_run(
             out_trace->pc = (uintptr_t)elf.entry;
         }
 
+        (void)append_rootfs_source_line(out, out_size, &used);
         (void)append_str(out, out_size, &used, "linux-compat: path=");
         (void)append_str(out, out_size, &used, entry.path);
         (void)append_str(out, out_size, &used, " argc=");
@@ -1066,6 +976,7 @@ linux_compat_result_t linux_compat_run(
         out_trace->pc = (uintptr_t)elf.entry;
     }
 
+    (void)append_rootfs_source_line(out, out_size, &used);
     (void)append_str(out, out_size, &used, "linux-compat: path=");
     (void)append_str(out, out_size, &used, entry.path);
     (void)append_str(out, out_size, &used, " argc=");

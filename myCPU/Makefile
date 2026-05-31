@@ -60,11 +60,11 @@ COURSE_OS_STAGE2_PROCESS_UNIT_OBJS = tests/unit/course_os_stage2_process_test.o 
 COURSE_OS_STAGE2_PROCESS_UNIT_DEPS = $(COURSE_OS_STAGE2_PROCESS_UNIT_OBJS:.o=.d)
 COURSE_OS_STAGE2_FD_FS_UNIT_OBJS = tests/unit/course_os_stage2_fd_fs_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_FD_FS_UNIT_DEPS = $(COURSE_OS_STAGE2_FD_FS_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_SHELL_UNIT_OBJS = tests/unit/course_os_stage2_shell_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_SHELL_UNIT_OBJS = tests/unit/course_os_stage2_shell_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_rootfs_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_SHELL_UNIT_DEPS = $(COURSE_OS_STAGE2_SHELL_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_COW_CRASH_UNIT_OBJS = tests/unit/course_os_stage2_cow_crash_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_COW_CRASH_UNIT_OBJS = tests/unit/course_os_stage2_cow_crash_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_rootfs_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_COW_CRASH_UNIT_DEPS = $(COURSE_OS_STAGE2_COW_CRASH_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE2_UNIT_OBJS = tests/unit/course_os_stage2_test.o tests/unit/course_os_stage2_guest.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE2_UNIT_OBJS = tests/unit/course_os_stage2_test.o tests/unit/course_os_stage2_guest.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_rootfs_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE2_UNIT_DEPS = $(COURSE_OS_STAGE2_UNIT_OBJS:.o=.d)
 COURSE_OS_STAGE3_ELF_UNIT_OBJS = tests/unit/course_os_stage3_elf_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE3_ELF_UNIT_DEPS = $(COURSE_OS_STAGE3_ELF_UNIT_OBJS:.o=.d)
@@ -72,16 +72,18 @@ COURSE_OS_STAGE3_SCHED_SYNC_UNIT_OBJS = tests/unit/course_os_stage3_sched_sync_t
 COURSE_OS_STAGE3_SCHED_SYNC_UNIT_DEPS = $(COURSE_OS_STAGE3_SCHED_SYNC_UNIT_OBJS:.o=.d)
 COURSE_OS_STAGE3_VM_UNIT_OBJS = tests/unit/course_os_stage3_vm_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE3_VM_UNIT_DEPS = $(COURSE_OS_STAGE3_VM_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE3_FS_SHELL_UNIT_OBJS = tests/unit/course_os_stage3_fs_shell_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE3_FS_SHELL_UNIT_OBJS = tests/unit/course_os_stage3_fs_shell_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_rootfs_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE3_FS_SHELL_UNIT_DEPS = $(COURSE_OS_STAGE3_FS_SHELL_UNIT_OBJS:.o=.d)
 COURSE_OS_STAGE3_PROC_UNIT_OBJS = tests/unit/course_os_stage3_proc_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE3_PROC_UNIT_DEPS = $(COURSE_OS_STAGE3_PROC_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE3_UNIT_OBJS = tests/unit/course_os_stage3_test.o tests/unit/course_os_stage3_guest.o tests/unit/course_sync_guest.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
+COURSE_OS_STAGE3_UNIT_OBJS = tests/unit/course_os_stage3_test.o tests/unit/course_os_stage3_guest.o tests/unit/course_sync_guest.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_rootfs_guest.o tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE3_UNIT_DEPS = $(COURSE_OS_STAGE3_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage5_linux_compat_test.o tests/unit/linux_compat_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/course_elf_loader_guest.o
+COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage5_linux_compat_test.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_rootfs_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/course_elf_loader_guest.o
 COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_DEPS = $(COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage6_linux_compat_test.o tests/unit/linux_compat_guest.o
+COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage6_linux_compat_test.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_rootfs_guest.o
 COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_DEPS = $(COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_OBJS:.o=.d)
+COURSE_OS_STAGE7_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage7_linux_compat_test.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_rootfs_external_guest.o
+COURSE_OS_STAGE7_LINUX_COMPAT_UNIT_DEPS = $(COURSE_OS_STAGE7_LINUX_COMPAT_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_COMMON_UNIT_OBJS = tests/unit/kernel_alpha_common_test.o tests/unit/kernel_alpha_common_guest.o
 KERNEL_ALPHA_COMMON_UNIT_DEPS = $(KERNEL_ALPHA_COMMON_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_STORAGE_UNIT_OBJS = tests/unit/kernel_alpha_storage_test.o tests/unit/kernel_alpha_storage_guest.o
@@ -101,6 +103,7 @@ GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO = guest/kernel_alpha_plic_not_ready_demo.
 GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO = guest/kernel_alpha_timer_not_ready_demo.elf
 GUEST_INTERACTIVE_OS_DEMO = guest/interactive_os.elf
 GUEST_COURSE_OS_SHELL_DEMO = guest/course_os_shell.elf
+GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_DEMO = guest/generated/course_os_linux_compat_external_shell.elf
 GUEST_AI_ACCEL_DEMO = guest/ai_accel_demo.elf
 GUEST_VECTOR_DEMO = guest/vector_demo.elf
 GUEST_VECTOR_CNN_DEMO = guest/vector_cnn_demo.elf
@@ -123,7 +126,11 @@ LINUX_PROTO_GENERATED_DISK_DIR = workloads/linux_proto/rootfs_disk_staging
 LINUX_PROTO_GENERATED_DISK_BLOCKS ?= 8192
 LINUX_DISTRO_REJECT_REPO_ROOTFS = MYCPU_CHECK_ROOTFS="$$rootfs" python3 -c 'import os,sys; p=os.environ["MYCPU_CHECK_ROOTFS"]; base=os.path.realpath("$(LINUX_PROTO_GENERATED_DISK)"); cand=os.path.realpath(p if os.path.isabs(p) else os.path.join(os.getcwd(), p)); sys.exit(1 if cand == base else 0)'
 REQUIRE_EXTERNAL_LINUX_ROOTFS = rootfs="$(1)"; if [ -z "$$rootfs" ]; then echo "$(2)" >&2; exit 1; fi; $(LINUX_DISTRO_REJECT_REPO_ROOTFS) || { echo "$(2)" >&2; exit 1; }
-GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/ai_accel.c guest/kernel/console.c guest/kernel/course_elf_loader.c guest/kernel/course_fd.c guest/kernel/course_fs.c guest/kernel/course_libc.c guest/kernel/course_memory.c guest/kernel/course_os_stage1.c guest/kernel/course_os_stage2.c guest/kernel/course_os_stage3.c guest/kernel/course_process.c guest/kernel/course_scheduler.c guest/kernel/course_shell.c guest/kernel/course_sync.c guest/kernel/course_syscall.c guest/kernel/course_user_programs.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/linux_compat.c guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/procfs.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
+REQUIRE_EXTERNAL_COURSE_OS_LINUX_COMPAT_ROOTFS = rootfs="$(1)"; if [ -z "$$rootfs" ]; then echo "$(2)" >&2; exit 1; fi; $(LINUX_DISTRO_REJECT_REPO_ROOTFS) || { echo "$(2)" >&2; exit 1; }
+LINUX_COMPAT_ROOTFS_SRC ?= guest/kernel/linux_compat_rootfs_builtin.c
+LINUX_COMPAT_GENERATED_ROOTFS_ASSET = guest/generated/linux_compat_rootfs_asset.c
+LINUX_COMPAT_GENERATED_ROOTFS_MANIFEST = guest/generated/linux_compat_rootfs_asset.json
+GUEST_SRCS = guest/lib/platform.S guest/lib/trap_runtime.S guest/kernel/ai_accel.c guest/kernel/console.c guest/kernel/course_elf_loader.c guest/kernel/course_fd.c guest/kernel/course_fs.c guest/kernel/course_libc.c guest/kernel/course_memory.c guest/kernel/course_os_stage1.c guest/kernel/course_os_stage2.c guest/kernel/course_os_stage3.c guest/kernel/course_process.c guest/kernel/course_scheduler.c guest/kernel/course_shell.c guest/kernel/course_sync.c guest/kernel/course_syscall.c guest/kernel/course_user_programs.c guest/kernel/kernel_bringup.c guest/kernel/kernel_runtime.c guest/kernel/linux_compat.c $(LINUX_COMPAT_ROOTFS_SRC) guest/kernel/memory.c guest/kernel/panic.c guest/kernel/pmm.c guest/kernel/procfs.c guest/kernel/runtime_context.c guest/kernel/storage.c guest/kernel/supervisor_demo_smoke.c guest/kernel/supervisor_runtime.c guest/kernel/timer.c guest/kernel/trap.c guest/kernel/trap_dispatch.c guest/kernel/user_program.c guest/kernel/user_program_smoke.c guest/kernel/user_task.c guest/kernel/user_task_bootstrap.c guest/kernel/vm.c guest/kernel/vm_address_space.c guest/kernel/vm_process.c guest/kernel/vm_object.c guest/kernel/vm_fault.c guest/supervisor_demo/start.S guest/supervisor_demo/main.c
 GUEST_OBJS = $(GUEST_SRCS:.S=.o)
 GUEST_OBJS := $(GUEST_OBJS:.c=.o)
 GUEST_KERNEL_ALPHA_COMMON_SRCS = guest/kernel_alpha/common.c guest/kernel_alpha/interrupt_contract.c guest/kernel_alpha/storage_contract.c
@@ -163,6 +170,9 @@ GUEST_INTERACTIVE_OS_OBJS := $(GUEST_INTERACTIVE_OS_OBJS:.c=.o)
 GUEST_COURSE_OS_SHELL_SRCS = $(filter-out guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/kernel/console_input.c guest/course_os_shell/main.c
 GUEST_COURSE_OS_SHELL_OBJS = $(GUEST_COURSE_OS_SHELL_SRCS:.S=.o)
 GUEST_COURSE_OS_SHELL_OBJS := $(GUEST_COURSE_OS_SHELL_OBJS:.c=.o)
+GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_SRCS = $(filter-out guest/supervisor_demo/main.c guest/kernel/linux_compat_rootfs_builtin.c,$(GUEST_SRCS)) $(LINUX_COMPAT_GENERATED_ROOTFS_ASSET) guest/kernel/console_input.c guest/course_os_shell/main.c
+GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_OBJS = $(GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_SRCS:.S=.o)
+GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_OBJS := $(GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_OBJS:.c=.o)
 GUEST_AI_ACCEL_DEMO_SRCS = $(filter-out guest/supervisor_demo/start.S guest/supervisor_demo/main.c,$(GUEST_SRCS)) guest/ai_accel_demo/start.S guest/ai_accel_demo/main.c
 GUEST_AI_ACCEL_DEMO_OBJS = $(GUEST_AI_ACCEL_DEMO_SRCS:.S=.o)
 GUEST_AI_ACCEL_DEMO_OBJS := $(GUEST_AI_ACCEL_DEMO_OBJS:.c=.o)
@@ -182,6 +192,7 @@ DEPS     += $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_OBJS:.o=.d)
 DEPS     += $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_OBJS:.o=.d)
 DEPS     += $(GUEST_INTERACTIVE_OS_OBJS:.o=.d)
 DEPS     += $(GUEST_COURSE_OS_SHELL_OBJS:.o=.d)
+DEPS     += $(GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_OBJS:.o=.d)
 DEPS     += $(GUEST_AI_ACCEL_DEMO_OBJS:.o=.d)
 DEPS     += $(GUEST_VECTOR_DEMO_OBJS:.o=.d)
 DEPS     += $(GUEST_VECTOR_CNN_DEMO_OBJS:.o=.d)
@@ -214,6 +225,8 @@ DEPS     += $(COURSE_OS_STAGE3_FS_SHELL_UNIT_DEPS)
 DEPS     += $(COURSE_OS_STAGE3_PROC_UNIT_DEPS)
 DEPS     += $(COURSE_OS_STAGE3_UNIT_DEPS)
 DEPS     += $(COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_DEPS)
+DEPS     += $(COURSE_OS_STAGE7_LINUX_COMPAT_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_COMMON_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_STORAGE_UNIT_DEPS)
 DEPS     += $(KERNEL_ALPHA_INTERRUPT_UNIT_DEPS)
@@ -342,6 +355,9 @@ $(GUEST_INTERACTIVE_OS_DEMO): $(GUEST_INTERACTIVE_OS_OBJS)
 	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
 
 $(GUEST_COURSE_OS_SHELL_DEMO): $(GUEST_COURSE_OS_SHELL_OBJS)
+	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
+
+$(GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_DEMO): $(GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_OBJS)
 	$(RV_CC) $(GUEST_RV_CFLAGS) $(GUEST_RV_LDFLAGS) -o $@ $^
 
 $(GUEST_AI_ACCEL_DEMO): $(GUEST_AI_ACCEL_DEMO_OBJS)
@@ -629,6 +645,20 @@ test-host-course_os_linux_compat_terminal_smoke: FORCE $(TARGET) $(GUEST_COURSE_
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
 		echo "Host test timed out: course_os_linux_compat_terminal_smoke" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
+test-host-course_os_linux_compat_external_rootfs_smoke: FORCE $(TARGET) $(GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_DEMO) tests/host/course_os_linux_compat_external_rootfs_smoke
+	@echo "=== host:course_os_linux_compat_external_rootfs_smoke ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/course_os_linux_compat_external_rootfs_smoke functional 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Host test timed out: course_os_linux_compat_external_rootfs_smoke" >&2; \
 		exit 1; \
 	fi; \
 	if [ $$status -ne 0 ]; then \
@@ -1448,6 +1478,9 @@ tests/unit/course_os_stage5_linux_compat_test.o: tests/unit/course_os_stage5_lin
 tests/unit/linux_compat_guest.o: guest/kernel/linux_compat.c
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
 
+tests/unit/linux_compat_rootfs_guest.o: $(LINUX_COMPAT_ROOTFS_SRC)
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
 tests/unit/course_os_stage5_linux_compat: $(COURSE_OS_STAGE5_LINUX_COMPAT_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
@@ -1455,6 +1488,20 @@ tests/unit/course_os_stage6_linux_compat_test.o: tests/unit/course_os_stage6_lin
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
 
 tests/unit/course_os_stage6_linux_compat: $(COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(LINUX_COMPAT_GENERATED_ROOTFS_ASSET): FORCE
+	@$(call REQUIRE_EXTERNAL_COURSE_OS_LINUX_COMPAT_ROOTFS,$(MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS),MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS must point to an external rootfs directory or ext4 image)
+	@mkdir -p guest/generated
+	python3 tools/linux_compat_rootfs_asset.py --source "$(MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS)" --out-c $@ --out-manifest $(LINUX_COMPAT_GENERATED_ROOTFS_MANIFEST) --path /bin/busybox --path /usr/bin/git
+
+tests/unit/course_os_stage7_linux_compat_test.o: tests/unit/course_os_stage7_linux_compat.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/linux_compat_rootfs_external_guest.o: $(LINUX_COMPAT_GENERATED_ROOTFS_ASSET)
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_stage7_linux_compat: $(COURSE_OS_STAGE7_LINUX_COMPAT_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/unit/kernel_alpha_common_test.o: tests/unit/kernel_alpha_common.c

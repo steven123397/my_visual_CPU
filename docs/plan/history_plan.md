@@ -929,3 +929,29 @@
   资产读取、动态链接器、完整 Linux shell、网络 git、完整 vim / gcc / rustc、signal/futex
   或真实 rootfs 写语义已经完成。
 - 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan
+
+- 原文件：`course_os_kernel_alpha_stage7_linux_compat_external_rootfs_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 7 Linux compat 外部 rootfs 资产链路，新增
+  `linux_compat_rootfs_asset.py` host generator、builtin / external rootfs provider 分层、
+  generated C provider、Stage 7 unit target 和显式 external rootfs shell smoke。外部 opt-in target
+  可以从目录或 ext4 rootfs 提取 `/bin/busybox`、`/usr/bin/git`，把真实 RV64 ELF bytes 和 metadata
+  接入现有 lookup / stat / read / ELF inspect / help 路径；默认 `make test` 仍使用 builtin provider。
+- 实现过程摘要：按 TDD 先补 generator host 红灯，再拆 `linux_compat_rootfs` provider 接口，
+  保持 Stage 5 / Stage 6 builtin 绿灯；随后接入 generated provider、external shell ELF / smoke、
+  `rootfs=builtin|external` 可观察输出、`--source-dir` / `--source-rootfs` / `--source` generator
+  输入和外部 rootfs fail-closed guardrail。直接 `git -h` fallback 继续关闭。
+- 验证摘要：已运行 `cd myCPU && python3 -m unittest tests.host.linux_compat_rootfs_asset_test`、
+  `make test-unit-course_os_stage5_linux_compat`、`make test-unit-course_os_stage6_linux_compat`、
+  带临时 rootfs 的 `make test-unit-course_os_stage7_linux_compat`、`make test-unit-course_os_stage3_fs_shell`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、带临时 rootfs 的
+  `make test-host-course_os_linux_compat_external_rootfs_smoke`、`make test-guest-course_os_linux_compat_shell_demo`、
+  `make test-pipeline-guest-course_os_linux_compat_shell_demo`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test-guest-course_os_shell_demo`、
+  `make test-pipeline-guest-course_os_shell_demo`、`make test`、`make test-pipeline` 和
+  `git diff --check`。
+- 剩余风险：Stage 7 只证明外部 rootfs asset ingestion，不声明动态链接器、真实 ELF 执行、
+  完整 Linux syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成；网络 git、完整 vim /
+  gcc / rustc、signal / futex 仍留给后续 trace-driven 阶段。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)

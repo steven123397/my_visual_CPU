@@ -17,10 +17,11 @@
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
-  - 无活跃 Stage 计划；Stage 6 rootfs / syscall slice 已完成并归档。
+  - 无活跃 Stage 计划；Stage 7 Linux compat 外部 rootfs 资产链路已完成并归档。
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
@@ -94,6 +95,12 @@ Stage 6 已完成 Linux compat Plus 的 rootfs / syscall 第一层语义。`linu
 该阶段仍使用内置最小 rootfs catalog 和模拟 help 路径，不声明外部真实 rootfs、动态链接器
 或通用 Linux 用户态兼容已经完成。
 
+Stage 7 已完成 Linux compat 外部 rootfs 资产链路。显式 opt-in target 现在可以从外部目录
+或 ext4 rootfs 提取 `/bin/busybox`、`/usr/bin/git`，生成可编译 C provider，并让
+`course-os> linux ...` 使用真实 RV64 ELF bytes 和 metadata 进入现有 Linux compat lookup /
+stat / read / ELF inspect / help 路径。默认 `make test` 仍使用 builtin provider，不依赖外部
+rootfs、`debugfs` 或本机特定镜像。
+
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
 - `K`：进入独立 kernel 入口
@@ -152,16 +159,18 @@ Stage 6 已完成 Linux compat Plus 的 rootfs / syscall 第一层语义。`linu
 - 旧 9 条负向 guest 回归仍是基础设施 guardrail；当前正向 `kernel_alpha_demo` 已不再检查旧 `D/S` marker。
 - `SimpleStorage` 仍然是单块、同步、无 completion interrupt、无宿主持久化回写的最小模型。
 - `/proc` 第三阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
-- Stage 6 只是 Linux compat rootfs / syscall 第一层语义，不声明完整 Linux 用户态兼容；当前不支持
-  网络 `git clone/push/pull`、完整 `vim`、完整 `gcc/rustc`、完整 signal/futex、完整动态链接器、
-  外部真实 rootfs 资产读取 / 写语义或自动 `git -h` fallback。
+- Stage 7 只证明外部 rootfs asset ingestion，不声明动态链接器、真实 ELF 执行、完整 Linux
+  syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成；当前仍不支持网络
+  `git clone/push/pull`、完整 `vim`、完整 `gcc/rustc`、完整 signal/futex。
 - 课程级 ELF catalog、课程 syscall ABI、RAMFS、固定小进程表、教学 COW 和课程 shell 仍不能直接
   声明为 Linux ABI 兼容层；Linux ABI 扩展必须继续走旁路 `linux_compat_*` 模块和进程 ABI 分流。
 
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. 若继续扩展 Linux 用户态兼容 plus，按 [../design/course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md) 继续补外部真实 rootfs 文件读取、动态 ELF / loader 边界，以及 `fcntl/ioctl/getrandom/rt_sig*/futex/execve/wait4` 等后续真实 trace 驱动语义；不要直接改大 `course_*` 教学模块，也不要提前启用自动 fallback。
+2. Linux compat plus 下一步应从“外部 rootfs 资产读取”推进到动态 ELF / loader 边界或真实 trace
+   驱动 syscall；`fcntl/ioctl/getrandom/rt_sig*/futex/execve/wait4` 等后续语义继续按真实 trace
+   分阶段补齐，不要直接改大 `course_*` 教学模块，也不要提前启用自动 fallback。
 3. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立 Stage 5+ 方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
 4. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 

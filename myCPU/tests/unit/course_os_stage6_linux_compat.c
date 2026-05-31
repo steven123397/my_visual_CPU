@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../../guest/include/linux_compat.h"
+#include "../../guest/include/linux_compat_rootfs.h"
 
 static int fail(const char* message) {
     fprintf(stderr, "%s\n", message);
@@ -12,6 +13,14 @@ static int fail(const char* message) {
 
 static bool contains(const char* haystack, const char* needle) {
     return strstr(haystack, needle) != NULL;
+}
+
+static int test_builtin_rootfs_provider_reports_source(void) {
+    if (strcmp(linux_compat_rootfs_source_name(), "builtin") != 0 ||
+        linux_compat_rootfs_node_count() < 6U) {
+        return fail("expected builtin Linux compat rootfs provider");
+    }
+    return 0;
 }
 
 static int test_rootfs_stat_reports_linux_metadata(void) {
@@ -230,7 +239,8 @@ static int test_linux_run_emits_help_instead_of_unsupported_syscall(void) {
 }
 
 int main(void) {
-    if (test_rootfs_stat_reports_linux_metadata() != 0 ||
+    if (test_builtin_rootfs_provider_reports_source() != 0 ||
+        test_rootfs_stat_reports_linux_metadata() != 0 ||
         test_fd_openat_read_lseek_close_uses_rootfs_bytes() != 0 ||
         test_syscall_dispatch_covers_help_output_minimum() != 0 ||
         test_linux_run_emits_help_instead_of_unsupported_syscall() != 0) {

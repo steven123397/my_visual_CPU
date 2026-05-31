@@ -21,6 +21,7 @@ testsuits-for-oskernel README 中涉及的 Linux 用户态程序。
 - 状态文档：
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 已完成计划：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
 - 已完成设计：
