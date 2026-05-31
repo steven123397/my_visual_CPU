@@ -882,3 +882,27 @@
 - 实现过程摘要：按 ELF/libc、调度/同步、VM/COW、FS/shell、procfs 和总编排六条窄切片 TDD 推进；新增 `course_os_stage3` 总编排层，并把 Stage 3 marker 串入 functional / pipeline `kernel_alpha_demo`。
 - 验证摘要：新增 `test-unit-course_os_stage3_elf`、`test-unit-course_os_stage3_sched_sync`、`test-unit-course_os_stage3_vm`、`test-unit-course_os_stage3_fs_shell`、`test-unit-course_os_stage3_proc`、`test-unit-course_os_stage3`，并由 `test-guest-kernel_alpha_demo` / `test-pipeline-guest-kernel_alpha_demo` 验证完整 marker。
 - 结果参考：[course_os_kernel_alpha_stage3_design.md](../design/course_os_kernel_alpha_stage3_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+### 2026-05-31
+
+#### course-os-kernel-alpha-stage5-linux-compat-plus-plan
+
+- 原文件：`course_os_kernel_alpha_stage5_linux_compat_plus_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 5 Linux compat Plus v0，新增显式
+  `course-os> linux <path-or-command> [args...]` launcher、旁路 `linux_compat_*` 模块、
+  进程 ABI 标记、最小 rootfs catalog、RV64 little-endian ELF header / program-header
+  inspection，以及坏路径 / 坏 ELF / unsupported ELF / unsupported syscall 的 fail-closed
+  诊断。
+- 实现过程摘要：按 Makefile 骨架、rootfs lookup、ELF inspection、进程 ABI、shell launcher、
+  host terminal smoke 和文档同步分步 TDD 推进；`linux /bin/busybox --help` 与
+  `linux /usr/bin/git -h` 进入 Linux compat 旁路并回到同一个 `course-os> ` prompt，
+  直接 `git -h` 自动 fallback 仍保持关闭。
+- 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage5_linux_compat`、
+  `make test-unit-course_os_stage3_fs_shell`、`make test-guest-course_os_shell_demo`、
+  `make test-pipeline-guest-course_os_shell_demo`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test-guest-course_os_linux_compat_shell_demo`、
+  `make test-pipeline-guest-course_os_linux_compat_shell_demo` 和 `make test`；归档后补跑
+  `git diff --check`。
+- 剩余风险：Stage 5 v0 不声明完整 Linux 用户态兼容；未启用自动 fallback，不支持网络 git、
+  完整 vim、完整 gcc/rustc、完整 signal/futex、完整动态链接器或真实 rootfs 写语义。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)

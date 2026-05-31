@@ -24,6 +24,11 @@ typedef enum CourseProcessState {
     COURSE_PROCESS_DEAD,
 } course_process_state_t;
 
+typedef enum CourseProcessAbi {
+    COURSE_PROCESS_ABI_COURSE = 0,
+    COURSE_PROCESS_ABI_LINUX_COMPAT,
+} course_process_abi_t;
+
 typedef enum CourseProcessResult {
     COURSE_PROCESS_OK = 0,
     COURSE_PROCESS_ERR_NO_SLOT = -1,
@@ -64,6 +69,7 @@ typedef struct CourseProcess {
     uint32_t pid;
     uint32_t ppid;
     course_process_state_t state;
+    course_process_abi_t abi;
     int32_t exit_code;
     char crash_reason[COURSE_PROCESS_MAX_NAME];
     uintptr_t crash_sepc;
@@ -98,6 +104,12 @@ course_process_t* course_process_fork(course_process_table_t* table,
 bool course_process_set_state(course_process_table_t* table,
                               uint32_t pid,
                               course_process_state_t state);
+bool course_process_set_abi(course_process_table_t* table,
+                            uint32_t pid,
+                            course_process_abi_t abi);
+bool course_process_get_abi(const course_process_table_t* table,
+                            uint32_t pid,
+                            course_process_abi_t* out_abi);
 bool course_process_exit(course_process_table_t* table,
                          uint32_t pid,
                          int32_t exit_code);

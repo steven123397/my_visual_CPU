@@ -75,13 +75,15 @@
   - [plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan](plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan)
 
 - `kernel_alpha`
+  - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
+  - [design/course_os_kernel_alpha_linux_compat_plus_design.md](design/course_os_kernel_alpha_linux_compat_plus_design.md)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
   - [design/course_os_kernel_alpha_stage4_frontend_shell_design.md](design/course_os_kernel_alpha_stage4_frontend_shell_design.md)
   - [plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
   - [design/course_os_kernel_alpha_stage3_design.md](design/course_os_kernel_alpha_stage3_design.md)
   - [plan/history_plan.md#course-os-kernel-alpha-stage3-plan](plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
   - [design/course_os_kernel_alpha_stage2_design.md](design/course_os_kernel_alpha_stage2_design.md)
   - [design/course_os_kernel_alpha_stage1_design.md](design/course_os_kernel_alpha_stage1_design.md)
-  - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
   - [plan/history_plan.md#course-os-kernel-alpha-stage2-plan](plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage1-plan](plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)

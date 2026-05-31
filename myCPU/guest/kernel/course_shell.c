@@ -251,6 +251,11 @@ void course_shell_init(course_shell_t* shell) {
                                               &shell->processes);
     (void)procfs_attach_syscalls(&shell->procfs, &shell->syscalls);
     (void)course_fd_set_cwd(&shell->fds, "/");
+    shell->linux_trace.path[0] = '\0';
+    shell->linux_trace.errno_value = 0;
+    shell->linux_trace.syscall_number = 0;
+    shell->linux_trace.pc = 0;
+    shell->linux_trace.message[0] = '\0';
     shell->transcript[0] = '\0';
     shell->transcript_size = 0;
 }
@@ -608,6 +613,68 @@ static bool read_pid_proc_file(course_shell_t* shell,
            read_proc_file(shell, path, out, out_size);
 }
 
+static bool run_linux_command(course_shell_t* shell,
+                              const course_shell_simple_command_t* command,
+                              char* out,
+                              size_t out_size) {
+    linux_compat_exec_request_t request;
+    const char* argv[LINUX_COMPAT_MAX_ARGS];
+    course_process_t* child = 0;
+    int32_t status = 0;
+    size_t i = 0;
+
+    if (shell == 0 || command == 0 || out == 0 || out_size == 0) {
+        return false;
+    }
+    if (command->argc < 2U) {
+        size_t used = 0;
+
+        out[0] = '\0';
+        return append_str(out,
+                          out_size,
+                          &used,
+                          "linux-compat: usage: linux <path-or-command> "
+                          "[args...]\n");
+    }
+    if (command->argc - 1U > LINUX_COMPAT_MAX_ARGS) {
+        size_t used = 0;
+
+        out[0] = '\0';
+        return append_str(out,
+                          out_size,
+                          &used,
+                          "linux-compat: too many args\n");
+    }
+
+    for (i = 1U; i < command->argc; ++i) {
+        argv[i - 1U] = command->argv[i];
+    }
+
+    child = course_process_fork(&shell->processes,
+                                shell->shell_pid,
+                                command->argv[1]);
+    if (child == 0 ||
+        !course_process_set_abi(&shell->processes,
+                                child->pid,
+                                COURSE_PROCESS_ABI_LINUX_COMPAT)) {
+        return false;
+    }
+
+    request.path = command->argv[1];
+    request.argc = command->argc - 1U;
+    request.argv = argv;
+    (void)linux_compat_run(&request, out, out_size, &shell->linux_trace);
+    if (!course_process_exit(&shell->processes, child->pid, 0) ||
+        course_process_waitpid(&shell->processes,
+                               shell->shell_pid,
+                               child->pid,
+                               &status) != COURSE_PROCESS_OK) {
+        return false;
+    }
+    (void)status;
+    return true;
+}
+
 static bool run_simple(course_shell_t* shell,
                        const course_shell_simple_command_t* command,
                        const char* stdin_text,
@@ -674,6 +741,9 @@ static bool run_simple(course_shell_t* shell,
             return false;
         }
         return run_script(shell, command->argv[1], out, out_size);
+    }
+    if (str_eq(command->argv[0], "linux")) {
+        return run_linux_command(shell, command, out, out_size);
     }
     if (str_eq(command->argv[0], "ps")) {
         return read_proc_file(shell, "/proc/ps", out, out_size);

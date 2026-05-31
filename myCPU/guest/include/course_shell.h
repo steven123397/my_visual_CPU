@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #include "course_fd.h"
+#include "linux_compat.h"
 #include "course_memory.h"
 #include "course_process.h"
 #include "course_scheduler.h"
@@ -35,6 +36,7 @@ typedef struct CourseShell {
     procfs_t procfs;
     course_fd_table_t fds;
     course_syscall_t syscalls;
+    linux_compat_trace_t linux_trace;
     char transcript[COURSE_SHELL_MAX_TRANSCRIPT];
     size_t transcript_size;
     uint32_t shell_pid;

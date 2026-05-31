@@ -164,11 +164,56 @@ static int test_exec_cat_reads_file_through_user_program_path(void) {
     return 0;
 }
 
+static int test_linux_compat_launcher_is_explicit_and_fail_closed(void) {
+    static course_shell_t shell;
+    char out[1024];
+
+    course_shell_init(&shell);
+
+    if (!course_shell_run_line(&shell,
+                               "linux /bin/busybox --help",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "linux-compat:") ||
+        !contains(out, "path=/bin/busybox") ||
+        !contains(out, "elf=rv64-little") ||
+        !contains(out, "unsupported syscall") ||
+        !contains(out, "errno=38")) {
+        return fail("expected explicit linux launcher to fail closed after ELF inspection");
+    }
+
+    if (!course_shell_run_line(&shell, "linux /usr/bin/git -h", out, sizeof(out)) ||
+        !contains(out, "linux-compat:") ||
+        !contains(out, "path=/usr/bin/git") ||
+        !contains(out, "elf=rv64-little")) {
+        return fail("expected git path to use explicit linux compat launcher");
+    }
+
+    if (!course_shell_run_line(&shell, "linux /nope", out, sizeof(out)) ||
+        !contains(out, "linux-compat:") ||
+        !contains(out, "path=/nope") ||
+        !contains(out, "errno=2") ||
+        !contains(out, "no such file")) {
+        return fail("expected bad linux compat path to emit fail-closed diagnostic");
+    }
+
+    if (!course_shell_run_line(&shell, "help", out, sizeof(out)) ||
+        !contains(out, "exec sh meminfo") ||
+        !course_shell_run_line(&shell, "exec hello", out, sizeof(out)) ||
+        !contains(out, "program=hello") ||
+        course_shell_run_line(&shell, "git -h", out, sizeof(out))) {
+        return fail("expected course commands to stay first and direct linux fallback disabled");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_fs_mkfs_seek_unlink_rmdir_and_capacity() != 0 ||
         test_fd_seek_only_accepts_regular_files() != 0 ||
         test_shell_script_mode_success_and_failure_line() != 0 ||
-        test_exec_cat_reads_file_through_user_program_path() != 0) {
+        test_exec_cat_reads_file_through_user_program_path() != 0 ||
+        test_linux_compat_launcher_is_explicit_and_fail_closed() != 0) {
         return 1;
     }
 

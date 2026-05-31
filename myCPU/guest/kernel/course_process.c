@@ -25,6 +25,7 @@ static void clear_process(course_process_t* process) {
     process->pid = 0;
     process->ppid = 0;
     process->state = COURSE_PROCESS_UNUSED;
+    process->abi = COURSE_PROCESS_ABI_COURSE;
     process->exit_code = 0;
     process->crash_sepc = 0;
     process->crash_scause = 0;
@@ -296,6 +297,7 @@ course_process_t* course_process_fork(course_process_table_t* table,
     }
     child->entry_pc = parent->entry_pc;
     child->user_sp = parent->user_sp;
+    child->abi = parent->abi;
     child->address_space = parent->address_space;
     child->open_files = parent->open_files;
     child->map_count = parent->map_count;
@@ -352,6 +354,41 @@ bool course_process_set_state(course_process_table_t* table,
 
     process->state = state;
     return true;
+}
+
+bool course_process_set_abi(course_process_table_t* table,
+                            uint32_t pid,
+                            course_process_abi_t abi) {
+    course_process_t* process = course_process_find(table, pid);
+
+    if (process == 0 ||
+        (abi != COURSE_PROCESS_ABI_COURSE &&
+         abi != COURSE_PROCESS_ABI_LINUX_COMPAT)) {
+        return false;
+    }
+
+    process->abi = abi;
+    return true;
+}
+
+bool course_process_get_abi(const course_process_table_t* table,
+                            uint32_t pid,
+                            course_process_abi_t* out_abi) {
+    size_t i = 0;
+
+    if (table == 0 || out_abi == 0) {
+        return false;
+    }
+    for (i = 0; i < COURSE_PROCESS_MAX_PROCESSES; ++i) {
+        const course_process_t* process = &table->processes[i];
+
+        if (process->used && process->pid == pid &&
+            process->state != COURSE_PROCESS_DEAD) {
+            *out_abi = process->abi;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool course_process_exit(course_process_table_t* table,
@@ -438,6 +475,7 @@ int32_t course_process_exec(course_process_table_t* table,
     release_process_user_pages(table, process);
     copy_str(process->name, sizeof(process->name), program.name);
     copy_str(process->argv, sizeof(process->argv), load.argv);
+    process->abi = COURSE_PROCESS_ABI_COURSE;
     process->entry_pc = load.entry_pc;
     process->user_sp = load.user_sp;
     process->map_count = load.map_count;

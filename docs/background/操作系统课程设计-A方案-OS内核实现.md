@@ -160,6 +160,33 @@
 
 - 用户程序崩溃不影响内核稳定性
 
+### 7. Plus：Linux 用户态程序兼容验证
+
+在 Stage 4 前端交互 shell 完成后，可在本项目已有 myCPU 模拟器上继续扩展`kernel_alpha` 自写内核，增加面向 Linux 用户态程序的兼容层。该 plus不要求适配 QEMU、LoongArch64 或真实开发板环境，验收环境限定为本模拟器上的RISC-V64 `kernel_alpha` 内核，并应保持 Stage 1 / Stage 2 / Stage 3 正向 marker和 Stage 4
+`course-os> ` prompt 不变。
+
+功能示例：
+
+- 复用或扩展 `kernel_alpha` 的 ELF 加载、用户态地址空间、系统调用、进程、FD / FS和 shell 基础设施
+
+- 支持 testsuits-for-oskernel README 中涉及的 Linux 用户态程序加载运行，例如`git`、`vim`、`gcc`、`rustc`，以及必要的 `busybox` / `bash` 等基础工具
+
+- 从低风险命令开始建立兼容层证据，例如 `git -h`、`vim -h`、`gcc -h`、`rustc -h`
+
+- 逐步扩展到文件系统和进程链路相关任务，例如 `git init/add/commit/log`、`vim hello.c`、`gcc hello.c && ./a.out`
+
+- 将网络相关的 `git clone/push/pull` 视为独立高阶扩展，不绑定基础 plus 完成范围
+
+技术指标：
+
+- 能在本模拟器中启动自写 `kernel_alpha` 内核并加载 Linux 用户态 ELF 程序
+
+- 提供最小 Linux ABI 兼容层，包括动态 ELF / musl loader 所需的用户栈、auxv、TLS及核心 syscall 子集
+
+- 文件系统语义满足基础 Linux 工具运行需求，包括目录、普通文件、seek、rename、unlink、stat、临时文件和必要的同步语义
+
+- 用户态程序异常退出或触发未支持 syscall 时，内核应 fail-closed，输出可诊断原因，不破坏已有课程 OS 正向 demo 和回归门禁
+
 ## 三、项目资源
 
 - 全国大学生计算机系统能力大赛官方

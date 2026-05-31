@@ -9,6 +9,7 @@
 ## 关联文档
 
 - 相关设计：
+  - [../design/course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)
   - [../design/course_os_kernel_alpha_stage4_frontend_shell_design.md](../design/course_os_kernel_alpha_stage4_frontend_shell_design.md)
   - [../design/course_os_kernel_alpha_stage3_design.md](../design/course_os_kernel_alpha_stage3_design.md)
   - [../design/course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)
@@ -16,10 +17,11 @@
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
-  - 无活跃 Stage 计划；Stage 4 已完成并归档。
+  - 无活跃 Stage 计划；Stage 5 v0 已完成并归档。
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage3-plan](../plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage2-plan](../plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
@@ -69,6 +71,19 @@ Stage 1 / Stage 2 / Stage 3 summary，而是新增独立 `guest_course_os_shell_
 启动后进入 `course-os> ` prompt，并通过 `/console` 的 manifest / terminal / Lab workbench
 展示 Stage 3 已完成的课程 shell、FD / FS、procfs、ELF / libc、COW 和 crash isolation 能力。
 前端继续复用现有 debug session 和 UART terminal 合同，没有新增并行执行协议。
+
+Stage 4 之后的 plus 方向已补充为独立设计边界：在本 myCPU 模拟器上继续扩展自写
+`kernel_alpha` 内核，尝试运行 testsuits-for-oskernel README 中涉及的 Linux 用户态程序。
+这条 plus 线必须旁路新增 Linux ABI / ELF / FS / syscall 模块，不把课程级 `course_*`
+实现直接膨胀成通用 Linux 兼容层，也不改变 Stage 1 / Stage 2 / Stage 3 marker 和
+Stage 4 shell prompt。
+
+Stage 5 v0 已完成 Linux compat Plus 第一刀。`course-os> ` 现在新增显式
+`linux <path-or-command> [args...]` launcher；`linux /bin/busybox --help` 和
+`linux /usr/bin/git -h` 会进入旁路 `linux_compat_*` 后端，经过最小 rootfs catalog、
+RV64 little-endian ELF header / program-header inspection、进程 ABI 标记和
+fail-closed syscall 诊断后回到同一个 `course-os> ` prompt。直接 `git -h` 自动 fallback
+尚未启用，课程命令和 Stage 3 catalog 仍优先保持原语义。
 
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
@@ -128,12 +143,18 @@ Stage 1 / Stage 2 / Stage 3 summary，而是新增独立 `guest_course_os_shell_
 - 旧 9 条负向 guest 回归仍是基础设施 guardrail；当前正向 `kernel_alpha_demo` 已不再检查旧 `D/S` marker。
 - `SimpleStorage` 仍然是单块、同步、无 completion interrupt、无宿主持久化回写的最小模型。
 - `/proc` 第三阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
+- Stage 5 v0 只是 Linux compat fail-closed 第一刀，不声明完整 Linux 用户态兼容；当前不支持网络
+  `git clone/push/pull`、完整 `vim`、完整 `gcc/rustc`、完整 signal/futex、完整动态链接器、
+  真实 rootfs 写语义或自动 `git -h` fallback。
+- 课程级 ELF catalog、课程 syscall ABI、RAMFS、固定小进程表、教学 COW 和课程 shell 仍不能直接
+  声明为 Linux ABI 兼容层；Linux ABI 扩展必须继续走旁路 `linux_compat_*` 模块和进程 ABI 分流。
 
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立 Stage 5+ 方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
-3. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
+2. 若继续扩展 Linux 用户态兼容 plus，按 [../design/course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md) 继续补真实 rootfs 文件读取、Linux syscall trace、`openat/read/write/stat/getdents64/mmap/brk` 等最小语义和动态 ELF 边界；不要直接改大 `course_*` 教学模块，也不要提前启用自动 fallback。
+3. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立 Stage 5+ 方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
+4. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
 ## 验证基线
 
@@ -178,3 +199,9 @@ Stage 1 / Stage 2 / Stage 3 summary，而是新增独立 `guest_course_os_shell_
   - `cd myCPU && make test-guest-course_os_shell_demo`
   - `cd myCPU && make test-pipeline-guest-course_os_shell_demo`
   - `cd frontend && node --test`
+- Stage 5 v0 当前固定门禁：
+  - `cd myCPU && make test-unit-course_os_stage5_linux_compat`
+  - `cd myCPU && make test-unit-course_os_stage3_fs_shell`
+  - `cd myCPU && make test-host-course_os_linux_compat_terminal_smoke`
+  - `cd myCPU && make test-guest-course_os_linux_compat_shell_demo`
+  - `cd myCPU && make test-pipeline-guest-course_os_linux_compat_shell_demo`
