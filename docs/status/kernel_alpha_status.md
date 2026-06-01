@@ -17,7 +17,7 @@
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
-  - 暂无活跃 Stage 8 计划；Stage 8 已归档到 [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)。
+  - [../plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md](../plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
@@ -111,6 +111,14 @@ optional interpreter asset 记录，manifest 能区分 required / optional path 
 syscall 扩展提供稳定观察面。该阶段仍不声明真实动态链接器运行、真实 ELF 执行、完整 Linux
 syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成。
 
+Stage 9 当前计划为 Linux compat 真实 ELF 执行第一刀。该阶段将继续基于显式
+`course-os> linux ...` launcher，结束 Stage 5-8 的硬编码 help 字符串和模拟 syscall
+序列，把静态 RV64 ELF 走通为真实 PT_LOAD 段映射、argv / envp / auxv 用户栈、U-mode
+入口、真实 ecall dispatch、UART `write` 和 `exit_group` 回到同一个 `course-os> ` prompt。
+Stage 9 的端到端验收先收敛到 hand-crafted 最小 ELF 与静态 busybox `--help` / `echo`
+路径；仍不启用直接命令 fallback，不声明动态链接器运行、完整 Linux syscall 面、完整
+signal / futex 或 rootfs 写语义。
+
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
 - `K`：进入独立 kernel 入口
@@ -185,9 +193,12 @@ syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成。
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. Stage 9+ 如继续推进 Linux compat，应基于 Stage 8 trace record 采样真实缺口，再分阶段补
-   `fcntl/ioctl/getrandom/rt_sig*/futex/execve/wait4` 等语义；不要直接改大 `course_*`
-   教学模块，也不要提前启用自动 fallback。
+2. 按 [../plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md](../plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md)
+   推进 Stage 9 Linux compat 真实 ELF 执行：真实 brk/mmap/munmap 接入 guest VM、
+   ELF PT_LOAD segment 映射、用户栈构建、U-mode entry 与 ecall dispatch 闭环、
+   额外 syscall（fcntl/getrandom/clock_gettime/ioctl），最终以静态 busybox 端到端
+   验证。所有新增语义继续放在旁路 `linux_compat_*`，不要直接改大 `course_*` 教学模块，
+   也不要提前启用自动 fallback。
 3. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立 Stage 5+ 方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
 4. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
@@ -242,3 +253,9 @@ syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成。
   - `cd myCPU && make test-host-course_os_linux_compat_terminal_smoke`
   - `cd myCPU && make test-guest-course_os_linux_compat_shell_demo`
   - `cd myCPU && make test-pipeline-guest-course_os_linux_compat_shell_demo`
+- Stage 9 Linux compat 计划新增门禁：
+  - `cd myCPU && make test-unit-course_os_stage9_linux_compat_vm`
+  - `cd myCPU && make test-unit-course_os_stage9_linux_compat_exec`
+  - `cd myCPU && make test-unit-course_os_stage9_linux_compat_syscall`
+  - `cd myCPU && make test-host-course_os_linux_compat_minimal_elf_smoke`
+  - `cd myCPU && make test-guest-course_os_linux_compat_shell_demo`

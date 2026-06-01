@@ -20,7 +20,10 @@ testsuits-for-oskernel README 中涉及的 Linux 用户态程序。
 
 - 状态文档：
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
+- 当前计划：
+  - [../plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md](../plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md)
 - 已完成计划：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
@@ -282,6 +285,8 @@ Plus 每一刀都必须同时守住：
 ## 当前有效性说明
 
 - 当前有效：本文档作为 Stage 4 完成后开启 Linux 用户态兼容 plus 的设计边界。
+- 当前活跃计划：Stage 9 已安排为 Linux compat 真实 ELF 执行第一刀，见
+  [../plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md](../plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md)。
 - 当前不是完成声明：Stage 5 / Stage 6 / Stage 7 / Stage 8 已完成 Linux compat 入口、最小
   syscall / rootfs 语义、外部 rootfs 资产链路和 loader / trace 诊断第一刀，但
   `kernel_alpha` 仍未声明完整 Linux 用户态兼容。

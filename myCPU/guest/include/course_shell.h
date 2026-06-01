@@ -8,10 +8,13 @@
 #include "course_memory.h"
 #include "course_process.h"
 #include "course_scheduler.h"
+#include "trap.h"
+#include "vm.h"
 
 #define COURSE_SHELL_MAX_ARGS 8U
 #define COURSE_SHELL_MAX_ARG_LEN 32U
 #define COURSE_SHELL_MAX_TRANSCRIPT 2048U
+#define COURSE_SHELL_LINUX_COMPAT_TRAP_STACK_SIZE 4096U
 
 typedef struct CourseShellSimpleCommand {
     char argv[COURSE_SHELL_MAX_ARGS][COURSE_SHELL_MAX_ARG_LEN];
@@ -37,6 +40,10 @@ typedef struct CourseShell {
     course_fd_table_t fds;
     course_syscall_t syscalls;
     linux_compat_trace_t linux_trace;
+    vm_process_t linux_compat_process;
+    trap_user_runtime_t linux_compat_user_runtime;
+    uint8_t linux_compat_trap_stack[COURSE_SHELL_LINUX_COMPAT_TRAP_STACK_SIZE]
+        __attribute__((aligned(TRAP_USER_RUNTIME_STACK_ALIGNMENT)));
     char transcript[COURSE_SHELL_MAX_TRANSCRIPT];
     size_t transcript_size;
     uint32_t shell_pid;

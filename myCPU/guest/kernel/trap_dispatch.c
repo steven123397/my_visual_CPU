@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "course_syscall.h"
+#include "linux_compat.h"
 #include "memory.h"
 #include "panic.h"
 #include "platform.h"
@@ -54,6 +55,21 @@ static bool user_syscall_policy_valid(const trap_context_t* trap_context,
            (sstatus & RISCV_SSTATUS_SPIE) != 0;
 }
 
+static bool user_linux_compat_policy_valid(const trap_context_t* trap_context,
+                                           const trap_frame_t* frame,
+                                           uint64_t cause,
+                                           uint64_t tval) {
+    const uint64_t sstatus = riscv_read_sstatus();
+
+    return trap_context != NULL &&
+           trap_context->user_ecall_policy.linux_runtime != NULL &&
+           frame != NULL &&
+           cause == RISCV_EXC_ECALL_FROM_U &&
+           tval == 0 &&
+           (sstatus & RISCV_SSTATUS_SPP) == 0 &&
+           (sstatus & RISCV_SSTATUS_SPIE) != 0;
+}
+
 static bool user_exception_from_u_mode(void) {
     const uint64_t sstatus = riscv_read_sstatus();
 
@@ -85,6 +101,137 @@ static bool handle_user_syscall_policy(const trap_context_t* trap_context,
     frame->a0 = (uint64_t)result;
     riscv_set_sstatus_bits(RISCV_SSTATUS_SPP);
     riscv_write_sepc(epc + 4U);
+    return true;
+}
+
+static void build_linux_compat_request(const trap_frame_t* frame,
+                                       uint64_t epc,
+                                       linux_compat_syscall_request_t* request) {
+    if (request == NULL) {
+        return;
+    }
+    request->number = frame != NULL ? frame->a7 : 0;
+    request->dirfd = frame != NULL ? (int32_t)frame->a0 : 0;
+    request->fd = frame != NULL ? (int32_t)frame->a0 : 0;
+    request->path = frame != NULL ? (const char*)frame->a1 : 0;
+    request->write_buffer = frame != NULL ? (const void*)frame->a1 : 0;
+    request->read_buffer = frame != NULL ? (void*)frame->a1 : 0;
+    request->length = frame != NULL ? (size_t)frame->a2 : 0;
+    request->offset = frame != NULL ? frame->a1 : 0;
+    request->stat = frame != NULL ? (linux_compat_stat_t*)frame->a2 : 0;
+    request->dirents = frame != NULL ? (linux_compat_dirent_t*)frame->a1 : 0;
+    request->dirent_capacity = frame != NULL ? (size_t)frame->a2 : 0;
+    request->addr = frame != NULL ? frame->a0 : 0;
+    request->prot = frame != NULL ? (uint32_t)frame->a2 : 0;
+    request->flags = frame != NULL ? (uint32_t)frame->a3 : 0;
+
+    if (frame == NULL) {
+        return;
+    }
+    switch (frame->a7) {
+    case LINUX_COMPAT_SYS_MMAP:
+        request->addr = frame->a0;
+        request->length = (size_t)frame->a1;
+        request->prot = (uint32_t)frame->a2;
+        request->flags = (uint32_t)frame->a3;
+        request->fd = (int32_t)frame->a4;
+        request->offset = frame->a5;
+        break;
+    case LINUX_COMPAT_SYS_FCNTL:
+        request->fd = (int32_t)frame->a0;
+        request->command = (uint32_t)frame->a1;
+        request->arg = frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_IOCTL:
+        request->fd = (int32_t)frame->a0;
+        request->command = (uint32_t)frame->a1;
+        request->arg = frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_GETRANDOM:
+        request->read_buffer = (void*)frame->a0;
+        request->length = (size_t)frame->a1;
+        request->flags = (uint32_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_CLOCK_GETTIME:
+        request->fd = (int32_t)frame->a0;
+        request->read_buffer = (void*)frame->a1;
+        break;
+    case LINUX_COMPAT_SYS_MUNMAP:
+        request->addr = frame->a0;
+        request->length = (size_t)frame->a1;
+        break;
+    case LINUX_COMPAT_SYS_WRITE:
+        request->fd = (int32_t)frame->a0;
+        request->write_buffer = (const void*)frame->a1;
+        request->length = (size_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_READ:
+        request->fd = (int32_t)frame->a0;
+        request->read_buffer = (void*)frame->a1;
+        request->length = (size_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_OPENAT:
+        request->dirfd = (int32_t)frame->a0;
+        request->path = (const char*)frame->a1;
+        request->flags = (uint32_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_NEWFSTATAT:
+        request->dirfd = (int32_t)frame->a0;
+        request->path = (const char*)frame->a1;
+        request->stat = (linux_compat_stat_t*)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_GETDENTS64:
+        request->fd = (int32_t)frame->a0;
+        request->dirents = (linux_compat_dirent_t*)frame->a1;
+        request->dirent_capacity = (size_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_LSEEK:
+        request->fd = (int32_t)frame->a0;
+        request->offset = frame->a1;
+        break;
+    case LINUX_COMPAT_SYS_EXIT:
+    case LINUX_COMPAT_SYS_EXIT_GROUP:
+        request->fd = (int32_t)frame->a0;
+        break;
+    default:
+        break;
+    }
+    request->addr = request->addr != 0U ? request->addr : epc;
+}
+
+static bool handle_linux_compat_syscall_policy(const trap_context_t* trap_context,
+                                               trap_frame_t* frame,
+                                               uint64_t cause,
+                                               uint64_t epc,
+                                               uint64_t tval) {
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    linux_compat_runtime_t* runtime = NULL;
+    uintptr_t next_pc = epc + 4U;
+
+    if (trap_context == NULL ||
+        trap_context->user_ecall_policy.linux_runtime == NULL) {
+        return false;
+    }
+    if (!user_linux_compat_policy_valid(trap_context, frame, cause, tval)) {
+        panic_shutdown();
+    }
+
+    runtime = trap_context->user_ecall_policy.linux_runtime;
+    build_linux_compat_request(frame, epc, &request);
+    response.value = 0;
+    (void)linux_compat_syscall_dispatch(runtime, &request, &response, &trace);
+    frame->a0 = (uint64_t)response.value;
+    if (runtime->exited &&
+        trap_context->user_ecall_policy.user_runtime != NULL &&
+        trap_context->user_ecall_policy.user_runtime->resume_pc != 0U) {
+        next_pc = trap_context->user_ecall_policy.user_runtime->resume_pc;
+        riscv_set_sstatus_bits(RISCV_SSTATUS_SPP);
+    } else {
+        riscv_clear_sstatus_bits(RISCV_SSTATUS_SPP);
+    }
+    riscv_write_sepc(next_pc);
     return true;
 }
 
@@ -405,6 +552,7 @@ bool trap_context_install_user_runtime_resume_policy(
 
     trap_context->user_ecall_policy.user_runtime = user_runtime;
     trap_context->user_ecall_policy.syscalls = NULL;
+    trap_context->user_ecall_policy.linux_runtime = NULL;
     trap_context->user_ecall_policy.validate = NULL;
     trap_context->user_ecall_policy.validate_context = NULL;
     trap_context->user_ecall_policy.resume_pc = 0;
@@ -426,6 +574,7 @@ bool trap_context_install_user_ecall_resume_policy(
 
     trap_context->user_ecall_policy.user_runtime = NULL;
     trap_context->user_ecall_policy.syscalls = NULL;
+    trap_context->user_ecall_policy.linux_runtime = NULL;
     trap_context->user_ecall_policy.validate = validate;
     trap_context->user_ecall_policy.validate_context = validate_context;
     trap_context->user_ecall_policy.resume_pc = resume_pc;
@@ -444,6 +593,28 @@ bool trap_context_install_user_syscall_policy(trap_context_t* trap_context,
 
     trap_context->user_ecall_policy.user_runtime = NULL;
     trap_context->user_ecall_policy.syscalls = syscalls;
+    trap_context->user_ecall_policy.linux_runtime = NULL;
+    trap_context->user_ecall_policy.validate = NULL;
+    trap_context->user_ecall_policy.validate_context = NULL;
+    trap_context->user_ecall_policy.resume_pc = 0;
+    return true;
+}
+
+bool trap_context_install_linux_compat_syscall_policy(
+    trap_context_t* trap_context,
+    trap_user_runtime_t* user_runtime,
+    linux_compat_runtime_t* runtime) {
+    if (trap_context == NULL || runtime == NULL ||
+        (user_runtime != NULL &&
+         (!user_runtime_valid(user_runtime) ||
+          user_runtime->trap_context != trap_context ||
+          user_runtime->resume_pc == 0))) {
+        return false;
+    }
+
+    trap_context->user_ecall_policy.user_runtime = user_runtime;
+    trap_context->user_ecall_policy.syscalls = NULL;
+    trap_context->user_ecall_policy.linux_runtime = runtime;
     trap_context->user_ecall_policy.validate = NULL;
     trap_context->user_ecall_policy.validate_context = NULL;
     trap_context->user_ecall_policy.resume_pc = 0;
@@ -514,6 +685,17 @@ void supervisor_trap_dispatch_with_frame(trap_frame_t* frame) {
         if (cause == RISCV_EXC_ECALL_FROM_U &&
             trap_context->user_ecall_policy.syscalls != NULL &&
             handle_user_syscall_policy(trap_context, frame, cause, epc, tval)) {
+            return;
+        }
+
+        if (cause == RISCV_EXC_ECALL_FROM_U &&
+            trap_context->user_ecall_policy.syscalls == NULL &&
+            trap_context->user_ecall_policy.linux_runtime != NULL &&
+            handle_linux_compat_syscall_policy(trap_context,
+                                               frame,
+                                               cause,
+                                               epc,
+                                               tval)) {
             return;
         }
 

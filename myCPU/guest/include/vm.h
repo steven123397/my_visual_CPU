@@ -158,6 +158,9 @@ bool vm_process_is_runnable(const vm_process_t* process);
 bool vm_object_reset(vm_object_t* object);
 bool vm_object_init_physical(vm_object_t* object, uintptr_t paddr, size_t size);
 bool vm_object_init_anon(vm_object_t* object, size_t size);
+bool vm_object_resolve_page_for_write(vm_object_t* object,
+                                      size_t page_offset,
+                                      uintptr_t* out_paddr);
 bool vm_user_region_clear_object(vm_user_region_t* region);
 bool vm_user_region_map_object_at(vm_user_region_t* region,
                                   vm_object_t* object,

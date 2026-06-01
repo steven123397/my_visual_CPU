@@ -11,6 +11,16 @@ static int fail(const char* message) {
     return 1;
 }
 
+static char g_console_buffer[128];
+static size_t g_console_size = 0;
+
+void console_putc(char ch) {
+    if (g_console_size + 1U < sizeof(g_console_buffer)) {
+        g_console_buffer[g_console_size++] = ch;
+        g_console_buffer[g_console_size] = '\0';
+    }
+}
+
 static bool contains(const char* haystack, const char* needle) {
     return strstr(haystack, needle) != NULL;
 }
@@ -63,6 +73,8 @@ static int test_fd_openat_read_lseek_close_uses_rootfs_bytes(void) {
     int32_t fd = -1;
 
     linux_compat_runtime_init(&runtime);
+    g_console_size = 0;
+    g_console_buffer[0] = '\0';
     fd = linux_compat_openat(&runtime,
                              LINUX_COMPAT_AT_FDCWD,
                              "/bin/busybox",
@@ -193,8 +205,9 @@ static int test_syscall_dispatch_covers_help_output_minimum(void) {
     if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
             LINUX_COMPAT_OK ||
         response.value != (int64_t)strlen(message) ||
-        !contains(runtime.stdout_buffer, "BusyBox v")) {
-        return fail("expected write syscall to append to stdout buffer");
+        !contains(runtime.stdout_buffer, "BusyBox v") ||
+        !contains(g_console_buffer, "BusyBox v")) {
+        return fail("expected write syscall to append to stdout buffer and UART");
     }
 
     memset(&request, 0, sizeof(request));
@@ -225,6 +238,7 @@ static int test_linux_run_emits_help_instead_of_unsupported_syscall(void) {
     linux_compat_trace_t trace;
     char out[1024];
 
+    memset(&request, 0, sizeof(request));
     request.path = "/bin/busybox";
     request.argc = 2U;
     request.argv = busybox_argv;
@@ -262,6 +276,7 @@ static int test_linux_run_fails_closed_for_dynamic_elf_without_interp(void) {
     linux_compat_trace_t trace;
     char out[1024];
 
+    memset(&request, 0, sizeof(request));
     request.path = "/usr/bin/dynamic-app";
     request.argc = 1U;
     request.argv = argv;
@@ -277,13 +292,40 @@ static int test_linux_run_fails_closed_for_dynamic_elf_without_interp(void) {
     return 0;
 }
 
+static int test_linux_run_busybox_help_stays_simulated_with_exec_context(void) {
+    const char* argv[] = {"/bin/busybox", "--help"};
+    linux_compat_exec_request_t request;
+    linux_compat_trace_t trace;
+    char out[1024];
+
+    memset(&request, 0, sizeof(request));
+    request.path = "/bin/busybox";
+    request.argc = 2U;
+    request.argv = argv;
+    request.trap_context = (trap_context_t*)(uintptr_t)0x1U;
+    request.user_runtime = (trap_user_runtime_t*)(uintptr_t)0x2U;
+    request.address_space = (vm_address_space_t*)(uintptr_t)0x3U;
+    request.process = (vm_process_t*)(uintptr_t)0x4U;
+    request.trap_stack_base = (void*)(uintptr_t)0x5U;
+    request.trap_stack_size = 256U;
+    if (linux_compat_run(&request, out, sizeof(out), &trace) != LINUX_COMPAT_OK ||
+        !contains(out, "BusyBox v") ||
+        !contains(out, "Usage: busybox") ||
+        contains(out, "exec=real")) {
+        return fail("expected busybox help to stay on the simulated path until minimal ELF gating is explicit");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_builtin_rootfs_provider_reports_source() != 0 ||
         test_rootfs_stat_reports_linux_metadata() != 0 ||
         test_fd_openat_read_lseek_close_uses_rootfs_bytes() != 0 ||
         test_syscall_dispatch_covers_help_output_minimum() != 0 ||
         test_linux_run_emits_help_instead_of_unsupported_syscall() != 0 ||
-        test_linux_run_fails_closed_for_dynamic_elf_without_interp() != 0) {
+        test_linux_run_fails_closed_for_dynamic_elf_without_interp() != 0 ||
+        test_linux_run_busybox_help_stays_simulated_with_exec_context() != 0) {
         return 1;
     }
 

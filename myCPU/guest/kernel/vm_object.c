@@ -277,6 +277,12 @@ bool vm_object_init_anon(vm_object_t* object, size_t size) {
     return true;
 }
 
+bool vm_object_resolve_page_for_write(vm_object_t* object,
+                                      size_t page_offset,
+                                      uintptr_t* out_paddr) {
+    return object_resolve_page(object, page_offset, true, out_paddr);
+}
+
 bool vm_user_region_clear_object(vm_user_region_t* region) {
     bool changed = false;
     vm_object_t* object = NULL;

@@ -7,6 +7,7 @@
 
 #include "../../guest/kernel/vm_private.h"
 #include "../../guest/include/course_syscall.h"
+#include "../../guest/include/linux_compat.h"
 #include "../../guest/include/trap.h"
 
 static jmp_buf g_panic_env;
@@ -28,6 +29,8 @@ static int g_timer_handle_interrupt_calls = 0;
 static uint32_t g_claim_source_id = 0;
 static int g_complete_calls = 0;
 static uint32_t g_last_completed_source_id = 0;
+static int g_clear_sstatus_bits_calls = 0;
+static uint64_t g_last_clear_sstatus_bits = 0;
 static int g_set_sstatus_bits_calls = 0;
 static uint64_t g_last_set_sstatus_bits = 0;
 static int g_write_sepc_calls = 0;
@@ -60,6 +63,11 @@ static uint64_t g_last_course_syscall_arg1 = 0;
 static uint64_t g_last_course_syscall_arg2 = 0;
 static uint64_t g_last_course_syscall_arg3 = 0;
 static int64_t g_course_syscall_dispatch_result = 0;
+static int g_linux_compat_dispatch_calls = 0;
+static linux_compat_runtime_t* g_last_linux_compat_runtime = NULL;
+static linux_compat_syscall_request_t g_last_linux_compat_request;
+static int64_t g_linux_compat_dispatch_value = 0;
+static bool g_linux_compat_dispatch_sets_exited = false;
 static int g_user_crash_handler_calls = 0;
 static uint64_t g_last_user_crash_cause = 0;
 static uint64_t g_last_user_crash_epc = 0;
@@ -73,6 +81,7 @@ static int test_install_standard_user_runtime_policies(void);
 static int test_dispatch_page_fault_and_custom_handlers(void);
 static int test_dispatch_user_ecall_resume_policy(void);
 static int test_dispatch_user_ecall_syscall_policy(void);
+static int test_dispatch_linux_compat_ecall_policy(void);
 static int test_dispatch_user_crash_policy(void);
 static int test_default_timer_and_external_handlers(void);
 static void stub_interrupt_handler(uint64_t cause, void* context);
@@ -106,6 +115,26 @@ int64_t course_syscall_dispatch(course_syscall_t* syscalls,
     g_last_course_syscall_arg2 = arg2;
     g_last_course_syscall_arg3 = arg3;
     return g_course_syscall_dispatch_result;
+}
+
+linux_compat_result_t linux_compat_syscall_dispatch(
+    linux_compat_runtime_t* runtime,
+    const linux_compat_syscall_request_t* request,
+    linux_compat_syscall_response_t* response,
+    linux_compat_trace_t* out_trace) {
+    (void)out_trace;
+    g_linux_compat_dispatch_calls += 1;
+    g_last_linux_compat_runtime = runtime;
+    if (request != NULL) {
+        g_last_linux_compat_request = *request;
+    }
+    if (g_linux_compat_dispatch_sets_exited && runtime != NULL) {
+        runtime->exited = true;
+    }
+    if (response != NULL) {
+        response->value = g_linux_compat_dispatch_value;
+    }
+    return LINUX_COMPAT_OK;
 }
 
 void panic_shutdown(void) {
@@ -187,6 +216,11 @@ uint64_t riscv_read_sstatus(void) {
     return g_sstatus;
 }
 
+void riscv_clear_sstatus_bits(uint64_t value) {
+    g_clear_sstatus_bits_calls += 1;
+    g_last_clear_sstatus_bits = value;
+}
+
 void riscv_set_sstatus_bits(uint64_t value) {
     g_set_sstatus_bits_calls += 1;
     g_last_set_sstatus_bits = value;
@@ -220,6 +254,8 @@ static void reset_stub_state(void) {
     g_claim_source_id = 0;
     g_complete_calls = 0;
     g_last_completed_source_id = 0;
+    g_clear_sstatus_bits_calls = 0;
+    g_last_clear_sstatus_bits = 0;
     g_set_sstatus_bits_calls = 0;
     g_last_set_sstatus_bits = 0;
     g_write_sepc_calls = 0;
@@ -252,6 +288,11 @@ static void reset_stub_state(void) {
     g_last_course_syscall_arg2 = 0;
     g_last_course_syscall_arg3 = 0;
     g_course_syscall_dispatch_result = 0;
+    g_linux_compat_dispatch_calls = 0;
+    g_last_linux_compat_runtime = NULL;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    g_linux_compat_dispatch_value = 0;
+    g_linux_compat_dispatch_sets_exited = false;
     g_user_crash_handler_calls = 0;
     g_last_user_crash_cause = 0;
     g_last_user_crash_epc = 0;
@@ -511,6 +552,95 @@ static int test_dispatch_user_ecall_syscall_policy(void) {
     return 0;
 }
 
+static int test_dispatch_linux_compat_ecall_policy(void) {
+    trap_context_t trap_context = {0};
+    vm_address_space_t address_space = {
+        .allocated = true,
+        .root_table = (uint64_t*)MEM_BASE,
+    };
+    vm_process_t process = {
+        .address_space = &address_space,
+    };
+    trap_user_runtime_t user_runtime = {
+        .trap_context = &trap_context,
+        .process = &process,
+        .resume_pc = 0x9000,
+    };
+    linux_compat_runtime_t runtime = {0};
+    trap_frame_t trap_frame = {0};
+
+    reset_stub_state();
+    if (!trap_context_install_linux_compat_syscall_policy(&trap_context,
+                                                          &user_runtime,
+                                                          &runtime)) {
+        return fail("expected linux compat syscall policy install to succeed");
+    }
+
+    trap_frame.a0 = 1U;
+    trap_frame.a1 = 0x2000U;
+    trap_frame.a2 = 5U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_WRITE;
+    g_linux_compat_dispatch_value = 5;
+    g_active_trap_context = &trap_context;
+    g_scause = RISCV_EXC_ECALL_FROM_U;
+    g_sepc = 0x7000;
+    g_stval = 0;
+    g_sstatus = RISCV_SSTATUS_SPIE;
+    if (setjmp(g_panic_env) != 0) {
+        return fail("did not expect panic during linux compat write ecall dispatch");
+    }
+    g_panic_armed = true;
+    supervisor_trap_dispatch_with_frame(&trap_frame);
+    g_panic_armed = false;
+
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_runtime != &runtime ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_WRITE ||
+        g_last_linux_compat_request.fd != 1 ||
+        g_last_linux_compat_request.write_buffer != (const void*)0x2000U ||
+        g_last_linux_compat_request.length != 5U ||
+        trap_frame.a0 != 5U ||
+        g_clear_sstatus_bits_calls != 1 ||
+        g_last_clear_sstatus_bits != RISCV_SSTATUS_SPP ||
+        g_set_sstatus_bits_calls != 0 ||
+        g_write_sepc_calls != 1 ||
+        g_last_written_sepc != 0x7004U) {
+        return fail("expected linux compat write ecall to return to U-mode next pc");
+    }
+
+    g_clear_sstatus_bits_calls = 0;
+    g_last_clear_sstatus_bits = 0;
+    g_set_sstatus_bits_calls = 0;
+    g_last_set_sstatus_bits = 0;
+    g_write_sepc_calls = 0;
+    g_last_written_sepc = 0;
+    trap_frame.a0 = 7U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_EXIT_GROUP;
+    g_linux_compat_dispatch_sets_exited = true;
+    g_active_trap_context = &trap_context;
+    g_scause = RISCV_EXC_ECALL_FROM_U;
+    g_sepc = 0x7010;
+    g_stval = 0;
+    g_sstatus = RISCV_SSTATUS_SPIE;
+    if (setjmp(g_panic_env) != 0) {
+        return fail("did not expect panic during linux compat exit ecall dispatch");
+    }
+    g_panic_armed = true;
+    supervisor_trap_dispatch_with_frame(&trap_frame);
+    g_panic_armed = false;
+    if (g_last_linux_compat_request.number != LINUX_COMPAT_SYS_EXIT_GROUP ||
+        g_last_linux_compat_request.fd != 7 ||
+        g_clear_sstatus_bits_calls != 0 ||
+        g_set_sstatus_bits_calls != 1 ||
+        g_last_set_sstatus_bits != RISCV_SSTATUS_SPP ||
+        g_write_sepc_calls != 1 ||
+        g_last_written_sepc != user_runtime.resume_pc) {
+        return fail("expected linux compat exit ecall to return to runtime resume pc");
+    }
+
+    return 0;
+}
+
 static int test_dispatch_user_crash_policy(void) {
     trap_context_t trap_context = {0};
     int crash_cookie = 11;
@@ -709,6 +839,7 @@ int main(void) {
         test_dispatch_page_fault_and_custom_handlers() != 0 ||
         test_dispatch_user_ecall_resume_policy() != 0 ||
         test_dispatch_user_ecall_syscall_policy() != 0 ||
+        test_dispatch_linux_compat_ecall_policy() != 0 ||
         test_dispatch_user_crash_policy() != 0 ||
         test_default_timer_and_external_handlers() != 0 ||
         test_signal_delivery_rejects_inactive_runtime() != 0) {

@@ -79,6 +79,20 @@ static bool range_overlaps_kernel_globals(const vm_address_space_t* address_spac
                                        size);
 }
 
+static bool range_is_platform_mmio(uintptr_t vaddr, size_t size) {
+    return range_within_window(vaddr, size, UART_BASE, UART_BASE + MEMORY_PAGE_SIZE) ||
+           range_within_window(vaddr, size, CLINT_BASE, CLINT_BASE + CLINT_SIZE) ||
+           range_within_window(vaddr, size, PLIC_BASE, PLIC_BASE + PLIC_SIZE) ||
+           range_within_window(vaddr,
+                               size,
+                               STORAGE_BASE,
+                               STORAGE_BASE + MEMORY_PAGE_SIZE) ||
+           range_within_window(vaddr,
+                               size,
+                               AI_ACCEL_BASE,
+                               AI_ACCEL_BASE + MEMORY_PAGE_SIZE);
+}
+
 static struct VmFaultRange* find_free_fault_range_slot(struct VmFaultRange* ranges,
                                                        size_t count) {
     size_t i = 0;
@@ -332,18 +346,7 @@ static bool kernel_fault_range_args_valid(const vm_address_space_t* address_spac
                                           size_t size,
                                           uint64_t flags) {
     const bool in_kernel_window = vm_range_is_kernel(vaddr, size);
-    const bool in_platform_mmio =
-        range_within_window(vaddr, size, UART_BASE, UART_BASE + MEMORY_PAGE_SIZE) ||
-        range_within_window(vaddr, size, CLINT_BASE, CLINT_BASE + CLINT_SIZE) ||
-        range_within_window(vaddr, size, PLIC_BASE, PLIC_BASE + PLIC_SIZE) ||
-        range_within_window(vaddr,
-                            size,
-                            STORAGE_BASE,
-                            STORAGE_BASE + MEMORY_PAGE_SIZE) ||
-        range_within_window(vaddr,
-                            size,
-                            AI_ACCEL_BASE,
-                            AI_ACCEL_BASE + MEMORY_PAGE_SIZE);
+    const bool in_platform_mmio = range_is_platform_mmio(vaddr, size);
 
     return address_space_storage_ready(address_space) &&
            mapped_range_args_valid(vaddr, paddr, size) &&
@@ -527,7 +530,8 @@ bool vm_address_space_map_kernel_range(vm_address_space_t* address_space,
                                        uintptr_t paddr,
                                        size_t size,
                                        uint64_t flags) {
-    if (!vm_range_is_kernel(vaddr, size)) {
+    if (!vm_range_is_kernel(vaddr, size) &&
+        !range_is_platform_mmio(vaddr, size)) {
         return false;
     }
 

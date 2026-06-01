@@ -37,6 +37,7 @@ static void reset_stub_state(void);
 static int fail(const char* message);
 static int test_lifecycle_enable_disable_and_destroy(void);
 static int test_map_kernel_range_records_mapping_contract(void);
+static int test_map_platform_mmio_range_records_mapping_contract(void);
 static int test_fault_range_registration_blocks_overlap_and_user_flags(void);
 static int test_destroy_fail_closed_on_free_failure(void);
 
@@ -285,6 +286,49 @@ static int test_map_kernel_range_records_mapping_contract(void) {
     return 0;
 }
 
+static int test_map_platform_mmio_range_records_mapping_contract(void) {
+    vm_address_space_t* address_space = NULL;
+    const uintptr_t vaddr = UART_BASE;
+    const uintptr_t paddr = UART_BASE;
+    const size_t size = MEMORY_PAGE_SIZE;
+    const uint64_t flags = VM_PAGE_READ | VM_PAGE_WRITE;
+
+    reset_stub_state();
+    if (!vm_address_space_create(&address_space)) {
+        return fail("expected create to succeed before platform mmio map");
+    }
+
+    if (!vm_address_space_map_kernel_range(address_space, vaddr, paddr, size, flags)) {
+        return fail("expected eager platform mmio map to succeed");
+    }
+
+    if (g_can_map_page_calls != 1 || g_map_page_calls != 1 ||
+        g_flush_if_enabled_calls != 1 || g_unmap_page_calls != 0) {
+        return fail("expected platform mmio map to validate and map one page");
+    }
+
+    if (g_can_map_page_vaddrs[0] != vaddr ||
+        g_map_page_records[0].vaddr != vaddr ||
+        g_map_page_records[0].paddr != paddr ||
+        g_map_page_records[0].flags != flags) {
+        return fail("expected platform mmio map to forward UART coordinates");
+    }
+
+    if (!address_space->kernel_mappings[0].valid ||
+        address_space->kernel_mappings[0].vaddr != vaddr ||
+        address_space->kernel_mappings[0].paddr != paddr ||
+        address_space->kernel_mappings[0].size != size ||
+        address_space->kernel_mappings[0].flags != flags) {
+        return fail("expected platform mmio map to record kernel mapping metadata");
+    }
+
+    if (!vm_address_space_destroy(address_space)) {
+        return fail("expected destroy after platform mmio map to succeed");
+    }
+
+    return 0;
+}
+
 static int test_fault_range_registration_blocks_overlap_and_user_flags(void) {
     vm_address_space_t* address_space = NULL;
     const uintptr_t vaddr = MEM_BASE + 8U * MEMORY_PAGE_SIZE;
@@ -389,6 +433,7 @@ static int test_destroy_fail_closed_on_free_failure(void) {
 int main(void) {
     if (test_lifecycle_enable_disable_and_destroy() != 0 ||
         test_map_kernel_range_records_mapping_contract() != 0 ||
+        test_map_platform_mmio_range_records_mapping_contract() != 0 ||
         test_fault_range_registration_blocks_overlap_and_user_flags() != 0 ||
         test_destroy_fail_closed_on_free_failure() != 0) {
         return 1;

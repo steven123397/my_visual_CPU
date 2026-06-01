@@ -11,6 +11,7 @@
 #define LINUX_COMPAT_MAX_STDOUT 512U
 #define LINUX_COMPAT_MAX_DIRENTS 8U
 #define LINUX_COMPAT_MAX_TRACE_RECORDS 16U
+#define LINUX_COMPAT_MINIMAL_ELF_PATH "/bin/minimal-elf"
 #define LINUX_COMPAT_AT_FDCWD (-100)
 #define LINUX_COMPAT_O_RDONLY 0U
 #define LINUX_COMPAT_DT_DIR 4U
@@ -25,6 +26,24 @@
 #define LINUX_COMPAT_S_IROTH 0004U
 #define LINUX_COMPAT_S_IXOTH 0001U
 
+#define LINUX_COMPAT_O_NONBLOCK 00004000U
+#define LINUX_COMPAT_F_DUPFD 0U
+#define LINUX_COMPAT_F_GETFD 1U
+#define LINUX_COMPAT_F_SETFD 2U
+#define LINUX_COMPAT_F_GETFL 3U
+#define LINUX_COMPAT_F_SETFL 4U
+#define LINUX_COMPAT_FD_CLOEXEC 1U
+#define LINUX_COMPAT_TIOCGWINSZ 0x5413U
+#define LINUX_COMPAT_TCGETS 0x5401U
+#define LINUX_COMPAT_TCSETS 0x5402U
+#define LINUX_COMPAT_TCSETSW 0x5403U
+#define LINUX_COMPAT_TCSETSF 0x5404U
+#define LINUX_COMPAT_FIONBIO 0x5421U
+#define LINUX_COMPAT_CLOCK_REALTIME 0U
+#define LINUX_COMPAT_CLOCK_MONOTONIC 1U
+
+#define LINUX_COMPAT_SYS_FCNTL 25U
+#define LINUX_COMPAT_SYS_IOCTL 29U
 #define LINUX_COMPAT_SYS_OPENAT 56U
 #define LINUX_COMPAT_SYS_CLOSE 57U
 #define LINUX_COMPAT_SYS_GETDENTS64 61U
@@ -38,6 +57,13 @@
 #define LINUX_COMPAT_SYS_BRK 214U
 #define LINUX_COMPAT_SYS_MUNMAP 215U
 #define LINUX_COMPAT_SYS_MMAP 222U
+#define LINUX_COMPAT_SYS_GETRANDOM 278U
+
+struct LinuxCompatVm;
+typedef struct TrapContext trap_context_t;
+typedef struct TrapUserRuntime trap_user_runtime_t;
+typedef struct VmAddressSpace vm_address_space_t;
+typedef struct VmProcess vm_process_t;
 
 typedef enum LinuxCompatResult {
     LINUX_COMPAT_OK = 0,
@@ -51,6 +77,12 @@ typedef struct LinuxCompatExecRequest {
     const char* path;
     size_t argc;
     const char* const* argv;
+    trap_context_t* trap_context;
+    trap_user_runtime_t* user_runtime;
+    vm_address_space_t* address_space;
+    vm_process_t* process;
+    void* trap_stack_base;
+    size_t trap_stack_size;
 } linux_compat_exec_request_t;
 
 typedef struct LinuxCompatTrace {
@@ -98,7 +130,28 @@ typedef struct LinuxCompatFd {
     bool open;
     const void* node;
     size_t offset;
+    uint32_t flags;
+    uint32_t fd_flags;
 } linux_compat_fd_t;
+
+typedef struct LinuxCompatTimespec {
+    int64_t tv_sec;
+    int64_t tv_nsec;
+} linux_compat_timespec_t;
+
+typedef struct LinuxCompatWinsize {
+    uint16_t ws_row;
+    uint16_t ws_col;
+    uint16_t ws_xpixel;
+    uint16_t ws_ypixel;
+} linux_compat_winsize_t;
+
+typedef struct LinuxCompatTermios {
+    uint32_t c_iflag;
+    uint32_t c_oflag;
+    uint32_t c_cflag;
+    uint32_t c_lflag;
+} linux_compat_termios_t;
 
 typedef struct LinuxCompatSyscallTraceRecord {
     uint64_t number;
@@ -109,6 +162,7 @@ typedef struct LinuxCompatSyscallTraceRecord {
 } linux_compat_syscall_trace_record_t;
 
 typedef struct LinuxCompatRuntime {
+    struct LinuxCompatVm* vm;
     linux_compat_fd_t fds[LINUX_COMPAT_MAX_FDS];
     uint64_t program_break;
     uint64_t next_mmap;
@@ -134,6 +188,10 @@ typedef struct LinuxCompatSyscallRequest {
     linux_compat_dirent_t* dirents;
     size_t dirent_capacity;
     uint64_t addr;
+    uint32_t prot;
+    uint32_t flags;
+    uint32_t command;
+    uint64_t arg;
 } linux_compat_syscall_request_t;
 
 typedef struct LinuxCompatSyscallResponse {
