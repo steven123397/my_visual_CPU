@@ -12,7 +12,13 @@
 #define AT_PHENT 4U
 #define AT_PHNUM 5U
 #define AT_PAGESZ 6U
+#define AT_BASE 7U
 #define AT_ENTRY 9U
+#define AT_UID 11U
+#define AT_EUID 12U
+#define AT_GID 13U
+#define AT_EGID 14U
+#define AT_SECURE 23U
 #define AT_RANDOM 25U
 #define LINUX_COMPAT_STACK_PAGES 8U
 
@@ -179,13 +185,6 @@ linux_compat_result_t linux_compat_exec_load(
         set_trace(out_trace, 22, "linux-compat: exec: bad request");
         return LINUX_COMPAT_ERR_BAD_ELF;
     }
-    if (plan->requires_interp) {
-        set_trace(out_trace,
-                  9,
-                  "linux-compat: exec: dynamic linker not executed");
-        return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
-    }
-
     for (i = 0; i < plan->segment_count; ++i) {
         const linux_compat_load_segment_t* segment = &plan->segments[i];
         const uintptr_t page_vaddr = align_down_page((uintptr_t)segment->vaddr);
@@ -237,7 +236,8 @@ linux_compat_result_t linux_compat_exec_build_stack(
     uintptr_t cursor = 0;
     uintptr_t string_addrs[LINUX_COMPAT_MAX_ARGS];
     uintptr_t random_addr = 0;
-    uint64_t aux_values[14];
+    uint64_t aux_values[32];
+    size_t aux_count = 0;
     size_t frame_words = 0;
     size_t frame_size = 0;
     size_t i = 0;
@@ -304,24 +304,43 @@ linux_compat_result_t linux_compat_exec_build_stack(
     }
     cursor = align_down_16(cursor);
 
-    aux_values[0] = AT_PHDR;
-    aux_values[1] = plan->segment_count != 0U ? plan->segments[0].vaddr + ELF64_HEADER_SIZE
-                                              : 0U;
-    aux_values[2] = AT_PHENT;
-    aux_values[3] = ELF64_PHENTSIZE;
-    aux_values[4] = AT_PHNUM;
-    aux_values[5] = plan->segment_count;
-    aux_values[6] = AT_PAGESZ;
-    aux_values[7] = MEMORY_PAGE_SIZE;
-    aux_values[8] = AT_ENTRY;
-    aux_values[9] = plan->entry;
-    aux_values[10] = AT_RANDOM;
-    aux_values[11] = random_addr;
-    aux_values[12] = AT_NULL;
-    aux_values[13] = 0U;
+    aux_values[aux_count++] = AT_PHDR;
+    aux_values[aux_count++] =
+        plan->segment_count != 0U ? plan->segments[0].vaddr + ELF64_HEADER_SIZE
+                                  : 0U;
+    aux_values[aux_count++] = AT_PHENT;
+    aux_values[aux_count++] = ELF64_PHENTSIZE;
+    aux_values[aux_count++] = AT_PHNUM;
+    aux_values[aux_count++] = plan->segment_count;
+    aux_values[aux_count++] = AT_PAGESZ;
+    aux_values[aux_count++] = MEMORY_PAGE_SIZE;
+    if (plan->requires_interp) {
+        if (plan->interp_load_bias == 0U || plan->interp_entry == 0U) {
+            set_trace(out_trace, 22, "linux-compat: exec: missing interp auxv");
+            return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
+        }
+        aux_values[aux_count++] = AT_BASE;
+        aux_values[aux_count++] = plan->interp_load_bias;
+    }
+    aux_values[aux_count++] = AT_ENTRY;
+    aux_values[aux_count++] = plan->entry;
+    aux_values[aux_count++] = AT_UID;
+    aux_values[aux_count++] = 0U;
+    aux_values[aux_count++] = AT_EUID;
+    aux_values[aux_count++] = 0U;
+    aux_values[aux_count++] = AT_GID;
+    aux_values[aux_count++] = 0U;
+    aux_values[aux_count++] = AT_EGID;
+    aux_values[aux_count++] = 0U;
+    aux_values[aux_count++] = AT_SECURE;
+    aux_values[aux_count++] = 0U;
+    aux_values[aux_count++] = AT_RANDOM;
+    aux_values[aux_count++] = random_addr;
+    aux_values[aux_count++] = AT_NULL;
+    aux_values[aux_count++] = 0U;
 
     frame_words = 1U + argc + 1U + 1U +
-                  (sizeof(aux_values) / sizeof(aux_values[0]));
+                  aux_count;
     frame_size = frame_words * sizeof(uint64_t);
     if (frame_size > (size_t)(cursor - stack_base)) {
         set_trace(out_trace, 22, "linux-compat: exec: stack frame too large");
@@ -329,7 +348,7 @@ linux_compat_result_t linux_compat_exec_build_stack(
     }
     cursor = align_down_16(cursor - frame_size) + frame_size;
 
-    for (i = sizeof(aux_values) / sizeof(aux_values[0]); i > 0U; --i) {
+    for (i = aux_count; i > 0U; --i) {
         if (!push_u64(&stack_region->object,
                       stack_base,
                       &cursor,

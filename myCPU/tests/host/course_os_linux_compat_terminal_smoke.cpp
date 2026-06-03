@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
         {"linux-compat: rootfs=builtin", "builtin rootfs source should be visible"},
         {"linux-compat: path=/bin/busybox", "busybox should use explicit linux compat launcher"},
         {"loader=static interp=none", "busybox should report static loader plan"},
-        {"segments=1 stack=2/0/6", "busybox should report segment and stack summary"},
+        {"segments=1 stack=2/0/12", "busybox should report segment and stack summary"},
         {"exec=real", "busybox should run through the real Linux compat exec path"},
         {"trace=write", "busybox help should be produced by real write ecalls"},
         {"exit_group", "busybox help should exit through exit_group"},
@@ -203,8 +203,13 @@ int main(int argc, char** argv) {
     }
 
     constexpr ExpectedText kDirectGitExpectations[] = {
-        {"git -h", "direct git fallback command should be visible"},
-        {"error\r\ncourse-os> ", "direct git fallback should remain disabled in v0"},
+        {"linux-compat: rootfs=builtin", "direct git fallback should report builtin rootfs"},
+        {"linux-compat: path=/usr/bin/git", "direct git fallback should resolve through Linux compat PATH"},
+        {"exec=real", "direct git fallback should run through the real Linux compat exec path"},
+        {"trace=write", "direct git fallback should use real write ecalls"},
+        {"exit_group", "direct git fallback should exit through exit_group"},
+        {"usage: git", "direct git -h should emit a help usage line"},
+        {"course-os> ", "direct git fallback should return to prompt"},
     };
     if (!run_shell_command(session,
                            offset,
@@ -212,6 +217,22 @@ int main(int argc, char** argv) {
                            kDirectGitExpectations,
                            sizeof(kDirectGitExpectations) /
                                sizeof(kDirectGitExpectations[0]))) {
+        return 1;
+    }
+
+    constexpr ExpectedText kDirectGitHelpExpectations[] = {
+        {"linux-compat: path=/usr/bin/git", "direct git help should resolve through Linux compat PATH"},
+        {"exec=real", "direct git help should run through the real Linux compat exec path"},
+        {"trace=write", "direct git help should use real write ecalls"},
+        {"usage: git", "direct git help should emit a usage line"},
+        {"course-os> ", "direct git help should return to prompt"},
+    };
+    if (!run_shell_command(session,
+                           offset,
+                           "git help\r",
+                           kDirectGitHelpExpectations,
+                           sizeof(kDirectGitHelpExpectations) /
+                               sizeof(kDirectGitHelpExpectations[0]))) {
         return 1;
     }
 

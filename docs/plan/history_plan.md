@@ -23,6 +23,40 @@
 
 ### 2026-06-03
 
+#### course-os-kernel-alpha-stage10-oscomp-help-run-plan
+
+- 完成时间：2026-06-03
+- 原文件：`course_os_kernel_alpha_stage10_oscomp_help_run_plan.md`
+- 完成内容：完成 `kernel_alpha` Linux compat Stage 10 OSComp help-run 基线。
+  `course-os> git -h` 和 `course-os> git help` 现在通过课程 shell 受限 PATH fallback
+  解析到 `/usr/bin/git`，进入真实 Linux compat exec 路径并输出 `usage: git`、
+  `exec=real` 和真实 syscall trace 后回到同一个 `course-os> ` prompt。`vim -h`、
+  `gcc --h`、`rustc -h` 在 builtin provider 缺少对应资产时进入 Linux compat fail-closed
+  诊断，输出 resolved path、`errno=2`、`path: no such file` 和 prompt 回归。
+- 实现过程摘要：本轮先补 Stage 10 rootfs/provider manifest 合同，新增 Stage 10 required
+  工具路径与 shared asset manifest；随后启用课程命令优先的 direct fallback，补
+  dynamic-loader v0 / `PT_INTERP` 映射元数据、`AT_BASE` 等 auxv 诊断，以及 help-run trace
+  证明需要的最小只读 / 低副作用 syscall 面。最后新增
+  `course_os_linux_compat_oscomp_help_smoke` host target，并修复缺 builtin 资产命令只输出
+  裸 `error` 的回归缺口，使缺资产工具也进入 Linux compat 诊断链路。
+- 验证摘要：已运行 `cd myCPU && python3 -m unittest tests.host.linux_compat_rootfs_asset_test`、
+  `make test-unit-course_os_stage5_linux_compat`、
+  `make test-unit-course_os_stage6_linux_compat`、
+  `make test-unit-course_os_stage8_linux_compat_loader`、
+  `make test-unit-course_os_stage9_linux_compat_vm`、
+  `make test-unit-course_os_stage9_linux_compat_exec`、
+  `make test-unit-course_os_stage9_linux_compat_syscall`、
+  `make test-unit-course_os_stage10_linux_compat`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、
+  `make test-host-course_os_linux_compat_minimal_elf_smoke`、
+  `make test-host-course_os_linux_compat_oscomp_help_smoke`、
+  `make test`、`make test-pipeline` 和 `git diff --check`，最终均以退出码 0 完成。
+- 剩余风险：Stage 10 不声明完整 testsuits-for-oskernel、网络 `git clone/push/pull`、
+  `git init/add/commit/log`、交互式 `vim hello.c`、`gcc hello.c && ./a.out`、
+  `rustc helloworld.rs && ./helloworld`、完整动态链接器、完整 signal / futex、完整 TTY
+  或 rootfs 写语义。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 #### course-os-kernel-alpha-stage9-linux-compat-real-exec-plan
 
 - 原文件：`course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md`

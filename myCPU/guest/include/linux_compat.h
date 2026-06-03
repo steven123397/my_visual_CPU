@@ -16,6 +16,11 @@
 #define LINUX_COMPAT_O_RDONLY 0U
 #define LINUX_COMPAT_DT_DIR 4U
 #define LINUX_COMPAT_DT_REG 8U
+#ifndef LINUX_COMPAT_PROT_READ
+#define LINUX_COMPAT_PROT_READ 0x1U
+#define LINUX_COMPAT_PROT_WRITE 0x2U
+#define LINUX_COMPAT_PROT_EXEC 0x4U
+#endif
 #define LINUX_COMPAT_S_IFDIR 0040000U
 #define LINUX_COMPAT_S_IFREG 0100000U
 #define LINUX_COMPAT_S_IRUSR 0400U
@@ -44,20 +49,32 @@
 
 #define LINUX_COMPAT_SYS_FCNTL 25U
 #define LINUX_COMPAT_SYS_IOCTL 29U
+#define LINUX_COMPAT_SYS_FACCESSAT 48U
 #define LINUX_COMPAT_SYS_OPENAT 56U
 #define LINUX_COMPAT_SYS_CLOSE 57U
 #define LINUX_COMPAT_SYS_GETDENTS64 61U
 #define LINUX_COMPAT_SYS_LSEEK 62U
 #define LINUX_COMPAT_SYS_READ 63U
 #define LINUX_COMPAT_SYS_WRITE 64U
+#define LINUX_COMPAT_SYS_WRITEV 66U
+#define LINUX_COMPAT_SYS_PREAD64 67U
+#define LINUX_COMPAT_SYS_READLINKAT 78U
 #define LINUX_COMPAT_SYS_NEWFSTATAT 79U
 #define LINUX_COMPAT_SYS_CLOCK_GETTIME 113U
 #define LINUX_COMPAT_SYS_EXIT 93U
 #define LINUX_COMPAT_SYS_EXIT_GROUP 94U
+#define LINUX_COMPAT_SYS_SET_TID_ADDRESS 96U
+#define LINUX_COMPAT_SYS_SET_ROBUST_LIST 99U
+#define LINUX_COMPAT_SYS_RT_SIGACTION 134U
+#define LINUX_COMPAT_SYS_RT_SIGPROCMASK 135U
+#define LINUX_COMPAT_SYS_UNAME 160U
 #define LINUX_COMPAT_SYS_BRK 214U
 #define LINUX_COMPAT_SYS_MUNMAP 215U
 #define LINUX_COMPAT_SYS_MMAP 222U
+#define LINUX_COMPAT_SYS_MPROTECT 226U
+#define LINUX_COMPAT_SYS_PRLIMIT64 261U
 #define LINUX_COMPAT_SYS_GETRANDOM 278U
+#define LINUX_COMPAT_SYS_STATX 291U
 
 struct LinuxCompatVm;
 typedef struct TrapContext trap_context_t;
@@ -126,6 +143,33 @@ typedef struct LinuxCompatDirent {
     char name[LINUX_COMPAT_MAX_PATH];
 } linux_compat_dirent_t;
 
+typedef struct LinuxCompatIovec {
+    const void* base;
+    size_t length;
+} linux_compat_iovec_t;
+
+typedef struct LinuxCompatUtsname {
+    char sysname[65];
+    char nodename[65];
+    char release[65];
+    char version[65];
+    char machine[65];
+    char domainname[65];
+} linux_compat_utsname_t;
+
+typedef struct LinuxCompatRlimit {
+    uint64_t current;
+    uint64_t maximum;
+} linux_compat_rlimit_t;
+
+typedef struct LinuxCompatStatx {
+    uint32_t mask;
+    uint32_t blksize;
+    uint64_t inode;
+    uint64_t size;
+    uint32_t mode;
+} linux_compat_statx_t;
+
 typedef struct LinuxCompatFd {
     bool open;
     const void* node;
@@ -185,6 +229,7 @@ typedef struct LinuxCompatSyscallRequest {
     size_t length;
     uint64_t offset;
     linux_compat_stat_t* stat;
+    linux_compat_statx_t* statx;
     linux_compat_dirent_t* dirents;
     size_t dirent_capacity;
     uint64_t addr;
@@ -201,6 +246,12 @@ typedef struct LinuxCompatSyscallResponse {
 linux_compat_result_t linux_compat_lookup(
     const char* path,
     linux_compat_rootfs_entry_t* out_entry,
+    linux_compat_trace_t* out_trace);
+
+linux_compat_result_t linux_compat_resolve_path(
+    const char* command,
+    char* out_path,
+    size_t out_path_size,
     linux_compat_trace_t* out_trace);
 
 linux_compat_result_t linux_compat_inspect_elf(

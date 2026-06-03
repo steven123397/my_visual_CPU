@@ -77,10 +77,18 @@ def mode_for_file(source: Source, guest_path: str) -> int:
 
 
 def collect_asset_records(
-    source: Source, required_paths: list[str], optional_paths: list[str]
+    source: Source,
+    required_paths: list[str],
+    optional_paths: list[str],
+    optional_shared_paths: list[str],
 ) -> list[dict]:
     records = []
-    for required, paths in ((True, required_paths), (False, optional_paths)):
+    path_groups = (
+        (True, "tool", required_paths),
+        (False, "interpreter", optional_paths),
+        (False, "shared", optional_shared_paths),
+    )
+    for required, kind, paths in path_groups:
         for guest_path in paths:
             try:
                 data = read_source_file(source, guest_path)
@@ -91,6 +99,7 @@ def collect_asset_records(
                 records.append(
                     {
                         "path": guest_path,
+                        "kind": kind,
                         "required": False,
                         "present": False,
                         "reason": str(exc),
@@ -100,6 +109,7 @@ def collect_asset_records(
             records.append(
                 {
                     "path": guest_path,
+                    "kind": kind,
                     "required": required,
                     "present": True,
                     "data": data,
@@ -145,8 +155,11 @@ def write_c_asset(
     source: Source,
     required_paths: list[str],
     optional_paths: list[str],
+    optional_shared_paths: list[str],
 ) -> None:
-    records = collect_asset_records(source, required_paths, optional_paths)
+    records = collect_asset_records(
+        source, required_paths, optional_paths, optional_shared_paths
+    )
     entries = [record for record in records if record["present"]]
     for index, entry in enumerate(entries):
         entry["index"] = index
@@ -215,13 +228,17 @@ def write_c_asset(
 def write_manifest(out_manifest: pathlib.Path | None,
                    source: Source,
                    required_paths: list[str],
-                   optional_paths: list[str]) -> None:
+                   optional_paths: list[str],
+                   optional_shared_paths: list[str]) -> None:
     if out_manifest is None:
         return
     files = []
-    for record in collect_asset_records(source, required_paths, optional_paths):
+    for record in collect_asset_records(
+        source, required_paths, optional_paths, optional_shared_paths
+    ):
         entry = {
             "path": record["path"],
+            "kind": record["kind"],
             "required": record["required"],
             "present": record["present"],
         }
@@ -250,6 +267,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--out-manifest", type=pathlib.Path)
     parser.add_argument("--path", action="append", default=[])
     parser.add_argument("--optional-path", action="append", default=[])
+    parser.add_argument("--optional-shared-path", action="append", default=[])
     return parser.parse_args(argv)
 
 
@@ -272,8 +290,14 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         source = resolve_source(args)
-        write_c_asset(args.out_c, source, args.path, args.optional_path)
-        write_manifest(args.out_manifest, source, args.path, args.optional_path)
+        write_c_asset(
+            args.out_c, source, args.path, args.optional_path,
+            args.optional_shared_path
+        )
+        write_manifest(
+            args.out_manifest, source, args.path, args.optional_path,
+            args.optional_shared_path
+        )
     except (OSError, RuntimeError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

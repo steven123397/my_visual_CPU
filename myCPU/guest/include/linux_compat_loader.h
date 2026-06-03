@@ -8,8 +8,9 @@
 
 #define LINUX_COMPAT_MAX_LOAD_SEGMENTS 8U
 #define LINUX_COMPAT_DYN_LOAD_BIAS UINT64_C(0x40000000)
+#define LINUX_COMPAT_INTERP_LOAD_BIAS UINT64_C(0x50000000)
 #define LINUX_COMPAT_STACK_TOP UINT64_C(0x70000000)
-#define LINUX_COMPAT_AUXV_COUNT 6U
+#define LINUX_COMPAT_AUXV_COUNT 12U
 
 typedef struct LinuxCompatLoadSegment {
     uint64_t vaddr;
@@ -27,6 +28,8 @@ typedef struct LinuxCompatLoadPlan {
     linux_compat_load_segment_t segments[LINUX_COMPAT_MAX_LOAD_SEGMENTS];
     bool requires_interp;
     char interp_path[LINUX_COMPAT_MAX_PATH];
+    uint64_t interp_load_bias;
+    uint64_t interp_entry;
     uint64_t stack_top;
     size_t argv_count;
     size_t envp_count;

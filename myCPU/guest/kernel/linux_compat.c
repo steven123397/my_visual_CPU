@@ -14,10 +14,12 @@ typedef struct LinuxCompatRunScratch {
     linux_compat_rootfs_entry_t entry;
     linux_compat_rootfs_entry_t interp_entry;
     linux_compat_load_plan_t load_plan;
+    linux_compat_load_plan_t interp_plan;
     linux_compat_vm_t vm;
     linux_compat_runtime_t runtime;
     linux_compat_trace_t trace;
     uintptr_t entry_pc;
+    uintptr_t interp_entry_pc;
     uintptr_t user_sp;
 } linux_compat_run_scratch_t;
 
@@ -321,6 +323,8 @@ static const char* linux_compat_syscall_name(uint64_t number) {
             return "fcntl";
         case LINUX_COMPAT_SYS_IOCTL:
             return "ioctl";
+        case LINUX_COMPAT_SYS_FACCESSAT:
+            return "faccessat";
         case LINUX_COMPAT_SYS_OPENAT:
             return "openat";
         case LINUX_COMPAT_SYS_CLOSE:
@@ -333,6 +337,12 @@ static const char* linux_compat_syscall_name(uint64_t number) {
             return "read";
         case LINUX_COMPAT_SYS_WRITE:
             return "write";
+        case LINUX_COMPAT_SYS_WRITEV:
+            return "writev";
+        case LINUX_COMPAT_SYS_PREAD64:
+            return "pread64";
+        case LINUX_COMPAT_SYS_READLINKAT:
+            return "readlinkat";
         case LINUX_COMPAT_SYS_NEWFSTATAT:
             return "newfstatat";
         case LINUX_COMPAT_SYS_CLOCK_GETTIME:
@@ -341,14 +351,30 @@ static const char* linux_compat_syscall_name(uint64_t number) {
             return "exit";
         case LINUX_COMPAT_SYS_EXIT_GROUP:
             return "exit_group";
+        case LINUX_COMPAT_SYS_SET_TID_ADDRESS:
+            return "set_tid_address";
+        case LINUX_COMPAT_SYS_SET_ROBUST_LIST:
+            return "set_robust_list";
+        case LINUX_COMPAT_SYS_RT_SIGACTION:
+            return "rt_sigaction";
+        case LINUX_COMPAT_SYS_RT_SIGPROCMASK:
+            return "rt_sigprocmask";
+        case LINUX_COMPAT_SYS_UNAME:
+            return "uname";
         case LINUX_COMPAT_SYS_BRK:
             return "brk";
         case LINUX_COMPAT_SYS_MUNMAP:
             return "munmap";
         case LINUX_COMPAT_SYS_MMAP:
             return "mmap";
+        case LINUX_COMPAT_SYS_MPROTECT:
+            return "mprotect";
+        case LINUX_COMPAT_SYS_PRLIMIT64:
+            return "prlimit64";
         case LINUX_COMPAT_SYS_GETRANDOM:
             return "getrandom";
+        case LINUX_COMPAT_SYS_STATX:
+            return "statx";
         default:
             return "unknown";
     }
@@ -381,6 +407,33 @@ static bool append_trace_summary(char* out,
     if (runtime->trace_truncated) {
         return append_str(out, out_size, used, "+truncated");
     }
+    return true;
+}
+
+static bool rebase_load_plan(linux_compat_load_plan_t* plan,
+                             uint64_t new_load_bias) {
+    uint64_t old_load_bias = 0;
+    size_t i = 0;
+
+    if (plan == 0 || plan->elf_type != 3U) {
+        return false;
+    }
+    old_load_bias = plan->load_bias;
+    if (new_load_bias == old_load_bias) {
+        return true;
+    }
+    if (plan->entry < old_load_bias) {
+        return false;
+    }
+    plan->entry = (plan->entry - old_load_bias) + new_load_bias;
+    for (i = 0; i < plan->segment_count; ++i) {
+        if (plan->segments[i].vaddr < old_load_bias) {
+            return false;
+        }
+        plan->segments[i].vaddr =
+            (plan->segments[i].vaddr - old_load_bias) + new_load_bias;
+    }
+    plan->load_bias = new_load_bias;
     return true;
 }
 
@@ -649,6 +702,123 @@ linux_compat_result_t linux_compat_lookup(
     }
 
     set_trace(out_trace, path, 2, "linux-compat: rootfs: no such file");
+    return LINUX_COMPAT_ERR_NO_SUCH_FILE;
+}
+
+static bool path_contains_slash(const char* value) {
+    size_t i = 0;
+
+    if (value == 0) {
+        return false;
+    }
+    while (value[i] != '\0') {
+        if (value[i] == '/') {
+            return true;
+        }
+        i += 1U;
+    }
+    return false;
+}
+
+static bool fallback_name_allowed(const char* value) {
+    return str_eq(value, "busybox") || str_eq(value, "git") ||
+           str_eq(value, "vim") || str_eq(value, "gcc") ||
+           str_eq(value, "rustc");
+}
+
+static const char* fallback_canonical_prefix(const char* value) {
+    if (str_eq(value, "busybox")) {
+        return "/bin/";
+    }
+    if (str_eq(value, "git") || str_eq(value, "vim") ||
+        str_eq(value, "gcc") || str_eq(value, "rustc")) {
+        return "/usr/bin/";
+    }
+    return 0;
+}
+
+static bool build_path_candidate(char* out,
+                                 size_t out_size,
+                                 const char* prefix,
+                                 const char* name) {
+    size_t used = 0;
+
+    if (out == 0 || out_size == 0 || prefix == 0 || name == 0) {
+        return false;
+    }
+    out[0] = '\0';
+    return append_str(out, out_size, &used, prefix) &&
+           append_str(out, out_size, &used, name);
+}
+
+linux_compat_result_t linux_compat_resolve_path(
+    const char* command,
+    char* out_path,
+    size_t out_path_size,
+    linux_compat_trace_t* out_trace) {
+    static const char* k_path_prefixes[] = {"/bin/", "/usr/bin/"};
+    linux_compat_rootfs_entry_t entry;
+    linux_compat_trace_t trace;
+    size_t i = 0;
+
+    if (out_path != 0 && out_path_size != 0U) {
+        out_path[0] = '\0';
+    }
+    if (command == 0 || str_len(command) == 0U || out_path == 0 ||
+        out_path_size == 0U) {
+        set_trace(out_trace, "", 2, "linux-compat: path: empty");
+        return LINUX_COMPAT_ERR_NO_SUCH_FILE;
+    }
+
+    if (path_contains_slash(command)) {
+        const linux_compat_result_t result =
+            linux_compat_lookup(command, &entry, &trace);
+
+        if (result != LINUX_COMPAT_OK) {
+            if (out_trace != 0) {
+                *out_trace = trace;
+            }
+            return result;
+        }
+        copy_str(out_path, out_path_size, entry.path);
+        set_trace(out_trace, entry.path, 0, "linux-compat: path: explicit");
+        return LINUX_COMPAT_OK;
+    }
+
+    if (!fallback_name_allowed(command)) {
+        set_trace(out_trace, command, 2, "linux-compat: path: no fallback");
+        return LINUX_COMPAT_ERR_NO_SUCH_FILE;
+    }
+
+    for (i = 0; i < sizeof(k_path_prefixes) / sizeof(k_path_prefixes[0]); ++i) {
+        char candidate[LINUX_COMPAT_MAX_PATH];
+        const linux_compat_result_t result =
+            build_path_candidate(candidate,
+                                 sizeof(candidate),
+                                 k_path_prefixes[i],
+                                 command)
+                ? linux_compat_lookup(candidate, &entry, &trace)
+                : LINUX_COMPAT_ERR_NO_SUCH_FILE;
+
+        if (result == LINUX_COMPAT_OK) {
+            copy_str(out_path, out_path_size, entry.path);
+            set_trace(out_trace,
+                      entry.path,
+                      0,
+                      "linux-compat: path: fallback");
+            return LINUX_COMPAT_OK;
+        }
+    }
+
+    if (build_path_candidate(out_path,
+                             out_path_size,
+                             fallback_canonical_prefix(command),
+                             command)) {
+        set_trace(out_trace, out_path, 0, "linux-compat: path: fallback");
+        return LINUX_COMPAT_OK;
+    }
+
+    set_trace(out_trace, command, 2, "linux-compat: path: no such file");
     return LINUX_COMPAT_ERR_NO_SUCH_FILE;
 }
 
@@ -1280,6 +1450,229 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
     return (int64_t)count;
 }
 
+static int64_t linux_compat_mprotect(uint64_t addr,
+                                     size_t length,
+                                     uint32_t prot,
+                                     linux_compat_trace_t* out_trace) {
+    (void)addr;
+    (void)prot;
+    if (length == 0U) {
+        set_trace(out_trace, "", 22, "linux-compat: mprotect: empty range");
+        return -22;
+    }
+    set_trace(out_trace, "", 0, "linux-compat: mprotect");
+    return 0;
+}
+
+static int64_t linux_compat_uname(linux_compat_runtime_t* runtime,
+                                  void* buffer,
+                                  linux_compat_trace_t* out_trace) {
+    linux_compat_utsname_t utsname;
+
+    if (buffer == 0) {
+        set_trace(out_trace, "", 14, "linux-compat: uname: bad buffer");
+        return -14;
+    }
+    zero_bytes(&utsname, sizeof(utsname));
+    copy_str(utsname.sysname, sizeof(utsname.sysname), "Linux");
+    copy_str(utsname.nodename, sizeof(utsname.nodename), "mycpu");
+    copy_str(utsname.release, sizeof(utsname.release), "6.0.0-myCPU");
+    copy_str(utsname.version, sizeof(utsname.version), "#1 kernel_alpha");
+    copy_str(utsname.machine, sizeof(utsname.machine), "riscv64");
+    copy_str(utsname.domainname, sizeof(utsname.domainname), "localdomain");
+    if (!linux_compat_write_result_buffer(runtime,
+                                          buffer,
+                                          &utsname,
+                                          sizeof(utsname))) {
+        set_trace(out_trace, "", 14, "linux-compat: uname: bad buffer");
+        return -14;
+    }
+    set_trace(out_trace, "", 0, "linux-compat: uname");
+    return 0;
+}
+
+static int64_t linux_compat_prlimit64(linux_compat_runtime_t* runtime,
+                                      uint32_t resource,
+                                      void* old_limit,
+                                      linux_compat_trace_t* out_trace) {
+    linux_compat_rlimit_t limit;
+
+    (void)resource;
+    if (old_limit == 0) {
+        set_trace(out_trace, "", 0, "linux-compat: prlimit64");
+        return 0;
+    }
+    limit.current = 8U * 1024U * 1024U;
+    limit.maximum = limit.current;
+    if (!linux_compat_write_result_buffer(runtime,
+                                          old_limit,
+                                          &limit,
+                                          sizeof(limit))) {
+        set_trace(out_trace, "", 14, "linux-compat: prlimit64: bad buffer");
+        return -14;
+    }
+    set_trace(out_trace, "", 0, "linux-compat: prlimit64");
+    return 0;
+}
+
+static int64_t linux_compat_readlinkat(linux_compat_runtime_t* runtime,
+                                       const char* path,
+                                       void* buffer,
+                                       size_t length,
+                                       linux_compat_trace_t* out_trace) {
+    char resolved_path[LINUX_COMPAT_MAX_PATH];
+    const char* target = "linux-compat:/proc/self/exe";
+    const size_t target_len = str_len(target);
+    const size_t copy_len = target_len < (length - 1U) ? target_len
+                                                       : (length - 1U);
+
+    if (buffer == 0 || length == 0U) {
+        set_trace(out_trace, "", 14, "linux-compat: readlinkat: bad buffer");
+        return -14;
+    }
+    if (!linux_compat_copy_in_path(runtime, path, resolved_path,
+                                   sizeof(resolved_path))) {
+        set_trace(out_trace, "", 14, "linux-compat: readlinkat: bad path");
+        return -14;
+    }
+    if (!str_eq(resolved_path, "/proc/self/exe")) {
+        set_trace(out_trace, resolved_path, 2,
+                  "linux-compat: readlinkat: no such file");
+        return -2;
+    }
+    if (!linux_compat_write_result_buffer(runtime, buffer, target, copy_len) ||
+        !linux_compat_write_result_buffer(runtime,
+                                          (uint8_t*)buffer + copy_len,
+                                          "",
+                                          1U)) {
+        set_trace(out_trace, resolved_path, 14,
+                  "linux-compat: readlinkat: bad buffer");
+        return -14;
+    }
+    set_trace(out_trace, resolved_path, 0, "linux-compat: readlinkat");
+    return (int64_t)copy_len;
+}
+
+static int64_t linux_compat_faccessat(linux_compat_runtime_t* runtime,
+                                      const char* path,
+                                      linux_compat_trace_t* out_trace) {
+    char resolved_path[LINUX_COMPAT_MAX_PATH];
+    linux_compat_stat_t stat;
+
+    if (!linux_compat_copy_in_path(runtime, path, resolved_path,
+                                   sizeof(resolved_path))) {
+        set_trace(out_trace, "", 14, "linux-compat: faccessat: bad path");
+        return -14;
+    }
+    if (linux_compat_stat_path(resolved_path, &stat, out_trace) !=
+        LINUX_COMPAT_OK) {
+        set_trace(out_trace, resolved_path, 2,
+                  "linux-compat: faccessat: no such file");
+        return -2;
+    }
+    set_trace(out_trace, resolved_path, 0, "linux-compat: faccessat");
+    return 0;
+}
+
+static int64_t linux_compat_pread64(linux_compat_runtime_t* runtime,
+                                    int32_t fd,
+                                    void* buffer,
+                                    size_t length,
+                                    uint64_t offset,
+                                    linux_compat_trace_t* out_trace) {
+    size_t saved_offset = 0;
+    int64_t result = 0;
+
+    if (runtime == 0 || fd < 0 || fd >= (int32_t)LINUX_COMPAT_MAX_FDS ||
+        (fd >= 3 && !runtime->fds[fd].open)) {
+        set_trace(out_trace, "", 9, "linux-compat: pread64: bad fd");
+        return -9;
+    }
+    saved_offset = runtime->fds[fd].offset;
+    runtime->fds[fd].offset = (size_t)offset;
+    result = linux_compat_read(runtime, fd, buffer, length, out_trace);
+    runtime->fds[fd].offset = saved_offset;
+    if (result >= 0) {
+        set_trace(out_trace, "", 0, "linux-compat: pread64");
+    }
+    return result;
+}
+
+static int64_t linux_compat_writev(linux_compat_runtime_t* runtime,
+                                   int32_t fd,
+                                   const void* iovecs,
+                                   size_t count,
+                                   linux_compat_trace_t* out_trace) {
+    size_t i = 0;
+    int64_t total = 0;
+
+    if (count > 16U || (iovecs == 0 && count != 0U)) {
+        set_trace(out_trace, "", 22, "linux-compat: writev: bad iov");
+        return -22;
+    }
+    for (i = 0; i < count; ++i) {
+        linux_compat_iovec_t iov;
+        int64_t wrote = 0;
+
+        if (!linux_compat_read_user_buffer(
+                runtime,
+                (const uint8_t*)iovecs + (i * sizeof(iov)),
+                &iov,
+                sizeof(iov))) {
+            set_trace(out_trace, "", 14, "linux-compat: writev: bad iov");
+            return -14;
+        }
+        wrote = linux_compat_write(runtime, fd, iov.base, iov.length, out_trace);
+        if (wrote < 0) {
+            return wrote;
+        }
+        total += wrote;
+    }
+    set_trace(out_trace, "", 0, "linux-compat: writev");
+    return total;
+}
+
+static int64_t linux_compat_statx(linux_compat_runtime_t* runtime,
+                                  const char* path,
+                                  linux_compat_statx_t* out_statx,
+                                  linux_compat_trace_t* out_trace) {
+    char resolved_path[LINUX_COMPAT_MAX_PATH];
+    linux_compat_stat_t stat;
+    linux_compat_statx_t statx;
+
+    if (out_statx == 0) {
+        set_trace(out_trace, "", 14, "linux-compat: statx: bad buffer");
+        return -14;
+    }
+    if (!linux_compat_copy_in_path(runtime, path, resolved_path,
+                                   sizeof(resolved_path))) {
+        set_trace(out_trace, "", 14, "linux-compat: statx: bad path");
+        return -14;
+    }
+    if (linux_compat_stat_path(resolved_path, &stat, out_trace) !=
+        LINUX_COMPAT_OK) {
+        set_trace(out_trace, resolved_path, 2,
+                  "linux-compat: statx: no such file");
+        return -2;
+    }
+    zero_bytes(&statx, sizeof(statx));
+    statx.mask = 0x17ffU;
+    statx.blksize = 4096U;
+    statx.inode = stat.inode;
+    statx.size = stat.size;
+    statx.mode = stat.mode;
+    if (!linux_compat_write_result_buffer(runtime,
+                                          out_statx,
+                                          &statx,
+                                          sizeof(statx))) {
+        set_trace(out_trace, resolved_path, 14,
+                  "linux-compat: statx: bad buffer");
+        return -14;
+    }
+    set_trace(out_trace, resolved_path, 0, "linux-compat: statx");
+    return 0;
+}
+
 static uint64_t align_page(uint64_t value) {
     const uint64_t mask = 4095U;
 
@@ -1370,6 +1763,11 @@ linux_compat_result_t linux_compat_syscall_dispatch(
             value = 0;
         }
         set_trace(out_trace, "", 0, "linux-compat: syscall: munmap");
+    } else if (request->number == LINUX_COMPAT_SYS_MPROTECT) {
+        value = linux_compat_mprotect(request->addr,
+                                      request->length,
+                                      request->prot,
+                                      out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_NEWFSTATAT) {
         char resolved_path[LINUX_COMPAT_MAX_PATH];
         linux_compat_stat_t stat_value;
@@ -1433,6 +1831,8 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                                    request->command,
                                    request->arg,
                                    out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_FACCESSAT) {
+        value = linux_compat_faccessat(runtime, request->path, out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_OPENAT) {
         value = linux_compat_openat(runtime,
                                     request->dirfd,
@@ -1456,6 +1856,13 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                                   request->read_buffer,
                                   request->length,
                                   out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_PREAD64) {
+        value = linux_compat_pread64(runtime,
+                                     request->fd,
+                                     request->read_buffer,
+                                     request->length,
+                                     request->offset,
+                                     out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_CLOSE) {
         value = linux_compat_close(runtime, request->fd, out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_LSEEK) {
@@ -1476,11 +1883,47 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                                    request->write_buffer,
                                    request->length,
                                    out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_WRITEV) {
+        value = linux_compat_writev(runtime,
+                                    request->fd,
+                                    request->write_buffer,
+                                    request->length,
+                                    out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_READLINKAT) {
+        value = linux_compat_readlinkat(runtime,
+                                        request->path,
+                                        request->read_buffer,
+                                        request->length,
+                                        out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_CLOCK_GETTIME) {
         value = linux_compat_clock_gettime(request->fd,
                                            runtime,
                                            request->read_buffer,
                                            out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_UNAME) {
+        value = linux_compat_uname(runtime, request->read_buffer, out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_PRLIMIT64) {
+        value = linux_compat_prlimit64(runtime,
+                                       request->command,
+                                       request->read_buffer,
+                                       out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_SET_TID_ADDRESS) {
+        value = 1;
+        set_trace(out_trace, "", 0, "linux-compat: set_tid_address");
+    } else if (request->number == LINUX_COMPAT_SYS_SET_ROBUST_LIST) {
+        value = 0;
+        set_trace(out_trace, "", 0, "linux-compat: set_robust_list");
+    } else if (request->number == LINUX_COMPAT_SYS_RT_SIGACTION) {
+        value = 0;
+        set_trace(out_trace, "", 0, "linux-compat: rt_sigaction");
+    } else if (request->number == LINUX_COMPAT_SYS_RT_SIGPROCMASK) {
+        value = 0;
+        set_trace(out_trace, "", 0, "linux-compat: rt_sigprocmask");
+    } else if (request->number == LINUX_COMPAT_SYS_STATX) {
+        value = linux_compat_statx(runtime,
+                                   request->path,
+                                   request->statx,
+                                   out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_EXIT ||
                request->number == LINUX_COMPAT_SYS_EXIT_GROUP) {
         runtime->exited = true;
@@ -1551,7 +1994,7 @@ linux_compat_result_t linux_compat_run(
                              out_size,
                              &used,
                              (uint64_t)scratch->trace.errno_value);
-        (void)append_str(out, out_size, &used, " message=rootfs: no such file\n");
+        (void)append_str(out, out_size, &used, " message=path: no such file\n");
         return result;
     }
 
@@ -1609,24 +2052,40 @@ linux_compat_result_t linux_compat_run(
                              " loader reason=interp missing\n");
             return result;
         }
-        set_trace(out_trace,
-                  scratch->entry.path,
-                  9,
-                  "linux-compat: loader: dynamic linker not executed");
-        (void)append_rootfs_source_line(out, out_size, &used);
-        (void)append_str(out, out_size, &used, "linux-compat: path=");
-        (void)append_str(out, out_size, &used, scratch->entry.path);
-        (void)append_str(out, out_size, &used, " argc=");
-        (void)append_u64_dec(out, out_size, &used, (uint64_t)request->argc);
-        (void)append_load_plan_summary(out,
-                                       out_size,
-                                       &used,
-                                       &scratch->load_plan);
-        (void)append_str(out,
-                         out_size,
-                         &used,
-                         " errno=9 loader reason=dynamic linker not executed\n");
-        return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
+        result = linux_compat_build_load_plan(scratch->interp_entry.data,
+                                              scratch->interp_entry.size,
+                                              1U,
+                                              0U,
+                                              &scratch->interp_plan,
+                                              &scratch->trace);
+        if (result != LINUX_COMPAT_OK || scratch->interp_plan.requires_interp ||
+            (scratch->interp_plan.elf_type == 3U &&
+             !rebase_load_plan(&scratch->interp_plan,
+                               LINUX_COMPAT_INTERP_LOAD_BIAS))) {
+            set_trace(out_trace,
+                      scratch->entry.path,
+                      9,
+                      "linux-compat: loader: interp unsupported");
+            (void)append_rootfs_source_line(out, out_size, &used);
+            (void)append_str(out, out_size, &used, "linux-compat: path=");
+            (void)append_str(out, out_size, &used, scratch->entry.path);
+            (void)append_str(out, out_size, &used, " argc=");
+            (void)append_u64_dec(out, out_size, &used, (uint64_t)request->argc);
+            (void)append_load_plan_summary(out,
+                                           out_size,
+                                           &used,
+                                           &scratch->load_plan);
+            (void)append_str(out,
+                             out_size,
+                             &used,
+                             " errno=9 loader reason=interp unsupported\n");
+            return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
+        }
+        scratch->load_plan.interp_load_bias =
+            scratch->interp_plan.load_bias != 0U
+                ? scratch->interp_plan.load_bias
+                : scratch->interp_plan.segments[0].vaddr;
+        scratch->load_plan.interp_entry = scratch->interp_plan.entry;
     }
 
     if (request_wants_real_exec(request, &scratch->entry)) {
@@ -1642,6 +2101,14 @@ linux_compat_result_t linux_compat_run(
                                         &scratch->load_plan,
                                         &scratch->entry_pc,
                                         &scratch->trace);
+        if (result == LINUX_COMPAT_OK && scratch->load_plan.requires_interp) {
+            result = linux_compat_exec_load(&scratch->vm,
+                                            scratch->interp_entry.data,
+                                            scratch->interp_entry.size,
+                                            &scratch->interp_plan,
+                                            &scratch->interp_entry_pc,
+                                            &scratch->trace);
+        }
         if (result == LINUX_COMPAT_OK) {
             result = linux_compat_exec_build_stack(&scratch->vm,
                                                    &scratch->load_plan,
@@ -1656,7 +2123,9 @@ linux_compat_result_t linux_compat_run(
                                              request->user_runtime,
                                              request->trap_stack_base,
                                              request->trap_stack_size,
-                                             scratch->entry_pc,
+                                             scratch->load_plan.requires_interp
+                                                 ? scratch->interp_entry_pc
+                                                 : scratch->entry_pc,
                                              scratch->user_sp,
                                              &scratch->runtime,
                                              &scratch->trace);

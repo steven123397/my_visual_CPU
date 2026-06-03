@@ -751,12 +751,49 @@ static bool run_linux_command(course_shell_t* shell,
     return true;
 }
 
+static bool run_linux_fallback_command(course_shell_t* shell,
+                                       const course_shell_simple_command_t* command,
+                                       char* out,
+                                       size_t out_size) {
+    course_shell_simple_command_t linux_command;
+    char resolved_path[LINUX_COMPAT_MAX_PATH];
+    size_t i = 0;
+
+    if (shell == 0 || command == 0 || command->argc == 0U ||
+        command->argc + 1U > COURSE_SHELL_MAX_ARGS ||
+        linux_compat_resolve_path(command->argv[0],
+                                  resolved_path,
+                                  sizeof(resolved_path),
+                                  &shell->linux_trace) != LINUX_COMPAT_OK) {
+        return false;
+    }
+
+    zero_bytes(&linux_command, sizeof(linux_command));
+    linux_command.argc = command->argc + 1U;
+    copy_token(linux_command.argv[0],
+               sizeof(linux_command.argv[0]),
+               "linux",
+               5U);
+    copy_token(linux_command.argv[1],
+               sizeof(linux_command.argv[1]),
+               resolved_path,
+               str_len(resolved_path));
+    for (i = 1U; i < command->argc; ++i) {
+        copy_token(linux_command.argv[i + 1U],
+                   sizeof(linux_command.argv[i + 1U]),
+                   command->argv[i],
+                   str_len(command->argv[i]));
+    }
+    return run_linux_command(shell, &linux_command, out, out_size);
+}
+
 static bool run_simple(course_shell_t* shell,
                        const course_shell_simple_command_t* command,
                        const char* stdin_text,
                        char* out,
                        size_t out_size) {
     size_t used = 0;
+    course_user_program_t program;
 
     if (shell == 0 || command == 0 || command->argc == 0 || out == 0 ||
         out_size == 0) {
@@ -883,7 +920,10 @@ static bool run_simple(course_shell_t* shell,
         return run_program_command(shell, &exec_command, out, out_size);
     }
 
-    return run_program_command(shell, command, out, out_size);
+    if (course_user_program_lookup(command->argv[0], &program)) {
+        return run_program_command(shell, command, out, out_size);
+    }
+    return run_linux_fallback_command(shell, command, out, out_size);
 }
 
 bool course_shell_run_line(course_shell_t* shell,

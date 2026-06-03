@@ -1,3 +1,4 @@
+import json
 import pathlib
 import subprocess
 import tempfile
@@ -171,3 +172,74 @@ class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
             self.assertIn('"path":"/lib/ld-musl-riscv64.so.1"', manifest)
             self.assertIn('"present":true', manifest)
             self.assertIn('"entry":4096', manifest)
+
+    def test_stage10_tools_and_shared_assets_are_manifested(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "rootfs"
+            out_c = pathlib.Path(tmp) / "linux_compat_rootfs_asset.c"
+            out_json = pathlib.Path(tmp) / "linux_compat_rootfs_asset.json"
+            for guest_dir in ("bin", "usr/bin", "lib"):
+                (root / guest_dir).mkdir(parents=True)
+            for guest_path, entry in (
+                ("bin/busybox", 0x401000),
+                ("usr/bin/git", 0x402000),
+                ("usr/bin/vim", 0x403000),
+                ("usr/bin/gcc", 0x404000),
+                ("usr/bin/rustc", 0x405000),
+            ):
+                (root / guest_path).write_bytes(rv64_exec_elf(entry))
+            (root / "lib" / "ld-musl-riscv64.so.1").write_bytes(
+                rv64_dyn_elf(0x1000)
+            )
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    str(TOOL),
+                    "--source-dir",
+                    str(root),
+                    "--out-c",
+                    str(out_c),
+                    "--out-manifest",
+                    str(out_json),
+                    "--path",
+                    "/bin/busybox",
+                    "--path",
+                    "/usr/bin/git",
+                    "--path",
+                    "/usr/bin/vim",
+                    "--path",
+                    "/usr/bin/gcc",
+                    "--path",
+                    "/usr/bin/rustc",
+                    "--optional-path",
+                    "/lib/ld-musl-riscv64.so.1",
+                    "--optional-shared-path",
+                    "/lib/libgcc_s.so.1",
+                ],
+                cwd=MYCPU_DIR,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            generated = out_c.read_text()
+            manifest = json.loads(out_json.read_text())
+            by_path = {entry["path"]: entry for entry in manifest["files"]}
+            for tool in (
+                "/bin/busybox",
+                "/usr/bin/git",
+                "/usr/bin/vim",
+                "/usr/bin/gcc",
+                "/usr/bin/rustc",
+            ):
+                self.assertEqual(by_path[tool]["kind"], "tool")
+                self.assertTrue(by_path[tool]["required"])
+                self.assertTrue(by_path[tool]["present"])
+                self.assertIn(tool, generated)
+            self.assertEqual(
+                by_path["/lib/ld-musl-riscv64.so.1"]["kind"], "interpreter"
+            )
+            self.assertTrue(by_path["/lib/ld-musl-riscv64.so.1"]["present"])
+            self.assertEqual(by_path["/lib/libgcc_s.so.1"]["kind"], "shared")
+            self.assertFalse(by_path["/lib/libgcc_s.so.1"]["present"])

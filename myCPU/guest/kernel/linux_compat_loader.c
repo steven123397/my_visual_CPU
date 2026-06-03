@@ -107,6 +107,8 @@ static void clear_load_plan(linux_compat_load_plan_t* plan) {
     }
     plan->requires_interp = false;
     plan->interp_path[0] = '\0';
+    plan->interp_load_bias = 0;
+    plan->interp_entry = 0;
     plan->stack_top = 0;
     plan->argv_count = 0;
     plan->envp_count = 0;

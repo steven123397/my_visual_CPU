@@ -518,7 +518,71 @@ static int test_exec_build_stack_writes_argc_argv_and_auxv(void) {
     return 0;
 }
 
-static int test_exec_load_rejects_interp_plan(void) {
+static int test_exec_build_stack_for_dynamic_plan_includes_at_base(void) {
+    vm_address_space_t address_space;
+    vm_process_t process;
+    linux_compat_vm_t vm;
+    uint8_t image[512];
+    const char interp[] = "/lib/ld-musl-riscv64.so.1";
+    linux_compat_load_plan_t plan;
+    linux_compat_trace_t trace;
+    const char* argv[] = {"/usr/bin/dynamic-app"};
+    uintptr_t user_sp = 0;
+    linux_compat_vm_region_t* stack = NULL;
+    size_t aux_offset = 0;
+    bool saw_base = false;
+
+    reset_stub_state();
+    if (!make_process(&address_space, &process, &vm)) {
+        return fail("expected process setup to succeed");
+    }
+    make_elf_header(image, sizeof(image), 3U, 0x1000U, 2U);
+    write_program_header(image, 0U, 1U, 5U, 0x100U, 0U, 4U, 4U);
+    write_program_header(image, 1U, 3U, 4U, 0x180U, 0U,
+                         sizeof(interp), sizeof(interp));
+    memcpy(image + 0x180U, interp, sizeof(interp));
+    if (linux_compat_build_load_plan(image, sizeof(image), 1U, 0U, &plan, &trace) !=
+        LINUX_COMPAT_OK) {
+        return fail("expected dyn load plan to build");
+    }
+    plan.interp_load_bias = LINUX_COMPAT_INTERP_LOAD_BIAS;
+    plan.interp_entry = LINUX_COMPAT_INTERP_LOAD_BIAS + 0x1200U;
+
+    if (linux_compat_exec_build_stack(&vm, &plan, 1U, argv, &user_sp, &trace) !=
+        LINUX_COMPAT_OK) {
+        return fail("expected dynamic stack builder to accept interp metadata");
+    }
+    stack = find_region_containing(&vm, user_sp);
+    if (stack == NULL) {
+        return fail("expected dynamic stack builder to map stack");
+    }
+    aux_offset = (size_t)(user_sp - stack->vaddr) +
+                 (1U + 1U + 1U + 1U) * sizeof(uint64_t);
+    while (aux_offset + 16U <= stack->length) {
+        const size_t aux_page_index = aux_offset / MEMORY_PAGE_SIZE;
+        const size_t aux_page_offset = aux_offset % MEMORY_PAGE_SIZE;
+        uint8_t* aux_page =
+            (uint8_t*)stack->object.backing.anon.page_slots[aux_page_index];
+        const uint64_t type = read_u64_le(aux_page, aux_page_offset);
+        const uint64_t value = read_u64_le(aux_page, aux_page_offset + 8U);
+
+        if (type == 0U) {
+            break;
+        }
+        if (type == 7U && value == LINUX_COMPAT_INTERP_LOAD_BIAS) {
+            saw_base = true;
+            break;
+        }
+        aux_offset += 16U;
+    }
+    if (!saw_base) {
+        return fail("expected dynamic stack auxv to include AT_BASE");
+    }
+    linux_compat_vm_destroy(&vm);
+    return 0;
+}
+
+static int test_exec_load_maps_interp_main_plan(void) {
     vm_address_space_t address_space;
     vm_process_t process;
     linux_compat_vm_t vm;
@@ -542,10 +606,12 @@ static int test_exec_load_rejects_interp_plan(void) {
         return fail("expected dyn load plan to build");
     }
     if (linux_compat_exec_load(&vm, image, sizeof(image), &plan, &entry_pc, &trace) !=
-            LINUX_COMPAT_ERR_UNSUPPORTED_ELF ||
-        strstr(trace.message, "dynamic linker not executed") == NULL) {
-        return fail("expected exec_load to reject interp plan fail-closed");
+            LINUX_COMPAT_OK ||
+        entry_pc != plan.entry ||
+        find_region(&vm, LINUX_COMPAT_DYN_LOAD_BIAS) == NULL) {
+        return fail("expected exec_load to map dynamic main ELF and preserve entry");
     }
+    linux_compat_vm_destroy(&vm);
     return 0;
 }
 
@@ -605,7 +671,8 @@ static int test_course_shell_linux_compat_trap_stack_is_aligned(void) {
 int main(void) {
     if (test_exec_load_maps_segment_and_copies_file_bytes() != 0 ||
         test_exec_build_stack_writes_argc_argv_and_auxv() != 0 ||
-        test_exec_load_rejects_interp_plan() != 0 ||
+        test_exec_build_stack_for_dynamic_plan_includes_at_base() != 0 ||
+        test_exec_load_maps_interp_main_plan() != 0 ||
         test_exec_enter_installs_linux_policy_and_returns_after_exit() != 0 ||
         test_course_shell_linux_compat_trap_stack_is_aligned() != 0) {
         return 1;

@@ -18,8 +18,9 @@
 - 状态文档：
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 当前计划：
-  - [../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md](../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md)
+  - 暂无活跃 `kernel_alpha` Linux compat plus 计划；下一刀重新开计划。
 - 已完成计划：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
@@ -65,9 +66,9 @@ Stage 1-4 已经形成课程 OS 基线：
 这些内容的稳定设计口径见
 [course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)。
 
-### Linux compat Stage 5-9
+### Linux compat Stage 5-10
 
-Stage 5-9 已完成 plus 的第一轮基础设施：
+Stage 5-10 已完成 plus 的第一轮基础设施与 OSComp help-run 基线：
 
 - Stage 5：显式 `course-os> linux <path-or-command> [args...]` launcher、旁路
   `linux_compat_*` 模块、进程 ABI 标记、最小 rootfs catalog、ELF inspection 和 fail-closed
@@ -83,6 +84,9 @@ Stage 5-9 已完成 plus 的第一轮基础设施：
   `/bin/busybox --help`、`/bin/busybox echo hello` 和 `/usr/bin/git -h` 走真实 PT_LOAD
   映射、argv / envp / auxv 用户栈、U-mode 入口、真实 ecall dispatch、UART `write`
   和 `exit_group` 闭环。
+- Stage 10：OSComp help-run 基线，`git -h` / `git help` 直接 fallback 进入 `/usr/bin/git`
+  real-exec；`vim -h`、`gcc --h`、`rustc -h` 在 builtin provider 缺资产时进入 Linux compat
+  fail-closed 诊断并回到 prompt；dynamic-loader v0 和最小 syscall 面按 help-run trace 收口。
 
 Stage 9 之后，硬编码 help 字符串和模拟 syscall 序列不再是正向路径。缺少 real-exec context
 的 host-only 调用必须 fail-closed。
@@ -245,7 +249,7 @@ Plus 每一刀都必须同时守住课程 OS 基线：
 - `cd myCPU && make test-pipeline-guest-course_os_shell_demo`
 - `git diff --check`
 
-Stage 5-9 现有 Linux compat 门禁继续有效：
+Stage 5-10 现有 Linux compat 门禁继续有效：
 
 - `cd myCPU && make test-unit-course_os_stage5_linux_compat`
 - `cd myCPU && make test-unit-course_os_stage6_linux_compat`
@@ -253,15 +257,12 @@ Stage 5-9 现有 Linux compat 门禁继续有效：
 - `cd myCPU && make test-unit-course_os_stage9_linux_compat_vm`
 - `cd myCPU && make test-unit-course_os_stage9_linux_compat_exec`
 - `cd myCPU && make test-unit-course_os_stage9_linux_compat_syscall`
+- `cd myCPU && make test-unit-course_os_stage10_linux_compat`
 - `cd myCPU && make test-host-course_os_linux_compat_terminal_smoke`
 - `cd myCPU && make test-host-course_os_linux_compat_minimal_elf_smoke`
+- `cd myCPU && make test-host-course_os_linux_compat_oscomp_help_smoke`
 - `cd myCPU && make test-guest-course_os_linux_compat_shell_demo`
 - `cd myCPU && make test-pipeline-guest-course_os_linux_compat_shell_demo`
-
-Stage 10 应新增并固定：
-
-- `cd myCPU && make test-unit-course_os_stage10_linux_compat`
-- `cd myCPU && make test-host-course_os_linux_compat_oscomp_help_smoke`
 
 阶段完成前默认还应运行：
 
@@ -281,10 +282,9 @@ Stage 10 应新增并固定：
 ## 当前有效性说明
 
 - 当前有效：本文档是 Stage 4 后 Linux 用户态兼容 plus 的长期设计边界。
-- 当前完成态：Stage 5 / Stage 6 / Stage 7 / Stage 8 / Stage 9 已完成显式 launcher、
+- 当前完成态：Stage 5 / Stage 6 / Stage 7 / Stage 8 / Stage 9 / Stage 10 已完成显式 launcher、
   最小 rootfs / syscall、外部 rootfs asset provider、loader / trace 诊断，以及静态 RV64
-  ELF real-exec 第一刀。
-- 当前活跃计划：Stage 10 OSComp help-run 基线，见
-  [../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md](../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md)。
+  ELF real-exec 第一刀和 OSComp help-run 基线。
+- 当前活跃计划：暂无；下一刀应在 `docs/plan/` 重新开窄计划并链接本文。
 - 当前不是完整兼容声明：`kernel_alpha` 仍不声明完整 Linux syscall 面、完整动态链接器、
   完整 signal / futex、rootfs 写语义、完整 TTY、网络 git 或自动跑完 OSComp testsuits。

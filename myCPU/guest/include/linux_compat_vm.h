@@ -9,9 +9,11 @@
 #define LINUX_COMPAT_BRK_BASE ((uintptr_t)0x08000000U)
 #define LINUX_COMPAT_MMAP_BASE ((uintptr_t)0x10000000U)
 
+#ifndef LINUX_COMPAT_PROT_READ
 #define LINUX_COMPAT_PROT_READ 0x1U
 #define LINUX_COMPAT_PROT_WRITE 0x2U
 #define LINUX_COMPAT_PROT_EXEC 0x4U
+#endif
 
 typedef struct LinuxCompatVmRegion {
     bool used;

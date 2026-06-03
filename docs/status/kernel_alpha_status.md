@@ -14,10 +14,11 @@
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
-  - [../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md](../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md)
+  - 暂无活跃 `kernel_alpha` 计划；下一刀按本文“下一步”重新开计划。
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
@@ -84,7 +85,7 @@ Stage 5 v0 已完成 Linux compat Plus 第一刀。`course-os> ` 现在新增显
 `linux /usr/bin/git -h` 会进入旁路 `linux_compat_*` 后端，经过最小 rootfs catalog、
 RV64 little-endian ELF header / program-header inspection、进程 ABI 标记和
 fail-closed syscall 诊断后回到同一个 `course-os> ` prompt。直接 `git -h` 自动 fallback
-尚未启用，课程命令和 Stage 3 catalog 仍优先保持原语义。
+在 Stage 5 当时尚未启用，课程命令和 Stage 3 catalog 仍优先保持原语义。
 
 Stage 6 已完成 Linux compat Plus 的 rootfs / syscall 第一层语义。`linux_compat_*`
 现在提供最小 rootfs metadata、`stat`、FD 表、`openat/read/lseek/close`、`getdents64`、
@@ -115,8 +116,18 @@ Stage 9 已完成 Linux compat 真实 ELF 执行第一刀。显式
 入口、真实 ecall dispatch、UART `write` 和 `exit_group` 闭环后回到同一个
 `course-os> ` prompt。端到端验收覆盖 hand-crafted 最小 ELF、`linux /bin/busybox --help`、
 `linux /bin/busybox echo hello` 和 `linux /usr/bin/git -h`，输出中包含 `exec=real` 与真实
-syscall trace。Stage 9 仍不启用直接命令 fallback，不声明动态链接器运行、完整 Linux
+syscall trace。Stage 9 当时仍不启用直接命令 fallback，不声明动态链接器运行、完整 Linux
 syscall 面、完整 signal / futex、rootfs 写语义或通用 Linux 用户态兼容。
+
+Stage 10 已完成 OSComp Linux 用户态 help-run 基线。`course-os> git -h` 和
+`course-os> git help` 现在会在课程内置命令与 Stage 3 课程用户程序均未命中后，通过受限
+Linux PATH fallback 解析到 `/usr/bin/git`，进入真实 Linux compat exec 路径，并在输出
+`usage: git`、`exec=real` 和真实 syscall trace 后回到同一个 `course-os> ` prompt。
+`course-os> vim -h`、`course-os> gcc --h`、`course-os> rustc -h` 在 builtin provider
+缺少对应资产时不再落回课程 shell 裸 `error`，而是进入 Linux compat fail-closed 诊断，
+输出 resolved path、`errno=2`、`path: no such file` 和 prompt 回归。Stage 10 同时补齐
+OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v0 元数据和
+最小只读 / 低副作用 syscall 面；默认回归仍不依赖外部 rootfs。
 
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
@@ -146,6 +157,12 @@ syscall 面、完整 signal / futex、rootfs 写语义或通用 Linux 用户态�
 ## 关键历史节点
 
 - `2026-06-03`
+  - 课程 OS Stage 10 OSComp help-run 基线完成，新增 `git -h` / `git help` 直接命令
+    fallback real-exec host smoke，并把 `vim -h`、`gcc --h`、`rustc -h` 在 builtin provider
+    缺资产时的 fail-closed Linux compat 诊断固定为回归合同。
+  - Stage 10 同步补齐 external provider Stage 10 required path / shared asset manifest、
+    `PT_INTERP` dynamic-loader v0、`AT_BASE` 等 auxv 诊断，以及 help-run trace 证明需要的
+    最小 syscall 面；课程命令优先级和 Stage 1 / Stage 2 / Stage 3 marker 不变。
   - 课程 OS Stage 9 Linux compat 真实 ELF 执行第一刀完成，`linux_compat_run()` 不再对
     `/bin/busybox` / `/usr/bin/git` 使用硬编码 help 文本或模拟 syscall 序列；显式 launcher
     的静态 ELF 路径统一进入 `linux_compat_exec_load()`、`linux_compat_exec_build_stack()` 和
@@ -190,18 +207,20 @@ syscall 面、完整 signal / futex、rootfs 写语义或通用 Linux 用户态�
 - 旧 9 条负向 guest 回归仍是基础设施 guardrail；当前正向 `kernel_alpha_demo` 已不再检查旧 `D/S` marker。
 - `SimpleStorage` 仍然是单块、同步、无 completion interrupt、无宿主持久化回写的最小模型。
 - `/proc` 第三阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
-- Stage 9 只证明静态 RV64 ELF 的显式 launcher real-exec 第一刀，不声明动态链接器执行、
-  完整 Linux syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成；当前仍不支持网络
-  `git clone/push/pull`、完整 `vim`、完整 `gcc/rustc`、`execve` / `wait4` / `futex` /
-  `rt_sig*`、完整 signal/futex。
+- Stage 10 只证明 OSComp help-run 基线、`git -h` / `git help` 直接 fallback real-exec、
+  builtin provider 缺 `vim` / `gcc` / `rustc` 资产时的 fail-closed 诊断，以及 dynamic-loader
+  v0 / 最小 syscall 的受限门禁；当前仍不支持完整 testsuits-for-oskernel、网络
+  `git clone/push/pull`、`git init/add/commit/log`、交互式 `vim hello.c`、`gcc hello.c &&
+  ./a.out`、`rustc helloworld.rs && ./helloworld`、完整 `execve` / `wait4` / `futex` /
+  signal、完整 TTY 或 rootfs 写语义。
 - 课程级 ELF catalog、课程 syscall ABI、RAMFS、固定小进程表、教学 COW 和课程 shell 仍不能直接
   声明为 Linux ABI 兼容层；Linux ABI 扩展必须继续走旁路 `linux_compat_*` 模块和进程 ABI 分流。
 
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. 执行 [../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md](../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md)，把下一刀限定为 OSComp Linux 用户态 help-run 基线：`git -h` / `git help`、`vim -h`、`gcc --h`、`rustc -h`。
-3. Stage 10 的新增语义继续放在旁路 `linux_compat_*`，按真实 trace 补 direct fallback、PATH 解析、动态链接器 v0 和最小 syscall，不直接改大 `course_*` 教学模块。
+2. 如继续推进 Stage 11，优先显式选择一个窄目标：外部 OSComp rootfs 下的 `vim/gcc/rustc` help-run real asset smoke，或 `git init/add/commit/log` 这类有状态只读/写入边界之一。
+3. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补可写 rootfs、`execve` / `wait4` / `futex` / signal / TTY 等能力，不直接改大 `course_*` 教学模块。
 4. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立后续方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
 5. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
@@ -248,15 +267,17 @@ syscall 面、完整 signal / futex、rootfs 写语义或通用 Linux 用户态�
   - `cd myCPU && make test-guest-course_os_shell_demo`
   - `cd myCPU && make test-pipeline-guest-course_os_shell_demo`
   - `cd frontend && node --test`
-- Stage 5 / Stage 6 / Stage 7 / Stage 8 / Stage 9 Linux compat 当前固定门禁：
+- Stage 5 / Stage 6 / Stage 7 / Stage 8 / Stage 9 / Stage 10 Linux compat 当前固定门禁：
   - `cd myCPU && make test-unit-course_os_stage5_linux_compat`
   - `cd myCPU && make test-unit-course_os_stage6_linux_compat`
   - `cd myCPU && make test-unit-course_os_stage8_linux_compat_loader`
   - `cd myCPU && make test-unit-course_os_stage9_linux_compat_vm`
   - `cd myCPU && make test-unit-course_os_stage9_linux_compat_exec`
   - `cd myCPU && make test-unit-course_os_stage9_linux_compat_syscall`
+  - `cd myCPU && make test-unit-course_os_stage10_linux_compat`
   - `cd myCPU && make test-unit-course_os_stage3_fs_shell`
   - `cd myCPU && make test-host-course_os_linux_compat_terminal_smoke`
   - `cd myCPU && make test-host-course_os_linux_compat_minimal_elf_smoke`
+  - `cd myCPU && make test-host-course_os_linux_compat_oscomp_help_smoke`
   - `cd myCPU && make test-guest-course_os_linux_compat_shell_demo`
   - `cd myCPU && make test-pipeline-guest-course_os_linux_compat_shell_demo`

@@ -205,8 +205,12 @@ static int test_linux_compat_launcher_is_explicit_and_fails_closed_without_runti
         !contains(out, "exec sh meminfo") ||
         !course_shell_run_line(&shell, "exec hello", out, sizeof(out)) ||
         !contains(out, "program=hello") ||
-        course_shell_run_line(&shell, "git -h", out, sizeof(out))) {
-        return fail("expected course commands to stay first and direct linux fallback disabled");
+        !course_shell_run_line(&shell, "git -h", out, sizeof(out)) ||
+        !contains(out, "linux-compat:") ||
+        !contains(out, "path=/usr/bin/git") ||
+        !contains(out, "exec=real") ||
+        !contains(out, "errno=38")) {
+        return fail("expected course commands first and direct git fallback diagnostic");
     }
 
     return 0;

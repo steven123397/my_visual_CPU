@@ -92,6 +92,94 @@ static int test_rootfs_catalog_lookup_known_paths_and_bad_path(void) {
     return 0;
 }
 
+static int test_path_fallback_resolves_known_tools_only(void) {
+    char resolved[LINUX_COMPAT_MAX_PATH];
+    linux_compat_trace_t trace;
+
+    if (linux_compat_resolve_path("git",
+                                  resolved,
+                                  sizeof(resolved),
+                                  &trace) != LINUX_COMPAT_OK ||
+        strcmp(resolved, "/usr/bin/git") != 0 ||
+        !contains(trace.message, "path: fallback")) {
+        return fail("expected git to resolve through Linux compat PATH fallback");
+    }
+
+    if (linux_compat_resolve_path("/usr/bin/git",
+                                  resolved,
+                                  sizeof(resolved),
+                                  &trace) != LINUX_COMPAT_OK ||
+        strcmp(resolved, "/usr/bin/git") != 0) {
+        return fail("expected explicit Linux compat path to remain usable");
+    }
+
+    if (linux_compat_resolve_path("help",
+                                  resolved,
+                                  sizeof(resolved),
+                                  &trace) != LINUX_COMPAT_ERR_NO_SUCH_FILE ||
+        trace.errno_value != 2) {
+        return fail("expected non-Linux fallback command to fail closed");
+    }
+
+    return 0;
+}
+
+static int test_stage10_missing_tools_resolve_for_diagnostics(void) {
+    char resolved[LINUX_COMPAT_MAX_PATH];
+    linux_compat_trace_t trace;
+
+    if (linux_compat_resolve_path("vim",
+                                  resolved,
+                                  sizeof(resolved),
+                                  &trace) != LINUX_COMPAT_OK ||
+        strcmp(resolved, "/usr/bin/vim") != 0 ||
+        !contains(trace.message, "path: fallback")) {
+        return fail("expected missing vim asset to resolve for Linux compat diagnostics");
+    }
+
+    if (linux_compat_resolve_path("gcc",
+                                  resolved,
+                                  sizeof(resolved),
+                                  &trace) != LINUX_COMPAT_OK ||
+        strcmp(resolved, "/usr/bin/gcc") != 0 ||
+        !contains(trace.message, "path: fallback")) {
+        return fail("expected missing gcc asset to resolve for Linux compat diagnostics");
+    }
+
+    if (linux_compat_resolve_path("rustc",
+                                  resolved,
+                                  sizeof(resolved),
+                                  &trace) != LINUX_COMPAT_OK ||
+        strcmp(resolved, "/usr/bin/rustc") != 0 ||
+        !contains(trace.message, "path: fallback")) {
+        return fail("expected missing rustc asset to resolve for Linux compat diagnostics");
+    }
+
+    return 0;
+}
+
+static int test_missing_linux_compat_run_reports_path_diagnostic(void) {
+    linux_compat_exec_request_t request;
+    linux_compat_trace_t trace;
+    char output[256];
+    const char* argv[] = {"/usr/bin/vim", "-h"};
+
+    memset(&request, 0, sizeof(request));
+    request.path = "/usr/bin/vim";
+    request.argc = 2U;
+    request.argv = argv;
+
+    if (linux_compat_run(&request, output, sizeof(output), &trace) !=
+            LINUX_COMPAT_ERR_NO_SUCH_FILE ||
+        !contains(output, "linux-compat: path=/usr/bin/vim") ||
+        !contains(output, "errno=2") ||
+        !contains(output, "path: no such file")) {
+        return fail("expected missing Linux compat run to report PATH diagnostic");
+    }
+
+    return 0;
+}
+
 static int test_elf_inspection_accepts_rv64_exec_metadata(void) {
     uint8_t image[128];
     linux_compat_elf_info_t info;
@@ -182,6 +270,9 @@ static int test_process_abi_defaults_course_and_marks_linux_compat(void) {
 
 int main(void) {
     if (test_rootfs_catalog_lookup_known_paths_and_bad_path() != 0 ||
+        test_path_fallback_resolves_known_tools_only() != 0 ||
+        test_stage10_missing_tools_resolve_for_diagnostics() != 0 ||
+        test_missing_linux_compat_run_reports_path_diagnostic() != 0 ||
         test_elf_inspection_accepts_rv64_exec_metadata() != 0 ||
         test_elf_inspection_fails_closed_for_bad_or_unsupported_elf() != 0 ||
         test_process_abi_defaults_course_and_marks_linux_compat() != 0) {

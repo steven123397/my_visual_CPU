@@ -160,7 +160,17 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         request->addr = frame->a0;
         request->length = (size_t)frame->a1;
         break;
+    case LINUX_COMPAT_SYS_MPROTECT:
+        request->addr = frame->a0;
+        request->length = (size_t)frame->a1;
+        request->prot = (uint32_t)frame->a2;
+        break;
     case LINUX_COMPAT_SYS_WRITE:
+        request->fd = (int32_t)frame->a0;
+        request->write_buffer = (const void*)frame->a1;
+        request->length = (size_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_WRITEV:
         request->fd = (int32_t)frame->a0;
         request->write_buffer = (const void*)frame->a1;
         request->length = (size_t)frame->a2;
@@ -170,15 +180,40 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         request->read_buffer = (void*)frame->a1;
         request->length = (size_t)frame->a2;
         break;
+    case LINUX_COMPAT_SYS_PREAD64:
+        request->fd = (int32_t)frame->a0;
+        request->read_buffer = (void*)frame->a1;
+        request->length = (size_t)frame->a2;
+        request->offset = frame->a3;
+        break;
     case LINUX_COMPAT_SYS_OPENAT:
         request->dirfd = (int32_t)frame->a0;
         request->path = (const char*)frame->a1;
         request->flags = (uint32_t)frame->a2;
         break;
+    case LINUX_COMPAT_SYS_FACCESSAT:
+        request->dirfd = (int32_t)frame->a0;
+        request->path = (const char*)frame->a1;
+        request->command = (uint32_t)frame->a2;
+        request->flags = (uint32_t)frame->a3;
+        break;
+    case LINUX_COMPAT_SYS_READLINKAT:
+        request->dirfd = (int32_t)frame->a0;
+        request->path = (const char*)frame->a1;
+        request->read_buffer = (void*)frame->a2;
+        request->length = (size_t)frame->a3;
+        break;
     case LINUX_COMPAT_SYS_NEWFSTATAT:
         request->dirfd = (int32_t)frame->a0;
         request->path = (const char*)frame->a1;
         request->stat = (linux_compat_stat_t*)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_STATX:
+        request->dirfd = (int32_t)frame->a0;
+        request->path = (const char*)frame->a1;
+        request->flags = (uint32_t)frame->a2;
+        request->command = (uint32_t)frame->a3;
+        request->statx = (linux_compat_statx_t*)frame->a4;
         break;
     case LINUX_COMPAT_SYS_GETDENTS64:
         request->fd = (int32_t)frame->a0;
@@ -188,6 +223,34 @@ static void build_linux_compat_request(const trap_frame_t* frame,
     case LINUX_COMPAT_SYS_LSEEK:
         request->fd = (int32_t)frame->a0;
         request->offset = frame->a1;
+        break;
+    case LINUX_COMPAT_SYS_UNAME:
+        request->read_buffer = (void*)frame->a0;
+        break;
+    case LINUX_COMPAT_SYS_PRLIMIT64:
+        request->fd = (int32_t)frame->a0;
+        request->command = (uint32_t)frame->a1;
+        request->write_buffer = (const void*)frame->a2;
+        request->read_buffer = (void*)frame->a3;
+        break;
+    case LINUX_COMPAT_SYS_SET_TID_ADDRESS:
+        request->addr = frame->a0;
+        break;
+    case LINUX_COMPAT_SYS_SET_ROBUST_LIST:
+        request->addr = frame->a0;
+        request->length = (size_t)frame->a1;
+        break;
+    case LINUX_COMPAT_SYS_RT_SIGACTION:
+        request->fd = (int32_t)frame->a0;
+        request->write_buffer = (const void*)frame->a1;
+        request->read_buffer = (void*)frame->a2;
+        request->length = (size_t)frame->a3;
+        break;
+    case LINUX_COMPAT_SYS_RT_SIGPROCMASK:
+        request->fd = (int32_t)frame->a0;
+        request->write_buffer = (const void*)frame->a1;
+        request->read_buffer = (void*)frame->a2;
+        request->length = (size_t)frame->a3;
         break;
     case LINUX_COMPAT_SYS_EXIT:
     case LINUX_COMPAT_SYS_EXIT_GROUP:

@@ -247,7 +247,7 @@ static int test_linux_run_requires_real_exec_context(void) {
         !contains(out, "loader=static") ||
         !contains(out, "interp=none") ||
         !contains(out, "segments=1") ||
-        !contains(out, "stack=2/0/6") ||
+        !contains(out, "stack=2/0/12") ||
         !contains(out, "real exec context missing") ||
         contains(out, "BusyBox v") ||
         contains(out, "trace=brk/mmap")) {
