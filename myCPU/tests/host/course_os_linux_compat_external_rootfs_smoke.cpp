@@ -1,11 +1,11 @@
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <sstream>
+#include <cstring>
+#include <stdexcept>
 #include <string>
 
 #include "../../src/debug/debug_budget.h"
-#include "../../src/debug/debug_protocol.h"
+#include "../../src/debug/debug_session.h"
 
 namespace {
 
@@ -20,96 +20,147 @@ bool expect_contains(const std::string& haystack,
     return true;
 }
 
-std::string run_until_uart_contains_command(const char* text,
-                                            std::uint64_t max_steps) {
-    std::ostringstream script;
-    script << "{\"cmd\":\"run_until_uart_contains\",\"text\":\"" << text
-           << "\",\"max_steps\":" << max_steps << "}\n";
-    return script.str();
+bool expect_any_contains(const std::string& haystack,
+                         const char* first,
+                         const char* second,
+                         const char* message) {
+    if (haystack.find(first) != std::string::npos ||
+        haystack.find(second) != std::string::npos) {
+        return true;
+    }
+    std::fprintf(stderr, "%s\n", message);
+    std::fprintf(stderr, "output was:\n%s\n", haystack.c_str());
+    return false;
 }
 
-std::string run_cli_script(const std::string& script) {
-    std::istringstream in(script);
-    std::ostringstream out;
-    std::ostringstream err;
-
-    const int status = run_debug_cli(in, out, err);
-    if (status != 0) {
-        std::fprintf(stderr, "debug cli exited with status %d\n", status);
-        std::fprintf(stderr, "stderr:\n%s\n", err.str().c_str());
-        std::exit(1);
+BackendKind parse_backend_kind(const char* backend) {
+    if (std::strcmp(backend, "functional") == 0) {
+        return BackendKind::Functional;
     }
+    if (std::strcmp(backend, "pipeline") == 0) {
+        return BackendKind::Pipeline;
+    }
+    std::fprintf(stderr, "unknown backend: %s\n", backend);
+    std::exit(1);
+}
 
-    return out.str();
+struct ExpectedText {
+    const char* needle;
+    const char* message;
+};
+
+bool run_until_new_uart_contains(DebugSession& session,
+                                 size_t offset,
+                                 const char* needle,
+                                 DebugSession::UartOutputChunk& chunk) {
+    try {
+        chunk = session.run_until_new_uart_contains(
+            offset, needle, DebugBudget::kCourseOsShellCommandMaxSteps);
+        return true;
+    } catch (const std::runtime_error& error) {
+        chunk = session.uart_output(offset);
+        std::fprintf(stderr, "%s\n", error.what());
+        std::fprintf(stderr,
+                     "external rootfs smoke failed while waiting for: %s\n",
+                     needle);
+        std::fprintf(stderr,
+                     "command output since offset %zu was:\n%s\n",
+                     offset,
+                     chunk.text.c_str());
+        return false;
+    }
+}
+
+bool run_shell_command(DebugSession& session,
+                       size_t& offset,
+                       const char* command,
+                       const ExpectedText* expectations,
+                       size_t expectation_count,
+                       DebugSession::UartOutputChunk& chunk) {
+    session.uart_input(command);
+    for (size_t i = 0; i < expectation_count; ++i) {
+        if (!run_until_new_uart_contains(session,
+                                         offset,
+                                         expectations[i].needle,
+                                         chunk)) {
+            return false;
+        }
+    }
+    for (size_t i = 0; i < expectation_count; ++i) {
+        if (!expect_contains(chunk.text,
+                             expectations[i].needle,
+                             expectations[i].message)) {
+            return false;
+        }
+    }
+    offset = chunk.next_offset;
+    return true;
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
     const char* backend = argc > 1 ? argv[1] : "functional";
-    std::ostringstream script;
 
-    script << "{\"cmd\":\"load\","
-           << "\"image\":\"guest/generated/course_os_linux_compat_external_shell.elf\","
-           << "\"backend\":\"" << backend
-           << "\",\"disk\":\"tests/data/storage_basic.txt\"}\n"
-           << run_until_uart_contains_command("course-os> ",
-                                              DebugBudget::kCourseOsShellBootMaxSteps)
-           << "{\"cmd\":\"uart_input\",\"text\":\"linux /bin/busybox --help\\r\"}\n"
-           << run_until_uart_contains_command("linux-compat: rootfs=external",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("linux-compat: path=/bin/busybox",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("loader=static interp=none",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("BusyBox v",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("course-os> ",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << "{\"cmd\":\"uart_input\",\"text\":\"linux /usr/bin/git -h\\r\"}\n"
-           << run_until_uart_contains_command("usage: git",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("course-os> ",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << "{\"cmd\":\"uart_input\",\"text\":\"git -h\\r\"}\n"
-           << run_until_uart_contains_command("error\\r\\ncourse-os> ",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
-           << "{\"cmd\":\"quit\"}\n";
+    DebugSession session;
+    session.load_elf("guest/generated/course_os_linux_compat_external_shell.elf",
+                     parse_backend_kind(backend),
+                     BlockTransport::SimpleStorage,
+                     "tests/data/storage_basic.txt");
+    session.run_until_uart_contains("course-os> ",
+                                    DebugBudget::kCourseOsShellBootMaxSteps);
 
-    const std::string output = run_cli_script(script.str());
+    size_t offset = session.uart_output(0).next_offset;
+    DebugSession::UartOutputChunk chunk{};
 
-    if (!expect_contains(output,
-                         "linux-compat: rootfs=external",
-                         "external rootfs smoke should report generated provider")) {
+    constexpr ExpectedText kBusybox[] = {
+        {"linux-compat: rootfs=external", "external rootfs should report generated provider"},
+        {"linux-compat: path=/bin/busybox", "busybox should launch through explicit linux command"},
+        {"loader=static interp=none", "busybox should report static loader plan"},
+        {"BusyBox v", "busybox help should emit help"},
+        {"course-os> ", "busybox help should return to prompt"},
+    };
+    if (!run_shell_command(session,
+                           offset,
+                           "linux /bin/busybox --help\r",
+                           kBusybox,
+                           sizeof(kBusybox) / sizeof(kBusybox[0]),
+                           chunk)) {
         return 1;
     }
-    if (!expect_contains(output,
-                         "linux-compat: path=/bin/busybox",
-                         "external rootfs busybox should still launch through explicit linux command")) {
+
+    constexpr ExpectedText kExplicitGit[] = {
+        {"linux-compat: path=/usr/bin/git", "explicit git should use external /usr/bin/git"},
+        {"usage: git", "explicit git help should emit usage"},
+        {"course-os> ", "explicit git help should return to prompt"},
+    };
+    if (!run_shell_command(session,
+                           offset,
+                           "linux /usr/bin/git -h\r",
+                           kExplicitGit,
+                           sizeof(kExplicitGit) / sizeof(kExplicitGit[0]),
+                           chunk)) {
         return 1;
     }
-    if (!expect_contains(output,
-                         "loader=static interp=none",
-                         "external rootfs busybox should report static loader plan")) {
+
+    constexpr ExpectedText kDirectGit[] = {
+        {"linux-compat: rootfs=external", "direct git fallback should enter Linux compat"},
+        {"linux-compat: path=/usr/bin/git", "direct git fallback should resolve through PATH"},
+        {"course-os> ", "direct git fallback should return to prompt"},
+    };
+    if (!run_shell_command(session,
+                           offset,
+                           "git -h\r",
+                           kDirectGit,
+                           sizeof(kDirectGit) / sizeof(kDirectGit[0]),
+                           chunk)) {
         return 1;
     }
-    if (!expect_contains(output,
-                         "BusyBox v",
-                         "external rootfs busybox help path should still emit help")) {
-        return 1;
-    }
-    if (!expect_contains(output,
-                         "usage: git",
-                         "external rootfs git help path should still emit help")) {
-        return 1;
-    }
-    if (!expect_contains(output,
-                         "error",
-                         "direct git fallback should remain disabled with external rootfs")) {
-        return 1;
-    }
-    if (!expect_contains(output, "\"cmd\":\"quit\"", "quit response should be emitted")) {
+    if (!expect_any_contains(
+            chunk.text,
+            "usage: git",
+            "errno=",
+            "direct git fallback should real-exec or emit Linux compat fail-closed diagnostics")) {
         return 1;
     }
 

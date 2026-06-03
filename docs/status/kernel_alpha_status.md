@@ -14,7 +14,7 @@
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
-  - 暂无活跃 `kernel_alpha` 计划；下一刀按本文“下一步”重新开计划。
+  - [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
@@ -157,6 +157,10 @@ OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v
 ## 关键历史节点
 
 - `2026-06-03`
+  - Stage 11 已完成首个可验证切片：external asset preflight 现在能区分 Stage 11 required
+    tools、gcc toolchain 子资产、optional `rustc`、optional interpreter 和 optional shared
+    assets；external rootfs smoke 的 direct `git -h` fallback 已对齐 Stage 10 当前合同；
+    新增 `test-host-course_os_linux_compat_external_workflow_smoke` 作为 external-only 工作流红灯。
   - 课程 OS Stage 10 OSComp help-run 基线完成，新增 `git -h` / `git help` 直接命令
     fallback real-exec host smoke，并把 `vim -h`、`gcc --h`、`rustc -h` 在 builtin provider
     缺资产时的 fail-closed Linux compat 诊断固定为回归合同。
@@ -219,10 +223,11 @@ OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. 如继续推进 Stage 11，优先显式选择一个窄目标：外部 OSComp rootfs 下的 `vim/gcc/rustc` help-run real asset smoke，或 `git init/add/commit/log` 这类有状态只读/写入边界之一。
-3. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补可写 rootfs、`execve` / `wait4` / `futex` / signal / TTY 等能力，不直接改大 `course_*` 教学模块。
-4. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立后续方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
-5. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
+2. 继续执行 [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)，下一刀从任务 2 writable rootfs overlay v0 开始，最终目标仍是收口 `git init/add/commit/log`、`vim hello.c`、`gcc hello.c && ./a.out`。
+3. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11。
+4. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
+5. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补能力，不直接改大 `course_*` 教学模块；AI/NPU、JIT/DBT 或 Pipeline-aware 调度继续作为独立后续方向。
+6. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
 ## 验证基线
 

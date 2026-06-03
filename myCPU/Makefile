@@ -711,6 +711,20 @@ test-host-course_os_linux_compat_external_rootfs_smoke: FORCE $(TARGET) $(GUEST_
 	fi; \
 	printf '%s\n' "$$output"
 
+test-host-course_os_linux_compat_external_workflow_smoke: FORCE $(TARGET) $(GUEST_COURSE_OS_LINUX_COMPAT_EXTERNAL_SHELL_DEMO) tests/host/course_os_linux_compat_external_workflow_smoke
+	@echo "=== host:course_os_linux_compat_external_workflow_smoke ==="; \
+	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/course_os_linux_compat_external_workflow_smoke functional 2>&1)"; \
+	status=$$?; \
+	if [ $$status -eq 124 ]; then \
+		echo "Host test timed out: course_os_linux_compat_external_workflow_smoke" >&2; \
+		exit 1; \
+	fi; \
+	if [ $$status -ne 0 ]; then \
+		printf '%s\n' "$$output" >&2; \
+		exit $$status; \
+	fi; \
+	printf '%s\n' "$$output"
+
 test-host-debug_cli_smoke: FORCE $(TARGET) $(GUEST_INTERACTIVE_OS_DEMO) $(GUEST_AI_ACCEL_DEMO) tests/host/debug_cli_smoke
 	@echo "=== host:debug_cli_smoke ==="; \
 	output="$$(timeout $(DEBUG_CLI_SMOKE_TIMEOUT) ./tests/host/debug_cli_smoke 2>&1)"; \
@@ -1543,7 +1557,7 @@ tests/unit/course_os_stage6_linux_compat: $(COURSE_OS_STAGE6_LINUX_COMPAT_UNIT_O
 $(LINUX_COMPAT_GENERATED_ROOTFS_ASSET): FORCE
 	@$(call REQUIRE_EXTERNAL_COURSE_OS_LINUX_COMPAT_ROOTFS,$(MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS),MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS must point to an external rootfs directory or ext4 image)
 	@mkdir -p guest/generated
-	python3 tools/linux_compat_rootfs_asset.py --source "$(MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS)" --out-c $@ --out-manifest $(LINUX_COMPAT_GENERATED_ROOTFS_MANIFEST) --path /bin/busybox --path /usr/bin/git --path /usr/bin/vim --path /usr/bin/gcc --path /usr/bin/rustc --optional-path /lib/ld-musl-riscv64.so.1 --optional-path /lib64/ld-linux-riscv64-lp64d.so.1 --optional-shared-path /lib/libc.so.6 --optional-shared-path /lib/libgcc_s.so.1 --optional-shared-path /usr/lib/libstdc++.so.6
+	python3 tools/linux_compat_rootfs_asset.py --source "$(MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS)" --out-c $@ --out-manifest $(LINUX_COMPAT_GENERATED_ROOTFS_MANIFEST) --path /bin/busybox --path /usr/bin/git --path /usr/bin/vim --path /usr/bin/gcc --toolchain-path /bin/sh --toolchain-path /usr/bin/as --toolchain-path /usr/bin/ld --optional-toolchain-path /usr/lib/gcc/riscv64-linux-gnu/cc1 --optional-tool-path /usr/bin/rustc --optional-path /lib/ld-musl-riscv64.so.1 --optional-path /lib64/ld-linux-riscv64-lp64d.so.1 --optional-shared-path /lib/libc.so.6 --optional-shared-path /lib/libgcc_s.so.1 --optional-shared-path /usr/lib/libstdc++.so.6
 
 tests/unit/course_os_stage7_linux_compat_test.o: tests/unit/course_os_stage7_linux_compat.c
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<

@@ -18,7 +18,7 @@
 - 状态文档：
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 当前计划：
-  - 暂无活跃 `kernel_alpha` Linux compat plus 计划；下一刀重新开计划。
+  - [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)
 - 已完成计划：
   - [../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
@@ -101,8 +101,9 @@ Stage 9 之后，硬编码 help 字符串和模拟 syscall 序列不再是正向
 - 从 builtin 或 external / OSComp rootfs provider 加载真实 RISC-V64 Linux ELF 和必要 metadata。
 - 逐步支持静态 ELF、`PT_INTERP` dynamic-loader v0、argv/envp/auxv、最小 TLS / random /
   brk / mmap 策略和真实 syscall trace。
-- 以 `testsuits-for-oskernel` 的低风险帮助输出作为下一跳验收，再进入写 rootfs、工具链、
-  交互终端和网络能力。
+- Stage 10 已以 `testsuits-for-oskernel` 的低风险帮助输出完成 help-run 基线；Stage 11
+  转入 writable rootfs、本地工具链和交互终端，Stage 12 / Stage 13 再分别处理网络 git
+  和 `rustc` 重工具链。
 - 对未支持 syscall、非法 ELF、坏路径、缺失 interpreter、坏用户指针和用户态崩溃保持
   fail-closed。
 
@@ -115,7 +116,8 @@ Stage 9 之后，硬编码 help 字符串和模拟 syscall 序列不再是正向
   完整 termios / TTY 或完整 rootfs 写语义。
 - 不在 Stage 10 承诺 `git init/add/commit/log`、`git clone/push/pull`、`vim hello.c`、
   `gcc hello.c && ./a.out` 或 `rustc helloworld.rs && ./helloworld`。
-- 不把网络、认证、真实终端编辑、完整工具链执行或多进程构建流程绑定到 help-run 完成定义。
+- 不把网络、认证、完整工具链矩阵或多进程构建全集绑定到 help-run 完成定义。
+- 不在 Stage 11 承诺网络 `git clone/push/pull` 或 `rustc` 编译闭环。
 
 ## 架构合同
 
@@ -168,8 +170,11 @@ provider 必须能回答：
 - `stat` family、`getdents64` 和 seek 所需的只读语义。
 - required asset 缺失和 optional asset 缺失的差异化诊断。
 
-Stage 10 之后如进入 `git init`、编译器输出或编辑器保存，再单独设计可写 rootfs、rename /
-unlink / fsync / sync / temp file 等语义；help-run 阶段不提前声明这些能力。
+Stage 11 开始把可写 rootfs 作为独立 overlay 设计：lower layer 继续来自 builtin 或 external
+provider，upper layer 只在当前 guest session 内维护文件 / 目录创建、truncate、write /
+pwrite、readback、metadata 更新、rename / unlink、fsync / sync no-op 成功语义和失败诊断。
+这一层用于支撑 `git init/add/commit/log`、`vim hello.c`、`gcc hello.c && ./a.out`，不声明
+宿主持久化回写或完整发行版磁盘一致性。
 
 ### ELF / dynamic-loader v0
 
@@ -188,16 +193,17 @@ dynamic-loader v0 的目标是支撑 help-run 的加载运行，不是完整动�
 
 Linux syscall 扩展必须 trace-driven：
 
-1. 先运行目标命令，记录第一个阻塞 help-run 的 syscall number、PC、参数、path / fd、errno
+1. 先运行目标命令，记录第一个阻塞目标 workflow 的 syscall number、PC、参数、path / fd、errno
    和已执行 trace。
 2. 只实现该 trace 证明需要的最小语义。
 3. 每个 syscall 都必须固定 Linux errno、用户指针校验、trace record 和 unsupported fallback。
 4. 不允许为了“看起来能跑”吞掉未知 syscall 或返回伪成功。
 
-help-run 阶段优先补只读、低副作用或可明确 fail-closed 的 syscall。`mprotect`、`readlinkat`、
-`faccessat` / `access`、`uname`、`prlimit64`、`set_tid_address`、`set_robust_list`、
-`rt_sigaction`、`rt_sigprocmask`、`writev`、`pread64`、`statx` 等接口是否进入 Stage 10，
-必须由真实工具 trace 决定。
+Stage 10 help-run 阶段优先补只读、低副作用或可明确 fail-closed 的 syscall。Stage 11
+workflow 阶段新增的 `execve` / `wait4` / `clone` 或 `vfork`、pipe / dup、writable file
+syscall、TTY / termios、`mprotect`、`readlinkat`、`faccessat` / `access`、`uname`、
+`prlimit64`、`set_tid_address`、`set_robust_list`、`rt_sigaction`、`rt_sigprocmask`、
+`writev`、`pread64`、`statx` 等接口，也必须由真实工具 trace 决定。
 
 ### 失败诊断
 
@@ -213,31 +219,36 @@ help-run 阶段优先补只读、低副作用或可明确 fail-closed 的 syscal
 
 这些字段用于 host smoke、文档报告和后续 trace-driven 补洞，不作为用户体验装饰。
 
-## Stage 10：OSComp help-run 下一跳
+## Stage 11-13：OSComp workflow 路线
 
-Stage 10 的定位是 `OSComp Linux 用户态 help-run 基线`。它只证明一组低风险工具入口能够加载运行，
-不证明 testsuits 全部任务完成。
+Stage 10 已完成 `OSComp Linux 用户态 help-run 基线`。Stage 11 之后的路线按能力面拆分，
+避免把可写文件系统、本地工具链、网络 git 和重型 Rust 工具链揉成一个不可验证阶段。
 
-Stage 10 命令矩阵：
+Stage 11 的定位是 `writable rootfs + process / file workflow`，目标是本地有状态工作流：
 
-- `git -h`
-- `git help`
-- `vim -h`
-- `gcc --h`
-- `rustc -h`
+- `git init/add/commit/log`
+- `vim hello.c`
+- `gcc hello.c && ./a.out`
 
-验收重点：
+Stage 11 的验收重点：
 
-- direct fallback 能在课程命令未命中后解析到 Linux rootfs。
-- 工具来自真实 rootfs/provider，不使用固定字符串。
-- 动态 ELF 通过 `PT_INTERP` / interpreter v0 或明确 fail-closed 诊断。
-- 输出是工具真实执行产生的 help / usage / 参数诊断，而不是 shell 伪造。
-- 命令退出或 fail-closed 后回到同一个 `course-os> ` prompt。
+- external / OSComp rootfs 下的真实 `git`、`vim`、`gcc` 资产和必要 shared assets 能被 provider
+  诊断到；这只是前置条件，不是完成定义。
+- writable rootfs overlay 支持文件 / 目录创建、写入、rename、unlink、metadata 和 readback。
+- Linux compat runtime 能支撑 cwd、relative path、FD、`execve` / `wait4` / 子进程、pipe / dup
+  和 trace-driven syscall 补洞。
+- `course-os> ` shell 保持课程命令优先，同时为 Linux fallback 传递 cwd，并提供最小 `&&`
+  成功链执行。
+- 工具输出来自真实执行和真实 rootfs，不使用固定文本伪造。
 - Stage 5-9 显式 launcher、bad path、bad ELF、unsupported syscall 和 fallback 关闭历史 guardrail
   不被破坏。
 
-`testsuits-for-oskernel` 中更复杂的 `git init/add/commit/log`、`git clone/push/pull`、
-`vim hello.c`、`gcc hello.c && ./a.out`、`rustc helloworld.rs && ./helloworld` 留给 Stage 11+。
+Stage 12 的定位是 `network / git remote path`，再推进 virtio-net、socket、DNS、SSH / TLS
+或最小 git remote 能力，目标放到 `git clone/push/pull`。
+
+Stage 13 的定位是 `rustc large-memory / toolchain closure`，再处理 `rustc helloworld.rs &&
+./helloworld`、大内存占用、重型动态链接和稳定性问题。Stage 11 可以把 `/usr/bin/rustc`
+作为 optional provider 预检资产记录，但不把 Rust 编译成功作为 Stage 11 完成条件。
 
 ## 验证要求
 
@@ -264,6 +275,12 @@ Stage 5-10 现有 Linux compat 门禁继续有效：
 - `cd myCPU && make test-guest-course_os_linux_compat_shell_demo`
 - `cd myCPU && make test-pipeline-guest-course_os_linux_compat_shell_demo`
 
+Stage 11 workflow 门禁必须保持 external-only：
+
+- `cd myCPU && make test-unit-course_os_stage11_linux_compat`
+- `cd myCPU && make test-host-course_os_linux_compat_external_rootfs_smoke`
+- `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=<external-rootfs> make test-host-course_os_linux_compat_external_workflow_smoke`
+
 阶段完成前默认还应运行：
 
 - `cd myCPU && make test`
@@ -276,7 +293,9 @@ Stage 5-10 现有 Linux compat 门禁继续有效：
 - dynamic-loader v0 很容易滑向完整动态链接器；Stage 10 只绑定 help-run 需要的最小执行证据。
 - trace-driven syscall 容易被“伪成功返回”污染；未知 syscall 必须 fail-closed。
 - OSComp rootfs provider 如果依赖宿主机资产，默认回归会变脆；默认 `make test` 仍必须走 builtin 或显式跳过外部资产。
-- `vim`、`gcc`、`rustc` 可能快速引入 TTY、signal、futex、execve、wait4、临时文件和动态链接细节；Stage 10 只承诺 help-run，不承诺交互编辑或编译闭环。
+- `vim`、`gcc`、`git commit` 会快速引入 TTY、signal、futex、execve、wait4、临时文件、动态链接
+  和可写 rootfs 细节；Stage 11 必须按真实 trace 小步补洞，不能用伪成功绕过。
+- `rustc` 会引入更重的内存与 toolchain 压力；默认留给 Stage 13，不作为 Stage 11 pass 条件。
 - Plus 修改课程 OS marker 会破坏课程线证据链；已有 Stage 1-4 demo 和旧 9 条负向 demo 必须继续作为 guardrail。
 
 ## 当前有效性说明
@@ -285,6 +304,7 @@ Stage 5-10 现有 Linux compat 门禁继续有效：
 - 当前完成态：Stage 5 / Stage 6 / Stage 7 / Stage 8 / Stage 9 / Stage 10 已完成显式 launcher、
   最小 rootfs / syscall、外部 rootfs asset provider、loader / trace 诊断，以及静态 RV64
   ELF real-exec 第一刀和 OSComp help-run 基线。
-- 当前活跃计划：暂无；下一刀应在 `docs/plan/` 重新开窄计划并链接本文。
+- 当前活跃计划：Stage 11 writable rootfs / process-file workflow，见
+  [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)。
 - 当前不是完整兼容声明：`kernel_alpha` 仍不声明完整 Linux syscall 面、完整动态链接器、
   完整 signal / futex、rootfs 写语义、完整 TTY、网络 git 或自动跑完 OSComp testsuits。
