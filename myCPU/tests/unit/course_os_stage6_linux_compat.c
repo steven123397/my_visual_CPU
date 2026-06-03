@@ -231,7 +231,7 @@ static int test_syscall_dispatch_covers_help_output_minimum(void) {
     return 0;
 }
 
-static int test_linux_run_emits_help_instead_of_unsupported_syscall(void) {
+static int test_linux_run_requires_real_exec_context(void) {
     const char* busybox_argv[] = {"/bin/busybox", "--help"};
     const char* git_argv[] = {"/usr/bin/git", "-h"};
     linux_compat_exec_request_t request;
@@ -242,29 +242,29 @@ static int test_linux_run_emits_help_instead_of_unsupported_syscall(void) {
     request.path = "/bin/busybox";
     request.argc = 2U;
     request.argv = busybox_argv;
-    if (linux_compat_run(&request, out, sizeof(out), &trace) != LINUX_COMPAT_OK ||
-        !contains(out, "BusyBox v") ||
-        !contains(out, "Usage: busybox") ||
+    if (linux_compat_run(&request, out, sizeof(out), &trace) !=
+            LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL ||
         !contains(out, "loader=static") ||
         !contains(out, "interp=none") ||
         !contains(out, "segments=1") ||
         !contains(out, "stack=2/0/6") ||
-        !contains(out,
-                  "trace=brk/mmap/newfstatat/openat/read/close/write/exit_group") ||
-        contains(out, "unsupported syscall")) {
-        return fail("expected busybox help to complete through minimal syscalls");
+        !contains(out, "real exec context missing") ||
+        contains(out, "BusyBox v") ||
+        contains(out, "trace=brk/mmap")) {
+        return fail("expected busybox run to require real exec context");
     }
 
     request.path = "/usr/bin/git";
     request.argc = 2U;
     request.argv = git_argv;
-    if (linux_compat_run(&request, out, sizeof(out), &trace) != LINUX_COMPAT_OK ||
-        !contains(out, "usage: git") ||
+    if (linux_compat_run(&request, out, sizeof(out), &trace) !=
+            LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL ||
         !contains(out, "loader=static") ||
         !contains(out, "interp=none") ||
-        !contains(out, "trace=brk/mmap/newfstatat/openat/read/close/write/exit_group") ||
-        contains(out, "unsupported syscall")) {
-        return fail("expected git -h to complete through minimal syscalls");
+        !contains(out, "real exec context missing") ||
+        contains(out, "usage: git") ||
+        contains(out, "trace=brk/mmap")) {
+        return fail("expected git run to require real exec context");
     }
 
     return 0;
@@ -292,40 +292,13 @@ static int test_linux_run_fails_closed_for_dynamic_elf_without_interp(void) {
     return 0;
 }
 
-static int test_linux_run_busybox_help_stays_simulated_with_exec_context(void) {
-    const char* argv[] = {"/bin/busybox", "--help"};
-    linux_compat_exec_request_t request;
-    linux_compat_trace_t trace;
-    char out[1024];
-
-    memset(&request, 0, sizeof(request));
-    request.path = "/bin/busybox";
-    request.argc = 2U;
-    request.argv = argv;
-    request.trap_context = (trap_context_t*)(uintptr_t)0x1U;
-    request.user_runtime = (trap_user_runtime_t*)(uintptr_t)0x2U;
-    request.address_space = (vm_address_space_t*)(uintptr_t)0x3U;
-    request.process = (vm_process_t*)(uintptr_t)0x4U;
-    request.trap_stack_base = (void*)(uintptr_t)0x5U;
-    request.trap_stack_size = 256U;
-    if (linux_compat_run(&request, out, sizeof(out), &trace) != LINUX_COMPAT_OK ||
-        !contains(out, "BusyBox v") ||
-        !contains(out, "Usage: busybox") ||
-        contains(out, "exec=real")) {
-        return fail("expected busybox help to stay on the simulated path until minimal ELF gating is explicit");
-    }
-
-    return 0;
-}
-
 int main(void) {
     if (test_builtin_rootfs_provider_reports_source() != 0 ||
         test_rootfs_stat_reports_linux_metadata() != 0 ||
         test_fd_openat_read_lseek_close_uses_rootfs_bytes() != 0 ||
         test_syscall_dispatch_covers_help_output_minimum() != 0 ||
-        test_linux_run_emits_help_instead_of_unsupported_syscall() != 0 ||
-        test_linux_run_fails_closed_for_dynamic_elf_without_interp() != 0 ||
-        test_linux_run_busybox_help_stays_simulated_with_exec_context() != 0) {
+        test_linux_run_requires_real_exec_context() != 0 ||
+        test_linux_run_fails_closed_for_dynamic_elf_without_interp() != 0) {
         return 1;
     }
 

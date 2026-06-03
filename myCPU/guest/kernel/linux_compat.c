@@ -10,33 +10,15 @@ __attribute__((weak)) void console_putc(char ch) {
     (void)ch;
 }
 
-static const char k_busybox_help[] =
-    "BusyBox v1.36.1 (myCPU linux-compat)\n"
-    "Usage: busybox [function [arguments]...]\n"
-    "Currently defined functions:\n"
-    "    cat, echo, ls, sh\n";
-
-static const char k_git_help[] =
-    "usage: git [-v | --version] [-h | --help] <command> [<args>]\n"
-    "\n"
-    "These are common Git commands used in various situations:\n"
-    "   init     Create an empty Git repository\n"
-    "   status   Show the working tree status\n";
-
 typedef struct LinuxCompatRunScratch {
     linux_compat_rootfs_entry_t entry;
     linux_compat_rootfs_entry_t interp_entry;
     linux_compat_load_plan_t load_plan;
     linux_compat_vm_t vm;
     linux_compat_runtime_t runtime;
-    linux_compat_syscall_request_t syscall;
-    linux_compat_syscall_response_t response;
-    linux_compat_stat_t stat;
     linux_compat_trace_t trace;
     uintptr_t entry_pc;
     uintptr_t user_sp;
-    int32_t fd;
-    uint8_t probe[4];
 } linux_compat_run_scratch_t;
 
 /*
@@ -160,7 +142,7 @@ static bool request_wants_real_exec(
     const linux_compat_exec_request_t* request,
     const linux_compat_rootfs_entry_t* entry) {
     return request_has_real_exec_context(request) && entry != 0 &&
-           str_eq(entry->path, LINUX_COMPAT_MINIMAL_ELF_PATH);
+           entry->executable;
 }
 
 static void zero_bytes(void* ptr, size_t size) {
@@ -609,21 +591,6 @@ static bool linux_compat_write_result_buffer(linux_compat_runtime_t* runtime,
                                              void* buffer,
                                              const void* data,
                                              size_t length);
-
-static bool request_has_arg(const linux_compat_exec_request_t* request,
-                            const char* value) {
-    size_t i = 0;
-
-    if (request == 0 || value == 0 || request->argv == 0) {
-        return false;
-    }
-    for (i = 1U; i < request->argc; ++i) {
-        if (str_eq(request->argv[i], value)) {
-            return true;
-        }
-    }
-    return false;
-}
 
 static uint16_t read_u16_le(const uint8_t* image, size_t offset) {
     return (uint16_t)image[offset] |
@@ -1557,7 +1524,6 @@ linux_compat_result_t linux_compat_run(
     linux_compat_trace_t* out_trace) {
     linux_compat_run_scratch_t* scratch = &g_linux_compat_run_scratch;
     linux_compat_result_t result = LINUX_COMPAT_OK;
-    const char* help_text = 0;
     size_t used = 0;
 
     if (out == 0 || out_size == 0) {
@@ -1565,7 +1531,6 @@ linux_compat_result_t linux_compat_run(
     }
     out[0] = '\0';
     zero_bytes(scratch, sizeof(*scratch));
-    scratch->fd = -1;
     if (request == 0 || request->path == 0 || str_len(request->path) == 0U) {
         set_trace(out_trace, "", 2, "linux-compat: usage: linux <path> [args...]");
         return append_str(out, out_size, &used, "linux-compat: usage: linux <path-or-command> [args...]\n")
@@ -1754,140 +1719,10 @@ linux_compat_result_t linux_compat_run(
         return LINUX_COMPAT_OK;
     }
 
-    if (str_eq(scratch->entry.path, "/bin/busybox") &&
-        (request->argc <= 1U || request_has_arg(request, "--help") ||
-         request_has_arg(request, "-h"))) {
-        help_text = k_busybox_help;
-    } else if (str_eq(scratch->entry.path, "/usr/bin/git") &&
-               (request_has_arg(request, "-h") ||
-                request_has_arg(request, "--help"))) {
-        help_text = k_git_help;
-    }
-
-    if (help_text == 0) {
-        set_trace(out_trace,
-                  scratch->entry.path,
-                  38,
-                  "linux-compat: syscall: unsupported syscall");
-        if (out_trace != 0) {
-            out_trace->syscall_number = 0;
-            out_trace->pc = (uintptr_t)scratch->load_plan.entry;
-        }
-
-        (void)append_rootfs_source_line(out, out_size, &used);
-        (void)append_str(out, out_size, &used, "linux-compat: path=");
-        (void)append_str(out, out_size, &used, scratch->entry.path);
-        (void)append_str(out, out_size, &used, " argc=");
-        (void)append_u64_dec(out, out_size, &used, (uint64_t)request->argc);
-        (void)append_load_plan_summary(out,
-                                       out_size,
-                                       &used,
-                                       &scratch->load_plan);
-        (void)append_str(out,
-                         out_size,
-                         &used,
-                         " fail-closed unsupported syscall number=0 pc=");
-        (void)append_u64_hex(out,
-                             out_size,
-                             &used,
-                             scratch->load_plan.entry);
-        (void)append_str(out, out_size, &used, " errno=38 trace_index=0\n");
-        return LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL;
-    }
-
-    linux_compat_runtime_init(&scratch->runtime);
-
-    scratch->syscall.number = LINUX_COMPAT_SYS_BRK;
-    scratch->syscall.dirfd = 0;
-    scratch->syscall.fd = 0;
-    scratch->syscall.path = 0;
-    scratch->syscall.write_buffer = 0;
-    scratch->syscall.read_buffer = 0;
-    scratch->syscall.length = 0;
-    scratch->syscall.offset = 0;
-    scratch->syscall.stat = 0;
-    scratch->syscall.dirents = 0;
-    scratch->syscall.dirent_capacity = 0;
-    scratch->syscall.addr = 0;
-    scratch->syscall.prot = 0;
-    scratch->syscall.flags = 0;
-    scratch->syscall.command = 0;
-    scratch->syscall.arg = 0;
-    (void)linux_compat_syscall_dispatch(&scratch->runtime,
-                                        &scratch->syscall,
-                                        &scratch->response,
-                                        &scratch->trace);
-
-    scratch->syscall.number = LINUX_COMPAT_SYS_MMAP;
-    scratch->syscall.length = 4096U;
-    (void)linux_compat_syscall_dispatch(&scratch->runtime,
-                                        &scratch->syscall,
-                                        &scratch->response,
-                                        &scratch->trace);
-
-    scratch->syscall.number = LINUX_COMPAT_SYS_NEWFSTATAT;
-    scratch->syscall.dirfd = LINUX_COMPAT_AT_FDCWD;
-    scratch->syscall.path = scratch->entry.path;
-    scratch->syscall.stat = &scratch->stat;
-    scratch->syscall.length = 0;
-    (void)linux_compat_syscall_dispatch(&scratch->runtime,
-                                        &scratch->syscall,
-                                        &scratch->response,
-                                        &scratch->trace);
-
-    scratch->syscall.number = LINUX_COMPAT_SYS_OPENAT;
-    scratch->syscall.path = scratch->entry.path;
-    scratch->syscall.stat = 0;
-    (void)linux_compat_syscall_dispatch(&scratch->runtime,
-                                        &scratch->syscall,
-                                        &scratch->response,
-                                        &scratch->trace);
-    scratch->fd = (int32_t)scratch->response.value;
-
-    if (scratch->fd >= 0) {
-        scratch->syscall.number = LINUX_COMPAT_SYS_READ;
-        scratch->syscall.fd = scratch->fd;
-        scratch->syscall.path = 0;
-        scratch->syscall.read_buffer = scratch->probe;
-        scratch->syscall.length = sizeof(scratch->probe);
-        (void)linux_compat_syscall_dispatch(&scratch->runtime,
-                                            &scratch->syscall,
-                                            &scratch->response,
-                                            &scratch->trace);
-        scratch->syscall.number = LINUX_COMPAT_SYS_CLOSE;
-        scratch->syscall.read_buffer = 0;
-        scratch->syscall.length = 0;
-        (void)linux_compat_syscall_dispatch(&scratch->runtime,
-                                            &scratch->syscall,
-                                            &scratch->response,
-                                            &scratch->trace);
-    }
-
-    scratch->syscall.number = LINUX_COMPAT_SYS_WRITE;
-    scratch->syscall.fd = 1;
-    scratch->syscall.write_buffer = help_text;
-    scratch->syscall.length = str_len(help_text);
-    (void)linux_compat_syscall_dispatch(&scratch->runtime,
-                                        &scratch->syscall,
-                                        &scratch->response,
-                                        &scratch->trace);
-
-    scratch->syscall.number = LINUX_COMPAT_SYS_EXIT_GROUP;
-    scratch->syscall.fd = 0;
-    scratch->syscall.write_buffer = 0;
-    scratch->syscall.length = 0;
-    scratch->syscall.addr = scratch->load_plan.entry;
-    (void)linux_compat_syscall_dispatch(&scratch->runtime,
-                                        &scratch->syscall,
-                                        &scratch->response,
-                                        &scratch->trace);
-
-    set_trace(out_trace, scratch->entry.path, 0, "linux-compat: run: ok");
-    if (out_trace != 0) {
-        out_trace->syscall_number = LINUX_COMPAT_SYS_EXIT_GROUP;
-        out_trace->pc = (uintptr_t)scratch->load_plan.entry;
-    }
-
+    set_trace(out_trace,
+              scratch->entry.path,
+              38,
+              "linux-compat: exec: real exec context missing");
     (void)append_rootfs_source_line(out, out_size, &used);
     (void)append_str(out, out_size, &used, "linux-compat: path=");
     (void)append_str(out, out_size, &used, scratch->entry.path);
@@ -1900,12 +1735,6 @@ linux_compat_result_t linux_compat_run(
     (void)append_str(out,
                      out_size,
                      &used,
-                     " syscalls=openat/read/newfstatat/brk/mmap/write/exit_group");
-    (void)append_trace_summary(out, out_size, &used, &scratch->runtime);
-    (void)append_char(out, out_size, &used, '\n');
-    (void)append_str(out,
-                     out_size,
-                     &used,
-                     scratch->runtime.stdout_buffer);
-    return LINUX_COMPAT_OK;
+                     " fail-closed real exec context missing errno=38\n");
+    return LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL;
 }

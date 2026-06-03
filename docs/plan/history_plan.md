@@ -21,6 +21,28 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-06-03
+
+#### course-os-kernel-alpha-stage9-linux-compat-real-exec-plan
+
+- 原文件：`course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md`
+- 完成内容：完成 `kernel_alpha` Linux compat Stage 9 真实 ELF 执行第一刀。显式
+  `course-os> linux ...` launcher 现在对静态 RV64 ELF 走真实 PT_LOAD 段映射、
+  argv / envp / auxv 用户栈、U-mode 入口、真实 ecall dispatch、UART `write` 与
+  `exit_group` 闭环；`/bin/minimal-elf`、`/bin/busybox --help`、`/bin/busybox echo hello`
+  和 `/usr/bin/git -h` 端到端输出均要求出现 `exec=real` 和真实 syscall trace。
+- 实现过程摘要：本轮把 `linux_compat_run()` 从 Stage 5-8 的硬编码 help 文本和模拟
+  syscall 序列收敛到统一 real-exec context 分流；具备真实 guest runtime / VM / trap
+  context 的静态 ELF 进入 `linux_compat_exec_load()`、`linux_compat_exec_build_stack()`
+  和 `linux_compat_exec_enter()`，缺少 real-exec context 的 host-only 直接调用改为
+  fail-closed。terminal smoke 改为只检查命令后的 UART 增量，并覆盖 busybox help、
+  busybox echo、git help、坏路径、课程 help 和直接 `git -h` fallback 关闭合同。
+- 验证摘要：已运行 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 和
+  `git diff --check`，最终均以退出码 0 完成。Stage 9 仍不声明动态链接器执行、完整
+  Linux syscall 面、完整 signal / futex、rootfs 写语义、网络 `git` 操作或自动 Linux
+  命令 fallback。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 ### 2026-05-29
 
 #### course-os-kernel-alpha-stage2-plan

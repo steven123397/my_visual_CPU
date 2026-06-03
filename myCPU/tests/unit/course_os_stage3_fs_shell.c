@@ -164,7 +164,7 @@ static int test_exec_cat_reads_file_through_user_program_path(void) {
     return 0;
 }
 
-static int test_linux_compat_launcher_is_explicit_and_emits_help(void) {
+static int test_linux_compat_launcher_is_explicit_and_fails_closed_without_runtime(void) {
     static course_shell_t shell;
     char out[1024];
 
@@ -177,19 +177,20 @@ static int test_linux_compat_launcher_is_explicit_and_emits_help(void) {
         !contains(out, "linux-compat:") ||
         !contains(out, "path=/bin/busybox") ||
         !contains(out, "elf=rv64-little") ||
-        !contains(out, "BusyBox v") ||
-        !contains(out, "Usage: busybox") ||
-        contains(out, "unsupported syscall")) {
-        return fail("expected explicit linux launcher to emit busybox help");
+        !contains(out, "exec=real") ||
+        !contains(out, "errno=38") ||
+        contains(out, "BusyBox v")) {
+        return fail("expected explicit linux launcher to fail closed in host unit");
     }
 
     if (!course_shell_run_line(&shell, "linux /usr/bin/git -h", out, sizeof(out)) ||
         !contains(out, "linux-compat:") ||
         !contains(out, "path=/usr/bin/git") ||
         !contains(out, "elf=rv64-little") ||
-        !contains(out, "usage: git") ||
-        contains(out, "unsupported syscall")) {
-        return fail("expected git path to emit Linux compat help");
+        !contains(out, "exec=real") ||
+        !contains(out, "errno=38") ||
+        contains(out, "usage: git")) {
+        return fail("expected git launcher to fail closed in host unit");
     }
 
     if (!course_shell_run_line(&shell, "linux /nope", out, sizeof(out)) ||
@@ -216,7 +217,7 @@ int main(void) {
         test_fd_seek_only_accepts_regular_files() != 0 ||
         test_shell_script_mode_success_and_failure_line() != 0 ||
         test_exec_cat_reads_file_through_user_program_path() != 0 ||
-        test_linux_compat_launcher_is_explicit_and_emits_help() != 0) {
+        test_linux_compat_launcher_is_explicit_and_fails_closed_without_runtime() != 0) {
         return 1;
     }
 

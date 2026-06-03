@@ -1,11 +1,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <sstream>
+#include <cstring>
+#include <stdexcept>
 #include <string>
 
 #include "../../src/debug/debug_budget.h"
-#include "../../src/debug/debug_protocol.h"
+#include "../../src/debug/debug_session.h"
 
 namespace {
 
@@ -20,56 +21,92 @@ bool expect_contains(const std::string& haystack,
     return true;
 }
 
-std::string run_until_uart_contains_command(const char* text,
-                                            std::uint64_t max_steps) {
-    std::ostringstream script;
-    script << "{\"cmd\":\"run_until_uart_contains\",\"text\":\"" << text
-           << "\",\"max_steps\":" << max_steps << "}\n";
-    return script.str();
+BackendKind parse_backend_kind(const char* backend) {
+    if (std::strcmp(backend, "functional") == 0) {
+        return BackendKind::Functional;
+    }
+    if (std::strcmp(backend, "pipeline") == 0) {
+        return BackendKind::Pipeline;
+    }
+    std::fprintf(stderr, "unknown backend: %s\n", backend);
+    std::exit(1);
 }
 
-std::string run_cli_script(const std::string& script) {
-    std::istringstream in(script);
-    std::ostringstream out;
-    std::ostringstream err;
-
-    const int status = run_debug_cli(in, out, err);
-    if (status != 0) {
-        std::fprintf(stderr, "debug cli exited with status %d\n", status);
-        std::fprintf(stderr, "stderr:\n%s\n", err.str().c_str());
-        std::exit(1);
+bool run_until_new_uart_contains(DebugSession& session,
+                                 size_t offset,
+                                 const char* needle,
+                                 std::uint64_t max_steps,
+                                 DebugSession::UartOutputChunk& chunk) {
+    try {
+        chunk = session.run_until_new_uart_contains(offset, needle, max_steps);
+        return true;
+    } catch (const std::runtime_error& error) {
+        chunk = session.uart_output(offset);
+        std::fprintf(stderr, "%s\n", error.what());
+        std::fprintf(stderr,
+                     "minimal ELF smoke failed while waiting for command UART text: %s\n",
+                     needle);
+        std::fprintf(stderr,
+                     "command output since offset %zu was:\n%s\n",
+                     offset,
+                     chunk.text.c_str());
+        return false;
     }
-
-    return out.str();
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
     const char* backend = argc > 1 ? argv[1] : "functional";
-    std::ostringstream script;
 
-    script << "{\"cmd\":\"load\",\"image\":\"guest/course_os_shell.elf\","
-           << "\"backend\":\"" << backend
-           << "\",\"disk\":\"tests/data/storage_basic.txt\"}\n"
-           << run_until_uart_contains_command("course-os> ",
-                                              DebugBudget::kCourseOsShellBootMaxSteps)
-           << "{\"cmd\":\"uart_input\",\"text\":\"linux /bin/minimal-elf\\r\"}\n"
-           << run_until_uart_contains_command("linux-compat: exec=real",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("trace=write/exit_group",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("hello",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << run_until_uart_contains_command("course-os> ",
-                                              DebugBudget::kCourseOsShellCommandMaxSteps)
-           << "{\"cmd\":\"uart_output\",\"offset\":0}\n"
-           << "{\"cmd\":\"quit\"}\n";
+    DebugSession session;
+    session.load_elf("guest/course_os_shell.elf",
+                     parse_backend_kind(backend),
+                     BlockTransport::SimpleStorage,
+                     "tests/data/storage_basic.txt");
+    session.run_until_uart_contains("course-os> ", DebugBudget::kCourseOsShellBootMaxSteps);
 
-    const std::string output = run_cli_script(script.str());
+    const DebugSession::UartOutputChunk boot_chunk = session.uart_output(0);
+    if (!expect_contains(boot_chunk.text,
+                         "course-os shell ready",
+                         "course OS shell should emit a ready banner") ||
+        !expect_contains(boot_chunk.text,
+                         "course-os> ",
+                         "course OS shell prompt should settle")) {
+        return 1;
+    }
+
+    const size_t command_offset = boot_chunk.next_offset;
+    session.uart_input("linux /bin/minimal-elf\r");
+
+    DebugSession::UartOutputChunk command_chunk{};
+    if (!run_until_new_uart_contains(session,
+                                     command_offset,
+                                     "exec=real",
+                                     DebugBudget::kCourseOsShellCommandMaxSteps,
+                                     command_chunk) ||
+        !run_until_new_uart_contains(session,
+                                     command_offset,
+                                     "trace=write/exit_group",
+                                     DebugBudget::kCourseOsShellCommandMaxSteps,
+                                     command_chunk) ||
+        !run_until_new_uart_contains(session,
+                                     command_offset,
+                                     "hello",
+                                     DebugBudget::kCourseOsShellCommandMaxSteps,
+                                     command_chunk) ||
+        !run_until_new_uart_contains(session,
+                                     command_offset,
+                                     "course-os> ",
+                                     DebugBudget::kCourseOsShellCommandMaxSteps,
+                                     command_chunk)) {
+        return 1;
+    }
+
+    const std::string& output = command_chunk.text;
 
     if (!expect_contains(output,
-                         "linux-compat: exec=real",
+                         "exec=real",
                          "minimal ELF smoke should use the real Linux compat exec path")) {
         return 1;
     }
@@ -88,9 +125,5 @@ int main(int argc, char** argv) {
                          "minimal ELF smoke should return to the course OS prompt")) {
         return 1;
     }
-    if (!expect_contains(output, "\"cmd\":\"quit\"", "quit response should be emitted")) {
-        return 1;
-    }
-
     return 0;
 }

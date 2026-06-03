@@ -77,7 +77,7 @@
 - `kernel_alpha`
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
   - [design/course_os_kernel_alpha_linux_compat_plus_design.md](design/course_os_kernel_alpha_linux_compat_plus_design.md)
-  - [plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md](plan/course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
