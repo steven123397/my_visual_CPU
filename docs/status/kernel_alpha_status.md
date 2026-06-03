@@ -10,13 +10,11 @@
 
 - 相关设计：
   - [../design/course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)
-  - [../design/course_os_kernel_alpha_stage4_frontend_shell_design.md](../design/course_os_kernel_alpha_stage4_frontend_shell_design.md)
-  - [../design/course_os_kernel_alpha_stage3_design.md](../design/course_os_kernel_alpha_stage3_design.md)
-  - [../design/course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)
-  - [../design/course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)
+  - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
-- 当前计划：暂无。
+- 当前计划：
+  - [../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md](../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
@@ -35,10 +33,10 @@
 
 `kernel_alpha` 当前已经从 Phase 1 bring-up demo 切换为《操作系统课程设计》A 方案主线入口；旧
 `KMVPETDS` 只保留为历史 guardrail，不再描述当前正向能力。
-第一阶段按 [../design/course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)
+第一阶段按 [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
 落地进程、内存、文件系统 3 个模块的 9 个功能点，并提供只读 `/proc` 指标证据面。
 
-第二阶段按 [../design/course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)
+第二阶段按 [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
 完成 A 方案核心闭环和创新线：syscall ABI、真实进程生命周期、FD / FS 统一 I/O、5 个课程用户程序、
 shell、单级管道、重定向、COW Fork、用户态崩溃隔离，以及 `/proc/syscalls`、`/proc/cow`、
 `/proc/crashlog` 可观测证据。
@@ -55,7 +53,7 @@ Stage 2 基线输出曾固定为：
 `course-os-stage2 ...` 固定第二阶段 syscall、进程、FD / FS、shell、管道、COW、crash isolation
 和扩展 `/proc` 证据摘要。
 
-第三阶段按 [../design/course_os_kernel_alpha_stage3_design.md](../design/course_os_kernel_alpha_stage3_design.md)
+第三阶段按 [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
 完成“课程满分基线真实化”：教学级 ELF / libc、真实用户程序、FCFS / RR 指标化、
 semaphore / mutex、Sv39 fault-driven COW 证据链、`mkfs` / `seek` / `unlink` / `rmdir`、
 shell 脚本模式，以及 `/proc/cpuinfo`、`/proc/uptime`、`/proc/<pid>/status`、`/proc/<pid>/fd`、
@@ -202,11 +200,10 @@ syscall 面、完整 signal / futex、rootfs 写语义或通用 Linux 用户态�
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. 后续 Stage 10+ 如继续扩展 Linux compat，应优先按真实 trace 补动态链接器或 `execve` /
-   `wait4` / `futex` / `rt_sig*` 等缺口；所有新增语义继续放在旁路 `linux_compat_*`，
-   不要直接改大 `course_*` 教学模块，也不要提前启用自动 fallback。
-3. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立 Stage 5+ 方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
-4. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
+2. 执行 [../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md](../plan/course_os_kernel_alpha_stage10_oscomp_help_run_plan.md)，把下一刀限定为 OSComp Linux 用户态 help-run 基线：`git -h` / `git help`、`vim -h`、`gcc --h`、`rustc -h`。
+3. Stage 10 的新增语义继续放在旁路 `linux_compat_*`，按真实 trace 补 direct fallback、PATH 解析、动态链接器 v0 和最小 syscall，不直接改大 `course_*` 教学模块。
+4. 如继续扩展 AI/NPU、JIT/DBT 或 Pipeline-aware 调度，继续作为独立后续方向设计；不要回写扩大 Stage 3 / Stage 4 完成范围。
+5. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
 ## 验证基线
 
