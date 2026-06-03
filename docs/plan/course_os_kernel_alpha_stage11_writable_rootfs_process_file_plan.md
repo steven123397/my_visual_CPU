@@ -124,27 +124,33 @@ Stage 10 的 help-run 提升到本地有状态工作流：
 - 修改：`myCPU/guest/generated/linux_compat_rootfs_asset.c`
 - 修改：`myCPU/guest/include/linux_compat.h`
 - 修改：`myCPU/guest/kernel/linux_compat.c`
+- 修改：`myCPU/guest/kernel/trap_dispatch.c`
 - 创建或修改：`myCPU/tests/unit/course_os_stage11_linux_compat.c`
+- 修改：`myCPU/tests/unit/trap_dispatch.c`
 - 修改：`myCPU/Makefile`
 
-- [ ] **步骤 1：补 writable rootfs unit 红灯**
+- [x] **步骤 1：补 writable rootfs unit 红灯**
   - 覆盖 `openat(O_CREAT|O_TRUNC|O_WRONLY)`、`write`、`lseek`、`readback`、`fstat`、`unlink`、
     `rename`、目录创建和 bad path / bad fd / read-only provider guardrail。
   - 运行：`cd myCPU && make test-unit-course_os_stage11_linux_compat`
   - 预期：当前只读 rootfs 实现 FAIL。
-- [ ] **步骤 2：实现内存 overlay**
+- [x] **步骤 2：实现内存 overlay**
   - overlay 叠在 builtin / external provider 之上；原 provider 继续提供只读 lower layer。
   - overlay 节点维护 inode-like id、mode、size、mtime、directory / regular 标记和 dirty 标记。
   - 写入只影响当前 guest session，不声明宿主持久化回写。
-- [ ] **步骤 3：接入 Linux syscall 路径**
+- [x] **步骤 3：接入 Linux syscall 路径**
   - `openat` flags、`write` / `pwrite64`、`ftruncate`、`fsync` / `fdatasync` / `sync`、
     `mkdirat`、`unlinkat`、`renameat` / `renameat2`、`newfstatat` / `statx` 返回稳定 Linux errno
     和 trace record。
+  - U-mode trap 到 `linux_compat_syscall_request_t` 的参数映射同步覆盖新增 syscall，避免
+    `pwrite64` offset、`ftruncate` length、`fstat` stat buffer 或 `renameat` new path
+    在真实 ELF syscall 路径里走错字段。
   - 用户指针读写继续经过现有 VM 校验；坏指针 fail-closed。
-- [ ] **步骤 4：验证 writable rootfs 层**
+- [x] **步骤 4：验证 writable rootfs 层**
   - 运行：`cd myCPU && make test-unit-course_os_stage6_linux_compat`
   - 运行：`cd myCPU && make test-unit-course_os_stage10_linux_compat`
   - 运行：`cd myCPU && make test-unit-course_os_stage11_linux_compat`
+  - 运行：`cd myCPU && make test-unit-trap_dispatch`
 
 ### 任务 3：cwd、relative path 与 `course-os> ` workflow shell
 

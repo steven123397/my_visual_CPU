@@ -11,9 +11,16 @@
 #define LINUX_COMPAT_MAX_STDOUT 512U
 #define LINUX_COMPAT_MAX_DIRENTS 8U
 #define LINUX_COMPAT_MAX_TRACE_RECORDS 16U
+#define LINUX_COMPAT_MAX_OVERLAY_NODES 32U
+#define LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE 2048U
 #define LINUX_COMPAT_MINIMAL_ELF_PATH "/bin/minimal-elf"
 #define LINUX_COMPAT_AT_FDCWD (-100)
 #define LINUX_COMPAT_O_RDONLY 0U
+#define LINUX_COMPAT_O_WRONLY 00000001U
+#define LINUX_COMPAT_O_RDWR 00000002U
+#define LINUX_COMPAT_O_ACCMODE 00000003U
+#define LINUX_COMPAT_O_CREAT 00000100U
+#define LINUX_COMPAT_O_TRUNC 00001000U
 #define LINUX_COMPAT_DT_DIR 4U
 #define LINUX_COMPAT_DT_REG 8U
 #ifndef LINUX_COMPAT_PROT_READ
@@ -49,6 +56,10 @@
 
 #define LINUX_COMPAT_SYS_FCNTL 25U
 #define LINUX_COMPAT_SYS_IOCTL 29U
+#define LINUX_COMPAT_SYS_MKDIRAT 34U
+#define LINUX_COMPAT_SYS_UNLINKAT 35U
+#define LINUX_COMPAT_SYS_RENAMEAT 38U
+#define LINUX_COMPAT_SYS_FTRUNCATE 46U
 #define LINUX_COMPAT_SYS_FACCESSAT 48U
 #define LINUX_COMPAT_SYS_OPENAT 56U
 #define LINUX_COMPAT_SYS_CLOSE 57U
@@ -58,8 +69,13 @@
 #define LINUX_COMPAT_SYS_WRITE 64U
 #define LINUX_COMPAT_SYS_WRITEV 66U
 #define LINUX_COMPAT_SYS_PREAD64 67U
+#define LINUX_COMPAT_SYS_PWRITE64 68U
 #define LINUX_COMPAT_SYS_READLINKAT 78U
 #define LINUX_COMPAT_SYS_NEWFSTATAT 79U
+#define LINUX_COMPAT_SYS_FSTAT 80U
+#define LINUX_COMPAT_SYS_SYNC 81U
+#define LINUX_COMPAT_SYS_FSYNC 82U
+#define LINUX_COMPAT_SYS_FDATASYNC 83U
 #define LINUX_COMPAT_SYS_CLOCK_GETTIME 113U
 #define LINUX_COMPAT_SYS_EXIT 93U
 #define LINUX_COMPAT_SYS_EXIT_GROUP 94U
@@ -73,6 +89,7 @@
 #define LINUX_COMPAT_SYS_MMAP 222U
 #define LINUX_COMPAT_SYS_MPROTECT 226U
 #define LINUX_COMPAT_SYS_PRLIMIT64 261U
+#define LINUX_COMPAT_SYS_RENAMEAT2 276U
 #define LINUX_COMPAT_SYS_GETRANDOM 278U
 #define LINUX_COMPAT_SYS_STATX 291U
 
@@ -170,12 +187,26 @@ typedef struct LinuxCompatStatx {
     uint32_t mode;
 } linux_compat_statx_t;
 
+typedef struct LinuxCompatOverlayNode {
+    bool used;
+    bool directory;
+    bool executable;
+    bool dirty;
+    uint64_t inode;
+    uint32_t mode;
+    uint64_t mtime;
+    char path[LINUX_COMPAT_MAX_PATH];
+    uint8_t data[LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE];
+    size_t size;
+} linux_compat_overlay_node_t;
+
 typedef struct LinuxCompatFd {
     bool open;
     const void* node;
     size_t offset;
     uint32_t flags;
     uint32_t fd_flags;
+    bool overlay_node;
 } linux_compat_fd_t;
 
 typedef struct LinuxCompatTimespec {
@@ -214,6 +245,9 @@ typedef struct LinuxCompatRuntime {
     size_t stdout_size;
     bool exited;
     int32_t exit_code;
+    linux_compat_overlay_node_t overlay_nodes[LINUX_COMPAT_MAX_OVERLAY_NODES];
+    uint64_t next_overlay_inode;
+    uint64_t next_overlay_mtime;
     linux_compat_syscall_trace_record_t trace_records[LINUX_COMPAT_MAX_TRACE_RECORDS];
     size_t trace_count;
     bool trace_truncated;
@@ -224,6 +258,7 @@ typedef struct LinuxCompatSyscallRequest {
     int32_t dirfd;
     int32_t fd;
     const char* path;
+    const char* new_path;
     const void* write_buffer;
     void* read_buffer;
     size_t length;

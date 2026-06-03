@@ -157,6 +157,12 @@ OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v
 ## 关键历史节点
 
 - `2026-06-03`
+  - Stage 11 已完成第二个可验证切片：`linux_compat_runtime_t` 现在带 session-local writable
+    rootfs overlay v0，支持 `openat(O_CREAT|O_TRUNC|O_WRONLY)`、`write` / `pwrite64`、
+    `ftruncate`、`fsync` / `fdatasync` / `sync`、`mkdirat`、`unlinkat`、`renameat` /
+    `renameat2`、`newfstatat` / `fstat` / `statx`、目录枚举和 bad path / bad fd / lower
+    readonly guardrail，并同步补齐真实 U-mode ecall 到 Linux compat syscall request 的参数映射；
+    新增 `test-unit-course_os_stage11_linux_compat` 并扩展 `test-unit-trap_dispatch` 固定该合同。
   - Stage 11 已完成首个可验证切片：external asset preflight 现在能区分 Stage 11 required
     tools、gcc toolchain 子资产、optional `rustc`、optional interpreter 和 optional shared
     assets；external rootfs smoke 的 direct `git -h` fallback 已对齐 Stage 10 当前合同；
@@ -213,17 +219,19 @@ OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v
 - `/proc` 第三阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
 - Stage 10 只证明 OSComp help-run 基线、`git -h` / `git help` 直接 fallback real-exec、
   builtin provider 缺 `vim` / `gcc` / `rustc` 资产时的 fail-closed 诊断，以及 dynamic-loader
-  v0 / 最小 syscall 的受限门禁；当前仍不支持完整 testsuits-for-oskernel、网络
+  v0 / 最小 syscall 的受限门禁。Stage 11 当前仅新增 session-local writable overlay v0，
+  尚未把 cwd、relative path、shell workflow、process / wait / exec 和 TTY 串成端到端工作流；
+  当前仍不支持完整 testsuits-for-oskernel、网络
   `git clone/push/pull`、`git init/add/commit/log`、交互式 `vim hello.c`、`gcc hello.c &&
   ./a.out`、`rustc helloworld.rs && ./helloworld`、完整 `execve` / `wait4` / `futex` /
-  signal、完整 TTY 或 rootfs 写语义。
+  signal 或完整 TTY。
 - 课程级 ELF catalog、课程 syscall ABI、RAMFS、固定小进程表、教学 COW 和课程 shell 仍不能直接
   声明为 Linux ABI 兼容层；Linux ABI 扩展必须继续走旁路 `linux_compat_*` 模块和进程 ABI 分流。
 
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. 继续执行 [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)，下一刀从任务 2 writable rootfs overlay v0 开始，最终目标仍是收口 `git init/add/commit/log`、`vim hello.c`、`gcc hello.c && ./a.out`。
+2. 继续执行 [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)，下一刀从任务 3 cwd、relative path 和 `course-os> ` workflow shell 开始，最终目标仍是收口 `git init/add/commit/log`、`vim hello.c`、`gcc hello.c && ./a.out`。
 3. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11。
 4. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
 5. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补能力，不直接改大 `course_*` 教学模块；AI/NPU、JIT/DBT 或 Pipeline-aware 调度继续作为独立后续方向。

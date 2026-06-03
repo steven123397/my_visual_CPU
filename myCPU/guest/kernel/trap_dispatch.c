@@ -114,16 +114,20 @@ static void build_linux_compat_request(const trap_frame_t* frame,
     request->dirfd = frame != NULL ? (int32_t)frame->a0 : 0;
     request->fd = frame != NULL ? (int32_t)frame->a0 : 0;
     request->path = frame != NULL ? (const char*)frame->a1 : 0;
+    request->new_path = 0;
     request->write_buffer = frame != NULL ? (const void*)frame->a1 : 0;
     request->read_buffer = frame != NULL ? (void*)frame->a1 : 0;
     request->length = frame != NULL ? (size_t)frame->a2 : 0;
     request->offset = frame != NULL ? frame->a1 : 0;
     request->stat = frame != NULL ? (linux_compat_stat_t*)frame->a2 : 0;
+    request->statx = 0;
     request->dirents = frame != NULL ? (linux_compat_dirent_t*)frame->a1 : 0;
     request->dirent_capacity = frame != NULL ? (size_t)frame->a2 : 0;
     request->addr = frame != NULL ? frame->a0 : 0;
     request->prot = frame != NULL ? (uint32_t)frame->a2 : 0;
     request->flags = frame != NULL ? (uint32_t)frame->a3 : 0;
+    request->command = 0;
+    request->arg = 0;
 
     if (frame == NULL) {
         return;
@@ -186,10 +190,36 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         request->length = (size_t)frame->a2;
         request->offset = frame->a3;
         break;
+    case LINUX_COMPAT_SYS_PWRITE64:
+        request->fd = (int32_t)frame->a0;
+        request->write_buffer = (const void*)frame->a1;
+        request->length = (size_t)frame->a2;
+        request->offset = frame->a3;
+        break;
+    case LINUX_COMPAT_SYS_FTRUNCATE:
+        request->fd = (int32_t)frame->a0;
+        request->length = (size_t)frame->a1;
+        break;
     case LINUX_COMPAT_SYS_OPENAT:
         request->dirfd = (int32_t)frame->a0;
         request->path = (const char*)frame->a1;
         request->flags = (uint32_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_MKDIRAT:
+    case LINUX_COMPAT_SYS_UNLINKAT:
+        request->dirfd = (int32_t)frame->a0;
+        request->path = (const char*)frame->a1;
+        request->flags = (uint32_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_RENAMEAT:
+    case LINUX_COMPAT_SYS_RENAMEAT2:
+        request->dirfd = (int32_t)frame->a0;
+        request->path = (const char*)frame->a1;
+        request->command = (uint32_t)frame->a2;
+        request->new_path = (const char*)frame->a3;
+        request->flags = frame->a7 == LINUX_COMPAT_SYS_RENAMEAT2
+                             ? (uint32_t)frame->a4
+                             : 0;
         break;
     case LINUX_COMPAT_SYS_FACCESSAT:
         request->dirfd = (int32_t)frame->a0;
@@ -207,6 +237,10 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         request->dirfd = (int32_t)frame->a0;
         request->path = (const char*)frame->a1;
         request->stat = (linux_compat_stat_t*)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_FSTAT:
+        request->fd = (int32_t)frame->a0;
+        request->stat = (linux_compat_stat_t*)frame->a1;
         break;
     case LINUX_COMPAT_SYS_STATX:
         request->dirfd = (int32_t)frame->a0;

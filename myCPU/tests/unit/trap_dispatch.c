@@ -77,6 +77,10 @@ static bool g_user_crash_handler_result = true;
 
 static void reset_stub_state(void);
 static int fail(const char* message);
+static int dispatch_linux_compat_frame(trap_context_t* trap_context,
+                                       trap_frame_t* trap_frame,
+                                       uint64_t epc,
+                                       const char* panic_message);
 static int test_install_standard_user_runtime_policies(void);
 static int test_dispatch_page_fault_and_custom_handlers(void);
 static int test_dispatch_user_ecall_resume_policy(void);
@@ -304,6 +308,24 @@ static void reset_stub_state(void) {
 static int fail(const char* message) {
     fprintf(stderr, "%s\n", message);
     return 1;
+}
+
+static int dispatch_linux_compat_frame(trap_context_t* trap_context,
+                                       trap_frame_t* trap_frame,
+                                       uint64_t epc,
+                                       const char* panic_message) {
+    g_active_trap_context = trap_context;
+    g_scause = RISCV_EXC_ECALL_FROM_U;
+    g_sepc = epc;
+    g_stval = 0;
+    g_sstatus = RISCV_SSTATUS_SPIE;
+    if (setjmp(g_panic_env) != 0) {
+        return fail(panic_message);
+    }
+    g_panic_armed = true;
+    supervisor_trap_dispatch_with_frame(trap_frame);
+    g_panic_armed = false;
+    return 0;
 }
 
 static void stub_interrupt_handler(uint64_t cause, void* context) {
@@ -581,17 +603,14 @@ static int test_dispatch_linux_compat_ecall_policy(void) {
     trap_frame.a2 = 5U;
     trap_frame.a7 = LINUX_COMPAT_SYS_WRITE;
     g_linux_compat_dispatch_value = 5;
-    g_active_trap_context = &trap_context;
-    g_scause = RISCV_EXC_ECALL_FROM_U;
-    g_sepc = 0x7000;
-    g_stval = 0;
-    g_sstatus = RISCV_SSTATUS_SPIE;
-    if (setjmp(g_panic_env) != 0) {
-        return fail("did not expect panic during linux compat write ecall dispatch");
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7000,
+            "did not expect panic during linux compat write ecall dispatch") !=
+        0) {
+        return 1;
     }
-    g_panic_armed = true;
-    supervisor_trap_dispatch_with_frame(&trap_frame);
-    g_panic_armed = false;
 
     if (g_linux_compat_dispatch_calls != 1 ||
         g_last_linux_compat_runtime != &runtime ||
@@ -606,6 +625,120 @@ static int test_dispatch_linux_compat_ecall_policy(void) {
         g_write_sepc_calls != 1 ||
         g_last_written_sepc != 0x7004U) {
         return fail("expected linux compat write ecall to return to U-mode next pc");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    trap_frame.a0 = 4U;
+    trap_frame.a1 = 0x2100U;
+    trap_frame.a2 = 12U;
+    trap_frame.a3 = 0x33U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_PWRITE64;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7020,
+            "did not expect panic during linux compat pwrite64 ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_PWRITE64 ||
+        g_last_linux_compat_request.fd != 4 ||
+        g_last_linux_compat_request.write_buffer != (const void*)0x2100U ||
+        g_last_linux_compat_request.length != 12U ||
+        g_last_linux_compat_request.offset != 0x33U) {
+        return fail("expected linux compat pwrite64 ecall to preserve offset argument");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    trap_frame.a0 = 4U;
+    trap_frame.a1 = 64U;
+    trap_frame.a2 = 0;
+    trap_frame.a3 = 0;
+    trap_frame.a7 = LINUX_COMPAT_SYS_FTRUNCATE;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7030,
+            "did not expect panic during linux compat ftruncate ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_FTRUNCATE ||
+        g_last_linux_compat_request.fd != 4 ||
+        g_last_linux_compat_request.length != 64U) {
+        return fail("expected linux compat ftruncate ecall to preserve length argument");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    trap_frame.a0 = 5U;
+    trap_frame.a1 = 0x2200U;
+    trap_frame.a2 = 0;
+    trap_frame.a3 = 0;
+    trap_frame.a7 = LINUX_COMPAT_SYS_FSTAT;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7040,
+            "did not expect panic during linux compat fstat ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_FSTAT ||
+        g_last_linux_compat_request.fd != 5 ||
+        g_last_linux_compat_request.stat != (linux_compat_stat_t*)0x2200U) {
+        return fail("expected linux compat fstat ecall to preserve stat buffer argument");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    trap_frame.a0 = LINUX_COMPAT_AT_FDCWD;
+    trap_frame.a1 = 0x2300U;
+    trap_frame.a2 = 0755U;
+    trap_frame.a3 = 0;
+    trap_frame.a7 = LINUX_COMPAT_SYS_MKDIRAT;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7050,
+            "did not expect panic during linux compat mkdirat ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_MKDIRAT ||
+        g_last_linux_compat_request.dirfd != LINUX_COMPAT_AT_FDCWD ||
+        g_last_linux_compat_request.path != (const char*)0x2300U ||
+        g_last_linux_compat_request.flags != 0755U) {
+        return fail("expected linux compat mkdirat ecall to preserve mode argument");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    trap_frame.a0 = LINUX_COMPAT_AT_FDCWD;
+    trap_frame.a1 = 0x2400U;
+    trap_frame.a2 = LINUX_COMPAT_AT_FDCWD;
+    trap_frame.a3 = 0x2500U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_RENAMEAT;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7060,
+            "did not expect panic during linux compat renameat ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_RENAMEAT ||
+        g_last_linux_compat_request.dirfd != LINUX_COMPAT_AT_FDCWD ||
+        g_last_linux_compat_request.path != (const char*)0x2400U ||
+        g_last_linux_compat_request.new_path != (const char*)0x2500U) {
+        return fail("expected linux compat renameat ecall to preserve new path argument");
     }
 
     g_clear_sstatus_bits_calls = 0;

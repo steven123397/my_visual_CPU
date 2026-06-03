@@ -323,6 +323,14 @@ static const char* linux_compat_syscall_name(uint64_t number) {
             return "fcntl";
         case LINUX_COMPAT_SYS_IOCTL:
             return "ioctl";
+        case LINUX_COMPAT_SYS_MKDIRAT:
+            return "mkdirat";
+        case LINUX_COMPAT_SYS_UNLINKAT:
+            return "unlinkat";
+        case LINUX_COMPAT_SYS_RENAMEAT:
+            return "renameat";
+        case LINUX_COMPAT_SYS_FTRUNCATE:
+            return "ftruncate";
         case LINUX_COMPAT_SYS_FACCESSAT:
             return "faccessat";
         case LINUX_COMPAT_SYS_OPENAT:
@@ -341,10 +349,20 @@ static const char* linux_compat_syscall_name(uint64_t number) {
             return "writev";
         case LINUX_COMPAT_SYS_PREAD64:
             return "pread64";
+        case LINUX_COMPAT_SYS_PWRITE64:
+            return "pwrite64";
         case LINUX_COMPAT_SYS_READLINKAT:
             return "readlinkat";
         case LINUX_COMPAT_SYS_NEWFSTATAT:
             return "newfstatat";
+        case LINUX_COMPAT_SYS_FSTAT:
+            return "fstat";
+        case LINUX_COMPAT_SYS_SYNC:
+            return "sync";
+        case LINUX_COMPAT_SYS_FSYNC:
+            return "fsync";
+        case LINUX_COMPAT_SYS_FDATASYNC:
+            return "fdatasync";
         case LINUX_COMPAT_SYS_CLOCK_GETTIME:
             return "clock_gettime";
         case LINUX_COMPAT_SYS_EXIT:
@@ -371,6 +389,8 @@ static const char* linux_compat_syscall_name(uint64_t number) {
             return "mprotect";
         case LINUX_COMPAT_SYS_PRLIMIT64:
             return "prlimit64";
+        case LINUX_COMPAT_SYS_RENAMEAT2:
+            return "renameat2";
         case LINUX_COMPAT_SYS_GETRANDOM:
             return "getrandom";
         case LINUX_COMPAT_SYS_STATX:
@@ -929,6 +949,7 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
         runtime->fds[i].offset = 0;
         runtime->fds[i].flags = LINUX_COMPAT_O_RDONLY;
         runtime->fds[i].fd_flags = 0;
+        runtime->fds[i].overlay_node = false;
     }
     runtime->program_break = 0x8000000U;
     runtime->next_mmap = 0x10000000U;
@@ -936,6 +957,21 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
     runtime->stdout_size = 0;
     runtime->exited = false;
     runtime->exit_code = 0;
+    runtime->next_overlay_inode = 0x100000U;
+    runtime->next_overlay_mtime = 1U;
+    for (i = 0; i < LINUX_COMPAT_MAX_OVERLAY_NODES; ++i) {
+        runtime->overlay_nodes[i].used = false;
+        runtime->overlay_nodes[i].directory = false;
+        runtime->overlay_nodes[i].executable = false;
+        runtime->overlay_nodes[i].dirty = false;
+        runtime->overlay_nodes[i].inode = 0;
+        runtime->overlay_nodes[i].mode = 0;
+        runtime->overlay_nodes[i].mtime = 0;
+        runtime->overlay_nodes[i].path[0] = '\0';
+        runtime->overlay_nodes[i].size = 0;
+        zero_bytes(runtime->overlay_nodes[i].data,
+                   sizeof(runtime->overlay_nodes[i].data));
+    }
     runtime->trace_count = 0;
     runtime->trace_truncated = false;
     for (i = 0; i < LINUX_COMPAT_MAX_TRACE_RECORDS; ++i) {
@@ -947,17 +983,252 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
     }
 }
 
-static const linux_compat_rootfs_node_t* fd_node(
+static uint32_t linux_compat_file_mode(bool executable) {
+    uint32_t mode = LINUX_COMPAT_S_IFREG | LINUX_COMPAT_S_IRUSR |
+                    LINUX_COMPAT_S_IWUSR | LINUX_COMPAT_S_IRGRP |
+                    LINUX_COMPAT_S_IROTH;
+
+    if (executable) {
+        mode |= LINUX_COMPAT_S_IXUSR | LINUX_COMPAT_S_IXGRP |
+                LINUX_COMPAT_S_IXOTH;
+    }
+    return mode;
+}
+
+static uint32_t linux_compat_dir_mode(void) {
+    return LINUX_COMPAT_S_IFDIR | LINUX_COMPAT_S_IRUSR |
+           LINUX_COMPAT_S_IWUSR | LINUX_COMPAT_S_IXUSR |
+           LINUX_COMPAT_S_IRGRP | LINUX_COMPAT_S_IXGRP |
+           LINUX_COMPAT_S_IROTH | LINUX_COMPAT_S_IXOTH;
+}
+
+static bool linux_compat_open_flags_supported(uint32_t flags) {
+    const uint32_t supported = LINUX_COMPAT_O_ACCMODE | LINUX_COMPAT_O_CREAT |
+                               LINUX_COMPAT_O_TRUNC |
+                               LINUX_COMPAT_O_NONBLOCK;
+    return (flags & ~supported) == 0U &&
+           (flags & LINUX_COMPAT_O_ACCMODE) <= LINUX_COMPAT_O_RDWR;
+}
+
+static bool linux_compat_flags_writable(uint32_t flags) {
+    const uint32_t access = flags & LINUX_COMPAT_O_ACCMODE;
+
+    return access == LINUX_COMPAT_O_WRONLY || access == LINUX_COMPAT_O_RDWR;
+}
+
+static bool linux_compat_flags_readable(uint32_t flags) {
+    const uint32_t access = flags & LINUX_COMPAT_O_ACCMODE;
+
+    return access == LINUX_COMPAT_O_RDONLY || access == LINUX_COMPAT_O_RDWR;
+}
+
+static bool linux_compat_split_parent(const char* path,
+                                      char* out_parent,
+                                      size_t parent_size,
+                                      char* out_name,
+                                      size_t name_size) {
+    size_t len = str_len(path);
+    size_t slash = 0;
+    size_t i = 0;
+
+    if (path == 0 || path[0] != '/' || len <= 1U ||
+        path[len - 1U] == '/' || out_parent == 0 || parent_size == 0U ||
+        out_name == 0 || name_size == 0U) {
+        return false;
+    }
+    for (i = 1U; i < len; ++i) {
+        if (path[i] == '/') {
+            slash = i;
+        }
+    }
+    if (slash == 0U) {
+        copy_str(out_parent, parent_size, "/");
+        copy_str(out_name, name_size, path + 1U);
+        return str_len(out_name) != 0U;
+    }
+    if (slash + 1U >= len || slash + 1U >= parent_size ||
+        len - slash > name_size) {
+        return false;
+    }
+    for (i = 0; i < slash; ++i) {
+        out_parent[i] = path[i];
+    }
+    out_parent[slash] = '\0';
+    copy_str(out_name, name_size, path + slash + 1U);
+    return str_len(out_name) != 0U;
+}
+
+static linux_compat_overlay_node_t* find_overlay_node(
     linux_compat_runtime_t* runtime,
-    int32_t fd,
-    linux_compat_trace_t* out_trace,
-    const char* operation) {
-    if (runtime == 0 || fd < 0 || fd >= (int32_t)LINUX_COMPAT_MAX_FDS ||
-        !runtime->fds[fd].open || runtime->fds[fd].node == 0) {
-        set_trace(out_trace, "", 9, operation);
+    const char* path) {
+    size_t i = 0;
+
+    if (runtime == 0 || path == 0) {
         return 0;
     }
-    return (const linux_compat_rootfs_node_t*)runtime->fds[fd].node;
+    for (i = 0; i < LINUX_COMPAT_MAX_OVERLAY_NODES; ++i) {
+        linux_compat_overlay_node_t* node = &runtime->overlay_nodes[i];
+
+        if (node->used && str_eq(node->path, path)) {
+            return node;
+        }
+    }
+    return 0;
+}
+
+static bool path_is_directory(linux_compat_runtime_t* runtime,
+                              const char* path) {
+    linux_compat_overlay_node_t* overlay = find_overlay_node(runtime, path);
+    const linux_compat_rootfs_node_t* lower = 0;
+
+    if (overlay != 0) {
+        return overlay->directory;
+    }
+    lower = find_node(path);
+    return lower != 0 && lower->directory;
+}
+
+static bool path_exists(linux_compat_runtime_t* runtime, const char* path) {
+    return find_overlay_node(runtime, path) != 0 || find_node(path) != 0;
+}
+
+static bool parent_directory_exists(linux_compat_runtime_t* runtime,
+                                    const char* path) {
+    char parent[LINUX_COMPAT_MAX_PATH];
+    char name[LINUX_COMPAT_MAX_PATH];
+
+    if (!linux_compat_split_parent(path,
+                                   parent,
+                                   sizeof(parent),
+                                   name,
+                                   sizeof(name))) {
+        return false;
+    }
+    return path_is_directory(runtime, parent);
+}
+
+static linux_compat_overlay_node_t* alloc_overlay_node(
+    linux_compat_runtime_t* runtime,
+    const char* path,
+    bool directory,
+    uint32_t mode) {
+    size_t i = 0;
+
+    if (runtime == 0 || path == 0 || str_len(path) >= LINUX_COMPAT_MAX_PATH) {
+        return 0;
+    }
+    for (i = 0; i < LINUX_COMPAT_MAX_OVERLAY_NODES; ++i) {
+        linux_compat_overlay_node_t* node = &runtime->overlay_nodes[i];
+
+        if (node->used) {
+            continue;
+        }
+        node->used = true;
+        node->directory = directory;
+        node->executable = (mode & LINUX_COMPAT_S_IXUSR) != 0U;
+        node->dirty = true;
+        node->inode = runtime->next_overlay_inode;
+        runtime->next_overlay_inode += 1U;
+        node->mode = mode;
+        node->mtime = runtime->next_overlay_mtime;
+        runtime->next_overlay_mtime += 1U;
+        copy_str(node->path, sizeof(node->path), path);
+        zero_bytes(node->data, sizeof(node->data));
+        node->size = 0;
+        return node;
+    }
+    return 0;
+}
+
+static void fill_stat_from_overlay(linux_compat_stat_t* stat,
+                                   const linux_compat_overlay_node_t* node) {
+    if (stat == 0) {
+        return;
+    }
+    clear_stat(stat);
+    if (node == 0) {
+        return;
+    }
+    stat->inode = node->inode;
+    stat->mode = node->mode;
+    stat->size = node->directory ? 0U : node->size;
+    stat->directory = node->directory;
+    stat->executable = node->executable;
+}
+
+static linux_compat_result_t linux_compat_stat_path_runtime(
+    linux_compat_runtime_t* runtime,
+    const char* path,
+    linux_compat_stat_t* out_stat,
+    linux_compat_trace_t* out_trace) {
+    linux_compat_overlay_node_t* overlay = find_overlay_node(runtime, path);
+    const linux_compat_rootfs_node_t* lower = 0;
+
+    clear_stat(out_stat);
+    if (overlay != 0) {
+        fill_stat_from_overlay(out_stat, overlay);
+        set_trace(out_trace, path, 0, "linux-compat: stat: overlay");
+        return LINUX_COMPAT_OK;
+    }
+    lower = find_node(path);
+    if (lower == 0) {
+        set_trace(out_trace, path != 0 ? path : "", 2,
+                  "linux-compat: stat: no such file");
+        return LINUX_COMPAT_ERR_NO_SUCH_FILE;
+    }
+    fill_stat_from_node(out_stat, lower);
+    set_trace(out_trace, path, 0, "linux-compat: stat: ok");
+    return LINUX_COMPAT_OK;
+}
+
+static bool fd_is_valid_file(linux_compat_runtime_t* runtime, int32_t fd) {
+    return runtime != 0 && fd >= 3 && fd < (int32_t)LINUX_COMPAT_MAX_FDS &&
+           runtime->fds[fd].open && runtime->fds[fd].node != 0;
+}
+
+static const char* fd_path(linux_compat_runtime_t* runtime, int32_t fd) {
+    if (!fd_is_valid_file(runtime, fd)) {
+        return "";
+    }
+    if (runtime->fds[fd].overlay_node) {
+        return ((const linux_compat_overlay_node_t*)runtime->fds[fd].node)
+            ->path;
+    }
+    return ((const linux_compat_rootfs_node_t*)runtime->fds[fd].node)->path;
+}
+
+static bool fd_is_directory(linux_compat_runtime_t* runtime, int32_t fd) {
+    if (!fd_is_valid_file(runtime, fd)) {
+        return false;
+    }
+    if (runtime->fds[fd].overlay_node) {
+        return ((const linux_compat_overlay_node_t*)runtime->fds[fd].node)
+            ->directory;
+    }
+    return ((const linux_compat_rootfs_node_t*)runtime->fds[fd].node)
+        ->directory;
+}
+
+static size_t fd_size(linux_compat_runtime_t* runtime, int32_t fd) {
+    if (!fd_is_valid_file(runtime, fd)) {
+        return 0;
+    }
+    if (runtime->fds[fd].overlay_node) {
+        return ((const linux_compat_overlay_node_t*)runtime->fds[fd].node)
+            ->size;
+    }
+    return ((const linux_compat_rootfs_node_t*)runtime->fds[fd].node)->size;
+}
+
+static const uint8_t* fd_data(linux_compat_runtime_t* runtime, int32_t fd) {
+    if (!fd_is_valid_file(runtime, fd)) {
+        return 0;
+    }
+    if (runtime->fds[fd].overlay_node) {
+        return ((const linux_compat_overlay_node_t*)runtime->fds[fd].node)
+            ->data;
+    }
+    return ((const linux_compat_rootfs_node_t*)runtime->fds[fd].node)->data;
 }
 
 int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
@@ -967,7 +1238,11 @@ int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
                             linux_compat_trace_t* out_trace) {
     char resolved_path[LINUX_COMPAT_MAX_PATH];
     const char* lookup_path = path;
+    linux_compat_overlay_node_t* overlay = 0;
     const linux_compat_rootfs_node_t* node = 0;
+    const bool create = (flags & LINUX_COMPAT_O_CREAT) != 0U;
+    const bool truncate = (flags & LINUX_COMPAT_O_TRUNC) != 0U;
+    const bool writable = linux_compat_flags_writable(flags);
     size_t i = 0;
 
     if (runtime == 0) {
@@ -993,24 +1268,79 @@ int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
                   "linux-compat: openat: unsupported path base");
         return -22;
     }
-    if (flags != LINUX_COMPAT_O_RDONLY) {
-        set_trace(out_trace, lookup_path, 13,
-                  "linux-compat: openat: readonly rootfs");
-        return -13;
+    if (!linux_compat_open_flags_supported(flags)) {
+        set_trace(out_trace, lookup_path, 22,
+                  "linux-compat: openat: unsupported flags");
+        return -22;
     }
-    node = find_node(lookup_path);
-    if (node == 0) {
+    overlay = find_overlay_node(runtime, lookup_path);
+    node = overlay == 0 ? find_node(lookup_path) : 0;
+    if (overlay == 0 && node == 0 && !create) {
         set_trace(out_trace, lookup_path, 2, "linux-compat: openat: no such file");
         return -2;
+    }
+    if (overlay == 0 && node == 0 && create) {
+        if (!parent_directory_exists(runtime, lookup_path)) {
+            set_trace(out_trace, lookup_path, 2,
+                      "linux-compat: openat: parent missing");
+            return -2;
+        }
+        overlay = alloc_overlay_node(runtime,
+                                     lookup_path,
+                                     false,
+                                     linux_compat_file_mode(false));
+        if (overlay == 0) {
+            set_trace(out_trace, lookup_path, 28,
+                      "linux-compat: openat: overlay full");
+            return -28;
+        }
+    } else if (overlay == 0 && node != 0 && writable) {
+        if (node->directory) {
+            set_trace(out_trace, lookup_path, 21,
+                      "linux-compat: openat: is directory");
+            return -21;
+        }
+        overlay = alloc_overlay_node(runtime,
+                                     lookup_path,
+                                     false,
+                                     node->mode);
+        if (overlay == 0) {
+            set_trace(out_trace, lookup_path, 28,
+                      "linux-compat: openat: overlay full");
+            return -28;
+        }
+        if (!truncate) {
+            overlay->size = node->size < sizeof(overlay->data)
+                                ? node->size
+                                : sizeof(overlay->data);
+            copy_bytes(overlay->data, node->data, overlay->size);
+        }
+    }
+    if (overlay != 0 && overlay->directory && writable) {
+        set_trace(out_trace, lookup_path, 21,
+                  "linux-compat: openat: is directory");
+        return -21;
+    }
+    if (overlay != 0 && truncate) {
+        overlay->size = 0;
+        overlay->dirty = true;
+        overlay->mtime = runtime->next_overlay_mtime;
+        runtime->next_overlay_mtime += 1U;
     }
     for (i = 3U; i < LINUX_COMPAT_MAX_FDS; ++i) {
         if (!runtime->fds[i].open) {
             runtime->fds[i].open = true;
-            runtime->fds[i].node = node;
+            runtime->fds[i].node = overlay != 0 ? (const void*)overlay
+                                                : (const void*)node;
             runtime->fds[i].offset = 0;
             runtime->fds[i].flags = flags;
             runtime->fds[i].fd_flags = 0;
-            set_trace(out_trace, lookup_path, 0, "linux-compat: openat: ok");
+            runtime->fds[i].overlay_node = overlay != 0;
+            set_trace(out_trace,
+                      lookup_path,
+                      0,
+                      overlay != 0 ? "linux-compat: openat: overlay"
+                                   : "linux-compat: openat: ok");
             return (int32_t)i;
         }
     }
@@ -1023,29 +1353,39 @@ int64_t linux_compat_read(linux_compat_runtime_t* runtime,
                           void* buffer,
                           size_t length,
                           linux_compat_trace_t* out_trace) {
-    const linux_compat_rootfs_node_t* node =
-        fd_node(runtime, fd, out_trace, "linux-compat: read: bad fd");
+    const char* path = fd_path(runtime, fd);
+    const size_t node_size = fd_size(runtime, fd);
+    const uint8_t* data = fd_data(runtime, fd);
     size_t available = 0;
     size_t count = 0;
     uint8_t temp[256];
     size_t copied = 0;
 
-    if (node == 0) {
+    if (!fd_is_valid_file(runtime, fd)) {
+        set_trace(out_trace, "", 9, "linux-compat: read: bad fd");
         return -9;
     }
-    if (node->directory) {
-        set_trace(out_trace, node->path, 21, "linux-compat: read: is directory");
+    if (!linux_compat_flags_readable(runtime->fds[fd].flags)) {
+        set_trace(out_trace, path, 9, "linux-compat: read: fd not readable");
+        return -9;
+    }
+    if (fd_is_directory(runtime, fd)) {
+        set_trace(out_trace, path, 21, "linux-compat: read: is directory");
         return -21;
     }
+    if (data == 0) {
+        set_trace(out_trace, path, 9, "linux-compat: read: bad fd");
+        return -9;
+    }
     if (buffer == 0 && length != 0U) {
-        set_trace(out_trace, node->path, 14, "linux-compat: read: bad buffer");
+        set_trace(out_trace, path, 14, "linux-compat: read: bad buffer");
         return -14;
     }
-    if (runtime->fds[fd].offset >= node->size) {
-        set_trace(out_trace, node->path, 0, "linux-compat: read: eof");
+    if (runtime->fds[fd].offset >= node_size) {
+        set_trace(out_trace, path, 0, "linux-compat: read: eof");
         return 0;
     }
-    available = node->size - runtime->fds[fd].offset;
+    available = node_size - runtime->fds[fd].offset;
     count = length < available ? length : available;
     while (copied < count) {
         const size_t chunk = (count - copied) < sizeof(temp)
@@ -1053,19 +1393,19 @@ int64_t linux_compat_read(linux_compat_runtime_t* runtime,
                                  : sizeof(temp);
 
         copy_bytes(temp,
-                   node->data + runtime->fds[fd].offset + copied,
+                   data + runtime->fds[fd].offset + copied,
                    chunk);
         if (!linux_compat_write_result_buffer(runtime,
                                              (uint8_t*)buffer + copied,
                                              temp,
                                              chunk)) {
-            set_trace(out_trace, node->path, 14, "linux-compat: read: bad buffer");
+            set_trace(out_trace, path, 14, "linux-compat: read: bad buffer");
             return -14;
         }
         copied += chunk;
     }
     runtime->fds[fd].offset += count;
-    set_trace(out_trace, node->path, 0, "linux-compat: read: ok");
+    set_trace(out_trace, path, 0, "linux-compat: read: ok");
     return (int64_t)count;
 }
 
@@ -1074,16 +1414,16 @@ int64_t linux_compat_lseek(linux_compat_runtime_t* runtime,
                            int64_t offset,
                            uint32_t whence,
                            linux_compat_trace_t* out_trace) {
-    const linux_compat_rootfs_node_t* node =
-        fd_node(runtime, fd, out_trace, "linux-compat: lseek: bad fd");
+    const char* path = fd_path(runtime, fd);
     int64_t base = 0;
     int64_t next = 0;
 
-    if (node == 0) {
+    if (!fd_is_valid_file(runtime, fd)) {
+        set_trace(out_trace, "", 9, "linux-compat: lseek: bad fd");
         return -9;
     }
-    if (node->directory) {
-        set_trace(out_trace, node->path, 22, "linux-compat: lseek: is directory");
+    if (fd_is_directory(runtime, fd)) {
+        set_trace(out_trace, path, 22, "linux-compat: lseek: is directory");
         return -22;
     }
     if (whence == 0U) {
@@ -1091,18 +1431,18 @@ int64_t linux_compat_lseek(linux_compat_runtime_t* runtime,
     } else if (whence == 1U) {
         base = (int64_t)runtime->fds[fd].offset;
     } else if (whence == 2U) {
-        base = (int64_t)node->size;
+        base = (int64_t)fd_size(runtime, fd);
     } else {
-        set_trace(out_trace, node->path, 22, "linux-compat: lseek: bad whence");
+        set_trace(out_trace, path, 22, "linux-compat: lseek: bad whence");
         return -22;
     }
     next = base + offset;
     if (next < 0) {
-        set_trace(out_trace, node->path, 22, "linux-compat: lseek: bad offset");
+        set_trace(out_trace, path, 22, "linux-compat: lseek: bad offset");
         return -22;
     }
     runtime->fds[fd].offset = (size_t)next;
-    set_trace(out_trace, node->path, 0, "linux-compat: lseek: ok");
+    set_trace(out_trace, path, 0, "linux-compat: lseek: ok");
     return next;
 }
 
@@ -1119,6 +1459,7 @@ int32_t linux_compat_close(linux_compat_runtime_t* runtime,
     runtime->fds[fd].offset = 0;
     runtime->fds[fd].flags = LINUX_COMPAT_O_RDONLY;
     runtime->fds[fd].fd_flags = 0;
+    runtime->fds[fd].overlay_node = false;
     set_trace(out_trace, "", 0, "linux-compat: close: ok");
     return 0;
 }
@@ -1347,13 +1688,75 @@ static int64_t linux_compat_write(linux_compat_runtime_t* runtime,
     const char* bytes = (const char*)buffer;
     size_t i = 0;
 
-    if (runtime == 0 || (fd != 1 && fd != 2)) {
+    if (runtime == 0) {
         set_trace(out_trace, "", 9, "linux-compat: write: bad fd");
         return -9;
     }
     if (buffer == 0 && length != 0U) {
         set_trace(out_trace, "", 14, "linux-compat: write: bad buffer");
         return -14;
+    }
+    if (fd >= 3) {
+        linux_compat_overlay_node_t* node = 0;
+        size_t end = 0;
+
+        if (!fd_is_valid_file(runtime, fd)) {
+            set_trace(out_trace, "", 9, "linux-compat: write: bad fd");
+            return -9;
+        }
+        if (!runtime->fds[fd].overlay_node ||
+            !linux_compat_flags_writable(runtime->fds[fd].flags)) {
+            set_trace(out_trace, fd_path(runtime, fd), 9,
+                      "linux-compat: write: fd not writable");
+            return -9;
+        }
+        node = (linux_compat_overlay_node_t*)runtime->fds[fd].node;
+        if (node->directory) {
+            set_trace(out_trace, node->path, 21,
+                      "linux-compat: write: is directory");
+            return -21;
+        }
+        if (runtime->fds[fd].offset >
+                (size_t)LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE ||
+            length > (size_t)LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE -
+                         runtime->fds[fd].offset) {
+            set_trace(out_trace, node->path, 28,
+                      "linux-compat: write: overlay file full");
+            return -28;
+        }
+        end = runtime->fds[fd].offset + length;
+        while (i < length) {
+            uint8_t chunk[64];
+            const size_t chunk_size =
+                (length - i) < sizeof(chunk) ? (length - i) : sizeof(chunk);
+
+            if (!linux_compat_read_user_buffer(runtime,
+                                               (const uint8_t*)buffer + i,
+                                               chunk,
+                                               chunk_size)) {
+                set_trace(out_trace, node->path, 14,
+                          "linux-compat: write: bad user buffer");
+                return -14;
+            }
+            copy_bytes(node->data + runtime->fds[fd].offset + i,
+                       chunk,
+                       chunk_size);
+            i += chunk_size;
+        }
+        runtime->fds[fd].offset = end;
+        if (end > node->size) {
+            node->size = end;
+        }
+        node->dirty = true;
+        node->mtime = runtime->next_overlay_mtime;
+        runtime->next_overlay_mtime += 1U;
+        set_trace(out_trace, node->path, 0,
+                  "linux-compat: write: overlay");
+        return (int64_t)length;
+    }
+    if (fd != 1 && fd != 2) {
+        set_trace(out_trace, "", 9, "linux-compat: write: bad fd");
+        return -9;
     }
     while (i < length) {
         char chunk[64];
@@ -1393,21 +1796,21 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
                                        linux_compat_dirent_t* dirents,
                                        size_t capacity,
                                        linux_compat_trace_t* out_trace) {
-    const linux_compat_rootfs_node_t* node =
-        fd_node(runtime, fd, out_trace, "linux-compat: getdents64: bad fd");
+    const char* path = fd_path(runtime, fd);
     size_t i = 0;
     size_t count = 0;
 
-    if (node == 0) {
+    if (!fd_is_valid_file(runtime, fd)) {
+        set_trace(out_trace, "", 9, "linux-compat: getdents64: bad fd");
         return -9;
     }
-    if (!node->directory) {
-        set_trace(out_trace, node->path, 20,
+    if (!fd_is_directory(runtime, fd)) {
+        set_trace(out_trace, path, 20,
                   "linux-compat: getdents64: not directory");
         return -20;
     }
     if (dirents == 0 || capacity == 0U) {
-        set_trace(out_trace, node->path, 22,
+        set_trace(out_trace, path, 22,
                   "linux-compat: getdents64: bad buffer");
         return -22;
     }
@@ -1420,8 +1823,8 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
         if (count >= capacity) {
             break;
         }
-        if (child == 0 ||
-            !copy_basename_if_child(node->path,
+        if (child == 0 || find_overlay_node(runtime, child->path) != 0 ||
+            !copy_basename_if_child(path,
                                     child->path,
                                     name,
                                     sizeof(name))) {
@@ -1437,7 +1840,7 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
                                                       (count * sizeof(record)),
                                                   &record,
                                                   sizeof(record))) {
-                set_trace(out_trace, node->path, 14,
+                set_trace(out_trace, path, 14,
                           "linux-compat: getdents64: bad buffer");
                 return -14;
             }
@@ -1446,7 +1849,41 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
         }
         count += 1U;
     }
-    set_trace(out_trace, node->path, 0, "linux-compat: getdents64: ok");
+    for (i = 0; i < LINUX_COMPAT_MAX_OVERLAY_NODES; ++i) {
+        linux_compat_overlay_node_t* child = &runtime->overlay_nodes[i];
+        char name[LINUX_COMPAT_MAX_PATH];
+        linux_compat_dirent_t record;
+
+        if (count >= capacity) {
+            break;
+        }
+        if (!child->used ||
+            !copy_basename_if_child(path,
+                                    child->path,
+                                    name,
+                                    sizeof(name))) {
+            continue;
+        }
+        record.inode = child->inode;
+        record.type =
+            child->directory ? LINUX_COMPAT_DT_DIR : LINUX_COMPAT_DT_REG;
+        copy_str(record.name, sizeof(record.name), name);
+        if (runtime->vm != 0) {
+            if (!linux_compat_write_result_buffer(runtime,
+                                                  (uint8_t*)dirents +
+                                                      (count * sizeof(record)),
+                                                  &record,
+                                                  sizeof(record))) {
+                set_trace(out_trace, path, 14,
+                          "linux-compat: getdents64: bad buffer");
+                return -14;
+            }
+        } else {
+            dirents[count] = record;
+        }
+        count += 1U;
+    }
+    set_trace(out_trace, path, 0, "linux-compat: getdents64: ok");
     return (int64_t)count;
 }
 
@@ -1564,7 +2001,7 @@ static int64_t linux_compat_faccessat(linux_compat_runtime_t* runtime,
         set_trace(out_trace, "", 14, "linux-compat: faccessat: bad path");
         return -14;
     }
-    if (linux_compat_stat_path(resolved_path, &stat, out_trace) !=
+    if (linux_compat_stat_path_runtime(runtime, resolved_path, &stat, out_trace) !=
         LINUX_COMPAT_OK) {
         set_trace(out_trace, resolved_path, 2,
                   "linux-compat: faccessat: no such file");
@@ -1596,6 +2033,66 @@ static int64_t linux_compat_pread64(linux_compat_runtime_t* runtime,
         set_trace(out_trace, "", 0, "linux-compat: pread64");
     }
     return result;
+}
+
+static int64_t linux_compat_pwrite64(linux_compat_runtime_t* runtime,
+                                     int32_t fd,
+                                     const void* buffer,
+                                     size_t length,
+                                     uint64_t offset,
+                                     linux_compat_trace_t* out_trace) {
+    size_t saved_offset = 0;
+    int64_t result = 0;
+
+    if (!fd_is_valid_file(runtime, fd)) {
+        set_trace(out_trace, "", 9, "linux-compat: pwrite64: bad fd");
+        return -9;
+    }
+    saved_offset = runtime->fds[fd].offset;
+    runtime->fds[fd].offset = (size_t)offset;
+    result = linux_compat_write(runtime, fd, buffer, length, out_trace);
+    runtime->fds[fd].offset = saved_offset;
+    if (result >= 0) {
+        set_trace(out_trace, fd_path(runtime, fd), 0,
+                  "linux-compat: pwrite64");
+    }
+    return result;
+}
+
+static int64_t linux_compat_fstat(linux_compat_runtime_t* runtime,
+                                  int32_t fd,
+                                  linux_compat_stat_t* out_stat,
+                                  linux_compat_trace_t* out_trace) {
+    linux_compat_stat_t stat;
+
+    if (!fd_is_valid_file(runtime, fd)) {
+        set_trace(out_trace, "", 9, "linux-compat: fstat: bad fd");
+        return -9;
+    }
+    if (out_stat == 0) {
+        set_trace(out_trace, fd_path(runtime, fd), 14,
+                  "linux-compat: fstat: bad buffer");
+        return -14;
+    }
+    if (runtime->fds[fd].overlay_node) {
+        fill_stat_from_overlay(
+            &stat,
+            (const linux_compat_overlay_node_t*)runtime->fds[fd].node);
+    } else {
+        fill_stat_from_node(
+            &stat,
+            (const linux_compat_rootfs_node_t*)runtime->fds[fd].node);
+    }
+    if (!linux_compat_write_result_buffer(runtime,
+                                          out_stat,
+                                          &stat,
+                                          sizeof(stat))) {
+        set_trace(out_trace, fd_path(runtime, fd), 14,
+                  "linux-compat: fstat: bad buffer");
+        return -14;
+    }
+    set_trace(out_trace, fd_path(runtime, fd), 0, "linux-compat: fstat");
+    return 0;
 }
 
 static int64_t linux_compat_writev(linux_compat_runtime_t* runtime,
@@ -1649,7 +2146,7 @@ static int64_t linux_compat_statx(linux_compat_runtime_t* runtime,
         set_trace(out_trace, "", 14, "linux-compat: statx: bad path");
         return -14;
     }
-    if (linux_compat_stat_path(resolved_path, &stat, out_trace) !=
+    if (linux_compat_stat_path_runtime(runtime, resolved_path, &stat, out_trace) !=
         LINUX_COMPAT_OK) {
         set_trace(out_trace, resolved_path, 2,
                   "linux-compat: statx: no such file");
@@ -1670,6 +2167,210 @@ static int64_t linux_compat_statx(linux_compat_runtime_t* runtime,
         return -14;
     }
     set_trace(out_trace, resolved_path, 0, "linux-compat: statx");
+    return 0;
+}
+
+static int64_t linux_compat_mkdirat(linux_compat_runtime_t* runtime,
+                                    int32_t dirfd,
+                                    const char* path,
+                                    uint32_t mode,
+                                    linux_compat_trace_t* out_trace) {
+    char resolved_path[LINUX_COMPAT_MAX_PATH];
+    linux_compat_overlay_node_t* node = 0;
+
+    (void)mode;
+    if (dirfd != LINUX_COMPAT_AT_FDCWD) {
+        set_trace(out_trace, path != 0 ? path : "", 22,
+                  "linux-compat: mkdirat: unsupported path base");
+        return -22;
+    }
+    if (!linux_compat_copy_in_path(runtime,
+                                   path,
+                                   resolved_path,
+                                   sizeof(resolved_path))) {
+        set_trace(out_trace, "", 14, "linux-compat: mkdirat: bad path");
+        return -14;
+    }
+    if (resolved_path[0] != '/') {
+        set_trace(out_trace, resolved_path, 22,
+                  "linux-compat: mkdirat: unsupported path base");
+        return -22;
+    }
+    if (path_exists(runtime, resolved_path)) {
+        set_trace(out_trace, resolved_path, 17,
+                  "linux-compat: mkdirat: exists");
+        return -17;
+    }
+    if (!parent_directory_exists(runtime, resolved_path)) {
+        set_trace(out_trace, resolved_path, 2,
+                  "linux-compat: mkdirat: parent missing");
+        return -2;
+    }
+    node = alloc_overlay_node(runtime,
+                              resolved_path,
+                              true,
+                              linux_compat_dir_mode());
+    if (node == 0) {
+        set_trace(out_trace, resolved_path, 28,
+                  "linux-compat: mkdirat: overlay full");
+        return -28;
+    }
+    set_trace(out_trace, resolved_path, 0, "linux-compat: mkdirat");
+    return 0;
+}
+
+static int64_t linux_compat_unlinkat(linux_compat_runtime_t* runtime,
+                                     int32_t dirfd,
+                                     const char* path,
+                                     linux_compat_trace_t* out_trace) {
+    char resolved_path[LINUX_COMPAT_MAX_PATH];
+    linux_compat_overlay_node_t* overlay = 0;
+    const linux_compat_rootfs_node_t* lower = 0;
+
+    if (dirfd != LINUX_COMPAT_AT_FDCWD) {
+        set_trace(out_trace, path != 0 ? path : "", 22,
+                  "linux-compat: unlinkat: unsupported path base");
+        return -22;
+    }
+    if (!linux_compat_copy_in_path(runtime,
+                                   path,
+                                   resolved_path,
+                                   sizeof(resolved_path))) {
+        set_trace(out_trace, "", 14, "linux-compat: unlinkat: bad path");
+        return -14;
+    }
+    overlay = find_overlay_node(runtime, resolved_path);
+    if (overlay != 0) {
+        if (overlay->directory) {
+            set_trace(out_trace, resolved_path, 21,
+                      "linux-compat: unlinkat: is directory");
+            return -21;
+        }
+        overlay->used = false;
+        overlay->dirty = true;
+        set_trace(out_trace, resolved_path, 0, "linux-compat: unlinkat");
+        return 0;
+    }
+    lower = find_node(resolved_path);
+    if (lower != 0) {
+        set_trace(out_trace, resolved_path, 30,
+                  "linux-compat: unlinkat: readonly lower");
+        return -30;
+    }
+    set_trace(out_trace, resolved_path, 2,
+              "linux-compat: unlinkat: no such file");
+    return -2;
+}
+
+static int64_t linux_compat_renameat(linux_compat_runtime_t* runtime,
+                                     int32_t dirfd,
+                                     const char* old_path,
+                                     const char* new_path,
+                                     linux_compat_trace_t* out_trace) {
+    char old_resolved[LINUX_COMPAT_MAX_PATH];
+    char new_resolved[LINUX_COMPAT_MAX_PATH];
+    linux_compat_overlay_node_t* source = 0;
+    linux_compat_overlay_node_t* target = 0;
+
+    if (dirfd != LINUX_COMPAT_AT_FDCWD) {
+        set_trace(out_trace, old_path != 0 ? old_path : "", 22,
+                  "linux-compat: renameat: unsupported path base");
+        return -22;
+    }
+    if (!linux_compat_copy_in_path(runtime,
+                                   old_path,
+                                   old_resolved,
+                                   sizeof(old_resolved)) ||
+        !linux_compat_copy_in_path(runtime,
+                                   new_path,
+                                   new_resolved,
+                                   sizeof(new_resolved))) {
+        set_trace(out_trace, "", 14, "linux-compat: renameat: bad path");
+        return -14;
+    }
+    if (old_resolved[0] != '/' || new_resolved[0] != '/') {
+        set_trace(out_trace, old_resolved, 22,
+                  "linux-compat: renameat: unsupported path base");
+        return -22;
+    }
+    source = find_overlay_node(runtime, old_resolved);
+    if (source == 0) {
+        if (find_node(old_resolved) != 0) {
+            set_trace(out_trace, old_resolved, 30,
+                      "linux-compat: renameat: readonly lower");
+            return -30;
+        }
+        set_trace(out_trace, old_resolved, 2,
+                  "linux-compat: renameat: no such file");
+        return -2;
+    }
+    if (!parent_directory_exists(runtime, new_resolved)) {
+        set_trace(out_trace, new_resolved, 2,
+                  "linux-compat: renameat: parent missing");
+        return -2;
+    }
+    if (find_node(new_resolved) != 0 && find_overlay_node(runtime, new_resolved) == 0) {
+        set_trace(out_trace, new_resolved, 30,
+                  "linux-compat: renameat: readonly lower target");
+        return -30;
+    }
+    target = find_overlay_node(runtime, new_resolved);
+    if (target != 0 && target != source) {
+        target->used = false;
+    }
+    copy_str(source->path, sizeof(source->path), new_resolved);
+    source->dirty = true;
+    source->mtime = runtime->next_overlay_mtime;
+    runtime->next_overlay_mtime += 1U;
+    set_trace(out_trace, new_resolved, 0, "linux-compat: renameat");
+    return 0;
+}
+
+static int64_t linux_compat_ftruncate(linux_compat_runtime_t* runtime,
+                                      int32_t fd,
+                                      size_t length,
+                                      linux_compat_trace_t* out_trace) {
+    linux_compat_overlay_node_t* node = 0;
+
+    if (!fd_is_valid_file(runtime, fd) || !runtime->fds[fd].overlay_node ||
+        !linux_compat_flags_writable(runtime->fds[fd].flags)) {
+        set_trace(out_trace, "", 9, "linux-compat: ftruncate: bad fd");
+        return -9;
+    }
+    node = (linux_compat_overlay_node_t*)runtime->fds[fd].node;
+    if (node->directory) {
+        set_trace(out_trace, node->path, 22,
+                  "linux-compat: ftruncate: is directory");
+        return -22;
+    }
+    if (length > LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE) {
+        set_trace(out_trace, node->path, 27,
+                  "linux-compat: ftruncate: too large");
+        return -27;
+    }
+    if (length > node->size) {
+        zero_bytes(node->data + node->size, length - node->size);
+    }
+    node->size = length;
+    if (runtime->fds[fd].offset > length) {
+        runtime->fds[fd].offset = length;
+    }
+    node->dirty = true;
+    node->mtime = runtime->next_overlay_mtime;
+    runtime->next_overlay_mtime += 1U;
+    set_trace(out_trace, node->path, 0, "linux-compat: ftruncate");
+    return 0;
+}
+
+static int64_t linux_compat_sync_fd(linux_compat_runtime_t* runtime,
+                                    int32_t fd,
+                                    linux_compat_trace_t* out_trace,
+                                    const char* operation) {
+    if (!fd_is_valid_file(runtime, fd)) {
+        set_trace(out_trace, "", 9, operation);
+        return -9;
+    }
+    set_trace(out_trace, fd_path(runtime, fd), 0, operation);
     return 0;
 }
 
@@ -1789,7 +2490,10 @@ linux_compat_result_t linux_compat_syscall_dispatch(
             append_syscall_trace_record(runtime, request, value, out_trace);
             return LINUX_COMPAT_OK;
         }
-        result = linux_compat_stat_path(resolved_path, &stat_value, out_trace);
+        result = linux_compat_stat_path_runtime(runtime,
+                                                resolved_path,
+                                                &stat_value,
+                                                out_trace);
         if (result == LINUX_COMPAT_OK &&
             !linux_compat_write_result_buffer(runtime,
                                               request->stat,
@@ -1831,13 +2535,36 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                                    request->command,
                                    request->arg,
                                    out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_MKDIRAT) {
+        value = linux_compat_mkdirat(runtime,
+                                     request->dirfd,
+                                     request->path,
+                                     request->flags,
+                                     out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_UNLINKAT) {
+        value = linux_compat_unlinkat(runtime,
+                                      request->dirfd,
+                                      request->path,
+                                      out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_RENAMEAT ||
+               request->number == LINUX_COMPAT_SYS_RENAMEAT2) {
+        value = linux_compat_renameat(runtime,
+                                      request->dirfd,
+                                      request->path,
+                                      request->new_path,
+                                      out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_FTRUNCATE) {
+        value = linux_compat_ftruncate(runtime,
+                                       request->fd,
+                                       request->length,
+                                       out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_FACCESSAT) {
         value = linux_compat_faccessat(runtime, request->path, out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_OPENAT) {
         value = linux_compat_openat(runtime,
                                     request->dirfd,
                                     request->path,
-                                    LINUX_COMPAT_O_RDONLY,
+                                    request->flags,
                                     out_trace);
         if (response != 0) {
             response->value = value;
@@ -1863,6 +2590,18 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                                      request->length,
                                      request->offset,
                                      out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_PWRITE64) {
+        value = linux_compat_pwrite64(runtime,
+                                      request->fd,
+                                      request->write_buffer,
+                                      request->length,
+                                      request->offset,
+                                      out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_FSTAT) {
+        value = linux_compat_fstat(runtime,
+                                   request->fd,
+                                   request->stat,
+                                   out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_CLOSE) {
         value = linux_compat_close(runtime, request->fd, out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_LSEEK) {
@@ -1889,6 +2628,19 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                                     request->write_buffer,
                                     request->length,
                                     out_trace);
+    } else if (request->number == LINUX_COMPAT_SYS_SYNC) {
+        value = 0;
+        set_trace(out_trace, "", 0, "linux-compat: sync");
+    } else if (request->number == LINUX_COMPAT_SYS_FSYNC) {
+        value = linux_compat_sync_fd(runtime,
+                                     request->fd,
+                                     out_trace,
+                                     "linux-compat: fsync");
+    } else if (request->number == LINUX_COMPAT_SYS_FDATASYNC) {
+        value = linux_compat_sync_fd(runtime,
+                                     request->fd,
+                                     out_trace,
+                                     "linux-compat: fdatasync");
     } else if (request->number == LINUX_COMPAT_SYS_READLINKAT) {
         value = linux_compat_readlinkat(runtime,
                                         request->path,
