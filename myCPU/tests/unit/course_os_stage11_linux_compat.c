@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../../guest/include/course_shell.h"
 #include "../../guest/include/linux_compat.h"
 
 static int fail(const char* message) {
@@ -92,6 +93,10 @@ static bool dirents_include(const linux_compat_dirent_t* dirents,
         }
     }
     return false;
+}
+
+static bool contains(const char* haystack, const char* needle) {
+    return haystack != 0 && needle != 0 && strstr(haystack, needle) != 0;
 }
 
 static int test_create_write_lseek_readback_and_stat(void) {
@@ -371,11 +376,184 @@ static int test_bad_path_bad_fd_and_lower_guardrails(void) {
     return 0;
 }
 
+static int test_cwd_relative_paths_and_dot_slash(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_stat_t stat;
+    char readback[8] = {0};
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+    if (!linux_compat_runtime_set_cwd(&runtime, "/repo")) {
+        return fail("expected runtime cwd set to accept absolute working directory");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/repo";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected mkdirat to create cwd directory");
+    }
+
+    fd = open_path(&runtime,
+                   "hello.c",
+                   LINUX_COMPAT_O_CREAT | LINUX_COMPAT_O_TRUNC |
+                       LINUX_COMPAT_O_WRONLY,
+                   &trace);
+    if (fd < 3 ||
+        write_fd(&runtime, fd, "hello", 5U, &trace) != 5 ||
+        linux_compat_close(&runtime, fd, &trace) != 0) {
+        return fail("expected relative openat to resolve under runtime cwd");
+    }
+
+    if (stat_path(&runtime, "/repo/hello.c", &stat, &trace) != 0 ||
+        stat.size != 5U ||
+        stat_path(&runtime, "hello.c", &stat, &trace) != 0 ||
+        stat.size != 5U) {
+        return fail("expected relative stat to see cwd overlay file");
+    }
+
+    fd = open_path(&runtime, "./hello.c", LINUX_COMPAT_O_RDONLY, &trace);
+    if (fd < 3 ||
+        linux_compat_read(&runtime, fd, readback, sizeof(readback), &trace) !=
+            5 ||
+        memcmp(readback, "hello", 5U) != 0) {
+        return fail("expected ./ path to resolve under runtime cwd");
+    }
+
+    return 0;
+}
+
+static int test_course_shell_minimal_and_chain(void) {
+    static course_shell_t shell;
+    char out[512];
+
+    course_shell_init(&shell);
+    if (!course_shell_run_line(&shell,
+                               "echo left && echo right",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "left\n") ||
+        !contains(out, "right\n")) {
+        return fail("expected simple && chain to run right side after success");
+    }
+
+    if (!course_shell_run_line(&shell,
+                               "linux /nope && echo should-not-run",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "path=/nope errno=2") ||
+        contains(out, "should-not-run")) {
+        return fail("expected && chain to stop after linux fail-closed output");
+    }
+
+    return 0;
+}
+
+static int test_process_exec_wait_and_pipe_syscalls(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    int32_t pipefds[2] = {-1, -1};
+    int32_t status = -1;
+    int64_t child_pid = 0;
+    char readback[8] = {0};
+
+    linux_compat_runtime_init(&runtime);
+    if (!linux_compat_runtime_set_cwd(&runtime, "/repo")) {
+        return fail("expected process test cwd setup to succeed");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_CLONE;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value <= 1 ||
+        !contains(trace.message, "clone")) {
+        return fail("expected clone to create a minimal Linux compat child");
+    }
+    child_pid = response.value;
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_WAIT4;
+    request.fd = (int32_t)child_pid;
+    request.read_buffer = &status;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != child_pid ||
+        status != 0 ||
+        !contains(trace.message, "wait4")) {
+        return fail("expected wait4 to reap the minimal child exit status");
+    }
+
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != -10) {
+        return fail("expected repeated wait4 to return ECHILD");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_EXECVE;
+    request.path = "/bin/busybox";
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        !contains(trace.message, "execve")) {
+        return fail("expected execve to accept an existing Linux rootfs path");
+    }
+
+    request.path = "/nope";
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != -2) {
+        return fail("expected execve bad path to return ENOENT");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_PIPE2;
+    request.read_buffer = pipefds;
+    request.flags = LINUX_COMPAT_O_CLOEXEC;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        pipefds[0] < 3 ||
+        pipefds[1] < 3 ||
+        pipefds[0] == pipefds[1] ||
+        runtime.fds[pipefds[0]].fd_flags != LINUX_COMPAT_FD_CLOEXEC ||
+        runtime.fds[pipefds[1]].fd_flags != LINUX_COMPAT_FD_CLOEXEC) {
+        return fail("expected pipe2 to allocate close-on-exec read/write fds");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_DUP3;
+    request.fd = pipefds[0];
+    request.command = 5U;
+    request.flags = LINUX_COMPAT_O_CLOEXEC;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 5 ||
+        runtime.fds[5].fd_flags != LINUX_COMPAT_FD_CLOEXEC) {
+        return fail("expected dup3 to duplicate the pipe read end with close-on-exec");
+    }
+
+    if (linux_compat_close(&runtime, pipefds[0], &trace) != 0 ||
+        write_fd(&runtime, pipefds[1], "pipe", 4U, &trace) != 4 ||
+        linux_compat_read(&runtime, 5, readback, sizeof(readback), &trace) !=
+            4 ||
+        memcmp(readback, "pipe", 4U) != 0) {
+        return fail("expected pipe data to flow through duplicated fd");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_create_write_lseek_readback_and_stat() != 0 ||
         test_overlay_shadows_lower_rootfs() != 0 ||
         test_mkdir_dirents_rename_unlink_and_sync() != 0 ||
-        test_bad_path_bad_fd_and_lower_guardrails() != 0) {
+        test_bad_path_bad_fd_and_lower_guardrails() != 0 ||
+        test_cwd_relative_paths_and_dot_slash() != 0 ||
+        test_course_shell_minimal_and_chain() != 0 ||
+        test_process_exec_wait_and_pipe_syscalls() != 0) {
         return 1;
     }
     return 0;

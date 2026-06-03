@@ -13,6 +13,9 @@
 #define LINUX_COMPAT_MAX_TRACE_RECORDS 16U
 #define LINUX_COMPAT_MAX_OVERLAY_NODES 32U
 #define LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE 2048U
+#define LINUX_COMPAT_MAX_PIPES 4U
+#define LINUX_COMPAT_MAX_PIPE_SIZE 512U
+#define LINUX_COMPAT_MAX_PROCESSES 4U
 #define LINUX_COMPAT_MINIMAL_ELF_PATH "/bin/minimal-elf"
 #define LINUX_COMPAT_AT_FDCWD (-100)
 #define LINUX_COMPAT_O_RDONLY 0U
@@ -39,6 +42,7 @@
 #define LINUX_COMPAT_S_IXOTH 0001U
 
 #define LINUX_COMPAT_O_NONBLOCK 00004000U
+#define LINUX_COMPAT_O_CLOEXEC 02000000U
 #define LINUX_COMPAT_F_DUPFD 0U
 #define LINUX_COMPAT_F_GETFD 1U
 #define LINUX_COMPAT_F_SETFD 2U
@@ -54,6 +58,7 @@
 #define LINUX_COMPAT_CLOCK_REALTIME 0U
 #define LINUX_COMPAT_CLOCK_MONOTONIC 1U
 
+#define LINUX_COMPAT_SYS_DUP3 24U
 #define LINUX_COMPAT_SYS_FCNTL 25U
 #define LINUX_COMPAT_SYS_IOCTL 29U
 #define LINUX_COMPAT_SYS_MKDIRAT 34U
@@ -63,6 +68,7 @@
 #define LINUX_COMPAT_SYS_FACCESSAT 48U
 #define LINUX_COMPAT_SYS_OPENAT 56U
 #define LINUX_COMPAT_SYS_CLOSE 57U
+#define LINUX_COMPAT_SYS_PIPE2 59U
 #define LINUX_COMPAT_SYS_GETDENTS64 61U
 #define LINUX_COMPAT_SYS_LSEEK 62U
 #define LINUX_COMPAT_SYS_READ 63U
@@ -86,8 +92,11 @@
 #define LINUX_COMPAT_SYS_UNAME 160U
 #define LINUX_COMPAT_SYS_BRK 214U
 #define LINUX_COMPAT_SYS_MUNMAP 215U
+#define LINUX_COMPAT_SYS_CLONE 220U
+#define LINUX_COMPAT_SYS_EXECVE 221U
 #define LINUX_COMPAT_SYS_MMAP 222U
 #define LINUX_COMPAT_SYS_MPROTECT 226U
+#define LINUX_COMPAT_SYS_WAIT4 260U
 #define LINUX_COMPAT_SYS_PRLIMIT64 261U
 #define LINUX_COMPAT_SYS_RENAMEAT2 276U
 #define LINUX_COMPAT_SYS_GETRANDOM 278U
@@ -109,6 +118,7 @@ typedef enum LinuxCompatResult {
 
 typedef struct LinuxCompatExecRequest {
     const char* path;
+    const char* cwd;
     size_t argc;
     const char* const* argv;
     trap_context_t* trap_context;
@@ -207,7 +217,28 @@ typedef struct LinuxCompatFd {
     uint32_t flags;
     uint32_t fd_flags;
     bool overlay_node;
+    bool pipe_node;
+    bool pipe_read;
+    bool pipe_write;
+    size_t pipe_index;
 } linux_compat_fd_t;
+
+typedef struct LinuxCompatPipe {
+    bool used;
+    uint8_t data[LINUX_COMPAT_MAX_PIPE_SIZE];
+    size_t size;
+    size_t read_offset;
+} linux_compat_pipe_t;
+
+typedef struct LinuxCompatProcess {
+    bool used;
+    uint32_t pid;
+    uint32_t ppid;
+    bool exited;
+    int32_t exit_code;
+    char path[LINUX_COMPAT_MAX_PATH];
+    char cwd[LINUX_COMPAT_MAX_PATH];
+} linux_compat_process_t;
 
 typedef struct LinuxCompatTimespec {
     int64_t tv_sec;
@@ -248,6 +279,12 @@ typedef struct LinuxCompatRuntime {
     linux_compat_overlay_node_t overlay_nodes[LINUX_COMPAT_MAX_OVERLAY_NODES];
     uint64_t next_overlay_inode;
     uint64_t next_overlay_mtime;
+    char cwd[LINUX_COMPAT_MAX_PATH];
+    char exec_path[LINUX_COMPAT_MAX_PATH];
+    linux_compat_pipe_t pipes[LINUX_COMPAT_MAX_PIPES];
+    linux_compat_process_t processes[LINUX_COMPAT_MAX_PROCESSES];
+    uint32_t current_pid;
+    uint32_t next_pid;
     linux_compat_syscall_trace_record_t trace_records[LINUX_COMPAT_MAX_TRACE_RECORDS];
     size_t trace_count;
     bool trace_truncated;
@@ -307,6 +344,9 @@ linux_compat_result_t linux_compat_stat_path(
     linux_compat_trace_t* out_trace);
 
 void linux_compat_runtime_init(linux_compat_runtime_t* runtime);
+bool linux_compat_runtime_set_cwd(linux_compat_runtime_t* runtime,
+                                  const char* cwd);
+const char* linux_compat_runtime_cwd(const linux_compat_runtime_t* runtime);
 
 int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
                             int32_t dirfd,

@@ -95,7 +95,7 @@ COURSE_OS_STAGE9_LINUX_COMPAT_SYSCALL_UNIT_OBJS = tests/unit/course_os_stage9_li
 COURSE_OS_STAGE9_LINUX_COMPAT_SYSCALL_UNIT_DEPS = $(COURSE_OS_STAGE9_LINUX_COMPAT_SYSCALL_UNIT_OBJS:.o=.d)
 COURSE_OS_STAGE10_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage10_linux_compat_test.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_vm_stub_guest.o tests/unit/linux_compat_loader_guest.o $(LINUX_COMPAT_ROOTFS_BUILTIN_UNIT_OBJS)
 COURSE_OS_STAGE10_LINUX_COMPAT_UNIT_DEPS = $(COURSE_OS_STAGE10_LINUX_COMPAT_UNIT_OBJS:.o=.d)
-COURSE_OS_STAGE11_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage11_linux_compat_test.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_vm_stub_guest.o tests/unit/linux_compat_loader_guest.o $(LINUX_COMPAT_ROOTFS_BUILTIN_UNIT_OBJS)
+COURSE_OS_STAGE11_LINUX_COMPAT_UNIT_OBJS = tests/unit/course_os_stage11_linux_compat_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_shell_guest.o tests/unit/linux_compat_guest.o tests/unit/linux_compat_vm_stub_guest.o tests/unit/linux_compat_loader_guest.o $(LINUX_COMPAT_ROOTFS_BUILTIN_UNIT_OBJS) tests/unit/course_libc_guest.o tests/unit/course_fd_guest.o tests/unit/course_fs_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE11_LINUX_COMPAT_UNIT_DEPS = $(COURSE_OS_STAGE11_LINUX_COMPAT_UNIT_OBJS:.o=.d)
 KERNEL_ALPHA_COMMON_UNIT_OBJS = tests/unit/kernel_alpha_common_test.o tests/unit/kernel_alpha_common_guest.o
 KERNEL_ALPHA_COMMON_UNIT_DEPS = $(KERNEL_ALPHA_COMMON_UNIT_OBJS:.o=.d)

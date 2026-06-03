@@ -163,21 +163,21 @@ Stage 10 的 help-run 提升到本地有状态工作流：
 - 修改：`myCPU/tests/unit/course_os_stage11_linux_compat.c`
 - 修改：`myCPU/tests/host/course_os_linux_compat_terminal_smoke.cpp`
 
-- [ ] **步骤 1：补 cwd / relative path 红灯**
+- [x] **步骤 1：补 cwd / relative path 红灯**
   - Stage 11 unit 覆盖 Linux compat request 从 `course_shell` 继承 cwd，`git -C repo ...`、
     `./a.out` 和 `hello.c` relative path 都解析到同一 overlay 工作目录。
   - 运行：`cd myCPU && make test-unit-course_os_stage11_linux_compat`
   - 预期：当前 Linux fallback 未携带 Linux cwd 时 FAIL。
-- [ ] **步骤 2：补最小 `&&` 成功链红灯**
+- [x] **步骤 2：补最小 `&&` 成功链红灯**
   - `gcc hello.c && ./a.out` 只有左侧命令退出码为 0 时才执行右侧命令。
   - 左侧 fail-closed 时输出诊断并保留 prompt，不执行右侧。
   - 运行：`cd myCPU && make test-unit-course_os_stage11_linux_compat`
-- [ ] **步骤 3：实现 shell 合同**
+- [x] **步骤 3：实现 shell 合同**
   - 课程命令、Stage 3 catalog、显式 `linux ...`、Linux PATH fallback 的既有顺序不变。
   - `course-os> cd` / `pwd` 的 cwd 可传给 Linux compat 进程，但不把课程 FD / FS ABI 改成
     Linux ABI。
   - `&&` 只支持 Stage 11 需要的简单命令链，不扩展完整 POSIX shell 语法。
-- [ ] **步骤 4：验证 shell guardrail**
+- [x] **步骤 4：验证 shell guardrail**
   - 运行：`cd myCPU && make test-unit-course_os_stage10_linux_compat`
   - 运行：`cd myCPU && make test-unit-course_os_stage11_linux_compat`
   - 运行：`cd myCPU && make test-host-course_os_linux_compat_terminal_smoke`
@@ -194,25 +194,36 @@ Stage 10 的 help-run 提升到本地有状态工作流：
 - 修改：`myCPU/tests/unit/course_os_stage9_linux_compat_exec.c`
 - 修改：`myCPU/tests/unit/course_os_stage9_linux_compat_syscall.c`
 - 修改：`myCPU/tests/unit/course_os_stage11_linux_compat.c`
+- 修改：`myCPU/tests/unit/trap_dispatch.c`
 
 - [ ] **步骤 1：记录真实 blocker trace**
   - 运行：`MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=<external-rootfs> make test-host-course_os_linux_compat_external_workflow_smoke`
   - 对 `git commit`、`vim`、`gcc` 的第一个 blocker 记录 path、argv、loader kind、interpreter、
     first unsupported syscall、PC、errno 和已执行 trace records。
-- [ ] **步骤 2：补 process unit 红灯**
+  - 当前环境未设置 `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS`；本轮只验证该 target fail-closed，
+    不声明 external rootfs workflow 已实跑。
+- [x] **步骤 2：补 process unit 红灯**
   - 覆盖 `execve` 继承 cwd / envp / fd、`wait4` 读取退出码、`clone` 或 `vfork` 的最小子进程
     生命周期、`pipe2` / `dup3` / `close` 的工具链子进程数据流。
   - 运行：`cd myCPU && make test-unit-course_os_stage11_linux_compat`
-- [ ] **步骤 3：实现 trace-driven 最小语义**
+- [x] **步骤 3a：实现 unit-proven v0 最小语义**
+  - Linux compat runtime 维护 session-local 最小 process / pipe 状态。
+  - `clone` 创建一个可被 `wait4` 观察到的即时完成 helper child，不声明真实调度。
+  - `execve` 固定存在路径 / 坏路径处理，并继承当前 Linux compat cwd / exec path 语义。
+  - `pipe2` / `dup3` / `read` / `write` 固定最小 fd 数据流，并覆盖 `O_CLOEXEC` 到
+    `FD_CLOEXEC` 的低副作用语义。
+  - `trap_dispatch` 同步固定真实 ecall 到 request 字段的参数映射，避免 unit request 路径假绿。
+- [ ] **步骤 3b：按 external trace 扩展真实 toolchain 子进程语义**
   - 只为 `git init/add/commit/log`、`vim hello.c`、`gcc hello.c && ./a.out` 真实 trace 需要的
     process / syscall 补洞。
   - `futex`、`rt_sigaction`、`rt_sigprocmask`、`set_tid_address`、`set_robust_list` 等优先实现
     可诊断最小语义；不能静默伪成功。
   - 每个 syscall 固定 Linux errno、用户指针校验、trace record 和 unsupported fallback。
-- [ ] **步骤 4：验证 process / exec 层**
+- [x] **步骤 4：验证 process / exec 层**
   - 运行：`cd myCPU && make test-unit-course_os_stage9_linux_compat_exec`
   - 运行：`cd myCPU && make test-unit-course_os_stage9_linux_compat_syscall`
   - 运行：`cd myCPU && make test-unit-course_os_stage11_linux_compat`
+  - 运行：`cd myCPU && make test-unit-trap_dispatch`
 
 ### 任务 5：minimal TTY / terminal input for `vim hello.c`
 

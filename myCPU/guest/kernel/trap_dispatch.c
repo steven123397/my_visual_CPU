@@ -133,6 +133,11 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         return;
     }
     switch (frame->a7) {
+    case LINUX_COMPAT_SYS_DUP3:
+        request->fd = (int32_t)frame->a0;
+        request->command = (uint32_t)frame->a1;
+        request->flags = (uint32_t)frame->a2;
+        break;
     case LINUX_COMPAT_SYS_MMAP:
         request->addr = frame->a0;
         request->length = (size_t)frame->a1;
@@ -163,6 +168,21 @@ static void build_linux_compat_request(const trap_frame_t* frame,
     case LINUX_COMPAT_SYS_MUNMAP:
         request->addr = frame->a0;
         request->length = (size_t)frame->a1;
+        break;
+    case LINUX_COMPAT_SYS_CLONE:
+        request->flags = (uint32_t)frame->a0;
+        request->addr = frame->a1;
+        break;
+    case LINUX_COMPAT_SYS_EXECVE:
+        request->path = (const char*)frame->a0;
+        request->write_buffer = (const void*)frame->a1;
+        request->read_buffer = (void*)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_WAIT4:
+        request->fd = (int32_t)frame->a0;
+        request->read_buffer = (void*)frame->a1;
+        request->flags = (uint32_t)frame->a2;
+        request->write_buffer = (const void*)frame->a3;
         break;
     case LINUX_COMPAT_SYS_MPROTECT:
         request->addr = frame->a0;
@@ -253,6 +273,10 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         request->fd = (int32_t)frame->a0;
         request->dirents = (linux_compat_dirent_t*)frame->a1;
         request->dirent_capacity = (size_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_PIPE2:
+        request->read_buffer = (void*)frame->a0;
+        request->flags = (uint32_t)frame->a1;
         break;
     case LINUX_COMPAT_SYS_LSEEK:
         request->fd = (int32_t)frame->a0;

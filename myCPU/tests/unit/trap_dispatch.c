@@ -741,6 +741,119 @@ static int test_dispatch_linux_compat_ecall_policy(void) {
         return fail("expected linux compat renameat ecall to preserve new path argument");
     }
 
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    memset(&trap_frame, 0, sizeof(trap_frame));
+    trap_frame.a0 = 0x120011U;
+    trap_frame.a1 = 0x3000U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_CLONE;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7070,
+            "did not expect panic during linux compat clone ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_CLONE ||
+        g_last_linux_compat_request.flags != 0x120011U ||
+        g_last_linux_compat_request.addr != 0x3000U) {
+        return fail("expected linux compat clone ecall to preserve flags and child stack");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    memset(&trap_frame, 0, sizeof(trap_frame));
+    trap_frame.a0 = 0x3400U;
+    trap_frame.a1 = 0x3500U;
+    trap_frame.a2 = 0x3600U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_EXECVE;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7080,
+            "did not expect panic during linux compat execve ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_EXECVE ||
+        g_last_linux_compat_request.path != (const char*)0x3400U ||
+        g_last_linux_compat_request.write_buffer != (const void*)0x3500U ||
+        g_last_linux_compat_request.read_buffer != (void*)0x3600U) {
+        return fail("expected linux compat execve ecall to preserve path argv and envp");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    memset(&trap_frame, 0, sizeof(trap_frame));
+    trap_frame.a0 = 42U;
+    trap_frame.a1 = 0x3700U;
+    trap_frame.a2 = 0x2U;
+    trap_frame.a3 = 0x3800U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_WAIT4;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x7090,
+            "did not expect panic during linux compat wait4 ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_WAIT4 ||
+        g_last_linux_compat_request.fd != 42 ||
+        g_last_linux_compat_request.read_buffer != (void*)0x3700U ||
+        g_last_linux_compat_request.flags != 0x2U ||
+        g_last_linux_compat_request.write_buffer != (const void*)0x3800U) {
+        return fail("expected linux compat wait4 ecall to preserve pid status flags and rusage");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    memset(&trap_frame, 0, sizeof(trap_frame));
+    trap_frame.a0 = 0x3900U;
+    trap_frame.a1 = 0x800U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_PIPE2;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x70a0,
+            "did not expect panic during linux compat pipe2 ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_PIPE2 ||
+        g_last_linux_compat_request.read_buffer != (void*)0x3900U ||
+        g_last_linux_compat_request.flags != 0x800U) {
+        return fail("expected linux compat pipe2 ecall to preserve pipefd and flags");
+    }
+
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    memset(&trap_frame, 0, sizeof(trap_frame));
+    trap_frame.a0 = 3U;
+    trap_frame.a1 = 6U;
+    trap_frame.a2 = 0x80000U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_DUP3;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x70b0,
+            "did not expect panic during linux compat dup3 ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_DUP3 ||
+        g_last_linux_compat_request.fd != 3 ||
+        g_last_linux_compat_request.command != 6U ||
+        g_last_linux_compat_request.flags != 0x80000U) {
+        return fail("expected linux compat dup3 ecall to preserve oldfd newfd and flags");
+    }
+
     g_clear_sstatus_bits_calls = 0;
     g_last_clear_sstatus_bits = 0;
     g_set_sstatus_bits_calls = 0;
