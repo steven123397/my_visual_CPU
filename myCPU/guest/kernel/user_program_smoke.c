@@ -23,6 +23,8 @@ static void clear_region(vm_user_region_t* region) {
 }
 
 static void clear_object(vm_object_t* object) {
+    size_t i = 0;
+
     if (object == NULL) {
         return;
     }
@@ -33,6 +35,9 @@ static void clear_object(vm_object_t* object) {
     object->attachment_count = 0;
     object->backing.anon.page_slots = NULL;
     object->backing.anon.page_count = 0;
+    for (i = 0; i < VM_OBJECT_ANON_SLOT_TABLE_COUNT - 1U; ++i) {
+        object->backing.anon.extra_page_slots[i] = NULL;
+    }
 }
 
 static bool region_cleared(const vm_user_region_t* region) {
@@ -47,7 +52,8 @@ static bool object_cleared(const vm_object_t* object) {
            object->backing_kind == VM_OBJECT_BACKING_NONE &&
            object->size == 0 && object->attachment_count == 0 &&
            object->backing.anon.page_slots == NULL &&
-           object->backing.anon.page_count == 0;
+           object->backing.anon.page_count == 0 &&
+           object->backing.anon.extra_page_slots[0] == NULL;
 }
 
 static bool invalid_region_state_ok(const vm_user_region_t* region) {

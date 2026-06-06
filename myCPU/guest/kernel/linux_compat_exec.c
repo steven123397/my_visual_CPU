@@ -2,6 +2,17 @@
 
 #include "memory.h"
 
+#ifdef __riscv
+#include "riscv.h"
+#endif
+
+#ifndef RISCV_SSTATUS_FS_MASK
+#define RISCV_SSTATUS_FS_MASK (3ULL << 13)
+#endif
+#ifndef RISCV_SSTATUS_FS_INITIAL
+#define RISCV_SSTATUS_FS_INITIAL (1ULL << 13)
+#endif
+
 #define ELF64_HEADER_SIZE 64U
 #define ELF64_PHENTSIZE 56U
 #define PT_LOAD_FLAG_X 0x1U
@@ -21,6 +32,32 @@
 #define AT_SECURE 23U
 #define AT_RANDOM 25U
 #define LINUX_COMPAT_STACK_PAGES 8U
+#define LINUX_COMPAT_EXEC_MAX_SEGMENT_CHUNK \
+    ((size_t)(MEMORY_PAGE_SIZE / sizeof(uintptr_t)) * (size_t)MEMORY_PAGE_SIZE)
+
+__attribute__((weak)) uint64_t linux_compat_exec_read_sstatus(void) {
+#ifdef __riscv
+    return riscv_read_sstatus();
+#else
+    return 0;
+#endif
+}
+
+__attribute__((weak)) void linux_compat_exec_set_sstatus_bits(uint64_t value) {
+#ifdef __riscv
+    riscv_set_sstatus_bits(value);
+#else
+    (void)value;
+#endif
+}
+
+__attribute__((weak)) void linux_compat_exec_clear_sstatus_bits(uint64_t value) {
+#ifdef __riscv
+    riscv_clear_sstatus_bits(value);
+#else
+    (void)value;
+#endif
+}
 
 static uintptr_t align_down_page(uintptr_t value) {
     return value & ~((uintptr_t)MEMORY_PAGE_SIZE - 1U);
@@ -34,6 +71,22 @@ static size_t align_up_page_size(size_t value) {
     const size_t mask = (size_t)MEMORY_PAGE_SIZE - 1U;
 
     return (value + mask) & ~mask;
+}
+
+static uint64_t enable_linux_compat_floating_state(void) {
+    const uint64_t previous_fs =
+        linux_compat_exec_read_sstatus() & RISCV_SSTATUS_FS_MASK;
+
+    linux_compat_exec_clear_sstatus_bits(RISCV_SSTATUS_FS_MASK);
+    linux_compat_exec_set_sstatus_bits(RISCV_SSTATUS_FS_INITIAL);
+    return previous_fs;
+}
+
+static void restore_linux_compat_floating_state(uint64_t previous_fs) {
+    linux_compat_exec_clear_sstatus_bits(RISCV_SSTATUS_FS_MASK);
+    if (previous_fs != 0U) {
+        linux_compat_exec_set_sstatus_bits(previous_fs);
+    }
 }
 
 static size_t str_len(const char* value) {
@@ -96,6 +149,14 @@ static uint32_t segment_prot(uint32_t flags) {
         prot |= LINUX_COMPAT_PROT_EXEC;
     }
     return prot;
+}
+
+static size_t min_size(size_t a, size_t b) {
+    return a < b ? a : b;
+}
+
+static size_t max_size(size_t a, size_t b) {
+    return a > b ? a : b;
 }
 
 static bool write_object_bytes(vm_object_t* object,
@@ -191,7 +252,7 @@ linux_compat_result_t linux_compat_exec_load(
         const size_t page_delta = (size_t)(segment->vaddr - page_vaddr);
         const size_t mapped_length =
             align_up_page_size(page_delta + (size_t)segment->memsz);
-        linux_compat_vm_region_t* region = 0;
+        size_t chunk_offset = 0;
 
         if (segment->memsz == 0U ||
             segment->filesz > segment->memsz ||
@@ -200,18 +261,48 @@ linux_compat_result_t linux_compat_exec_load(
             return LINUX_COMPAT_ERR_BAD_ELF;
         }
 
-        region = linux_compat_vm_map_fixed(vm,
-                                           page_vaddr,
-                                           mapped_length,
-                                           segment_prot(segment->flags),
-                                           0U);
-        if (region == 0 ||
-            !write_object_bytes(&region->object,
-                                page_delta,
-                                image + (size_t)segment->offset,
-                                (size_t)segment->filesz)) {
-            set_trace(out_trace, 12, "linux-compat: exec: map segment failed");
-            return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
+        while (chunk_offset < mapped_length) {
+            const size_t chunk_length =
+                min_size(mapped_length - chunk_offset,
+                         LINUX_COMPAT_EXEC_MAX_SEGMENT_CHUNK);
+            const uintptr_t chunk_vaddr =
+                page_vaddr + (uintptr_t)chunk_offset;
+            const size_t file_start = page_delta;
+            const size_t file_end = page_delta + (size_t)segment->filesz;
+            const size_t chunk_start = chunk_offset;
+            const size_t chunk_end = chunk_offset + chunk_length;
+            linux_compat_vm_region_t* region =
+                linux_compat_vm_map_fixed(vm,
+                                          chunk_vaddr,
+                                          chunk_length,
+                                          segment_prot(segment->flags),
+                                          0U);
+
+            if (region == 0) {
+                set_trace(out_trace,
+                          12,
+                          "linux-compat: exec: map segment failed");
+                return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
+            }
+            if (file_start < chunk_end && file_end > chunk_start) {
+                const size_t copy_start = max_size(file_start, chunk_start);
+                const size_t copy_end = min_size(file_end, chunk_end);
+                const size_t copy_length = copy_end - copy_start;
+                const size_t object_offset = copy_start - chunk_start;
+                const size_t image_offset =
+                    (size_t)segment->offset + (copy_start - file_start);
+
+                if (!write_object_bytes(&region->object,
+                                        object_offset,
+                                        image + image_offset,
+                                        copy_length)) {
+                    set_trace(out_trace,
+                              12,
+                              "linux-compat: exec: map segment failed");
+                    return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
+                }
+            }
+            chunk_offset += chunk_length;
         }
     }
 
@@ -306,12 +397,12 @@ linux_compat_result_t linux_compat_exec_build_stack(
 
     aux_values[aux_count++] = AT_PHDR;
     aux_values[aux_count++] =
-        plan->segment_count != 0U ? plan->segments[0].vaddr + ELF64_HEADER_SIZE
+        plan->phdr_vaddr != 0U ? plan->phdr_vaddr
                                   : 0U;
     aux_values[aux_count++] = AT_PHENT;
     aux_values[aux_count++] = ELF64_PHENTSIZE;
     aux_values[aux_count++] = AT_PHNUM;
-    aux_values[aux_count++] = plan->segment_count;
+    aux_values[aux_count++] = plan->phnum;
     aux_values[aux_count++] = AT_PAGESZ;
     aux_values[aux_count++] = MEMORY_PAGE_SIZE;
     if (plan->requires_interp) {
@@ -398,6 +489,9 @@ linux_compat_result_t linux_compat_exec_enter(
     uintptr_t user_sp,
     linux_compat_runtime_t* runtime,
     linux_compat_trace_t* out_trace) {
+    uint64_t previous_fs = 0;
+    bool floating_state_enabled = false;
+
     if (vm == 0 || vm->process == 0 || trap_context == 0 ||
         user_runtime == 0 || runtime == 0 || entry_pc == 0 || user_sp == 0) {
         set_trace(out_trace, 22, "linux-compat: exec: bad enter request");
@@ -409,7 +503,7 @@ linux_compat_result_t linux_compat_exec_enter(
                                             vm->process,
                                             entry_pc,
                                             user_sp,
-                                            0U,
+                                            user_sp,
                                             trap_stack_base,
                                             trap_stack_size,
                                             entry_pc,
@@ -427,17 +521,31 @@ linux_compat_result_t linux_compat_exec_enter(
         return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
     }
 
+    previous_fs = enable_linux_compat_floating_state();
+    floating_state_enabled = true;
     if (!trap_user_runtime_enter(user_runtime)) {
+        restore_linux_compat_floating_state(previous_fs);
+        floating_state_enabled = false;
         (void)trap_user_runtime_deactivate(user_runtime);
         set_trace(out_trace, 22, "linux-compat: exec: user enter failed");
         return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
     }
+    restore_linux_compat_floating_state(previous_fs);
+    floating_state_enabled = false;
     if (!runtime->exited) {
         (void)trap_user_runtime_deactivate(user_runtime);
         set_trace(out_trace, 22, "linux-compat: exec: unexpected trap return");
         return LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL;
     }
+    if (runtime->user_faulted) {
+        (void)trap_user_runtime_deactivate(user_runtime);
+        set_trace(out_trace, 14, "linux-compat: exec: user fault");
+        return LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL;
+    }
     if (!trap_user_runtime_deactivate(user_runtime)) {
+        if (floating_state_enabled) {
+            restore_linux_compat_floating_state(previous_fs);
+        }
         set_trace(out_trace, 22, "linux-compat: exec: deactivate failed");
         return LINUX_COMPAT_ERR_UNSUPPORTED_ELF;
     }

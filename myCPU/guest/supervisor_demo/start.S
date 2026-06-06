@@ -36,8 +36,9 @@ supervisor_entry:
     call platform_shutdown
 
 supervisor_trap:
-    csrrw sp, sscratch, sp
-    bnez sp, 1f
+    csrr t0, sstatus
+    andi t0, t0, (1 << 8)
+    bnez t0, 1f
     csrrw sp, sscratch, sp
 1:
     addi sp, sp, -TRAP_FRAME_SIZE

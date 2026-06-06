@@ -232,19 +232,27 @@ OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v
   builtin provider 缺 `vim` / `gcc` / `rustc` 资产时的 fail-closed 诊断，以及 dynamic-loader
   v0 / 最小 syscall 的受限门禁。Stage 11 当前已新增 session-local writable overlay v0、
   Linux compat cwd / relative path 解析、`course-os> ` 最小 `&&` 成功链，以及 unit-proven
-  process / wait / exec / pipe / dup v0；尚未把 external rootfs 下的真实 `git` / `vim` /
-  `gcc` trace、TTY 和 toolchain 子进程串成端到端工作流；
-  当前仍不支持完整 testsuits-for-oskernel、网络
-  `git clone/push/pull`、`git init/add/commit/log`、交互式 `vim hello.c`、`gcc hello.c &&
-  ./a.out`、`rustc helloworld.rs && ./helloworld`、完整 `execve` / `wait4` / `futex` /
-  signal 或完整 TTY。
+  process / wait / exec / pipe / dup v0、fd 0 raw stdin read contract，以及 per-command
+  syscall trace / summary 诊断面；尚未把 external rootfs 下的真实 `git` / `vim` / `gcc`
+  trace、TTY 和 toolchain 子进程串成端到端工作流；
+  当前本机已获取 Alpine RISC-V64 external rootfs，并确认 Stage 11 required tool assets
+  present；external workflow 已进入真实 `/usr/bin/git` dynamic ELF run path，并已推过
+  早先的 `map segment failed`、shared-library load、`O_CLOEXEC`、`/dev/null`、cwd /
+  `O_DIRECTORY` / `O_EXCL`、小匿名 object descriptor、S-mode `mremap` byte-copy 和
+  8.6 MiB anonymous `mmap` descriptor blocker。最新窄复查显示：在 2e8 per-command
+  step budget 下，`git init stage11repo` 已能回到 `course-os> ` prompt，不再是当前首个
+  blocker；`vim stage11repo/hello.c` 已进入新文件编辑画面，但保存 / 退出和文件内容读回尚未
+  闭环验证。当前仍不支持完整 testsuits-for-oskernel、网络 `git clone/push/pull`、
+  `git init/add/commit/log` 的 external-rootfs 闭环、`gcc hello.c && ./a.out`、
+  `rustc helloworld.rs && ./helloworld`、完整 `execve` / `wait4` / `futex` / signal
+  或完整 TTY。
 - 课程级 ELF catalog、课程 syscall ABI、RAMFS、固定小进程表、教学 COW 和课程 shell 仍不能直接
   声明为 Linux ABI 兼容层；Linux ABI 扩展必须继续走旁路 `linux_compat_*` 模块和进程 ABI 分流。
 
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. 继续执行 [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)，下一刀需要在可用 external rootfs 下补任务 4 的真实 blocker trace，或继续任务 5 minimal TTY；最终目标仍是收口 `git init/add/commit/log`、`vim hello.c`、`gcc hello.c && ./a.out`。
+2. 继续执行 [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)，下一刀优先闭环 `vim stage11repo/hello.c` 的最小 terminal 保存 / 退出和内容读回，再继续推进 `git -C stage11repo add/commit/log` 与 `gcc hello.c && ./a.out`；每次 external workflow 复查都记录 stop reason、last syscall、last PC、UART 增量和 trace 摘要。
 3. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11。
 4. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
 5. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补能力，不直接改大 `course_*` 教学模块；AI/NPU、JIT/DBT 或 Pipeline-aware 调度继续作为独立后续方向。

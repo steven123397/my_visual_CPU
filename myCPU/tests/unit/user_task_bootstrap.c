@@ -87,6 +87,7 @@ bool vm_object_init_physical(vm_object_t* object, uintptr_t paddr, size_t size) 
 
 bool vm_object_init_anon(vm_object_t* object, size_t size) {
     static uintptr_t page_slots[VM_OBJECT_ANON_PAGE_SLOTS];
+    size_t i = 0;
 
     g_anon_init_calls += 1;
     g_last_anon_size = size;
@@ -100,10 +101,15 @@ bool vm_object_init_anon(vm_object_t* object, size_t size) {
     object->attachment_count = 0;
     object->backing.anon.page_slots = page_slots;
     object->backing.anon.page_count = object_page_count(size);
+    for (i = 0; i < VM_OBJECT_ANON_SLOT_TABLE_COUNT - 1U; ++i) {
+        object->backing.anon.extra_page_slots[i] = NULL;
+    }
     return true;
 }
 
 bool vm_object_reset(vm_object_t* object) {
+    size_t i = 0;
+
     g_object_reset_calls += 1;
     if (!g_object_reset_result || object == NULL) {
         return false;
@@ -115,6 +121,9 @@ bool vm_object_reset(vm_object_t* object) {
     object->attachment_count = 0;
     object->backing.anon.page_slots = NULL;
     object->backing.anon.page_count = 0;
+    for (i = 0; i < VM_OBJECT_ANON_SLOT_TABLE_COUNT - 1U; ++i) {
+        object->backing.anon.extra_page_slots[i] = NULL;
+    }
     return true;
 }
 

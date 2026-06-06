@@ -97,6 +97,20 @@
 6. 汇报结果，把提交和清理交还给开发者决定。
    不默认自动提交，也不默认自动清理 branch / worktree，除非用户明确要求。
 
+## 本对话上下文获取规则
+
+当用户明确要求“获取本对话的上下文”、“找回本会话记录”、“查本 session”或类似表述时，默认不要只读
+`AGENTS.md` 或泛搜记忆，而应优先定位本次 Codex session id，并读取对应的会话记录文件来自行恢复上下文。
+
+执行规则：
+
+- 会话记录通常位于 `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-*.jsonl`。
+- 优先用当前 session id 匹配 `rollout-*<session-id>.jsonl`；如果暂时不知道 session id，可先在当天
+  session 目录中按用户最近一句话、任务路径、项目目录或关键文件名用 `rg` 定位。
+- 读取记录时重点查看 `session_meta`、最近的 `turn_context`、`context_compacted`、用户消息、
+  assistant 消息、tool call 和 tool output。
+- 恢复后再继续当前任务，并在必要时用本地文件 / 命令重新验证，不要把过期记忆当成当前事实。
+
 ## 全局验证基线
 
 修改架构相关路径后，至少应守住：

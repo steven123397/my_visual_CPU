@@ -191,17 +191,59 @@ Stage 10 的 help-run 提升到本地有状态工作流：
 - 修改：`myCPU/guest/kernel/linux_compat_loader.c`
 - 修改：`myCPU/guest/kernel/linux_compat_vm.c`
 - 修改：`myCPU/guest/kernel/trap_dispatch.c`
+- 修改：`myCPU/tests/host/course_os_linux_compat_external_workflow_smoke.cpp`
 - 修改：`myCPU/tests/unit/course_os_stage9_linux_compat_exec.c`
 - 修改：`myCPU/tests/unit/course_os_stage9_linux_compat_syscall.c`
 - 修改：`myCPU/tests/unit/course_os_stage11_linux_compat.c`
 - 修改：`myCPU/tests/unit/trap_dispatch.c`
 
-- [ ] **步骤 1：记录真实 blocker trace**
+- [x] **步骤 1a：增强 per-command syscall trace / summary 诊断面**
+  - 在 `linux_compat_syscall_request_t` 真实 U-mode syscall 处理路径和
+    `test-host-course_os_linux_compat_external_workflow_smoke` 中补 per-command summary，而不是
+    无条件向 UART / host log 打印每个 syscall。
+  - 每条 command 至少记录：command id / 原始命令、resolved path、argv、cwd、loader kind、
+    interpreter、step budget、stop reason、last pc / sepc、last syscall no / name、ret / errno
+    和 trace record count。
+  - syscall trace record 对 Stage 11 重点 syscall 增加可诊断参数：
+    - path / fd 类：`dirfd`、`fd`、fd kind、path、offset、flags、close-on-exec；
+    - I/O 类：`read` / `write` / `pread64` / `pwrite64` / `lseek` 的 count、offset、ret / errno；
+    - VM 类：`mmap` / `mremap` / `mprotect` / `munmap` / `brk` 的 addr、len、prot、flags、fd、
+      offset 和 result；
+    - process 类：`execve` / `clone` / `wait4` / `exit_group` / `pipe2` / `dup3` 的 pid、child、
+      exit status、fd inheritance 摘要。
+  - 字符串指针只允许 bounded safe copy（例如 128 / 256 bytes）；坏用户指针记录 `EFAULT` 或
+    trace diagnostic，不能为 trace 引入 kernel panic。
+  - 默认输出为 ring buffer / per-command summary；不 dump 大块用户 buffer，避免 `git init` 长跑时
+    日志量和模拟器开销掩盖真正 blocker。
+  - `futex` 只作为 trace 证明后的候选补洞：若后续发现真实 trace 进入 `futex`，再补
+    `FUTEX_WAIT` 的 `*uaddr == val` 阻塞前校验、坏指针 `EFAULT`、以及 `FUTEX_WAKE` 按地址精确匹配
+    和 wake count 的 unit 红灯。
+  - 2026-06-05 已补 unit-proven 诊断面：`linux_compat_syscall_trace_record_t.message`
+    现在按 syscall 类型记录 bounded path / fd / fd kind / flags / close-on-exec、I/O count /
+    offset / ret / errno、VM addr / len / prot / flags / fd / offset，以及 process pid / child /
+    fd inheritance 摘要；`linux_compat_run()` real-exec 输出也追加 command / cwd / loader_kind /
+    interpreter / stop / last_syscall 摘要；external workflow host smoke 在失败时输出 command、
+    step budget、stop reason、needle 和 offset。默认仍不逐 syscall 向 UART dump 大量调试文本。
+- [ ] **步骤 1b：记录真实 blocker trace**
   - 运行：`MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=<external-rootfs> make test-host-course_os_linux_compat_external_workflow_smoke`
   - 对 `git commit`、`vim`、`gcc` 的第一个 blocker 记录 path、argv、loader kind、interpreter、
     first unsupported syscall、PC、errno 和已执行 trace records。
-  - 当前环境未设置 `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS`；本轮只验证该 target fail-closed，
-    不声明 external rootfs workflow 已实跑。
+  - 2026-06-03 已获取本机 external rootfs：
+    `/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img`。
+    asset generator 已确认 Stage 11 required tools present；workflow 已进入真实 `git init`
+    first blocker：`path=/usr/bin/git`、`loader=dynamic`、
+    `interp=/lib/ld-musl-riscv64.so.1`、`exec=real`、`errno=12`、
+    `linux-compat: exec: map segment failed`。
+  - 2026-06-04 继续 trace-driven 推进后，`map segment failed` 已不再是当前 blocker；
+    external `git init stage11repo` 已继续通过 shared-library open fallback、`O_CLOEXEC`、
+    `/dev/null`、cwd / `O_DIRECTORY` / `O_EXCL`、小匿名 object descriptor、S-mode
+    `mremap` byte-copy 和 8.6 MiB anonymous `mmap` descriptor blocker。当时 stop point
+    是 1.2B per-command step budget 耗尽，停在 `/usr/bin/git` U-mode `pc=0x400cc6d2`
+    （PIE offset `0xcc6d2`），没有新的 unsupported syscall、FS 或 VM 快失败证据。
+  - 后续 2e8 per-command step budget 窄复查显示，`git init stage11repo` 已能回到
+    `course-os> ` prompt，不再是当前首个 blocker；`vim stage11repo/hello.c` 已进入新文件
+    编辑画面，但保存 / 退出和文件内容读回尚未闭环验证。本计划仍不能声明
+    `git init/add/commit/log`、`vim hello.c` 或 `gcc hello.c && ./a.out` 已完成。
 - [x] **步骤 2：补 process unit 红灯**
   - 覆盖 `execve` 继承 cwd / envp / fd、`wait4` 读取退出码、`clone` 或 `vfork` 的最小子进程
     生命周期、`pipe2` / `dup3` / `close` 的工具链子进程数据流。
@@ -228,18 +270,17 @@ Stage 10 的 help-run 提升到本地有状态工作流：
 ### 任务 5：minimal TTY / terminal input for `vim hello.c`
 
 **文件：**
-- 修改：`myCPU/guest/include/linux_compat.h`
-- 修改：`myCPU/guest/kernel/linux_compat.c`
+- 修改：`myCPU/guest/include/console_input.h`
 - 修改：`myCPU/guest/kernel/console_input.c`
-- 修改：`myCPU/guest/course_os_shell/main.c`
+- 修改：`myCPU/guest/kernel/linux_compat.c`
 - 修改：`myCPU/tests/unit/course_os_stage11_linux_compat.c`
 - 修改：`myCPU/tests/host/course_os_linux_compat_external_workflow_smoke.cpp`
 
-- [ ] **步骤 1：补 terminal 红灯**
+- [x] **步骤 1：补 terminal 红灯**
   - host smoke 启动 `vim hello.c` 后发送最小编辑序列：进入插入模式、写入 `hello.c` 内容、
     退出插入模式、`:wq` 保存退出。
   - 预期：当前缺少 stdin read / termios / TTY 时暴露明确 blocker。
-- [ ] **步骤 2：实现最小 TTY 合同**
+- [x] **步骤 2：实现最小 TTY 合同**
   - 支持 `read` from fd 0 消费 UART input queue。
   - 支持 `ioctl(TCGETS/TCSETS/TIOCGWINSZ)`、`isatty` 相关查询和 terminal size 稳定返回。
   - 保持 prompt 回归；用户态崩溃或 unsupported TTY 能力必须 fail-closed。
@@ -258,6 +299,23 @@ Stage 10 的 help-run 提升到本地有状态工作流：
 - 按真实 trace 修改：`myCPU/guest/kernel/linux_compat_exec.c`
 - 按真实 trace 修改：`myCPU/guest/kernel/linux_compat_loader.c`
 - 按真实 trace 修改：`myCPU/guest/kernel/linux_compat_vm.c`
+
+**当前前置状态（2026-06-03）：**
+- 本机 external rootfs 已放在
+  `/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img`。
+- asset generator 已通过该镜像提取 `/bin/busybox`、`/usr/bin/git`、`/usr/bin/vim`、
+  `/usr/bin/gcc`、`/bin/sh`、`/usr/bin/as`、`/usr/bin/ld` 等 required assets。
+- `test-host-course_os_linux_compat_external_workflow_smoke` 已进入真实 `git init` run path。
+  2026-06-04 的最新 direct run 显示：旧的 `map segment failed` 和 8.6 MiB anonymous
+  `mmap` descriptor OOM 已被推过；当时第一条 `git init stage11repo` 仍未输出
+  `Initialized`，而是在 1.2B step budget 下停在 `/usr/bin/git` U-mode
+  `pc=0x400cc6d2`（PIE offset `0xcc6d2`，stripped binary 的字符 / config parser 邻近区域）。
+  这更像诊断 / 性能 / budget 问题，不能声明 `git` / `vim` / `gcc` workflow 已跑通，
+  也不能归档 Stage 11。
+- 后续 2e8 per-command step budget 窄复查显示：`git init stage11repo` 已能回到
+  `course-os> ` prompt；`vim stage11repo/hello.c` 已进入新文件编辑画面，但保存 / 退出
+  和文件内容读回尚未验证。因此当前推进点已经从 `git init` 长跑转移到 minimal TTY
+  保存闭环、`git add/commit/log` 和 `gcc hello.c && ./a.out`，仍不能归档 Stage 11。
 
 - [ ] **步骤 1：固定 git 本地工作流**
   - host smoke 验证 `git init` 创建 `.git`，`git add hello.c` 写 index，`git commit -m init`

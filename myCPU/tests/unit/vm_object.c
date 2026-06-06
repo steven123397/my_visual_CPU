@@ -12,12 +12,12 @@ typedef struct PageMapCall {
     uint64_t flags;
 } page_map_call_t;
 
-static uint64_t g_pages[8][SV39_LEVEL_ENTRIES]
+static uint64_t g_pages[24][SV39_LEVEL_ENTRIES]
     __attribute__((aligned(MEMORY_PAGE_SIZE)));
 static size_t g_next_page = 0;
 static int g_alloc_zeroed_page_calls = 0;
 static int g_pmm_free_page_calls = 0;
-static void* g_freed_pages[8];
+static void* g_freed_pages[24];
 static size_t g_freed_page_count = 0;
 static bool g_can_map_page_default = true;
 static bool g_can_map_page_responses[8];
@@ -35,7 +35,10 @@ static int g_flush_if_enabled_calls = 0;
 static void reset_stub_state(void);
 static int fail(const char* message);
 static void queue_can_map_page_response(bool value);
+static bool freed_page_recorded(void* page);
 static int test_object_init_resolve_and_reset(void);
+static int test_large_anon_object_spans_multiple_slot_pages(void);
+static int test_anon_object_spans_fifth_slot_page(void);
 static int test_region_map_clear_and_fault_binding(void);
 
 void* alloc_zeroed_page(void) {
@@ -150,6 +153,17 @@ static void queue_can_map_page_response(bool value) {
     }
 }
 
+static bool freed_page_recorded(void* page) {
+    size_t i = 0;
+
+    for (i = 0; i < g_freed_page_count; ++i) {
+        if (g_freed_pages[i] == page) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static int test_object_init_resolve_and_reset(void) {
     vm_object_t physical = {0};
     vm_object_t anon = {0};
@@ -190,6 +204,77 @@ static int test_object_init_resolve_and_reset(void) {
         g_freed_pages[0] != g_pages[1] ||
         g_freed_pages[1] != anon_slot_page) {
         return fail("expected anon object reset to free pages and slot page");
+    }
+
+    return 0;
+}
+
+static int test_large_anon_object_spans_multiple_slot_pages(void) {
+    const size_t single_slot_page_entries = MEMORY_PAGE_SIZE / sizeof(uintptr_t);
+    const size_t page_count = single_slot_page_entries + 1U;
+    vm_object_t anon = {0};
+    uintptr_t first_page = 0;
+    uintptr_t last_page = 0;
+    uintptr_t* first_slot_page = NULL;
+
+    reset_stub_state();
+    if (!vm_object_init_anon(&anon, page_count * MEMORY_PAGE_SIZE) ||
+        anon.backing.anon.page_count != page_count ||
+        g_alloc_zeroed_page_calls != 2 ||
+        anon.backing.anon.page_slots == NULL) {
+        return fail("expected large anon object to allocate multiple slot pages");
+    }
+    first_slot_page = anon.backing.anon.page_slots;
+
+    if (!object_resolve_page(&anon, 0, true, &first_page) ||
+        first_page != (uintptr_t)g_pages[2]) {
+        return fail("expected first large anon page to resolve through first slot page");
+    }
+    if (!object_resolve_page(&anon,
+                             single_slot_page_entries * MEMORY_PAGE_SIZE,
+                             true,
+                             &last_page) ||
+        last_page != (uintptr_t)g_pages[3]) {
+        return fail("expected last large anon page to resolve through overflow slot page");
+    }
+
+    if (!vm_object_reset(&anon) || anon.initialized ||
+        g_pmm_free_page_calls != 4 ||
+        !freed_page_recorded((void*)first_page) ||
+        !freed_page_recorded((void*)last_page) ||
+        !freed_page_recorded(first_slot_page)) {
+        return fail("expected large anon reset to free data pages and slot pages");
+    }
+
+    return 0;
+}
+
+static int test_anon_object_spans_fifth_slot_page(void) {
+    const size_t single_slot_page_entries = MEMORY_PAGE_SIZE / sizeof(uintptr_t);
+    const size_t page_count = (single_slot_page_entries * 4U) + 1U;
+    vm_object_t anon = {0};
+    uintptr_t last_page = 0;
+
+    reset_stub_state();
+    if (!vm_object_init_anon(&anon, page_count * MEMORY_PAGE_SIZE) ||
+        anon.backing.anon.page_count != page_count ||
+        g_alloc_zeroed_page_calls != 5 ||
+        anon_slot_table(&anon, 4U) == NULL) {
+        return fail("expected anon object to allocate a fifth slot page");
+    }
+
+    if (!object_resolve_page(&anon,
+                             (page_count - 1U) * MEMORY_PAGE_SIZE,
+                             true,
+                             &last_page) ||
+        last_page != (uintptr_t)g_pages[5]) {
+        return fail("expected anon object to resolve pages beyond four slot pages");
+    }
+
+    if (!vm_object_reset(&anon) || anon.initialized ||
+        g_pmm_free_page_calls != 6 ||
+        !freed_page_recorded((void*)last_page)) {
+        return fail("expected fifth-slot anon reset to free data and slot pages");
     }
 
     return 0;
@@ -255,6 +340,8 @@ static int test_region_map_clear_and_fault_binding(void) {
 
 int main(void) {
     if (test_object_init_resolve_and_reset() != 0 ||
+        test_large_anon_object_spans_multiple_slot_pages() != 0 ||
+        test_anon_object_spans_fifth_slot_page() != 0 ||
         test_region_map_clear_and_fault_binding() != 0) {
         return 1;
     }

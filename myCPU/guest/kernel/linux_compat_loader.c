@@ -97,6 +97,8 @@ static void clear_load_plan(linux_compat_load_plan_t* plan) {
     plan->elf_type = 0;
     plan->entry = 0;
     plan->load_bias = 0;
+    plan->phdr_vaddr = 0;
+    plan->phnum = 0;
     plan->segment_count = 0;
     for (i = 0; i < LINUX_COMPAT_MAX_LOAD_SEGMENTS; ++i) {
         plan->segments[i].vaddr = 0;
@@ -253,6 +255,15 @@ linux_compat_result_t linux_compat_build_load_plan(
                             8,
                             "linux-compat: loader: bad entry");
     }
+    if (!add_u64(phoff, plan.load_bias, &plan.phdr_vaddr)) {
+        return finish_error(out_plan,
+                            &plan,
+                            out_trace,
+                            LINUX_COMPAT_ERR_BAD_ELF,
+                            8,
+                            "linux-compat: loader: bad phdr address");
+    }
+    plan.phnum = phnum;
     plan.stack_top = LINUX_COMPAT_STACK_TOP;
     plan.argv_count = argc;
     plan.envp_count = envp_count;

@@ -25,6 +25,16 @@ static bool contains(const char* haystack, const char* needle) {
     return strstr(haystack, needle) != NULL;
 }
 
+static uint64_t read_u64_le(const uint8_t* bytes, size_t offset) {
+    uint64_t value = 0;
+    size_t i = 0;
+
+    for (i = 0; i < 8U; ++i) {
+        value |= (uint64_t)bytes[offset + i] << (i * 8U);
+    }
+    return value;
+}
+
 static int test_builtin_rootfs_provider_reports_source(void) {
     if (strcmp(linux_compat_rootfs_source_name(), "builtin") != 0 ||
         linux_compat_rootfs_node_count() < 6U) {
@@ -110,7 +120,7 @@ static int test_syscall_dispatch_covers_help_output_minimum(void) {
     linux_compat_runtime_t runtime;
     linux_compat_syscall_request_t request;
     linux_compat_syscall_response_t response;
-    linux_compat_stat_t stat;
+    uint8_t stat_buffer[128];
     linux_compat_dirent_t dirents[LINUX_COMPAT_MAX_DIRENTS];
     linux_compat_trace_t trace;
     uint8_t bytes[4] = {0U, 0U, 0U, 0U};
@@ -142,11 +152,12 @@ static int test_syscall_dispatch_covers_help_output_minimum(void) {
     request.number = LINUX_COMPAT_SYS_NEWFSTATAT;
     request.dirfd = LINUX_COMPAT_AT_FDCWD;
     request.path = "/bin/busybox";
-    request.stat = &stat;
+    memset(stat_buffer, 0, sizeof(stat_buffer));
+    request.stat = (linux_compat_stat_t*)stat_buffer;
     if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
             LINUX_COMPAT_OK ||
         response.value != 0 ||
-        stat.size == 0U) {
+        read_u64_le(stat_buffer, 48U) == 0U) {
         return fail("expected newfstatat to expose rootfs file metadata");
     }
 

@@ -1,5 +1,6 @@
 import json
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -32,6 +33,91 @@ def rv64_exec_elf(entry: int) -> bytes:
 
 def rv64_dyn_elf(entry: int) -> bytes:
     return rv64_elf(entry, 3)
+
+
+def rv64_phdr(
+    *,
+    p_type: int,
+    p_flags: int,
+    p_offset: int,
+    p_vaddr: int,
+    p_filesz: int,
+    p_memsz: int,
+    p_align: int,
+) -> bytes:
+    return (
+        p_type.to_bytes(4, "little")
+        + p_flags.to_bytes(4, "little")
+        + p_offset.to_bytes(8, "little")
+        + p_vaddr.to_bytes(8, "little")
+        + (0).to_bytes(8, "little")
+        + p_filesz.to_bytes(8, "little")
+        + p_memsz.to_bytes(8, "little")
+        + p_align.to_bytes(8, "little")
+    )
+
+
+def rv64_dyn_elf_with_needed(entry: int, needed: list[str]) -> bytes:
+    dyn_offset = 0x200
+    dynstr_offset = 0x300
+    ph_count = 2
+    image_size = dynstr_offset + 1 + sum(len(name) + 1 for name in needed)
+    image = bytearray(image_size)
+    image[0:4] = b"\x7fELF"
+    image[4] = 2
+    image[5] = 1
+    image[6] = 1
+    image[16:18] = (3).to_bytes(2, "little")
+    image[18:20] = (243).to_bytes(2, "little")
+    image[20:24] = (1).to_bytes(4, "little")
+    image[24:32] = entry.to_bytes(8, "little")
+    image[32:40] = (64).to_bytes(8, "little")
+    image[52:54] = (64).to_bytes(2, "little")
+    image[54:56] = (56).to_bytes(2, "little")
+    image[56:58] = ph_count.to_bytes(2, "little")
+    image[64:120] = rv64_phdr(
+        p_type=1,
+        p_flags=5,
+        p_offset=0,
+        p_vaddr=0,
+        p_filesz=image_size,
+        p_memsz=image_size,
+        p_align=0x1000,
+    )
+    image[120:176] = rv64_phdr(
+        p_type=2,
+        p_flags=6,
+        p_offset=dyn_offset,
+        p_vaddr=dyn_offset,
+        p_filesz=(len(needed) + 3) * 16,
+        p_memsz=(len(needed) + 3) * 16,
+        p_align=8,
+    )
+
+    cursor = dynstr_offset + 1
+    needed_offsets = []
+    for name in needed:
+        needed_offsets.append(cursor - dynstr_offset)
+        encoded = name.encode("ascii") + b"\0"
+        image[cursor:cursor + len(encoded)] = encoded
+        cursor += len(encoded)
+
+    dyn_cursor = dyn_offset
+    for offset in needed_offsets:
+        image[dyn_cursor:dyn_cursor + 16] = (
+            (1).to_bytes(8, "little") + offset.to_bytes(8, "little")
+        )
+        dyn_cursor += 16
+    image[dyn_cursor:dyn_cursor + 16] = (
+        (5).to_bytes(8, "little") + dynstr_offset.to_bytes(8, "little")
+    )
+    dyn_cursor += 16
+    image[dyn_cursor:dyn_cursor + 16] = (
+        (10).to_bytes(8, "little")
+        + (cursor - dynstr_offset).to_bytes(8, "little")
+    )
+
+    return bytes(image)
 
 
 class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
@@ -70,6 +156,9 @@ class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
             self.assertIn("linux_compat_rootfs_source_name", generated)
             self.assertIn("/bin/busybox", generated)
             self.assertIn("0x7f", generated)
+            self.assertIn("__attribute__((aligned(4096)))", generated)
+            self.assertNotIn("sizeof(k_asset_", generated)
+            self.assertRegex(generated, r'"/bin/busybox", k_asset_0, 128U,')
             self.assertIn('"source":"directory"', out_json.read_text())
 
     def test_missing_ext4_rootfs_fails_closed(self) -> None:
@@ -352,3 +441,114 @@ class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
             self.assertIn("/usr/bin/rustc", generated)
             self.assertIn("/usr/lib/gcc/riscv64-linux-gnu/cc1", generated)
             self.assertNotIn("/lib/libgcc_s.so.1", generated)
+
+    def test_required_tool_needed_shared_assets_are_generated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "rootfs"
+            out_c = pathlib.Path(tmp) / "linux_compat_rootfs_asset.c"
+            out_json = pathlib.Path(tmp) / "linux_compat_rootfs_asset.json"
+            for guest_dir in ("bin", "usr/bin", "usr/lib", "lib"):
+                (root / guest_dir).mkdir(parents=True)
+            (root / "bin" / "busybox").write_bytes(rv64_exec_elf(0x401000))
+            (root / "usr" / "bin" / "git").write_bytes(
+                rv64_dyn_elf_with_needed(
+                    0x402000,
+                    [
+                        "libpcre2-8.so.0",
+                        "libz.so.1",
+                        "libc.musl-riscv64.so.1",
+                    ],
+                )
+            )
+            (root / "usr" / "lib" / "libpcre2-8.so.0").write_bytes(
+                rv64_dyn_elf(0x5000)
+            )
+            (root / "usr" / "lib" / "libz.so.1").write_bytes(
+                rv64_dyn_elf(0x6000)
+            )
+            (root / "lib" / "libc.musl-riscv64.so.1").write_bytes(
+                rv64_dyn_elf(0x7000)
+            )
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    str(TOOL),
+                    "--source-dir",
+                    str(root),
+                    "--out-c",
+                    str(out_c),
+                    "--out-manifest",
+                    str(out_json),
+                    "--path",
+                    "/bin/busybox",
+                    "--path",
+                    "/usr/bin/git",
+                ],
+                cwd=MYCPU_DIR,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            generated = out_c.read_text()
+            manifest = json.loads(out_json.read_text())
+            by_path = {entry["path"]: entry for entry in manifest["files"]}
+            for shared in (
+                "/usr/lib/libpcre2-8.so.0",
+                "/usr/lib/libz.so.1",
+                "/lib/libc.musl-riscv64.so.1",
+            ):
+                self.assertEqual(by_path[shared]["kind"], "shared")
+                self.assertTrue(by_path[shared]["required"])
+                self.assertTrue(by_path[shared]["present"])
+                self.assertIn(shared, generated)
+
+    @unittest.skipIf(
+        shutil.which("mke2fs") is None or shutil.which("debugfs") is None,
+        "mke2fs and debugfs are required for ext4 symlink coverage",
+    )
+    def test_ext4_source_resolves_absolute_symlink_within_rootfs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "rootfs"
+            image = pathlib.Path(tmp) / "rootfs.ext4"
+            out_c = pathlib.Path(tmp) / "linux_compat_rootfs_asset.c"
+            out_json = pathlib.Path(tmp) / "linux_compat_rootfs_asset.json"
+            (root / "bin").mkdir(parents=True)
+            (root / "bin" / "busybox").write_bytes(rv64_exec_elf(0x401000))
+            (root / "bin" / "sh").symlink_to("/bin/busybox")
+
+            mkfs = subprocess.run(
+                ["mke2fs", "-q", "-t", "ext4", "-d", str(root), str(image), "4M"],
+                cwd=MYCPU_DIR,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(mkfs.returncode, 0, mkfs.stderr)
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    str(TOOL),
+                    "--source-rootfs",
+                    str(image),
+                    "--out-c",
+                    str(out_c),
+                    "--out-manifest",
+                    str(out_json),
+                    "--path",
+                    "/bin/busybox",
+                    "--toolchain-path",
+                    "/bin/sh",
+                ],
+                cwd=MYCPU_DIR,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            manifest = json.loads(out_json.read_text())
+            by_path = {entry["path"]: entry for entry in manifest["files"]}
+            self.assertTrue(by_path["/bin/sh"]["present"])
+            self.assertEqual(by_path["/bin/sh"]["entry"], 0x401000)
+            self.assertIn("/bin/sh", out_c.read_text())

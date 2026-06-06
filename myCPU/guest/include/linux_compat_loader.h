@@ -24,6 +24,8 @@ typedef struct LinuxCompatLoadPlan {
     uint16_t elf_type;
     uint64_t entry;
     uint64_t load_bias;
+    uint64_t phdr_vaddr;
+    uint16_t phnum;
     size_t segment_count;
     linux_compat_load_segment_t segments[LINUX_COMPAT_MAX_LOAD_SEGMENTS];
     bool requires_interp;

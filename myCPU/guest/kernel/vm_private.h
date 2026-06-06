@@ -25,14 +25,17 @@
 #define SV39_PPN_MASK ((1ULL << 44) - 1ULL)
 #define VM_MAX_KERNEL_MAPPINGS 16U
 #define VM_MAX_KERNEL_FAULT_RANGES 16U
-#define VM_MAX_USER_REGIONS 16U
+#define VM_MAX_USER_REGIONS VM_PROCESS_MAX_USER_REGIONS
 #define VM_MAX_ADDRESS_SPACES 2U
 #define VM_MAX_FAULT_ACTIONS 16U
 #define VM_USER_VADDR_BASE ((uintptr_t)0)
 #define VM_USER_VADDR_LIMIT ((uintptr_t)MEM_BASE)
 #define VM_KERNEL_VADDR_BASE ((uintptr_t)MEM_BASE)
 #define VM_KERNEL_VADDR_LIMIT ((uintptr_t)MEM_BASE + (uintptr_t)MEM_SIZE)
-#define VM_OBJECT_ANON_PAGE_SLOTS (MEMORY_PAGE_SIZE / sizeof(uintptr_t))
+#define VM_OBJECT_ANON_SLOT_TABLE_ENTRIES \
+    (MEMORY_PAGE_SIZE / sizeof(uintptr_t))
+#define VM_OBJECT_ANON_PAGE_SLOTS \
+    (VM_OBJECT_ANON_SLOT_TABLE_ENTRIES * VM_OBJECT_ANON_SLOT_TABLE_COUNT)
 
 struct VmFaultRange {
     bool valid;
@@ -185,6 +188,43 @@ static inline size_t object_page_count(size_t size) {
     return size / MEMORY_PAGE_SIZE;
 }
 
+static inline size_t anon_slot_table_count_for_pages(size_t page_count) {
+    return (page_count + VM_OBJECT_ANON_SLOT_TABLE_ENTRIES - 1U) /
+           VM_OBJECT_ANON_SLOT_TABLE_ENTRIES;
+}
+
+static inline uintptr_t* anon_slot_table(vm_object_t* object,
+                                         size_t table_index) {
+    if (object == NULL || table_index >= VM_OBJECT_ANON_SLOT_TABLE_COUNT) {
+        return NULL;
+    }
+    return table_index == 0U
+               ? object->backing.anon.page_slots
+               : object->backing.anon.extra_page_slots[table_index - 1U];
+}
+
+static inline const uintptr_t* anon_slot_table_const(
+    const vm_object_t* object,
+    size_t table_index) {
+    if (object == NULL || table_index >= VM_OBJECT_ANON_SLOT_TABLE_COUNT) {
+        return NULL;
+    }
+    return table_index == 0U
+               ? object->backing.anon.page_slots
+               : object->backing.anon.extra_page_slots[table_index - 1U];
+}
+
+static inline uintptr_t* anon_page_slot(vm_object_t* object,
+                                        size_t page_index) {
+    uintptr_t* table =
+        anon_slot_table(object,
+                        page_index / VM_OBJECT_ANON_SLOT_TABLE_ENTRIES);
+
+    return table == NULL
+               ? NULL
+               : &table[page_index % VM_OBJECT_ANON_SLOT_TABLE_ENTRIES];
+}
+
 static inline bool physical_object_descriptor_valid(const vm_object_t* object) {
     return (object->backing.physical.base_paddr & (MEMORY_PAGE_SIZE - 1U)) == 0 &&
            !range_overflows(object->backing.physical.base_paddr, object->size);
@@ -192,13 +232,26 @@ static inline bool physical_object_descriptor_valid(const vm_object_t* object) {
 
 static inline bool anon_object_descriptor_valid(const vm_object_t* object) {
     const size_t expected_page_count = object_page_count(object->size);
+    const size_t slot_table_count =
+        anon_slot_table_count_for_pages(expected_page_count);
+    size_t i = 0;
 
-    return expected_page_count != 0 &&
-           expected_page_count <= VM_OBJECT_ANON_PAGE_SLOTS &&
-           object->backing.anon.page_slots != NULL &&
-           object->backing.anon.page_count == expected_page_count &&
-           (((uintptr_t)object->backing.anon.page_slots) &
-            (MEMORY_PAGE_SIZE - 1U)) == 0;
+    if (expected_page_count == 0 ||
+        expected_page_count > VM_OBJECT_ANON_PAGE_SLOTS ||
+        object->backing.anon.page_count != expected_page_count ||
+        slot_table_count == 0 ||
+        slot_table_count > VM_OBJECT_ANON_SLOT_TABLE_COUNT) {
+        return false;
+    }
+    for (i = 0; i < slot_table_count; ++i) {
+        const uintptr_t* table = anon_slot_table_const(object, i);
+
+        if (table == NULL ||
+            (((uintptr_t)table) & (MEMORY_PAGE_SIZE - 1U)) != 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static inline bool object_descriptor_valid(const vm_object_t* object) {

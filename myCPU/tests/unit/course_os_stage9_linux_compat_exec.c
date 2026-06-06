@@ -14,26 +14,41 @@ typedef struct PageMapCall {
     uint64_t flags;
 } page_map_call_t;
 
-static uint64_t g_pages[48][SV39_LEVEL_ENTRIES]
+enum {
+    TEST_PAGE_CAPACITY = 900,
+};
+
+#define TEST_RISCV_SSTATUS_FS_MASK (3ULL << 13)
+#define TEST_RISCV_SSTATUS_FS_INITIAL (1ULL << 13)
+
+static uint64_t g_pages[TEST_PAGE_CAPACITY][SV39_LEVEL_ENTRIES]
     __attribute__((aligned(MEMORY_PAGE_SIZE)));
 static size_t g_next_page = 0;
 static int g_alloc_zeroed_page_calls = 0;
 static int g_pmm_free_page_calls = 0;
-static void* g_freed_pages[48];
+static void* g_freed_pages[TEST_PAGE_CAPACITY];
 static size_t g_freed_page_count = 0;
 static int g_map_page_calls = 0;
-static page_map_call_t g_map_page_records[48];
+static page_map_call_t g_map_page_records[TEST_PAGE_CAPACITY];
 static int g_unmap_page_calls = 0;
-static uintptr_t g_unmap_page_vaddrs[48];
+static uintptr_t g_unmap_page_vaddrs[TEST_PAGE_CAPACITY];
 static int g_unregister_user_region_calls = 0;
 static int g_prepare_standard_calls = 0;
 static uintptr_t g_last_prepare_entry_pc = 0;
 static uintptr_t g_last_prepare_user_sp = 0;
+static uintptr_t g_last_prepare_arg0 = 0;
 static int g_linux_policy_install_calls = 0;
 static linux_compat_runtime_t* g_last_linux_policy_runtime = NULL;
 static int g_runtime_activate_calls = 0;
 static int g_runtime_enter_calls = 0;
 static int g_runtime_deactivate_calls = 0;
+static uint64_t g_sstatus = 0;
+static int g_read_sstatus_calls = 0;
+static int g_set_sstatus_bits_calls = 0;
+static uint64_t g_last_set_sstatus_bits = 0;
+static int g_clear_sstatus_bits_calls = 0;
+static uint64_t g_last_clear_sstatus_bits = 0;
+static uint64_t g_sstatus_at_runtime_enter = 0;
 
 static int fail(const char* message) {
     fprintf(stderr, "%s\n", message);
@@ -55,11 +70,19 @@ static void reset_stub_state(void) {
     g_prepare_standard_calls = 0;
     g_last_prepare_entry_pc = 0;
     g_last_prepare_user_sp = 0;
+    g_last_prepare_arg0 = 0;
     g_linux_policy_install_calls = 0;
     g_last_linux_policy_runtime = NULL;
     g_runtime_activate_calls = 0;
     g_runtime_enter_calls = 0;
     g_runtime_deactivate_calls = 0;
+    g_sstatus = 0;
+    g_read_sstatus_calls = 0;
+    g_set_sstatus_bits_calls = 0;
+    g_last_set_sstatus_bits = 0;
+    g_clear_sstatus_bits_calls = 0;
+    g_last_clear_sstatus_bits = 0;
+    g_sstatus_at_runtime_enter = 0;
 }
 
 void* alloc_zeroed_page(void) {
@@ -180,6 +203,23 @@ void runtime_context_clear_process(const vm_process_t* process) {
     (void)process;
 }
 
+uint64_t linux_compat_exec_read_sstatus(void) {
+    g_read_sstatus_calls += 1;
+    return g_sstatus;
+}
+
+void linux_compat_exec_set_sstatus_bits(uint64_t value) {
+    g_set_sstatus_bits_calls += 1;
+    g_last_set_sstatus_bits = value;
+    g_sstatus |= value;
+}
+
+void linux_compat_exec_clear_sstatus_bits(uint64_t value) {
+    g_clear_sstatus_bits_calls += 1;
+    g_last_clear_sstatus_bits = value;
+    g_sstatus &= ~value;
+}
+
 bool runtime_context_process_is_active(const vm_process_t* process) {
     (void)process;
     return false;
@@ -236,6 +276,7 @@ bool trap_user_runtime_prepare_standard(
     g_prepare_standard_calls += 1;
     g_last_prepare_entry_pc = entry_pc;
     g_last_prepare_user_sp = user_sp;
+    g_last_prepare_arg0 = arg0;
     if (user_runtime != NULL) {
         user_runtime->trap_context = trap_context;
         user_runtime->process = process;
@@ -267,6 +308,7 @@ bool trap_user_runtime_activate(trap_user_runtime_t* user_runtime) {
 bool trap_user_runtime_enter(const trap_user_runtime_t* user_runtime) {
     (void)user_runtime;
     g_runtime_enter_calls += 1;
+    g_sstatus_at_runtime_enter = g_sstatus;
     if (g_last_linux_policy_runtime != NULL) {
         g_last_linux_policy_runtime->exited = true;
         g_last_linux_policy_runtime->exit_code = 0;
@@ -285,8 +327,8 @@ static bool make_process(vm_address_space_t* address_space,
     memset(address_space, 0, sizeof(*address_space));
     memset(process, 0, sizeof(*process));
     address_space->allocated = true;
-    address_space->root_table = g_pages[47];
-    address_space->root_table_pa = (uintptr_t)g_pages[47];
+    address_space->root_table = g_pages[TEST_PAGE_CAPACITY - 1U];
+    address_space->root_table_pa = (uintptr_t)g_pages[TEST_PAGE_CAPACITY - 1U];
     if (!vm_process_create(process, address_space)) {
         return false;
     }
@@ -531,15 +573,17 @@ static int test_exec_build_stack_for_dynamic_plan_includes_at_base(void) {
     linux_compat_vm_region_t* stack = NULL;
     size_t aux_offset = 0;
     bool saw_base = false;
+    bool saw_phnum = false;
 
     reset_stub_state();
     if (!make_process(&address_space, &process, &vm)) {
         return fail("expected process setup to succeed");
     }
-    make_elf_header(image, sizeof(image), 3U, 0x1000U, 2U);
+    make_elf_header(image, sizeof(image), 3U, 0x1000U, 3U);
     write_program_header(image, 0U, 1U, 5U, 0x100U, 0U, 4U, 4U);
     write_program_header(image, 1U, 3U, 4U, 0x180U, 0U,
                          sizeof(interp), sizeof(interp));
+    write_program_header(image, 2U, 0x6474e551U, 4U, 0x1c0U, 0U, 4U, 4U);
     memcpy(image + 0x180U, interp, sizeof(interp));
     if (linux_compat_build_load_plan(image, sizeof(image), 1U, 0U, &plan, &trace) !=
         LINUX_COMPAT_OK) {
@@ -571,12 +615,17 @@ static int test_exec_build_stack_for_dynamic_plan_includes_at_base(void) {
         }
         if (type == 7U && value == LINUX_COMPAT_INTERP_LOAD_BIAS) {
             saw_base = true;
-            break;
+        }
+        if (type == 5U && value == 3U) {
+            saw_phnum = true;
         }
         aux_offset += 16U;
     }
     if (!saw_base) {
         return fail("expected dynamic stack auxv to include AT_BASE");
+    }
+    if (!saw_phnum) {
+        return fail("expected dynamic stack auxv to include full ELF PHNUM");
     }
     linux_compat_vm_destroy(&vm);
     return 0;
@@ -615,6 +664,52 @@ static int test_exec_load_maps_interp_main_plan(void) {
     return 0;
 }
 
+static int test_exec_load_splits_large_dynamic_segment(void) {
+    vm_address_space_t address_space;
+    vm_process_t process;
+    linux_compat_vm_t vm;
+    uint8_t image[512];
+    linux_compat_load_plan_t plan;
+    linux_compat_trace_t trace;
+    uintptr_t entry_pc = 0;
+    linux_compat_vm_region_t* first = NULL;
+    linux_compat_vm_region_t* second = NULL;
+    const uint8_t text[] = {0x13U, 0x00U, 0x00U, 0x00U};
+    const size_t oversized_memsz =
+        (VM_OBJECT_ANON_SLOT_TABLE_ENTRIES + 1U) * MEMORY_PAGE_SIZE;
+
+    reset_stub_state();
+    if (!make_process(&address_space, &process, &vm)) {
+        return fail("expected process setup to succeed");
+    }
+    make_elf_header(image, sizeof(image), 3U, 0x1000U, 1U);
+    write_program_header(image, 0U, 1U, 5U, 0x100U, 0U,
+                         sizeof(text), oversized_memsz);
+    memcpy(image + 0x100U, text, sizeof(text));
+    if (linux_compat_build_load_plan(image, sizeof(image), 1U, 0U, &plan, &trace) !=
+        LINUX_COMPAT_OK) {
+        return fail("expected dynamic load plan to build");
+    }
+    if (linux_compat_exec_load(&vm, image, sizeof(image), &plan, &entry_pc, &trace) !=
+            LINUX_COMPAT_OK ||
+        entry_pc != LINUX_COMPAT_DYN_LOAD_BIAS + 0x1000U) {
+        return fail("expected exec_load to split oversized dynamic segment");
+    }
+    first = find_region(&vm, LINUX_COMPAT_DYN_LOAD_BIAS);
+    second = find_region(&vm,
+                         LINUX_COMPAT_DYN_LOAD_BIAS +
+                             VM_OBJECT_ANON_SLOT_TABLE_ENTRIES *
+                                 MEMORY_PAGE_SIZE);
+    if (first == NULL || second == NULL ||
+        first->length !=
+            VM_OBJECT_ANON_SLOT_TABLE_ENTRIES * MEMORY_PAGE_SIZE ||
+        second->length != MEMORY_PAGE_SIZE) {
+        return fail("expected oversized dynamic segment to occupy two VM regions");
+    }
+    linux_compat_vm_destroy(&vm);
+    return 0;
+}
+
 static int test_exec_enter_installs_linux_policy_and_returns_after_exit(void) {
     vm_address_space_t address_space;
     vm_process_t process;
@@ -626,6 +721,7 @@ static int test_exec_enter_installs_linux_policy_and_returns_after_exit(void) {
     uint8_t trap_stack[512] __attribute__((aligned(16)));
 
     reset_stub_state();
+    g_sstatus = 0;
     if (!make_process(&address_space, &process, &vm)) {
         return fail("expected process setup to succeed");
     }
@@ -643,6 +739,7 @@ static int test_exec_enter_installs_linux_policy_and_returns_after_exit(void) {
     if (g_prepare_standard_calls != 1 ||
         g_last_prepare_entry_pc != 0x401000U ||
         g_last_prepare_user_sp != LINUX_COMPAT_STACK_TOP - 16U ||
+        g_last_prepare_arg0 != LINUX_COMPAT_STACK_TOP - 16U ||
         g_linux_policy_install_calls != 1 ||
         g_last_linux_policy_runtime != &runtime ||
         g_runtime_activate_calls != 1 ||
@@ -650,6 +747,16 @@ static int test_exec_enter_installs_linux_policy_and_returns_after_exit(void) {
         g_runtime_deactivate_calls != 1 ||
         !runtime.exited) {
         return fail("expected exec_enter to prepare, install policy, enter and deactivate");
+    }
+    if (g_read_sstatus_calls == 0 ||
+        g_set_sstatus_bits_calls != 1 ||
+        g_last_set_sstatus_bits != TEST_RISCV_SSTATUS_FS_INITIAL ||
+        g_clear_sstatus_bits_calls != 2 ||
+        g_last_clear_sstatus_bits != TEST_RISCV_SSTATUS_FS_MASK ||
+        (g_sstatus_at_runtime_enter & TEST_RISCV_SSTATUS_FS_MASK) !=
+            TEST_RISCV_SSTATUS_FS_INITIAL ||
+        (g_sstatus & TEST_RISCV_SSTATUS_FS_MASK) != 0) {
+        return fail("expected exec_enter to enable and restore Linux compat floating state");
     }
     return 0;
 }
@@ -662,7 +769,7 @@ static int test_course_shell_linux_compat_trap_stack_is_aligned(void) {
     if ((trap_stack_base & (TRAP_USER_RUNTIME_STACK_ALIGNMENT - 1U)) != 0U) {
         return fail("expected course shell Linux compat trap stack to stay 16-byte aligned");
     }
-    if (sizeof(shell.linux_compat_trap_stack) < 4096U) {
+    if (sizeof(shell.linux_compat_trap_stack) < 16384U) {
         return fail("expected course shell Linux compat trap stack to cover real-exec syscall dispatch");
     }
     return 0;
@@ -673,6 +780,7 @@ int main(void) {
         test_exec_build_stack_writes_argc_argv_and_auxv() != 0 ||
         test_exec_build_stack_for_dynamic_plan_includes_at_base() != 0 ||
         test_exec_load_maps_interp_main_plan() != 0 ||
+        test_exec_load_splits_large_dynamic_segment() != 0 ||
         test_exec_enter_installs_linux_policy_and_returns_after_exit() != 0 ||
         test_course_shell_linux_compat_trap_stack_is_aligned() != 0) {
         return 1;

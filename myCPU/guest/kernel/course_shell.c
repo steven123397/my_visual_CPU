@@ -357,6 +357,7 @@ void course_shell_init(course_shell_t* shell) {
                                               &shell->processes);
     (void)procfs_attach_syscalls(&shell->procfs, &shell->syscalls);
     (void)course_fd_set_cwd(&shell->fds, "/");
+    linux_compat_runtime_init(&shell->linux_compat_runtime);
     shell->linux_trace.path[0] = '\0';
     shell->linux_trace.errno_value = 0;
     shell->linux_trace.syscall_number = 0;
@@ -810,6 +811,7 @@ static bool run_linux_command(course_shell_t* shell,
     request.cwd = course_fd_cwd(&shell->fds);
     request.argc = command->argc - 1U;
     request.argv = argv;
+    request.session_runtime = &shell->linux_compat_runtime;
     request.trap_context = trap_active_context();
     request.user_runtime = &shell->linux_compat_user_runtime;
     request.address_space = address_space;

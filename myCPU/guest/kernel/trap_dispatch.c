@@ -133,6 +133,10 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         return;
     }
     switch (frame->a7) {
+    case LINUX_COMPAT_SYS_GETCWD:
+        request->read_buffer = (void*)frame->a0;
+        request->length = (size_t)frame->a1;
+        break;
     case LINUX_COMPAT_SYS_DUP3:
         request->fd = (int32_t)frame->a0;
         request->command = (uint32_t)frame->a1;
@@ -168,6 +172,13 @@ static void build_linux_compat_request(const trap_frame_t* frame,
     case LINUX_COMPAT_SYS_MUNMAP:
         request->addr = frame->a0;
         request->length = (size_t)frame->a1;
+        break;
+    case LINUX_COMPAT_SYS_MREMAP:
+        request->addr = frame->a0;
+        request->length = (size_t)frame->a1;
+        request->offset = frame->a2;
+        request->flags = (uint32_t)frame->a3;
+        request->arg = frame->a4;
         break;
     case LINUX_COMPAT_SYS_CLONE:
         request->flags = (uint32_t)frame->a0;
@@ -216,6 +227,12 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         request->length = (size_t)frame->a2;
         request->offset = frame->a3;
         break;
+    case LINUX_COMPAT_SYS_PSELECT6:
+        request->length = (size_t)frame->a0;
+        request->read_buffer = (void*)frame->a1;
+        request->write_buffer = (const void*)frame->a2;
+        request->stat = (linux_compat_stat_t*)frame->a3;
+        break;
     case LINUX_COMPAT_SYS_FTRUNCATE:
         request->fd = (int32_t)frame->a0;
         request->length = (size_t)frame->a1;
@@ -246,6 +263,14 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         request->path = (const char*)frame->a1;
         request->command = (uint32_t)frame->a2;
         request->flags = (uint32_t)frame->a3;
+        break;
+    case LINUX_COMPAT_SYS_FCHMODAT:
+        request->dirfd = (int32_t)frame->a0;
+        request->path = (const char*)frame->a1;
+        request->flags = (uint32_t)frame->a2;
+        break;
+    case LINUX_COMPAT_SYS_CHDIR:
+        request->path = (const char*)frame->a0;
         break;
     case LINUX_COMPAT_SYS_READLINKAT:
         request->dirfd = (int32_t)frame->a0;
@@ -281,6 +306,7 @@ static void build_linux_compat_request(const trap_frame_t* frame,
     case LINUX_COMPAT_SYS_LSEEK:
         request->fd = (int32_t)frame->a0;
         request->offset = frame->a1;
+        request->command = (uint32_t)frame->a2;
         break;
     case LINUX_COMPAT_SYS_UNAME:
         request->read_buffer = (void*)frame->a0;
@@ -293,6 +319,11 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         break;
     case LINUX_COMPAT_SYS_SET_TID_ADDRESS:
         request->addr = frame->a0;
+        break;
+    case LINUX_COMPAT_SYS_FUTEX:
+        request->addr = frame->a0;
+        request->command = (uint32_t)frame->a1;
+        request->arg = frame->a2;
         break;
     case LINUX_COMPAT_SYS_SET_ROBUST_LIST:
         request->addr = frame->a0;
@@ -353,6 +384,35 @@ static bool handle_linux_compat_syscall_policy(const trap_context_t* trap_contex
         riscv_clear_sstatus_bits(RISCV_SSTATUS_SPP);
     }
     riscv_write_sepc(next_pc);
+    return true;
+}
+
+static bool handle_linux_compat_user_fault_policy(
+    const trap_context_t* trap_context,
+    uint64_t cause,
+    uint64_t epc,
+    uint64_t tval) {
+    linux_compat_runtime_t* runtime = NULL;
+    trap_user_runtime_t* user_runtime = NULL;
+
+    if (trap_context == NULL ||
+        trap_context->user_ecall_policy.linux_runtime == NULL ||
+        !user_exception_from_u_mode()) {
+        return false;
+    }
+
+    runtime = trap_context->user_ecall_policy.linux_runtime;
+    user_runtime = trap_context->user_ecall_policy.user_runtime;
+    if (user_runtime == NULL || user_runtime->resume_pc == 0U) {
+        return false;
+    }
+
+    linux_compat_runtime_record_user_fault(runtime,
+                                           cause,
+                                           (uintptr_t)epc,
+                                           (uintptr_t)tval);
+    riscv_set_sstatus_bits(RISCV_SSTATUS_SPP);
+    riscv_write_sepc(user_runtime->resume_pc);
     return true;
 }
 
@@ -817,6 +877,13 @@ void supervisor_trap_dispatch_with_frame(trap_frame_t* frame) {
                                                cause,
                                                epc,
                                                tval)) {
+            return;
+        }
+
+        if (handle_linux_compat_user_fault_policy(trap_context,
+                                                  cause,
+                                                  epc,
+                                                  tval)) {
             return;
         }
 

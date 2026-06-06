@@ -6,7 +6,7 @@
 
 #define LINUX_COMPAT_MAX_PATH 64U
 #define LINUX_COMPAT_MAX_MESSAGE 128U
-#define LINUX_COMPAT_MAX_ARGS 8U
+#define LINUX_COMPAT_MAX_ARGS 16U
 #define LINUX_COMPAT_MAX_FDS 8U
 #define LINUX_COMPAT_MAX_STDOUT 512U
 #define LINUX_COMPAT_MAX_DIRENTS 8U
@@ -16,6 +16,7 @@
 #define LINUX_COMPAT_MAX_PIPES 4U
 #define LINUX_COMPAT_MAX_PIPE_SIZE 512U
 #define LINUX_COMPAT_MAX_PROCESSES 4U
+#define LINUX_COMPAT_TRACE_USER_FAULT UINT64_MAX
 #define LINUX_COMPAT_MINIMAL_ELF_PATH "/bin/minimal-elf"
 #define LINUX_COMPAT_AT_FDCWD (-100)
 #define LINUX_COMPAT_O_RDONLY 0U
@@ -23,6 +24,7 @@
 #define LINUX_COMPAT_O_RDWR 00000002U
 #define LINUX_COMPAT_O_ACCMODE 00000003U
 #define LINUX_COMPAT_O_CREAT 00000100U
+#define LINUX_COMPAT_O_EXCL 00000200U
 #define LINUX_COMPAT_O_TRUNC 00001000U
 #define LINUX_COMPAT_DT_DIR 4U
 #define LINUX_COMPAT_DT_REG 8U
@@ -32,6 +34,7 @@
 #define LINUX_COMPAT_PROT_EXEC 0x4U
 #endif
 #define LINUX_COMPAT_S_IFDIR 0040000U
+#define LINUX_COMPAT_S_IFCHR 0020000U
 #define LINUX_COMPAT_S_IFREG 0100000U
 #define LINUX_COMPAT_S_IRUSR 0400U
 #define LINUX_COMPAT_S_IWUSR 0200U
@@ -42,7 +45,10 @@
 #define LINUX_COMPAT_S_IXOTH 0001U
 
 #define LINUX_COMPAT_O_NONBLOCK 00004000U
+#define LINUX_COMPAT_O_LARGEFILE 00100000U
+#define LINUX_COMPAT_O_DIRECTORY 00200000U
 #define LINUX_COMPAT_O_CLOEXEC 02000000U
+#define LINUX_COMPAT_MAP_FIXED 0x10U
 #define LINUX_COMPAT_F_DUPFD 0U
 #define LINUX_COMPAT_F_GETFD 1U
 #define LINUX_COMPAT_F_SETFD 2U
@@ -57,7 +63,13 @@
 #define LINUX_COMPAT_FIONBIO 0x5421U
 #define LINUX_COMPAT_CLOCK_REALTIME 0U
 #define LINUX_COMPAT_CLOCK_MONOTONIC 1U
+#define LINUX_COMPAT_FUTEX_WAIT 0U
+#define LINUX_COMPAT_FUTEX_WAKE 1U
+#define LINUX_COMPAT_FUTEX_PRIVATE_FLAG 128U
+#define LINUX_COMPAT_FUTEX_CMD_MASK (~LINUX_COMPAT_FUTEX_PRIVATE_FLAG)
+#define LINUX_COMPAT_MREMAP_MAYMOVE 1U
 
+#define LINUX_COMPAT_SYS_GETCWD 17U
 #define LINUX_COMPAT_SYS_DUP3 24U
 #define LINUX_COMPAT_SYS_FCNTL 25U
 #define LINUX_COMPAT_SYS_IOCTL 29U
@@ -66,6 +78,8 @@
 #define LINUX_COMPAT_SYS_RENAMEAT 38U
 #define LINUX_COMPAT_SYS_FTRUNCATE 46U
 #define LINUX_COMPAT_SYS_FACCESSAT 48U
+#define LINUX_COMPAT_SYS_CHDIR 49U
+#define LINUX_COMPAT_SYS_FCHMODAT 53U
 #define LINUX_COMPAT_SYS_OPENAT 56U
 #define LINUX_COMPAT_SYS_CLOSE 57U
 #define LINUX_COMPAT_SYS_PIPE2 59U
@@ -76,6 +90,7 @@
 #define LINUX_COMPAT_SYS_WRITEV 66U
 #define LINUX_COMPAT_SYS_PREAD64 67U
 #define LINUX_COMPAT_SYS_PWRITE64 68U
+#define LINUX_COMPAT_SYS_PSELECT6 72U
 #define LINUX_COMPAT_SYS_READLINKAT 78U
 #define LINUX_COMPAT_SYS_NEWFSTATAT 79U
 #define LINUX_COMPAT_SYS_FSTAT 80U
@@ -86,12 +101,15 @@
 #define LINUX_COMPAT_SYS_EXIT 93U
 #define LINUX_COMPAT_SYS_EXIT_GROUP 94U
 #define LINUX_COMPAT_SYS_SET_TID_ADDRESS 96U
+#define LINUX_COMPAT_SYS_FUTEX 98U
 #define LINUX_COMPAT_SYS_SET_ROBUST_LIST 99U
 #define LINUX_COMPAT_SYS_RT_SIGACTION 134U
 #define LINUX_COMPAT_SYS_RT_SIGPROCMASK 135U
 #define LINUX_COMPAT_SYS_UNAME 160U
+#define LINUX_COMPAT_SYS_GETPID 172U
 #define LINUX_COMPAT_SYS_BRK 214U
 #define LINUX_COMPAT_SYS_MUNMAP 215U
+#define LINUX_COMPAT_SYS_MREMAP 216U
 #define LINUX_COMPAT_SYS_CLONE 220U
 #define LINUX_COMPAT_SYS_EXECVE 221U
 #define LINUX_COMPAT_SYS_MMAP 222U
@@ -107,6 +125,7 @@ typedef struct TrapContext trap_context_t;
 typedef struct TrapUserRuntime trap_user_runtime_t;
 typedef struct VmAddressSpace vm_address_space_t;
 typedef struct VmProcess vm_process_t;
+typedef struct LinuxCompatRuntime linux_compat_runtime_t;
 
 typedef enum LinuxCompatResult {
     LINUX_COMPAT_OK = 0,
@@ -121,6 +140,7 @@ typedef struct LinuxCompatExecRequest {
     const char* cwd;
     size_t argc;
     const char* const* argv;
+    linux_compat_runtime_t* session_runtime;
     trap_context_t* trap_context;
     trap_user_runtime_t* user_runtime;
     vm_address_space_t* address_space;
@@ -221,6 +241,8 @@ typedef struct LinuxCompatFd {
     bool pipe_read;
     bool pipe_write;
     size_t pipe_index;
+    bool dev_null;
+    bool dev_random;
 } linux_compat_fd_t;
 
 typedef struct LinuxCompatPipe {
@@ -267,7 +289,7 @@ typedef struct LinuxCompatSyscallTraceRecord {
     char message[LINUX_COMPAT_MAX_MESSAGE];
 } linux_compat_syscall_trace_record_t;
 
-typedef struct LinuxCompatRuntime {
+struct LinuxCompatRuntime {
     struct LinuxCompatVm* vm;
     linux_compat_fd_t fds[LINUX_COMPAT_MAX_FDS];
     uint64_t program_break;
@@ -286,9 +308,17 @@ typedef struct LinuxCompatRuntime {
     uint32_t current_pid;
     uint32_t next_pid;
     linux_compat_syscall_trace_record_t trace_records[LINUX_COMPAT_MAX_TRACE_RECORDS];
+    linux_compat_syscall_trace_record_t latest_trace_record;
+    linux_compat_syscall_trace_record_t latest_error_trace_record;
     size_t trace_count;
     bool trace_truncated;
-} linux_compat_runtime_t;
+    bool latest_trace_valid;
+    bool latest_error_trace_valid;
+    bool user_faulted;
+    uint64_t user_fault_cause;
+    uintptr_t user_fault_pc;
+    uintptr_t user_fault_tval;
+};
 
 typedef struct LinuxCompatSyscallRequest {
     uint64_t number;
@@ -375,3 +405,8 @@ linux_compat_result_t linux_compat_syscall_dispatch(
     const linux_compat_syscall_request_t* request,
     linux_compat_syscall_response_t* response,
     linux_compat_trace_t* out_trace);
+
+void linux_compat_runtime_record_user_fault(linux_compat_runtime_t* runtime,
+                                            uint64_t cause,
+                                            uintptr_t pc,
+                                            uintptr_t tval);

@@ -32,6 +32,38 @@ uintptr_t linux_compat_vm_mmap(linux_compat_vm_t* vm,
     return (uintptr_t)-22;
 }
 
+uintptr_t linux_compat_vm_mmap_file(linux_compat_vm_t* vm,
+                                    uintptr_t addr,
+                                    size_t length,
+                                    uint32_t prot,
+                                    uint32_t flags,
+                                    const uint8_t* data,
+                                    size_t data_size,
+                                    size_t file_offset) {
+    (void)vm;
+    (void)addr;
+    (void)length;
+    (void)prot;
+    (void)flags;
+    (void)data;
+    (void)data_size;
+    (void)file_offset;
+    return (uintptr_t)-22;
+}
+
+uintptr_t linux_compat_vm_mremap(linux_compat_vm_t* vm,
+                                 uintptr_t old_addr,
+                                 size_t old_length,
+                                 size_t new_length,
+                                 uint32_t flags) {
+    (void)vm;
+    (void)old_addr;
+    (void)old_length;
+    (void)new_length;
+    (void)flags;
+    return (uintptr_t)-22;
+}
+
 int32_t linux_compat_vm_munmap(linux_compat_vm_t* vm,
                                uintptr_t addr,
                                size_t length) {

@@ -7,12 +7,15 @@
 #include "vm.h"
 
 #define LINUX_COMPAT_BRK_BASE ((uintptr_t)0x08000000U)
-#define LINUX_COMPAT_MMAP_BASE ((uintptr_t)0x10000000U)
+#define LINUX_COMPAT_MMAP_BASE ((uintptr_t)0x20000000U)
 
 #ifndef LINUX_COMPAT_PROT_READ
 #define LINUX_COMPAT_PROT_READ 0x1U
 #define LINUX_COMPAT_PROT_WRITE 0x2U
 #define LINUX_COMPAT_PROT_EXEC 0x4U
+#endif
+#ifndef LINUX_COMPAT_MAP_FIXED
+#define LINUX_COMPAT_MAP_FIXED 0x10U
 #endif
 
 typedef struct LinuxCompatVmRegion {
@@ -44,6 +47,19 @@ uintptr_t linux_compat_vm_mmap(linux_compat_vm_t* vm,
                                size_t length,
                                uint32_t prot,
                                uint32_t flags);
+uintptr_t linux_compat_vm_mmap_file(linux_compat_vm_t* vm,
+                                    uintptr_t addr,
+                                    size_t length,
+                                    uint32_t prot,
+                                    uint32_t flags,
+                                    const uint8_t* data,
+                                    size_t data_size,
+                                    size_t file_offset);
+uintptr_t linux_compat_vm_mremap(linux_compat_vm_t* vm,
+                                 uintptr_t old_addr,
+                                 size_t old_length,
+                                 size_t new_length,
+                                 uint32_t flags);
 linux_compat_vm_region_t* linux_compat_vm_map_fixed(linux_compat_vm_t* vm,
                                                     uintptr_t addr,
                                                     size_t length,

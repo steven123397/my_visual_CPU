@@ -8,7 +8,8 @@
 #define VM_PAGE_WRITE (1ULL << 2)
 #define VM_PAGE_EXEC (1ULL << 3)
 #define VM_PAGE_USER (1ULL << 4)
-#define VM_PROCESS_MAX_USER_REGIONS 8U
+#define VM_PROCESS_MAX_USER_REGIONS 48U
+#define VM_OBJECT_ANON_SLOT_TABLE_COUNT 8U
 
 typedef struct VmAddressSpace vm_address_space_t;
 
@@ -31,6 +32,7 @@ typedef struct VmObjectPhysicalBacking {
 typedef struct VmObjectAnonBacking {
     uintptr_t* page_slots;
     size_t page_count;
+    uintptr_t* extra_page_slots[VM_OBJECT_ANON_SLOT_TABLE_COUNT - 1U];
 } vm_object_anon_backing_t;
 
 typedef struct VmObject {

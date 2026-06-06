@@ -27,6 +27,19 @@ static uintptr_t align_up(uintptr_t value, size_t alignment) {
     return (value + mask) & ~mask;
 }
 
+void* memset(void* ptr, int value, size_t size) {
+    size_t i = 0;
+    uint8_t* bytes = (uint8_t*)ptr;
+
+    if (ptr == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < size; ++i) {
+        bytes[i] = (uint8_t)value;
+    }
+    return ptr;
+}
+
 void memory_init(void) {
     heap_start_ptr = (uintptr_t)__heap_start;
     heap_cursor = heap_start_ptr;

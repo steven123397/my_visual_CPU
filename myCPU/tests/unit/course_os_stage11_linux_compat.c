@@ -5,6 +5,7 @@
 
 #include "../../guest/include/course_shell.h"
 #include "../../guest/include/linux_compat.h"
+#include "../../guest/include/linux_compat_minimal_elf_asset.h"
 
 static int fail(const char* message) {
     fprintf(stderr, "%s\n", message);
@@ -15,12 +16,36 @@ void console_putc(char ch) {
     (void)ch;
 }
 
+static const uint8_t* g_uart_input = 0;
+static size_t g_uart_input_size = 0;
+static size_t g_uart_input_offset = 0;
+
+static void set_uart_input(const uint8_t* input, size_t size) {
+    g_uart_input = input;
+    g_uart_input_size = size;
+    g_uart_input_offset = 0;
+}
+
+uint64_t platform_uart_rx_ready(void) {
+    return g_uart_input != 0 && g_uart_input_offset < g_uart_input_size ? 1U : 0U;
+}
+
+uint8_t platform_uart_getc(void) {
+    if (g_uart_input == 0 || g_uart_input_offset >= g_uart_input_size) {
+        return 0U;
+    }
+    return g_uart_input[g_uart_input_offset++];
+}
+
 static int dispatch(linux_compat_runtime_t* runtime,
                     linux_compat_syscall_request_t* request,
                     linux_compat_syscall_response_t* response,
                     linux_compat_trace_t* trace) {
     return linux_compat_syscall_dispatch(runtime, request, response, trace);
 }
+
+static uint32_t read_u32_le(const uint8_t* bytes, size_t offset);
+static uint64_t read_u64_le(const uint8_t* bytes, size_t offset);
 
 static int open_path(linux_compat_runtime_t* runtime,
                      const char* path,
@@ -45,20 +70,37 @@ static int stat_path(linux_compat_runtime_t* runtime,
                      const char* path,
                      linux_compat_stat_t* stat,
                      linux_compat_trace_t* trace) {
+    enum {
+        kLinuxStatModeOffset = 16,
+        kLinuxStatSizeOffset = 48,
+        kLinuxStatSize = 128
+    };
     linux_compat_syscall_request_t request;
     linux_compat_syscall_response_t response;
+    uint8_t stat_buffer[kLinuxStatSize];
+    int result = 0;
 
     memset(&request, 0, sizeof(request));
     memset(&response, 0, sizeof(response));
+    memset(stat_buffer, 0, sizeof(stat_buffer));
     memset(stat, 0, sizeof(*stat));
     request.number = LINUX_COMPAT_SYS_NEWFSTATAT;
     request.dirfd = LINUX_COMPAT_AT_FDCWD;
     request.path = path;
-    request.stat = stat;
+    request.stat = (linux_compat_stat_t*)stat_buffer;
     if (dispatch(runtime, &request, &response, trace) != LINUX_COMPAT_OK) {
         return -1000;
     }
-    return (int)response.value;
+    result = (int)response.value;
+    if (result == 0) {
+        stat->mode = read_u32_le(stat_buffer, kLinuxStatModeOffset);
+        stat->size = read_u64_le(stat_buffer, kLinuxStatSizeOffset);
+        stat->directory =
+            (stat->mode & LINUX_COMPAT_S_IFDIR) == LINUX_COMPAT_S_IFDIR;
+        stat->executable =
+            (stat->mode & LINUX_COMPAT_S_IXUSR) == LINUX_COMPAT_S_IXUSR;
+    }
+    return result;
 }
 
 static int64_t write_fd(linux_compat_runtime_t* runtime,
@@ -97,6 +139,23 @@ static bool dirents_include(const linux_compat_dirent_t* dirents,
 
 static bool contains(const char* haystack, const char* needle) {
     return haystack != 0 && needle != 0 && strstr(haystack, needle) != 0;
+}
+
+static uint32_t read_u32_le(const uint8_t* bytes, size_t offset) {
+    return (uint32_t)bytes[offset] |
+           ((uint32_t)bytes[offset + 1U] << 8U) |
+           ((uint32_t)bytes[offset + 2U] << 16U) |
+           ((uint32_t)bytes[offset + 3U] << 24U);
+}
+
+static uint64_t read_u64_le(const uint8_t* bytes, size_t offset) {
+    uint64_t value = 0;
+    size_t i = 0;
+
+    for (i = 0; i < 8U; ++i) {
+        value |= (uint64_t)bytes[offset + i] << (i * 8U);
+    }
+    return value;
 }
 
 static int test_create_write_lseek_readback_and_stat(void) {
@@ -142,13 +201,7 @@ static int test_create_write_lseek_readback_and_stat(void) {
         return fail("expected lseek to rewind overlay fd");
     }
 
-    memset(&request, 0, sizeof(request));
-    memset(&stat, 0, sizeof(stat));
-    request.number = LINUX_COMPAT_SYS_FSTAT;
-    request.fd = fd;
-    request.stat = &stat;
-    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
-        response.value != 0 ||
+    if (stat_path(&runtime, "/stage11.txt", &stat, &trace) != 0 ||
         stat.size != 6U ||
         (stat.mode & LINUX_COMPAT_S_IFREG) == 0U) {
         return fail("expected fstat to report overlay file metadata");
@@ -179,6 +232,81 @@ static int test_create_write_lseek_readback_and_stat(void) {
             6 ||
         memcmp(readback, "stage1", 6U) != 0) {
         return fail("expected readback to see current overlay bytes");
+    }
+
+    return 0;
+}
+
+static int test_fstat_and_newfstatat_write_linux_abi_stat_layout(void) {
+    enum {
+        kLinuxStatModeOffset = 16,
+        kLinuxStatSizeOffset = 48,
+        kLinuxStatSize = 128
+    };
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    uint8_t stat_buffer[kLinuxStatSize];
+    const char payload[] = "stage11 git config\n";
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/stage11repo";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected stage11repo setup directory to succeed");
+    }
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/stage11repo/.git";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected .git setup directory to succeed");
+    }
+
+    fd = open_path(&runtime,
+                   "/stage11repo/.git/config",
+                   LINUX_COMPAT_O_CREAT | LINUX_COMPAT_O_TRUNC |
+                       LINUX_COMPAT_O_RDWR,
+                   &trace);
+    if (fd < 3 ||
+        write_fd(&runtime, fd, payload, strlen(payload), &trace) !=
+            (int64_t)strlen(payload)) {
+        return fail("expected git config overlay file setup to succeed");
+    }
+
+    memset(stat_buffer, 0xa5, sizeof(stat_buffer));
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_FSTAT;
+    request.fd = fd;
+    request.stat = (linux_compat_stat_t*)stat_buffer;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        (read_u32_le(stat_buffer, kLinuxStatModeOffset) &
+         LINUX_COMPAT_S_IFREG) == 0U ||
+        read_u64_le(stat_buffer, kLinuxStatSizeOffset) != strlen(payload)) {
+        return fail("expected fstat to write Linux ABI stat mode and size fields");
+    }
+
+    memset(stat_buffer, 0xa5, sizeof(stat_buffer));
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_NEWFSTATAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/stage11repo/.git/config";
+    request.stat = (linux_compat_stat_t*)stat_buffer;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        (read_u32_le(stat_buffer, kLinuxStatModeOffset) &
+         LINUX_COMPAT_S_IFREG) == 0U ||
+        read_u64_le(stat_buffer, kLinuxStatSizeOffset) != strlen(payload)) {
+        return fail("expected newfstatat to write Linux ABI stat mode and size fields");
     }
 
     return 0;
@@ -429,9 +557,138 @@ static int test_cwd_relative_paths_and_dot_slash(void) {
     return 0;
 }
 
+static int test_getcwd_and_chdir_update_runtime_cwd(void) {
+    const uint64_t kSysGetcwd = 17U;
+    const uint64_t kSysChdir = 49U;
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    char cwd[LINUX_COMPAT_MAX_PATH];
+
+    linux_compat_runtime_init(&runtime);
+
+    memset(cwd, 0, sizeof(cwd));
+    memset(&request, 0, sizeof(request));
+    request.number = kSysGetcwd;
+    request.read_buffer = cwd;
+    request.length = sizeof(cwd);
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 2 ||
+        strcmp(cwd, "/") != 0) {
+        return fail("expected getcwd to report initial root cwd");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/repo";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected mkdirat to create chdir target");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = kSysChdir;
+    request.path = "repo";
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        strcmp(linux_compat_runtime_cwd(&runtime), "/repo") != 0) {
+        return fail("expected relative chdir to update runtime cwd");
+    }
+
+    memset(cwd, 0, sizeof(cwd));
+    memset(&request, 0, sizeof(request));
+    request.number = kSysGetcwd;
+    request.read_buffer = cwd;
+    request.length = sizeof(cwd);
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 6 ||
+        strcmp(cwd, "/repo") != 0) {
+        return fail("expected getcwd to report updated cwd");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = kSysChdir;
+    request.path = "/missing";
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != -2 ||
+        strcmp(linux_compat_runtime_cwd(&runtime), "/repo") != 0) {
+        return fail("expected chdir missing directory to fail without changing cwd");
+    }
+
+    return 0;
+}
+
+static int test_getpid_and_fchmodat_for_overlay_file(void) {
+    const uint64_t kSysFchmodat = 53U;
+    const uint64_t kSysGetpid = 172U;
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_stat_t stat;
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+
+    memset(&request, 0, sizeof(request));
+    request.number = kSysGetpid;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 1) {
+        return fail("expected getpid to return current Linux compat pid");
+    }
+
+    fd = open_path(&runtime,
+                   "/config.lock",
+                   LINUX_COMPAT_O_RDWR | LINUX_COMPAT_O_CREAT |
+                       LINUX_COMPAT_O_EXCL,
+                   &trace);
+    if (fd < 3 || linux_compat_close(&runtime, fd, &trace) != 0) {
+        return fail("expected config.lock overlay setup for fchmodat");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = kSysFchmodat;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/config.lock";
+    request.flags = 0644U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        stat_path(&runtime, "/config.lock", &stat, &trace) != 0 ||
+        (stat.mode & 0777U) != 0644U ||
+        (stat.mode & LINUX_COMPAT_S_IFREG) == 0U) {
+        return fail("expected fchmodat to update overlay file mode bits");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = kSysFchmodat;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/missing";
+    request.flags = 0644U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != -2) {
+        return fail("expected fchmodat missing path to return ENOENT");
+    }
+
+    return 0;
+}
+
 static int test_course_shell_minimal_and_chain(void) {
     static course_shell_t shell;
+    course_shell_command_t command;
     char out[512];
+
+    if (!course_shell_parse(
+            "git -C stage11repo -c user.name=stage11 "
+            "-c user.email=stage11@example.invalid commit -m init",
+            &command) ||
+        command.left.argc != 10U ||
+        strcmp(command.left.argv[0], "git") != 0 ||
+        strcmp(command.left.argv[9], "init") != 0) {
+        return fail("expected Stage 11 git commit command to fit shell argv budget");
+    }
 
     course_shell_init(&shell);
     if (!course_shell_run_line(&shell,
@@ -450,6 +707,71 @@ static int test_course_shell_minimal_and_chain(void) {
         !contains(out, "path=/nope errno=2") ||
         contains(out, "should-not-run")) {
         return fail("expected && chain to stop after linux fail-closed output");
+    }
+
+    return 0;
+}
+
+static int test_linux_run_uses_session_overlay_for_exec_lookup(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    linux_compat_exec_request_t exec_request;
+    const char* argv[] = {"/tmp/a.out"};
+    char out[512];
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/tmp";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected session overlay /tmp setup to succeed");
+    }
+
+    fd = open_path(&runtime,
+                   "/tmp/a.out",
+                   LINUX_COMPAT_O_CREAT | LINUX_COMPAT_O_TRUNC |
+                       LINUX_COMPAT_O_WRONLY,
+                   &trace);
+    if (fd < 3 ||
+        write_fd(&runtime,
+                 fd,
+                 g_linux_compat_minimal_elf_asset,
+                 LINUX_COMPAT_MINIMAL_ELF_ASSET_SIZE,
+                 &trace) != (int64_t)LINUX_COMPAT_MINIMAL_ELF_ASSET_SIZE ||
+        linux_compat_close(&runtime, fd, &trace) != 0) {
+        return fail("expected session overlay ELF write to succeed");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_FCHMODAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/tmp/a.out";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected session overlay ELF chmod to succeed");
+    }
+
+    memset(&exec_request, 0, sizeof(exec_request));
+    exec_request.path = "/tmp/a.out";
+    exec_request.argc = 1U;
+    exec_request.argv = argv;
+    exec_request.session_runtime = &runtime;
+    if (linux_compat_run(&exec_request, out, sizeof(out), &trace) !=
+            LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL ||
+        !contains(out, "linux-compat: path=/tmp/a.out") ||
+        !contains(out, "loader=static") ||
+        !contains(out, "real exec context missing") ||
+        contains(out, "errno=2")) {
+        return fail("expected linux_compat_run to find session overlay executable");
     }
 
     return 0;
@@ -546,14 +868,572 @@ static int test_process_exec_wait_and_pipe_syscalls(void) {
     return 0;
 }
 
+static int test_openat_cloexec_sets_fd_flag(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+
+    fd = open_path(&runtime,
+                   "/bin/busybox",
+                   LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_CLOEXEC,
+                   &trace);
+    if (fd < 3 ||
+        runtime.fds[fd].fd_flags != LINUX_COMPAT_FD_CLOEXEC ||
+        (runtime.fds[fd].flags & LINUX_COMPAT_O_CLOEXEC) != 0U) {
+        return fail("expected openat O_CLOEXEC to open readonly fd with close-on-exec");
+    }
+
+    return 0;
+}
+
+static int test_openat_largefile_is_accepted_as_low_effect_status_flag(void) {
+    const uint32_t kOLargefile = 00100000U;
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+
+    fd = open_path(&runtime,
+                   "/bin/busybox",
+                   LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_CLOEXEC |
+                       kOLargefile,
+                   &trace);
+    if (fd < 3 ||
+        runtime.fds[fd].fd_flags != LINUX_COMPAT_FD_CLOEXEC ||
+        (runtime.fds[fd].flags & LINUX_COMPAT_O_CLOEXEC) != 0U ||
+        (runtime.fds[fd].flags & kOLargefile) != kOLargefile) {
+        return fail("expected openat O_LARGEFILE to be accepted without swallowing O_CLOEXEC");
+    }
+
+    return 0;
+}
+
+static int test_openat_directory_and_exclusive_create_flags(void) {
+    const uint32_t kOExcl = 00000200U;
+    const uint32_t kODirectory = 00200000U;
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/repo";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected mkdirat to prepare O_DIRECTORY target");
+    }
+
+    fd = open_path(&runtime,
+                   "/repo",
+                   LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_CLOEXEC |
+                       LINUX_COMPAT_O_LARGEFILE | kODirectory,
+                   &trace);
+    if (fd < 3 || !runtime.fds[fd].overlay_node ||
+        (runtime.fds[fd].flags & kODirectory) != kODirectory) {
+        return fail("expected O_DIRECTORY to open an existing directory");
+    }
+    (void)linux_compat_close(&runtime, fd, &trace);
+
+    memset(&request, 0, sizeof(request));
+    memset(&response, 0, sizeof(response));
+    request.number = LINUX_COMPAT_SYS_OPENAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/missing/templates/";
+    request.flags = LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_CLOEXEC |
+                    LINUX_COMPAT_O_LARGEFILE | kODirectory;
+    if (dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_ERR_NO_SUCH_FILE ||
+        response.value != -2) {
+        return fail("expected O_DIRECTORY missing path to return ENOENT not EINVAL");
+    }
+
+    fd = open_path(&runtime,
+                   "/bin/busybox",
+                   LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_CREAT | kOExcl,
+                   &trace);
+    if (fd != -17) {
+        return fail("expected O_CREAT|O_EXCL on an existing lower file to fail with EEXIST");
+    }
+
+    fd = open_path(&runtime,
+                   "/repo/config.lock",
+                   LINUX_COMPAT_O_RDWR | LINUX_COMPAT_O_CREAT | kOExcl |
+                       LINUX_COMPAT_O_LARGEFILE,
+                   &trace);
+    if (fd < 3 || !runtime.fds[fd].overlay_node) {
+        return fail("expected O_CREAT|O_EXCL to create a missing overlay file");
+    }
+    (void)linux_compat_close(&runtime, fd, &trace);
+
+    fd = open_path(&runtime,
+                   "/repo/config.lock",
+                   LINUX_COMPAT_O_RDWR | LINUX_COMPAT_O_CREAT | kOExcl |
+                       LINUX_COMPAT_O_LARGEFILE,
+                   &trace);
+    if (fd != -17) {
+        return fail("expected O_CREAT|O_EXCL on an existing overlay file to fail with EEXIST");
+    }
+
+    return 0;
+}
+
+static int test_dev_null_open_read_write_and_fstat(void) {
+    enum {
+        kLinuxStatModeOffset = 16,
+        kLinuxStatSizeOffset = 48,
+        kLinuxStatSize = 128
+    };
+    const uint32_t kSIfChr = 0020000U;
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    uint8_t stat_buffer[kLinuxStatSize];
+    char readback[4] = {0};
+    uint8_t random_bytes[8] = {0};
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+
+    fd = open_path(&runtime,
+                   "/dev/null",
+                   LINUX_COMPAT_O_RDWR | LINUX_COMPAT_O_LARGEFILE,
+                   &trace);
+    if (fd < 3) {
+        return fail("expected /dev/null to open read-write");
+    }
+
+    if (write_fd(&runtime, fd, "drop", 4U, &trace) != 4) {
+        return fail("expected /dev/null write to discard bytes");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_READ;
+    request.fd = fd;
+    request.read_buffer = readback;
+    request.length = sizeof(readback);
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        memcmp(readback, "\0\0\0\0", sizeof(readback)) != 0) {
+        return fail("expected /dev/null read to return eof");
+    }
+
+    memset(&request, 0, sizeof(request));
+    memset(stat_buffer, 0, sizeof(stat_buffer));
+    request.number = LINUX_COMPAT_SYS_FSTAT;
+    request.fd = fd;
+    request.stat = (linux_compat_stat_t*)stat_buffer;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        read_u64_le(stat_buffer, kLinuxStatSizeOffset) != 0U ||
+        (read_u32_le(stat_buffer, kLinuxStatModeOffset) & kSIfChr) == 0U) {
+        return fail("expected /dev/null fstat to report char device metadata");
+    }
+
+    fd = open_path(&runtime,
+                   "/dev/urandom",
+                   LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_LARGEFILE,
+                   &trace);
+    if (fd < 3) {
+        return fail("expected /dev/urandom to open read-only");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_READ;
+    request.fd = fd;
+    request.read_buffer = random_bytes;
+    request.length = sizeof(random_bytes);
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != (int64_t)sizeof(random_bytes) ||
+        memcmp(random_bytes, "\0\0\0\0\0\0\0\0", sizeof(random_bytes)) == 0) {
+        return fail("expected /dev/urandom read to fill deterministic bytes");
+    }
+
+    memset(&request, 0, sizeof(request));
+    memset(stat_buffer, 0, sizeof(stat_buffer));
+    request.number = LINUX_COMPAT_SYS_FSTAT;
+    request.fd = fd;
+    request.stat = (linux_compat_stat_t*)stat_buffer;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        read_u64_le(stat_buffer, kLinuxStatSizeOffset) != 0U ||
+        (read_u32_le(stat_buffer, kLinuxStatModeOffset) & kSIfChr) == 0U) {
+        return fail("expected /dev/urandom fstat to report char device metadata");
+    }
+
+    return 0;
+}
+
+static int test_stdin_read_consumes_uart_queue_raw_bytes(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    uint8_t readback[8] = {0};
+    const uint8_t input[] = {'i', 'h', 'e', 'l', 'l', 'o', 0x1b, '\r'};
+
+    linux_compat_runtime_init(&runtime);
+    set_uart_input(input, sizeof(input));
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_READ;
+    request.fd = 0;
+    request.read_buffer = readback;
+    request.length = sizeof(readback);
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != (int64_t)sizeof(input) ||
+        memcmp(readback, input, sizeof(input)) != 0) {
+        return fail("expected stdin read to consume raw UART bytes");
+    }
+
+    return 0;
+}
+
+static int test_pselect6_reports_stdin_ready_from_uart_queue(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    uint64_t readfds = 1U;
+    uint64_t writefds = 0U;
+    uint64_t exceptfds = 0U;
+    const uint8_t input[] = {'\r'};
+
+    linux_compat_runtime_init(&runtime);
+    set_uart_input(input, sizeof(input));
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_PSELECT6;
+    request.length = 1U;
+    request.read_buffer = &readfds;
+    request.write_buffer = &writefds;
+    request.stat = (linux_compat_stat_t*)&exceptfds;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 1 ||
+        readfds != 1U ||
+        writefds != 0U ||
+        exceptfds != 0U ||
+        !contains(trace.message, "pselect6")) {
+        return fail("expected pselect6 to report queued stdin input as readable");
+    }
+
+    return 0;
+}
+
+static int test_futex_wait_and_wake_are_low_effect_not_unsupported(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    uint32_t futex_word = 1U;
+
+    linux_compat_runtime_init(&runtime);
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_FUTEX;
+    request.addr = (uint64_t)(uintptr_t)&futex_word;
+    request.command = LINUX_COMPAT_FUTEX_WAIT |
+                      LINUX_COMPAT_FUTEX_PRIVATE_FLAG;
+    request.arg = 2U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != -11 ||
+        !contains(trace.message, "futex")) {
+        return fail("expected FUTEX_WAIT with mismatched value to return EAGAIN");
+    }
+
+    request.arg = 1U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != -11 ||
+        !contains(trace.message, "futex")) {
+        return fail("expected FUTEX_WAIT to avoid blocking in single-thread compat");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_FUTEX;
+    request.addr = (uint64_t)(uintptr_t)&futex_word;
+    request.command = LINUX_COMPAT_FUTEX_WAKE |
+                      LINUX_COMPAT_FUTEX_PRIVATE_FLAG;
+    request.arg = 1U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        !contains(trace.message, "futex")) {
+        return fail("expected FUTEX_WAKE to return zero wakeups instead of ENOSYS");
+    }
+
+    return 0;
+}
+
+static int test_syscall_trace_records_include_stage11_diagnostics(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    const linux_compat_syscall_trace_record_t* record = 0;
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/repo";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected mkdirat setup for trace diagnostics to succeed");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_OPENAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/repo/config.lock";
+    request.flags = LINUX_COMPAT_O_RDWR | LINUX_COMPAT_O_CREAT |
+                    LINUX_COMPAT_O_EXCL | LINUX_COMPAT_O_CLOEXEC;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value < 3) {
+        return fail("expected openat setup for trace diagnostics to succeed");
+    }
+    fd = (int)response.value;
+    if (!runtime.latest_trace_valid) {
+        return fail("expected truncated trace to expose latest trace record");
+    }
+    record = &runtime.latest_trace_record;
+    if (record->number != LINUX_COMPAT_SYS_OPENAT ||
+        !contains(record->message, "path=/repo/config.lock") ||
+        !contains(record->message, "dirfd=-100") ||
+        !contains(record->message, "fd=") ||
+        !contains(record->message, "flags=") ||
+        !contains(record->message, "cloexec=1")) {
+        return fail("expected openat trace record to include path fd flags and cloexec diagnostics");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_RENAMEAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/repo/config.lock";
+    request.new_path = "/repo/config";
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected renameat setup for trace diagnostics to succeed");
+    }
+    record = &runtime.latest_trace_record;
+    if (record->number != LINUX_COMPAT_SYS_RENAMEAT ||
+        !contains(record->message, "path=/repo/config.lock") ||
+        !contains(record->message, "new=/repo/config")) {
+        return fail("expected renameat trace record to include safe copied new path");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_WRITE;
+    request.fd = fd;
+    request.write_buffer = "abc";
+    request.length = 3U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 3) {
+        return fail("expected write setup for trace diagnostics to succeed");
+    }
+    if (!runtime.latest_trace_valid) {
+        return fail("expected truncated trace to expose latest trace record");
+    }
+    record = &runtime.latest_trace_record;
+    if (record->number != LINUX_COMPAT_SYS_WRITE ||
+        !contains(record->message, "fd=") ||
+        !contains(record->message, "count=3") ||
+        !contains(record->message, "offset=0") ||
+        !contains(record->message, "ret=3") ||
+        !contains(record->message, "errno=0")) {
+        return fail("expected write trace record to include fd count offset ret errno diagnostics");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MMAP;
+    request.addr = 0x500000U;
+    request.length = 8192U;
+    request.prot = LINUX_COMPAT_PROT_READ | LINUX_COMPAT_PROT_WRITE;
+    request.flags = 0x22U;
+    request.fd = -1;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value <= 0) {
+        return fail("expected mmap setup for trace diagnostics to succeed");
+    }
+    record = &runtime.trace_records[runtime.trace_count - 1U];
+    if (record->number != LINUX_COMPAT_SYS_MMAP ||
+        !contains(record->message, "addr=0x500000") ||
+        !contains(record->message, "len=8192") ||
+        !contains(record->message, "prot=3") ||
+        !contains(record->message, "flags=34") ||
+        !contains(record->message, "fd=-1")) {
+        return fail("expected mmap trace record to include addr len prot flags fd diagnostics");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_CLONE;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value <= 1) {
+        return fail("expected clone setup for trace diagnostics to succeed");
+    }
+    record = &runtime.trace_records[runtime.trace_count - 1U];
+    if (record->number != LINUX_COMPAT_SYS_CLONE ||
+        !contains(record->message, "pid=1") ||
+        !contains(record->message, "child=") ||
+        !contains(record->message, "ret=")) {
+        return fail("expected clone trace record to include pid child and ret diagnostics");
+    }
+
+    return 0;
+}
+
+static int test_lseek_syscall_dispatch_uses_whence_argument(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+    fd = open_path(&runtime,
+                   "/stage11-lseek.txt",
+                   LINUX_COMPAT_O_CREAT | LINUX_COMPAT_O_TRUNC |
+                       LINUX_COMPAT_O_RDWR,
+                   &trace);
+    if (fd < 3 ||
+        write_fd(&runtime, fd, "0123456789", 10U, &trace) != 10) {
+        return fail("expected lseek test file setup to succeed");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_LSEEK;
+    request.fd = fd;
+    request.offset = (uint64_t)-3;
+    request.command = 2U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 7 ||
+        runtime.fds[fd].offset != 7U) {
+        return fail("expected lseek syscall dispatch to honor SEEK_END whence");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_LSEEK;
+    request.fd = fd;
+    request.offset = 2U;
+    request.command = 1U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 9 ||
+        runtime.fds[fd].offset != 9U) {
+        return fail("expected lseek syscall dispatch to honor SEEK_CUR whence");
+    }
+
+    return 0;
+}
+
+static int test_syscall_trace_keeps_latest_record_after_truncation(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    size_t i = 0;
+    const linux_compat_syscall_trace_record_t* record = NULL;
+
+    linux_compat_runtime_init(&runtime);
+    for (i = 0; i < LINUX_COMPAT_MAX_TRACE_RECORDS + 3U; ++i) {
+        memset(&request, 0, sizeof(request));
+        request.number = LINUX_COMPAT_SYS_BRK;
+        request.addr = runtime.program_break + 4096U;
+        if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK) {
+            return fail("expected repeated brk trace setup to succeed");
+        }
+    }
+
+    if (!runtime.trace_truncated ||
+        runtime.trace_count != LINUX_COMPAT_MAX_TRACE_RECORDS) {
+        return fail("expected repeated syscalls to mark trace as truncated at capacity");
+    }
+    if (!runtime.latest_trace_valid) {
+        return fail("expected truncated trace to expose latest trace record");
+    }
+    record = &runtime.latest_trace_record;
+    if (record->number != LINUX_COMPAT_SYS_BRK ||
+        record->return_value != response.value ||
+        record->pc != request.addr ||
+        !contains(record->message, "addr=")) {
+        return fail("expected truncated trace to retain latest syscall diagnostics");
+    }
+
+    return 0;
+}
+
+static int test_syscall_trace_keeps_latest_error_after_success(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    const linux_compat_syscall_trace_record_t* record = NULL;
+
+    linux_compat_runtime_init(&runtime);
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_OPENAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/missing";
+    if (dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_ERR_NO_SUCH_FILE ||
+        response.value != -2) {
+        return fail("expected missing openat setup for latest-error trace");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_GETPID;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value <= 0) {
+        return fail("expected successful getpid after latest-error trace setup");
+    }
+
+    if (!runtime.latest_error_trace_valid) {
+        return fail("expected trace to retain latest negative-return syscall");
+    }
+    record = &runtime.latest_error_trace_record;
+    if (record->number != LINUX_COMPAT_SYS_OPENAT ||
+        record->return_value != -2 ||
+        record->errno_value != 2 ||
+        !contains(record->message, "path=/missing")) {
+        return fail("expected latest error trace to retain missing openat diagnostics");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_create_write_lseek_readback_and_stat() != 0 ||
+        test_fstat_and_newfstatat_write_linux_abi_stat_layout() != 0 ||
         test_overlay_shadows_lower_rootfs() != 0 ||
         test_mkdir_dirents_rename_unlink_and_sync() != 0 ||
         test_bad_path_bad_fd_and_lower_guardrails() != 0 ||
         test_cwd_relative_paths_and_dot_slash() != 0 ||
+        test_getcwd_and_chdir_update_runtime_cwd() != 0 ||
+        test_getpid_and_fchmodat_for_overlay_file() != 0 ||
         test_course_shell_minimal_and_chain() != 0 ||
-        test_process_exec_wait_and_pipe_syscalls() != 0) {
+        test_linux_run_uses_session_overlay_for_exec_lookup() != 0 ||
+        test_process_exec_wait_and_pipe_syscalls() != 0 ||
+        test_openat_cloexec_sets_fd_flag() != 0 ||
+        test_openat_largefile_is_accepted_as_low_effect_status_flag() != 0 ||
+        test_openat_directory_and_exclusive_create_flags() != 0 ||
+        test_dev_null_open_read_write_and_fstat() != 0 ||
+        test_stdin_read_consumes_uart_queue_raw_bytes() != 0 ||
+        test_pselect6_reports_stdin_ready_from_uart_queue() != 0 ||
+        test_futex_wait_and_wake_are_low_effect_not_unsupported() != 0 ||
+        test_syscall_trace_records_include_stage11_diagnostics() != 0 ||
+        test_lseek_syscall_dispatch_uses_whence_argument() != 0 ||
+        test_syscall_trace_keeps_latest_record_after_truncation() != 0 ||
+        test_syscall_trace_keeps_latest_error_after_success() != 0) {
         return 1;
     }
     return 0;
