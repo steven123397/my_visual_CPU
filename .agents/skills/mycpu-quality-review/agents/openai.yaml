@@ -1,0 +1,7 @@
+interface:
+  display_name: "myCPU Quality Review"
+  short_description: "审查并收敛 my_visual_CPU 的代码质量，不改变 simulator 语义"
+  default_prompt: "Use $mycpu-quality-review to audit, simplify, deduplicate, or convergence-refactor my_visual_CPU while preserving repo contracts and using the smallest relevant validation."
+
+policy:
+  allow_implicit_invocation: true

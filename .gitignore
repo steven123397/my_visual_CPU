@@ -70,6 +70,9 @@ __pycache__/
 .claude/
 .superpowers/
 
+# Reasonix Code
+.reasonix/
+
 # Local git worktrees
 .worktrees/
 

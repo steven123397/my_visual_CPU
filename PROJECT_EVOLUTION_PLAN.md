@@ -89,7 +89,68 @@ Lab Workbench 是浏览器前端，靠 Node 调试服务和模拟器对话。这
 **12. Showcase 与主线脱钩**
 课程结题、PPT、讲稿、HTML 预览页是项目历史基因，但与当前工程主线已不在同一时间维度。建议把 showcase 冻结为 "v1 课程结题归档"，新的对外材料另起一个面向工程 / 研究的展示线，不要让 showcase 持续侵入 status / design 的更新节奏。
 
-### 1.4 重构优先级建议
+### 1.4 交互性与可配置性（"展示化 → 真实工作台"）
+
+`2026-05-31` 全盘审计发现：项目内核（myCPU CLI + 调试协议 + AI 设备 + guest runtime）实际上是高度可编程的，但**浏览器前端是一层只读展示壳**——它把 CLI 的灵活性全部封死。以下是从"展示器"到"真实工作台"需要补齐的能力。
+
+**13. 前端打破硬编码 manifest**
+当前 `POST /api/session/load` 只能按 name 在 `tests_manifest.mjs` 的约 25 个预定义条目中查找。用户不能上传或指定自己的 ELF。没有代码编辑器、没有汇编器集成、没有任何方式在浏览器里跑用户自己的程序。
+
+提升方向：
+- 最小方案：`POST /api/session/load` 增加 `elfPath`（服务器本地路径）和 `elfBase64`（base64 编码的 ELF）两种新参数，直接绕过 manifest 查找。用户把 RISC-V ELF 放到服务器目录或通过 base64 传入即可在浏览器里跑。
+- 进阶方案：嵌入 Monaco/CodeMirror 代码编辑器，支持 RISC-V 汇编语法高亮，配合浏览器内 assembler 或 docker/riscv-gnu-toolchain 一键编译运行。
+- 影响面：`frontend/server/debug_server.mjs` 的 `/api/session/load` 路由，`frontend/app/app.js` 的 workload 选择 UI。
+
+**14. 调试协议补写能力**
+调试 CLI 当前只读能力强（`snapshot` 完整机器状态、`peek` 读内存、`pagewalk` 遍历页表），但写能力严重缺失：只有 `set_gpr` 能写寄存器，没有 `set_memory`、没有 `set_csr`、没有断点命令。
+
+提升方向：
+- `set_memory addr value`：向指定物理/虚拟地址写入值，复用现有 `peek` 的地址解析路径。
+- `set_csr csr value`：写 CSR，复用现有 CSR 读写基础设施。
+- `break_at addr`：设置 PC 断点，当 `pc == addr` 时暂停执行并返回当前 snapshot。
+- 影响面：`myCPU/src/debug/debug_protocol_command.h`（新增命令枚举）、`debug_protocol.cpp`（新增处理分支）、前端 debug_server 协议转发。
+
+**15. course_os_shell 支持加载外部 ELF**
+`course-os> ` 是一个真正的交互式 shell（支持管道、重定向、脚本），但 `exec` 命令只能运行 `course_user_programs.c` 里硬编码的 7 个 ELF 字节数组（hello/echo/cat/forktest/crashdemo/crash/badelf）。Stage 7 的外部 rootfs 资产链路已经能从 ext4 提取真实 ELF，但只为 Linux compat 路径服务。
+
+提升方向：
+- 让 `course-os> exec /path/to/prog` 从课程 OS 的 rootfs 或内置 FS 中加载真实 RV64 ELF，不再限制为 7 个硬编码程序。
+- 或者：让 `/console` 前端支持拖入 ELF 注入到课程 OS 的文件系统，然后 `exec` 执行。
+- 影响面：`myCPU/guest/kernel/course_user_programs.c`、`course_shell.c` 的 `exec` 路径。
+
+**16. kernel_alpha 增加交互式观察面**
+`kernel_alpha_demo` 跑完 Stage 1→2→3 打印一行 summary marker 就退出。9 条负向 demo 也是预编排的故障注入。和 `interactive_os` 的 monitor（有 `peek`/`regs`/`pagewalk`/`pte` 交互命令）形成鲜明对比——kernel_alpha 的能力（调度器、内存管理、FS、COW、procfs）闲置在一次性 smoke 里。
+
+提升方向：
+- 新增 `kernel_alpha_monitor` 入口：启动后不退出，进入精简 monitor，用户可通过 procfs 节点持续观察调度/内存/COW 统计（`cat /proc/schedstat`），而不是只在一轮 smoke 里被动输出。
+- 或者：让 kernel_alpha_demo 在输出 summary 后 fall into 一个最小交互 prompt，允许重复查询 procfs 节点。
+- 影响面：`myCPU/guest/kernel_alpha/main.c` 入口编排，`procfs.c` 已具备只读能力。
+
+**17. AI 加速器前端自定义**
+AI 加速器是一个真正可编程的硬件设备（~40 个 MMIO 寄存器、提交队列、中断闭环），Python SDK（`workloads/ai_proto/pack_graph.py`）可以构建自定义图包。但前端 AI 面板只能从 4 个服务端硬编码模板中选择。用户不能通过浏览器定义新 op、新模型、新 workload。
+
+提升方向：
+- 最小方案：新增 `POST /api/ai/custom-graph` 端点，接受 JSON 描述的自定义 op 序列和 shape，服务端调用 `pack_graph.py` 生成图包并运行，返回 profile。
+- 进阶方案：前端增加简易 op 编排 UI（JSON editor 或拖拽），让用户在 bounded-dynamic shape 安全壳内定义小模型。
+- 影响面：`frontend/server/ai_tiny_model_service.mjs`，`workloads/ai_proto/pack_graph.py`。
+
+**18. Workload 系统降低门槛**
+当前新增 workload 需要手动改 makefile、添加 profile 目录、写 manifest 条目。对开发者可行，对普通用户不可行。
+
+提升方向：
+- 提供 `workloads/custom/` 模板目录，用户放入 ELF + `profile.toml` 即可被自动发现。
+- manifest 改为自动扫描 workload 目录生成，不再手动维护。
+- 影响面：`myCPU/workloads/` 目录结构，`frontend/server/tests_manifest.mjs` 生成逻辑。
+
+**19. 机器参数可配置**
+RAM 大小通过板级 makefile 固定为 128MiB（`BOARD_RAM_SIZE := 0x08000000`）。MMU 强制 Sv39。无 `--ram-size` CLI 参数，无 CPU 数配置。
+
+提升方向：
+- 增加 `--ram-size` CLI 参数覆盖板级默认值。
+- 前端增加基本的机器配置面板（RAM 大小、是否启用 MMU、设备勾选）。
+- 影响面：`myCPU/src/main.cpp`，`myCPU/src/platform/machine.cpp`，`workloads/boards/`。
+
+### 1.5 重构优先级建议
 
 | 优先级 | 项目 | 原因 |
 |---|---|---|
@@ -105,6 +166,13 @@ Lab Workbench 是浏览器前端，靠 Node 调试服务和模拟器对话。这
 | P3 | Pipeline 后端诚实标注（#9） | 文档清晰度 |
 | P3 | 状态文档边界规则（#8） | 治理规则 |
 | P3 | Showcase 冻结归档（#12） | 治理规则 |
+| P0 | 前端打破硬编码 manifest（#13） | 最小改动把"展示器"变成"可加载任意 ELF 的模拟器"，是所有交互性提升的最短路径 |
+| P0 | 调试协议补写能力（#14） | 有读+写+断点才有交互式调试的完整闭环，否则前端只能"看"不能"改" |
+| P1 | course_os_shell 支持外部 ELF（#15） | 课程 OS 有了真正的用户程序加载能力，教学价值拉满；复用 Stage 7 已有资产 |
+| P1 | kernel_alpha 增加交互式观察面（#16） | 让 procfs / 调度 / COW 统计变成用户可主动查询的实时数据，而不是一次性 summary |
+| P1 | AI 加速器前端自定义（#17） | 设备本身已可编程，前端打开自定义图包入口即可释放硬件能力 |
+| P2 | Workload 系统降低门槛（#18） | 降低用户添加自定义 workload 的工程成本，从"改 makefile"降到"放文件" |
+| P2 | 机器参数可配置（#19） | RAM 大小、MMU、设备选择从硬编码升级为可配置，向 Ripes 级交互靠拢 |
 
 ---
 
@@ -210,7 +278,7 @@ kernel_alpha vs xv6 vs Alpine vs Debian 跑同一个 workload，对比 syscall t
 
 ## 总结
 
-**第一部分的核心动作**：先守住已经落地的 `kernel_alpha` 课程 OS Stage 2 证据面和基础设施 guardrail，再做三件认知重构（AI 设备契约、observability schema、ISA 真值形式占位），再做四件结构层决断 / 固化（Linux 冻结点、测试分层执行纪律、JIT dry-run 出路、状态文档治理），再做四件工程清理（pipeline 标注、bounded-dynamic 文档化、frontend 协议、showcase 归档）。
+**第一部分的核心动作**：先守住已经落地的 `kernel_alpha` 课程 OS 证据面和基础设施 guardrail，再做三件认知重构（AI 设备契约、observability schema、ISA 真值形式占位），再做四件结构层决断 / 固化（Linux 冻结点、测试分层执行纪律、JIT dry-run 出路、状态文档治理），再做四件工程清理（pipeline 标注、bounded-dynamic 文档化、frontend 协议、showcase 归档），再做七件交互性与可配置性提升（打破硬编码 manifest、调试协议写能力、course_os_shell 外部 ELF、kernel_alpha 交互式观察面、AI 前端自定义、workload 门槛降低、机器参数可配置）。其中 #13（前端任意 ELF 加载）和 #14（调试写能力+断点）是 P0，应最先落地——这两个改动让项目从"展示器"变成用户可以真正交互的"工作台"。
 
 **第二部分的核心方向**：从"reference-first + observability + 协设计"这个内核长出八条创新方向，其中 observability 协议化、AI 协处理器协同仿真、Lab 协议化、pipeline 参数化、ISA 形式化是最值得押注的五条。
 
