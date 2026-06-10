@@ -15,6 +15,8 @@
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
+- 当前活跃计划：
+  - [../plan/course_os_kernel_alpha_quality_review_plan.md](../plan/course_os_kernel_alpha_quality_review_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)

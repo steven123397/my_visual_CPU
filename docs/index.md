@@ -6,19 +6,21 @@
 
 1. [status/mainline_status.md](status/mainline_status.md)
    仓库唯一的主线实时状态、当前优先级和下一步。
-2. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
+2. [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
+   `simulator-evolution` 模拟器架构、协议和可观察性升级分线状态。
+3. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
    `Post-Wave 7 标准 Linux 发行版平台` 的当前状态、风险和下一步。
-3. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
+4. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
    `用户自定义 AI 任务 + NPU 性能模型` 与独立 AI accelerator 方向状态。
-4. [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
+5. [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
    当前 `/console` 从 demo workspace 走向 Lab workbench 的设计边界。
-5. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
+6. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
    标准 Linux 发行版平台设计入口。
-6. [plan/post_wave7_linux_distribution_platform_longterm_plan.md](plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+7. [plan/post_wave7_linux_distribution_platform_longterm_plan.md](plan/post_wave7_linux_distribution_platform_longterm_plan.md)
    标准 Linux 发行版平台五阶段长线活跃计划。
-7. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
+8. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
    用户 AI 任务与 NPU 性能模型设计入口。
-8. [showcase/README.md](showcase/README.md)
+9. [showcase/README.md](showcase/README.md)
    课程结题、PPT、讲稿、截图和演示材料入口。
 
 历史设计和专项资料按专题读取即可。
@@ -27,9 +29,20 @@
 
 - `主线状态`
   - [status/mainline_status.md](status/mainline_status.md)
+  - [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
+  - [plan/simulator_evolution_slice1_observability_schema_plan.md](plan/simulator_evolution_slice1_observability_schema_plan.md)
   - [status/code_reself_status.md](status/code_reself_status.md)
   - [plan/history_plan.md#code-reself-remediation-plan](plan/history_plan.md#code-reself-remediation-plan)
   - [plan/history_plan.md](plan/history_plan.md)
+
+- `simulator-evolution`
+  - [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
+  - [plan/simulator_evolution_slice1_observability_schema_plan.md](plan/simulator_evolution_slice1_observability_schema_plan.md)
+  - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
+  - [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
+  - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
+  - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
+  - [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
 
 - `Post-Wave 7 Linux`
   - [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
@@ -78,6 +91,7 @@
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
   - [design/course_os_kernel_alpha_course_os_baseline_design.md](design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [design/course_os_kernel_alpha_linux_compat_plus_design.md](design/course_os_kernel_alpha_linux_compat_plus_design.md)
+  - [plan/course_os_kernel_alpha_quality_review_plan.md](plan/course_os_kernel_alpha_quality_review_plan.md)
   - [plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)

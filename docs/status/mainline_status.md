@@ -26,9 +26,12 @@
   - [../design/wave7_remote_cloud_dev_environment_design.md](../design/wave7_remote_cloud_dev_environment_design.md)
 - 相关状态：
   - [kernel_alpha_status.md](kernel_alpha_status.md)
+  - [simulator_evolution_status.md](simulator_evolution_status.md)
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
 - 当前活跃计划：
+  - [../plan/simulator_evolution_slice1_observability_schema_plan.md](../plan/simulator_evolution_slice1_observability_schema_plan.md)
+  - [../plan/course_os_kernel_alpha_quality_review_plan.md](../plan/course_os_kernel_alpha_quality_review_plan.md)
   - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
   - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划归档：
