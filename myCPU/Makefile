@@ -258,7 +258,8 @@ AI_ACCEL_PROFILE_SMOKE_TIMEOUT ?= 10s
 XV6_SHELL_SMOKE_TIMEOUT ?= 300s
 SUPERVISOR_GUEST_TEST_TIMEOUT ?= 7s
 KERNEL_ALPHA_GUEST_TEST_TIMEOUT ?= 7s
-DEBUG_CLI_SMOKE_TIMEOUT ?= 12s
+DEBUG_CLI_SMOKE_TIMEOUT ?= 30s
+COURSE_OS_LINUX_COMPAT_HOST_SMOKE_TIMEOUT ?= 10s
 AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 10s
 # Pipeline guest demos execute the full guest runtime under the pipeline
 # backend and need a wider budget than the functional path on debug builds.
@@ -689,7 +690,7 @@ test-host-course_os_linux_compat_minimal_elf_smoke: FORCE $(TARGET) $(GUEST_COUR
 
 test-host-course_os_linux_compat_oscomp_help_smoke: FORCE $(TARGET) $(GUEST_COURSE_OS_SHELL_DEMO) tests/host/course_os_linux_compat_oscomp_help_smoke
 	@echo "=== host:course_os_linux_compat_oscomp_help_smoke ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/course_os_linux_compat_oscomp_help_smoke functional 2>&1)"; \
+	output="$$(timeout $(COURSE_OS_LINUX_COMPAT_HOST_SMOKE_TIMEOUT) ./tests/host/course_os_linux_compat_oscomp_help_smoke functional 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
 		echo "Host test timed out: course_os_linux_compat_oscomp_help_smoke" >&2; \

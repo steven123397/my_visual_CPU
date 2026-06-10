@@ -14,6 +14,8 @@
 #define COURSE_SHELL_MAX_ARGS 16U
 #define COURSE_SHELL_MAX_ARG_LEN 32U
 #define COURSE_SHELL_MAX_TRANSCRIPT 2048U
+#define COURSE_SHELL_COMMAND_OUTPUT_SIZE 16384U
+#define COURSE_SHELL_LINE_OUTPUT_SIZE COURSE_SHELL_COMMAND_OUTPUT_SIZE
 #define COURSE_SHELL_LINUX_COMPAT_TRAP_STACK_SIZE 16384U
 
 typedef struct CourseShellSimpleCommand {
@@ -45,6 +47,8 @@ typedef struct CourseShell {
     trap_user_runtime_t linux_compat_user_runtime;
     uint8_t linux_compat_trap_stack[COURSE_SHELL_LINUX_COMPAT_TRAP_STACK_SIZE]
         __attribute__((aligned(TRAP_USER_RUNTIME_STACK_ALIGNMENT)));
+    char command_output_scratch[COURSE_SHELL_COMMAND_OUTPUT_SIZE];
+    char line_output_scratch[COURSE_SHELL_LINE_OUTPUT_SIZE];
     char transcript[COURSE_SHELL_MAX_TRANSCRIPT];
     size_t transcript_size;
     uint32_t shell_pid;

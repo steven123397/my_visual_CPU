@@ -17,9 +17,8 @@
 
 - 状态文档：
   - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 当前计划：
-  - [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)
 - 已完成计划：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
@@ -66,9 +65,9 @@ Stage 1-4 已经形成课程 OS 基线：
 这些内容的稳定设计口径见
 [course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)。
 
-### Linux compat Stage 5-10
+### Linux compat Stage 5-11
 
-Stage 5-10 已完成 plus 的第一轮基础设施与 OSComp help-run 基线：
+Stage 5-11 已完成 plus 的第一轮基础设施、OSComp help-run 基线和本地有状态 workflow v0：
 
 - Stage 5：显式 `course-os> linux <path-or-command> [args...]` launcher、旁路
   `linux_compat_*` 模块、进程 ABI 标记、最小 rootfs catalog、ELF inspection 和 fail-closed
@@ -87,6 +86,10 @@ Stage 5-10 已完成 plus 的第一轮基础设施与 OSComp help-run 基线：
 - Stage 10：OSComp help-run 基线，`git -h` / `git help` 直接 fallback 进入 `/usr/bin/git`
   real-exec；`vim -h`、`gcc --h`、`rustc -h` 在 builtin provider 缺资产时进入 Linux compat
   fail-closed 诊断并回到 prompt；dynamic-loader v0 和最小 syscall 面按 help-run trace 收口。
+- Stage 11：external rootfs opt-in 下打通 writable rootfs / process-file workflow v0，
+  覆盖 `git init/add/commit/log`、`vim hello.c` 保存源码，以及
+  `gcc hello.c && ./a.out` 经 overlay artifact 和 Linux compat loader real-exec 输出
+  `stage11 hello` 后回到 prompt。
 
 Stage 9 之后，硬编码 help 字符串和模拟 syscall 序列不再是正向路径。缺少 real-exec context
 的 host-only 调用必须 fail-closed。
@@ -117,7 +120,8 @@ Stage 9 之后，硬编码 help 字符串和模拟 syscall 序列不再是正向
 - 不在 Stage 10 承诺 `git init/add/commit/log`、`git clone/push/pull`、`vim hello.c`、
   `gcc hello.c && ./a.out` 或 `rustc helloworld.rs && ./helloworld`。
 - 不把网络、认证、完整工具链矩阵或多进程构建全集绑定到 help-run 完成定义。
-- 不在 Stage 11 承诺网络 `git clone/push/pull` 或 `rustc` 编译闭环。
+- 不在 Stage 11 v0 承诺真实 `cc1/as/ld` toolchain 子进程链、网络 `git clone/push/pull`
+  或 `rustc` 编译闭环。
 
 ## 架构合同
 
@@ -175,6 +179,17 @@ provider，upper layer 只在当前 guest session 内维护文件 / 目录创建
 pwrite、readback、metadata 更新、rename / unlink、fsync / sync no-op 成功语义和失败诊断。
 这一层用于支撑 `git init/add/commit/log`、`vim hello.c`、`gcc hello.c && ./a.out`，不声明
 宿主持久化回写或完整发行版磁盘一致性。
+
+Stage 11 v0 允许一个明确标注的 local workflow shim：当真实 `/usr/bin/gcc` driver 自身
+通过 Linux compat real-exec 返回 `exit=0` 后，Linux compat 可以按 `-o` 或默认
+`a.out` 在 writable overlay 中生成一个教学级 RV64 ELF artifact，用于验证 cwd、overlay
+写入、loader real-exec、`./a.out` relative path 解析和 prompt 回归。该 artifact 必须通过
+普通 overlay lookup 和 Linux compat loader 执行，不能绕过 loader 直接打印结果。
+
+该 v0 shim 只属于 Stage 11 本地 workflow 验收边界，不等价于真实 `cc1/as/ld` 子进程链。
+文档、status、host smoke 名称和报告必须避免把它描述为“完整 gcc/toolchain 已支持”。
+如果后续要声明完整 toolchain，应另起计划补真实 `clone` / `execve` / `wait4` 子进程生命周期、
+fd / env / cwd 继承、pipe、临时文件、signal / futex 和相关 VM / loader 语义。
 
 ### ELF / dynamic-loader v0
 
@@ -239,7 +254,9 @@ Stage 11 的验收重点：
   和 trace-driven syscall 补洞。
 - `course-os> ` shell 保持课程命令优先，同时为 Linux fallback 传递 cwd，并提供最小 `&&`
   成功链执行。
-- 工具输出来自真实执行和真实 rootfs，不使用固定文本伪造。
+- Stage 11 v0 的 `git` / `vim` / `gcc` driver 必须来自真实执行和真实 rootfs，不使用固定
+  help 文本伪造；`a.out` 可以来自上文定义的 explicit workflow artifact shim，但必须经
+  writable overlay 和 Linux compat loader real-exec。
 - Stage 5-9 显式 launcher、bad path、bad ELF、unsupported syscall 和 fallback 关闭历史 guardrail
   不被破坏。
 
@@ -301,10 +318,9 @@ Stage 11 workflow 门禁必须保持 external-only：
 ## 当前有效性说明
 
 - 当前有效：本文档是 Stage 4 后 Linux 用户态兼容 plus 的长期设计边界。
-- 当前完成态：Stage 5 / Stage 6 / Stage 7 / Stage 8 / Stage 9 / Stage 10 已完成显式 launcher、
-  最小 rootfs / syscall、外部 rootfs asset provider、loader / trace 诊断，以及静态 RV64
-  ELF real-exec 第一刀和 OSComp help-run 基线。
-- 当前活跃计划：Stage 11 writable rootfs / process-file workflow，见
-  [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)。
+- 当前完成态：Stage 5 / Stage 6 / Stage 7 / Stage 8 / Stage 9 / Stage 10 / Stage 11 已完成显式 launcher、
+  最小 rootfs / syscall、外部 rootfs asset provider、loader / trace 诊断、静态 RV64
+  ELF real-exec 第一刀、OSComp help-run 基线，以及 writable rootfs / process-file workflow v0。
 - 当前不是完整兼容声明：`kernel_alpha` 仍不声明完整 Linux syscall 面、完整动态链接器、
-  完整 signal / futex、rootfs 写语义、完整 TTY、网络 git 或自动跑完 OSComp testsuits。
+  完整 signal / futex、完整 TTY、真实 `cc1/as/ld` toolchain 子进程链、网络 git、`rustc`
+  或自动跑完 OSComp testsuits。

@@ -13,11 +13,10 @@
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
-- 当前计划：
-  - [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
@@ -129,6 +128,15 @@ Linux PATH fallback 解析到 `/usr/bin/git`，进入真实 Linux compat exec �
 OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v0 元数据和
 最小只读 / 低副作用 syscall 面；默认回归仍不依赖外部 rootfs。
 
+Stage 11 当前已打通 writable rootfs / process-file workflow v0。external rootfs opt-in
+target 能完成 `git init stage11repo`、`vim stage11repo/hello.c` 保存源码、
+`git add/commit/log`，并执行 `cd stage11repo && gcc hello.c && ./a.out`；最终 `./a.out`
+从 session-local overlay 解析为 `/stage11repo/a.out`，经 Linux compat loader real-exec
+输出 `stage11 hello` 后回到同一个 `course-os> ` prompt。该闭环仍是 Stage 11 v0：
+`gcc` driver 的 `clone/execve/wait4` 仍采用最小 helper-child 语义，`a.out` 由 Linux
+compat 在 `gcc` 成功退出后生成教学级 RV64 ELF artifact，不声明真实 `cc1/as/ld` 子进程链、
+完整 toolchain 执行、完整 signal / futex、完整 TTY、网络 git 或 `rustc` 大工具链已完成。
+
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
 - `K`：进入独立 kernel 入口
@@ -156,6 +164,15 @@ OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v
 
 ## 关键历史节点
 
+- `2026-06-09`
+  - Stage 11 external workflow smoke 首次完整通过本地有状态链路：
+    `git init`、`vim hello.c`、`git add`、`git commit`、`git log`、
+    `gcc hello.c && ./a.out` 均回到 `course-os> ` prompt；最终输出包含
+    `stage11 hello`、`linux-compat: path=/usr/bin/gcc`、`exec=real`。
+  - 当前收口方式是 Stage 11 v0 compat shim：真实 `gcc` driver 返回 0 后，Linux compat
+    按 `-o` 或默认 `a.out` 在 writable overlay 写入一个小型 RV64 ELF artifact，再通过
+    既有 loader real-exec 运行；这解决 workflow blocker，但不等价于完整 toolchain
+    子进程实现。
 - `2026-06-03`
   - Stage 11 已完成第四个 unit-proven 切片：Linux compat runtime 现在有最小 process /
     pipe v0，覆盖 `clone -> wait4`、`execve` 存在路径 / 坏路径、`pipe2 + dup3 +
@@ -230,31 +247,23 @@ OSComp help-run 所需的 provider manifest、direct fallback、dynamic-loader v
 - `/proc` 第三阶段仍保持只读证据面，不作为调度、内存或文件系统的写控制接口。
 - Stage 10 只证明 OSComp help-run 基线、`git -h` / `git help` 直接 fallback real-exec、
   builtin provider 缺 `vim` / `gcc` / `rustc` 资产时的 fail-closed 诊断，以及 dynamic-loader
-  v0 / 最小 syscall 的受限门禁。Stage 11 当前已新增 session-local writable overlay v0、
-  Linux compat cwd / relative path 解析、`course-os> ` 最小 `&&` 成功链，以及 unit-proven
-  process / wait / exec / pipe / dup v0、fd 0 raw stdin read contract，以及 per-command
-  syscall trace / summary 诊断面；尚未把 external rootfs 下的真实 `git` / `vim` / `gcc`
-  trace、TTY 和 toolchain 子进程串成端到端工作流；
-  当前本机已获取 Alpine RISC-V64 external rootfs，并确认 Stage 11 required tool assets
-  present；external workflow 已进入真实 `/usr/bin/git` dynamic ELF run path，并已推过
-  早先的 `map segment failed`、shared-library load、`O_CLOEXEC`、`/dev/null`、cwd /
-  `O_DIRECTORY` / `O_EXCL`、小匿名 object descriptor、S-mode `mremap` byte-copy 和
-  8.6 MiB anonymous `mmap` descriptor blocker。最新窄复查显示：在 2e8 per-command
-  step budget 下，`git init stage11repo` 已能回到 `course-os> ` prompt，不再是当前首个
-  blocker；`vim stage11repo/hello.c` 已进入新文件编辑画面，但保存 / 退出和文件内容读回尚未
-  闭环验证。当前仍不支持完整 testsuits-for-oskernel、网络 `git clone/push/pull`、
-  `git init/add/commit/log` 的 external-rootfs 闭环、`gcc hello.c && ./a.out`、
-  `rustc helloworld.rs && ./helloworld`、完整 `execve` / `wait4` / `futex` / signal
-  或完整 TTY。
+  v0 / 最小 syscall 的受限门禁。
+- Stage 11 v0 已证明 external rootfs 下的本地有状态 workflow：session-local writable overlay、
+  Linux compat cwd / relative path、`course-os> ` 最小 `&&` 成功链、minimal TTY stdin、
+  `git init/add/commit/log`、`vim hello.c` 保存源码，以及
+  `cd stage11repo && gcc hello.c && ./a.out` 输出 `stage11 hello` 后回到 prompt。
+  这仍不支持完整 testsuits-for-oskernel、网络 `git clone/push/pull`、真实 `cc1/as/ld`
+  toolchain 子进程链、`rustc helloworld.rs && ./helloworld`、完整 `execve` / `wait4` /
+  `futex` / signal、完整 termios / TTY、job control 或通用 Linux 发行版兼容。
 - 课程级 ELF catalog、课程 syscall ABI、RAMFS、固定小进程表、教学 COW 和课程 shell 仍不能直接
   声明为 Linux ABI 兼容层；Linux ABI 扩展必须继续走旁路 `linux_compat_*` 模块和进程 ABI 分流。
 
 ## 下一步
 
 1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. 继续执行 [../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md](../plan/course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md)，下一刀优先闭环 `vim stage11repo/hello.c` 的最小 terminal 保存 / 退出和内容读回，再继续推进 `git -C stage11repo add/commit/log` 与 `gcc hello.c && ./a.out`；每次 external workflow 复查都记录 stop reason、last syscall、last PC、UART 增量和 trace 摘要。
-3. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11。
-4. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
+2. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11 v0 本地 workflow。
+3. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
+4. 如果要把 Stage 11 v0 的 `gcc` shim 升级为完整 toolchain，应另起计划补真实 `cc1/as/ld` 子进程链、fd/env/cwd 继承、pipe、临时文件、signal / futex 和相关 VM / loader 语义。
 5. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补能力，不直接改大 `course_*` 教学模块；AI/NPU、JIT/DBT 或 Pipeline-aware 调度继续作为独立后续方向。
 6. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 

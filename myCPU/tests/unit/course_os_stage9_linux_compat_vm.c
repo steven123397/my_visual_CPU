@@ -1137,6 +1137,51 @@ static int test_syscall_mmap_fixed_prot_none_replaces_existing_page(void) {
     return 0;
 }
 
+static int test_write_only_mmap_supports_kernel_copyin(void) {
+    vm_address_space_t address_space;
+    vm_process_t process;
+    linux_compat_vm_t vm;
+    uintptr_t addr = 0;
+    linux_compat_vm_region_t* region = NULL;
+    const char payload[] = "git object buffer";
+    char readback[sizeof(payload)] = {0};
+
+    reset_stub_state();
+    if (!make_process(&address_space, &process)) {
+        return fail("expected test process setup to succeed");
+    }
+    linux_compat_vm_init(&vm, &address_space, &process);
+
+    addr = linux_compat_vm_mmap(&vm,
+                                0U,
+                                MEMORY_PAGE_SIZE,
+                                LINUX_COMPAT_PROT_WRITE,
+                                0x22U);
+    region = find_vm_region(&vm, addr);
+    if (addr != LINUX_COMPAT_MMAP_BASE ||
+        region == NULL ||
+        (region->region.flags & VM_PAGE_READ) == 0U ||
+        (region->region.flags & VM_PAGE_WRITE) == 0U) {
+        return fail("expected PROT_WRITE mmap to install readable writable RISC-V pages");
+    }
+    if (!linux_compat_vm_write_user(&vm,
+                                    addr,
+                                    payload,
+                                    sizeof(payload))) {
+        return fail("expected write-only mmap setup to accept user writes");
+    }
+    if (!linux_compat_vm_read_user(&vm,
+                                   addr,
+                                   readback,
+                                   sizeof(readback)) ||
+        memcmp(readback, payload, sizeof(payload)) != 0) {
+        return fail("expected kernel copy-in to read from PROT_WRITE mmap");
+    }
+
+    linux_compat_vm_destroy(&vm);
+    return 0;
+}
+
 int main(void) {
     if (test_brk_maps_heap_pages_and_shrink_releases_backing() != 0 ||
         test_mmap_maps_user_pages_and_munmap_releases_them() != 0 ||
@@ -1152,7 +1197,8 @@ int main(void) {
         test_anonymous_mmap_defers_page_allocation_under_pmm_pressure() != 0 ||
         test_mmap_file_uses_physical_mapping_for_aligned_readonly_asset() != 0 ||
         test_mmap_fixed_writable_file_segment_over_physical_mapping() != 0 ||
-        test_syscall_mmap_fixed_prot_none_replaces_existing_page() != 0) {
+        test_syscall_mmap_fixed_prot_none_replaces_existing_page() != 0 ||
+        test_write_only_mmap_supports_kernel_copyin() != 0) {
         return 1;
     }
 

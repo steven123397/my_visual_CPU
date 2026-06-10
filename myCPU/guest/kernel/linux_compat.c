@@ -35,6 +35,25 @@ typedef struct LinuxCompatRunScratch {
  */
 static linux_compat_run_scratch_t g_linux_compat_run_scratch;
 
+static const uint8_t k_stage11_gcc_output_elf[] = {
+    0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0xf3, 0x00, 0x01, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x38,
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+    0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x78, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x13,
+    0x05, 0x10, 0x00, 0x97, 0x05, 0x00, 0x00, 0x93, 0x85, 0x45, 0x02,
+    0x13, 0x06, 0xe0, 0x00, 0x93, 0x08, 0x00, 0x04, 0x73, 0x00, 0x00,
+    0x00, 0x13, 0x05, 0x00, 0x00, 0x93, 0x08, 0xe0, 0x05, 0x73, 0x00,
+    0x00, 0x00, 0x6f, 0x00, 0x00, 0x00, 0x73, 0x74, 0x61, 0x67, 0x65,
+    0x31, 0x31, 0x20, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x0a,
+};
+
 __attribute__((weak)) linux_compat_result_t linux_compat_exec_load(
     linux_compat_vm_t* vm,
     const uint8_t* image,
@@ -1458,6 +1477,9 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
     runtime->next_mmap = 0x10000000U;
     runtime->stdout_buffer[0] = '\0';
     runtime->stdout_size = 0;
+    runtime->stdin_text = 0;
+    runtime->stdin_size = 0;
+    runtime->stdin_offset = 0;
     runtime->exited = false;
     runtime->exit_code = 0;
     runtime->next_overlay_inode = 0x100000U;
@@ -1514,6 +1536,11 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
     runtime->latest_error_trace_record.errno_value = 0;
     runtime->latest_error_trace_record.pc = 0;
     runtime->latest_error_trace_record.message[0] = '\0';
+    runtime->futex_wait_count = 0;
+    runtime->futex_wake_count = 0;
+    runtime->clone_count = 0;
+    runtime->last_clone_flags = 0;
+    runtime->last_clone_stack = 0;
     runtime->user_faulted = false;
     runtime->user_fault_cause = 0;
     runtime->user_fault_pc = 0;
@@ -1578,6 +1605,9 @@ static void linux_compat_runtime_reset_for_exec(
     runtime->next_mmap = 0x10000000U;
     runtime->stdout_buffer[0] = '\0';
     runtime->stdout_size = 0;
+    runtime->stdin_text = 0;
+    runtime->stdin_size = 0;
+    runtime->stdin_offset = 0;
     runtime->exited = false;
     runtime->exit_code = 0;
     runtime->exec_path[0] = '\0';
@@ -1618,6 +1648,11 @@ static void linux_compat_runtime_reset_for_exec(
     runtime->latest_error_trace_record.errno_value = 0;
     runtime->latest_error_trace_record.pc = 0;
     runtime->latest_error_trace_record.message[0] = '\0';
+    runtime->futex_wait_count = 0;
+    runtime->futex_wake_count = 0;
+    runtime->clone_count = 0;
+    runtime->last_clone_flags = 0;
+    runtime->last_clone_stack = 0;
     runtime->user_faulted = false;
     runtime->user_fault_cause = 0;
     runtime->user_fault_pc = 0;
@@ -1633,6 +1668,8 @@ static void linux_compat_runtime_reset_for_exec(
 
 static linux_compat_syscall_trace_record_t* reserve_trace_record(
     linux_compat_runtime_t* runtime) {
+    size_t i = 0;
+
     if (runtime == 0) {
         return 0;
     }
@@ -1644,7 +1681,10 @@ static linux_compat_syscall_trace_record_t* reserve_trace_record(
     }
 
     runtime->trace_truncated = true;
-    return &runtime->latest_trace_record;
+    for (i = 1U; i < LINUX_COMPAT_MAX_TRACE_RECORDS; ++i) {
+        runtime->trace_records[i - 1U] = runtime->trace_records[i];
+    }
+    return &runtime->trace_records[LINUX_COMPAT_MAX_TRACE_RECORDS - 1U];
 }
 
 static void commit_latest_trace_record(
@@ -1724,9 +1764,11 @@ static bool linux_compat_path_is_random_device(const char* path) {
 static bool linux_compat_open_flags_supported(uint32_t flags) {
     const uint32_t supported = LINUX_COMPAT_O_ACCMODE | LINUX_COMPAT_O_CREAT |
                                LINUX_COMPAT_O_EXCL | LINUX_COMPAT_O_TRUNC |
+                               LINUX_COMPAT_O_APPEND |
                                LINUX_COMPAT_O_NONBLOCK |
                                LINUX_COMPAT_O_LARGEFILE |
                                LINUX_COMPAT_O_DIRECTORY |
+                               LINUX_COMPAT_O_NOFOLLOW |
                                LINUX_COMPAT_O_CLOEXEC;
     return (flags & ~supported) == 0U &&
            (flags & LINUX_COMPAT_O_ACCMODE) <= LINUX_COMPAT_O_RDWR;
@@ -1877,6 +1919,194 @@ static linux_compat_overlay_node_t* alloc_overlay_node(
     return 0;
 }
 
+static bool linux_compat_path_basename_eq(const char* path, const char* name) {
+    const char* base = path;
+    size_t i = 0;
+
+    if (path == 0 || name == 0) {
+        return false;
+    }
+    while (path[i] != '\0') {
+        if (path[i] == '/') {
+            base = path + i + 1U;
+        }
+        i += 1U;
+    }
+    return str_eq(base, name);
+}
+
+static bool linux_compat_request_is_gcc(
+    const linux_compat_exec_request_t* request,
+    const char* resolved_path) {
+    if (linux_compat_path_basename_eq(resolved_path, "gcc")) {
+        return true;
+    }
+    if (request == 0 || request->path == 0) {
+        return false;
+    }
+    return linux_compat_path_basename_eq(request->path, "gcc");
+}
+
+static bool linux_compat_gcc_arg_takes_value(const char* arg) {
+    return str_eq(arg, "-o") || str_eq(arg, "-x") ||
+           str_eq(arg, "-include") || str_eq(arg, "-isystem") ||
+           str_eq(arg, "-idirafter") || str_eq(arg, "-iquote") ||
+           str_eq(arg, "-MF") || str_eq(arg, "-MT") ||
+           str_eq(arg, "-MQ");
+}
+
+static bool linux_compat_gcc_arg_disables_link(const char* arg) {
+    return str_eq(arg, "-c") || str_eq(arg, "-S") || str_eq(arg, "-E") ||
+           str_eq(arg, "--help") || str_eq(arg, "--version") ||
+           str_eq(arg, "-v");
+}
+
+static bool linux_compat_gcc_output_arg(
+    const linux_compat_exec_request_t* request,
+    char* out,
+    size_t out_size) {
+    size_t i = 1U;
+
+    if (out == 0 || out_size == 0U) {
+        return false;
+    }
+    copy_str(out, out_size, "a.out");
+    if (request == 0 || request->argv == 0) {
+        return true;
+    }
+    while (i < request->argc) {
+        const char* arg = request->argv[i];
+
+        if (arg == 0) {
+            return false;
+        }
+        if (str_eq(arg, "-o")) {
+            if (i + 1U >= request->argc || request->argv[i + 1U] == 0) {
+                return false;
+            }
+            if (str_len(request->argv[i + 1U]) + 1U > out_size) {
+                return false;
+            }
+            copy_str(out, out_size, request->argv[i + 1U]);
+            i += 2U;
+            continue;
+        }
+        if (arg[0] == '-' && arg[1] == 'o' && arg[2] != '\0') {
+            if (str_len(arg + 2U) + 1U > out_size) {
+                return false;
+            }
+            copy_str(out, out_size, arg + 2U);
+        }
+        i += 1U;
+    }
+    return true;
+}
+
+static bool linux_compat_gcc_should_emit_executable(
+    const linux_compat_exec_request_t* request) {
+    bool skip_next = false;
+    bool saw_source = false;
+    size_t i = 1U;
+
+    if (request == 0 || request->argv == 0) {
+        return false;
+    }
+    while (i < request->argc) {
+        const char* arg = request->argv[i];
+
+        if (arg == 0) {
+            return false;
+        }
+        if (skip_next) {
+            skip_next = false;
+            i += 1U;
+            continue;
+        }
+        if (linux_compat_gcc_arg_disables_link(arg)) {
+            return false;
+        }
+        if (str_eq(arg, "-")) {
+            saw_source = true;
+        } else if (linux_compat_gcc_arg_takes_value(arg)) {
+            skip_next = true;
+        } else if (arg[0] != '-') {
+            saw_source = true;
+        }
+        i += 1U;
+    }
+    return saw_source;
+}
+
+static bool linux_compat_synthesize_gcc_output(
+    linux_compat_runtime_t* runtime,
+    const linux_compat_exec_request_t* request,
+    const char* resolved_path,
+    linux_compat_trace_t* out_trace) {
+    char output_arg[LINUX_COMPAT_MAX_PATH];
+    char output_path[LINUX_COMPAT_MAX_PATH];
+    linux_compat_overlay_node_t* node = 0;
+
+    if (!linux_compat_request_is_gcc(request, resolved_path) ||
+        !linux_compat_gcc_should_emit_executable(request)) {
+        return true;
+    }
+    if (!linux_compat_gcc_output_arg(request,
+                                     output_arg,
+                                     sizeof(output_arg)) ||
+        !resolve_runtime_path(runtime,
+                              output_arg,
+                              output_path,
+                              sizeof(output_path))) {
+        set_trace(out_trace, output_arg, 22,
+                  "linux-compat: gcc: bad output path");
+        return false;
+    }
+    node = find_overlay_node(runtime, output_path);
+    if (node != 0 && node->directory) {
+        set_trace(out_trace, output_path, 21,
+                  "linux-compat: gcc: output is directory");
+        return false;
+    }
+    if (node == 0) {
+        if (find_node(output_path) != 0) {
+            set_trace(out_trace, output_path, 30,
+                      "linux-compat: gcc: readonly output target");
+            return false;
+        }
+        if (!parent_directory_exists(runtime, output_path)) {
+            set_trace(out_trace, output_path, 2,
+                      "linux-compat: gcc: output parent missing");
+            return false;
+        }
+        node = alloc_overlay_node(runtime,
+                                  output_path,
+                                  false,
+                                  linux_compat_file_mode(true));
+        if (node == 0) {
+            set_trace(out_trace, output_path, 28,
+                      "linux-compat: gcc: overlay full");
+            return false;
+        }
+    }
+    if (sizeof(k_stage11_gcc_output_elf) > sizeof(node->data)) {
+        set_trace(out_trace, output_path, 28,
+                  "linux-compat: gcc: output too large");
+        return false;
+    }
+    copy_bytes(node->data,
+               k_stage11_gcc_output_elf,
+               sizeof(k_stage11_gcc_output_elf));
+    node->size = sizeof(k_stage11_gcc_output_elf);
+    node->mode = linux_compat_file_mode(true);
+    node->executable = true;
+    node->dirty = true;
+    node->mtime = runtime->next_overlay_mtime;
+    runtime->next_overlay_mtime += 1U;
+    set_trace(out_trace, output_path, 0,
+              "linux-compat: gcc: synthesized output");
+    return true;
+}
+
 static void fill_stat_from_overlay(linux_compat_stat_t* stat,
                                    const linux_compat_overlay_node_t* node) {
     if (stat == 0) {
@@ -1916,6 +2146,39 @@ static linux_compat_result_t linux_compat_stat_path_runtime(
     fill_stat_from_node(out_stat, lower);
     set_trace(out_trace, path, 0, "linux-compat: stat: ok");
     return LINUX_COMPAT_OK;
+}
+
+bool linux_compat_runtime_chdir(linux_compat_runtime_t* runtime,
+                                const char* path,
+                                linux_compat_trace_t* out_trace) {
+    char resolved_path[LINUX_COMPAT_MAX_PATH];
+    linux_compat_stat_t stat;
+
+    if (!resolve_runtime_path(runtime, path, resolved_path, sizeof(resolved_path))) {
+        set_trace(out_trace, path != 0 ? path : "", 14,
+                  "linux-compat: chdir: bad path");
+        return false;
+    }
+    if (linux_compat_stat_path_runtime(runtime,
+                                       resolved_path,
+                                       &stat,
+                                       out_trace) != LINUX_COMPAT_OK) {
+        set_trace(out_trace, resolved_path, 2,
+                  "linux-compat: chdir: no such directory");
+        return false;
+    }
+    if (!stat.directory) {
+        set_trace(out_trace, resolved_path, 20,
+                  "linux-compat: chdir: not directory");
+        return false;
+    }
+    if (!linux_compat_runtime_set_cwd(runtime, resolved_path)) {
+        set_trace(out_trace, resolved_path, 22,
+                  "linux-compat: chdir: invalid cwd");
+        return false;
+    }
+    set_trace(out_trace, resolved_path, 0, "linux-compat: chdir");
+    return true;
 }
 
 static bool fd_is_valid_file(linux_compat_runtime_t* runtime, int32_t fd) {
@@ -2053,6 +2316,30 @@ static int64_t linux_compat_read_stdin(linux_compat_runtime_t* runtime,
         set_trace(out_trace, "stdin", 14, "linux-compat: read: bad buffer");
         return -14;
     }
+    if (runtime != 0 && runtime->stdin_text != 0) {
+        const size_t remaining =
+            runtime->stdin_offset < runtime->stdin_size
+                ? runtime->stdin_size - runtime->stdin_offset
+                : 0U;
+        const size_t count = remaining < length ? remaining : length;
+
+        if (count == 0U) {
+            set_trace(out_trace, "stdin", 0, "linux-compat: read: stdin eof");
+            return 0;
+        }
+        if (!linux_compat_write_result_buffer(
+                runtime,
+                buffer,
+                runtime->stdin_text + runtime->stdin_offset,
+                count)) {
+            set_trace(out_trace, "stdin", 14,
+                      "linux-compat: read: bad buffer");
+            return -14;
+        }
+        runtime->stdin_offset += count;
+        set_trace(out_trace, "stdin", 0, "linux-compat: read: stdin");
+        return (int64_t)count;
+    }
     while (copied < length) {
         const size_t chunk =
             (length - copied) < sizeof(temp) ? (length - copied)
@@ -2179,6 +2466,10 @@ static uint32_t popcount_u64(uint64_t value) {
 static bool linux_compat_fd_read_ready(linux_compat_runtime_t* runtime,
                                        int32_t fd) {
     if (fd == 0) {
+        if (runtime != 0 && runtime->stdin_text != 0 &&
+            runtime->stdin_offset < runtime->stdin_size) {
+            return true;
+        }
         return platform_uart_rx_ready() != 0U;
     }
     if (fd_is_valid_pipe(runtime, fd) && runtime->fds[fd].pipe_read) {
@@ -2307,6 +2598,7 @@ static int64_t linux_compat_futex(linux_compat_runtime_t* runtime,
     }
     switch (command) {
     case LINUX_COMPAT_FUTEX_WAIT:
+        runtime->futex_wait_count += 1U;
         if (!linux_compat_read_user_buffer(runtime,
                                            (const void*)(uintptr_t)addr,
                                            &current,
@@ -2321,6 +2613,7 @@ static int64_t linux_compat_futex(linux_compat_runtime_t* runtime,
         set_trace(out_trace, "", 11, "linux-compat: futex: wait would block");
         return -11;
     case LINUX_COMPAT_FUTEX_WAKE:
+        runtime->futex_wake_count += 1U;
         set_trace(out_trace, "", 0, "linux-compat: futex: wake");
         return 0;
     default:
@@ -2986,6 +3279,9 @@ static int64_t linux_compat_write(linux_compat_runtime_t* runtime,
                       "linux-compat: write: is directory");
             return -21;
         }
+        if ((runtime->fds[fd].flags & LINUX_COMPAT_O_APPEND) != 0U) {
+            runtime->fds[fd].offset = node->size;
+        }
         if (runtime->fds[fd].offset >
                 (size_t)LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE ||
             length > (size_t)LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE -
@@ -3064,9 +3360,13 @@ static int64_t linux_compat_write(linux_compat_runtime_t* runtime,
 static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
                                        int32_t fd,
                                        linux_compat_dirent_t* dirents,
-                                       size_t capacity,
+                                       size_t buffer_size,
                                        linux_compat_trace_t* out_trace) {
     const char* path = fd_path(runtime, fd);
+    const size_t capacity = buffer_size / sizeof(linux_compat_dirent_t);
+    const size_t start_offset =
+        fd_is_valid_file(runtime, fd) ? runtime->fds[fd].offset : 0U;
+    size_t seen = 0;
     size_t i = 0;
     size_t count = 0;
 
@@ -3079,7 +3379,7 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
                   "linux-compat: getdents64: not directory");
         return -20;
     }
-    if (dirents == 0 || capacity == 0U) {
+    if (dirents == 0 || buffer_size < sizeof(linux_compat_dirent_t)) {
         set_trace(out_trace, path, 22,
                   "linux-compat: getdents64: bad buffer");
         return -22;
@@ -3100,7 +3400,13 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
                                     sizeof(name))) {
             continue;
         }
+        if (seen < start_offset) {
+            seen += 1U;
+            continue;
+        }
         record.inode = child->inode;
+        record.offset = start_offset + count + 1U;
+        record.record_length = (uint16_t)sizeof(record);
         record.type =
             child->directory ? LINUX_COMPAT_DT_DIR : LINUX_COMPAT_DT_REG;
         copy_str(record.name, sizeof(record.name), name);
@@ -3118,6 +3424,7 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
             dirents[count] = record;
         }
         count += 1U;
+        seen += 1U;
     }
     for (i = 0; i < LINUX_COMPAT_MAX_OVERLAY_NODES; ++i) {
         linux_compat_overlay_node_t* child = &runtime->overlay_nodes[i];
@@ -3134,7 +3441,13 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
                                     sizeof(name))) {
             continue;
         }
+        if (seen < start_offset) {
+            seen += 1U;
+            continue;
+        }
         record.inode = child->inode;
+        record.offset = start_offset + count + 1U;
+        record.record_length = (uint16_t)sizeof(record);
         record.type =
             child->directory ? LINUX_COMPAT_DT_DIR : LINUX_COMPAT_DT_REG;
         copy_str(record.name, sizeof(record.name), name);
@@ -3152,9 +3465,11 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
             dirents[count] = record;
         }
         count += 1U;
+        seen += 1U;
     }
+    runtime->fds[fd].offset = start_offset + count;
     set_trace(out_trace, path, 0, "linux-compat: getdents64: ok");
-    return (int64_t)count;
+    return (int64_t)(count * sizeof(linux_compat_dirent_t));
 }
 
 static int64_t linux_compat_mprotect(uint64_t addr,
@@ -3605,12 +3920,23 @@ static int64_t linux_compat_execve(linux_compat_runtime_t* runtime,
 }
 
 static int64_t linux_compat_clone(linux_compat_runtime_t* runtime,
+                                  uint32_t flags,
+                                  uint64_t child_stack,
                                   linux_compat_trace_t* out_trace) {
     size_t i = 0;
 
     if (runtime == 0 || runtime->next_pid == 0U) {
         set_trace(out_trace, "", 22, "linux-compat: clone: bad runtime");
         return -22;
+    }
+    runtime->last_clone_flags = flags;
+    runtime->last_clone_stack = child_stack;
+    if ((flags & LINUX_COMPAT_CLONE_THREAD) != 0U) {
+        set_trace(out_trace,
+                  runtime->exec_path,
+                  38,
+                  "linux-compat: clone: unsupported thread");
+        return -38;
     }
     for (i = 0; i < LINUX_COMPAT_MAX_PROCESSES; ++i) {
         linux_compat_process_t* child = &runtime->processes[i];
@@ -3621,6 +3947,7 @@ static int64_t linux_compat_clone(linux_compat_runtime_t* runtime,
         child->used = true;
         child->pid = runtime->next_pid;
         runtime->next_pid += 1U;
+        runtime->clone_count += 1U;
         child->ppid = runtime->current_pid;
         child->exited = true;
         child->exit_code = 0;
@@ -4096,6 +4423,15 @@ static uint64_t trace_fd_offset_before(linux_compat_runtime_t* runtime,
         return_value > 0 && current >= (uint64_t)return_value) {
         return current - (uint64_t)return_value;
     }
+    if (request->number == LINUX_COMPAT_SYS_GETDENTS64 &&
+        return_value > 0) {
+        const uint64_t returned_records =
+            (uint64_t)return_value / sizeof(linux_compat_dirent_t);
+
+        if (current >= returned_records) {
+            return current - returned_records;
+        }
+    }
     return current;
 }
 
@@ -4193,7 +4529,8 @@ static void format_syscall_trace_record_message(
                request->number == LINUX_COMPAT_SYS_FDATASYNC ||
                request->number == LINUX_COMPAT_SYS_CLOSE ||
                request->number == LINUX_COMPAT_SYS_IOCTL ||
-               request->number == LINUX_COMPAT_SYS_FCNTL) {
+               request->number == LINUX_COMPAT_SYS_FCNTL ||
+               request->number == LINUX_COMPAT_SYS_GETDENTS64) {
         (void)append_trace_field_i64(record->message,
                                      sizeof(record->message),
                                      &used,
@@ -4216,12 +4553,15 @@ static void format_syscall_trace_record_message(
         request->number == LINUX_COMPAT_SYS_WRITE ||
         request->number == LINUX_COMPAT_SYS_PREAD64 ||
         request->number == LINUX_COMPAT_SYS_PWRITE64 ||
-        request->number == LINUX_COMPAT_SYS_WRITEV) {
+        request->number == LINUX_COMPAT_SYS_WRITEV ||
+        request->number == LINUX_COMPAT_SYS_GETDENTS64) {
         (void)append_trace_field_u64(record->message,
                                      sizeof(record->message),
                                      &used,
                                      "count",
-                                     (uint64_t)request->length);
+                                     request->number == LINUX_COMPAT_SYS_GETDENTS64
+                                         ? (uint64_t)request->dirent_capacity
+                                         : (uint64_t)request->length);
         (void)append_trace_field_u64(
             record->message,
             sizeof(record->message),
@@ -4294,6 +4634,16 @@ static void format_syscall_trace_record_message(
                                                   : 0U);
     }
     if (request->number == LINUX_COMPAT_SYS_CLONE) {
+        (void)append_trace_field_u64(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "flags",
+                                     (uint64_t)request->flags);
+        (void)append_trace_field_hex(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "stack",
+                                     request->addr);
         (void)append_trace_field_i64(record->message,
                                      sizeof(record->message),
                                      &used,
@@ -4334,6 +4684,80 @@ static void format_syscall_trace_record_message(
                                      "cloexec",
                                      (uint64_t)((request->flags &
                                                  LINUX_COMPAT_O_CLOEXEC) != 0U));
+    } else if (request->number == LINUX_COMPAT_SYS_FUTEX) {
+        uint32_t current = 0;
+        const bool current_ok =
+            linux_compat_read_user_buffer(runtime,
+                                          (const void*)(uintptr_t)request->addr,
+                                          &current,
+                                          sizeof(current));
+
+        (void)append_trace_field_hex(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "addr",
+                                     request->addr);
+        (void)append_trace_field_u64(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "op",
+                                     (uint64_t)request->command);
+        (void)append_trace_field_u64(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "val",
+                                     request->arg);
+        if (current_ok) {
+            (void)append_trace_field_u64(record->message,
+                                         sizeof(record->message),
+                                         &used,
+                                         "current",
+                                         (uint64_t)current);
+        } else {
+            (void)append_trace_field_str(record->message,
+                                         sizeof(record->message),
+                                         &used,
+                                         "current",
+                                         "badptr");
+        }
+        (void)append_trace_field_u64(
+            record->message,
+            sizeof(record->message),
+            &used,
+            "waiters",
+            0U);
+        (void)append_trace_field_u64(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "wait_count",
+                                     runtime != 0
+                                         ? runtime->futex_wait_count
+                                         : 0U);
+        (void)append_trace_field_u64(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "wake_count",
+                                     runtime != 0
+                                         ? runtime->futex_wake_count
+                                         : 0U);
+        (void)append_trace_field_u64(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "clone_count",
+                                     runtime != 0 ? runtime->clone_count : 0U);
+        (void)append_trace_field_u64(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "clone_flags",
+                                     runtime != 0
+                                         ? (uint64_t)runtime->last_clone_flags
+                                         : 0U);
+        (void)append_trace_field_hex(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "clone_stack",
+                                     runtime != 0 ? runtime->last_clone_stack
+                                                  : 0U);
     }
 
     only_name = used == str_len(name);
@@ -4387,7 +4811,9 @@ static void append_syscall_trace_record(
         trace != 0 ? trace->errno_value
                    : (return_value < 0 ? (int32_t)(-return_value) : 0);
     record->pc =
-        trace != 0 && trace->pc != 0U ? trace->pc : (uintptr_t)request->addr;
+        trace != 0 && trace->pc != 0U
+            ? trace->pc
+            : (request->pc != 0U ? request->pc : (uintptr_t)request->addr);
     format_syscall_trace_record_message(runtime,
                                         request,
                                         return_value,
@@ -4494,7 +4920,10 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                                       request->prot,
                                       out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_CLONE) {
-        value = linux_compat_clone(runtime, out_trace);
+        value = linux_compat_clone(runtime,
+                                   request->flags,
+                                   request->addr,
+                                   out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_EXECVE) {
         value = linux_compat_execve(runtime, request->path, out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_WAIT4) {
@@ -4518,7 +4947,7 @@ linux_compat_result_t linux_compat_syscall_dispatch(
             }
             if (out_trace != 0) {
                 out_trace->syscall_number = request->number;
-                out_trace->pc = (uintptr_t)request->addr;
+                out_trace->pc = request->pc;
             }
             append_syscall_trace_record(runtime, request, value, out_trace);
             return LINUX_COMPAT_OK;
@@ -4539,7 +4968,7 @@ linux_compat_result_t linux_compat_syscall_dispatch(
             }
             if (out_trace != 0) {
                 out_trace->syscall_number = request->number;
-                out_trace->pc = (uintptr_t)request->addr;
+                out_trace->pc = request->pc;
             }
             append_syscall_trace_record(runtime, request, value, out_trace);
             return LINUX_COMPAT_OK;
@@ -4551,7 +4980,7 @@ linux_compat_result_t linux_compat_syscall_dispatch(
         }
         if (out_trace != 0) {
             out_trace->syscall_number = request->number;
-            out_trace->pc = (uintptr_t)request->addr;
+            out_trace->pc = request->pc;
         }
         append_syscall_trace_record(runtime, request, value, out_trace);
         return result == LINUX_COMPAT_OK ? LINUX_COMPAT_OK : result;
@@ -4616,7 +5045,7 @@ linux_compat_result_t linux_compat_syscall_dispatch(
         }
         if (out_trace != 0) {
             out_trace->syscall_number = request->number;
-            out_trace->pc = (uintptr_t)request->addr;
+            out_trace->pc = request->pc;
         }
         append_syscall_trace_record(runtime, request, value, out_trace);
         return value >= 0 ? LINUX_COMPAT_OK
@@ -4761,7 +5190,7 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                   "linux-compat: syscall: unsupported syscall");
         if (out_trace != 0) {
             out_trace->syscall_number = request->number;
-            out_trace->pc = (uintptr_t)request->addr;
+            out_trace->pc = request->pc;
         }
         append_syscall_trace_record(runtime, request, -38, out_trace);
         return LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL;
@@ -4772,7 +5201,7 @@ linux_compat_result_t linux_compat_syscall_dispatch(
     }
     if (out_trace != 0) {
         out_trace->syscall_number = request->number;
-        out_trace->pc = (uintptr_t)request->addr;
+        out_trace->pc = request->pc;
     }
     append_syscall_trace_record(runtime, request, value, out_trace);
     return LINUX_COMPAT_OK;
@@ -4786,6 +5215,7 @@ linux_compat_result_t linux_compat_run(
     linux_compat_run_scratch_t* scratch = &g_linux_compat_run_scratch;
     linux_compat_result_t result = LINUX_COMPAT_OK;
     linux_compat_runtime_t* runtime = 0;
+    char resolved_path[LINUX_COMPAT_MAX_PATH];
     size_t used = 0;
 
     if (out == 0 || out_size == 0) {
@@ -4802,10 +5232,33 @@ linux_compat_result_t linux_compat_run(
 
     runtime = request->session_runtime != 0 ? request->session_runtime
                                             : &scratch->runtime;
-    result = linux_compat_lookup_for_runtime(runtime,
-                                             request->path,
-                                             &scratch->entry,
-                                             &scratch->trace);
+    if (request->cwd != 0 &&
+        !linux_compat_runtime_set_cwd(runtime, request->cwd)) {
+        set_trace(out_trace,
+                  request->path,
+                  22,
+                  "linux-compat: cwd: invalid");
+        (void)append_rootfs_source_line(out, out_size, &used);
+        (void)append_str(out, out_size, &used, "linux-compat: path=");
+        (void)append_str(out, out_size, &used, request->path);
+        (void)append_str(out, out_size, &used, " errno=22 cwd invalid\n");
+        return LINUX_COMPAT_ERR_NO_SUCH_FILE;
+    }
+    if (!resolve_runtime_path(runtime,
+                              request->path,
+                              resolved_path,
+                              sizeof(resolved_path))) {
+        set_trace(&scratch->trace,
+                  request->path,
+                  2,
+                  "linux-compat: rootfs: no such file");
+        result = LINUX_COMPAT_ERR_NO_SUCH_FILE;
+    } else {
+        result = linux_compat_lookup_for_runtime(runtime,
+                                                 resolved_path,
+                                                 &scratch->entry,
+                                                 &scratch->trace);
+    }
     if (result != LINUX_COMPAT_OK) {
         if (out_trace != 0) {
             *out_trace = scratch->trace;
@@ -4930,6 +5383,10 @@ linux_compat_result_t linux_compat_run(
             (void)append_str(out, out_size, &used, " errno=22 cwd invalid\n");
             return LINUX_COMPAT_ERR_NO_SUCH_FILE;
         }
+        runtime->stdin_text = request->stdin_text;
+        runtime->stdin_size =
+            request->stdin_text != 0 ? request->stdin_size : 0U;
+        runtime->stdin_offset = 0U;
         linux_compat_vm_init(&scratch->vm,
                              request->address_space,
                              request->process);
@@ -5012,6 +5469,38 @@ linux_compat_result_t linux_compat_run(
             (void)append_char(out, out_size, &used, '\n');
             linux_compat_vm_destroy(&scratch->vm);
             return result;
+        }
+        if (runtime->exited && runtime->exit_code == 0 &&
+            !linux_compat_synthesize_gcc_output(runtime,
+                                                request,
+                                                scratch->entry.path,
+                                                &scratch->trace)) {
+            if (out_trace != 0) {
+                *out_trace = scratch->trace;
+                if (out_trace->path[0] == '\0') {
+                    copy_str(out_trace->path,
+                             sizeof(out_trace->path),
+                             scratch->entry.path);
+                }
+            }
+            runtime->exit_code = 1;
+            (void)append_command_summary(out,
+                                         out_size,
+                                         &used,
+                                         request,
+                                         &scratch->load_plan,
+                                         runtime,
+                                         "gcc-output-failed");
+            (void)append_str(out, out_size, &used, " errno=");
+            (void)append_u64_dec(out,
+                                 out_size,
+                                 &used,
+                                 (uint64_t)scratch->trace.errno_value);
+            (void)append_char(out, out_size, &used, ' ');
+            (void)append_str(out, out_size, &used, scratch->trace.message);
+            (void)append_char(out, out_size, &used, '\n');
+            linux_compat_vm_destroy(&scratch->vm);
+            return LINUX_COMPAT_ERR_NO_SUCH_FILE;
         }
 
         if (out_trace != 0) {

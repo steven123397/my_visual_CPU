@@ -343,7 +343,9 @@ class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
             for guest_dir in (
                 "bin",
                 "usr/bin",
+                "usr/riscv64-alpine-linux-musl/bin",
                 "usr/lib/gcc/riscv64-linux-gnu",
+                "usr/libexec/gcc/riscv64-alpine-linux-musl/14.2.0",
                 "lib",
             ):
                 (root / guest_dir).mkdir(parents=True)
@@ -357,6 +359,13 @@ class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
                 ("usr/bin/ld", 0x407000),
                 ("usr/bin/rustc", 0x408000),
                 ("usr/lib/gcc/riscv64-linux-gnu/cc1", 0x409000),
+                ("usr/riscv64-alpine-linux-musl/bin/as", 0x40B000),
+                ("usr/riscv64-alpine-linux-musl/bin/ld", 0x40C000),
+                (
+                    "usr/libexec/gcc/riscv64-alpine-linux-musl/14.2.0/"
+                    "liblto_plugin.so",
+                    0x40A000,
+                ),
             ):
                 (root / guest_path).write_bytes(rv64_exec_elf(entry))
             (root / "lib" / "ld-musl-riscv64.so.1").write_bytes(
@@ -421,6 +430,13 @@ class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
                 self.assertEqual(by_path[toolchain_path]["kind"], "toolchain")
                 self.assertTrue(by_path[toolchain_path]["required"])
                 self.assertTrue(by_path[toolchain_path]["present"])
+            for toolchain_path in (
+                "/usr/riscv64-alpine-linux-musl/bin/as",
+                "/usr/riscv64-alpine-linux-musl/bin/ld",
+            ):
+                self.assertEqual(by_path[toolchain_path]["kind"], "toolchain")
+                self.assertTrue(by_path[toolchain_path]["required"])
+                self.assertTrue(by_path[toolchain_path]["present"])
             self.assertEqual(
                 by_path["/usr/lib/gcc/riscv64-linux-gnu/cc1"]["kind"],
                 "toolchain",
@@ -431,6 +447,13 @@ class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
             self.assertEqual(by_path["/usr/bin/rustc"]["kind"], "tool")
             self.assertFalse(by_path["/usr/bin/rustc"]["required"])
             self.assertTrue(by_path["/usr/bin/rustc"]["present"])
+            lto_plugin_path = (
+                "/usr/libexec/gcc/riscv64-alpine-linux-musl/14.2.0/"
+                "liblto_plugin.so"
+            )
+            self.assertEqual(by_path[lto_plugin_path]["kind"], "toolchain")
+            self.assertTrue(by_path[lto_plugin_path]["required"])
+            self.assertTrue(by_path[lto_plugin_path]["present"])
             self.assertEqual(
                 by_path["/lib/ld-musl-riscv64.so.1"]["kind"], "interpreter"
             )
@@ -440,6 +463,7 @@ class LinuxCompatRootfsAssetToolTest(unittest.TestCase):
             self.assertFalse(by_path["/lib/libgcc_s.so.1"]["present"])
             self.assertIn("/usr/bin/rustc", generated)
             self.assertIn("/usr/lib/gcc/riscv64-linux-gnu/cc1", generated)
+            self.assertIn(lto_plugin_path, generated)
             self.assertNotIn("/lib/libgcc_s.so.1", generated)
 
     def test_required_tool_needed_shared_assets_are_generated(self) -> None:

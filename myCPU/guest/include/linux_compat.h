@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define LINUX_COMPAT_MAX_PATH 64U
+#define LINUX_COMPAT_MAX_PATH 128U
 #define LINUX_COMPAT_MAX_MESSAGE 128U
 #define LINUX_COMPAT_MAX_ARGS 16U
 #define LINUX_COMPAT_MAX_FDS 8U
@@ -26,6 +26,7 @@
 #define LINUX_COMPAT_O_CREAT 00000100U
 #define LINUX_COMPAT_O_EXCL 00000200U
 #define LINUX_COMPAT_O_TRUNC 00001000U
+#define LINUX_COMPAT_O_APPEND 00002000U
 #define LINUX_COMPAT_DT_DIR 4U
 #define LINUX_COMPAT_DT_REG 8U
 #ifndef LINUX_COMPAT_PROT_READ
@@ -47,6 +48,7 @@
 #define LINUX_COMPAT_O_NONBLOCK 00004000U
 #define LINUX_COMPAT_O_LARGEFILE 00100000U
 #define LINUX_COMPAT_O_DIRECTORY 00200000U
+#define LINUX_COMPAT_O_NOFOLLOW 00400000U
 #define LINUX_COMPAT_O_CLOEXEC 02000000U
 #define LINUX_COMPAT_MAP_FIXED 0x10U
 #define LINUX_COMPAT_F_DUPFD 0U
@@ -67,6 +69,7 @@
 #define LINUX_COMPAT_FUTEX_WAKE 1U
 #define LINUX_COMPAT_FUTEX_PRIVATE_FLAG 128U
 #define LINUX_COMPAT_FUTEX_CMD_MASK (~LINUX_COMPAT_FUTEX_PRIVATE_FLAG)
+#define LINUX_COMPAT_CLONE_THREAD 0x00010000U
 #define LINUX_COMPAT_MREMAP_MAYMOVE 1U
 
 #define LINUX_COMPAT_SYS_GETCWD 17U
@@ -140,6 +143,8 @@ typedef struct LinuxCompatExecRequest {
     const char* cwd;
     size_t argc;
     const char* const* argv;
+    const char* stdin_text;
+    size_t stdin_size;
     linux_compat_runtime_t* session_runtime;
     trap_context_t* trap_context;
     trap_user_runtime_t* user_runtime;
@@ -186,6 +191,8 @@ typedef struct LinuxCompatStat {
 
 typedef struct LinuxCompatDirent {
     uint64_t inode;
+    uint64_t offset;
+    uint16_t record_length;
     uint8_t type;
     char name[LINUX_COMPAT_MAX_PATH];
 } linux_compat_dirent_t;
@@ -296,6 +303,9 @@ struct LinuxCompatRuntime {
     uint64_t next_mmap;
     char stdout_buffer[LINUX_COMPAT_MAX_STDOUT];
     size_t stdout_size;
+    const char* stdin_text;
+    size_t stdin_size;
+    size_t stdin_offset;
     bool exited;
     int32_t exit_code;
     linux_compat_overlay_node_t overlay_nodes[LINUX_COMPAT_MAX_OVERLAY_NODES];
@@ -314,6 +324,11 @@ struct LinuxCompatRuntime {
     bool trace_truncated;
     bool latest_trace_valid;
     bool latest_error_trace_valid;
+    uint64_t futex_wait_count;
+    uint64_t futex_wake_count;
+    uint64_t clone_count;
+    uint32_t last_clone_flags;
+    uint64_t last_clone_stack;
     bool user_faulted;
     uint64_t user_fault_cause;
     uintptr_t user_fault_pc;
@@ -322,6 +337,7 @@ struct LinuxCompatRuntime {
 
 typedef struct LinuxCompatSyscallRequest {
     uint64_t number;
+    uintptr_t pc;
     int32_t dirfd;
     int32_t fd;
     const char* path;
@@ -376,6 +392,9 @@ linux_compat_result_t linux_compat_stat_path(
 void linux_compat_runtime_init(linux_compat_runtime_t* runtime);
 bool linux_compat_runtime_set_cwd(linux_compat_runtime_t* runtime,
                                   const char* cwd);
+bool linux_compat_runtime_chdir(linux_compat_runtime_t* runtime,
+                                const char* path,
+                                linux_compat_trace_t* out_trace);
 const char* linux_compat_runtime_cwd(const linux_compat_runtime_t* runtime);
 
 int32_t linux_compat_openat(linux_compat_runtime_t* runtime,

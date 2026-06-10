@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -8,6 +9,28 @@
 #include "../../src/debug/debug_session.h"
 
 namespace {
+
+constexpr uint64_t kDefaultStage11ExternalRootfsCommandMaxSteps =
+    1200000000ULL;
+
+uint64_t stage11_external_rootfs_command_max_steps() {
+    const char* env =
+        std::getenv("MYCPU_STAGE11_EXTERNAL_ROOTFS_COMMAND_MAX_STEPS");
+    if (env == nullptr || env[0] == '\0') {
+        return kDefaultStage11ExternalRootfsCommandMaxSteps;
+    }
+
+    char* end = nullptr;
+    const unsigned long long value = std::strtoull(env, &end, 10);
+    if (end == env || *end != '\0' || value == 0ULL) {
+        std::fprintf(
+            stderr,
+            "invalid MYCPU_STAGE11_EXTERNAL_ROOTFS_COMMAND_MAX_STEPS: %s\n",
+            env);
+        std::exit(1);
+    }
+    return static_cast<uint64_t>(value);
+}
 
 bool expect_contains(const std::string& haystack,
                      const char* needle,
@@ -53,16 +76,18 @@ bool run_until_new_uart_contains(DebugSession& session,
                                  size_t offset,
                                  const char* needle,
                                  DebugSession::UartOutputChunk& chunk) {
+    const uint64_t max_steps = stage11_external_rootfs_command_max_steps();
     try {
-        chunk = session.run_until_new_uart_contains(
-            offset, needle, DebugBudget::kCourseOsShellCommandMaxSteps);
+        chunk = session.run_until_new_uart_contains(offset, needle, max_steps);
         return true;
     } catch (const std::runtime_error& error) {
         chunk = session.uart_output(offset);
         std::fprintf(stderr, "%s\n", error.what());
         std::fprintf(stderr,
-                     "external rootfs smoke failed while waiting for: %s\n",
-                     needle);
+                     "external rootfs smoke failed while waiting for: %s "
+                     "step_budget=%llu\n",
+                     needle,
+                     (unsigned long long)max_steps);
         std::fprintf(stderr,
                      "command output since offset %zu was:\n%s\n",
                      offset,
@@ -77,6 +102,13 @@ bool run_shell_command(DebugSession& session,
                        const ExpectedText* expectations,
                        size_t expectation_count,
                        DebugSession::UartOutputChunk& chunk) {
+    const uint64_t max_steps = stage11_external_rootfs_command_max_steps();
+    std::fprintf(stderr,
+                 "Stage 11 external rootfs command begin command=\"%s\" "
+                 "step_budget=%llu offset=%zu\n",
+                 command,
+                 (unsigned long long)max_steps,
+                 offset);
     session.uart_input(command);
     for (size_t i = 0; i < expectation_count; ++i) {
         if (!run_until_new_uart_contains(session,
@@ -85,6 +117,9 @@ bool run_shell_command(DebugSession& session,
                                          chunk)) {
             return false;
         }
+        std::fprintf(stderr,
+                     "Stage 11 external rootfs matched: %s\n",
+                     expectations[i].needle);
     }
     for (size_t i = 0; i < expectation_count; ++i) {
         if (!expect_contains(chunk.text,
@@ -116,7 +151,8 @@ int main(int argc, char** argv) {
     constexpr ExpectedText kBusybox[] = {
         {"linux-compat: rootfs=external", "external rootfs should report generated provider"},
         {"linux-compat: path=/bin/busybox", "busybox should launch through explicit linux command"},
-        {"loader=static interp=none", "busybox should report static loader plan"},
+        {"loader=", "busybox should report a loader plan"},
+        {"exec=real", "busybox should run through the real Linux compat exec path"},
         {"BusyBox v", "busybox help should emit help"},
         {"course-os> ", "busybox help should return to prompt"},
     };

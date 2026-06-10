@@ -123,6 +123,7 @@ static int test_shell_script_mode_success_and_failure_line(void) {
     if (!course_shell_run_line(&shell, "sh /demo.sh", out, sizeof(out)) ||
         !contains(out, "stage3") ||
         !contains(out, "profile") ||
+        !contains(out, "stage3\nprofile\n") ||
         !course_shell_transcript(&shell, transcript, sizeof(transcript)) ||
         !contains(transcript, "$ sh /demo.sh") ||
         !contains(transcript, "$ echo stage3") ||

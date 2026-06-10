@@ -199,10 +199,10 @@ static int test_syscall_dispatch_covers_help_output_minimum(void) {
     request.number = LINUX_COMPAT_SYS_GETDENTS64;
     request.fd = fd;
     request.dirents = dirents;
-    request.dirent_capacity = LINUX_COMPAT_MAX_DIRENTS;
+    request.dirent_capacity = sizeof(dirents);
     if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
             LINUX_COMPAT_OK ||
-        response.value < 1 ||
+        response.value < (int64_t)sizeof(linux_compat_dirent_t) ||
         strcmp(dirents[0].name, "git") != 0 ||
         dirents[0].type != LINUX_COMPAT_DT_REG) {
         return fail("expected getdents64 to enumerate /usr/bin");
@@ -223,7 +223,7 @@ static int test_syscall_dispatch_covers_help_output_minimum(void) {
 
     memset(&request, 0, sizeof(request));
     request.number = 9999U;
-    request.addr = 0x1234U;
+    request.pc = 0x1234U;
     if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
             LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL ||
         response.value != -38 ||

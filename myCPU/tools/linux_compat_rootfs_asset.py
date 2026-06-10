@@ -26,6 +26,15 @@ DEFAULT_SHARED_LIBRARY_DIRS = (
     "/usr/lib/riscv64-linux-gnu",
     "/usr/lib/gcc/riscv64-linux-gnu",
 )
+GCC_SEARCH_ROOTS = (
+    "/usr/libexec/gcc",
+    "/usr/lib/gcc",
+)
+TARGET_BINUTILS_NAMES = (
+    "as",
+    "ld",
+    "ld.bfd",
+)
 PAGE_SIZE = 4096
 
 
@@ -262,6 +271,85 @@ def source_path_exists(source: Source, guest_path: str) -> bool:
         return False
 
 
+def list_ext4_directory(rootfs: pathlib.Path, guest_path: str) -> list[tuple[str, bool]]:
+    if shutil.which("debugfs") is None:
+        return []
+    proc = subprocess.run(
+        ["debugfs", "-R", f"ls -p {guest_path}", str(rootfs)],
+        text=True,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return []
+    entries: list[tuple[str, bool]] = []
+    for line in proc.stdout.splitlines():
+        if not line.startswith("/"):
+            continue
+        fields = line.split("/")
+        if len(fields) < 7:
+            continue
+        mode = fields[2]
+        name = fields[5]
+        if name in ("", ".", ".."):
+            continue
+        entries.append((name, mode.startswith("04")))
+    return entries
+
+
+def list_source_directory(source: Source, guest_path: str) -> list[tuple[str, bool]]:
+    guest_path = normalize_guest_path(guest_path)
+    if source.kind == "ext4":
+        return list_ext4_directory(source.path, guest_path)
+    path = source.path / guest_path.removeprefix("/")
+    try:
+        return [
+            (child.name, child.is_dir())
+            for child in path.iterdir()
+            if child.name not in (".", "..")
+        ]
+    except OSError:
+        return []
+
+
+def discover_gcc_lto_plugin_paths(source: Source) -> list[str]:
+    paths: set[str] = set()
+    for search_root in GCC_SEARCH_ROOTS:
+        for target_name, target_is_dir in list_source_directory(source, search_root):
+            if not target_is_dir:
+                continue
+            target_root = normalize_guest_path(f"{search_root}/{target_name}")
+            for version_name, version_is_dir in list_source_directory(
+                source, target_root
+            ):
+                if not version_is_dir:
+                    continue
+                plugin_path = normalize_guest_path(
+                    f"{target_root}/{version_name}/liblto_plugin.so"
+                )
+                if source_path_exists(source, plugin_path):
+                    paths.add(plugin_path)
+    return sorted(paths)
+
+
+def discover_target_binutils_paths(
+    source: Source, required_toolchain_paths: set[str]
+) -> list[str]:
+    paths: set[str] = set()
+    for target_name, target_is_dir in list_source_directory(source, "/usr"):
+        if not target_is_dir:
+            continue
+        target_bin = normalize_guest_path(f"/usr/{target_name}/bin")
+        for tool_name in TARGET_BINUTILS_NAMES:
+            if normalize_guest_path(f"/usr/bin/{tool_name}") not in (
+                required_toolchain_paths
+            ):
+                continue
+            tool_path = normalize_guest_path(f"{target_bin}/{tool_name}")
+            if source_path_exists(source, tool_path):
+                paths.add(tool_path)
+    return sorted(paths)
+
+
 def resolve_shared_library_path(source: Source, name: str) -> str | None:
     if name.startswith("/"):
         guest_path = normalize_guest_path(name)
@@ -361,6 +449,17 @@ def collect_asset_records(
     for required, kind, paths in path_groups:
         for guest_path in paths:
             add_record(required, kind, guest_path)
+
+    required_toolchain_paths = {
+        normalize_guest_path(guest_path) for guest_path in toolchain_paths
+    }
+    for guest_path in discover_target_binutils_paths(source, required_toolchain_paths):
+        add_record(True, "toolchain", guest_path)
+
+    gcc_record = by_path.get("/usr/bin/gcc")
+    if gcc_record is not None and gcc_record["present"]:
+        for guest_path in discover_gcc_lto_plugin_paths(source):
+            add_record(True, "toolchain", guest_path)
 
     index = 0
     while index < len(records):

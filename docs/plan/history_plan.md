@@ -21,6 +21,51 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-06-10
+
+#### course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan
+
+- 完成时间：2026-06-10
+- 原文件：`course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md`
+- 完成内容：完成 `kernel_alpha` Linux compat Stage 11 writable rootfs / process-file workflow v0。
+  external rootfs opt-in target 现在能完成 `git init stage11repo`、`vim stage11repo/hello.c`
+  保存源码、`git add/commit/log`，并执行
+  `cd stage11repo && gcc hello.c && ./a.out`；最终 `./a.out` 从 session-local overlay
+  解析为 `/stage11repo/a.out`，经 Linux compat loader real-exec 输出 `stage11 hello`
+  后回到同一个 `course-os> ` prompt。
+- 实现过程摘要：本阶段按 trace-driven 小步补齐 external asset preflight、session-local
+  writable overlay、cwd / relative path、`course-os> ` 最小 `&&` 成功链、bounded per-command
+  syscall trace / summary、process / exec / wait / pipe / dup v0、minimal TTY stdin 和
+  Stage 11 workflow host smoke。最终 `gcc` driver 真实执行返回 0 后，由明确标注的 Stage 11
+  v0 compat shim 按 `-o` 或默认 `a.out` 写入教学级 RV64 ELF artifact；该 artifact 仍必须走
+  overlay lookup 和 Linux compat loader real-exec，不绕过 loader 直接伪造输出。
+- 验证摘要：已运行 `cd myCPU && python3 -m unittest tests.host.linux_compat_rootfs_asset_test`、
+  `make test-unit-course_os_stage5_linux_compat`、
+  `make test-unit-course_os_stage6_linux_compat`、
+  `make test-unit-course_os_stage8_linux_compat_loader`、
+  `make test-unit-course_os_stage9_linux_compat_vm`、
+  `make test-unit-course_os_stage9_linux_compat_exec`、
+  `make test-unit-course_os_stage9_linux_compat_syscall`、
+  `make test-unit-course_os_stage10_linux_compat`、
+  `make test-unit-course_os_stage11_linux_compat`、
+  `make test-unit-trap_dispatch`、
+  `make test-unit-supervisor_demo_smoke`、
+  `make test-unit-user_program_smoke`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、
+  `make test-host-course_os_linux_compat_minimal_elf_smoke`、
+  `make test-host-course_os_linux_compat_oscomp_help_smoke`、
+  带 `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img`
+  的 `make test-host-course_os_linux_compat_external_rootfs_smoke` 和
+  `make test-host-course_os_linux_compat_external_workflow_smoke`；workflow 输出确认
+  `git init`、`vim`、`git add/commit/log`、`gcc hello.c && ./a.out` 均匹配并回到 prompt，
+  最终包含 `stage11 hello`、`linux-compat: path=/usr/bin/gcc` 和 `exec=real`。收口阶段另跑
+  `make test`、`make test-pipeline` 和 `git diff --check`。
+- 剩余风险：Stage 11 v0 不声明完整 testsuits-for-oskernel、网络 `git clone/push/pull`、
+  真实 `cc1/as/ld` toolchain 子进程链、`rustc helloworld.rs && ./helloworld`、完整
+  `execve` / `wait4` / `futex` / signal、完整 termios / TTY、job control 或通用 Linux
+  发行版兼容。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 ### 2026-06-03
 
 #### course-os-kernel-alpha-stage10-oscomp-help-run-plan

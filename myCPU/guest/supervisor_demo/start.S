@@ -1,7 +1,8 @@
 #include "../../include/platform_mmio.h"
 .option norelax
 
-.equ TRAP_FRAME_SIZE, 240
+.equ TRAP_FRAME_USER_SP_OFFSET, 240
+.equ TRAP_FRAME_SIZE, 256
 .equ BOOT_STACK_SIZE, 8192    # keep smoke validation stack frames clear of boot BSS
 
 .section .text.start
@@ -36,9 +37,8 @@ supervisor_entry:
     call platform_shutdown
 
 supervisor_trap:
-    csrr t0, sstatus
-    andi t0, t0, (1 << 8)
-    bnez t0, 1f
+    csrrw sp, sscratch, sp
+    bnez sp, 1f
     csrrw sp, sscratch, sp
 1:
     addi sp, sp, -TRAP_FRAME_SIZE
@@ -72,6 +72,9 @@ supervisor_trap:
     sd   t4, 216(sp)
     sd   t5, 224(sp)
     sd   t6, 232(sp)
+    csrr t0, sscratch
+    sd   t0, TRAP_FRAME_USER_SP_OFFSET(sp)
+    csrw sscratch, zero
 
     mv   a0, sp
     call supervisor_trap_dispatch_with_frame
@@ -105,15 +108,18 @@ supervisor_trap:
     ld   t4, 216(sp)
     csrr t0, sstatus
     andi t0, t0, (1 << 8)
-    ld   t6, 232(sp)
     beqz t0, 2f
     ld   t5, 224(sp)
+    ld   t6, 232(sp)
     ld   t0, 24(sp)
     addi sp, sp, TRAP_FRAME_SIZE
     sret
 
 2:
     ld   t5, 224(sp)
+    ld   t6, TRAP_FRAME_USER_SP_OFFSET(sp)
+    csrw sscratch, t6
+    ld   t6, 232(sp)
     ld   t0, 24(sp)
     addi sp, sp, TRAP_FRAME_SIZE
     csrrw sp, sscratch, sp

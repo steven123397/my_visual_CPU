@@ -12,7 +12,7 @@
 static kernel_runtime_t g_runtime;
 static course_os_stage3_t g_stage;
 static console_input_state_t g_input;
-static char g_out[2048];
+static char g_out[COURSE_SHELL_COMMAND_OUTPUT_SIZE];
 
 static void print_prompt(void) {
     console_puts("course-os> ");

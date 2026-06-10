@@ -7,6 +7,7 @@
 #define ET_DYN 3U
 #define PT_LOAD 1U
 #define PT_INTERP 3U
+#define PT_PHDR 6U
 
 static void copy_str(char* out, size_t out_size, const char* value) {
     size_t i = 0;
@@ -64,6 +65,19 @@ static bool range_in_image(uint64_t offset, uint64_t size, size_t image_size) {
         return false;
     }
     return offset <= (uint64_t)image_size && end <= (uint64_t)image_size;
+}
+
+static bool range_contains(uint64_t outer_start,
+                           uint64_t outer_size,
+                           uint64_t inner_start,
+                           uint64_t inner_size) {
+    uint64_t outer_end = 0;
+    uint64_t inner_end = 0;
+
+    return add_u64(outer_start, outer_size, &outer_end) &&
+           add_u64(inner_start, inner_size, &inner_end) &&
+           inner_start >= outer_start &&
+           inner_end <= outer_end;
 }
 
 static void clear_trace(linux_compat_trace_t* trace) {
@@ -255,14 +269,6 @@ linux_compat_result_t linux_compat_build_load_plan(
                             8,
                             "linux-compat: loader: bad entry");
     }
-    if (!add_u64(phoff, plan.load_bias, &plan.phdr_vaddr)) {
-        return finish_error(out_plan,
-                            &plan,
-                            out_trace,
-                            LINUX_COMPAT_ERR_BAD_ELF,
-                            8,
-                            "linux-compat: loader: bad phdr address");
-    }
     plan.phnum = phnum;
     plan.stack_top = LINUX_COMPAT_STACK_TOP;
     plan.argv_count = argc;
@@ -279,7 +285,16 @@ linux_compat_result_t linux_compat_build_load_plan(
         const uint64_t p_filesz = read_u64_le(image, ph_offset + 32U);
         const uint64_t p_memsz = read_u64_le(image, ph_offset + 40U);
 
-        if (ph_type == PT_LOAD) {
+        if (ph_type == PT_PHDR) {
+            if (!add_u64(p_vaddr, plan.load_bias, &plan.phdr_vaddr)) {
+                return finish_error(out_plan,
+                                    &plan,
+                                    out_trace,
+                                    LINUX_COMPAT_ERR_BAD_ELF,
+                                    8,
+                                    "linux-compat: loader: bad phdr address");
+            }
+        } else if (ph_type == PT_LOAD) {
             linux_compat_load_segment_t* segment = 0;
 
             if (plan.segment_count >= LINUX_COMPAT_MAX_LOAD_SEGMENTS) {
@@ -313,6 +328,23 @@ linux_compat_result_t linux_compat_build_load_plan(
             segment->memsz = p_memsz;
             segment->flags = ph_flags;
             plan.segment_count += 1U;
+            if (plan.phdr_vaddr == 0U &&
+                range_contains(p_offset, p_filesz, phoff, ph_end - phoff)) {
+                uint64_t offset_delta = phoff - p_offset;
+                uint64_t raw_phdr_vaddr = 0;
+
+                if (!add_u64(p_vaddr, offset_delta, &raw_phdr_vaddr) ||
+                    !add_u64(raw_phdr_vaddr,
+                             plan.load_bias,
+                             &plan.phdr_vaddr)) {
+                    return finish_error(out_plan,
+                                        &plan,
+                                        out_trace,
+                                        LINUX_COMPAT_ERR_BAD_ELF,
+                                        8,
+                                        "linux-compat: loader: bad phdr address");
+                }
+            }
         } else if (ph_type == PT_INTERP) {
             if (!range_in_image(p_offset, p_filesz, image_size)) {
                 return finish_error(out_plan,

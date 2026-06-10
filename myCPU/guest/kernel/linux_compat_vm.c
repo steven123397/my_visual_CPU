@@ -4,45 +4,6 @@
 #include "pmm.h"
 #include "vm_private.h"
 
-__attribute__((weak)) void console_putc(char ch) {
-    (void)ch;
-}
-
-static void dbg_puts(const char* value) {
-    size_t i = 0;
-
-    if (value == 0) {
-        return;
-    }
-    while (value[i] != '\0') {
-        console_putc(value[i]);
-        i += 1U;
-    }
-}
-
-static void dbg_i64(int64_t value) {
-    char digits[24];
-    size_t used = 0;
-
-    if (value < 0) {
-        console_putc('-');
-        value = -value;
-    }
-    if (value == 0) {
-        console_putc('0');
-        return;
-    }
-    while (value != 0 && used < sizeof(digits)) {
-        digits[used] = (char)('0' + (value % 10));
-        used += 1U;
-        value /= 10;
-    }
-    while (used > 0) {
-        used -= 1U;
-        console_putc(digits[used]);
-    }
-}
-
 static uintptr_t align_up_page_uintptr(uintptr_t value) {
     const uintptr_t mask = (uintptr_t)MEMORY_PAGE_SIZE - 1U;
 
@@ -57,122 +18,6 @@ static size_t align_up_page_size(size_t value) {
 
 static size_t min_size(size_t a, size_t b) {
     return a < b ? a : b;
-}
-
-static size_t debug_process_region_count(const vm_process_t* process) {
-    size_t i = 0;
-    size_t used = 0;
-
-    if (process == 0) {
-        return 0;
-    }
-    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
-        if (process->user_regions[i] != 0) {
-            used += 1U;
-        }
-    }
-    return used;
-}
-
-static size_t debug_address_space_region_count(
-    const vm_address_space_t* address_space) {
-    size_t i = 0;
-    size_t used = 0;
-
-    if (address_space == 0) {
-        return 0;
-    }
-    for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
-        if (address_space->user_regions[i] != 0) {
-            used += 1U;
-        }
-    }
-    return used;
-}
-
-static void debug_first_address_space_overlap(
-    const vm_address_space_t* address_space,
-    uintptr_t vaddr,
-    size_t length) {
-    size_t i = 0;
-
-    if (address_space == 0) {
-        return;
-    }
-    for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
-        const vm_user_region_t* region = address_space->user_regions[i];
-
-        if (region != 0 && region->registered &&
-            ranges_overlap(vaddr, length, region->vaddr, region->size)) {
-            dbg_puts(" overlap=");
-            dbg_i64((int64_t)region->vaddr);
-            dbg_puts("+");
-            dbg_i64((int64_t)region->size);
-            return;
-        }
-    }
-}
-
-static bool debug_fault_ranges_overlap(const struct VmFaultRange* ranges,
-                                       size_t count,
-                                       uintptr_t vaddr,
-                                       size_t length) {
-    size_t i = 0;
-
-    if (ranges == 0) {
-        return false;
-    }
-    for (i = 0; i < count; ++i) {
-        if (ranges[i].valid &&
-            ranges_overlap(vaddr, length, ranges[i].vaddr, ranges[i].size)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool debug_has_free_process_slot(const vm_process_t* process) {
-    size_t i = 0;
-
-    if (process == 0) {
-        return false;
-    }
-    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
-        if (process->user_regions[i] == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool debug_process_owns_region(const vm_process_t* process,
-                                      const vm_user_region_t* region) {
-    size_t i = 0;
-
-    if (process == 0 || region == 0) {
-        return false;
-    }
-    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
-        if (process->user_regions[i] == region) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool debug_has_free_address_space_slot(
-    const vm_address_space_t* address_space) {
-    size_t i = 0;
-
-    if (address_space == 0) {
-        return false;
-    }
-    for (i = 0; i < VM_MAX_USER_REGIONS; ++i) {
-        if (address_space->user_regions[i] == 0) {
-            return true;
-        }
-    }
-    return false;
 }
 
 static bool vm_ready(const linux_compat_vm_t* vm) {
@@ -304,6 +149,32 @@ static linux_compat_vm_region_t* find_region_containing(linux_compat_vm_t* vm,
 
         if (!slot->used ||
             (slot->prot & required_prot) != required_prot ||
+            addr < slot->vaddr ||
+            addr + (uintptr_t)length > slot->vaddr + (uintptr_t)slot->length) {
+            continue;
+        }
+        return slot;
+    }
+    return 0;
+}
+
+static linux_compat_vm_region_t* find_region_readable_by_kernel(
+    linux_compat_vm_t* vm,
+    uintptr_t addr,
+    size_t length) {
+    size_t i = 0;
+
+    if (vm == 0 || length == 0U || addr > UINTPTR_MAX - (uintptr_t)length) {
+        return 0;
+    }
+    for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
+        linux_compat_vm_region_t* slot = &vm->regions[i];
+        const bool user_mapped_readable =
+            (slot->prot & (LINUX_COMPAT_PROT_READ |
+                           LINUX_COMPAT_PROT_WRITE)) != 0U;
+
+        if (!slot->used ||
+            !user_mapped_readable ||
             addr < slot->vaddr ||
             addr + (uintptr_t)length > slot->vaddr + (uintptr_t)slot->length) {
             continue;
@@ -773,11 +644,6 @@ static uintptr_t map_physical_mmap_region(linux_compat_vm_t* vm,
         (paddr & ((uintptr_t)MEMORY_PAGE_SIZE - 1U)) != 0U ||
         (vm_flags & (VM_PAGE_READ | VM_PAGE_EXEC)) == 0U ||
         (vm_flags & VM_PAGE_WRITE) != 0U) {
-        dbg_puts("\nDBG mmap physical reject pre paddr=");
-        dbg_i64((int64_t)paddr);
-        dbg_puts(" len=");
-        dbg_i64((int64_t)length);
-        dbg_puts("\n");
         return (uintptr_t)-22;
     }
 
@@ -790,11 +656,6 @@ static uintptr_t map_physical_mmap_region(linux_compat_vm_t* vm,
     if ((vaddr & ((uintptr_t)MEMORY_PAGE_SIZE - 1U)) != 0U ||
         vaddr >= vm_user_limit() ||
         mapped_length > (size_t)(vm_user_limit() - vaddr)) {
-        dbg_puts("\nDBG mmap physical reject addr vaddr=");
-        dbg_i64((int64_t)vaddr);
-        dbg_puts(" len=");
-        dbg_i64((int64_t)mapped_length);
-        dbg_puts("\n");
         return (uintptr_t)-22;
     }
     if (!fixed && !mmap_range_available(vm, vaddr, mapped_length) &&
@@ -802,29 +663,14 @@ static uintptr_t map_physical_mmap_region(linux_compat_vm_t* vm,
                                   vm->next_mmap,
                                   mapped_length,
                                   &vaddr)) {
-        dbg_puts("\nDBG mmap physical no range start=");
-        dbg_i64((int64_t)vm->next_mmap);
-        dbg_puts(" len=");
-        dbg_i64((int64_t)mapped_length);
-        dbg_puts("\n");
         return (uintptr_t)-12;
     }
 
     slot = find_free_region(vm);
     if (slot == 0) {
-        dbg_puts("\nDBG mmap physical no slot vaddr=");
-        dbg_i64((int64_t)vaddr);
-        dbg_puts("\n");
         return (uintptr_t)-12;
     }
     if (!vm_object_init_physical(&slot->object, paddr, mapped_length)) {
-        dbg_puts("\nDBG mmap physical object fail paddr=");
-        dbg_i64((int64_t)paddr);
-        dbg_puts(" len=");
-        dbg_i64((int64_t)mapped_length);
-        dbg_puts(" vaddr=");
-        dbg_i64((int64_t)vaddr);
-        dbg_puts("\n");
         clear_region_slot(slot);
         return (uintptr_t)-12;
     }
@@ -833,52 +679,6 @@ static uintptr_t map_physical_mmap_region(linux_compat_vm_t* vm,
                                      vaddr,
                                      mapped_length,
                                      vm_flags)) {
-        dbg_puts("\nDBG mmap physical region init fail vaddr=");
-        dbg_i64((int64_t)vaddr);
-        dbg_puts(" paddr=");
-        dbg_i64((int64_t)paddr);
-        dbg_puts(" len=");
-        dbg_i64((int64_t)mapped_length);
-        dbg_puts(" proc_regions=");
-        dbg_i64((int64_t)debug_process_region_count(vm->process));
-        dbg_puts(" as_regions=");
-        dbg_i64((int64_t)debug_address_space_region_count(vm->address_space));
-        dbg_puts(" same_as=");
-        dbg_i64(vm->process->address_space == vm->address_space ? 1 : 0);
-        dbg_puts(" root=");
-        dbg_i64(vm->address_space != 0 && vm->address_space->root_table != 0
-                    ? 1
-                    : 0);
-        dbg_puts(" page_span=");
-        dbg_i64(page_span_args_valid(vaddr, mapped_length) ? 1 : 0);
-        dbg_puts(" user_range=");
-        dbg_i64(vm_range_is_user(vaddr, mapped_length) ? 1 : 0);
-        dbg_puts(" flags=");
-        dbg_i64(user_flags_valid(vm_flags) ? 1 : 0);
-        dbg_puts(" free_proc=");
-        dbg_i64(debug_has_free_process_slot(vm->process) ? 1 : 0);
-        dbg_puts(" owns=");
-        dbg_i64(debug_process_owns_region(vm->process, &slot->region) ? 1 : 0);
-        dbg_puts(" free_as=");
-        dbg_i64(debug_has_free_address_space_slot(vm->address_space) ? 1 : 0);
-        dbg_puts(" kmap_ov=");
-        dbg_i64(debug_fault_ranges_overlap(vm->address_space->kernel_mappings,
-                                           VM_MAX_KERNEL_MAPPINGS,
-                                           vaddr,
-                                           mapped_length)
-                    ? 1
-                    : 0);
-        dbg_puts(" kfault_ov=");
-        dbg_i64(debug_fault_ranges_overlap(vm->address_space->kernel_fault_ranges,
-                                           VM_MAX_KERNEL_FAULT_RANGES,
-                                           vaddr,
-                                           mapped_length)
-                    ? 1
-                    : 0);
-        debug_first_address_space_overlap(vm->address_space,
-                                          vaddr,
-                                          mapped_length);
-        dbg_puts("\n");
         (void)vm_object_reset(&slot->object);
         clear_region_slot(slot);
         return (uintptr_t)-12;
@@ -886,13 +686,6 @@ static uintptr_t map_physical_mmap_region(linux_compat_vm_t* vm,
     if (!vm_user_region_set_fault_object_at(&slot->region,
                                             &slot->object,
                                             0U)) {
-        dbg_puts("\nDBG mmap physical fault bind fail vaddr=");
-        dbg_i64((int64_t)vaddr);
-        dbg_puts(" paddr=");
-        dbg_i64((int64_t)paddr);
-        dbg_puts(" len=");
-        dbg_i64((int64_t)mapped_length);
-        dbg_puts("\n");
         (void)vm_process_remove_user_region(vm->process, &slot->region);
         (void)vm_object_reset(&slot->object);
         clear_region_slot(slot);
@@ -1157,7 +950,7 @@ bool linux_compat_vm_read_user(linux_compat_vm_t* vm,
                 ? (length - copied)
                 : (MEMORY_PAGE_SIZE - page_offset);
         linux_compat_vm_region_t* slot =
-            find_region_containing(vm, current, chunk, LINUX_COMPAT_PROT_READ);
+            find_region_readable_by_kernel(vm, current, chunk);
         uintptr_t page = 0;
         size_t object_offset = 0;
         size_t i = 0;

@@ -111,6 +111,7 @@ static void build_linux_compat_request(const trap_frame_t* frame,
         return;
     }
     request->number = frame != NULL ? frame->a7 : 0;
+    request->pc = (uintptr_t)epc;
     request->dirfd = frame != NULL ? (int32_t)frame->a0 : 0;
     request->fd = frame != NULL ? (int32_t)frame->a0 : 0;
     request->path = frame != NULL ? (const char*)frame->a1 : 0;
@@ -348,7 +349,6 @@ static void build_linux_compat_request(const trap_frame_t* frame,
     default:
         break;
     }
-    request->addr = request->addr != 0U ? request->addr : epc;
 }
 
 static bool handle_linux_compat_syscall_policy(const trap_context_t* trap_context,

@@ -1001,6 +1001,26 @@ static int test_dispatch_linux_compat_ecall_policy(void) {
         return fail("expected linux compat dup3 ecall to preserve oldfd newfd and flags");
     }
 
+    g_linux_compat_dispatch_calls = 0;
+    memset(&g_last_linux_compat_request, 0, sizeof(g_last_linux_compat_request));
+    memset(&trap_frame, 0, sizeof(trap_frame));
+    trap_frame.a0 = 0U;
+    trap_frame.a7 = LINUX_COMPAT_SYS_BRK;
+    if (dispatch_linux_compat_frame(
+            &trap_context,
+            &trap_frame,
+            0x70b8,
+            "did not expect panic during linux compat brk(0) ecall dispatch") !=
+        0) {
+        return 1;
+    }
+    if (g_linux_compat_dispatch_calls != 1 ||
+        g_last_linux_compat_request.number != LINUX_COMPAT_SYS_BRK ||
+        g_last_linux_compat_request.addr != 0U ||
+        g_last_linux_compat_request.pc != 0x70b8U) {
+        return fail("expected linux compat brk(0) ecall to preserve zero address and separate pc");
+    }
+
     g_clear_sstatus_bits_calls = 0;
     g_last_clear_sstatus_bits = 0;
     g_set_sstatus_bits_calls = 0;

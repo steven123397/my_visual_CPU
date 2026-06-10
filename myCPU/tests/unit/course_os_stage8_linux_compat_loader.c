@@ -123,7 +123,7 @@ static int test_exec_load_plan_records_pt_load_segment(void) {
 }
 
 static int test_dyn_interp_load_plan_records_bias_and_interp_path(void) {
-    uint8_t image[512];
+    uint8_t image[1024];
     const char interp[] = "/lib/ld-musl-riscv64.so.1";
     linux_compat_load_plan_t plan;
     linux_compat_trace_t trace;
@@ -157,6 +157,32 @@ static int test_dyn_interp_load_plan_records_bias_and_interp_path(void) {
         plan.envp_count != 2U ||
         !contains(plan.diagnostic, "loader: requires interp")) {
         return fail("expected ET_DYN PT_INTERP load plan with deterministic bias");
+    }
+
+    return 0;
+}
+
+static int test_exec_load_plan_reports_memory_phdr_address(void) {
+    uint8_t image[1024];
+    const char interp[] = "/lib/ld-musl-riscv64.so.1";
+    linux_compat_load_plan_t plan;
+    linux_compat_trace_t trace;
+
+    make_elf_header(image, sizeof(image), 2U, 243U, 0x29ec2U, 3U);
+    write_program_header(image, 0U, 6U, 4U, 64U, 0x10040U, 3U * 56U, 3U * 56U);
+    write_program_header(image, 1U, 3U, 4U, 0x2ccU, 0x102ccU,
+                         sizeof(interp), sizeof(interp));
+    write_program_header(image, 2U, 1U, 5U, 0U, 0x10000U, 0x400U, 0x400U);
+    memcpy(image + 0x2ccU, interp, sizeof(interp));
+
+    if (linux_compat_build_load_plan(image,
+                                     sizeof(image),
+                                     2U,
+                                     0U,
+                                     &plan,
+                                     &trace) != LINUX_COMPAT_OK ||
+        plan.phdr_vaddr != 0x10040U) {
+        return fail("expected ET_EXEC AT_PHDR to use mapped memory address");
     }
 
     return 0;
@@ -207,17 +233,18 @@ static int test_loader_fails_closed_for_bad_or_unsupported_elf(void) {
 }
 
 static int test_loader_fails_closed_for_interp_path_too_long(void) {
-    uint8_t image[512];
+    uint8_t image[512 + LINUX_COMPAT_MAX_PATH];
     size_t i = 0;
+    const uint64_t interp_size = LINUX_COMPAT_MAX_PATH + 1U;
     linux_compat_load_plan_t plan;
     linux_compat_trace_t trace;
 
     make_elf_header(image, sizeof(image), 3U, 243U, 0x1000U, 1U);
-    write_program_header(image, 0U, 3U, 4U, 0x100U, 0U, 80U, 80U);
-    for (i = 0; i < 79U; ++i) {
+    write_program_header(image, 0U, 3U, 4U, 0x100U, 0U, interp_size, interp_size);
+    for (i = 0; i < LINUX_COMPAT_MAX_PATH; ++i) {
         image[0x100U + i] = 'a';
     }
-    image[0x100U + 79U] = '\0';
+    image[0x100U + LINUX_COMPAT_MAX_PATH] = '\0';
 
     if (linux_compat_build_load_plan(image,
                                      sizeof(image),
@@ -280,6 +307,7 @@ static int test_syscall_trace_records_order_and_truncation(void) {
 int main(void) {
     if (test_exec_load_plan_records_pt_load_segment() != 0 ||
         test_dyn_interp_load_plan_records_bias_and_interp_path() != 0 ||
+        test_exec_load_plan_reports_memory_phdr_address() != 0 ||
         test_loader_fails_closed_for_bad_or_unsupported_elf() != 0 ||
         test_loader_fails_closed_for_interp_path_too_long() != 0 ||
         test_syscall_trace_records_order_and_truncation() != 0) {

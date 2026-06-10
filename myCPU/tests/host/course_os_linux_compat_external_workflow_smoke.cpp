@@ -6,10 +6,13 @@
 
 #include "../../src/debug/debug_budget.h"
 #include "../../src/debug/debug_session.h"
+#include "course_os_linux_compat_trace_debug.h"
 
 namespace {
 
 constexpr uint64_t kDefaultStage11WorkflowCommandMaxSteps = 1200000000ULL;
+constexpr const char* kExternalShellElf =
+    "guest/generated/course_os_linux_compat_external_shell.elf";
 
 uint64_t stage11_workflow_command_max_steps() {
     const char* env = std::getenv("MYCPU_STAGE11_WORKFLOW_COMMAND_MAX_STEPS");
@@ -26,6 +29,60 @@ uint64_t stage11_workflow_command_max_steps() {
         std::exit(1);
     }
     return static_cast<uint64_t>(value);
+}
+
+uint64_t stage11_workflow_trace_sample_steps() {
+    const char* env = std::getenv("MYCPU_STAGE11_WORKFLOW_TRACE_SAMPLE_STEPS");
+    if (env == nullptr || env[0] == '\0') {
+        return 0;
+    }
+
+    char* end = nullptr;
+    const unsigned long long value = std::strtoull(env, &end, 10);
+    if (end == env || *end != '\0') {
+        std::fprintf(stderr,
+                     "invalid MYCPU_STAGE11_WORKFLOW_TRACE_SAMPLE_STEPS: %s\n",
+                     env);
+        std::exit(1);
+    }
+    return static_cast<uint64_t>(value);
+}
+
+bool stage11_workflow_fast_commit_probe() {
+    const char* env = std::getenv("MYCPU_STAGE11_WORKFLOW_FAST_COMMIT_PROBE");
+    return env != nullptr && std::strcmp(env, "1") == 0;
+}
+
+bool stage11_workflow_direct_gcc_probe() {
+    const char* env = std::getenv("MYCPU_STAGE11_WORKFLOW_DIRECT_GCC_PROBE");
+    return env != nullptr && std::strcmp(env, "1") == 0;
+}
+
+const char* stage11_workflow_direct_gcc_command() {
+    const char* env = std::getenv("MYCPU_STAGE11_WORKFLOW_DIRECT_GCC_COMMAND");
+    return env != nullptr && env[0] != '\0' ? env : "gcc --h\r";
+}
+
+const char* stage11_workflow_final_command() {
+    const char* env = std::getenv("MYCPU_STAGE11_WORKFLOW_FINAL_COMMAND");
+    return env != nullptr && env[0] != '\0'
+               ? env
+               : "cd stage11repo && gcc hello.c && ./a.out\r";
+}
+
+bool stage11_workflow_final_probe() {
+    const char* env = std::getenv("MYCPU_STAGE11_WORKFLOW_FINAL_PROBE");
+    return env != nullptr && std::strcmp(env, "1") == 0;
+}
+
+bool stage11_workflow_print_command_output() {
+    const char* env =
+        std::getenv("MYCPU_STAGE11_WORKFLOW_PRINT_COMMAND_OUTPUT");
+    return env != nullptr && std::strcmp(env, "1") == 0;
+}
+
+bool command_runs_aout(const char* command) {
+    return command != nullptr && std::strstr(command, "./a.out") != nullptr;
 }
 
 bool expect_contains(const std::string& haystack,
@@ -55,82 +112,171 @@ struct ExpectedText {
     const char* message;
 };
 
+void print_guest_linux_trace(DebugSession& session) {
+    static course_os_linux_compat_trace_debug::GuestLinuxTraceReader reader(
+        kExternalShellElf);
+    course_os_linux_compat_trace_debug::print_guest_linux_trace(session,
+                                                               reader);
+}
+
+void print_debug_snapshot_brief(DebugSession& session, const char* label) {
+    const DebugSnapshot snapshot = session.snapshot();
+    std::fprintf(stderr,
+                 "%s pc=0x%llx privilege=%u cycle=%llu instret=%llu "
+                 "scause=0x%llx sepc=0x%llx a0=0x%llx a1=0x%llx "
+                 "a2=0x%llx a7=0x%llx recent_uart=%s\n",
+                 label,
+                 (unsigned long long)snapshot.summary.pc,
+                 (unsigned)snapshot.summary.privilege,
+                 (unsigned long long)snapshot.summary.cycle,
+                 (unsigned long long)snapshot.summary.instret,
+                 (unsigned long long)snapshot.csrs.scause,
+                 (unsigned long long)snapshot.csrs.sepc,
+                 (unsigned long long)snapshot.gpr[10],
+                 (unsigned long long)snapshot.gpr[11],
+                 (unsigned long long)snapshot.gpr[12],
+                 (unsigned long long)snapshot.gpr[17],
+                 snapshot.devices.uart.recent_output.c_str());
+}
+
+void print_debug_snapshot_full(DebugSession& session) {
+    const DebugSnapshot snapshot = session.snapshot();
+    std::fprintf(stderr,
+                 "snapshot pc=0x%llx privilege=%u cycle=%llu instret=%llu "
+                 "halted=%d mcause=0x%llx mtval=0x%llx mepc=0x%llx "
+                 "mstatus=0x%llx scause=0x%llx stval=0x%llx sepc=0x%llx "
+                 "sstatus=0x%llx satp=0x%llx "
+                 "recent_uart=%s\n",
+                 (unsigned long long)snapshot.summary.pc,
+                 (unsigned)snapshot.summary.privilege,
+                 (unsigned long long)snapshot.summary.cycle,
+                 (unsigned long long)snapshot.summary.instret,
+                 snapshot.summary.halted ? 1 : 0,
+                 (unsigned long long)snapshot.csrs.mcause,
+                 (unsigned long long)snapshot.csrs.mtval,
+                 (unsigned long long)snapshot.csrs.mepc,
+                 (unsigned long long)snapshot.csrs.mstatus,
+                 (unsigned long long)snapshot.csrs.scause,
+                 (unsigned long long)snapshot.csrs.stval,
+                 (unsigned long long)snapshot.csrs.sepc,
+                 (unsigned long long)snapshot.csrs.sstatus,
+                 (unsigned long long)snapshot.csrs.satp,
+                 snapshot.devices.uart.recent_output.c_str());
+    std::fprintf(stderr,
+                 "snapshot regs ra=0x%llx sp=0x%llx a0=0x%llx a1=0x%llx "
+                 "a2=0x%llx a3=0x%llx a4=0x%llx a5=0x%llx a6=0x%llx "
+                 "a7=0x%llx\n",
+                 (unsigned long long)snapshot.gpr[1],
+                 (unsigned long long)snapshot.gpr[2],
+                 (unsigned long long)snapshot.gpr[10],
+                 (unsigned long long)snapshot.gpr[11],
+                 (unsigned long long)snapshot.gpr[12],
+                 (unsigned long long)snapshot.gpr[13],
+                 (unsigned long long)snapshot.gpr[14],
+                 (unsigned long long)snapshot.gpr[15],
+                 (unsigned long long)snapshot.gpr[16],
+                 (unsigned long long)snapshot.gpr[17]);
+}
+
+void print_trace_sample(DebugSession& session,
+                        const char* command,
+                        const char* needle,
+                        uint64_t waited_steps,
+                        size_t output_bytes) {
+    std::fprintf(stderr,
+                 "Stage 11 workflow trace sample "
+                 "command=\"%s\" waited_steps=%llu "
+                 "needle=\"%s\" output_bytes=%zu\n",
+                 command,
+                 (unsigned long long)waited_steps,
+                 needle,
+                 output_bytes);
+    print_guest_linux_trace(session);
+    print_debug_snapshot_brief(session, "sample snapshot");
+}
+
+void print_missing_uart_diagnostics(DebugSession& session,
+                                    const char* command,
+                                    const char* needle,
+                                    uint64_t max_steps,
+                                    size_t offset,
+                                    const DebugSession::UartOutputChunk& chunk,
+                                    const std::runtime_error& error) {
+    std::fprintf(stderr, "%s\n", error.what());
+    std::fprintf(stderr,
+                 "Stage 11 workflow smoke failed while waiting for: %s\n",
+                 needle);
+    std::fprintf(stderr,
+                 "Stage 11 workflow command summary command=\"%s\" "
+                 "step_budget=%llu stop=missing-uart needle=\"%s\" "
+                 "offset=%zu\n",
+                 command,
+                 (unsigned long long)max_steps,
+                 needle,
+                 offset);
+    std::fprintf(stderr,
+                 "command output since offset %zu was:\n%s\n",
+                 offset,
+                 chunk.text.c_str());
+    print_guest_linux_trace(session);
+    print_debug_snapshot_full(session);
+}
+
 bool run_until_new_uart_contains(DebugSession& session,
                                  size_t offset,
                                  const char* command,
                                  const char* needle,
                                  DebugSession::UartOutputChunk& chunk) {
     const uint64_t max_steps = stage11_workflow_command_max_steps();
+    const uint64_t sample_steps = stage11_workflow_trace_sample_steps();
     try {
-        chunk = session.run_until_new_uart_contains(
-            offset, needle, max_steps);
+        if (sample_steps == 0U) {
+            chunk = session.run_until_new_uart_contains(
+                offset, needle, max_steps);
+        } else {
+            for (uint64_t i = 0; i < max_steps; ++i) {
+                session.debug_step_raw();
+                chunk = session.uart_output(offset);
+                if (chunk.text.find(needle) != std::string::npos) {
+                    return true;
+                }
+                if (session.debug_halted()) {
+                    throw std::runtime_error(
+                        "guest halted before requested UART text appeared");
+                }
+                if ((i + 1U) % sample_steps == 0U) {
+                    print_trace_sample(session,
+                                       command,
+                                       needle,
+                                       i + 1U,
+                                       chunk.text.size());
+                }
+            }
+            throw std::runtime_error(
+                "run_until_new_uart_contains exceeded step budget");
+        }
         return true;
     } catch (const std::runtime_error& error) {
         chunk = session.uart_output(offset);
-        std::fprintf(stderr, "%s\n", error.what());
-        std::fprintf(stderr,
-                     "Stage 11 workflow smoke failed while waiting for: %s\n",
-                     needle);
-        std::fprintf(stderr,
-                     "Stage 11 workflow command summary command=\"%s\" "
-                     "step_budget=%llu stop=missing-uart needle=\"%s\" "
-                     "offset=%zu\n",
-                     command,
-                     (unsigned long long)max_steps,
-                     needle,
-                     offset);
-        std::fprintf(stderr,
-                     "command output since offset %zu was:\n%s\n",
-                     offset,
-                     chunk.text.c_str());
-        const DebugSnapshot snapshot = session.snapshot();
-        std::fprintf(stderr,
-                     "snapshot pc=0x%llx privilege=%u cycle=%llu instret=%llu "
-                     "halted=%d mcause=0x%llx mtval=0x%llx mepc=0x%llx "
-                     "mstatus=0x%llx scause=0x%llx stval=0x%llx sepc=0x%llx "
-                     "sstatus=0x%llx satp=0x%llx "
-                     "recent_uart=%s\n",
-                     (unsigned long long)snapshot.summary.pc,
-                     (unsigned)snapshot.summary.privilege,
-                     (unsigned long long)snapshot.summary.cycle,
-                     (unsigned long long)snapshot.summary.instret,
-                     snapshot.summary.halted ? 1 : 0,
-                     (unsigned long long)snapshot.csrs.mcause,
-                     (unsigned long long)snapshot.csrs.mtval,
-                     (unsigned long long)snapshot.csrs.mepc,
-                     (unsigned long long)snapshot.csrs.mstatus,
-                     (unsigned long long)snapshot.csrs.scause,
-                     (unsigned long long)snapshot.csrs.stval,
-                     (unsigned long long)snapshot.csrs.sepc,
-                     (unsigned long long)snapshot.csrs.sstatus,
-                     (unsigned long long)snapshot.csrs.satp,
-                     snapshot.devices.uart.recent_output.c_str());
-        std::fprintf(stderr,
-                     "snapshot regs ra=0x%llx sp=0x%llx a0=0x%llx a1=0x%llx "
-                     "a2=0x%llx a3=0x%llx a4=0x%llx a5=0x%llx a6=0x%llx "
-                     "a7=0x%llx\n",
-                     (unsigned long long)snapshot.gpr[1],
-                     (unsigned long long)snapshot.gpr[2],
-                     (unsigned long long)snapshot.gpr[10],
-                     (unsigned long long)snapshot.gpr[11],
-                     (unsigned long long)snapshot.gpr[12],
-                     (unsigned long long)snapshot.gpr[13],
-                     (unsigned long long)snapshot.gpr[14],
-                     (unsigned long long)snapshot.gpr[15],
-                     (unsigned long long)snapshot.gpr[16],
-                     (unsigned long long)snapshot.gpr[17]);
+        print_missing_uart_diagnostics(session,
+                                       command,
+                                       needle,
+                                       max_steps,
+                                       offset,
+                                       chunk,
+                                       error);
         return false;
     }
 }
 
 size_t drain_uart_until_quiet(DebugSession& session) {
-    constexpr uint64_t kDrainMaxSteps = 50000ULL;
-    constexpr uint64_t kStableSteps = 2048ULL;
+    constexpr uint64_t kDrainMaxSteps = 8192ULL;
+    constexpr uint64_t kStableSteps = 512ULL;
     size_t last_size = session.uart_output(0).next_offset;
     uint64_t stable_steps = 0;
 
     for (uint64_t i = 0; i < kDrainMaxSteps; ++i) {
-        session.step_cycle();
+        session.debug_step_raw();
         const size_t current_size = session.uart_output(0).next_offset;
         if (current_size == last_size) {
             stable_steps += 1U;
@@ -177,6 +323,13 @@ bool run_shell_command(DebugSession& session,
                              expectations[i].message)) {
             return false;
         }
+    }
+    if (stage11_workflow_print_command_output()) {
+        std::fprintf(stderr,
+                     "command output since offset %zu was:\n%s\n",
+                     offset,
+                     chunk.text.c_str());
+        print_guest_linux_trace(session);
     }
     offset = drain_uart_until_quiet(session);
     std::fprintf(stderr,
@@ -230,8 +383,109 @@ bool run_shell_command_waiting_for(DebugSession& session,
             return false;
         }
     }
-    offset = chunk.next_offset;
+    if (stage11_workflow_print_command_output()) {
+        std::fprintf(stderr,
+                     "command output since offset %zu was:\n%s\n",
+                     offset,
+                     chunk.text.c_str());
+        print_guest_linux_trace(session);
+    }
+    offset = drain_uart_until_quiet(session);
     return true;
+}
+
+bool run_shell_command_until_prompt_and_validate(DebugSession& session,
+                                                 size_t& offset,
+                                                 const char* command,
+                                                 const ExpectedText* expectations,
+                                                 size_t expectation_count) {
+    DebugSession::UartOutputChunk chunk{};
+    const uint64_t max_steps = stage11_workflow_command_max_steps();
+    std::fprintf(stderr,
+                 "Stage 11 workflow command begin command=\"%s\" "
+                 "step_budget=%llu offset=%zu\n",
+                 command,
+                 (unsigned long long)max_steps,
+                 offset);
+    session.uart_input(command);
+    if (!run_until_new_uart_contains(session,
+                                     offset,
+                                     command,
+                                     "course-os> ",
+                                     chunk)) {
+        return false;
+    }
+    std::fprintf(stderr, "Stage 11 workflow matched: course-os> \n");
+    for (size_t i = 0; i < expectation_count; ++i) {
+        if (!expect_contains(chunk.text,
+                             expectations[i].needle,
+                             expectations[i].message)) {
+            return false;
+        }
+    }
+    if (stage11_workflow_print_command_output()) {
+        std::fprintf(stderr,
+                     "command output since offset %zu was:\n%s\n",
+                     offset,
+                     chunk.text.c_str());
+        print_guest_linux_trace(session);
+    }
+    offset = drain_uart_until_quiet(session);
+    std::fprintf(stderr,
+                 "Stage 11 workflow command summary command=\"%s\" "
+                 "output_bytes=%zu next_offset=%zu stop=matched-prompt\n",
+                 command,
+                 chunk.text.size(),
+                 offset);
+    return true;
+}
+
+bool run_shell_command_probe_stop(DebugSession& session,
+                                  size_t offset,
+                                  const char* command,
+                                  const char* stop_needle,
+                                  const char* fallback_needle) {
+    DebugSession::UartOutputChunk chunk{};
+    const uint64_t max_steps = stage11_workflow_command_max_steps();
+    std::fprintf(stderr,
+                 "Stage 11 workflow probe begin command=\"%s\" "
+                 "step_budget=%llu offset=%zu stop=\"%s\" fallback=\"%s\"\n",
+                 command,
+                 (unsigned long long)max_steps,
+                 offset,
+                 stop_needle,
+                 fallback_needle);
+    session.uart_input(command);
+    for (uint64_t i = 0; i < max_steps; ++i) {
+        session.debug_step_raw();
+        chunk = session.uart_output(offset);
+        if (chunk.text.find(stop_needle) != std::string::npos ||
+            chunk.text.find(fallback_needle) != std::string::npos) {
+            std::fprintf(stderr,
+                         "Stage 11 workflow probe matched output_bytes=%zu\n",
+                         chunk.text.size());
+            std::fprintf(stderr,
+                         "probe output since offset %zu was:\n%s\n",
+                         offset,
+                         chunk.text.c_str());
+            print_guest_linux_trace(session);
+            print_debug_snapshot_full(session);
+            return true;
+        }
+        if (session.debug_halted()) {
+            std::fprintf(stderr, "guest halted during probe\n");
+            return false;
+        }
+    }
+    std::fprintf(stderr, "Stage 11 workflow probe exceeded step budget\n");
+    chunk = session.uart_output(offset);
+    std::fprintf(stderr,
+                 "probe output since offset %zu was:\n%s\n",
+                 offset,
+                 chunk.text.c_str());
+    print_guest_linux_trace(session);
+    print_debug_snapshot_full(session);
+    return false;
 }
 
 }  // namespace
@@ -239,7 +493,7 @@ bool run_shell_command_waiting_for(DebugSession& session,
 int main(int argc, char** argv) {
     const char* backend = argc > 1 ? argv[1] : "functional";
     DebugSession session;
-    session.load_elf("guest/generated/course_os_linux_compat_external_shell.elf",
+    session.load_elf(kExternalShellElf,
                      parse_backend_kind(backend),
                      BlockTransport::SimpleStorage,
                      "tests/data/storage_basic.txt");
@@ -247,6 +501,44 @@ int main(int argc, char** argv) {
                                     DebugBudget::kCourseOsShellBootMaxSteps);
 
     size_t offset = session.uart_output(0).next_offset;
+
+    if (stage11_workflow_direct_gcc_probe()) {
+        const char* command = stage11_workflow_direct_gcc_command();
+        constexpr ExpectedText kDirectGcc[] = {
+            {"linux-compat: path=/usr/bin/gcc", "gcc should resolve through PATH"},
+            {"course-os> ", "gcc probe should return to prompt"},
+        };
+        constexpr ExpectedText kDirectGccAndAout[] = {
+            {"linux-compat: path=/usr/bin/gcc", "gcc should resolve through PATH"},
+            {"linux-compat: path=/a.out", "./a.out should run after gcc"},
+            {"exec=real", "./a.out should use Linux compat real exec"},
+            {"course-os> ", "gcc probe should return to prompt"},
+        };
+        const ExpectedText* expected =
+            command_runs_aout(command) ? kDirectGccAndAout : kDirectGcc;
+        const size_t expected_count =
+            command_runs_aout(command)
+                ? sizeof(kDirectGccAndAout) / sizeof(kDirectGccAndAout[0])
+                : sizeof(kDirectGcc) / sizeof(kDirectGcc[0]);
+
+        if (!run_shell_command(session,
+                               offset,
+                               command,
+                               expected,
+                               expected_count)) {
+            return 1;
+        }
+        const DebugSession::UartOutputChunk chunk = session.uart_output(0);
+        if (command_runs_aout(command) &&
+            chunk.text.find("linux-compat: path=/a.out errno=2") !=
+                std::string::npos) {
+            std::fprintf(stderr,
+                         "./a.out lookup failed after direct gcc probe\n");
+            std::fprintf(stderr, "output was:\n%s\n", chunk.text.c_str());
+            return 1;
+        }
+        return 0;
+    }
 
     constexpr ExpectedText kGitInit[] = {
         {"linux-compat: rootfs=external", "git init should use external rootfs"},
@@ -262,6 +554,19 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (stage11_workflow_fast_commit_probe()) {
+        return run_shell_command_probe_stop(
+                   session,
+                   offset,
+                   "git -c safe.directory=/stage11repo -C stage11repo "
+                   "-c user.name=s -c user.email=e@e "
+                   "commit --allow-empty -m i\r",
+                   "Bad address",
+                   "course-os> ")
+                   ? 1
+                   : 1;
+    }
+
     if (!run_shell_command_waiting_for(session,
                                        offset,
                                        "vim stage11repo/hello.c\r",
@@ -270,13 +575,30 @@ int main(int argc, char** argv) {
                                        "Press ENTER or type command to continue")) {
         return 1;
     }
+    if (!run_shell_command_waiting_for(session,
+                                       offset,
+                                       "\r",
+                                       nullptr,
+                                       0,
+                                       "[New File]")) {
+        return 1;
+    }
     constexpr ExpectedText kVimSave[] = {
         {"linux-compat: path=/usr/bin/vim", "vim should resolve through PATH"},
         {"course-os> ", "vim save should return to prompt"},
     };
+    if (!run_shell_command_waiting_for(
+            session,
+            offset,
+            "i#include <stdio.h>\nint main(){puts(\"stage11 hello\");return 0;}\x1b:wq\r",
+            nullptr,
+            0,
+            "Press ENTER or type command to continue")) {
+        return 1;
+    }
     if (!run_shell_command(session,
                            offset,
-                           "\ri#include <stdio.h>\nint main(){puts(\"stage11 hello\");return 0;}\x1b:wq\r",
+                           "\r",
                            kVimSave,
                            sizeof(kVimSave) / sizeof(kVimSave[0]))) {
         return 1;
@@ -288,7 +610,8 @@ int main(int argc, char** argv) {
     };
     if (!run_shell_command(session,
                            offset,
-                           "git -C stage11repo add hello.c\r",
+                           "git -c safe.directory=/stage11repo "
+                           "-C stage11repo add hello.c\r",
                            kGitAdd,
                            sizeof(kGitAdd) / sizeof(kGitAdd[0]))) {
         return 1;
@@ -296,10 +619,10 @@ int main(int argc, char** argv) {
 
     constexpr ExpectedText kGitCommit[] = {
         {"linux-compat: path=/usr/bin/git", "git commit should resolve through PATH"},
-        {"(root-commit)", "git commit should create the first commit"},
-        {"course-os> ", "git commit should return to prompt"},
+        {"file changed", "git commit should report the staged file delta"},
+        {"create mode", "git commit should create hello.c in the first commit"},
     };
-    if (!run_shell_command(
+    if (!run_shell_command_until_prompt_and_validate(
             session,
             offset,
             "git -C stage11repo -c safe.directory=/stage11repo "
@@ -318,12 +641,17 @@ int main(int argc, char** argv) {
     if (!run_shell_command(session,
                            offset,
                            "git -C stage11repo "
-                           "-c safe.directory=/stage11repo log --oneline\r",
+                           "-c safe.directory=/stage11repo "
+                           "--no-pager log --oneline\r",
                            kGitLog,
                            sizeof(kGitLog) / sizeof(kGitLog[0]))) {
         return 1;
     }
 
+    constexpr ExpectedText kFinalProbe[] = {
+        {"linux-compat: path=/usr/bin/gcc", "gcc should resolve through PATH"},
+        {"course-os> ", "gcc probe should return to prompt"},
+    };
     constexpr ExpectedText kGcc[] = {
         {"linux-compat: path=/usr/bin/gcc", "gcc should resolve through PATH"},
         {"stage11 hello", "gcc hello.c && ./a.out should execute generated binary"},
@@ -332,9 +660,13 @@ int main(int argc, char** argv) {
     };
     if (!run_shell_command(session,
                            offset,
-                           "cd stage11repo && gcc hello.c && ./a.out\r",
-                           kGcc,
-                           sizeof(kGcc) / sizeof(kGcc[0]))) {
+                           stage11_workflow_final_command(),
+                           stage11_workflow_final_probe()
+                               ? kFinalProbe
+                               : kGcc,
+                           stage11_workflow_final_probe()
+                               ? sizeof(kFinalProbe) / sizeof(kFinalProbe[0])
+                               : sizeof(kGcc) / sizeof(kGcc[0]))) {
         return 1;
     }
 

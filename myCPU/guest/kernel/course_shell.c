@@ -114,6 +114,37 @@ static bool decimal_field_nonzero(const char* value, const char* field) {
     return false;
 }
 
+static bool decimal_field_zero(const char* value, const char* field) {
+    size_t i = 0;
+    const size_t field_len = str_len(field);
+
+    if (value == 0 || field == 0 || field_len == 0U) {
+        return false;
+    }
+    while (value[i] != '\0') {
+        size_t j = 0;
+
+        while (j < field_len && value[i + j] == field[j]) {
+            j += 1U;
+        }
+        if (j == field_len) {
+            bool saw_digit = false;
+            size_t pos = i + field_len;
+
+            while (value[pos] >= '0' && value[pos] <= '9') {
+                saw_digit = true;
+                if (value[pos] != '0') {
+                    return false;
+                }
+                pos += 1U;
+            }
+            return saw_digit;
+        }
+        i += 1U;
+    }
+    return false;
+}
+
 static bool append_u32(char* out,
                        size_t out_size,
                        size_t* used,
@@ -722,6 +753,7 @@ static bool read_pid_proc_file(course_shell_t* shell,
 
 static bool run_linux_command(course_shell_t* shell,
                               const course_shell_simple_command_t* command,
+                              const char* stdin_text,
                               char* out,
                               size_t out_size) {
     linux_compat_exec_request_t request;
@@ -811,6 +843,8 @@ static bool run_linux_command(course_shell_t* shell,
     request.cwd = course_fd_cwd(&shell->fds);
     request.argc = command->argc - 1U;
     request.argv = argv;
+    request.stdin_text = stdin_text;
+    request.stdin_size = stdin_text != 0 ? str_len(stdin_text) : 0U;
     request.session_runtime = &shell->linux_compat_runtime;
     request.trap_context = trap_active_context();
     request.user_runtime = &shell->linux_compat_user_runtime;
@@ -847,18 +881,34 @@ static bool run_linux_command(course_shell_t* shell,
 
 static bool run_linux_fallback_command(course_shell_t* shell,
                                        const course_shell_simple_command_t* command,
+                                       const char* stdin_text,
                                        char* out,
                                        size_t out_size) {
     course_shell_simple_command_t linux_command;
     char resolved_path[LINUX_COMPAT_MAX_PATH];
     size_t i = 0;
+    bool has_slash = false;
 
     if (shell == 0 || command == 0 || command->argc == 0U ||
-        command->argc + 1U > COURSE_SHELL_MAX_ARGS ||
-        linux_compat_resolve_path(command->argv[0],
-                                  resolved_path,
-                                  sizeof(resolved_path),
-                                  &shell->linux_trace) != LINUX_COMPAT_OK) {
+        command->argc + 1U > COURSE_SHELL_MAX_ARGS) {
+        return false;
+    }
+    for (i = 0; command->argv[0][i] != '\0'; ++i) {
+        if (command->argv[0][i] == '/') {
+            has_slash = true;
+            break;
+        }
+    }
+    if (has_slash) {
+        copy_token(resolved_path,
+                   sizeof(resolved_path),
+                   command->argv[0],
+                   str_len(command->argv[0]));
+    } else if (linux_compat_resolve_path(command->argv[0],
+                                         resolved_path,
+                                         sizeof(resolved_path),
+                                         &shell->linux_trace) !=
+               LINUX_COMPAT_OK) {
         return false;
     }
 
@@ -878,7 +928,44 @@ static bool run_linux_fallback_command(course_shell_t* shell,
                    command->argv[i],
                    str_len(command->argv[i]));
     }
-    return run_linux_command(shell, &linux_command, out, out_size);
+    return run_linux_command(shell, &linux_command, stdin_text, out, out_size);
+}
+
+static bool run_cd_command(course_shell_t* shell,
+                           const course_shell_simple_command_t* command,
+                           char* out,
+                           size_t out_size,
+                           size_t* used) {
+    const char* target = command->argc > 1U ? command->argv[1] : "/";
+    const char* linux_cwd = 0;
+
+    if (course_fd_set_cwd(&shell->fds, target) == COURSE_FD_OK) {
+        (void)linux_compat_runtime_set_cwd(&shell->linux_compat_runtime,
+                                           course_fd_cwd(&shell->fds));
+        return append_str(out, out_size, used, course_fd_cwd(&shell->fds)) &&
+               append_char(out, out_size, used, '\n');
+    }
+
+    if (!linux_compat_runtime_set_cwd(&shell->linux_compat_runtime,
+                                      course_fd_cwd(&shell->fds))) {
+        return false;
+    }
+    if (!linux_compat_runtime_chdir(&shell->linux_compat_runtime,
+                                    target,
+                                    &shell->linux_trace)) {
+        return false;
+    }
+
+    linux_cwd = linux_compat_runtime_cwd(&shell->linux_compat_runtime);
+    if (str_len(linux_cwd) >= sizeof(shell->fds.cwd)) {
+        return false;
+    }
+    copy_token(shell->fds.cwd,
+               sizeof(shell->fds.cwd),
+               linux_cwd,
+               str_len(linux_cwd));
+    return append_str(out, out_size, used, shell->fds.cwd) &&
+           append_char(out, out_size, used, '\n');
 }
 
 static bool run_simple(course_shell_t* shell,
@@ -908,10 +995,7 @@ static bool run_simple(course_shell_t* shell,
                append_char(out, out_size, &used, '\n');
     }
     if (str_eq(command->argv[0], "cd")) {
-        const char* target = command->argc > 1U ? command->argv[1] : "/";
-        return course_fd_set_cwd(&shell->fds, target) == COURSE_FD_OK &&
-               append_str(out, out_size, &used, course_fd_cwd(&shell->fds)) &&
-               append_char(out, out_size, &used, '\n');
+        return run_cd_command(shell, command, out, out_size, &used);
     }
     if (str_eq(command->argv[0], "echo")) {
         size_t i = 1U;
@@ -950,7 +1034,7 @@ static bool run_simple(course_shell_t* shell,
         return run_script(shell, command->argv[1], out, out_size);
     }
     if (str_eq(command->argv[0], "linux")) {
-        return run_linux_command(shell, command, out, out_size);
+        return run_linux_command(shell, command, stdin_text, out, out_size);
     }
     if (str_eq(command->argv[0], "ps")) {
         return read_proc_file(shell, "/proc/ps", out, out_size);
@@ -1017,74 +1101,35 @@ static bool run_simple(course_shell_t* shell,
     if (course_user_program_lookup(command->argv[0], &program)) {
         return run_program_command(shell, command, out, out_size);
     }
-    return run_linux_fallback_command(shell, command, out, out_size);
+    return run_linux_fallback_command(shell, command, stdin_text, out, out_size);
 }
 
 static bool shell_output_allows_and_chain(const char* out) {
     if (!str_contains(out, "linux-compat:")) {
         return true;
     }
-    return !str_contains(out, "fail-closed") &&
-           !decimal_field_nonzero(out, "errno=") &&
-           !decimal_field_nonzero(out, "exit=");
+    if (str_contains(out, "fail-closed") ||
+        decimal_field_nonzero(out, "errno=") ||
+        decimal_field_nonzero(out, "exit=")) {
+        return false;
+    }
+    return decimal_field_zero(out, "exit=");
 }
 
-static bool course_shell_run_line_internal(course_shell_t* shell,
-                                           const char* line,
-                                           char* out,
-                                           size_t out_size,
-                                           bool record_transcript) {
+static bool run_single_command_line_internal(course_shell_t* shell,
+                                             const char* line,
+                                             char* out,
+                                             size_t out_size,
+                                             bool record_transcript) {
     course_shell_command_t command;
-    char left_out[512];
-    char right_out[512];
-    char left_line[128];
-    char right_line[128];
+    char* left_out = 0;
     const char* stdin_text = 0;
     bool ok = false;
-    size_t and_offset = 0;
 
     if (shell == 0 || line == 0 || out == 0 || out_size == 0) {
         return false;
     }
-
-    if (find_and_separator(line, &and_offset)) {
-        size_t used = 0;
-
-        if (!copy_trimmed_segment(left_line,
-                                  sizeof(left_line),
-                                  line,
-                                  and_offset) ||
-            !copy_trimmed_segment(right_line,
-                                  sizeof(right_line),
-                                  line + and_offset + 2U,
-                                  str_len(line + and_offset + 2U))) {
-            return false;
-        }
-        if (record_transcript && !transcript_append(shell, line)) {
-            return false;
-        }
-        if (!course_shell_run_line_internal(shell,
-                                            left_line,
-                                            left_out,
-                                            sizeof(left_out),
-                                            false)) {
-            return false;
-        }
-        if (!append_str(out, out_size, &used, left_out)) {
-            return false;
-        }
-        if (!shell_output_allows_and_chain(left_out)) {
-            return true;
-        }
-        if (!course_shell_run_line_internal(shell,
-                                            right_line,
-                                            right_out,
-                                            sizeof(right_out),
-                                            false)) {
-            return false;
-        }
-        return append_str(out, out_size, &used, right_out);
-    }
+    left_out = shell->line_output_scratch;
 
     if (!course_shell_parse(line, &command) ||
         (record_transcript && !transcript_append(shell, line))) {
@@ -1099,7 +1144,10 @@ static bool course_shell_run_line_internal(course_shell_t* shell,
         if (fd < 0) {
             return false;
         }
-        ok = read_all_fd(&shell->fds, fd, left_out, sizeof(left_out));
+        ok = read_all_fd(&shell->fds,
+                         fd,
+                         left_out,
+                         COURSE_SHELL_LINE_OUTPUT_SIZE);
         (void)course_fd_close(&shell->fds, fd);
         if (!ok) {
             return false;
@@ -1111,7 +1159,7 @@ static bool course_shell_run_line_internal(course_shell_t* shell,
                     &command.left,
                     stdin_text,
                     command.has_pipe ? left_out : out,
-                    command.has_pipe ? sizeof(left_out) : out_size);
+                    command.has_pipe ? COURSE_SHELL_LINE_OUTPUT_SIZE : out_size);
     if (!ok) {
         return false;
     }
@@ -1138,6 +1186,60 @@ static bool course_shell_run_line_internal(course_shell_t* shell,
         }
     }
     return true;
+}
+
+static bool course_shell_run_line_internal(course_shell_t* shell,
+                                           const char* line,
+                                           char* out,
+                                           size_t out_size,
+                                           bool record_transcript) {
+    char segment[128];
+    char* segment_out = 0;
+    const char* cursor = line;
+    size_t used = 0;
+    size_t first_and_offset = 0;
+
+    if (shell == 0 || line == 0 || out == 0 || out_size == 0) {
+        return false;
+    }
+
+    if (!find_and_separator(line, &first_and_offset)) {
+        return run_single_command_line_internal(shell,
+                                                line,
+                                                out,
+                                                out_size,
+                                                record_transcript);
+    }
+
+    if (record_transcript && !transcript_append(shell, line)) {
+        return false;
+    }
+    segment_out = shell->command_output_scratch;
+    out[0] = '\0';
+
+    while (true) {
+        size_t and_offset = 0;
+        const bool has_and = find_and_separator(cursor, &and_offset);
+        const size_t segment_len = has_and ? and_offset : str_len(cursor);
+
+        if (!copy_trimmed_segment(segment,
+                                  sizeof(segment),
+                                  cursor,
+                                  segment_len) ||
+            !run_single_command_line_internal(shell,
+                                              segment,
+                                              segment_out,
+                                              COURSE_SHELL_COMMAND_OUTPUT_SIZE,
+                                              false) ||
+            !append_str(out, out_size, &used, segment_out)) {
+            return false;
+        }
+
+        if (!has_and || !shell_output_allows_and_chain(segment_out)) {
+            return true;
+        }
+        cursor += and_offset + 2U;
+    }
 }
 
 bool course_shell_run_line(course_shell_t* shell,
