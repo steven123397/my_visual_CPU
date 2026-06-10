@@ -43,6 +43,7 @@ function createFakeSession({
   loadError = null,
   snapshotError = null,
   jitDispatchSummary = null,
+  courseOsShellMode = false,
 } = {}) {
   let cycle = 0;
   let terminal = `boot:${label}\r\n> `;
@@ -64,7 +65,9 @@ function createFakeSession({
       loadCalls.push({ entry, backend });
       cycle = 0;
       stepCycleCount = 0;
-      terminal = linuxPromptMode ? `boot:${label}\r\nmycpu-linux# ` : `boot:${label}\r\n> `;
+      terminal = courseOsShellMode
+        ? `boot:${label}\r\ncourse-os> `
+        : (linuxPromptMode ? `boot:${label}\r\nmycpu-linux# ` : `boot:${label}\r\n> `);
       return { ok: true };
     },
     async loadPayload(image, addr) {
@@ -103,6 +106,9 @@ function createFakeSession({
       } else if (linuxPromptMode && pendingEcho === 'help\r') {
         terminal += 'help\r\ncommands: help uptime exit\r\nmycpu-linux# ';
         pendingEcho = '';
+      } else if (courseOsShellMode && pendingEcho === 'help\r') {
+        terminal += 'help\r\nhelp ls cat echo ps kill cd pwd exit exec sh meminfo schedstat fsstat syscalls cow crashlog cpuinfo uptime status fd maps\r\ncourse-os> ';
+        pendingEcho = '';
       }
       return makeSnapshot(cycle, label);
     },
@@ -110,14 +116,18 @@ function createFakeSession({
       callLog.push('reset');
       cycle = 0;
       stepCycleCount = 0;
-      terminal = 'reset\r\n> ';
+      terminal = courseOsShellMode
+        ? 'reset\r\ncourse-os> '
+        : (linuxPromptMode ? 'reset\r\nmycpu-linux# ' : 'reset\r\n> ');
       return makeSnapshot(cycle, label);
     },
     async runUntilUartContains(text, maxSteps, options = {}) {
       callLog.push('runUntilUartContains');
       runUntilCalls.push({ text, maxSteps, timeoutMs: options.timeoutMs });
       cycle = 4;
-      terminal = linuxPromptMode ? `boot:${label}\r\nready\r\nmycpu-linux# ` : `boot:${label}\r\nready\r\n> `;
+      terminal = courseOsShellMode
+        ? `boot:${label}\r\nready\r\ncourse-os> `
+        : (linuxPromptMode ? `boot:${label}\r\nready\r\nmycpu-linux# ` : `boot:${label}\r\nready\r\n> `);
       return makeSnapshot(cycle, label);
     },
     async runUntilNewUartContains(offset, text, maxSteps, options = {}) {
@@ -126,6 +136,9 @@ function createFakeSession({
       cycle += 2;
       if (linuxPromptMode && pendingEcho === 'help\r') {
         terminal += 'help\r\ncommands: help uptime exit\r\nmycpu-linux# ';
+        pendingEcho = '';
+      } else if (courseOsShellMode && pendingEcho === 'help\r') {
+        terminal += 'help\r\nhelp ls cat echo ps kill cd pwd exit exec sh meminfo schedstat fsstat syscalls cow crashlog cpuinfo uptime status fd maps\r\ncourse-os> ';
         pendingEcho = '';
       }
       return {
@@ -136,7 +149,7 @@ function createFakeSession({
       };
     },
     async uartInput(text) {
-      if (echoInputChunkSize || linuxPromptMode) {
+      if (echoInputChunkSize || linuxPromptMode || courseOsShellMode) {
         pendingEcho += text;
       } else {
         terminal += text;
@@ -632,6 +645,44 @@ test('createDebugServerRuntime terminalInput waits for Linux prompt command outp
   assert.equal(terminalMessages.length, 1);
   assert.match(terminalMessages[0].text, /commands: help uptime exit/);
   assert.match(terminalMessages[0].text, /mycpu-linux# $/);
+
+  await runtime.close();
+});
+
+test('createDebugServerRuntime terminalInput waits for Course OS shell command prompt to settle', async () => {
+  const session = createFakeSession({
+    label: 'course-os-shell',
+    courseOsShellMode: true,
+  });
+  const wsHub = createWsHub();
+  const runtime = createDebugServerRuntime({
+    createSession: async () => session,
+    wsHub,
+  });
+
+  await runtime.load({
+    name: 'guest_course_os_shell_demo',
+    image: 'guest/course_os_shell.elf',
+    bootUntilUartText: 'course-os> ',
+    bootMaxSteps: 5000000,
+    commandUntilUartText: 'course-os> ',
+    commandMaxSteps: 1000000,
+    terminalPrompt: 'course-os> ',
+  }, 'pipeline');
+  wsHub.messages.length = 0;
+
+  const response = await runtime.terminalInput('help\r');
+  const terminalMessages = wsHub.messages.filter((message) => message.type === 'terminal');
+
+  assert.equal(response.ok, true);
+  assert.match(response.text, /meminfo schedstat fsstat/);
+  assert.match(response.text, /course-os> $/);
+  assert.equal(session.runUntilNewCalls.length, 1);
+  assert.ok(session.runUntilNewCalls[0].offset > 0);
+  assert.equal(session.runUntilNewCalls[0].text, 'course-os> ');
+  assert.equal(session.runUntilNewCalls[0].maxSteps, 1000000);
+  assert.equal(terminalMessages.length, 1);
+  assert.match(terminalMessages[0].text, /course-os> $/);
 
   await runtime.close();
 });

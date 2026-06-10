@@ -62,6 +62,13 @@ void trap_user_runtime_arch_enter(trap_user_runtime_t* user_runtime,
     g_last_arch_enter_user_sp = user_sp;
 }
 
+void trap_user_runtime_arch_call(trap_user_runtime_t* user_runtime,
+                                 uintptr_t entry,
+                                 uintptr_t arg0,
+                                 uintptr_t user_sp) {
+    trap_user_runtime_arch_enter(user_runtime, entry, arg0, user_sp);
+}
+
 void trap_user_runtime_arch_resume(void) {}
 
 void runtime_context_activate_trap_context(trap_context_t* trap_context) {
@@ -300,6 +307,8 @@ static int test_user_runtime_prepare_standard(void) {
         g_last_policy_user_runtime != &user_runtime ||
         user_runtime.trap_context != &trap_context ||
         user_runtime.process != &process || user_runtime.arg0 != 7 ||
+        user_runtime.arch_state.saved_supervisor_sp != 0 ||
+        user_runtime.arch_state.saved_supervisor_ra != 0 ||
         user_runtime.arch_state.supervisor_trap_stack_top !=
             (uintptr_t)trap_stack + sizeof(trap_stack) ||
         user_runtime.arch_state.supervisor_trap_stack_size != sizeof(trap_stack) ||

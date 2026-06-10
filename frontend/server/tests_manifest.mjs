@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  courseOsShellBudgets,
   interactiveOsBudgets,
   LINUX_CONSOLE_BOOT_BUDGET,
   LINUX_CONSOLE_COMMAND_BUDGET,
@@ -216,6 +217,36 @@ export function listTests(repoRoot) {
     terminalPrompt: interactiveOsBudgets.prompt,
     commandMaxSteps: interactiveOsBudgets.commandMaxSteps,
   });
+  manifest.push(withPresentation(
+    {
+      ...guestEntry(myCpuRoot, 'guest_course_os_shell_demo', 'ready', 'course_os_shell'),
+      backend: 'pipeline',
+      bootUntilUartText: courseOsShellBudgets.prompt,
+      bootMaxSteps: courseOsShellBudgets.bootMaxSteps,
+      terminalPrompt: courseOsShellBudgets.prompt,
+      commandUntilUartText: courseOsShellBudgets.prompt,
+      commandMaxSteps: courseOsShellBudgets.commandMaxSteps,
+    },
+    {
+      menuLabel: 'guest_course_os_shell_demo · Course OS shell',
+      title: 'Course OS Shell',
+      badge: 'Course OS',
+      summary: '打开课程 OS Stage 4 交互 shell，通过 UART terminal 操作 procfs、FD / FS、pipe、ELF / libc、COW 与 crash evidence。',
+      workload: {
+        stage: 'Course OS Stage 4',
+        category: 'course-os-shell',
+        expectedMarker: courseOsShellBudgets.prompt,
+        ops: ['UART terminal', 'course shell', 'procfs shortcuts', 'ELF / libc programs', 'COW / crash evidence'],
+        pipelineNote: '默认使用 pipeline backend；前端只复用 manifest、debug session、terminal prompt 和 snapshot 合同，不新增专用执行协议。',
+        progress: [
+          ['Boot', '独立 guest_course_os_shell_demo 进入 course-os> prompt'],
+          ['Shell', 'help、文件重定向、pipe 和 exec 命令经 guest shell 执行'],
+          ['Evidence', 'procfs 快捷命令展示 Stage 1 / Stage 2 / Stage 3 证据面'],
+          ['Control', 'Load / Run / Pause / Step / Reset / Terminate 复用现有 session 控制'],
+        ],
+      },
+    },
+  ));
   const linuxConsoleTest = linuxConsoleEntry(myCpuRoot, linuxConsole);
   if (linuxConsoleTest) {
     manifest.push(linuxConsoleTest);

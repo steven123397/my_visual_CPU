@@ -25,6 +25,15 @@ typedef struct KernelBringupOptions {
     bool map_managed_memory;
 } kernel_bringup_options_t;
 
+bool kernel_bringup_create_active_address_space(
+    vm_address_space_t** out_space,
+    uint32_t mmio_mask,
+    bool map_managed_memory);
+
+bool kernel_bringup_create_linux_compat_address_space(
+    vm_address_space_t** out_space,
+    uint32_t mmio_mask);
+
 bool kernel_bringup_run_common(
     trap_context_t* trap_context,
     vm_address_space_t** out_space,

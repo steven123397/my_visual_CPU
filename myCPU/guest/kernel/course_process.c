@@ -15,6 +15,7 @@ static void clear_user_page_ref(course_process_user_page_ref_t* ref) {
 
 static void clear_process(course_process_t* process) {
     size_t i = 0;
+    size_t j = 0;
 
     if (process == 0) {
         return;
@@ -24,6 +25,7 @@ static void clear_process(course_process_t* process) {
     process->pid = 0;
     process->ppid = 0;
     process->state = COURSE_PROCESS_UNUSED;
+    process->abi = COURSE_PROCESS_ABI_COURSE;
     process->exit_code = 0;
     process->crash_sepc = 0;
     process->crash_scause = 0;
@@ -32,6 +34,16 @@ static void clear_process(course_process_t* process) {
     process->open_files = 0;
     process->entry_pc = 0;
     process->user_sp = 0;
+    process->map_count = 0;
+    for (i = 0; i < COURSE_PROCESS_MAX_MAPS; ++i) {
+        process->maps[i].start = 0;
+        process->maps[i].end = 0;
+        process->maps[i].flags = 0;
+        process->maps[i].cow = false;
+        for (j = 0; j < COURSE_ELF_MAP_NAME_MAX; ++j) {
+            process->maps[i].name[j] = '\0';
+        }
+    }
     for (i = 0; i < COURSE_PROCESS_MAX_USER_PAGES; ++i) {
         clear_user_page_ref(&process->user_pages[i]);
     }
@@ -140,6 +152,9 @@ static course_process_cow_page_t* alloc_cow_page(course_process_table_t* table) 
             page->id = table->next_cow_page_id;
             table->next_cow_page_id += 1U;
             page->refcount = 1U;
+            if (table->cow_stats.refcount_peak < page->refcount) {
+                table->cow_stats.refcount_peak = page->refcount;
+            }
             return page;
         }
     }
@@ -155,6 +170,7 @@ static void release_cow_page_ref(course_process_table_t* table, uint32_t id) {
 
     page->refcount -= 1U;
     if (page->refcount == 0) {
+        table->cow_stats.released_pages += 1U;
         clear_cow_page(page);
     }
 }
@@ -231,6 +247,10 @@ void course_process_table_init(course_process_table_t* table) {
     table->cow_stats.shared_pages = 0;
     table->cow_stats.cow_faults = 0;
     table->cow_stats.copied_pages = 0;
+    table->cow_stats.saved_pages = 0;
+    table->cow_stats.refcount_peak = 0;
+    table->cow_stats.released_pages = 0;
+    table->cow_stats.leak_free = true;
     for (i = 0; i < COURSE_PROCESS_MAX_PROCESSES; ++i) {
         clear_process(&table->processes[i]);
     }
@@ -277,8 +297,17 @@ course_process_t* course_process_fork(course_process_table_t* table,
     }
     child->entry_pc = parent->entry_pc;
     child->user_sp = parent->user_sp;
+    child->abi = parent->abi;
     child->address_space = parent->address_space;
     child->open_files = parent->open_files;
+    child->map_count = parent->map_count;
+    {
+        size_t i = 0;
+
+        for (i = 0; i < parent->map_count && i < COURSE_PROCESS_MAX_MAPS; ++i) {
+            child->maps[i] = parent->maps[i];
+        }
+    }
     {
         size_t i = 0;
 
@@ -298,12 +327,16 @@ course_process_t* course_process_fork(course_process_table_t* table,
             }
 
             page->refcount += 1U;
+            if (table->cow_stats.refcount_peak < page->refcount) {
+                table->cow_stats.refcount_peak = page->refcount;
+            }
             parent_ref->writable = false;
             parent_ref->cow = true;
             *child_ref = *parent_ref;
             child_ref->writable = false;
             child_ref->cow = true;
             table->cow_stats.mapped_pages += 1U;
+            table->cow_stats.saved_pages += 1U;
         }
     }
     copy_str(child->argv, sizeof(child->argv), parent->argv);
@@ -321,6 +354,41 @@ bool course_process_set_state(course_process_table_t* table,
 
     process->state = state;
     return true;
+}
+
+bool course_process_set_abi(course_process_table_t* table,
+                            uint32_t pid,
+                            course_process_abi_t abi) {
+    course_process_t* process = course_process_find(table, pid);
+
+    if (process == 0 ||
+        (abi != COURSE_PROCESS_ABI_COURSE &&
+         abi != COURSE_PROCESS_ABI_LINUX_COMPAT)) {
+        return false;
+    }
+
+    process->abi = abi;
+    return true;
+}
+
+bool course_process_get_abi(const course_process_table_t* table,
+                            uint32_t pid,
+                            course_process_abi_t* out_abi) {
+    size_t i = 0;
+
+    if (table == 0 || out_abi == 0) {
+        return false;
+    }
+    for (i = 0; i < COURSE_PROCESS_MAX_PROCESSES; ++i) {
+        const course_process_t* process = &table->processes[i];
+
+        if (process->used && process->pid == pid &&
+            process->state != COURSE_PROCESS_DEAD) {
+            *out_abi = process->abi;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool course_process_exit(course_process_table_t* table,
@@ -388,6 +456,8 @@ int32_t course_process_exec(course_process_table_t* table,
                             const char* argv) {
     course_process_t* process = course_process_find(table, pid);
     course_user_program_t program;
+    course_elf_load_result_t load;
+    size_t i = 0;
 
     if (process == 0) {
         return COURSE_PROCESS_ERR_NO_PROCESS;
@@ -395,11 +465,30 @@ int32_t course_process_exec(course_process_table_t* table,
     if (!course_user_program_lookup(program_name, &program)) {
         return COURSE_PROCESS_ERR_NO_SUCH_PROGRAM;
     }
+    if (course_elf_loader_load(program.elf_image,
+                               program.elf_size,
+                               argv,
+                               &load) != COURSE_ELF_OK) {
+        return COURSE_PROCESS_ERR_BAD_ELF;
+    }
 
+    release_process_user_pages(table, process);
     copy_str(process->name, sizeof(process->name), program.name);
-    copy_str(process->argv, sizeof(process->argv), argv);
-    process->entry_pc = program.entry_pc;
-    process->user_sp = program.user_sp;
+    copy_str(process->argv, sizeof(process->argv), load.argv);
+    process->abi = COURSE_PROCESS_ABI_COURSE;
+    process->entry_pc = load.entry_pc;
+    process->user_sp = load.user_sp;
+    process->map_count = load.map_count;
+    for (i = 0; i < COURSE_PROCESS_MAX_MAPS; ++i) {
+        process->maps[i].start = 0;
+        process->maps[i].end = 0;
+        process->maps[i].flags = 0;
+        process->maps[i].cow = false;
+        process->maps[i].name[0] = '\0';
+    }
+    for (i = 0; i < load.map_count && i < COURSE_PROCESS_MAX_MAPS; ++i) {
+        process->maps[i] = load.maps[i];
+    }
     process->state = COURSE_PROCESS_READY;
     return COURSE_PROCESS_OK;
 }
@@ -502,10 +591,58 @@ bool course_process_write_user_byte(course_process_table_t* table,
     return true;
 }
 
+bool course_process_handle_cow_store_fault(course_process_table_t* table,
+                                           uint32_t pid,
+                                           uint32_t page_index,
+                                           size_t offset) {
+    course_process_t* process = course_process_find(table, pid);
+
+    if (process == 0 ||
+        page_index >= COURSE_PROCESS_MAX_USER_PAGES ||
+        offset >= COURSE_PROCESS_USER_PAGE_SIZE ||
+        !process->user_pages[page_index].mapped) {
+        return false;
+    }
+    return duplicate_cow_page(table, process, page_index);
+}
+
+bool course_process_page_refcount(const course_process_table_t* table,
+                                  uint32_t pid,
+                                  uint32_t page_index,
+                                  uint32_t* out_refcount) {
+    const course_process_t* process = 0;
+    const course_process_cow_page_t* page = 0;
+    size_t i = 0;
+
+    if (table == 0 || out_refcount == 0 ||
+        page_index >= COURSE_PROCESS_MAX_USER_PAGES) {
+        return false;
+    }
+    for (i = 0; i < COURSE_PROCESS_MAX_PROCESSES; ++i) {
+        const course_process_t* candidate = &table->processes[i];
+
+        if (candidate->used && candidate->pid == pid) {
+            process = candidate;
+            break;
+        }
+    }
+    if (process == 0 || !process->user_pages[page_index].mapped) {
+        return false;
+    }
+    page = find_const_cow_page_by_id(table,
+                                     process->user_pages[page_index].cow_page_id);
+    if (page == 0) {
+        return false;
+    }
+    *out_refcount = page->refcount;
+    return true;
+}
+
 bool course_process_cow_stats(const course_process_table_t* table,
                               course_process_cow_stats_t* out_stats) {
     size_t i = 0;
     uint32_t shared = 0;
+    bool leak_free = true;
 
     if (table == 0 || out_stats == 0) {
         return false;
@@ -515,12 +652,19 @@ bool course_process_cow_stats(const course_process_table_t* table,
         if (table->cow_pages[i].used && table->cow_pages[i].refcount > 1U) {
             shared += 1U;
         }
+        if (table->cow_pages[i].used && table->cow_pages[i].refcount == 0U) {
+            leak_free = false;
+        }
     }
 
     out_stats->mapped_pages = table->cow_stats.mapped_pages;
     out_stats->shared_pages = shared;
     out_stats->cow_faults = table->cow_stats.cow_faults;
     out_stats->copied_pages = table->cow_stats.copied_pages;
+    out_stats->saved_pages = table->cow_stats.saved_pages;
+    out_stats->refcount_peak = table->cow_stats.refcount_peak;
+    out_stats->released_pages = table->cow_stats.released_pages;
+    out_stats->leak_free = leak_free;
     return true;
 }
 

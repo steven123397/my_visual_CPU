@@ -1,5 +1,7 @@
 #include "procfs.h"
 
+#include "course_fd.h"
+
 static bool str_eq(const char* a, const char* b) {
     size_t i = 0;
 
@@ -109,6 +111,45 @@ static bool append_key_value_i32(char* out,
            append_char(out, out_size, used, '\n');
 }
 
+static bool parse_u32_component(const char* text,
+                                size_t len,
+                                uint32_t* out_value) {
+    uint32_t value = 0;
+    size_t i = 0;
+
+    if (text == NULL || out_value == NULL || len == 0) {
+        return false;
+    }
+    for (i = 0; i < len; ++i) {
+        if (text[i] < '0' || text[i] > '9') {
+            return false;
+        }
+        value = (value * 10U) + (uint32_t)(text[i] - '0');
+    }
+    *out_value = value;
+    return true;
+}
+
+static const course_process_t* find_const_process(
+    const course_process_table_t* table,
+    uint32_t pid) {
+    size_t i = 0;
+
+    if (table == NULL || pid == 0) {
+        return NULL;
+    }
+    for (i = 0; i < COURSE_PROCESS_MAX_PROCESSES; ++i) {
+        const course_process_t* process = course_process_at(table, i);
+
+        if (process != NULL && process->pid == pid &&
+            process->state != COURSE_PROCESS_DEAD &&
+            process->state != COURSE_PROCESS_UNUSED) {
+            return process;
+        }
+    }
+    return NULL;
+}
+
 static bool read_ps(const procfs_t* procfs, char* out, size_t out_size) {
     course_scheduler_summary_t summary;
     course_scheduler_task_stats_t stats[COURSE_SCHEDULER_MAX_TASKS];
@@ -210,6 +251,26 @@ static bool read_schedstat(const procfs_t* procfs, char* out, size_t out_size) {
                                 &used,
                                 "context_switches",
                                 summary.context_switches) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "time_slice",
+                                summary.time_slice) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "preempts",
+                                summary.preempt_count) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "avg_wait",
+                                summary.average_wait_time) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "avg_turnaround",
+                                summary.average_turnaround_time) &&
            append_key_value_u32(out,
                                 out_size,
                                 &used,
@@ -372,8 +433,26 @@ static bool read_cow(const procfs_t* procfs, char* out, size_t out_size) {
            append_key_value_u32(out,
                                 out_size,
                                 &used,
+                                "saved_pages",
+                                stats.saved_pages) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
                                 "copied_pages",
-                                stats.copied_pages);
+                                stats.copied_pages) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "refcount_peak",
+                                stats.refcount_peak) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "released_pages",
+                                stats.released_pages) &&
+           append_str(out, out_size, &used, "leak_free=") &&
+           append_str(out, out_size, &used, stats.leak_free ? "yes" : "no") &&
+           append_char(out, out_size, &used, '\n');
 }
 
 static bool read_crashlog(const procfs_t* procfs, char* out, size_t out_size) {
@@ -418,6 +497,176 @@ static bool read_crashlog(const procfs_t* procfs, char* out, size_t out_size) {
            append_char(out, out_size, &used, '\n');
 }
 
+static bool read_cpuinfo(const procfs_t* procfs, char* out, size_t out_size) {
+    size_t used = 0;
+
+    (void)procfs;
+    return append_str(out, out_size, &used, "isa=rv64im\n") &&
+           append_str(out, out_size, &used, "backend=myCPU\n") &&
+           append_str(out, out_size, &used, "stage=kernel_alpha_stage3\n");
+}
+
+static bool read_uptime(const procfs_t* procfs, char* out, size_t out_size) {
+    size_t used = 0;
+    uint32_t ticks = 1U;
+
+    if (procfs != NULL && procfs->scheduler != NULL) {
+        course_scheduler_summary_t summary;
+
+        if (course_scheduler_summary(procfs->scheduler, &summary)) {
+            ticks += summary.context_switches + summary.total_turnaround_time;
+        }
+    }
+    return append_key_value_u32(out, out_size, &used, "ticks", ticks);
+}
+
+static bool read_pid_status(const procfs_t* procfs,
+                            uint32_t pid,
+                            char* out,
+                            size_t out_size) {
+    const course_process_t* process =
+        procfs != NULL ? find_const_process(procfs->processes, pid) : NULL;
+    size_t used = 0;
+
+    if (process == NULL) {
+        return false;
+    }
+    return append_key_value_u32(out, out_size, &used, "pid", process->pid) &&
+           append_key_value_u32(out, out_size, &used, "ppid", process->ppid) &&
+           append_str(out, out_size, &used, "state=") &&
+           append_str(out,
+                      out_size,
+                      &used,
+                      course_process_state_name(process->state)) &&
+           append_char(out, out_size, &used, '\n') &&
+           append_str(out, out_size, &used, "name=") &&
+           append_str(out, out_size, &used, process->name) &&
+           append_char(out, out_size, &used, '\n') &&
+           append_key_value_i32(out,
+                                out_size,
+                                &used,
+                                "exit_code",
+                                process->exit_code) &&
+           append_str(out, out_size, &used, "crash=") &&
+           append_str(out,
+                      out_size,
+                      &used,
+                      process->crash_reason[0] != '\0' ? "yes" : "no") &&
+           append_char(out, out_size, &used, '\n');
+}
+
+static const char* fd_kind_name(course_fd_kind_t kind) {
+    switch (kind) {
+    case COURSE_FD_KIND_STDIO:
+        return "stdio";
+    case COURSE_FD_KIND_FILE:
+        return "file";
+    case COURSE_FD_KIND_PROC:
+        return "proc";
+    case COURSE_FD_KIND_UNUSED:
+    default:
+        return "unused";
+    }
+}
+
+static bool read_pid_fd(const procfs_t* procfs,
+                        uint32_t pid,
+                        char* out,
+                        size_t out_size) {
+    size_t used = 0;
+    size_t i = 0;
+
+    if (procfs == NULL || procfs->processes == NULL ||
+        find_const_process(procfs->processes, pid) == NULL ||
+        procfs->fd_table == NULL || procfs->fd_owner_pid != pid) {
+        return false;
+    }
+    for (i = 0; i < COURSE_FD_MAX_OPEN; ++i) {
+        const course_fd_entry_t* entry = &procfs->fd_table->entries[i];
+
+        if (entry->kind == COURSE_FD_KIND_UNUSED) {
+            continue;
+        }
+        if (!append_str(out, out_size, &used, "fd=") ||
+            !append_u32(out, out_size, &used, (uint32_t)i) ||
+            !append_str(out, out_size, &used, " kind=") ||
+            !append_str(out, out_size, &used, fd_kind_name(entry->kind))) {
+            return false;
+        }
+        if (entry->path[0] != '\0') {
+            if (!append_str(out, out_size, &used, " path=") ||
+                !append_str(out, out_size, &used, entry->path)) {
+                return false;
+            }
+        }
+        if (!append_char(out, out_size, &used, '\n')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool read_pid_maps(const procfs_t* procfs,
+                          uint32_t pid,
+                          char* out,
+                          size_t out_size) {
+    const course_process_t* process =
+        procfs != NULL ? find_const_process(procfs->processes, pid) : NULL;
+    size_t used = 0;
+    size_t i = 0;
+
+    if (process == NULL) {
+        return false;
+    }
+    for (i = 0; i < process->map_count; ++i) {
+        const course_elf_map_t* map = &process->maps[i];
+
+        if (!append_str(out, out_size, &used, map->name) ||
+            !append_str(out, out_size, &used, " start=") ||
+            !append_u32(out, out_size, &used, (uint32_t)map->start) ||
+            !append_str(out, out_size, &used, " end=") ||
+            !append_u32(out, out_size, &used, (uint32_t)map->end) ||
+            !append_str(out, out_size, &used, " cow=") ||
+            !append_str(out, out_size, &used, map->cow ? "yes" : "no") ||
+            !append_char(out, out_size, &used, '\n')) {
+            return false;
+        }
+    }
+    return process->map_count > 0U;
+}
+
+static bool read_pid_node(const procfs_t* procfs,
+                          const char* path,
+                          char* out,
+                          size_t out_size) {
+    const char* pid_start = path + 6U;
+    const char* slash = pid_start;
+    uint32_t pid = 0;
+    size_t pid_len = 0;
+
+    while (*slash != '\0' && *slash != '/') {
+        slash += 1;
+    }
+    if (*slash != '/') {
+        return false;
+    }
+    pid_len = (size_t)(slash - pid_start);
+    if (!parse_u32_component(pid_start, pid_len, &pid)) {
+        return false;
+    }
+    slash += 1;
+    if (str_eq(slash, "status")) {
+        return read_pid_status(procfs, pid, out, out_size);
+    }
+    if (str_eq(slash, "fd")) {
+        return read_pid_fd(procfs, pid, out, out_size);
+    }
+    if (str_eq(slash, "maps")) {
+        return read_pid_maps(procfs, pid, out, out_size);
+    }
+    return false;
+}
+
 void procfs_init(procfs_t* procfs,
                  const course_scheduler_t* scheduler,
                  const course_memory_t* memory,
@@ -431,6 +680,8 @@ void procfs_init(procfs_t* procfs,
     procfs->fs = fs;
     procfs->syscalls = NULL;
     procfs->processes = NULL;
+    procfs->fd_table = NULL;
+    procfs->fd_owner_pid = 0;
 }
 
 bool procfs_read(const procfs_t* procfs,
@@ -464,6 +715,16 @@ bool procfs_read(const procfs_t* procfs,
     if (str_eq(path, "/proc/crashlog")) {
         return read_crashlog(procfs, out, out_size);
     }
+    if (str_eq(path, "/proc/cpuinfo")) {
+        return read_cpuinfo(procfs, out, out_size);
+    }
+    if (str_eq(path, "/proc/uptime")) {
+        return read_uptime(procfs, out, out_size);
+    }
+    if (path[0] == '/' && path[1] == 'p' && path[2] == 'r' &&
+        path[3] == 'o' && path[4] == 'c' && path[5] == '/') {
+        return read_pid_node(procfs, path, out, out_size);
+    }
 
     return false;
 }
@@ -496,5 +757,16 @@ bool procfs_attach_processes(procfs_t* procfs,
     }
 
     procfs->processes = processes;
+    return true;
+}
+
+bool procfs_attach_fd_table(procfs_t* procfs,
+                            uint32_t owner_pid,
+                            const struct CourseFdTable* fd_table) {
+    if (procfs == NULL || fd_table == NULL || owner_pid == 0U) {
+        return false;
+    }
+    procfs->fd_table = fd_table;
+    procfs->fd_owner_pid = owner_pid;
     return true;
 }

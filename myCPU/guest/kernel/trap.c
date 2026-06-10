@@ -12,6 +12,10 @@ extern void trap_user_runtime_arch_enter(trap_user_runtime_t* user_runtime,
                                          uintptr_t entry,
                                          uintptr_t arg0,
                                          uintptr_t user_sp);
+extern void trap_user_runtime_arch_call(trap_user_runtime_t* user_runtime,
+                                        uintptr_t entry,
+                                        uintptr_t arg0,
+                                        uintptr_t user_sp);
 extern void trap_user_runtime_arch_resume(void);
 
 static trap_user_runtime_t* active_user_runtime = NULL;
@@ -103,6 +107,7 @@ static trap_context_binding_snapshot_t capture_context_binding_snapshot(
     snapshot.supervisor_external_policy.post_context = NULL;
     snapshot.user_ecall_policy.user_runtime = NULL;
     snapshot.user_ecall_policy.syscalls = NULL;
+    snapshot.user_ecall_policy.linux_runtime = NULL;
     snapshot.user_ecall_policy.validate = NULL;
     snapshot.user_ecall_policy.validate_context = NULL;
     snapshot.user_ecall_policy.resume_pc = 0;
@@ -350,6 +355,7 @@ static void reset_prepared_runtime_state(trap_user_runtime_t* user_runtime) {
     }
 
     user_runtime->arch_state.saved_supervisor_sp = 0;
+    user_runtime->arch_state.saved_supervisor_ra = 0;
     user_runtime->arch_state.supervisor_trap_stack_top = 0;
     user_runtime->arch_state.supervisor_trap_stack_size = 0;
     user_runtime->expected_ecall_pc = 0;
@@ -376,6 +382,7 @@ static void clear_runtime_policy_refs(trap_context_t* trap_context,
 
     if (trap_context->user_ecall_policy.user_runtime == user_runtime) {
         trap_context->user_ecall_policy.user_runtime = NULL;
+        trap_context->user_ecall_policy.linux_runtime = NULL;
         trap_context->user_ecall_policy.validate = NULL;
         trap_context->user_ecall_policy.validate_context = NULL;
         trap_context->user_ecall_policy.resume_pc = 0;
@@ -426,6 +433,7 @@ void trap_context_init(trap_context_t* trap_context) {
     trap_context->supervisor_external_policy.post_context = NULL;
     trap_context->user_ecall_policy.user_runtime = NULL;
     trap_context->user_ecall_policy.syscalls = NULL;
+    trap_context->user_ecall_policy.linux_runtime = NULL;
     trap_context->user_ecall_policy.validate = NULL;
     trap_context->user_ecall_policy.validate_context = NULL;
     trap_context->user_ecall_policy.resume_pc = 0;
@@ -447,6 +455,7 @@ void trap_user_runtime_init(trap_user_runtime_t* user_runtime) {
 
     clear_runtime_policy_refs(trap_context, user_runtime);
     user_runtime->arch_state.saved_supervisor_sp = 0;
+    user_runtime->arch_state.saved_supervisor_ra = 0;
     user_runtime->arch_state.supervisor_trap_stack_top = 0;
     user_runtime->arch_state.supervisor_trap_stack_size = 0;
     user_runtime->trap_context = NULL;
@@ -613,6 +622,7 @@ bool trap_user_runtime_configure_supervisor_trap_stack(
     }
 
     user_runtime->arch_state.saved_supervisor_sp = 0;
+    user_runtime->arch_state.saved_supervisor_ra = 0;
     user_runtime->arch_state.supervisor_trap_stack_top =
         stack_base + (uintptr_t)trap_stack_size;
     user_runtime->arch_state.supervisor_trap_stack_size = trap_stack_size;
@@ -721,9 +731,9 @@ bool trap_user_runtime_enter(const trap_user_runtime_t* user_runtime) {
         return false;
     }
 
-    trap_user_runtime_arch_enter((trap_user_runtime_t*)user_runtime,
-                                 user_runtime->process->entry_pc,
-                                 user_runtime->arg0,
-                                 user_runtime->process->user_sp);
+    trap_user_runtime_arch_call((trap_user_runtime_t*)user_runtime,
+                                user_runtime->process->entry_pc,
+                                user_runtime->arg0,
+                                user_runtime->process->user_sp);
     return true;
 }

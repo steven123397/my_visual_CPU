@@ -7,6 +7,8 @@
 #include "vm_private.h"
 
 static void clear_object_descriptor(vm_object_t* object) {
+    size_t i = 0;
+
     if (object == NULL) {
         return;
     }
@@ -17,6 +19,9 @@ static void clear_object_descriptor(vm_object_t* object) {
     object->attachment_count = 0;
     object->backing.anon.page_slots = NULL;
     object->backing.anon.page_count = 0;
+    for (i = 0; i < VM_OBJECT_ANON_SLOT_TABLE_COUNT - 1U; ++i) {
+        object->backing.anon.extra_page_slots[i] = NULL;
+    }
 }
 
 static bool resolve_physical_object_page(const vm_object_t* object,
@@ -46,7 +51,13 @@ static bool resolve_anon_object_page(vm_object_t* object,
         return false;
     }
 
-    if (object->backing.anon.page_slots[page_index] == 0) {
+    uintptr_t* slot = anon_page_slot(object, page_index);
+
+    if (slot == NULL) {
+        return false;
+    }
+
+    if (*slot == 0) {
         if (!create) {
             return false;
         }
@@ -56,15 +67,14 @@ static bool resolve_anon_object_page(vm_object_t* object,
             return false;
         }
 
-        object->backing.anon.page_slots[page_index] = (uintptr_t)page;
+        *slot = (uintptr_t)page;
     }
 
-    if ((object->backing.anon.page_slots[page_index] &
-         (MEMORY_PAGE_SIZE - 1U)) != 0) {
+    if ((*slot & (MEMORY_PAGE_SIZE - 1U)) != 0) {
         return false;
     }
 
-    *out_paddr = object->backing.anon.page_slots[page_index];
+    *out_paddr = *slot;
     return true;
 }
 
@@ -182,13 +192,19 @@ bool map_region_object_pages(vm_user_region_t* region,
 
 static bool release_anon_object_pages(vm_object_t* object) {
     size_t i = 0;
+    const size_t slot_table_count =
+        object != NULL
+            ? anon_slot_table_count_for_pages(
+                  object->backing.anon.page_count)
+            : 0U;
 
     if (object == NULL) {
         return false;
     }
 
     for (i = 0; i < object->backing.anon.page_count; ++i) {
-        const uintptr_t page = object->backing.anon.page_slots[i];
+        uintptr_t* slot = anon_page_slot(object, i);
+        const uintptr_t page = slot != NULL ? *slot : 0U;
 
         if (page == 0) {
             continue;
@@ -198,10 +214,17 @@ static bool release_anon_object_pages(vm_object_t* object) {
             return false;
         }
 
-        object->backing.anon.page_slots[i] = 0;
+        *slot = 0;
     }
 
-    return pmm_free_page(object->backing.anon.page_slots);
+    for (i = 0; i < slot_table_count; ++i) {
+        uintptr_t* table = anon_slot_table(object, i);
+
+        if (table != NULL && !pmm_free_page(table)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool vm_object_reset(vm_object_t* object) {
@@ -252,29 +275,50 @@ bool vm_object_init_physical(vm_object_t* object, uintptr_t paddr, size_t size) 
 }
 
 bool vm_object_init_anon(vm_object_t* object, size_t size) {
-    uintptr_t* page_slots = NULL;
+    uintptr_t* slot_tables[VM_OBJECT_ANON_SLOT_TABLE_COUNT] = {NULL};
     const size_t page_count = object_page_count(size);
+    const size_t slot_table_count =
+        anon_slot_table_count_for_pages(page_count);
+    size_t i = 0;
 
     if (object == NULL || object->initialized || object->attachment_count != 0 ||
         size == 0 ||
         (size & (MEMORY_PAGE_SIZE - 1U)) != 0 ||
         page_count == 0 ||
-        page_count > VM_OBJECT_ANON_PAGE_SLOTS) {
+        page_count > VM_OBJECT_ANON_PAGE_SLOTS ||
+        slot_table_count == 0 ||
+        slot_table_count > VM_OBJECT_ANON_SLOT_TABLE_COUNT) {
         return false;
     }
 
-    page_slots = (uintptr_t*)alloc_zeroed_page();
-    if (page_slots == NULL) {
-        return false;
+    for (i = 0; i < slot_table_count; ++i) {
+        slot_tables[i] = (uintptr_t*)alloc_zeroed_page();
+        if (slot_tables[i] == NULL) {
+            while (i > 0) {
+                i -= 1U;
+                (void)pmm_free_page(slot_tables[i]);
+            }
+            return false;
+        }
     }
 
+    clear_object_descriptor(object);
     object->initialized = true;
     object->backing_kind = VM_OBJECT_BACKING_ANON;
     object->size = size;
     object->attachment_count = 0;
-    object->backing.anon.page_slots = page_slots;
+    object->backing.anon.page_slots = slot_tables[0];
     object->backing.anon.page_count = page_count;
+    for (i = 1; i < slot_table_count; ++i) {
+        object->backing.anon.extra_page_slots[i - 1U] = slot_tables[i];
+    }
     return true;
+}
+
+bool vm_object_resolve_page_for_write(vm_object_t* object,
+                                      size_t page_offset,
+                                      uintptr_t* out_paddr) {
+    return object_resolve_page(object, page_offset, true, out_paddr);
 }
 
 bool vm_user_region_clear_object(vm_user_region_t* region) {

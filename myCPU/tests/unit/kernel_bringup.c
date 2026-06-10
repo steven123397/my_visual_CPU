@@ -32,6 +32,7 @@ static int g_pmm_init_calls = 0;
 static int g_vm_create_calls = 0;
 static int g_vm_enable_calls = 0;
 static int g_vm_destroy_calls = 0;
+static int g_vm_identity_1g_calls = 0;
 static int g_pre_vm_calls = 0;
 static int g_pmm_alloc_calls = 0;
 static int g_pmm_free_calls = 0;
@@ -42,6 +43,8 @@ static bool g_vm_enable_result = true;
 static bool g_vm_destroy_result = true;
 static range_call_t g_map_calls[8];
 static size_t g_map_call_count = 0;
+static range_call_t g_identity_map_calls[4];
+static size_t g_identity_map_call_count = 0;
 static range_call_t g_fault_calls[4];
 static size_t g_fault_call_count = 0;
 static struct VmAddressSpace g_address_space = {0};
@@ -73,6 +76,8 @@ static bool range_call_matches(const range_call_t* call,
                                uintptr_t paddr,
                                size_t size,
                                uint64_t flags);
+static int test_create_active_address_space_maps_fixed_ranges_and_selected_mmio(void);
+static int test_create_linux_compat_address_space_maps_kernel_superpage_and_selected_mmio(void);
 static int test_common_bringup_maps_fixed_ranges_and_selected_mmio(void);
 static int test_common_bringup_skips_managed_map_when_disabled(void);
 static int test_common_bringup_propagates_pre_vm_failure(void);
@@ -112,6 +117,10 @@ uintptr_t memory_bss_end(void) {
 
 uintptr_t memory_heap_start(void) {
     return g_heap_start;
+}
+
+uintptr_t vm_kernel_base(void) {
+    return g_text_start;
 }
 
 void runtime_context_reset(void) {
@@ -215,6 +224,25 @@ bool vm_address_space_map_kernel_range(vm_address_space_t* address_space,
     return true;
 }
 
+bool vm_address_space_map_identity_1g(vm_address_space_t* address_space,
+                                      uintptr_t base,
+                                      uint64_t flags) {
+    g_vm_identity_1g_calls += 1;
+    if (address_space == NULL ||
+        g_identity_map_call_count >=
+            (sizeof(g_identity_map_calls) / sizeof(g_identity_map_calls[0]))) {
+        return false;
+    }
+
+    g_identity_map_calls[g_identity_map_call_count++] = (range_call_t){
+        .vaddr = base,
+        .paddr = base,
+        .size = UINT64_C(1) << 30,
+        .flags = flags,
+    };
+    return true;
+}
+
 bool vm_address_space_register_fault_range(vm_address_space_t* address_space,
                                            uintptr_t vaddr,
                                            uintptr_t paddr,
@@ -283,6 +311,7 @@ static void reset_stub_state(void) {
     g_vm_create_calls = 0;
     g_vm_enable_calls = 0;
     g_vm_destroy_calls = 0;
+    g_vm_identity_1g_calls = 0;
     g_pre_vm_calls = 0;
     g_pmm_alloc_calls = 0;
     g_pmm_free_calls = 0;
@@ -293,6 +322,8 @@ static void reset_stub_state(void) {
     g_vm_destroy_result = true;
     memset(g_map_calls, 0, sizeof(g_map_calls));
     g_map_call_count = 0;
+    memset(g_identity_map_calls, 0, sizeof(g_identity_map_calls));
+    g_identity_map_call_count = 0;
     memset(g_fault_calls, 0, sizeof(g_fault_calls));
     g_fault_call_count = 0;
     g_address_space.enabled = false;
@@ -355,6 +386,118 @@ static bool stub_pre_vm_setup(trap_context_t* trap_context, void* context) {
             (trap_interrupt_handler_t)(uintptr_t)0x1;
     }
     return g_pre_vm_result;
+}
+
+static int test_create_active_address_space_maps_fixed_ranges_and_selected_mmio(void) {
+    vm_address_space_t* address_space = NULL;
+    const uint64_t data_flags = VM_PAGE_READ | VM_PAGE_WRITE;
+
+    reset_stub_state();
+    if (!kernel_bringup_create_active_address_space(
+            &address_space,
+            KERNEL_BRINGUP_MMIO_UART | KERNEL_BRINGUP_MMIO_PLIC,
+            true)) {
+        return fail("expected direct active address-space helper to succeed");
+    }
+
+    if (address_space != &g_address_space || g_vm_create_calls != 1 ||
+        g_vm_enable_calls != 1 || g_vm_destroy_calls != 0 ||
+        g_memory_init_calls != 0 || g_runtime_context_reset_calls != 0 ||
+        g_trap_context_init_calls != 0 || g_trap_context_activate_calls != 0 ||
+        g_pmm_init_calls != 0 || g_pmm_alloc_calls != 0 || g_pmm_free_calls != 0) {
+        return fail("expected direct helper to touch only VM setup steps");
+    }
+
+    if (g_map_call_count != 5 ||
+        !range_call_matches(&g_map_calls[0],
+                            g_text_start,
+                            g_text_start,
+                            g_text_end - g_text_start,
+                            VM_PAGE_READ | VM_PAGE_EXEC) ||
+        !range_call_matches(&g_map_calls[1],
+                            g_rodata_start,
+                            g_rodata_start,
+                            g_rodata_end - g_rodata_start,
+                            VM_PAGE_READ) ||
+        !range_call_matches(&g_map_calls[2],
+                            g_data_start,
+                            g_data_start,
+                            g_bss_end - g_data_start,
+                            data_flags) ||
+        !range_call_matches(&g_map_calls[3],
+                            g_heap_start,
+                            g_heap_start,
+                            g_managed_start - g_heap_start,
+                            data_flags) ||
+        !range_call_matches(&g_map_calls[4],
+                            g_managed_start,
+                            g_managed_start,
+                            g_managed_end - g_managed_start,
+                            data_flags)) {
+        return fail("expected direct helper to map fixed kernel ranges");
+    }
+
+    if (g_fault_call_count != 2 ||
+        !range_call_matches(&g_fault_calls[0],
+                            UART_BASE,
+                            UART_BASE,
+                            MEMORY_PAGE_SIZE,
+                            data_flags) ||
+        !range_call_matches(&g_fault_calls[1],
+                            PLIC_BASE,
+                            PLIC_BASE,
+                            PLIC_SIZE,
+                            data_flags)) {
+        return fail("expected direct helper to register selected MMIO fault ranges");
+    }
+
+    return 0;
+}
+
+static int test_create_linux_compat_address_space_maps_kernel_superpage_and_selected_mmio(void) {
+    vm_address_space_t* address_space = NULL;
+    const uint64_t data_flags = VM_PAGE_READ | VM_PAGE_WRITE;
+
+    reset_stub_state();
+    if (!kernel_bringup_create_linux_compat_address_space(
+            &address_space,
+            KERNEL_BRINGUP_MMIO_UART | KERNEL_BRINGUP_MMIO_PLIC)) {
+        return fail("expected linux compat address-space helper to succeed");
+    }
+
+    if (address_space != &g_address_space || g_vm_create_calls != 1 ||
+        g_vm_enable_calls != 0 || g_vm_destroy_calls != 0 ||
+        g_vm_identity_1g_calls != 1 || g_memory_init_calls != 0 ||
+        g_runtime_context_reset_calls != 0 || g_trap_context_init_calls != 0 ||
+        g_trap_context_activate_calls != 0 || g_pmm_init_calls != 0 ||
+        g_pmm_alloc_calls != 0 || g_pmm_free_calls != 0) {
+        return fail("expected linux compat helper to avoid runtime activation work");
+    }
+
+    if (g_map_call_count != 1 || g_identity_map_call_count != 1 ||
+        !range_call_matches(&g_identity_map_calls[0],
+                            vm_kernel_base(),
+                            vm_kernel_base(),
+                            UINT64_C(1) << 30,
+                            VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXEC) ||
+        !range_call_matches(&g_map_calls[0],
+                            UART_BASE,
+                            UART_BASE,
+                            MEMORY_PAGE_SIZE,
+                            data_flags)) {
+        return fail("expected linux compat helper to map the kernel superpage and eager UART window");
+    }
+
+    if (g_fault_call_count != 1 ||
+        !range_call_matches(&g_fault_calls[0],
+                            PLIC_BASE,
+                            PLIC_BASE,
+                            PLIC_SIZE,
+                            data_flags)) {
+        return fail("expected linux compat helper to keep non-UART MMIO as fault ranges");
+    }
+
+    return 0;
 }
 
 static int test_common_bringup_maps_fixed_ranges_and_selected_mmio(void) {
@@ -634,7 +777,9 @@ static int test_common_bringup_preserves_address_space_when_setup_rollback_fails
 }
 
 int main(void) {
-    if (test_common_bringup_maps_fixed_ranges_and_selected_mmio() != 0 ||
+    if (test_create_active_address_space_maps_fixed_ranges_and_selected_mmio() != 0 ||
+        test_create_linux_compat_address_space_maps_kernel_superpage_and_selected_mmio() != 0 ||
+        test_common_bringup_maps_fixed_ranges_and_selected_mmio() != 0 ||
         test_common_bringup_skips_managed_map_when_disabled() != 0 ||
         test_common_bringup_propagates_pre_vm_failure() != 0 ||
         test_common_bringup_rolls_back_vm_on_pmm_probe_failure() != 0 ||

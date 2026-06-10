@@ -9,6 +9,14 @@ static bool console_input_is_visible_ascii(uint8_t ch) {
     return ch >= 0x20U && ch <= 0x7eU;
 }
 
+static bool console_input_read_uart_byte(uint8_t* out_ch) {
+    if (out_ch == 0 || platform_uart_rx_ready() == 0U) {
+        return false;
+    }
+    *out_ch = platform_uart_getc();
+    return true;
+}
+
 void console_input_init(console_input_state_t* state) {
     console_input_reset(state);
 }
@@ -23,13 +31,30 @@ void console_input_reset(console_input_state_t* state) {
     state->overflow = false;
 }
 
+size_t console_input_read_raw(uint8_t* out, size_t out_size) {
+    size_t used = 0;
+
+    if (out == 0 || out_size == 0U) {
+        return 0U;
+    }
+
+    while (used < out_size && console_input_read_uart_byte(&out[used])) {
+        used += 1U;
+    }
+    return used;
+}
+
 console_input_poll_result_t console_input_poll(console_input_state_t* state) {
     if (state == NULL) {
         return CONSOLE_INPUT_NONE;
     }
 
-    while (platform_uart_rx_ready() != 0U) {
-        const uint8_t ch = platform_uart_getc();
+    while (true) {
+        uint8_t ch = 0;
+
+        if (!console_input_read_uart_byte(&ch)) {
+            break;
+        }
 
         if (ch == '\r' || ch == '\n') {
             console_putc('\r');

@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 enum {
     CONSOLE_INPUT_MAX_LINE = 128U,
@@ -21,4 +22,5 @@ typedef struct ConsoleInputState {
 
 void console_input_init(console_input_state_t* state);
 void console_input_reset(console_input_state_t* state);
+size_t console_input_read_raw(uint8_t* out, size_t out_size);
 console_input_poll_result_t console_input_poll(console_input_state_t* state);

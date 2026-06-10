@@ -60,6 +60,9 @@ public:
     void run_until_halt(uint64_t max_steps);
     void uart_input(std::string_view text);
     UartOutputChunk uart_output(size_t offset) const;
+    void debug_step_raw();
+    bool debug_halted() const;
+    bool debug_try_load_guest_memory(uint64_t addr, int size, uint64_t& value);
     TranslationPlanSnapshot translation_plan();
     DbtJitDryRunSummary jit_dispatch();
     DebugSnapshot snapshot() const;

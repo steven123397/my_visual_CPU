@@ -189,6 +189,41 @@ test('renderTerminal labels a loaded Linux serial console session without intera
   assert.doesNotMatch(html, /guest monitor/);
 });
 
+test('renderTerminal labels a loaded Course OS shell session without interactive_os wording', () => {
+  const html = renderTerminal({
+    selectedTest: 'guest_interactive_os_demo',
+    backend: 'functional',
+    loadedSession: {
+      test: 'guest_course_os_shell_demo',
+      backend: 'pipeline',
+    },
+    runState: 'paused',
+    currentSnapshot: {
+      summary: {
+        pc: '0x80000000',
+        privilege: 'S',
+        cycle: 4500000,
+        backend: 'pipeline',
+      },
+    },
+    layout: {
+      terminalCollapsed: false,
+    },
+    terminal: {
+      connected: true,
+      pendingInput: true,
+      focused: false,
+      buffer: 'course-os> help\r\nmeminfo schedstat fsstat\r\ncourse-os> ',
+    },
+  });
+
+  assert.match(html, /Course OS shell terminal/);
+  assert.match(html, /guest_course_os_shell_demo · pipeline/);
+  assert.match(html, /正在把按键送入 Course OS shell/);
+  assert.doesNotMatch(html, /interactive_os terminal/);
+  assert.doesNotMatch(html, /guest monitor/);
+});
+
 test('renderTerminal shows Linux boot progress while the load request is pending', () => {
   const html = renderTerminal({
     selectedTest: 'linux_proto_console',

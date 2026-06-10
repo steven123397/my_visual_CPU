@@ -12,6 +12,7 @@
 typedef struct VmProcess vm_process_t;
 typedef struct TrapUserRuntime trap_user_runtime_t;
 typedef struct CourseSyscall course_syscall_t;
+typedef struct LinuxCompatRuntime linux_compat_runtime_t;
 
 typedef void (*trap_interrupt_handler_t)(uint64_t cause, void* context);
 typedef void (*trap_exception_handler_t)(uint64_t cause,
@@ -52,6 +53,7 @@ typedef struct TrapSupervisorTimerPolicy {
 typedef struct TrapUserEcallPolicy {
     trap_user_runtime_t* user_runtime;
     course_syscall_t* syscalls;
+    linux_compat_runtime_t* linux_runtime;
     trap_user_ecall_validate_t validate;
     void* validate_context;
     uintptr_t resume_pc;
@@ -111,6 +113,7 @@ typedef struct TrapFrame {
 
 typedef struct TrapUserArchState {
     uintptr_t saved_supervisor_sp;
+    uintptr_t saved_supervisor_ra;
     uintptr_t supervisor_trap_stack_top;
     size_t supervisor_trap_stack_size;
 } trap_user_arch_state_t;
@@ -228,6 +231,10 @@ bool trap_context_install_user_ecall_resume_policy(
     void* validate_context);
 bool trap_context_install_user_syscall_policy(trap_context_t* trap_context,
                                               course_syscall_t* syscalls);
+bool trap_context_install_linux_compat_syscall_policy(
+    trap_context_t* trap_context,
+    trap_user_runtime_t* user_runtime,
+    linux_compat_runtime_t* runtime);
 bool trap_context_install_user_crash_policy(trap_context_t* trap_context,
                                             trap_user_crash_handler_t handler,
                                             void* context);

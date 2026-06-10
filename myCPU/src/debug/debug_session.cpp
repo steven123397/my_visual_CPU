@@ -219,6 +219,23 @@ DebugSession::UartOutputChunk DebugSession::uart_output(size_t offset) const {
     };
 }
 
+void DebugSession::debug_step_raw() {
+    ensure_loaded();
+    machine().step();
+}
+
+bool DebugSession::debug_halted() const {
+    ensure_loaded();
+    return machine().cpu().core().halted();
+}
+
+bool DebugSession::debug_try_load_guest_memory(uint64_t addr,
+                                               int size,
+                                               uint64_t& value) {
+    ensure_loaded();
+    return machine().bus().try_load(addr, size, value);
+}
+
 DebugSession::TranslationPlanSnapshot DebugSession::translation_plan() {
     ensure_loaded();
     const BackendDebugSnapshot backend_snapshot = machine().backend().debug_snapshot();

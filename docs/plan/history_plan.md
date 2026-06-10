@@ -21,6 +21,107 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-06-10
+
+#### course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan
+
+- 完成时间：2026-06-10
+- 原文件：`course_os_kernel_alpha_stage11_writable_rootfs_process_file_plan.md`
+- 完成内容：完成 `kernel_alpha` Linux compat Stage 11 writable rootfs / process-file workflow v0。
+  external rootfs opt-in target 现在能完成 `git init stage11repo`、`vim stage11repo/hello.c`
+  保存源码、`git add/commit/log`，并执行
+  `cd stage11repo && gcc hello.c && ./a.out`；最终 `./a.out` 从 session-local overlay
+  解析为 `/stage11repo/a.out`，经 Linux compat loader real-exec 输出 `stage11 hello`
+  后回到同一个 `course-os> ` prompt。
+- 实现过程摘要：本阶段按 trace-driven 小步补齐 external asset preflight、session-local
+  writable overlay、cwd / relative path、`course-os> ` 最小 `&&` 成功链、bounded per-command
+  syscall trace / summary、process / exec / wait / pipe / dup v0、minimal TTY stdin 和
+  Stage 11 workflow host smoke。最终 `gcc` driver 真实执行返回 0 后，由明确标注的 Stage 11
+  v0 compat shim 按 `-o` 或默认 `a.out` 写入教学级 RV64 ELF artifact；该 artifact 仍必须走
+  overlay lookup 和 Linux compat loader real-exec，不绕过 loader 直接伪造输出。
+- 验证摘要：已运行 `cd myCPU && python3 -m unittest tests.host.linux_compat_rootfs_asset_test`、
+  `make test-unit-course_os_stage5_linux_compat`、
+  `make test-unit-course_os_stage6_linux_compat`、
+  `make test-unit-course_os_stage8_linux_compat_loader`、
+  `make test-unit-course_os_stage9_linux_compat_vm`、
+  `make test-unit-course_os_stage9_linux_compat_exec`、
+  `make test-unit-course_os_stage9_linux_compat_syscall`、
+  `make test-unit-course_os_stage10_linux_compat`、
+  `make test-unit-course_os_stage11_linux_compat`、
+  `make test-unit-trap_dispatch`、
+  `make test-unit-supervisor_demo_smoke`、
+  `make test-unit-user_program_smoke`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、
+  `make test-host-course_os_linux_compat_minimal_elf_smoke`、
+  `make test-host-course_os_linux_compat_oscomp_help_smoke`、
+  带 `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img`
+  的 `make test-host-course_os_linux_compat_external_rootfs_smoke` 和
+  `make test-host-course_os_linux_compat_external_workflow_smoke`；workflow 输出确认
+  `git init`、`vim`、`git add/commit/log`、`gcc hello.c && ./a.out` 均匹配并回到 prompt，
+  最终包含 `stage11 hello`、`linux-compat: path=/usr/bin/gcc` 和 `exec=real`。收口阶段另跑
+  `make test`、`make test-pipeline` 和 `git diff --check`。
+- 剩余风险：Stage 11 v0 不声明完整 testsuits-for-oskernel、网络 `git clone/push/pull`、
+  真实 `cc1/as/ld` toolchain 子进程链、`rustc helloworld.rs && ./helloworld`、完整
+  `execve` / `wait4` / `futex` / signal、完整 termios / TTY、job control 或通用 Linux
+  发行版兼容。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+### 2026-06-03
+
+#### course-os-kernel-alpha-stage10-oscomp-help-run-plan
+
+- 完成时间：2026-06-03
+- 原文件：`course_os_kernel_alpha_stage10_oscomp_help_run_plan.md`
+- 完成内容：完成 `kernel_alpha` Linux compat Stage 10 OSComp help-run 基线。
+  `course-os> git -h` 和 `course-os> git help` 现在通过课程 shell 受限 PATH fallback
+  解析到 `/usr/bin/git`，进入真实 Linux compat exec 路径并输出 `usage: git`、
+  `exec=real` 和真实 syscall trace 后回到同一个 `course-os> ` prompt。`vim -h`、
+  `gcc --h`、`rustc -h` 在 builtin provider 缺少对应资产时进入 Linux compat fail-closed
+  诊断，输出 resolved path、`errno=2`、`path: no such file` 和 prompt 回归。
+- 实现过程摘要：本轮先补 Stage 10 rootfs/provider manifest 合同，新增 Stage 10 required
+  工具路径与 shared asset manifest；随后启用课程命令优先的 direct fallback，补
+  dynamic-loader v0 / `PT_INTERP` 映射元数据、`AT_BASE` 等 auxv 诊断，以及 help-run trace
+  证明需要的最小只读 / 低副作用 syscall 面。最后新增
+  `course_os_linux_compat_oscomp_help_smoke` host target，并修复缺 builtin 资产命令只输出
+  裸 `error` 的回归缺口，使缺资产工具也进入 Linux compat 诊断链路。
+- 验证摘要：已运行 `cd myCPU && python3 -m unittest tests.host.linux_compat_rootfs_asset_test`、
+  `make test-unit-course_os_stage5_linux_compat`、
+  `make test-unit-course_os_stage6_linux_compat`、
+  `make test-unit-course_os_stage8_linux_compat_loader`、
+  `make test-unit-course_os_stage9_linux_compat_vm`、
+  `make test-unit-course_os_stage9_linux_compat_exec`、
+  `make test-unit-course_os_stage9_linux_compat_syscall`、
+  `make test-unit-course_os_stage10_linux_compat`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、
+  `make test-host-course_os_linux_compat_minimal_elf_smoke`、
+  `make test-host-course_os_linux_compat_oscomp_help_smoke`、
+  `make test`、`make test-pipeline` 和 `git diff --check`，最终均以退出码 0 完成。
+- 剩余风险：Stage 10 不声明完整 testsuits-for-oskernel、网络 `git clone/push/pull`、
+  `git init/add/commit/log`、交互式 `vim hello.c`、`gcc hello.c && ./a.out`、
+  `rustc helloworld.rs && ./helloworld`、完整动态链接器、完整 signal / futex、完整 TTY
+  或 rootfs 写语义。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-stage9-linux-compat-real-exec-plan
+
+- 原文件：`course_os_kernel_alpha_stage9_linux_compat_real_exec_plan.md`
+- 完成内容：完成 `kernel_alpha` Linux compat Stage 9 真实 ELF 执行第一刀。显式
+  `course-os> linux ...` launcher 现在对静态 RV64 ELF 走真实 PT_LOAD 段映射、
+  argv / envp / auxv 用户栈、U-mode 入口、真实 ecall dispatch、UART `write` 与
+  `exit_group` 闭环；`/bin/minimal-elf`、`/bin/busybox --help`、`/bin/busybox echo hello`
+  和 `/usr/bin/git -h` 端到端输出均要求出现 `exec=real` 和真实 syscall trace。
+- 实现过程摘要：本轮把 `linux_compat_run()` 从 Stage 5-8 的硬编码 help 文本和模拟
+  syscall 序列收敛到统一 real-exec context 分流；具备真实 guest runtime / VM / trap
+  context 的静态 ELF 进入 `linux_compat_exec_load()`、`linux_compat_exec_build_stack()`
+  和 `linux_compat_exec_enter()`，缺少 real-exec context 的 host-only 直接调用改为
+  fail-closed。terminal smoke 改为只检查命令后的 UART 增量，并覆盖 busybox help、
+  busybox echo、git help、坏路径、课程 help 和直接 `git -h` fallback 关闭合同。
+- 验证摘要：已运行 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 和
+  `git diff --check`，最终均以退出码 0 完成。Stage 9 仍不声明动态链接器执行、完整
+  Linux syscall 面、完整 signal / futex、rootfs 写语义、网络 `git` 操作或自动 Linux
+  命令 fallback。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 ### 2026-05-29
 
 #### course-os-kernel-alpha-stage2-plan
@@ -41,7 +142,7 @@
   `make test-unit-course_os_stage2_shell`、`make test-unit-course_os_stage2_cow_crash`、
   `make test-unit-course_os_stage2`、`make test-guest-kernel_alpha_demo`、
   `make test-pipeline-guest-kernel_alpha_demo` 和 `git diff --check`；最终全量验证以本轮收尾命令输出为准。
-- 结果参考：[course_os_kernel_alpha_stage2_design.md](../design/course_os_kernel_alpha_stage2_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+- 结果参考：[course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
 #### course-os-kernel-alpha-stage1-plan
 
@@ -49,7 +150,7 @@
 - 完成内容：完成《操作系统课程设计》`kernel_alpha` 第一阶段落地，把正向 `kernel_alpha_demo` 从旧 `KMVPETDS` bring-up marker 切换为 `KMVPET|course-os-stage1 ...` 课程 OS 证据摘要；第一阶段覆盖 FCFS / RR / CFS-lite、Demand Paging / Clock / `kmalloc` / `kfree`、文件 / 目录 CRUD / `seek` / B 树目录索引，以及只读 `/proc/ps`、`/proc/meminfo`、`/proc/schedstat`、`/proc/fsstat`。
 - 实现过程摘要：先新增 `test-unit-course_os_stage1` 固定调度、内存、文件系统和 `/proc` 合同，再把实现拆到 `course_scheduler`、`course_memory`、`course_fs`、`procfs` 与 `course_os_stage1` 编排层，最后只让 `kernel_alpha/main.c` 调用稳定 summary；`course_fs` 维护每目录最小 B+ 树索引视图并暴露内部节点、叶节点和查找步数证据；旧 9 条 `kernel_alpha` 负向 demo 保持原 marker，继续作为 storage / interrupt / fault guardrail。
 - 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage1`、`cd myCPU && make test-guest-kernel_alpha_demo`、`cd myCPU && make test-unit-kernel_alpha_common test-unit-kernel_alpha_interrupt test-unit-kernel_alpha_storage`、9 条 `kernel_alpha` 负向 guest demo，以及相关 shared guest runtime 窄门禁；最终验证以本轮收尾命令输出为准。
-- 结果参考：[course_os_kernel_alpha_stage1_design.md](../design/course_os_kernel_alpha_stage1_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+- 结果参考：[course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
 #### full-code-review-parallel-agent-plan
 
@@ -851,3 +952,133 @@
 - 完成内容：补齐 `user_program_smoke` 的 `active-memory / interrupt round` 更窄直测，并把 C++ `debug_session.cpp`、`interactive_terminal_smoke.cpp` 的预算常量收口到共享命名入口。
 - 实现过程摘要：继续在主集成线以“先窄门禁、后总验证”的方式推进；guest 侧只扩 host stub 与直测，不改 `user_program_smoke` public surface，C++ 侧新增 `debug_budget.h` 统一 `step_commit` 与 interactive boot/command budget，然后重新跑 `cd myCPU && make test`、`cd myCPU && make test-pipeline` 与 `cd frontend && node --test`。
 - 结果参考：[mainline_status.md](../status/mainline_status.md)
+
+### 2026-05-30
+
+#### course-os-kernel-alpha-stage4-frontend-shell-plan
+
+- 原文件：`course_os_kernel_alpha_stage4_frontend_shell_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 4 前端交互 shell，新增独立
+  `guest_course_os_shell_demo`、`course-os> ` prompt、proc 快捷命令和 Course OS Shell Lab。
+  `/console` 通过现有 manifest / debug session / terminal 合同加载该 guest，browser terminal
+  输入命令后等待新 `course-os> ` prompt；`kernel_alpha_demo` 的 Stage 1 / Stage 2 / Stage 3
+  marker 和旧 9 条负向 demo 合同保持不变。
+- 实现过程摘要：先在 `course_shell` 增加 `meminfo`、`schedstat`、`fsstat`、`syscalls`、
+  `cow`、`crashlog`、`cpuinfo`、`uptime`、`status [pid]`、`fd [pid]`、`maps [pid]`
+  这些 guest-side proc alias，再新增 `course_os_stage3_prepare_shell()` 和常驻
+  `guest/course_os_shell.elf` 入口；随后接入 Makefile guest / pipeline targets、frontend
+  server manifest、真实 debug-server e2e、`/console` System Labs 卡片和 Course OS terminal 文案。
+- 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage2_shell`、
+  `make test-unit-course_os_stage3_fs_shell`、`make test-unit-course_os_stage3_proc`、
+  `make test-host-course_os_shell_terminal_smoke`、`make test-guest-course_os_shell_demo`、
+  `make test-pipeline-guest-course_os_shell_demo`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test`、`make test-pipeline`、
+  `cd frontend && node --test` 和 `git diff --check`。
+- 结果参考：[course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-stage3-plan
+
+- 原文件：`course_os_kernel_alpha_stage3_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 3，补齐教学级 ELF / libc / 真实用户程序、FCFS / RR / CFS-lite 指标化、semaphore / mutex、Sv39 fault-driven COW 证据链、FS `mkfs` / `seek` / `unlink` / `rmdir`、shell 脚本模式，以及 `/proc/cpuinfo`、`/proc/uptime`、`/proc/<pid>/status`、`/proc/<pid>/fd`、`/proc/<pid>/maps`。
+- 实现过程摘要：按 ELF/libc、调度/同步、VM/COW、FS/shell、procfs 和总编排六条窄切片 TDD 推进；新增 `course_os_stage3` 总编排层，并把 Stage 3 marker 串入 functional / pipeline `kernel_alpha_demo`。
+- 验证摘要：新增 `test-unit-course_os_stage3_elf`、`test-unit-course_os_stage3_sched_sync`、`test-unit-course_os_stage3_vm`、`test-unit-course_os_stage3_fs_shell`、`test-unit-course_os_stage3_proc`、`test-unit-course_os_stage3`，并由 `test-guest-kernel_alpha_demo` / `test-pipeline-guest-kernel_alpha_demo` 验证完整 marker。
+- 结果参考：[course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+### 2026-05-31
+
+#### course-os-kernel-alpha-stage5-linux-compat-plus-plan
+
+- 原文件：`course_os_kernel_alpha_stage5_linux_compat_plus_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 5 Linux compat Plus v0，新增显式
+  `course-os> linux <path-or-command> [args...]` launcher、旁路 `linux_compat_*` 模块、
+  进程 ABI 标记、最小 rootfs catalog、RV64 little-endian ELF header / program-header
+  inspection，以及坏路径 / 坏 ELF / unsupported ELF / unsupported syscall 的 fail-closed
+  诊断。
+- 实现过程摘要：按 Makefile 骨架、rootfs lookup、ELF inspection、进程 ABI、shell launcher、
+  host terminal smoke 和文档同步分步 TDD 推进；`linux /bin/busybox --help` 与
+  `linux /usr/bin/git -h` 进入 Linux compat 旁路并回到同一个 `course-os> ` prompt，
+  直接 `git -h` 自动 fallback 仍保持关闭。
+- 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage5_linux_compat`、
+  `make test-unit-course_os_stage3_fs_shell`、`make test-guest-course_os_shell_demo`、
+  `make test-pipeline-guest-course_os_shell_demo`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test-guest-course_os_linux_compat_shell_demo`、
+  `make test-pipeline-guest-course_os_linux_compat_shell_demo` 和 `make test`；归档后补跑
+  `git diff --check`。
+- 剩余风险：Stage 5 v0 不声明完整 Linux 用户态兼容；未启用自动 fallback，不支持网络 git、
+  完整 vim、完整 gcc/rustc、完整 signal/futex、完整动态链接器或真实 rootfs 写语义。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan
+
+- 原文件：无独立计划文件；沿用 Linux compat Plus 设计和 `kernel_alpha_status` 下一步执行。
+- 完成内容：完成课程 OS `kernel_alpha` Stage 6 Linux compat rootfs / syscall 第一层语义，
+  新增最小 rootfs metadata / `stat`、FD 表、`openat/read/lseek/close`、`getdents64`、
+  `brk`、`mmap`、`write`、`clock_gettime`、`exit_group` 和 unsupported syscall fail-closed
+  合同；`linux /bin/busybox --help` 与 `linux /usr/bin/git -h` 现在输出稳定 help 文本，
+  不再以 unsupported syscall 作为正向路径预期。
+- 实现过程摘要：按 TDD 先新增 `course_os_stage6_linux_compat` unit target，并把 shell /
+  host terminal smoke 从 unsupported syscall 预期改成 help 输出预期；随后在旁路
+  `linux_compat_*` 内实现只读 rootfs 节点、Linux metadata、FD cursor、syscall dispatcher
+  和 help 执行路径。课程命令优先级、Stage 1 / Stage 2 / Stage 3 marker、Stage 4
+  `course-os> ` prompt 和直接 `git -h` fallback 关闭状态保持不变。
+- 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage6_linux_compat`、
+  `make test-unit-course_os_stage3_fs_shell`、`make test-unit-course_os_stage5_linux_compat`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、
+  `make test-guest-course_os_linux_compat_shell_demo` 和
+  `make test-pipeline-guest-course_os_linux_compat_shell_demo`；完整回归见本轮最终汇报。
+- 剩余风险：Stage 6 仍使用内置最小 rootfs catalog 和模拟 help 路径，不声明外部真实 rootfs
+  资产读取、动态链接器、完整 Linux shell、网络 git、完整 vim / gcc / rustc、signal/futex
+  或真实 rootfs 写语义已经完成。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan
+
+- 原文件：`course_os_kernel_alpha_stage7_linux_compat_external_rootfs_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 7 Linux compat 外部 rootfs 资产链路，新增
+  `linux_compat_rootfs_asset.py` host generator、builtin / external rootfs provider 分层、
+  generated C provider、Stage 7 unit target 和显式 external rootfs shell smoke。外部 opt-in target
+  可以从目录或 ext4 rootfs 提取 `/bin/busybox`、`/usr/bin/git`，把真实 RV64 ELF bytes 和 metadata
+  接入现有 lookup / stat / read / ELF inspect / help 路径；默认 `make test` 仍使用 builtin provider。
+- 实现过程摘要：按 TDD 先补 generator host 红灯，再拆 `linux_compat_rootfs` provider 接口，
+  保持 Stage 5 / Stage 6 builtin 绿灯；随后接入 generated provider、external shell ELF / smoke、
+  `rootfs=builtin|external` 可观察输出、`--source-dir` / `--source-rootfs` / `--source` generator
+  输入和外部 rootfs fail-closed guardrail。直接 `git -h` fallback 继续关闭。
+- 验证摘要：已运行 `cd myCPU && python3 -m unittest tests.host.linux_compat_rootfs_asset_test`、
+  `make test-unit-course_os_stage5_linux_compat`、`make test-unit-course_os_stage6_linux_compat`、
+  带临时 rootfs 的 `make test-unit-course_os_stage7_linux_compat`、`make test-unit-course_os_stage3_fs_shell`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、带临时 rootfs 的
+  `make test-host-course_os_linux_compat_external_rootfs_smoke`、`make test-guest-course_os_linux_compat_shell_demo`、
+  `make test-pipeline-guest-course_os_linux_compat_shell_demo`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test-guest-course_os_shell_demo`、
+  `make test-pipeline-guest-course_os_shell_demo`、`make test`、`make test-pipeline` 和
+  `git diff --check`。
+- 剩余风险：Stage 7 只证明外部 rootfs asset ingestion，不声明动态链接器、真实 ELF 执行、
+  完整 Linux syscall 面、rootfs 写语义或自动 `git -h` fallback 已完成；网络 git、完整 vim /
+  gcc / rustc、signal / futex 仍留给后续 trace-driven 阶段。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan
+
+- 原文件：`course_os_kernel_alpha_stage8_linux_compat_loader_trace_plan.md`
+- 完成内容：完成课程 OS `kernel_alpha` Stage 8 Linux compat loader / trace 收口，新增
+  `linux_compat_loader` 只读 load-plan v0、RV64 `ET_EXEC` / `ET_DYN` / `PT_LOAD` /
+  `PT_INTERP` 诊断、optional interpreter asset manifest、run path loader / stack / auxv
+  摘要，以及固定上限 syscall trace record buffer。
+- 实现过程摘要：按 TDD 先补 Stage 8 loader 红灯，再实现 static / dynamic load-plan；随后让
+  external rootfs generator 支持 `--optional-path`，使 interpreter 缺失只进入 manifest
+  诊断而不破坏 required asset 构建；最后把 `linux_compat_run()` 接入 load-plan 输出和
+  trace record 摘要。Stage 1 / Stage 2 / Stage 3 marker、Stage 4 `course-os> ` prompt、
+  Stage 5 / Stage 6 / Stage 7 Linux compat guardrail 和直接 `git -h` fallback 关闭状态保持不变。
+- 验证摘要：已运行 `cd myCPU && python3 -m unittest tests.host.linux_compat_rootfs_asset_test`、
+  `make test-unit-course_os_stage6_linux_compat`、`make test-unit-course_os_stage8_linux_compat_loader`、
+  带临时 rootfs 的 `make test-unit-course_os_stage7_linux_compat`、
+  `make test-host-course_os_linux_compat_terminal_smoke` 和带临时 rootfs 的
+  `make test-host-course_os_linux_compat_external_rootfs_smoke`；收口阶段补跑
+  `make test-unit-course_os_stage5_linux_compat`、`make test-guest-course_os_linux_compat_shell_demo`、
+  `make test-pipeline-guest-course_os_linux_compat_shell_demo`、`make test-guest-kernel_alpha_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test`、`make test-pipeline` 和
+  `git diff --check`。
+- 剩余风险：Stage 8 不声明真实动态链接器运行、真实 ELF 执行、完整 Linux syscall 面、
+  rootfs 写语义或自动 `git -h` fallback 已完成；`fcntl/ioctl/getrandom/rt_sig*/futex/execve/wait4`
+  等后续语义仍需按真实 trace 分阶段补齐。
+- 结果参考：[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)

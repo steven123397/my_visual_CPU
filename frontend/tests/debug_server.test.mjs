@@ -87,7 +87,10 @@ function createFakeSession(sessionLabel = 'session-1') {
       pendingTerminalOutput = '';
       interactiveLine = '';
       interactiveOutputCooldown = 0;
-      currentPrompt = currentTest === 'linux_proto_console' ? 'mycpu-linux# ' : '> ';
+      currentPrompt =
+        currentTest === 'linux_proto_console'
+          ? 'mycpu-linux# '
+          : (currentTest === 'guest_course_os_shell_demo' ? 'course-os> ' : '> ');
       terminal =
         currentTest === 'guest_interactive_os_demo'
           ? ''
@@ -110,8 +113,23 @@ function createFakeSession(sessionLabel = 'session-1') {
       } else if (currentTest === 'linux_proto_console' && text === 'mycpu-linux# ') {
         cycle = 44;
         terminal = `boot:${sessionLabel}\r\nready\r\nmycpu-linux# `;
+      } else if (currentTest === 'guest_course_os_shell_demo' && text === 'course-os> ') {
+        cycle = 45;
+        terminal = 'course-os shell ready\r\ncourse-os> ';
       }
       return this.snapshot();
+    },
+    async runUntilNewUartContains(offset, text) {
+      if (currentTest === 'guest_course_os_shell_demo' && text === 'course-os> ') {
+        terminal += pendingTerminalOutput;
+        pendingTerminalOutput = '';
+      }
+      return {
+        type: 'uart_output',
+        offset,
+        next_offset: terminal.length,
+        text: terminal.slice(offset),
+      };
     },
     async stepCycle() {
       cycle += 1;
@@ -146,7 +164,18 @@ function createFakeSession(sessionLabel = 'session-1') {
     },
     async uartInput(text) {
       if (currentTest !== 'guest_interactive_os_demo') {
-        pendingTerminalOutput += text;
+        if (currentTest === 'guest_course_os_shell_demo') {
+          pendingTerminalOutput += text;
+          if (text === 'help\r') {
+            pendingTerminalOutput += 'help ls cat echo ps kill cd pwd exit exec sh meminfo schedstat fsstat syscalls cow crashlog cpuinfo uptime status fd maps\r\ncourse-os> ';
+          } else if (text === 'cpuinfo\r') {
+            pendingTerminalOutput += 'isa=rv64im\r\nbackend=myCPU\r\ncourse-os> ';
+          } else if (text.includes('\r')) {
+            pendingTerminalOutput += 'course-os> ';
+          }
+        } else {
+          pendingTerminalOutput += text;
+        }
         return { ok: true };
       }
 
@@ -507,12 +536,20 @@ test('GET /api/tests returns built-in test manifest', async () => {
     assert.ok(body.tests.some((item) => item.name === 'guest_interactive_os_demo'));
     assert.ok(body.tests.some((item) => item.name === 'guest_kernel_alpha_demo'));
     assert.ok(body.tests.some((item) => item.name === 'guest_kernel_alpha_storage_not_ready_demo'));
+    const courseOsShell = body.tests.find((item) => item.name === 'guest_course_os_shell_demo');
     const aiAccelDemo = body.tests.find((item) => item.name === 'guest_ai_accel_demo');
     const vectorDemo = body.tests.find((item) => item.name === 'guest_vector_demo');
     const vectorCnnDemo = body.tests.find((item) => item.name === 'guest_vector_cnn_demo');
+    assert.ok(courseOsShell);
     assert.ok(aiAccelDemo);
     assert.ok(vectorDemo);
     assert.ok(vectorCnnDemo);
+    assert.equal(courseOsShell.menuLabel, 'guest_course_os_shell_demo · Course OS shell');
+    assert.equal(courseOsShell.bootUntilUartText, 'course-os> ');
+    assert.equal(courseOsShell.terminalPrompt, 'course-os> ');
+    assert.equal(courseOsShell.commandUntilUartText, 'course-os> ');
+    assert.equal(courseOsShell.title, 'Course OS Shell');
+    assert.equal(courseOsShell.workload.expectedMarker, 'course-os> ');
     assert.equal(aiAccelDemo.badge, 'AI Accelerator');
     assert.equal(aiAccelDemo.workload.expectedMarker, 'KMVAI');
     assert.deepEqual(aiAccelDemo.workload.ops, ['graph package', 'MMIO doorbell', 'DMA load/store', 'timed-simple profile']);
@@ -1722,6 +1759,25 @@ test('POST /api/session/load boots guest_interactive_os_demo to monitor prompt',
   }
 });
 
+test('POST /api/session/load boots guest_course_os_shell_demo to course-os prompt', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_course_os_shell_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.body.terminal.text, /course-os shell ready/);
+    assert.match(response.body.terminal.text, /course-os> /);
+  } finally {
+    await server.close();
+  }
+});
+
 test('POST /api/session/terminal-input advances guest_interactive_os_demo until input is echoed', async () => {
   const server = await startServer({
     port: 0,
@@ -1741,6 +1797,30 @@ test('POST /api/session/terminal-input advances guest_interactive_os_demo until 
     assert.equal(response.status, 200);
     assert.equal(response.body.text, 'abc');
     assert.equal(response.body.nextOffset, loadResponse.body.terminal.nextOffset + 3);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/terminal-input waits for Course OS shell prompt after command output', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'guest_course_os_shell_demo',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const response = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'help\r',
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.body.text, /meminfo schedstat fsstat/);
+    assert.match(response.body.text, /course-os> $/);
   } finally {
     await server.close();
   }

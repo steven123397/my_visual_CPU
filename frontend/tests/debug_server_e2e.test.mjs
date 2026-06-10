@@ -105,6 +105,47 @@ test('real debug server + debug CLI can keep guest_interactive_os_demo responsiv
   }
 });
 
+test('real debug server + debug CLI can drive guest_course_os_shell_demo commands', async () => {
+  const tests = listTests(repoRoot);
+  const courseOsShell = tests.find((item) => item.name === 'guest_course_os_shell_demo');
+  assert.ok(courseOsShell, 'guest_course_os_shell_demo should be part of the manifest');
+
+  const server = await startServer({ port: 0 });
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: courseOsShell.name,
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+    assert.match(loadResponse.body.terminal.text, /course-os> /);
+
+    const helpResponse = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'help\r',
+    });
+    assert.equal(helpResponse.status, 200);
+    assert.match(helpResponse.body.text, /meminfo schedstat fsstat/);
+    assert.match(helpResponse.body.text, /course-os> $/);
+
+    const cpuinfoResponse = await postJson(server.baseUrl, '/api/session/terminal-input', {
+      text: 'cpuinfo\r',
+    });
+    assert.equal(cpuinfoResponse.status, 200);
+    assert.match(cpuinfoResponse.body.text, /isa=rv64im/);
+    assert.match(cpuinfoResponse.body.text, /course-os> $/);
+
+    const terminateResponse = await postJson(server.baseUrl, '/api/session/terminate', {});
+    assert.equal(terminateResponse.status, 200);
+    assert.deepEqual(terminateResponse.body.terminal, {
+      type: 'terminal',
+      text: '',
+      nextOffset: 0,
+      reset: true,
+    });
+  } finally {
+    await server.close();
+  }
+});
+
 test('real debug server + debug CLI can drive linux_proto_console help when explicitly enabled', {
   skip: linuxConsoleE2eEnabled ? false : 'set MYCPU_RUN_LINUX_PROTO_CONSOLE_E2E=1 to run the real Linux console e2e guardrail',
 }, async () => {

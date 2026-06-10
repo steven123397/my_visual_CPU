@@ -16,7 +16,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `user_task_t` / `user_task_bootstrap_t`
 - `user_program_t` / `user_program_smoke_t`
 - `supervisor_demo_smoke`
-- 独立 `kernel_alpha` 课程 OS Stage 1 / Stage 2 入口与 negative demos
+- 独立 `kernel_alpha` 课程 OS Stage 1 / Stage 2 / Stage 3 入口与 negative demos
+- 独立 `course_os_shell` 课程 OS Stage 4 浏览器 terminal shell demo
 - 独立 `interactive_os` 串口 monitor demo
 
 当前已经能完成：
@@ -27,7 +28,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - delegated user `ecall`
 - delegated timer / external interrupt return
 - 单用户生命周期和清理 smoke
-- 独立 kernel alpha 的课程 OS Stage 1 / Stage 2 正向 smoke 与九条负向回归
+- 独立 kernel alpha 的课程 OS Stage 1 / Stage 2 / Stage 3 正向 smoke 与九条负向回归
+- 独立 `course_os_shell` 的 `course-os> ` prompt、proc 快捷命令和 `/console` terminal 闭环
 - 独立 `interactive_os` 的 browser/front-end 终端壳闭环与 monitor 命令集
 - `guest_supervisor_demo`、`kernel_alpha` 课程 OS 正向 smoke 与 9 条 `kernel_alpha` 负向 demo 当前共同构成 guest 核心门禁，回归收口口径见 [docs/design/regression_completion_criteria.md](../../docs/design/regression_completion_criteria.md)
 - 当前冻结稳定基线 tag 为 `phase1-stable`（`283aee6`），后续 guest runtime 调整默认按 post-Phase1 hardening 理解。
@@ -54,9 +56,11 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `course_scheduler.c`：课程 OS 第一阶段的 FCFS / RR / CFS-lite 可切换调度与等待时间、周转时间、上下文切换统计。
 - `course_memory.c`：课程 OS 第一阶段的 Demand Paging / Clock 页面置换统计与课程级 `kmalloc` / `kfree` 复用证据。
 - `course_fs.c`：课程 OS 第一阶段的简化文件系统，覆盖文件 / 目录 CRUD、路径解析、`seek` 和简化 B 树目录索引查找统计。
-- `procfs.c`：课程 OS 只读 `/proc` 指标面，提供 `/proc/ps`、`/proc/meminfo`、`/proc/schedstat`、`/proc/fsstat`、`/proc/syscalls`、`/proc/cow` 和 `/proc/crashlog`。
+- `procfs.c`：课程 OS 只读 `/proc` 指标面，提供 `/proc/ps`、`/proc/meminfo`、`/proc/schedstat`、`/proc/fsstat`、`/proc/syscalls`、`/proc/cow`、`/proc/crashlog`、`/proc/cpuinfo`、`/proc/uptime`、`/proc/<pid>/status`、`/proc/<pid>/fd` 和 `/proc/<pid>/maps`。
+- `course_elf_loader.c` / `course_libc.c` / `course_sync.c`：课程 OS 第三阶段的教学级 ELF 装载、简化 libc syscall wrapper、semaphore / mutex 同步模型。
 - `course_os_stage1.c`：课程 OS 第一阶段 smoke 编排层，供 `kernel_alpha_demo` 输出稳定 summary，不把课程逻辑堆进入口文件。
 - `course_os_stage2.c`：课程 OS 第二阶段 smoke 编排层，串起 syscall、进程、FD / FS、shell、管道、COW、crash isolation 和负向 guardrail summary。
+- `course_os_stage3.c`：课程 OS 第三阶段 smoke 编排层，串起 ELF / libc / 真实用户程序、FCFS / RR / CFS-lite 指标化、同步、Sv39 COW 证据、FS / shell 脚本和扩展 `/proc`。
 - `kernel_bringup.c`：共享的早期 `K/M/V` bring-up 骨架，负责 memory / PMM / trap / VM 的最小启动编排
 - `kernel_runtime.c`：最小 kernel runtime 对象，承接 `trap_context` / `address_space` / `interrupt_state`，并负责 entry-level trap bring-up、`interactive_os` 复用的 identity-superpage bring-up、common bring-up options 的 runtime/self-context 装配，以及 `PLIC / first delivery / storage probe/signature` 这组可复用 phase helper，避免 bring-up 入口继续裸拼三件套
 - `supervisor_runtime.c`：`kernel_alpha` 与 `supervisor_demo_smoke` 共享的 supervisor bring-up interrupt state、self-bound contract、policy adapter、delivery / deadline wait 最小编排
@@ -64,12 +68,12 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `user_program_smoke.c`：标准用户 smoke 编排 helper，当前收口 standard plan 校验、prepare、active memory 与 enter round 最小 orchestration
 - `supervisor_demo_smoke.c`：`guest_supervisor_demo` 的最小 `KRN` bring-up orchestration，当前复用 `user_program_smoke` 与 `supervisor_runtime`，不再散落手写 lifecycle / prepare / platform tail
 
-### 入口与编排层：`supervisor_demo` / `kernel_alpha` / `interactive_os`
+### 入口与编排层：`supervisor_demo` / `kernel_alpha` / `course_os_shell` / `interactive_os`
 
 - [supervisor_demo/main.c](supervisor_demo/main.c)
   只负责最小入口编排：`kernel_runtime` 初始化、PLIC supervisor 初始化、入口级 trap bring-up，以及调用 `supervisor_demo_smoke_run()`。
 - [kernel_alpha/main.c](kernel_alpha/main.c)
-  独立 `kernel_alpha_demo` 正向入口；当前在 `K/M/V/P/E/T` 基础 bring-up 后运行课程 OS Stage 1 和 Stage 2 smoke。
+  独立 `kernel_alpha_demo` 正向入口；当前在 `K/M/V/P/E/T` 基础 bring-up 后运行课程 OS Stage 1 / Stage 2 / Stage 3 smoke。
 - [kernel_alpha/fault_main.c](kernel_alpha/fault_main.c)
   独立 `kernel_alpha_fault_demo` 负向入口。
 - [kernel_alpha/storage_no_media_main.c](kernel_alpha/storage_no_media_main.c)
@@ -96,6 +100,8 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   `kernel_alpha` storage 负向回归共享的合同 helper：当前收口 no-media / not-ready / bad-magic / bad-block-count / lba-range / bad-command 六条独立路径的公共协议检查。
 - [interactive_os/main.c](interactive_os/main.c)
   独立 `interactive_os` 入口。当前复用 `kernel_runtime_run_identity_superpage_bringup()` 完成最小 bring-up，再进入串口 monitor 主循环，不承载 `kernel_alpha` 的 bring-up 合同。
+- [course_os_shell/main.c](course_os_shell/main.c)
+  独立 `guest_course_os_shell_demo` 入口。当前复用 identity-superpage bring-up 和 `course_os_stage3_prepare_shell()`，进入常驻 `course-os> ` UART shell，不改变 `kernel_alpha_demo` 的一次性 Stage 1 / Stage 2 / Stage 3 marker 合同。
 - [kernel/console_input.c](kernel/console_input.c)
   轮询式 UART 输入与最小行编辑。
 - [kernel/monitor.c](kernel/monitor.c)
@@ -109,7 +115,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 
 ### `kernel_alpha_demo`
 
-当前承载《操作系统课程设计》Stage 1 / Stage 2 正向 smoke：
+当前承载《操作系统课程设计》Stage 1 / Stage 2 / Stage 3 正向 smoke：
 
 - `K/M/V/P/E/T` 基础 bring-up、PLIC、第一次 supervisor external interrupt 和第一次 timer interrupt 仍可用
 - FCFS / RR / CFS-lite 可切换调度，输出上下文切换与统计
@@ -118,10 +124,11 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - 只读 `/proc/ps`、`/proc/meminfo`、`/proc/schedstat`、`/proc/fsstat` 证据面
 - syscall ABI、真实进程生命周期、5 个课程用户程序、FD / FS 统一 I/O、shell、单级管道和重定向
 - COW Fork、用户态崩溃隔离、`/proc/syscalls`、`/proc/cow` 和 `/proc/crashlog` 证据面
+- 教学级 ELF / libc、真实用户程序、FCFS / RR 指标化、semaphore / mutex、Sv39 fault-driven COW 证据链、`mkfs` / `seek` / `unlink` / `rmdir`、shell 脚本模式，以及 `/proc/cpuinfo`、`/proc/uptime`、`/proc/<pid>/status`、`/proc/<pid>/fd` 和 `/proc/<pid>/maps`
 
 当前正向回归输出：
 
-- `KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog`
+- `KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog|course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid`
 
 ### `kernel_alpha_fault_demo`
 
@@ -286,7 +293,7 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
   - `VM_MAX_FAULT_ACTIONS`
   - `TRAP_MAX_INTERRUPT_CAUSE`
   - `TRAP_MAX_EXCEPTION_CAUSE`
-- `kernel_alpha` 已具备课程 OS Stage 2 教学闭环、COW / crash / `/proc` 创新线和正向 / 负向 guardrail，但仍不是完整通用 OS。
+- `kernel_alpha` 已具备课程 OS Stage 3 教学级满分基线、COW / crash / `/proc` 创新线和正向 / 负向 guardrail，但仍不是完整通用 OS。
 - [kernel/kernel_runtime.c](kernel/kernel_runtime.c)
   当前已继续收口 `kernel_alpha` 入口的基础 runtime 三件套、`supervisor_demo` 的入口级 trap bring-up、`interactive_os` 的最小 identity-superpage bring-up、common bring-up options 的默认 self-context 装配，以及 alpha / demo 共享 phase helper 的真实实现，但后续仍要继续往真正的小内核对象组织推进。
 - [kernel/kernel_bringup.c](kernel/kernel_bringup.c)
@@ -295,10 +302,11 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 ## 本子树下一步工作
 
 1. 保持 `guest_supervisor_demo` 和 `kernel_alpha` 分工清晰，不要把两条路径重新揉成一个入口。
-2. 继续把 `kernel_alpha_demo` 的课程 OS Stage 1 / Stage 2 输出、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 守在稳定输出上；它们当前就是 guest 核心门禁的一部分。
-3. 继续把 guest 生命周期相关回归优先压在 `test-unit-supervisor_demo_smoke` 与 `test-unit-user_program_smoke` 这类窄单测上，尤其是 standard plan、prepare、active memory、interrupt round 和 platform tail 这几类 smoke orchestration 边界。
-4. 守住 [kernel/vm.c](kernel/vm.c) / [kernel/vm_address_space.c](kernel/vm_address_space.c) / [kernel/vm_process.c](kernel/vm_process.c) / [kernel/vm_object.c](kernel/vm_object.c) / [kernel/vm_fault.c](kernel/vm_fault.c) 以及 [kernel/trap.c](kernel/trap.c) / [kernel/trap_dispatch.c](kernel/trap_dispatch.c) 的分层，不要因为修 bug 再把职责揉回大文件或 demo 入口。
-5. 当前 guest 子线以 bug-driven hardening 和边界维护为主，不再把重点放在继续扩新的 bring-up 功能面；`interactive_os` 仍主要服务于 monitor / terminal / 调试链路验证，而不是新的产品主线。
+2. 继续把 `kernel_alpha_demo` 的课程 OS Stage 1 / Stage 2 / Stage 3 输出、`kernel_alpha_fault_demo`、六条 storage 负向 demo、`kernel_alpha_plic_not_ready_demo` 和 `kernel_alpha_timer_not_ready_demo` 守在稳定输出上；它们当前就是 guest 核心门禁的一部分。
+3. 继续把 `course_os_shell` 守在独立 terminal 展示入口上，不要把浏览器交互需求回灌进 `kernel_alpha_demo` 的一次性 marker smoke。
+4. 继续把 guest 生命周期相关回归优先压在 `test-unit-supervisor_demo_smoke` 与 `test-unit-user_program_smoke` 这类窄单测上，尤其是 standard plan、prepare、active memory、interrupt round 和 platform tail 这几类 smoke orchestration 边界。
+5. 守住 [kernel/vm.c](kernel/vm.c) / [kernel/vm_address_space.c](kernel/vm_address_space.c) / [kernel/vm_process.c](kernel/vm_process.c) / [kernel/vm_object.c](kernel/vm_object.c) / [kernel/vm_fault.c](kernel/vm_fault.c) 以及 [kernel/trap.c](kernel/trap.c) / [kernel/trap_dispatch.c](kernel/trap_dispatch.c) 的分层，不要因为修 bug 再把职责揉回大文件或 demo 入口。
+6. 当前 guest 子线以 bug-driven hardening 和边界维护为主，不再把重点放在继续扩新的 bring-up 功能面；`interactive_os` 仍主要服务于 monitor / terminal / 调试链路验证，而不是新的产品主线。
 
 ## 验证要求
 
@@ -313,6 +321,12 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `cd myCPU && make test-unit-course_os_stage2_fd_fs`
 - `cd myCPU && make test-unit-course_os_stage2_shell`
 - `cd myCPU && make test-unit-course_os_stage2_cow_crash`
+- `cd myCPU && make test-unit-course_os_stage3_elf`
+- `cd myCPU && make test-unit-course_os_stage3_sched_sync`
+- `cd myCPU && make test-unit-course_os_stage3_vm`
+- `cd myCPU && make test-unit-course_os_stage3_fs_shell`
+- `cd myCPU && make test-unit-course_os_stage3_proc`
+- `cd myCPU && make test-unit-course_os_stage3`
 - `cd myCPU && make test-unit-kernel_alpha_common`
 - `cd myCPU && make test-unit-kernel_alpha_interrupt`
 - `cd myCPU && make test-unit-kernel_alpha_storage`
@@ -329,6 +343,9 @@ guest 侧当前已经不是单纯 demo 代码，而是一条已接通的最小 b
 - `cd myCPU && make test-guest-kernel_alpha_storage_bad_command_demo`
 - `cd myCPU && make test-guest-kernel_alpha_plic_not_ready_demo`
 - `cd myCPU && make test-guest-kernel_alpha_timer_not_ready_demo`
+- `cd myCPU && make test-guest-course_os_shell_demo`
+- `cd myCPU && make test-pipeline-guest-course_os_shell_demo`
+- `cd myCPU && make test-pipeline-guest-kernel_alpha_demo`
 
 通常仍应回归：
 

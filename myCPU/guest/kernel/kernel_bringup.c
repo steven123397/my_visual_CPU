@@ -168,6 +168,26 @@ static bool kernel_bringup_validate_active_address_space(
            riscv_read_satp() == vm_address_space_satp_value(address_space);
 }
 
+static bool kernel_bringup_map_linux_compat_kernel_window(
+    vm_address_space_t* address_space) {
+    return vm_address_space_map_identity_1g(address_space,
+                                            vm_kernel_base(),
+                                            VM_PAGE_READ | VM_PAGE_WRITE |
+                                                VM_PAGE_EXEC);
+}
+
+static bool kernel_bringup_map_linux_compat_supervisor_mmio(
+    vm_address_space_t* address_space,
+    uint32_t mmio_mask) {
+    const uint64_t data_flags = VM_PAGE_READ | VM_PAGE_WRITE;
+
+    return (mmio_mask & KERNEL_BRINGUP_MMIO_UART) == 0U ||
+           kernel_bringup_map_identity_if_present(address_space,
+                                                  UART_BASE,
+                                                  UART_BASE + MEMORY_PAGE_SIZE,
+                                                  data_flags);
+}
+
 static bool kernel_bringup_probe_pmm_page(uint64_t marker) {
     uint64_t* page = (uint64_t*)pmm_alloc_page();
     bool freed = false;
@@ -186,22 +206,60 @@ static bool kernel_bringup_probe_pmm_page(uint64_t marker) {
     return freed;
 }
 
-static bool kernel_bringup_setup_vm(vm_address_space_t** out_space,
-                                    const kernel_bringup_options_t* options) {
+bool kernel_bringup_create_active_address_space(vm_address_space_t** out_space,
+                                                uint32_t mmio_mask,
+                                                bool map_managed_memory) {
     vm_address_space_t* address_space = NULL;
 
-    if (out_space == NULL || options == NULL ||
-        !vm_address_space_create(&address_space)) {
+    if (out_space == NULL) {
+        return false;
+    }
+    *out_space = NULL;
+
+    if (!vm_address_space_create(&address_space)) {
         return false;
     }
 
     if (!kernel_bringup_map_fixed_kernel_ranges(address_space,
-                                                options->map_managed_memory) ||
+                                                map_managed_memory) ||
         !kernel_bringup_register_selected_mmio_fault_ranges(
             address_space,
-            options->mmio_mask) ||
+            mmio_mask) ||
         !vm_address_space_enable(address_space) ||
         !kernel_bringup_validate_active_address_space(address_space)) {
+        if (!vm_address_space_destroy(address_space)) {
+            *out_space = address_space;
+            return false;
+        }
+        *out_space = NULL;
+        return false;
+    }
+
+    *out_space = address_space;
+    return true;
+}
+
+bool kernel_bringup_create_linux_compat_address_space(
+    vm_address_space_t** out_space,
+    uint32_t mmio_mask) {
+    vm_address_space_t* address_space = NULL;
+    const uint32_t deferred_mmio_mask = mmio_mask & ~KERNEL_BRINGUP_MMIO_UART;
+
+    if (out_space == NULL) {
+        return false;
+    }
+    *out_space = NULL;
+
+    if (!vm_address_space_create(&address_space)) {
+        return false;
+    }
+
+    if (!kernel_bringup_map_linux_compat_kernel_window(address_space) ||
+        !kernel_bringup_map_linux_compat_supervisor_mmio(address_space,
+                                                         mmio_mask) ||
+        !kernel_bringup_register_selected_mmio_fault_ranges(
+            address_space,
+            deferred_mmio_mask)) {
         if (!vm_address_space_destroy(address_space)) {
             *out_space = address_space;
             return false;
@@ -243,7 +301,9 @@ bool kernel_bringup_run_common(
         return false;
     }
 
-    if (!kernel_bringup_setup_vm(&address_space, options)) {
+    if (!kernel_bringup_create_active_address_space(&address_space,
+                                                    options->mmio_mask,
+                                                    options->map_managed_memory)) {
         if (address_space != NULL) {
             *out_space = address_space;
         }

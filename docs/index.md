@@ -46,8 +46,10 @@
 
 - `前端 / Lab workbench`
   - [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
+  - [design/course_os_kernel_alpha_course_os_baseline_design.md](design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
   - [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
   - [plan/history_plan.md#post-wave7-frontend-lab-product-plan](plan/history_plan.md#post-wave7-frontend-lab-product-plan)
   - [plan/history_plan.md#post-wave7-frontend-lab-completion-plan](plan/history_plan.md#post-wave7-frontend-lab-completion-plan)
 
@@ -73,9 +75,18 @@
   - [plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan](plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan)
 
 - `kernel_alpha`
-  - [design/course_os_kernel_alpha_stage2_design.md](design/course_os_kernel_alpha_stage2_design.md)
-  - [design/course_os_kernel_alpha_stage1_design.md](design/course_os_kernel_alpha_stage1_design.md)
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
+  - [design/course_os_kernel_alpha_course_os_baseline_design.md](design/course_os_kernel_alpha_course_os_baseline_design.md)
+  - [design/course_os_kernel_alpha_linux_compat_plus_design.md](design/course_os_kernel_alpha_linux_compat_plus_design.md)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage3-plan](plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage2-plan](plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage1-plan](plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)

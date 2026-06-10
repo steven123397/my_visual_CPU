@@ -26,9 +26,14 @@ typedef struct CourseSchedulerTaskStats {
 typedef struct CourseSchedulerSummary {
     course_sched_policy_t policy;
     uint32_t context_switches;
+    uint32_t time_slice;
+    uint32_t preempt_count;
     uint32_t total_wait_time;
     uint32_t total_turnaround_time;
+    uint32_t average_wait_time;
+    uint32_t average_turnaround_time;
     uint32_t policy_runs[COURSE_SCHED_POLICY_COUNT];
+    const char* last_policy_name;
 } course_scheduler_summary_t;
 
 typedef struct CourseSchedulerTask {
