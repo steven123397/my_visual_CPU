@@ -1,10 +1,8 @@
 #include "course_shell.h"
 
 #include "course_libc.h"
+#include "course_shell_linux.h"
 #include "course_user_programs.h"
-#include "kernel_bringup.h"
-#include "trap.h"
-#include "vm.h"
 
 static size_t str_len(const char* value) {
     size_t i = 0;
@@ -61,90 +59,6 @@ static bool append_str(char* out,
     return true;
 }
 
-static bool str_contains(const char* value, const char* needle) {
-    size_t i = 0;
-    const size_t needle_len = str_len(needle);
-
-    if (value == 0 || needle == 0 || needle_len == 0U) {
-        return false;
-    }
-    while (value[i] != '\0') {
-        size_t j = 0;
-
-        while (j < needle_len && value[i + j] == needle[j]) {
-            j += 1U;
-        }
-        if (j == needle_len) {
-            return true;
-        }
-        i += 1U;
-    }
-    return false;
-}
-
-static bool decimal_field_nonzero(const char* value, const char* field) {
-    size_t i = 0;
-    const size_t field_len = str_len(field);
-
-    if (value == 0 || field == 0 || field_len == 0U) {
-        return false;
-    }
-    while (value[i] != '\0') {
-        size_t j = 0;
-
-        while (j < field_len && value[i + j] == field[j]) {
-            j += 1U;
-        }
-        if (j == field_len) {
-            bool saw_digit = false;
-            bool nonzero = false;
-            size_t pos = i + field_len;
-
-            while (value[pos] >= '0' && value[pos] <= '9') {
-                saw_digit = true;
-                if (value[pos] != '0') {
-                    nonzero = true;
-                }
-                pos += 1U;
-            }
-            return saw_digit && nonzero;
-        }
-        i += 1U;
-    }
-    return false;
-}
-
-static bool decimal_field_zero(const char* value, const char* field) {
-    size_t i = 0;
-    const size_t field_len = str_len(field);
-
-    if (value == 0 || field == 0 || field_len == 0U) {
-        return false;
-    }
-    while (value[i] != '\0') {
-        size_t j = 0;
-
-        while (j < field_len && value[i + j] == field[j]) {
-            j += 1U;
-        }
-        if (j == field_len) {
-            bool saw_digit = false;
-            size_t pos = i + field_len;
-
-            while (value[pos] >= '0' && value[pos] <= '9') {
-                saw_digit = true;
-                if (value[pos] != '0') {
-                    return false;
-                }
-                pos += 1U;
-            }
-            return saw_digit;
-        }
-        i += 1U;
-    }
-    return false;
-}
-
 static bool append_u32(char* out,
                        size_t out_size,
                        size_t* used,
@@ -169,15 +83,9 @@ static bool append_u32(char* out,
     return true;
 }
 
-static void zero_bytes(void* ptr, size_t size) {
-    size_t i = 0;
-    uint8_t* bytes = (uint8_t*)ptr;
-
-    if (ptr == 0) {
-        return;
-    }
-    for (i = 0; i < size; ++i) {
-        bytes[i] = 0;
+static void set_command_success(bool* command_success, bool value) {
+    if (command_success != 0) {
+        *command_success = value;
     }
 }
 
@@ -751,186 +659,6 @@ static bool read_pid_proc_file(course_shell_t* shell,
            read_proc_file(shell, path, out, out_size);
 }
 
-static bool run_linux_command(course_shell_t* shell,
-                              const course_shell_simple_command_t* command,
-                              const char* stdin_text,
-                              char* out,
-                              size_t out_size) {
-    linux_compat_exec_request_t request;
-    linux_compat_result_t result = LINUX_COMPAT_OK;
-    const char* argv[LINUX_COMPAT_MAX_ARGS];
-    course_process_t* child = 0;
-    vm_address_space_t* address_space = 0;
-    int32_t status = 0;
-    size_t i = 0;
-
-    if (shell == 0 || command == 0 || out == 0 || out_size == 0) {
-        return false;
-    }
-    if (command->argc < 2U) {
-        size_t used = 0;
-
-        out[0] = '\0';
-        return append_str(out,
-                          out_size,
-                          &used,
-                          "linux-compat: usage: linux <path-or-command> "
-                          "[args...]\n");
-    }
-    if (command->argc - 1U > LINUX_COMPAT_MAX_ARGS) {
-        size_t used = 0;
-
-        out[0] = '\0';
-        return append_str(out,
-                          out_size,
-                          &used,
-                          "linux-compat: too many args\n");
-    }
-
-    zero_bytes(&request, sizeof(request));
-    zero_bytes(&shell->linux_compat_process, sizeof(shell->linux_compat_process));
-    trap_user_runtime_init(&shell->linux_compat_user_runtime);
-    zero_bytes(shell->linux_compat_trap_stack,
-               sizeof(shell->linux_compat_trap_stack));
-
-    for (i = 1U; i < command->argc; ++i) {
-        argv[i - 1U] = command->argv[i];
-    }
-
-    child = course_process_fork(&shell->processes,
-                                shell->shell_pid,
-                                command->argv[1]);
-    if (child == 0 ||
-        !course_process_set_abi(&shell->processes,
-                                child->pid,
-                                COURSE_PROCESS_ABI_LINUX_COMPAT)) {
-        out[0] = '\0';
-        i = 0;
-        return append_str(out,
-                          out_size,
-                          &i,
-                          "linux-compat: process setup failed\n");
-    }
-
-    if (!kernel_bringup_create_linux_compat_address_space(
-            &address_space,
-            KERNEL_BRINGUP_MMIO_UART | KERNEL_BRINGUP_MMIO_CLINT |
-                KERNEL_BRINGUP_MMIO_PLIC | KERNEL_BRINGUP_MMIO_STORAGE |
-                KERNEL_BRINGUP_MMIO_AI_ACCEL)) {
-        if (address_space != 0) {
-            (void)vm_address_space_destroy(address_space);
-        }
-        out[0] = '\0';
-        i = 0;
-        return append_str(out,
-                          out_size,
-                          &i,
-                          "linux-compat: vm setup failed: kernel_bringup\n");
-    }
-    if (!vm_process_create(&shell->linux_compat_process, address_space)) {
-        if (address_space != 0) {
-            (void)vm_address_space_destroy(address_space);
-        }
-        out[0] = '\0';
-        i = 0;
-        return append_str(out,
-                          out_size,
-                          &i,
-                          "linux-compat: vm setup failed: process_create\n");
-    }
-
-    request.path = command->argv[1];
-    request.cwd = course_fd_cwd(&shell->fds);
-    request.argc = command->argc - 1U;
-    request.argv = argv;
-    request.stdin_text = stdin_text;
-    request.stdin_size = stdin_text != 0 ? str_len(stdin_text) : 0U;
-    request.session_runtime = &shell->linux_compat_runtime;
-    request.trap_context = trap_active_context();
-    request.user_runtime = &shell->linux_compat_user_runtime;
-    request.address_space = address_space;
-    request.process = &shell->linux_compat_process;
-    request.trap_stack_base = shell->linux_compat_trap_stack;
-    request.trap_stack_size = sizeof(shell->linux_compat_trap_stack);
-    result = linux_compat_run(&request, out, out_size, &shell->linux_trace);
-    if (result != LINUX_COMPAT_OK && out[0] == '\0') {
-        i = 0;
-        (void)append_str(out,
-                         out_size,
-                         &i,
-                         "linux-compat: run failed\n");
-    }
-    (void)vm_address_space_destroy(address_space);
-    if (!course_process_exit(&shell->processes, child->pid, 0) ||
-        course_process_waitpid(&shell->processes,
-                               shell->shell_pid,
-                               child->pid,
-                               &status) != COURSE_PROCESS_OK) {
-        if (out_size != 0) {
-            out[0] = '\0';
-        }
-        i = 0;
-        return append_str(out,
-                          out_size,
-                          &i,
-                          "linux-compat: process teardown failed\n");
-    }
-    (void)status;
-    return true;
-}
-
-static bool run_linux_fallback_command(course_shell_t* shell,
-                                       const course_shell_simple_command_t* command,
-                                       const char* stdin_text,
-                                       char* out,
-                                       size_t out_size) {
-    course_shell_simple_command_t linux_command;
-    char resolved_path[LINUX_COMPAT_MAX_PATH];
-    size_t i = 0;
-    bool has_slash = false;
-
-    if (shell == 0 || command == 0 || command->argc == 0U ||
-        command->argc + 1U > COURSE_SHELL_MAX_ARGS) {
-        return false;
-    }
-    for (i = 0; command->argv[0][i] != '\0'; ++i) {
-        if (command->argv[0][i] == '/') {
-            has_slash = true;
-            break;
-        }
-    }
-    if (has_slash) {
-        copy_token(resolved_path,
-                   sizeof(resolved_path),
-                   command->argv[0],
-                   str_len(command->argv[0]));
-    } else if (linux_compat_resolve_path(command->argv[0],
-                                         resolved_path,
-                                         sizeof(resolved_path),
-                                         &shell->linux_trace) !=
-               LINUX_COMPAT_OK) {
-        return false;
-    }
-
-    zero_bytes(&linux_command, sizeof(linux_command));
-    linux_command.argc = command->argc + 1U;
-    copy_token(linux_command.argv[0],
-               sizeof(linux_command.argv[0]),
-               "linux",
-               5U);
-    copy_token(linux_command.argv[1],
-               sizeof(linux_command.argv[1]),
-               resolved_path,
-               str_len(resolved_path));
-    for (i = 1U; i < command->argc; ++i) {
-        copy_token(linux_command.argv[i + 1U],
-                   sizeof(linux_command.argv[i + 1U]),
-                   command->argv[i],
-                   str_len(command->argv[i]));
-    }
-    return run_linux_command(shell, &linux_command, stdin_text, out, out_size);
-}
-
 static bool run_cd_command(course_shell_t* shell,
                            const course_shell_simple_command_t* command,
                            char* out,
@@ -972,7 +700,8 @@ static bool run_simple(course_shell_t* shell,
                        const course_shell_simple_command_t* command,
                        const char* stdin_text,
                        char* out,
-                       size_t out_size) {
+                       size_t out_size,
+                       bool* command_success) {
     size_t used = 0;
     course_user_program_t program;
 
@@ -981,6 +710,7 @@ static bool run_simple(course_shell_t* shell,
         return false;
     }
     out[0] = '\0';
+    set_command_success(command_success, true);
 
     if (str_eq(command->argv[0], "help")) {
         return append_str(out,
@@ -1034,7 +764,12 @@ static bool run_simple(course_shell_t* shell,
         return run_script(shell, command->argv[1], out, out_size);
     }
     if (str_eq(command->argv[0], "linux")) {
-        return run_linux_command(shell, command, stdin_text, out, out_size);
+        return course_shell_run_linux_command(shell,
+                                              command,
+                                              stdin_text,
+                                              out,
+                                              out_size,
+                                              command_success);
     }
     if (str_eq(command->argv[0], "ps")) {
         return read_proc_file(shell, "/proc/ps", out, out_size);
@@ -1101,26 +836,20 @@ static bool run_simple(course_shell_t* shell,
     if (course_user_program_lookup(command->argv[0], &program)) {
         return run_program_command(shell, command, out, out_size);
     }
-    return run_linux_fallback_command(shell, command, stdin_text, out, out_size);
-}
-
-static bool shell_output_allows_and_chain(const char* out) {
-    if (!str_contains(out, "linux-compat:")) {
-        return true;
-    }
-    if (str_contains(out, "fail-closed") ||
-        decimal_field_nonzero(out, "errno=") ||
-        decimal_field_nonzero(out, "exit=")) {
-        return false;
-    }
-    return decimal_field_zero(out, "exit=");
+    return course_shell_run_linux_fallback_command(shell,
+                                                   command,
+                                                   stdin_text,
+                                                   out,
+                                                   out_size,
+                                                   command_success);
 }
 
 static bool run_single_command_line_internal(course_shell_t* shell,
                                              const char* line,
                                              char* out,
                                              size_t out_size,
-                                             bool record_transcript) {
+                                             bool record_transcript,
+                                             bool* command_success) {
     course_shell_command_t command;
     char* left_out = 0;
     const char* stdin_text = 0;
@@ -1129,6 +858,7 @@ static bool run_single_command_line_internal(course_shell_t* shell,
     if (shell == 0 || line == 0 || out == 0 || out_size == 0) {
         return false;
     }
+    set_command_success(command_success, false);
     left_out = shell->line_output_scratch;
 
     if (!course_shell_parse(line, &command) ||
@@ -1159,7 +889,8 @@ static bool run_single_command_line_internal(course_shell_t* shell,
                     &command.left,
                     stdin_text,
                     command.has_pipe ? left_out : out,
-                    command.has_pipe ? COURSE_SHELL_LINE_OUTPUT_SIZE : out_size);
+                    command.has_pipe ? COURSE_SHELL_LINE_OUTPUT_SIZE : out_size,
+                    command_success);
     if (!ok) {
         return false;
     }
@@ -1168,7 +899,8 @@ static bool run_single_command_line_internal(course_shell_t* shell,
                         &command.right,
                         left_out,
                         out,
-                        out_size);
+                        out_size,
+                        command_success);
         if (!ok) {
             return false;
         }
@@ -1198,6 +930,7 @@ static bool course_shell_run_line_internal(course_shell_t* shell,
     const char* cursor = line;
     size_t used = 0;
     size_t first_and_offset = 0;
+    bool segment_success = false;
 
     if (shell == 0 || line == 0 || out == 0 || out_size == 0) {
         return false;
@@ -1208,7 +941,8 @@ static bool course_shell_run_line_internal(course_shell_t* shell,
                                                 line,
                                                 out,
                                                 out_size,
-                                                record_transcript);
+                                                record_transcript,
+                                                0);
     }
 
     if (record_transcript && !transcript_append(shell, line)) {
@@ -1230,12 +964,13 @@ static bool course_shell_run_line_internal(course_shell_t* shell,
                                               segment,
                                               segment_out,
                                               COURSE_SHELL_COMMAND_OUTPUT_SIZE,
-                                              false) ||
+                                              false,
+                                              &segment_success) ||
             !append_str(out, out_size, &used, segment_out)) {
             return false;
         }
 
-        if (!has_and || !shell_output_allows_and_chain(segment_out)) {
+        if (!has_and || !segment_success) {
             return true;
         }
         cursor += and_offset + 2U;

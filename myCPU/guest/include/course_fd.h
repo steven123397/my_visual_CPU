@@ -47,6 +47,7 @@ void course_fd_table_init(course_fd_table_t* table,
                           procfs_t* procfs);
 int course_fd_open(course_fd_table_t* table, const char* path, uint32_t flags);
 int course_fd_close(course_fd_table_t* table, int fd);
+/* Returns raw bytes read; callers that need strings must append NUL themselves. */
 int course_fd_read(course_fd_table_t* table, int fd, char* out, size_t size);
 int course_fd_write(course_fd_table_t* table,
                     int fd,

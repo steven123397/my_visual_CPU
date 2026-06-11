@@ -31,11 +31,12 @@
   - [code_reself_status.md](code_reself_status.md)
 - 当前活跃计划：
   - [../plan/simulator_evolution_slice1_observability_schema_plan.md](../plan/simulator_evolution_slice1_observability_schema_plan.md)
-  - [../plan/course_os_kernel_alpha_quality_review_plan.md](../plan/course_os_kernel_alpha_quality_review_plan.md)
   - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
   - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan)
+  - [../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan](../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan)
   - [../plan/history_plan.md#code-reself-remediation-plan](../plan/history_plan.md#code-reself-remediation-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)

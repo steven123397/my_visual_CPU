@@ -211,7 +211,6 @@ int course_fd_read(course_fd_table_t* table, int fd, char* out, size_t size) {
         if (!course_fs_read(table->fs, entry->path, entry->offset, out, size)) {
             return COURSE_FD_ERR_NO_SUCH_FILE;
         }
-        out[size] = '\0';
         entry->offset += size;
         return (int)size;
     }
@@ -230,9 +229,6 @@ int course_fd_read(course_fd_table_t* table, int fd, char* out, size_t size) {
         }
         for (i = 0; i < size; ++i) {
             out[i] = proc_out[entry->offset + i];
-        }
-        if (i < COURSE_FD_MAX_PATH || size == 0) {
-            out[i] = '\0';
         }
         entry->offset += size;
         return (int)size;

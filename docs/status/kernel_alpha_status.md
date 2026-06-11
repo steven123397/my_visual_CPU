@@ -15,9 +15,9 @@
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
-- 当前活跃计划：
-  - [../plan/course_os_kernel_alpha_quality_review_plan.md](../plan/course_os_kernel_alpha_quality_review_plan.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan)
+  - [../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan](../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
@@ -139,6 +139,54 @@ target 能完成 `git init stage11repo`、`vim stage11repo/hello.c` 保存源码
 compat 在 `gcc` 成功退出后生成教学级 RV64 ELF artifact，不声明真实 `cc1/as/ld` 子进程链、
 完整 toolchain 执行、完整 signal / futex、完整 TTY、网络 git 或 `rustc` 大工具链已完成。
 
+2026-06-10 已完成一次 `review-only` 质量审查，范围覆盖课程 OS 主体、Stage 1-4
+编排、`course_os_shell` / `kernel_alpha` 入口，以及课程 OS 与 Linux compat 的边界。
+本轮未修改生产代码，结论是边界总体仍符合课程 OS 主体、Linux compat 旁路和共享 guest
+runtime 的分层；没有建议推进 Stage 12 / Stage 13、`rustc` 或更宽 Linux syscall breadth。
+审查当时记录了 1 个后续必须修复项和 3 个建议收敛项：
+
+- `[必须修复]` `course_fd_read()` 当前在读取 `size` 字节后额外写 `out[size] = '\0'`，
+  但 API 形态是 read-style `buffer + size`，调用方如果只提供精确 `size` 字节会有越界写风险。
+  后续应先补 canary 红灯，再明确 raw read / NUL-terminated read 的合同。
+- `[建议修改]` `course_shell_t` 现在同时承载课程 FS / scheduler / process / FD / procfs、
+  Linux compat runtime、VM process、trap runtime 和大块 scratch buffer；`course_shell.c`
+  也同时实现 parser、builtin、课程用户程序、Linux launcher、cwd 同步和 `&&` 链控制。
+  后续收敛已把 Linux launcher 物理拆到 `course_shell_linux.c` / `course_shell_linux.h`；
+  `&&` 的 structured command status 也已落地，不再用输出字符串判断 Linux 命令是否允许继续。
+- `[建议修改]` `course_fs_t` 是可实例化对象，但文件内容 backing 仍在 `course_fs.c`
+  的全局数组中。当前 smoke 顺序下可接受，后续若复用多个 FS 实例或做更真实 VFS /
+  metadata，应把 storage backend 显式化或收口为清晰 singleton contract。
+- `[建议修改]` `/proc/<pid>/fd` 目前只挂一个 fd table 与 owner pid，能证明 shell
+  当前 FD 表，但不能完整表达每个进程自己的 FD 表。后续若继续强化 `/proc/<pid>`
+  证据面，应让 procfs 通过 process / fd resolver 查询目标 pid 的 FD 状态。
+
+Undefined-OS 参考的采用边界也已明确：可参考 process lifecycle 对象、VFS inode /
+metadata、地址空间 backend 和 syscall stub 分层治理；谨慎参考完整 futex / signal /
+mmap / ext4；不采用换底座、多架构优先或继续追完整 Linux userland 的方向。
+
+2026-06-10 已完成质量审查后的 `fix-and-validate` 小步收敛。`course_fd_read()` 现在明确为
+raw read 合同，只写实际返回的字节数，不再隐式追加 `NUL`；`test-unit-course_os_stage2_fd_fs`
+新增 exact-size read canary 回归覆盖该边界。`linux_compat.c` 也完成第一刀行为保持拆分：
+UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c` /
+`linux_compat_debug.h`，主文件继续保留 syscall trace record、dispatcher 和 run facade。
+`course_shell_run_line()` 也已把 `&&` 链控制改为内部 structured command status：
+普通命令输出中包含 `linux-compat:` 不再误阻断右侧命令，Linux compat run 仍按
+`linux_compat_run()` 结果和 runtime exit code 决定是否允许继续。
+
+2026-06-11 已继续完成 shell / Linux launcher 物理拆分小切片：显式 `linux ...` launcher
+和 Linux PATH fallback 现在迁移到 `course_shell_linux.c` / `course_shell_linux.h`，
+`course_shell.c` 保留 parser、builtin、课程用户程序、cwd 同步和链式分发。Makefile 新增
+`COURSE_SHELL_UNIT_OBJS`，统一连接 `course_shell_guest.o` 与 `course_shell_linux_guest.o`，
+避免各 Stage 2 / Stage 3 / Stage 11 单测重复维护同一 shell object 列表。
+
+2026-06-11 质量审查剩余两个安全收敛项也已完成。`course_fs_t` 现在有显式
+`course_fs_storage_t` backing contract：默认仍使用单例 backing 维持既有调用行为，需要
+多实例隔离时可用 `course_fs_mkfs_with_storage()` 传入独立 storage，新增单测覆盖稀疏写不会
+串读其他 FS 实例留下的字节。`/proc/<pid>/fd` 新增 fd table resolver 合同，旧的
+`procfs_attach_fd_table()` 继续作为单表 fallback；Stage 3 procfs 单测现在固定 pid 1 和 pid 2
+分别解析到不同 fd table，防止 per-pid FD 证据面串表。至此 2026-06-10 质量审查记录的
+1 个必须修复项和 3 个建议收敛项均已收口。
+
 旧 Phase 1 `KMVPETDS` 正向输出不再作为课程 OS 当前行为承诺；它降级为历史 bring-up 基线：
 
 - `K`：进入独立 kernel 入口
@@ -166,6 +214,25 @@ compat 在 `gcc` 成功退出后生成教学级 RV64 ELF artifact，不声明真
 
 ## 关键历史节点
 
+- `2026-06-11`
+  - 完成质量审查剩余安全收敛：`course_fs_t` 新增显式 `course_fs_storage_t` backing
+    contract 与独立 storage 验证；`/proc/<pid>/fd` 新增 fd table resolver，并用 pid 1 /
+    pid 2 不同 fd 表回归固定 per-pid 证据面。
+  - 完成 `course_shell` Linux launcher 物理拆分：新增 `course_shell_linux.c` /
+    `course_shell_linux.h` 承载显式 launcher、Linux PATH fallback、VM / trap setup 和
+    Linux compat command status；`course_shell.c` 不再直接承载这组 Linux launcher 细节。
+- `2026-06-10`
+  - 完成 `course_shell` structured command status 小切片：`&&` 链不再扫描输出字符串判断
+    Linux 命令成败，新增回归覆盖普通输出文本包含 `linux-compat:` 时仍继续右侧命令；既有
+    `linux /nope && ...` 失败短路合同继续由 Stage 11 Linux compat 单测守住。
+  - 完成 `kernel_alpha` quality review remediation 第一轮修复：`course_fd_read()` exact-size
+    buffer 越界风险已由 canary 单测覆盖并修复；`linux_compat.c` 已拆出 debug /
+    diagnostic helper 第一刀。详细归档见
+    [../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan)。
+  - 完成 `kernel_alpha` 课程 OS 层只读质量审查。审查未改生产代码；结论保留 1 个
+    `course_fd_read()` exact-size buffer 安全修复项，以及 shell / Linux launcher
+    边界、course FS backing、procfs per-pid FD 证据面的 3 个后续收敛建议。详细归档见
+    [../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan](../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan)。
 - `2026-06-09`
   - Stage 11 external workflow smoke 首次完整通过本地有状态链路：
     `git init`、`vim hello.c`、`git add`、`git commit`、`git log`、
@@ -262,12 +329,11 @@ compat 在 `gcc` 成功退出后生成教学级 RV64 ELF artifact，不声明真
 
 ## 下一步
 
-1. 保持 Stage 1 / Stage 2 / Stage 3 marker、Stage 4 shell prompt、functional / pipeline `kernel_alpha_demo` 和旧 9 条负向 demo 稳定。
-2. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11 v0 本地 workflow。
-3. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
-4. 如果要把 Stage 11 v0 的 `gcc` shim 升级为完整 toolchain，应另起计划补真实 `cc1/as/ld` 子进程链、fd/env/cwd 继承、pipe、临时文件、signal / futex 和相关 VM / loader 语义。
-5. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补能力，不直接改大 `course_*` 教学模块；AI/NPU、JIT/DBT 或 Pipeline-aware 调度继续作为独立后续方向。
-6. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
+1. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11 v0 本地 workflow。
+2. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
+3. 如果要把 Stage 11 v0 的 `gcc` shim 升级为完整 toolchain，应另起计划补真实 `cc1/as/ld` 子进程链、fd/env/cwd 继承、pipe、临时文件、signal / futex 和相关 VM / loader 语义。
+4. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补能力，不直接改大 `course_*` 教学模块；AI/NPU、JIT/DBT 或 Pipeline-aware 调度继续作为独立后续方向。
+5. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
 ## 验证基线
 

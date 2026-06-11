@@ -21,7 +21,94 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-06-11
+
+#### course-os-kernel-alpha-quality-review-safe-fixes-closeout
+
+- 完成时间：2026-06-11
+- 原文件：无；本轮按短切片执行，未新增单独计划文档。
+- 完成内容：完成质量审查剩余两个安全收敛项。`course_fs_t` 新增显式
+  `course_fs_storage_t` backing contract，默认继续使用单例 backing；需要多实例隔离时可用
+  `course_fs_mkfs_with_storage()` 传入独立 storage。`/proc/<pid>/fd` 新增 fd table
+  resolver 合同，旧的 `procfs_attach_fd_table()` 保持单表 fallback。
+- 实现过程摘要：先补 `test-unit-course_os_stage2_fd_fs` 红灯，固定独立 FS storage 下稀疏写
+  不得串读其他实例字节；再把 `course_fs.c` 的隐式全局 data 改成默认 storage singleton +
+  显式 storage 指针，并在新建文件时清理对应 backing。随后补
+  `test-unit-course_os_stage3_proc` 红灯，固定 pid 1 / pid 2 的 fd 表分别输出
+  `/proc/cpuinfo` 与 `/proc/uptime`，再让 procfs 通过 resolver 按目标 pid 查询 fd table。
+- 验证摘要：已运行并通过 `cd myCPU && make test-unit-course_os_stage2_fd_fs`、
+  `make test-unit-course_os_stage3_proc`、`make test-unit-course_os_stage2`、
+  `make test-unit-course_os_stage3`、`make test-unit-course_os_stage11_linux_compat`、
+  `make test-host-course_os_shell_terminal_smoke`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、`make test-guest-course_os_shell_demo`
+  和 `make test-guest-kernel_alpha_demo`。`guest_kernel_alpha_demo` 正向输出保持
+  `KMVPET|course-os-stage1 ...|course-os-stage2 ...|course-os-stage3 ...`。`git diff --check`
+  也已通过。
+- 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 ### 2026-06-10
+
+#### course-os-kernel-alpha-quality-review-plan
+
+- 完成时间：2026-06-10
+- 原文件：`course_os_kernel_alpha_quality_review_plan.md`
+- 完成内容：完成 `kernel_alpha` 课程 OS 层只读质量审查，范围覆盖
+  `course_scheduler`、`course_memory`、`course_fs`、`procfs`、课程 ELF / libc /
+  sync、Stage 1-4 编排、`course_shell`、`course_user_programs`、`course_os_shell`
+  和 `kernel_alpha` 入口，并边界阅读课程 OS 与 `linux_compat_*` 的接缝。
+- 审查结论：课程 OS 主体、Linux compat 旁路和共享 guest runtime 的分层总体仍清楚；
+  本轮没有发现需要立即改变 Stage 1 / Stage 2 / Stage 3 marker、Stage 4
+  `course-os> ` prompt 或 Stage 11 v0 完成口径的问题。发现 1 个后续必须修复项：
+  `myCPU/guest/kernel/course_fd.c` 的 `course_fd_read()` 在 read-style `buffer + size`
+  API 下额外写 `out[size] = '\0'`，精确长度缓冲区存在越界写风险。
+- 建议收敛项：
+  - `course_shell_t` / `course_shell.c` 同时承载课程 OS 状态、Linux compat runtime、
+    VM process / trap runtime、parser、builtin、Linux launcher 和 `&&` 链控制；建议后续
+    拆出 Linux launcher 并用结构化 command status 取代输出字符串扫描。
+  - `course_fs_t` 是实例对象，但文件内容 backing 仍由 `course_fs.c` 的全局数组承载；
+    建议后续显式化 storage backend 或固定 singleton contract，避免多 FS 实例隔离语义漂移。
+  - `/proc/<pid>/fd` 目前只挂一个 fd table 与 owner pid；建议后续通过 process / fd
+    resolver 查询目标 pid 的 FD 状态，增强 `/proc/<pid>` 证据面。
+- Undefined-OS 参考边界：可参考 process lifecycle 对象、VFS inode / metadata、地址空间
+  backend 和 syscall stub 分层治理；谨慎参考完整 futex / signal / mmap / ext4；不采用
+  换底座、多架构优先或继续追完整 Linux userland。
+- 建议后续切片：
+  1. `fix-and-validate`：先补 `course_fd_read()` exact-size canary 红灯，再修正 raw read /
+     NUL-termination 合同。建议验证 `cd myCPU && make test-unit-course_os_stage2_fd_fs`
+     和 `cd myCPU && make test-unit-course_os_stage2`。
+  2. `safe-fixes`：抽出 shell Linux launcher / structured command status，保持课程命令优先和
+     Linux compat 旁路不变。建议验证 `cd myCPU && make test-unit-course_os_stage2_shell`、
+     `cd myCPU && make test-unit-course_os_stage11_linux_compat`、`cd myCPU && make test-host-course_os_linux_compat_terminal_smoke`；
+     如有外部 rootfs，再补 `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=<external-rootfs> make test-host-course_os_linux_compat_external_workflow_smoke`。
+  3. `safe-fixes`：明确 course FS backing 与 procfs per-pid FD evidence 的模型边界。建议验证
+     `cd myCPU && make test-unit-course_os_stage2_fd_fs`、`cd myCPU && make test-unit-course_os_stage3_proc`、
+     `cd myCPU && make test-guest-course_os_shell_demo`。
+- 验证摘要：本轮为 review-only，未运行 simulator 实现测试；完成态只做文档验证，见本轮执行记录中的
+  `git diff --check` 和 `git diff --cached --check`。
+- 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
+#### course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan
+
+- 完成时间：2026-06-10
+- 原文件：`course_os_kernel_alpha_review_remediation_convergence_plan.md`
+- 完成内容：完成 `kernel_alpha` 质量审查后第一轮修复和结构收敛。`course_fd_read()`
+  现在明确为 raw read 合同，只写实际返回的字节数，不再隐式追加 `NUL`；caller
+  若需要字符串需自行补终止符。`linux_compat.c` 完成第一刀行为保持拆分，原先
+  `LINUX_COMPAT_TRACE_DEBUG_UART` 下的 UART debug / syscall diagnostic helper 已迁移到
+  `linux_compat_debug.c` / `linux_compat_debug.h`，主文件继续保留 syscall trace record、
+  dispatcher 和 run facade。
+- 实现过程摘要：先在 `test-unit-course_os_stage2_fd_fs` 中加入 exact-size read canary 红灯，
+  确认旧实现会破坏 canary；随后移除 `course_fd_read()` 文件路径和 proc 路径的隐式终止写，
+  并把测试中需要字符串匹配的位置改为 caller 自行 `NUL` 终止。Linux compat 拆分只迁移
+  debug 输出 helper，并通过 `LINUX_COMPAT_CORE_UNIT_OBJS` 让所有复用 `linux_compat_guest.o`
+  的 unit 目标同时链接新 debug object。
+- 验证摘要：已运行 `cd myCPU && make test-unit-course_os_stage2_fd_fs`，首次按 TDD 预期失败于
+  `expected exact-size fd read to preserve canary byte`；修复后重新运行通过。随后运行并通过
+  `cd myCPU && make test-unit-course_os_stage2`、`cd myCPU && make test-unit-course_os_stage11_linux_compat`。
+- 剩余风险：本轮未拆 `course_shell.c` 的 Linux launcher / structured command status，
+  未改变 `course_fs_t` backing storage 模型，也未改 `/proc/<pid>/fd` 的 per-pid FD 证据面；
+  这些继续作为后续独立收敛项处理。
+- 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
 #### course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan
 

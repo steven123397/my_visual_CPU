@@ -92,6 +92,23 @@ static int test_redirection_and_pipe_execution(void) {
     return 0;
 }
 
+static int test_and_chain_uses_command_status_not_output_text(void) {
+    static course_shell_t shell;
+    char out[1024];
+
+    course_shell_init(&shell);
+    if (!course_shell_run_line(&shell,
+                               "echo linux-compat: && echo after",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "linux-compat:\n") ||
+        !contains(out, "after\n")) {
+        return fail("expected && chain to use command status instead of output text");
+    }
+
+    return 0;
+}
+
 static int expect_shell_command_contains(course_shell_t* shell,
                                          const char* command,
                                          const char* expected) {
@@ -139,6 +156,7 @@ int main(void) {
     if (test_parser_pipeline_and_redirection() != 0 ||
         test_builtins_external_programs_and_transcript() != 0 ||
         test_redirection_and_pipe_execution() != 0 ||
+        test_and_chain_uses_command_status_not_output_text() != 0 ||
         test_proc_shortcut_commands() != 0) {
         return 1;
     }

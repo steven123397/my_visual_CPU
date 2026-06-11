@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-static unsigned char g_course_fs_data[COURSE_FS_MAX_NODES][COURSE_FS_MAX_DATA];
+static course_fs_storage_t g_course_fs_default_storage;
 
 static size_t cstr_len(const char* value) {
     size_t i = 0;
@@ -64,6 +64,21 @@ static void read_bytes(char* dest, const unsigned char* src, size_t size) {
     for (i = 0; i < size; ++i) {
         dest[i] = (char)src[i];
     }
+}
+
+static void zero_bytes(unsigned char* dest, size_t size) {
+    size_t i = 0;
+
+    for (i = 0; i < size; ++i) {
+        dest[i] = 0U;
+    }
+}
+
+static course_fs_storage_t* fs_storage(course_fs_t* fs) {
+    if (fs == NULL || fs->storage == NULL) {
+        return &g_course_fs_default_storage;
+    }
+    return fs->storage;
 }
 
 static int alloc_node(course_fs_t* fs) {
@@ -341,13 +356,14 @@ static int resolve_path(course_fs_t* fs,
     return current;
 }
 
-void course_fs_init(course_fs_t* fs) {
+void course_fs_init_with_storage(course_fs_t* fs, course_fs_storage_t* storage) {
     int i = 0;
 
     if (fs == NULL) {
         return;
     }
 
+    fs->storage = storage != NULL ? storage : &g_course_fs_default_storage;
     for (i = 0; i < (int)COURSE_FS_MAX_NODES; ++i) {
         fs->nodes[i].used = false;
         fs->nodes[i].is_dir = false;
@@ -385,8 +401,16 @@ void course_fs_init(course_fs_t* fs) {
     fs->nodes[0].name[1] = '\0';
 }
 
+void course_fs_init(course_fs_t* fs) {
+    course_fs_init_with_storage(fs, NULL);
+}
+
+void course_fs_mkfs_with_storage(course_fs_t* fs, course_fs_storage_t* storage) {
+    course_fs_init_with_storage(fs, storage);
+}
+
 void course_fs_mkfs(course_fs_t* fs) {
-    course_fs_init(fs);
+    course_fs_init_with_storage(fs, NULL);
 }
 
 bool course_fs_create(course_fs_t* fs, const char* path, bool directory) {
@@ -476,7 +500,11 @@ bool course_fs_write(course_fs_t* fs,
     }
 
     node = &fs->nodes[node_index];
-    copy_bytes(&g_course_fs_data[node_index][offset], data, size);
+    if (offset > node->size) {
+        zero_bytes(&fs_storage(fs)->data[node_index][node->size],
+                   offset - node->size);
+    }
+    copy_bytes(&fs_storage(fs)->data[node_index][offset], data, size);
     if (offset + size > node->size) {
         node->size = offset + size;
     }
@@ -502,7 +530,7 @@ bool course_fs_read(course_fs_t* fs,
         return false;
     }
 
-    read_bytes(out, &g_course_fs_data[node_index][offset], size);
+    read_bytes(out, &fs_storage(fs)->data[node_index][offset], size);
     fs->stats.file_reads += 1U;
     return true;
 }

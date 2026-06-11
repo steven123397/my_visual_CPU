@@ -49,13 +49,20 @@ typedef struct CourseFsNode {
     size_t btree_internal_count;
 } course_fs_node_t;
 
+typedef struct CourseFsStorage {
+    unsigned char data[COURSE_FS_MAX_NODES][COURSE_FS_MAX_DATA];
+} course_fs_storage_t;
+
 typedef struct CourseFs {
     course_fs_node_t nodes[COURSE_FS_MAX_NODES];
+    course_fs_storage_t* storage;
     course_fs_stats_t stats;
 } course_fs_t;
 
 void course_fs_init(course_fs_t* fs);
+void course_fs_init_with_storage(course_fs_t* fs, course_fs_storage_t* storage);
 void course_fs_mkfs(course_fs_t* fs);
+void course_fs_mkfs_with_storage(course_fs_t* fs, course_fs_storage_t* storage);
 bool course_fs_mkdir(course_fs_t* fs, const char* path);
 bool course_fs_rmdir(course_fs_t* fs, const char* path);
 bool course_fs_create(course_fs_t* fs, const char* path, bool directory);
