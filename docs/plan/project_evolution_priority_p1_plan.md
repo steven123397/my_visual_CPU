@@ -76,21 +76,36 @@ smoke 仍未启动，后续需要独立窄计划。
 ### 任务 2：JIT / DBT dry-run 去留决断
 
 **文件：**
-- 创建：按结论需要新增 closeout 或 backend-candidate 计划
+- 创建：无。当前结论不新增 backend-candidate 计划，也不新增 closeout 计划。
 - 修改：
+  - `PROJECT_EVOLUTION_PLAN.md`
   - `docs/design/wave6_jit_dbt_readiness_design.md`
   - `docs/status/mainline_status.md`
+  - `docs/status/simulator_evolution_status.md`
+- 盘点 / 验证：
   - `myCPU/src/exec/`
   - `myCPU/tests/host/`
 
-- [ ] **步骤 1：** 汇总现有 dry-run 能力：translator、IR eval、lowering、host emitter、
+- [x] **步骤 1：** 汇总现有 dry-run 能力：translator、IR eval、lowering、host emitter、
       executable cache、runtime harness、fallback 和 invalidation。
-- [ ] **步骤 2：** 固定决断标准：默认 backend 候选必须具备的 guest 范围、差分门禁、
+- [x] **步骤 2：** 固定决断标准：默认 backend 候选必须具备的 guest 范围、差分门禁、
       fallback coverage、性能证据和不可接受风险。
-- [ ] **步骤 3：** 运行当前 host smoke / pipeline 相关门禁，记录哪些边界仍只能
+- [x] **步骤 3：** 运行当前 host smoke / pipeline 相关门禁，记录哪些边界仍只能
       method-demo。
-- [ ] **步骤 4：** 若推进，写出下一份窄实现计划；若归档，更新设计和 status，停止新增
+- [x] **步骤 4：** 若推进，写出下一份窄实现计划；若归档，更新设计和 status，停止新增
       dry-run 接口面。
+
+**结果：** 当前 JIT / DBT 资产不推进为可选默认 backend 候选，而是归档为
+`method-demo / opt-in research asset`。已有 translator、IR eval、IR lowering、
+host emitter、executable memory、executable cache、runtime harness、scalar memory helper、
+reference fallback 和 invalidation guardrail 均保留为 host smoke 资产；不新增
+`--backend jit`，不替换 `functional` 或 `pipeline`，也不继续扩张新的 dry-run 接口面。
+后续如果重新打开 backend-candidate 路线，必须另开窄计划并先补 guest 范围、差分门禁、
+fallback coverage、可重复性能证据和 workload-level scheduler 边界。
+
+**验证：** 已运行 JIT / DBT 相关 host smoke、debug probe、debug CLI 和
+`execution_profile_smoke` 组合门禁并通过；本轮不重新启动 `make test-pipeline`，沿用同一
+工作区 `2026-06-11` 已通过的 pipeline gate。
 
 ### 任务 3：测试矩阵分层执行纪律
 

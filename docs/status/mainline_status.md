@@ -323,6 +323,13 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
   `linuxFacingContract` 只读摘要现在固定 DT node、MMIO / PLIC、descriptor /
   completion queue、DMA buffer、devfs / ioctl 预留面和 profile schema 边界；真实 Linux
   driver、`/dev/mycpu-ai0`、ioctl 和 Linux integration smoke 仍未启动。
+- `PROJECT_EVOLUTION` P1 当前已完成任务 2：JIT / DBT dry-run 去留决断结论是
+  归档为 `method-demo / opt-in research asset`，不新增 `--backend jit`，不替换
+  `functional` 或 `pipeline`，也不继续扩张新的 dry-run 接口面。现有 translator、IR eval、
+  lowering、host emitter、executable cache、runtime harness、scalar memory helper、
+  reference fallback 和 invalidation guardrail 继续作为 host smoke 资产保留；若未来重启
+  backend-candidate 路线，必须另开窄计划并先补 guest 范围、差分门禁、fallback coverage、
+  可重复性能证据和 workload-level scheduler 边界。
 - `2026-05-29` 全仓库 code review remediation 已完成并归档；12 条
   `必须修复` 与 19 条 `建议修改` active findings 已由四条整改线关闭，合并后守住
   `test-fast-smoke`、`test-standard-regression`、`test-pipeline`、`make test`
@@ -510,10 +517,13 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
    [Wave 6 runtime execution sequence 计划](../plan/history_plan.md#mainline-wave6-runtime-execution-sequence-plan)、
    [Wave 6 executable cache runtime hookup 计划](../plan/history_plan.md#mainline-wave6-executable-cache-runtime-hookup-plan)、
    [Wave 6 JIT Execution Layer 实现计划](../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)。
-   当前 closeout 判定是 opt-in executable path 与 runtime guardrail 收口；默认 backend 接入
-   当前评估结论仍是“不新增 `--backend jit`，不替换 functional 或 pipeline”。persistent
-   cache、workload-level scheduler、CSR / atomic / vector helper runtime、multicore、
-   coherence 或新的 memory consistency 模型仍不启动。
+   当前 closeout 判定是 opt-in executable path 与 runtime guardrail 收口；`PROJECT_EVOLUTION`
+   P1 去留决断进一步把这条线归档为 `method-demo / opt-in research asset`，不新增
+   `--backend jit`，不替换 functional 或 pipeline，也不继续扩张新的 dry-run 接口面。
+   persistent cache、workload-level scheduler、CSR / atomic / vector helper runtime、
+   multicore、coherence 或新的 memory consistency 模型仍不启动；后续如果重新打开
+   backend-candidate 路线，必须另开计划并补齐 guest 范围、差分门禁、fallback coverage
+   和可重复性能证据。
 2. `Wave 7` 已完成产品官网壳层 / 首页第一刀、控制台 demo workspace v1、产品文档 v1、
    Linux interactive frontend console 第一刀、Linux console hardening 第一刀、
    Linux console terminate 收口、真实 Image opt-in e2e guardrail、reset re-arm、

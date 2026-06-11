@@ -69,6 +69,13 @@ host-smoke-only opt-in 状态如果再持续半年没有进展，会变成僵尸
 
 两个方向都比"长期半成品"健康。
 
+`2026-06-11` P1 决断已经落地：当前 JIT / DBT 资产归档为
+`method-demo / opt-in research asset`，不新增 `--backend jit`，不替换 `functional`
+或 `pipeline`。已有 translator、IR eval、lowering、host emitter、executable cache、
+runtime harness、scalar memory helper、reference fallback 和 invalidation guardrail 继续保留
+为 host smoke 资产；后续只有在另开 backend-candidate 计划，并补齐 guest 范围、差分门禁、
+fallback coverage、可重复性能证据和 workload-level scheduler 边界后，才能重新推进默认后端候选。
+
 **8. 状态文档的边界**
 专项 status 当前包括 `kernel_alpha`、`npu_tpu`、`linux_distribution` 和
 `code_reself`。其中 `code_reself` 已完成四条整改线合并、统一验证和计划归档，当前只保留长期观察项；`kernel_alpha` 已进入课程 OS Stage 2 完成态；Linux / AI 仍是活跃产品线。建议设规则：专项 status 每季度自审一次，进入维护态就归档到 `mainline_status.md` 一节，不再独立维护。

@@ -19,7 +19,7 @@
   - [../design/post_wave7_frontend_lab_product_design.md](../design/post_wave7_frontend_lab_product_design.md)
   - [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
 - 当前计划：
-  - 无。小型 schema wrapper 切片可直接落地，完成后回写状态和相关文档；跨模块或多阶段迁移再另开计划。
+  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
 - 已完成计划：
   - [../plan/history_plan.md](../plan/history_plan.md)
   - [../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
@@ -34,6 +34,13 @@
 
 ## 当前状态
 
+- `2026-06-11` `PROJECT_EVOLUTION` P1 任务 2 已完成 JIT / DBT dry-run 去留决断：
+  当前不推进为可选默认 backend 候选，而是归档为 `method-demo / opt-in research asset`。
+  已有 translator、IR eval、lowering、host emitter、executable cache、runtime harness、
+  scalar memory helper、reference fallback 和 invalidation guardrail 继续保留为 host smoke
+  资产；不新增 `--backend jit`，不替换 `functional` 或 `pipeline`，也不继续扩张新的
+  dry-run 接口面。后续若重启 backend-candidate 路线，必须另开窄计划并先补 guest 范围、
+  差分门禁、fallback coverage、可重复性能证据和 workload-level scheduler 边界。
 - `simulator-evolution` 已作为独立分线建立文档入口，并在 `.worktrees/simulator-evolution`
   上完成第一切片设计收口。
 - 第一切片已建立

@@ -18,6 +18,8 @@
 
 - 状态文档：
   - [../status/mainline_status.md](../status/mainline_status.md)
+- 当前活跃计划：
+  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
   - [../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
@@ -440,6 +442,44 @@ runtime execution。
 
 这些能力如果未来重新打开，必须作为新的设计 / 计划边界处理，不能从本文档中的
 host-smoke-only guardrail 直接外推成默认运行能力。
+
+## P1 dry-run 去留决断
+
+`2026-06-11` `PROJECT_EVOLUTION` P1 已完成 JIT / DBT dry-run 去留决断：
+当前资产不推进为可选默认 backend 候选，而是归档为
+`method-demo / opt-in research asset`。
+
+这个结论基于当前边界：
+
+- translator、IR eval、IR lowering、host emitter、executable memory、executable cache、
+  runtime harness、scalar memory helper、reference fallback 和 invalidation guardrail 都已有
+  host-smoke 级证据。
+- `dbt_runtime_harness` 可以在 host smoke 中执行 pure integer block、复用 executable cache，
+  串接 scalar memory helper、reference fallback 和 guest-store invalidation。
+- 这些证据仍只覆盖显式 opt-in host harness，不覆盖默认 `Machine` backend、
+  workload-level scheduler、block stitching、persistent cache、CSR / atomic / vector helper
+  runtime、多 guest workload 或可重复性能收益。
+
+因此当前路线固定为：
+
+- 不新增 `--backend jit`。
+- 不替换 `functional` 或 `pipeline`。
+- 不继续扩张新的 dry-run 接口面来模拟“未来会接入”的能力。
+- 保留现有 host smoke 资产，作为 shared semantics、commit boundary、fallback、
+  invalidation 和 executable memory policy 的方法论验证样本。
+
+若未来重新打开 backend-candidate 路线，必须另开窄计划，并至少先满足：
+
+- guest 范围：声明只覆盖哪些 workload / 指令族 / privilege 状态，不能从 pure integer
+  host block 外推到系统 workload。
+- 差分门禁：对每个可执行 block 在提交前同 reference 或 IR eval 对齐 GPR、PC、retire、
+  trap / fault 和 memory effect。
+- fallback coverage：明确 helper、trap、MMIO、page fault、CSR、atomic、vector、control-flow
+  和 invalidation 的可执行或 reference fallback 边界。
+- 性能证据：在固定 workload 上给出可重复的 simulated/host-side 加速证据，并证明没有破坏
+  debug / profile / observation event 合同。
+- 风险边界：persistent cache、multicore / coherence、write-back cache、I-cache 和新的
+  memory consistency model 不得被顺带开启。
 
 ## 验证思路
 
