@@ -62,6 +62,78 @@ bool expect_contains(const std::string& text, const char* needle, const char* me
     return true;
 }
 
+bool expect_contains(const std::string& text, const std::string& needle, const char* message) {
+    return expect_contains(text, needle.c_str(), message);
+}
+
+bool expect_ai_profile_observation_event(const std::string& output,
+                                         const std::filesystem::path& manifest,
+                                         const char* workload_name,
+                                         const char* shape_mode,
+                                         const char* runtime_shapes,
+                                         uint64_t bytes_moved,
+                                         uint64_t retired_ops,
+                                         uint64_t tile_count,
+                                         uint32_t scratchpad_peak_bytes,
+                                         size_t op_count,
+                                         const char* context) {
+    return expect_contains(output,
+                           "observation-event: {\"schema_version\":1",
+                           context) &&
+           expect_contains(output,
+                           "\"source\":\"ai-accelerator-profile\"",
+                           context) &&
+           expect_contains(output,
+                           "\"phase\":\"profile-summary\"",
+                           context) &&
+           expect_contains(output,
+                           "\"producer_version\":\"ai_profile_v1\"",
+                           context) &&
+           expect_contains(output,
+                           std::string("\"name\":\"") + workload_name + "\"",
+                           context) &&
+           expect_contains(output,
+                           std::string("\"manifest\":\"") + manifest.string() + "\"",
+                           context) &&
+           expect_contains(output,
+                           "\"backend\":\"functional\"",
+                           context) &&
+           expect_contains(output,
+                           "\"effect\":\"completed\"",
+                           context) &&
+           expect_contains(output,
+                           std::string("\"shape_mode\":\"") + shape_mode + "\"",
+                           context) &&
+           expect_contains(output,
+                           std::string("\"runtime_shapes\":\"") + runtime_shapes + "\"",
+                           context) &&
+           expect_contains(output,
+                           std::string("\"bytes_moved\":") + std::to_string(bytes_moved),
+                           context) &&
+           expect_contains(output,
+                           std::string("\"retired_ops\":") + std::to_string(retired_ops),
+                           context) &&
+           expect_contains(output,
+                           std::string("\"tile_count\":") + std::to_string(tile_count),
+                           context) &&
+           expect_contains(output,
+                           std::string("\"scratchpad_peak_bytes\":") +
+                               std::to_string(scratchpad_peak_bytes),
+                           context) &&
+           expect_contains(output,
+                           std::string("\"op_count\":") + std::to_string(op_count),
+                           context) &&
+           expect_contains(output,
+                           "\"evidence_ref\":{\"text_line\":\"ai_profile\"",
+                           context) &&
+           expect_contains(output,
+                           "\"aggregate_text_line\":\"ai_profile_aggregate\"",
+                           context) &&
+           expect_contains(output,
+                           "\"op_text_line\":\"ai_profile_op\"",
+                           context);
+}
+
 uint32_t align_up_u32(uint32_t value, uint32_t alignment) {
     const uint32_t mask = alignment - 1;
     return (value + mask) & ~mask;
@@ -1656,6 +1728,17 @@ bool expect_pack_and_profile_dynamic(const std::filesystem::path& temp_dir) {
         !expect_contains(profile.output,
                          "ai_profile_op op_index=0 opcode=gemm retired_ops=64 compute_cycles=2 stall_cycles=2 tile_count=2",
                          "expected dynamic_gemm op itemized profile output") ||
+        !expect_ai_profile_observation_event(profile.output,
+                                             manifest,
+                                             "dynamic_gemm",
+                                             "dynamic_bounded",
+                                             "t0:2x8,t2:2x4",
+                                             80,
+                                             64,
+                                             2,
+                                             80,
+                                             1,
+                                             "expected dynamic_gemm ai profile observation event") ||
         !expect_file_exists(actual, "expected dynamic_gemm actual output")) {
         return false;
     }

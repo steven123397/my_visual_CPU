@@ -86,6 +86,68 @@ int main() {
         return 1;
     }
 
+    const DebugCliCommand set_memory = parse_debug_cli_command(
+        "{\"cmd\":\"set_memory\",\"addr\":\"0x80000100\",\"value\":\"0x1122334455667788\"}");
+    if (!expect(set_memory.kind == DebugCliCommandKind::SetMemory,
+                "set_memory command kind mismatch")) {
+        return 1;
+    }
+    if (!expect(set_memory.addr == 0x80000100ULL, "set_memory addr mismatch")) {
+        return 1;
+    }
+    if (!expect(set_memory.value == 0x1122334455667788ULL, "set_memory value mismatch")) {
+        return 1;
+    }
+    if (!expect(set_memory.memory_size == 8, "set_memory default size mismatch")) {
+        return 1;
+    }
+    if (!expect(!set_memory.virtual_address, "set_memory default virtual flag mismatch")) {
+        return 1;
+    }
+
+    const DebugCliCommand set_memory_virtual = parse_debug_cli_command(
+        "{\"cmd\":\"set_memory\",\"addr\":\"0x80000104\",\"value\":\"0xaa\","
+        "\"size\":1,\"virtual\":true}");
+    if (!expect(set_memory_virtual.kind == DebugCliCommandKind::SetMemory,
+                "virtual set_memory command kind mismatch")) {
+        return 1;
+    }
+    if (!expect(set_memory_virtual.addr == 0x80000104ULL, "virtual set_memory addr mismatch")) {
+        return 1;
+    }
+    if (!expect(set_memory_virtual.value == 0xaaULL, "virtual set_memory value mismatch")) {
+        return 1;
+    }
+    if (!expect(set_memory_virtual.memory_size == 1, "virtual set_memory size mismatch")) {
+        return 1;
+    }
+    if (!expect(set_memory_virtual.virtual_address, "virtual set_memory flag mismatch")) {
+        return 1;
+    }
+
+    const DebugCliCommand set_csr = parse_debug_cli_command(
+        "{\"cmd\":\"set_csr\",\"csr\":\"mepc\",\"value\":\"0x80000090\"}");
+    if (!expect(set_csr.kind == DebugCliCommandKind::SetCsr,
+                "set_csr command kind mismatch")) {
+        return 1;
+    }
+    if (!expect(set_csr.csr_name == "mepc", "set_csr csr name mismatch")) {
+        return 1;
+    }
+    if (!expect(set_csr.value == 0x80000090ULL, "set_csr value mismatch")) {
+        return 1;
+    }
+
+    const DebugCliCommand break_at =
+        parse_debug_cli_command("{\"cmd\":\"break_at\",\"addr\":\"0x80000080\"}");
+    if (!expect(break_at.kind == DebugCliCommandKind::BreakAt,
+                "break_at command kind mismatch")) {
+        return 1;
+    }
+    if (!expect(break_at.addr == 0x80000080ULL, "break_at addr mismatch")) {
+        return 1;
+    }
+
     const DebugCliCommand step_commit =
         parse_debug_cli_command("{\"cmd\":\"step_commit\",\"count\":\"7\"}");
     if (!expect(step_commit.kind == DebugCliCommandKind::StepCommit, "step_commit kind mismatch")) {
@@ -147,6 +209,23 @@ int main() {
         return 1;
     }
     if (!expect_parse_error("{\"cmd\":\"set_gpr\",\"reg\":\"a0\",\"value\":\"123abc\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"set_memory\",\"addr\":\"0x80000100\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"set_memory\",\"addr\":\"0x80000100\","
+                            "\"value\":\"0x1\",\"size\":3}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"set_memory\",\"addr\":\"0x80000100\","
+                            "\"value\":\"0x1\",\"virtual\":\"yes\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"set_csr\",\"csr\":768,\"value\":\"0x1\"}")) {
+        return 1;
+    }
+    if (!expect_parse_error("{\"cmd\":\"break_at\"}")) {
         return 1;
     }
     if (!expect_parse_error("{\"cmd\":\"step_commit\",\"count\":\"-1\"}")) {

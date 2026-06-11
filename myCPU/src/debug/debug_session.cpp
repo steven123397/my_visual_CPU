@@ -1,11 +1,16 @@
 #include "debug_session.h"
 #include "debug_budget.h"
 
+#include <cerrno>
 #include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <stdexcept>
+#include <string_view>
 
 #include "../arch/csr_file.h"
 #include "../exec/interpreter_dbt_prototype.h"
+#include "../mem/memory_region.h"
 
 namespace {
 
@@ -27,6 +32,113 @@ std::string stall_event_detail(const std::string& stall_reason) {
         return "pipeline stalled";
     }
     return "pipeline stalled: " + stall_reason;
+}
+
+uint64_t parse_u64_text(std::string_view text) {
+    if (text.empty()) {
+        throw std::runtime_error("expected unsigned integer");
+    }
+    if (text.front() == '-') {
+        throw std::runtime_error("negative numbers are not supported");
+    }
+
+    const std::string copy(text);
+    errno = 0;
+    char* end = nullptr;
+    const unsigned long long parsed = std::strtoull(copy.c_str(), &end, 0);
+    if (errno == ERANGE || parsed > std::numeric_limits<uint64_t>::max()) {
+        throw std::runtime_error("unsigned integer out of range");
+    }
+    if (end == copy.c_str() || *end != '\0') {
+        throw std::runtime_error("invalid unsigned integer");
+    }
+    return static_cast<uint64_t>(parsed);
+}
+
+uint32_t parse_csr_addr(std::string_view csr_name) {
+    if (csr_name == "sstatus") {
+        return CSR_SSTATUS;
+    }
+    if (csr_name == "sie") {
+        return CSR_SIE;
+    }
+    if (csr_name == "stvec") {
+        return CSR_STVEC;
+    }
+    if (csr_name == "sepc") {
+        return CSR_SEPC;
+    }
+    if (csr_name == "scause") {
+        return CSR_SCAUSE;
+    }
+    if (csr_name == "stval") {
+        return CSR_STVAL;
+    }
+    if (csr_name == "sip") {
+        return CSR_SIP;
+    }
+    if (csr_name == "satp") {
+        return CSR_SATP;
+    }
+    if (csr_name == "mstatus") {
+        return CSR_MSTATUS;
+    }
+    if (csr_name == "misa") {
+        return CSR_MISA;
+    }
+    if (csr_name == "medeleg") {
+        return CSR_MEDELEG;
+    }
+    if (csr_name == "mideleg") {
+        return CSR_MIDELEG;
+    }
+    if (csr_name == "mie") {
+        return CSR_MIE;
+    }
+    if (csr_name == "mtvec") {
+        return CSR_MTVEC;
+    }
+    if (csr_name == "mscratch") {
+        return CSR_MSCRATCH;
+    }
+    if (csr_name == "mepc") {
+        return CSR_MEPC;
+    }
+    if (csr_name == "mcause") {
+        return CSR_MCAUSE;
+    }
+    if (csr_name == "mtval") {
+        return CSR_MTVAL;
+    }
+    if (csr_name == "mip") {
+        return CSR_MIP;
+    }
+    if (csr_name == "mhartid") {
+        return CSR_MHARTID;
+    }
+    return static_cast<uint32_t>(parse_u64_text(csr_name) & 0xfffU);
+}
+
+bool csr_is_read_only(uint32_t addr) {
+    return (addr & 0xc00U) == 0xc00U || addr == CSR_MISA || addr == CSR_MHARTID;
+}
+
+const char* region_kind_name(PhysicalRegionKind kind) {
+    switch (kind) {
+    case PhysicalRegionKind::Ram:
+        return "ram";
+    case PhysicalRegionKind::Mmio:
+        return "mmio";
+    case PhysicalRegionKind::Unmapped:
+        return "unmapped";
+    }
+    return "unknown";
+}
+
+void validate_memory_size(uint32_t size) {
+    if (size != 1 && size != 2 && size != 4 && size != 8) {
+        throw std::runtime_error("set_memory size must be 1, 2, 4, or 8 bytes");
+    }
 }
 
 }  // namespace
@@ -51,6 +163,7 @@ void DebugSession::load_elf(const std::string& path,
     config_.post_load_actions.clear();
     recreate_machine();
     events_.clear();
+    breakpoints_.clear();
 }
 
 void DebugSession::load_binary(const std::string& path,
@@ -74,6 +187,7 @@ void DebugSession::load_binary(const std::string& path,
     config_.post_load_actions.clear();
     recreate_machine();
     events_.clear();
+    breakpoints_.clear();
 }
 
 void DebugSession::load_binary_payload(const std::string& path, uint64_t addr) {
@@ -96,6 +210,69 @@ void DebugSession::set_gpr(std::string_view reg_name, uint64_t value) {
     });
 }
 
+void DebugSession::set_memory(uint64_t addr, uint64_t value, uint32_t size, bool virtual_address) {
+    ensure_loaded();
+    validate_memory_size(size);
+
+    uint64_t physical_addr = addr;
+    if (virtual_address) {
+        const AddressSpace::TranslateResult translated =
+            machine().cpu().address_space().translate_result(
+                machine().bus(),
+                addr,
+                AccessType::Store,
+                false);
+        if (!translated.ok) {
+            throw std::runtime_error("set_memory virtual address translation failed at " + hex_u64(addr));
+        }
+        physical_addr = translated.paddr;
+    }
+
+    const PhysicalSpanInfo span = machine().bus().describe_span(physical_addr, size);
+    if (!span.ok) {
+        throw std::runtime_error("set_memory target is not fully mapped at " + hex_u64(physical_addr));
+    }
+    if (span.region.kind != PhysicalRegionKind::Ram || span.region.has_side_effect) {
+        throw std::runtime_error(std::string("set_memory supports RAM only; target region is ") +
+                                 region_kind_name(span.region.kind) + ":" + span.region.label);
+    }
+
+    if (virtual_address) {
+        const AddressSpace::AccessResult stored =
+            machine().cpu().address_space().store_result(machine().bus(), addr, value, static_cast<int>(size));
+        if (!stored.ok) {
+            throw std::runtime_error("set_memory virtual store failed at " + hex_u64(addr));
+        }
+    } else if (!machine().bus().try_store_observed(
+                   physical_addr,
+                   value,
+                   static_cast<int>(size),
+                   "debug",
+                   "set-memory")) {
+        const DebugBusAccess& access = machine().bus().last_access();
+        throw std::runtime_error(access.detail.empty() ? "set_memory physical store failed" : access.detail);
+    }
+}
+
+void DebugSession::set_csr(std::string_view csr_name, uint64_t value) {
+    ensure_loaded();
+    const uint32_t addr = parse_csr_addr(csr_name);
+    if (!machine().cpu().csr().is_implemented(addr)) {
+        throw std::runtime_error("set_csr target is not implemented: " + hex_u64(addr));
+    }
+    if (csr_is_read_only(addr)) {
+        throw std::runtime_error("set_csr target is read-only: " + hex_u64(addr));
+    }
+    machine().cpu().csr().write(addr, value, machine().cpu().core());
+}
+
+void DebugSession::break_at(uint64_t addr) {
+    ensure_loaded();
+    if (!is_breakpoint_pc(addr)) {
+        breakpoints_.push_back(addr);
+    }
+}
+
 void DebugSession::reset() {
     ensure_loaded();
     recreate_machine();
@@ -108,6 +285,7 @@ void DebugSession::step_cycle() {
     machine().step();
     const DebugSnapshot after = collect_snapshot();
     record_step_events(before, after);
+    record_breakpoint_hit(after.summary.pc);
 }
 
 void DebugSession::step_commit() {
@@ -131,6 +309,9 @@ void DebugSession::run_until_uart_contains(std::string_view text,
     if (output.find(needle) != std::string::npos) {
         return;
     }
+    if (record_current_breakpoint_hit()) {
+        return;
+    }
 
     const size_t overlap = needle.empty() ? 0 : needle.size() - 1;
     // Preserve just enough suffix to catch a match that straddles old/new UART bytes.
@@ -138,6 +319,9 @@ void DebugSession::run_until_uart_contains(std::string_view text,
 
     for (uint64_t i = 0; i < max_steps; ++i) {
         machine().step();
+        if (record_current_breakpoint_hit()) {
+            return;
+        }
         const std::string& updated_output = machine().uart().output();
         if (updated_output.find(needle, search_from) != std::string::npos) {
             return;
@@ -171,9 +355,15 @@ DebugSession::UartOutputChunk DebugSession::run_until_new_uart_contains(size_t o
     if (chunk.text.find(needle) != std::string::npos) {
         return chunk;
     }
+    if (record_current_breakpoint_hit()) {
+        return chunk;
+    }
 
     for (uint64_t i = 0; i < max_steps; ++i) {
         machine().step();
+        if (record_current_breakpoint_hit()) {
+            return chunk;
+        }
         chunk = make_chunk();
         if (chunk.text.find(needle) != std::string::npos) {
             return chunk;
@@ -191,10 +381,16 @@ void DebugSession::run_until_halt(uint64_t max_steps) {
     if (machine().cpu().core().halted()) {
         return;
     }
+    if (record_current_breakpoint_hit()) {
+        return;
+    }
 
     for (uint64_t i = 0; i < max_steps; ++i) {
         machine().step();
         if (machine().cpu().core().halted()) {
+            return;
+        }
+        if (record_current_breakpoint_hit()) {
             return;
         }
     }
@@ -449,6 +645,27 @@ void DebugSession::record_step_events(const DebugSnapshot& before, const DebugSn
     if (after.csrs.mcause != before.csrs.mcause || after.csrs.scause != before.csrs.scause) {
         append_event("trap", "trap state changed");
     }
+}
+
+bool DebugSession::is_breakpoint_pc(uint64_t pc) const {
+    for (uint64_t breakpoint : breakpoints_) {
+        if (breakpoint == pc) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DebugSession::record_breakpoint_hit(uint64_t pc) {
+    if (!is_breakpoint_pc(pc)) {
+        return false;
+    }
+    append_event("breakpoint", "hit breakpoint at " + hex_u64(pc));
+    return true;
+}
+
+bool DebugSession::record_current_breakpoint_hit() {
+    return record_breakpoint_hit(machine().cpu().core().pc());
 }
 
 void DebugSession::ensure_loaded() const {

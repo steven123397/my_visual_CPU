@@ -3,6 +3,8 @@
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <vector>
 
 #include "debug/debug_protocol.h"
@@ -17,6 +19,157 @@ static BackendKind parse_backend_kind(const char* value) {
         return BackendKind::Pipeline;
     }
     throw std::runtime_error("unknown backend");
+}
+
+static const char* backend_kind_name(BackendKind kind) {
+    switch (kind) {
+    case BackendKind::Functional:
+        return "functional";
+    case BackendKind::Pipeline:
+        return "pipeline";
+    }
+    return "unknown";
+}
+
+static std::string json_escape(const std::string& value) {
+    std::string escaped;
+    escaped.reserve(value.size() + 8);
+    for (char ch : value) {
+        switch (ch) {
+        case '\\':
+            escaped += "\\\\";
+            break;
+        case '"':
+            escaped += "\\\"";
+            break;
+        case '\b':
+            escaped += "\\b";
+            break;
+        case '\f':
+            escaped += "\\f";
+            break;
+        case '\n':
+            escaped += "\\n";
+            break;
+        case '\r':
+            escaped += "\\r";
+            break;
+        case '\t':
+            escaped += "\\t";
+            break;
+        default:
+            if (static_cast<unsigned char>(ch) < 0x20U) {
+                char buffer[8];
+                std::snprintf(buffer, sizeof(buffer), "\\u%04x", static_cast<unsigned>(static_cast<unsigned char>(ch)));
+                escaped += buffer;
+            } else {
+                escaped.push_back(ch);
+            }
+            break;
+        }
+    }
+    return escaped;
+}
+
+static void append_json_string(std::ostringstream& out, const std::string& value) {
+    out << '"' << json_escape(value) << '"';
+}
+
+static const char* ai_profile_progress(const Machine::AiProfileRunResult& result) {
+    if (!result.completed) {
+        return "timeout";
+    }
+    return result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS ? "completed" : "fault";
+}
+
+static void emit_ai_profile_observation_event(const Machine::AiProfileRunResult& result,
+                                              BackendKind backend_kind) {
+    std::ostringstream event;
+    const char* progress = ai_profile_progress(result);
+    event << "observation-event: {"
+          << "\"schema_version\":1"
+          << ",\"event_id\":";
+    append_json_string(event,
+                       "ai-accelerator-profile:" + result.workload_name + ":" +
+                           std::to_string(result.source_tag) + ":" +
+                           std::to_string(result.ticks));
+    event << ",\"source\":\"ai-accelerator-profile\""
+          << ",\"phase\":\"profile-summary\""
+          << ",\"producer_version\":\"ai_profile_v1\""
+          << ",\"subject\":{"
+          << "\"target\":\"ai-profile-manifest\""
+          << ",\"backend\":";
+    append_json_string(event, backend_kind_name(backend_kind));
+    event << ",\"name\":";
+    append_json_string(event, result.workload_name);
+    event << ",\"manifest\":";
+    append_json_string(event, result.manifest_path);
+    event << ",\"graph_package\":";
+    append_json_string(event, result.graph_package_path);
+    event << "}"
+          << ",\"timestamp_or_step\":{"
+          << "\"ticks\":" << result.ticks
+          << ",\"device_cycles\":" << result.device_cycles
+          << ",\"completion_cycles\":" << result.completion_cycles
+          << "}"
+          << ",\"effect\":";
+    append_json_string(event, progress);
+    event << ",\"payload\":{"
+          << "\"progress\":";
+    append_json_string(event, progress);
+    event << ",\"schema\":\"ai_profile_v1\""
+          << ",\"baseline\":\"none\""
+          << ",\"shape_mode\":";
+    append_json_string(event, result.shape_mode);
+    event << ",\"runtime_shapes\":";
+    append_json_string(event, result.runtime_shapes);
+    event << ",\"completion_status\":" << result.completion_status
+          << ",\"fault_code\":" << result.fault_code
+          << ",\"source_tag\":" << result.source_tag
+          << ",\"graph_package_bytes\":" << result.graph_package_bytes
+          << ",\"bytes_moved\":" << result.bytes_moved
+          << ",\"retired_ops\":" << result.retired_ops
+          << ",\"device_cycles\":" << result.device_cycles
+          << ",\"dma_cycles\":" << result.dma_cycles
+          << ",\"compute_cycles\":" << result.compute_cycles
+          << ",\"stall_cycles\":" << result.stall_cycles
+          << ",\"busy_cycles\":" << result.busy_cycles
+          << ",\"queue_cycles\":" << result.queue_cycles
+          << ",\"completion_cycles\":" << result.completion_cycles
+          << ",\"effective_ops_per_cycle\":" << result.effective_ops_per_cycle
+          << ",\"utilization\":" << result.utilization
+          << ",\"aggregate\":{"
+          << "\"tile_count\":" << result.tile_count
+          << ",\"scratchpad_peak_bytes\":" << result.scratchpad_peak_bytes
+          << ",\"op_count\":" << result.op_summaries.size()
+          << "}"
+          << ",\"op_summaries\":[";
+    for (size_t i = 0; i < result.op_summaries.size(); ++i) {
+        if (i != 0) {
+            event << ",";
+        }
+        const AiAcceleratorOpProfileSummary& summary = result.op_summaries[i];
+        event << "{"
+              << "\"op_index\":" << summary.op_index
+              << ",\"opcode\":";
+        append_json_string(event, ai_opcode_name(summary.opcode));
+        event << ",\"retired_ops\":" << summary.retired_ops
+              << ",\"compute_cycles\":" << summary.compute_cycles
+              << ",\"stall_cycles\":" << summary.stall_cycles
+              << ",\"tile_count\":" << summary.tile_count
+              << "}";
+    }
+    event << "]"
+          << "}"
+          << ",\"evidence_ref\":{"
+          << "\"text_line\":\"ai_profile\""
+          << ",\"aggregate_text_line\":\"ai_profile_aggregate\""
+          << ",\"op_text_line\":\"ai_profile_op\""
+          << ",\"manifest\":";
+    append_json_string(event, result.manifest_path);
+    event << "}"
+          << "}";
+    std::cout << event.str() << '\n';
 }
 
 static void usage(const char* prog) {
@@ -192,6 +345,7 @@ int main(int argc, char* argv[]) {
                           << " tile_count=" << summary.tile_count
                           << '\n';
             }
+            emit_ai_profile_observation_event(result, backend_kind);
             return result.completed &&
                            result.completion_status == AI_ACCEL_COMPLETION_STATUS_SUCCESS
                        ? 0

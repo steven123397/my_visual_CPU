@@ -226,9 +226,14 @@ AI lab 的重点不是做模型市场，而是让用户能把“任务入口、�
   `lab family / scenario brief / inspector focus / evidence copy` 的 curated metadata。
 - `loadedSession`、`loadProgress`、terminal buffer、snapshot history 和 diagnostics 继续复用现有
   state 合同，不新增并行事实来源。
+- Lab Workbench / Evidence Drawer 的 observation evidence 现在优先消费后端
+  `observation_event`，缺失时回退旧 `snapshot.profile`；浏览器端只做归一和展示，
+  不改写 producer 身份，也不自行生成模拟器事实。
 - AI tiny model 继续依赖服务器端模板与结果返回；前端只重构显示方式和解释层。
 - Linux 相关 gated diagnostics 继续使用 `diagnostics.linuxConsole`，但要进入更明确的
   `asset readiness` 展示位。
+- 自定义 ELF load 只属于本地开发 server 能力：`elfPath` 必须在配置允许目录内，
+  `elfBase64` 受大小和临时文件生命周期限制；该入口不得被描述为公网任意上传或通用镜像托管。
 - 当前阶段允许在浏览器端维护一份 `scenario catalog`，但它只能补充展示元数据，不得替代
   manifest / snapshot / diagnostics 的真实来源。
 

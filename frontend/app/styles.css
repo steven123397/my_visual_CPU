@@ -335,14 +335,16 @@ body {
 
 select,
 button,
-input {
+input,
+textarea {
   border: 1px solid rgba(24, 33, 39, 0.14);
   border-radius: var(--ui-corner-radius);
   font: inherit;
 }
 
 select,
-input {
+input,
+textarea {
   padding: 12px 14px;
   width: 100%;
   min-width: 0;
@@ -352,6 +354,30 @@ input {
 
 input {
   color: var(--ink);
+}
+
+textarea {
+  color: var(--ink);
+  resize: vertical;
+  min-height: 74px;
+  line-height: 1.45;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.custom-elf-fields__note {
+  margin: 0;
+  color: rgba(255, 248, 241, 0.68);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.custom-elf-fields__note code {
+  color: var(--terminal-accent);
+}
+
+.custom-elf-fields button {
+  width: 100%;
 }
 
 .button-row {

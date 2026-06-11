@@ -250,6 +250,20 @@ function createFakeSessionFactory() {
   };
 }
 
+function createCapturingSessionFactory(loads) {
+  let sessionId = 0;
+  return async () => {
+    sessionId += 1;
+    const session = createFakeSession(`session-${sessionId}`);
+    const originalLoad = session.load.bind(session);
+    session.load = async (entry, backend) => {
+      loads.push({ entry, backend });
+      return originalLoad(entry, backend);
+    };
+    return session;
+  };
+}
+
 function withEnv(updates, callback) {
   const previous = new Map();
   for (const key of Object.keys(updates)) {
@@ -521,6 +535,16 @@ test('built-in asm manifest stays in sync with myCPU Makefile ASM_TESTS', () => 
   assert.deepEqual(actualAsmTests, expectedAsmTests);
 });
 
+test('Course OS shell manifest carries wider debug CLI runtime budgets', () => {
+  const courseOsShell = listTests(repoRoot)
+    .find((item) => item.name === 'guest_course_os_shell_demo');
+  assert.ok(courseOsShell);
+  assert.equal(courseOsShell.bootUntilUartText, 'course-os> ');
+  assert.equal(courseOsShell.bootRequestTimeoutMs, 30000);
+  assert.equal(courseOsShell.commandUntilUartText, 'course-os> ');
+  assert.equal(courseOsShell.commandRequestTimeoutMs, 30000);
+});
+
 test('GET /api/tests returns built-in test manifest', async () => {
   const server = await startServer({
     port: 0,
@@ -569,6 +593,138 @@ test('GET /api/tests returns built-in test manifest', async () => {
     });
   } finally {
     await server.close();
+  }
+});
+
+test('POST /api/session/load accepts a local ELF path from the configured custom root', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-custom-elf-root-'));
+  const elfPath = path.join(tempRoot, 'demo.elf');
+  fs.writeFileSync(elfPath, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 1, 2, 3, 4]));
+  const previousRoots = process.env.MYCPU_FRONTEND_CUSTOM_ELF_ROOTS;
+  process.env.MYCPU_FRONTEND_CUSTOM_ELF_ROOTS = tempRoot;
+  const loads = [];
+  const server = await startServer({
+    port: 0,
+    createSession: createCapturingSessionFactory(loads),
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/session/load', {
+      elfPath,
+      backend: 'functional',
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.customElf.source, 'elfPath');
+    assert.equal(response.body.customElf.name, 'demo.elf');
+    assert.equal(loads.length, 1);
+    assert.equal(loads[0].backend, 'functional');
+    assert.equal(loads[0].entry.image, elfPath);
+    assert.equal(loads[0].entry.kind, 'custom');
+    assert.equal(loads[0].entry.disk, null);
+  } finally {
+    await server.close();
+    if (previousRoots == null) {
+      delete process.env.MYCPU_FRONTEND_CUSTOM_ELF_ROOTS;
+    } else {
+      process.env.MYCPU_FRONTEND_CUSTOM_ELF_ROOTS = previousRoots;
+    }
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('POST /api/session/load rejects custom ELF paths outside configured roots without leaking the path', async () => {
+  const allowedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-custom-elf-allowed-'));
+  const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-custom-elf-outside-'));
+  const elfPath = path.join(outsideRoot, 'private.elf');
+  fs.writeFileSync(elfPath, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 1, 2, 3, 4]));
+  const previousRoots = process.env.MYCPU_FRONTEND_CUSTOM_ELF_ROOTS;
+  process.env.MYCPU_FRONTEND_CUSTOM_ELF_ROOTS = allowedRoot;
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/session/load', {
+      elfPath,
+      backend: 'pipeline',
+    });
+
+    assert.equal(response.status, 403);
+    assert.equal(response.body.code, 'custom_elf_path_forbidden');
+    assert.equal(response.body.error, 'custom ELF path is outside the allowed roots');
+    assert.doesNotMatch(response.body.error, /private\.elf/);
+    assert.doesNotMatch(JSON.stringify(response.body), new RegExp(outsideRoot.replaceAll('\\', '\\\\')));
+  } finally {
+    await server.close();
+    if (previousRoots == null) {
+      delete process.env.MYCPU_FRONTEND_CUSTOM_ELF_ROOTS;
+    } else {
+      process.env.MYCPU_FRONTEND_CUSTOM_ELF_ROOTS = previousRoots;
+    }
+    fs.rmSync(allowedRoot, { recursive: true, force: true });
+    fs.rmSync(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test('POST /api/session/load accepts base64 ELF input and removes the temporary image after load', async () => {
+  const loads = [];
+  const server = await startServer({
+    port: 0,
+    createSession: createCapturingSessionFactory(loads),
+  });
+
+  try {
+    const response = await postJson(server.baseUrl, '/api/session/load', {
+      elfBase64: Buffer.from([0x7f, 0x45, 0x4c, 0x46, 1, 2, 3, 4]).toString('base64'),
+      elfName: 'browser-demo.elf',
+      backend: 'pipeline',
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.customElf.source, 'elfBase64');
+    assert.equal(response.body.customElf.name, 'browser-demo.elf');
+    assert.equal(loads.length, 1);
+    assert.equal(loads[0].entry.kind, 'custom');
+    assert.equal(path.basename(loads[0].entry.image), 'browser-demo.elf');
+    assert.equal(fs.existsSync(loads[0].entry.image), false);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/load rejects malformed or oversized base64 ELF input', async () => {
+  const previousMax = process.env.MYCPU_FRONTEND_CUSTOM_ELF_MAX_BYTES;
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const notElf = await postJson(server.baseUrl, '/api/session/load', {
+      elfBase64: Buffer.from('not-elf').toString('base64'),
+      elfName: 'not-elf.bin',
+      backend: 'pipeline',
+    });
+    assert.equal(notElf.status, 400);
+    assert.equal(notElf.body.code, 'custom_elf_invalid_magic');
+
+    process.env.MYCPU_FRONTEND_CUSTOM_ELF_MAX_BYTES = '4';
+    const tooLarge = await postJson(server.baseUrl, '/api/session/load', {
+      elfBase64: Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x00]).toString('base64'),
+      elfName: 'too-large.elf',
+      backend: 'pipeline',
+    });
+    assert.equal(tooLarge.status, 413);
+    assert.equal(tooLarge.body.code, 'custom_elf_too_large');
+  } finally {
+    await server.close();
+    if (previousMax == null) {
+      delete process.env.MYCPU_FRONTEND_CUSTOM_ELF_MAX_BYTES;
+    } else {
+      process.env.MYCPU_FRONTEND_CUSTOM_ELF_MAX_BYTES = previousMax;
+    }
   }
 });
 
@@ -1308,6 +1464,9 @@ test('GET /console keeps serving the existing browser console app', async () => 
     assert.match(body, /Linux serial console/);
     assert.match(body, /MYCPU_LINUX_PROTO_CONSOLE_IMAGE/);
     assert.match(body, /id="test-select"/);
+    assert.match(body, /id="custom-elf-path"/);
+    assert.match(body, /id="custom-elf-base64"/);
+    assert.match(body, /id="load-custom-elf-button"/);
     assert.match(body, /id="terminate-button"/);
     assert.match(body, />Terminate</);
     assert.match(body, /src="\/app\.js"/);
@@ -1618,6 +1777,94 @@ test('POST /api/session/step-cycle returns updated snapshot', async () => {
     const response = await postJson(server.baseUrl, '/api/session/step-cycle', {});
     assert.equal(response.status, 200);
     assert.equal(response.body.snapshot.summary.cycle, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/debug-command forwards controlled debug write commands', async () => {
+  const calls = [];
+  const server = await startServer({
+    port: 0,
+    createSession: async () => {
+      const session = createFakeSession('debug-control');
+      session.setMemory = async (addr, value, size, virtualAddress) => {
+        calls.push(['setMemory', addr, value, size, virtualAddress]);
+        return { ok: true };
+      };
+      session.setCsr = async (csr, value) => {
+        calls.push(['setCsr', csr, value]);
+        return { ok: true };
+      };
+      session.breakAt = async (addr) => {
+        calls.push(['breakAt', addr]);
+        return { ok: true };
+      };
+      return session;
+    },
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const setMemory = await postJson(server.baseUrl, '/api/session/debug-command', {
+      cmd: 'set_memory',
+      addr: '0x80000100',
+      value: '0xaa',
+      size: 1,
+      virtual: true,
+    });
+    assert.equal(setMemory.status, 200);
+    assert.equal(setMemory.body.ok, true);
+    assert.equal(setMemory.body.snapshot.summary.cycle, 0);
+
+    const setCsr = await postJson(server.baseUrl, '/api/session/debug-command', {
+      cmd: 'set_csr',
+      csr: 'mepc',
+      value: '0x80000090',
+    });
+    assert.equal(setCsr.status, 200);
+    assert.equal(setCsr.body.ok, true);
+
+    const breakAt = await postJson(server.baseUrl, '/api/session/debug-command', {
+      cmd: 'break_at',
+      addr: '0x80000080',
+    });
+    assert.equal(breakAt.status, 200);
+    assert.equal(breakAt.body.ok, true);
+
+    assert.deepEqual(calls, [
+      ['setMemory', '0x80000100', '0xaa', 1, true],
+      ['setCsr', 'mepc', '0x80000090'],
+      ['breakAt', '0x80000080'],
+    ]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /api/session/debug-command rejects unsupported debug CLI commands', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const loadResponse = await postJson(server.baseUrl, '/api/session/load', {
+      test: 'hello',
+      backend: 'pipeline',
+    });
+    assert.equal(loadResponse.status, 200);
+
+    const response = await postJson(server.baseUrl, '/api/session/debug-command', {
+      cmd: 'quit',
+    });
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /unsupported debug command/);
   } finally {
     await server.close();
   }

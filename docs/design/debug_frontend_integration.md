@@ -43,7 +43,9 @@
 ## 非目标
 
 - 不把当前前端扩成通用调试器或 IDE。
-- 不引入断点、条件暂停、任意文件加载、任意表达式求值、差分视图或 trace studio。
+- 不引入通用断点调试器、条件暂停、任意表达式求值、差分视图或 trace studio。
+- 不开放公网任意上传或任意文件宿主；当前只允许本地开发 server 的受控 ELF 路径 /
+  受限 base64 输入。
 - 不为了 UI 便利重写 backend、guest 或执行语义。
 - 不迁移到 React、Vue 或其他前端框架；当前继续保留原生 HTML / CSS / ESM。
 
@@ -68,16 +70,19 @@ browser
 其中：
 
 - `DebugSession` 负责 `load / snapshot / step / reset` 等最小调试控制。
+- `DebugSession` 也支持受控写能力：`set_memory`、`set_csr` 和单地址 `break_at`，
+  用于本地工程调试闭环，不扩成通用 IDE 调试器。
 - `debug_protocol` 继续保持单行 JSON 的 `--debug-cli` 协议。
 - `debug_server_runtime.mjs` 负责 session queue、run loop、generation guard 和 terminal 状态聚合。
 - 浏览器端负责状态管理和视图呈现，不直接解释执行语义。
 
 ### 2. 当前数据面
 
-当前前端只建立在 3 类正式数据面之上：
+当前前端只建立在 4 类正式数据面之上：
 
 - backend / machine 的只读快照
 - workload manifest 的只读元信息
+- 受控本地 ELF load 合同
 - 前端 / Node 会话自己的运行时状态
 
 当前稳定暴露的数据至少包括：
@@ -88,6 +93,8 @@ browser
 - UART / CLINT / PLIC / Storage 最小状态
 - 向量状态：`SEW / VL + v0..v31 raw dump`
 - workload 标题、摘要、badge、固定 demo 元信息
+- `observation_event` read-side summary 和旧 `snapshot.profile` fallback
+- `elfPath` / `elfBase64` 自定义 ELF 的本地开发 server 边界
 
 原则是：只暴露当前仓库里真实、稳定、可解释的状态，不为了 UI 便利编造第二套推导结果。
 
@@ -152,24 +159,41 @@ browser
 - 向量 / NN 教学视图
   - workload 导览、向量指令高亮、`SEW / VL + v0..v31`、固定 `conv -> relu` 专题卡
 
-### 6. 当前只读边界
+### 6. 当前执行语义边界
 
 当前前端的设计底线是：
 
-- 浏览器端只消费只读快照与 manifest 元信息。
+- 浏览器端只消费真实后端快照、manifest 元信息和受控 debug 操作响应。
 - `functional` 仍是 reference 真值来源。
 - `pipeline` 只暴露自己的真实状态，不复制第二套语义解释器。
-- workload 卡片、向量专题、`interactive_os` 终端都只是当前实现边界的表达，不构成新的执行语义来源。
+- workload 卡片、向量专题、`interactive_os` 终端、Evidence Drawer 和自定义 ELF 入口都只是
+  当前实现边界的表达，不构成新的执行语义来源。
+
+### 7. 当前受控写能力与本地 ELF 边界
+
+当前 debug server 允许少量受控操作：
+
+- `set_memory` 只写可映射 RAM，拒绝未映射地址和 side-effect / MMIO 区域。
+- `set_csr` 只写已实现且可写的 CSR，拒绝非法或只读 CSR。
+- `break_at` 只设置单地址 PC 断点，命中后暂停 run loop 并返回真实 snapshot。
+- `elfPath` 只接受 server 配置允许目录内的本地 ELF 文件，错误响应不得泄露越界主机路径。
+- `elfBase64` 进入受限临时文件生命周期和大小上限，加载后必须清理。
+
+这些能力服务本地 Lab Workbench 的工程调试和自定义 ELF 试跑；它们不等价于公网任意上传、
+多用户调试、条件断点、表达式求值、trace studio 或完整 IDE 调试器。
 
 ## 当前明确不做的功能面
 
 当前这条线明确不主动扩张到：
 
-- 断点、条件暂停
+- 通用断点调试器、条件暂停
 - 多客户端 / 多用户调试
 - 任意镜像上传与任意文件宿主
 - profiler、性能火焰图、通用 trace 下载器
 - 通用向量调试器或通用模型可视化器
+
+其中“断点调试器”指多断点 / 条件断点 / 表达式等通用 IDE 能力；当前只保留 P0 范围内的单地址
+`break_at` 最小闭环。
 
 如果未来要继续扩面，也应优先由真实 bug、真实观测缺口或明确 UI 需求驱动，而不是把前端本身变成新的主线。
 

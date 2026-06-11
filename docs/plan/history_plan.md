@@ -21,7 +21,73 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-06-11
+
+#### project-evolution-priority-p0-plan
+
+- 完成时间：2026-06-11
+- 原文件：`project_evolution_priority_p0_plan.md`
+- 完成内容：完成 `PROJECT_EVOLUTION` P0 工作台基础能力切片：
+  `kernel_alpha` Stage 2 正向证据面和旧负向 guardrail 已重跑守住；Lab Workbench /
+  Evidence Drawer 已落地首个 `observation_event` read-side consumer；`/api/session/load`
+  已支持受控 `elfPath` / `elfBase64` 本地 ELF；debug CLI / debug server 已支持
+  `set_memory`、`set_csr` 和单地址 `break_at`。
+- 实现过程摘要：本轮保持旧 consumer 兼容，前端只优先消费后端 `observation_event`，
+  缺失时回退旧 `snapshot.profile`；自定义 ELF load 只允许配置目录内的本地路径或受限
+  base64 临时文件；debug 写能力只允许 RAM 写、可写 CSR 和单地址断点，不扩成通用 IDE
+  调试器。验证过程中发现多处 guest / e2e timeout 预算已不适合当前 pipeline / Course OS
+  路径，已把 `kernel_alpha`、Course OS Linux compat、Course OS shell debug server boot 等慢
+  路径从普通 3s / 12s 门禁中拆到专用预算，不改变 guest 可见行为。
+- 验证摘要：已运行
+  `cd myCPU && make test-host-debug_protocol_command_smoke test-host-debug_cli_smoke test-host-run_debug_cli_probe test-host-execution_profile_smoke test-host-ai_accelerator_profile_smoke`、
+  `cd myCPU && make test-unit-kernel_alpha_common test-unit-kernel_alpha_interrupt test-unit-kernel_alpha_storage test-unit-course_os_stage2_syscall test-unit-course_os_stage2_process test-unit-course_os_stage2_fd_fs test-unit-course_os_stage2_shell test-unit-course_os_stage2_cow_crash test-unit-course_os_stage2 test-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo`、
+  `cd frontend && node --test` 和 `cd myCPU && make test-pipeline`。文档 / whitespace
+  收尾另以 `git diff --check` 与 `git diff --cached --check` 为准。
+- 剩余风险：本轮仍不开放公网任意 ELF / 镜像上传，不定义完整 frontend-simulator protocol，
+  不把 Evidence Drawer 升级为 event producer，不启动默认 JIT backend，也不扩 `kernel_alpha`
+  Stage 12 / Stage 13。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[simulator_evolution_status.md](../status/simulator_evolution_status.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)、[simulator_evolution_observability_schema_design.md](../design/simulator_evolution_observability_schema_design.md)、[debug_frontend_integration.md](../design/debug_frontend_integration.md)
+
 ### 2026-06-10
+
+#### simulator-evolution-slice2-debug-probe-event-summary-plan
+
+- 完成时间：2026-06-10
+- 原文件：`simulator_evolution_slice2_debug_probe_event_summary_plan.md`
+- 完成内容：完成 `simulator-evolution` Slice 2 / debug-probe event summary。
+  `myCPU/workloads/run_debug_cli_probe.py` 现在会在既有 `summary:` 文本之后输出
+  `observation-event: <json>`，作为统一 observability schema 的第一处代码落点。
+- 实现过程摘要：本轮按 TDD 先为 `emit_probe_summary()` 增加红灯测试，要求事件携带
+  `schema_version`、`event_id`、`source=debug-probe`、`phase=probe-summary`、`subject`、
+  `timestamp_or_step`、`effect=observed`、`payload` 和 `evidence_ref`。实现只包装已有
+  snapshot / profile 事实，不改变 debug CLI command、backend、guest state 或旧 probe 文本行。
+- 验证摘要：已运行单测红灯：
+  `cd myCPU && python3 -m unittest tests.host.run_debug_cli_probe_test.RunDebugCliProbeTest.test_emit_probe_summary_emits_observation_event`
+  失败于缺少 `observation-event:`；实现后同一命令通过。收尾阶段另运行
+  `cd myCPU && make test-host-debug_cli_smoke test-host-run_debug_cli_probe`、
+  `cd myCPU && make test-pipeline`、`git diff --check` 和 `git diff --cached --check`。
+- 剩余风险：当前只迁移 debug / probe 读侧摘要；JIT / DBT dispatch summary、AI profile、
+  frontend Evidence Drawer、pipeline 深层统计和核心 `ExecutionProfile` 结构仍需后续独立切片。
+- 结果参考：[simulator_evolution_observability_schema_design.md](../design/simulator_evolution_observability_schema_design.md)、[simulator_evolution_status.md](../status/simulator_evolution_status.md)
+
+#### simulator-evolution-slice1-observability-schema-plan
+
+- 完成时间：2026-06-10
+- 原文件：`simulator_evolution_slice1_observability_schema_plan.md`
+- 完成内容：完成 `simulator-evolution` Slice 1 / observability schema 设计收口。
+  本轮新增 [simulator_evolution_observability_schema_design.md](../design/simulator_evolution_observability_schema_design.md)，
+  固定统一 observation event 的最小字段、版本与兼容策略、producer / consumer 映射、
+  首批迁移候选和暂不迁移项。
+- 实现过程摘要：盘点现有 `ExecutionProfile`、memory observation、`shadow_cache`、JIT / DBT
+  dispatch summary、AI accelerator profile 和 frontend Evidence Drawer 后，将现有观察面分成
+  `stable-contract`、`diagnostic-output` 和 `candidate-for-schema`。首批后续迁移候选限定为
+  debug / probe 只读事件摘要，以及 JIT / DBT dispatch summary event wrapper；AI profile、
+  frontend Evidence Drawer、pipeline 深层统计和核心 `ExecutionProfile` 结构保留为后续独立切片。
+- 验证摘要：本轮为文档 / 设计切片，未修改生产代码。已运行 `git diff --check` 和
+  `git diff --cached --check`。
+- 剩余风险：统一 schema 尚未进入代码实现；后续切片必须继续保留现有 debug JSON、probe 文本、
+  host smoke 断言字段和 frontend response 字段，避免破坏既有 consumer。
+- 结果参考：[simulator_evolution_observability_schema_design.md](../design/simulator_evolution_observability_schema_design.md)、[simulator_evolution_status.md](../status/simulator_evolution_status.md)
 
 #### course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan
 

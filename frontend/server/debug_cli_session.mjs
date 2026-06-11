@@ -180,6 +180,31 @@ export class DebugCliSession {
     });
   }
 
+  async setMemory(addr, value, size = 8, virtualAddress = false) {
+    return this.request({
+      cmd: 'set_memory',
+      addr,
+      value,
+      size,
+      virtual: virtualAddress,
+    });
+  }
+
+  async setCsr(csr, value) {
+    return this.request({
+      cmd: 'set_csr',
+      csr,
+      value,
+    });
+  }
+
+  async breakAt(addr) {
+    return this.request({
+      cmd: 'break_at',
+      addr,
+    });
+  }
+
   async snapshot() {
     return this.request({ cmd: 'snapshot' });
   }

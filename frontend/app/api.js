@@ -52,8 +52,19 @@ export async function runAiTinyModel(parameters) {
   return postJson('/api/ai/tiny-model/run', parameters);
 }
 
-export async function loadSession(test, backend) {
-  return postJson('/api/session/load', { test, backend });
+export async function loadSession(test, backend, customElf = null) {
+  const payload = { backend };
+  if (customElf?.elfPath) {
+    payload.elfPath = customElf.elfPath;
+  } else if (customElf?.elfBase64) {
+    payload.elfBase64 = customElf.elfBase64;
+    if (customElf.elfName) {
+      payload.elfName = customElf.elfName;
+    }
+  } else {
+    payload.test = test;
+  }
+  return postJson('/api/session/load', payload);
 }
 
 export async function stepCycle() {

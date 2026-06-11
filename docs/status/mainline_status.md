@@ -20,6 +20,7 @@
   - [../design/phase3_ooo_execution_model_design.md](../design/phase3_ooo_execution_model_design.md)
   - [../design/pipeline_speculation_contracts.md](../design/pipeline_speculation_contracts.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
+  - [../design/simulator_evolution_observability_schema_design.md](../design/simulator_evolution_observability_schema_design.md)
   - [../design/wave5_cache_memory_system_design.md](../design/wave5_cache_memory_system_design.md)
   - [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
   - [../design/wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)
@@ -30,12 +31,17 @@
   - [npu_tpu_accelerator_status.md](npu_tpu_accelerator_status.md)
   - [code_reself_status.md](code_reself_status.md)
 - 当前活跃计划：
-  - [../plan/simulator_evolution_slice1_observability_schema_plan.md](../plan/simulator_evolution_slice1_observability_schema_plan.md)
+  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
+  - [../plan/project_evolution_priority_p2_plan.md](../plan/project_evolution_priority_p2_plan.md)
+  - [../plan/project_evolution_priority_p3_plan.md](../plan/project_evolution_priority_p3_plan.md)
   - [../plan/course_os_kernel_alpha_quality_review_plan.md](../plan/course_os_kernel_alpha_quality_review_plan.md)
   - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
   - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#project-evolution-priority-p0-plan](../plan/history_plan.md#project-evolution-priority-p0-plan)
+  - [../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
+  - [../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
   - [../plan/history_plan.md#code-reself-remediation-plan](../plan/history_plan.md#code-reself-remediation-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
@@ -112,8 +118,12 @@ contract、profile hot-path dispatch 和 reference fallback 选择串成单一 d
 也不成为默认 backend。
 `dispatch result serialization / debug-probe visibility bridge` 已完成第一刀：dry-run
 result 现在有稳定 summary 结构、`jit-dispatch:` 单行文本、debug CLI
-`jit_dispatch` opt-in JSON 事件，以及 `run_debug_cli_probe.py --jit-dispatch` 显式
-probe 输出；该观察面仍只读，不驱动 runtime。
+`jit_dispatch` opt-in JSON 事件、统一 `observation_event` wrapper，以及
+`run_debug_cli_probe.py --jit-dispatch` 显式 probe 输出；该观察面仍只读，不驱动 runtime。
+`simulator-evolution` observability wrapper 当前还已覆盖 debug-probe summary、
+ExecutionProfile core snapshot、memory observation、`shadow_cache` 读侧摘要和
+AI profile bridge；这些 wrapper 只包装既有 snapshot / profile / AI profile
+文本事实，不改变 guest 可见行为。
 `runtime dispatch contract dry-run` 已完成第一刀：`dbt_runtime_dispatch` 只把
 `DbtJitDryRunResult` 映射成运行时调度合同，区分 lowered block、helper bridge to
 reference 和 plain reference step；它不调用 helper、不执行 reference step、不提交 CPU
@@ -303,6 +313,10 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
   - functional `linux_proto` dummy-payload observation baseline
 - `debug/frontend`、`kernel_alpha` 十条基线、`make test` / `make test-pipeline`
   和现有 workload smoke 都已进入维护态。
+- `PROJECT_EVOLUTION` P0 已完成并归档：`kernel_alpha` Stage 2 正向证据面和旧负向
+  guardrail 已重跑守住；observability schema 已扩到 producer wrapper 和首个 frontend
+  Evidence Drawer consumer；`/api/session/load` 已支持受控本地 `elfPath` / `elfBase64`；
+  debug CLI / debug server 已补 `set_memory`、`set_csr` 和单地址 `break_at`。
 - `2026-05-29` 全仓库 code review remediation 已完成并归档；12 条
   `必须修复` 与 19 条 `建议修改` active findings 已由四条整改线关闭，合并后守住
   `test-fast-smoke`、`test-standard-regression`、`test-pipeline`、`make test`
@@ -403,7 +417,7 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
 - 主线 `Wave 6` 已完成 `dispatch result serialization / debug-probe visibility bridge`
   第一刀：`DbtJitDryRunSummary`、debug CLI `jit_dispatch` 和
   `run_debug_cli_probe.py --jit-dispatch` 暴露 action/source/cache/reject/helper/no-host-code
-  字段，仍不接 runtime backend。
+  字段；`jit_dispatch` JSON 另带统一 `observation_event` wrapper，仍不接 runtime backend。
 - 主线 `Wave 6` 已完成 `runtime dispatch contract dry-run` 第一刀：新增
   `src/exec/dbt_runtime_dispatch.{h,cpp}`，只把 `DbtJitDryRunResult` 分类成
   lowered block、helper bridge to reference 和 plain reference step 三种非执行
@@ -550,6 +564,12 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
 
 ## 关键历史节点
 
+- `2026-06-11`
+  - `PROJECT_EVOLUTION` P0 完成并归档到
+    [../plan/history_plan.md#project-evolution-priority-p0-plan](../plan/history_plan.md#project-evolution-priority-p0-plan)。
+    本轮守住 `kernel_alpha` Stage 2 / 旧负向 guardrail，完成 frontend Evidence Drawer
+    `observation_event` read-side consumer，补齐本地受控 ELF load，并给 debug protocol /
+    debug server 增加 `set_memory`、`set_csr` 与单地址 `break_at` 最小闭环。
 - `2026-05-02`
   - 主线 `Wave 7` 完成 AI 参数化小模型体验：
     [../plan/history_plan.md#mainline-wave7-ai-parameterized-tiny-model-plan](../plan/history_plan.md#mainline-wave7-ai-parameterized-tiny-model-plan)。
@@ -643,7 +663,8 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
     和 guest execution 仍不启动。
   - 主线 `Wave 6` 完成 `dispatch result serialization / debug-probe visibility bridge`
     第一刀：新增稳定 `DbtJitDryRunSummary` / `jit-dispatch:` 文本摘要，debug CLI
-    支持显式 `jit_dispatch`，probe 支持 `--jit-dispatch`；默认 runtime、host code
+    支持显式 `jit_dispatch` 和统一 observation event wrapper，probe 支持
+    `--jit-dispatch`；默认 runtime、host code
     emission、executable cache 和 guest execution 仍不启动。
   - 主线 `Wave 6` 完成 `metadata-only block cache` 第一刀：新增非执行
     `dbt_block_cache`，只缓存 ok `DbtTranslationUnit` metadata；host smoke 固定

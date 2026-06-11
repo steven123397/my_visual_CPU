@@ -166,6 +166,13 @@ compat 在 `gcc` 成功退出后生成教学级 RV64 ELF artifact，不声明真
 
 ## 关键历史节点
 
+- `2026-06-11`
+  - `PROJECT_EVOLUTION` P0 维护门禁重跑 `kernel_alpha` Stage 2 正向证据面、课程 OS 单元门禁、
+    functional / pipeline `kernel_alpha_demo` 和旧 Phase 1 负向 demo；当前结论是 Stage 2 marker、
+    Stage 3 串联 marker、storage / PLIC / timer / fault 历史 guardrail 继续稳定，不把新能力混入旧
+    `KMVPETDS` 语义。本轮同时把 `kernel_alpha` guest / pipeline guest smoke 的 timeout
+    预算从普通快速 smoke 中拆出，避免慢速主机把稳定 marker 误报成超时。
+
 - `2026-06-09`
   - Stage 11 external workflow smoke 首次完整通过本地有状态链路：
     `git init`、`vim hello.c`、`git add`、`git commit`、`git log`、

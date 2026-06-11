@@ -223,9 +223,11 @@ export function listTests(repoRoot) {
       backend: 'pipeline',
       bootUntilUartText: courseOsShellBudgets.prompt,
       bootMaxSteps: courseOsShellBudgets.bootMaxSteps,
+      bootRequestTimeoutMs: courseOsShellBudgets.bootRequestTimeoutMs,
       terminalPrompt: courseOsShellBudgets.prompt,
       commandUntilUartText: courseOsShellBudgets.prompt,
       commandMaxSteps: courseOsShellBudgets.commandMaxSteps,
+      commandRequestTimeoutMs: courseOsShellBudgets.commandRequestTimeoutMs,
     },
     {
       menuLabel: 'guest_course_os_shell_demo · Course OS shell',

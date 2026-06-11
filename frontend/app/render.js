@@ -1,4 +1,9 @@
-import { buildTimelineRows, diffRegisters, shouldAutoScrollToBottom } from './state.js';
+import {
+  buildTimelineRows,
+  diffRegisters,
+  normalizeObservationEvidence,
+  shouldAutoScrollToBottom,
+} from './state.js';
 import { renderTerminal } from './components/terminal.js';
 import { renderPipelineBoard, renderTimeline } from './components/pipeline.js';
 import {
@@ -665,6 +670,7 @@ function selectedScenarioContext(state) {
       nextAction,
       sessionContract,
       observationHints,
+      observationEvidence: normalizeObservationEvidence(state.currentSnapshot),
       scenarioKey: resolved.scenarioKey,
       scenarioTest,
       scenarioBackend: sessionBackend,
@@ -701,6 +707,7 @@ function selectedScenarioContext(state) {
       `Expected marker ${selectedEntry?.workload?.expectedMarker ?? 'No prompt marker declared'}`,
     ],
     observationHints: ['Terminal session', 'Snapshot summary', 'Platform and register panels'],
+    observationEvidence: normalizeObservationEvidence(state.currentSnapshot),
   };
 }
 
@@ -734,7 +741,26 @@ function renderScenarioEvidence(context) {
       ${renderScenarioFocusList(context.proves)}
       <p>${escapeHtml(context.boundary)}</p>
       ${context.assetNote ? `<code>${escapeHtml(context.assetNote)}</code>` : ''}
+      ${renderObservationEvidence(context.observationEvidence)}
     </article>
+  `;
+}
+
+function renderObservationEvidence(evidence) {
+  if (!evidence) {
+    return '';
+  }
+  const title = evidence.contract === 'observation_event'
+    ? 'Observation event'
+    : 'Legacy profile fallback';
+  const lines = Array.isArray(evidence.lines) ? evidence.lines : [];
+  return `
+    <div class="demo-workspace__observation-evidence" data-observation-contract="${escapeHtml(evidence.contract)}">
+      <span>${escapeHtml(title)}</span>
+      <strong>${escapeHtml(evidence.source)} · ${escapeHtml(evidence.phase)}</strong>
+      ${renderScenarioFocusList(lines)}
+      <p>evidence <code>${escapeHtml(evidence.evidenceRef)}</code></p>
+    </div>
   `;
 }
 
@@ -1374,4 +1400,8 @@ export function updateControls(elements, state) {
   document.querySelector('#terminate-button').disabled = !canControl;
   document.querySelector('#step-cycle-button').disabled = !canControl;
   document.querySelector('#step-commit-button').disabled = !canControl;
+  const loadCustomElfButton = document.querySelector('#load-custom-elf-button');
+  if (loadCustomElfButton) {
+    loadCustomElfButton.disabled = !canControl;
+  }
 }

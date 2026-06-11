@@ -140,6 +140,18 @@ bool test_debug_snapshot_json_exposes_profile_contract() {
                            "debug snapshot JSON should expose branch-target heat observations") &&
            expect_contains(output, "\"traps\":[",
                            "debug snapshot JSON should expose trap observations") &&
+           expect_contains(output, "\"observation_event\":{",
+                           "debug snapshot JSON should expose execution profile observation event") &&
+           expect_contains(output, "\"source\":\"execution-profile\"",
+                           "execution profile event should identify its source") &&
+           expect_contains(output, "\"phase\":\"snapshot-summary\"",
+                           "execution profile event should identify snapshot summary phase") &&
+           expect_contains(output, "\"subject\":{\"backend\":\"pipeline\"",
+                           "execution profile event should identify snapshot backend") &&
+           expect_contains(output, "\"effect\":\"observed\"",
+                           "execution profile event should be observational") &&
+           expect_contains(output, "\"evidence_ref\":{\"debug_json\":\"snapshot.profile\"}",
+                           "execution profile event should point back to snapshot profile JSON") &&
            expect_contains(output,
                            "\"l1_data_cache\":{\"enabled\":false,\"line_size_bytes\":64,\"capacity_lines\":64,\"loads\":0,\"stores\":0,\"hits\":0,\"misses\":0,\"evictions\":0,\"bypasses\":0,\"write_through_stores\":0}",
                            "debug snapshot JSON should expose default-off L1D cache counters");
@@ -182,6 +194,12 @@ bool test_pipeline_snapshot_json_exposes_hot_path_memory_and_trap_signals() {
                            "pipeline snapshot JSON should expose hot-path output") &&
            expect_contains(output, "\"memory_regions\":[",
                            "pipeline snapshot JSON should expose memory-region output") &&
+           expect_contains(output, "\"payload\":{\"total_retirements\":",
+                           "pipeline snapshot JSON should expose execution profile event payload") &&
+           expect_contains(output, "\"top_hot_path\":{",
+                           "pipeline snapshot JSON should expose top hot path in profile event") &&
+           expect_contains(output, "\"top_pc_cost\":{",
+                           "pipeline snapshot JSON should expose top PC cost in profile event") &&
            expect_contains(output, "\"traps\":[",
                            "pipeline snapshot JSON should expose trap output");
 }

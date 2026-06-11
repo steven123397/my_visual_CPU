@@ -86,6 +86,24 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
                 out << debug_protocol_ok_json("set_gpr") << '\n';
                 continue;
             }
+            if (command.kind == DebugCliCommandKind::SetMemory) {
+                session.set_memory(command.addr,
+                                   command.value,
+                                   command.memory_size,
+                                   command.virtual_address);
+                out << debug_protocol_ok_json("set_memory") << '\n';
+                continue;
+            }
+            if (command.kind == DebugCliCommandKind::SetCsr) {
+                session.set_csr(command.csr_name, command.value);
+                out << debug_protocol_ok_json("set_csr") << '\n';
+                continue;
+            }
+            if (command.kind == DebugCliCommandKind::BreakAt) {
+                session.break_at(command.addr);
+                out << debug_protocol_ok_json("break_at") << '\n';
+                continue;
+            }
             if (command.kind == DebugCliCommandKind::Snapshot) {
                 out << debug_snapshot_json(session.snapshot()) << '\n';
                 continue;

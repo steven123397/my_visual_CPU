@@ -2022,6 +2022,229 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
         self.assertNotIn("translation-plan:", stdout.getvalue())
 
+    def test_emit_probe_summary_emits_observation_event(self) -> None:
+        args = PROBE.parse_args(
+            [
+                "--target",
+                "./mycpu",
+                "--image",
+                "Image",
+                "--disk",
+                "rootfs.img",
+                "--block-transport",
+                "virtio-blk",
+                "--flat",
+                "--addr",
+                "0x80200000",
+            ]
+        )
+        lines = [
+            {
+                "type": "snapshot",
+                "summary": {
+                    "cycle": 8192,
+                    "instret": 4096,
+                    "pc": "0x80200010",
+                    "privilege": "S",
+                    "backend": "functional",
+                },
+                "csrs": {
+                    "mcause": "0x0",
+                    "mepc": "0x80200000",
+                    "mtval": "0x0",
+                    "scause": "0xd",
+                    "sepc": "0x80200010",
+                    "stval": "0x80201000",
+                    "stvec": "0x80200100",
+                    "satp": "0x8000000000080200",
+                },
+                "profile": {
+                    "total_retirements": 4096,
+                    "total_traps": 1,
+                    "total_memory_observations": 5,
+                    "shadow_cache": {
+                        "line_size_bytes": 64,
+                        "capacity_lines": 64,
+                        "resident_lines": 2,
+                        "line_accesses": 5,
+                        "hits": 3,
+                        "misses": 2,
+                        "evictions": 0,
+                        "bypasses": 0,
+                    },
+                    "hot_paths": [
+                        {
+                            "start_pc": "0x80200000",
+                            "end_pc": "0x80200020",
+                            "executions": 3,
+                            "retired_instructions": 9,
+                        }
+                    ],
+                    "memory_regions": [
+                        {
+                            "label": "ram",
+                            "kind": "ram",
+                            "accesses": 5,
+                            "reads": 3,
+                            "writes": 2,
+                            "faults": 0,
+                            "bytes": 20,
+                        }
+                    ],
+                },
+                "devices": {
+                    "uart": {
+                        "output_size": 14,
+                        "recent_output": "Booting Linux\n",
+                    }
+                },
+            }
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            rc = PROBE.emit_probe_summary(args, lines)
+
+        self.assertEqual(rc, 0)
+        event_line = next(
+            line
+            for line in stdout.getvalue().splitlines()
+            if line.startswith("observation-event: ")
+        )
+        event = json.loads(event_line.removeprefix("observation-event: "))
+
+        self.assertEqual(event["schema_version"], 1)
+        self.assertEqual(event["source"], "debug-probe")
+        self.assertEqual(event["phase"], "probe-summary")
+        self.assertEqual(event["effect"], "observed")
+        self.assertEqual(event["subject"]["backend"], "functional")
+        self.assertEqual(event["subject"]["pc"], "0x80200010")
+        self.assertEqual(event["timestamp_or_step"]["cycle"], 8192)
+        self.assertEqual(event["timestamp_or_step"]["instret"], 4096)
+        self.assertEqual(event["payload"]["profile"]["total_retirements"], 4096)
+        self.assertEqual(event["payload"]["profile"]["total_memory_observations"], 5)
+        self.assertEqual(event["payload"]["profile"]["top_memory_region"]["label"], "ram")
+        self.assertEqual(event["evidence_ref"]["debug_json"], "snapshot")
+
+    def test_emit_probe_summary_emits_memory_and_cache_observation_events(self) -> None:
+        args = PROBE.parse_args(
+            [
+                "--target",
+                "./mycpu",
+                "--image",
+                "Image",
+                "--flat",
+                "--addr",
+                "0x80200000",
+            ]
+        )
+        lines = [
+            {
+                "type": "snapshot",
+                "summary": {
+                    "cycle": 8192,
+                    "instret": 4096,
+                    "pc": "0x80200010",
+                    "privilege": "S",
+                    "backend": "functional",
+                },
+                "csrs": {
+                    "mcause": "0x0",
+                    "mepc": "0x80200000",
+                    "mtval": "0x0",
+                    "scause": "0xd",
+                    "sepc": "0x80200010",
+                    "stval": "0x80201000",
+                    "stvec": "0x80200100",
+                    "satp": "0x8000000000080200",
+                },
+                "profile": {
+                    "total_retirements": 4096,
+                    "total_traps": 1,
+                    "total_memory_observations": 5,
+                    "shadow_cache": {
+                        "line_size_bytes": 64,
+                        "capacity_lines": 64,
+                        "resident_lines": 2,
+                        "line_accesses": 5,
+                        "hits": 3,
+                        "misses": 2,
+                        "evictions": 0,
+                        "bypasses": 0,
+                    },
+                    "hot_paths": [],
+                    "memory_regions": [
+                        {
+                            "label": "ram",
+                            "kind": "ram",
+                            "accesses": 5,
+                            "reads": 3,
+                            "writes": 2,
+                            "faults": 0,
+                            "bytes": 20,
+                        }
+                    ],
+                    "pc_costs": [
+                        {
+                            "pc": "0x80200010",
+                            "raw": "0x28303",
+                            "retirements": 4,
+                            "cycles": 7,
+                            "memory_observations": 3,
+                            "memory_reads": 2,
+                            "memory_writes": 1,
+                            "memory_faults": 0,
+                            "memory_bytes": 12,
+                        }
+                    ],
+                },
+                "devices": {
+                    "uart": {
+                        "output_size": 0,
+                        "recent_output": "",
+                    }
+                },
+            }
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            rc = PROBE.emit_probe_summary(args, lines)
+
+        self.assertEqual(rc, 0)
+        events = [
+            json.loads(line.removeprefix("observation-event: "))
+            for line in stdout.getvalue().splitlines()
+            if line.startswith("observation-event: ")
+        ]
+        memory_event = next(
+            event for event in events if event["source"] == "memory-observation"
+        )
+        cache_event = next(event for event in events if event["source"] == "cache-shadow")
+
+        self.assertEqual(memory_event["schema_version"], 1)
+        self.assertEqual(memory_event["phase"], "profile-summary")
+        self.assertEqual(memory_event["effect"], "observed")
+        self.assertEqual(memory_event["subject"]["backend"], "functional")
+        self.assertEqual(memory_event["payload"]["total_memory_observations"], 5)
+        self.assertEqual(memory_event["payload"]["top_memory_region"]["label"], "ram")
+        self.assertEqual(memory_event["payload"]["top_pc_cost"]["pc"], "0x80200010")
+        self.assertEqual(
+            memory_event["evidence_ref"]["profile_json"],
+            "snapshot.profile.memory_regions",
+        )
+
+        self.assertEqual(cache_event["schema_version"], 1)
+        self.assertEqual(cache_event["phase"], "profile-summary")
+        self.assertEqual(cache_event["effect"], "observed")
+        self.assertEqual(cache_event["payload"]["line_accesses"], 5)
+        self.assertEqual(cache_event["payload"]["hits"], 3)
+        self.assertEqual(cache_event["payload"]["misses"], 2)
+        self.assertEqual(
+            cache_event["evidence_ref"]["profile_json"],
+            "snapshot.profile.shadow_cache",
+        )
+
     def test_emit_probe_summary_reports_opt_in_translation_plan_fallback(self) -> None:
         args = PROBE.parse_args(
             [
@@ -2194,6 +2417,45 @@ class RunDebugCliProbeTest(unittest.TestCase):
                 "host_code": False,
                 "executable_memory": False,
                 "guest_execution": False,
+                "observation_event": {
+                    "schema_version": 1,
+                    "event_id": "jit-dbt-dispatch:hot-path-profile:reference-fallback:0x80200000:0x80200008",
+                    "source": "jit-dbt-dispatch",
+                    "phase": "dry-run",
+                    "subject": {
+                        "start_pc": "0x80200000",
+                        "end_pc": "0x80200008",
+                        "dispatch_source": "hot-path-profile",
+                    },
+                    "timestamp_or_step": {
+                        "candidate_executions": 3,
+                        "candidate_retired_instructions": 6,
+                    },
+                    "effect": "reference-fallback",
+                    "payload": {
+                        "ok": False,
+                        "cache_state": "miss",
+                        "planned": True,
+                        "translated": True,
+                        "lowered": False,
+                        "fallback_to_reference": True,
+                        "lowered_instruction_count": 0,
+                        "reject": {
+                            "kind": "control-flow",
+                            "reason": "fallback-required",
+                        },
+                        "helper_replay_kind": "none",
+                        "no_execution": {
+                            "generated_host_code": False,
+                            "requested_executable_memory": False,
+                            "executed_guest_code": False,
+                        },
+                    },
+                    "evidence_ref": {
+                        "debug_json": "jit_dispatch",
+                        "text_line": "jit-dispatch",
+                    },
+                },
             },
             {
                 "type": "snapshot",
@@ -2238,6 +2500,21 @@ class RunDebugCliProbeTest(unittest.TestCase):
             "jit-dispatch: source=hot-path-profile action=reference-fallback ok=false start=0x80200000 end=0x80200008 cache=miss planned=true translated=true lowered=false fallback=true lowered_ops=0 executions=3 retired=6 reject=control-flow reason=fallback-required helper=none host_code=false executable_memory=false guest_execution=false",
             stdout.getvalue(),
         )
+        event_line = next(
+            line
+            for line in stdout.getvalue().splitlines()
+            if line.startswith("observation-event: ")
+            and '"source":"jit-dbt-dispatch"' in line
+        )
+        event = json.loads(event_line.removeprefix("observation-event: "))
+        self.assertEqual(event["schema_version"], 1)
+        self.assertEqual(event["source"], "jit-dbt-dispatch")
+        self.assertEqual(event["phase"], "dry-run")
+        self.assertEqual(event["effect"], "reference-fallback")
+        self.assertEqual(event["payload"]["no_execution"]["generated_host_code"], False)
+        self.assertEqual(event["payload"]["no_execution"]["requested_executable_memory"], False)
+        self.assertEqual(event["payload"]["no_execution"]["executed_guest_code"], False)
+        self.assertEqual(event["evidence_ref"]["debug_json"], "jit_dispatch")
 
     def test_emit_probe_summary_exposes_l1d_cache_when_enabled(self) -> None:
         args = PROBE.parse_args(

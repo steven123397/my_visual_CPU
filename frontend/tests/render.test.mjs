@@ -179,6 +179,84 @@ test('renderApp shows controller status and actions for an authenticated session
   assert.match(elements.authPanel.innerHTML, /退出登录/);
 });
 
+test('renderApp surfaces unified observation events in the guide evidence drawer', () => {
+  const state = createAppState();
+  state.runState = 'paused';
+  state.tests = [
+    {
+      name: 'hello',
+      title: 'Pipeline Inspector',
+      backend: 'pipeline',
+      summary: 'Small pipeline workload',
+      workload: {
+        expectedMarker: 'halt',
+      },
+    },
+  ];
+  state.selectedTest = 'hello';
+  state.selectedScenario = 'hello';
+  state.loadedSession = {
+    test: 'hello',
+    backend: 'pipeline',
+  };
+
+  pushSnapshot(state, {
+    summary: {
+      cycle: 12,
+      instret: 8,
+      pc: '0x80000020',
+      halted: false,
+      privilege: 'S',
+      backend: 'pipeline',
+    },
+    observation_event: {
+      schema_version: 1,
+      source: 'execution-profile',
+      phase: 'snapshot-summary',
+      effect: 'observed',
+      subject: {
+        backend: 'pipeline',
+        pc: '0x80000020',
+        privilege: 'S',
+      },
+      timestamp_or_step: {
+        cycle: 12,
+        instret: 8,
+      },
+      payload: {
+        total_retirements: 8,
+        total_memory_observations: 2,
+        top_hot_path: {
+          start_pc: '0x80000020',
+          end_pc: '0x80000030',
+          executions: 3,
+        },
+      },
+      evidence_ref: {
+        debug_json: 'snapshot.profile',
+      },
+    },
+    pipeline: {
+      if: { valid: false, text: '' },
+      flags: {},
+    },
+    gpr: [],
+    csrs: {},
+    devices: {},
+    bus: {},
+    events: [],
+  });
+
+  const elements = createElements();
+  renderApp(elements, state);
+
+  assert.match(elements.guide.innerHTML, /Observation event/);
+  assert.match(elements.guide.innerHTML, /execution-profile/);
+  assert.match(elements.guide.innerHTML, /snapshot-summary/);
+  assert.match(elements.guide.innerHTML, /snapshot\.profile/);
+  assert.match(elements.guide.innerHTML, /top hot path 0x80000020 -&gt; 0x80000030/);
+});
+
 test('renderApp shows predictor accuracy using resolved branch statistics contract', () => {
   const state = createAppState();
   state.runState = 'paused';

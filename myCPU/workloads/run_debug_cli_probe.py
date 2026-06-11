@@ -183,6 +183,20 @@ def load_mode_summary(args) -> list[str]:
     return fields
 
 
+def load_mode_payload(args) -> dict:
+    payload = {
+        "image": args.image,
+        "format": "flat" if args.flat else "elf",
+        "disk": args.disk if args.disk else "none",
+        "block_transport": args.block_transport if args.block_transport else "default",
+    }
+    if args.flat:
+        payload["addr"] = hex(args.addr)
+    if args.l1d:
+        payload["l1d"] = True
+    return payload
+
+
 def referenced_input_paths(args) -> list[tuple[str, str]]:
     paths = [("image", args.image)]
     if args.disk:
@@ -291,6 +305,161 @@ def emit_top_profile_entries(profile) -> None:
         )
 
 
+def build_probe_observation_event(args, snapshot) -> dict:
+    summary = snapshot.get("summary", {})
+    profile = snapshot.get("profile", {})
+    hot_paths = profile.get("hot_paths", [])
+    memory_regions = profile.get("memory_regions", [])
+    backend = summary.get("backend", args.backend)
+    cycle = profile_int(summary.get("cycle", 0))
+    pc = summary.get("pc", "0x0")
+
+    return {
+        "schema_version": 1,
+        "event_id": f"debug-probe:{backend}:{cycle}:{pc}",
+        "source": "debug-probe",
+        "phase": "probe-summary",
+        "subject": {
+            "target": args.target,
+            "backend": backend,
+            "pc": pc,
+            "privilege": summary.get("privilege", "?"),
+        },
+        "timestamp_or_step": {
+            "cycle": cycle,
+            "instret": profile_int(summary.get("instret", 0)),
+        },
+        "effect": "observed",
+        "payload": {
+            "load": load_mode_payload(args),
+            "profile": {
+                "total_retirements": profile_int(profile.get("total_retirements", 0)),
+                "total_traps": profile_int(profile.get("total_traps", 0)),
+                "total_memory_observations": profile_int(
+                    profile.get("total_memory_observations", 0)
+                ),
+                "shadow_cache": profile.get("shadow_cache", {}),
+                "top_hot_path": hot_paths[0] if hot_paths else None,
+                "top_memory_region": memory_regions[0] if memory_regions else None,
+            },
+        },
+        "evidence_ref": {
+            "debug_json": "snapshot",
+            "profile_json": "snapshot.profile",
+        },
+    }
+
+
+def emit_probe_observation_event(args, snapshot) -> None:
+    event = build_probe_observation_event(args, snapshot)
+    print(
+        "observation-event:",
+        json.dumps(event, sort_keys=True, separators=(",", ":")),
+    )
+
+
+def build_memory_observation_event(args, snapshot):
+    summary = snapshot.get("summary", {})
+    profile = snapshot.get("profile", {})
+    memory_regions = profile.get("memory_regions", [])
+    pc_costs = profile.get("pc_costs", [])
+    total_memory_observations = profile_int(profile.get("total_memory_observations", 0))
+    top_pc_cost = next(
+        (
+            cost
+            for cost in pc_costs
+            if profile_int(cost.get("memory_observations", 0)) > 0
+        ),
+        pc_costs[0] if pc_costs else None,
+    )
+    if total_memory_observations == 0 and not memory_regions and top_pc_cost is None:
+        return None
+
+    backend = summary.get("backend", args.backend)
+    cycle = profile_int(summary.get("cycle", 0))
+    pc = summary.get("pc", "0x0")
+    return {
+        "schema_version": 1,
+        "event_id": f"memory-observation:{backend}:{cycle}:{pc}",
+        "source": "memory-observation",
+        "phase": "profile-summary",
+        "subject": {
+            "target": args.target,
+            "backend": backend,
+            "pc": pc,
+            "privilege": summary.get("privilege", "?"),
+        },
+        "timestamp_or_step": {
+            "cycle": cycle,
+            "instret": profile_int(summary.get("instret", 0)),
+        },
+        "effect": "observed",
+        "payload": {
+            "total_memory_observations": total_memory_observations,
+            "top_memory_region": memory_regions[0] if memory_regions else None,
+            "top_pc_cost": top_pc_cost,
+        },
+        "evidence_ref": {
+            "debug_json": "snapshot",
+            "profile_json": "snapshot.profile.memory_regions",
+            "pc_cost_json": "snapshot.profile.pc_costs",
+        },
+    }
+
+
+def emit_memory_observation_event(args, snapshot) -> None:
+    event = build_memory_observation_event(args, snapshot)
+    if event is None:
+        return
+    print(
+        "observation-event:",
+        json.dumps(event, sort_keys=True, separators=(",", ":")),
+    )
+
+
+def build_cache_shadow_observation_event(args, snapshot):
+    summary = snapshot.get("summary", {})
+    shadow_cache = snapshot.get("profile", {}).get("shadow_cache", {})
+    if not shadow_cache:
+        return None
+
+    backend = summary.get("backend", args.backend)
+    cycle = profile_int(summary.get("cycle", 0))
+    pc = summary.get("pc", "0x0")
+    return {
+        "schema_version": 1,
+        "event_id": f"cache-shadow:{backend}:{cycle}:{pc}",
+        "source": "cache-shadow",
+        "phase": "profile-summary",
+        "subject": {
+            "target": args.target,
+            "backend": backend,
+            "pc": pc,
+            "privilege": summary.get("privilege", "?"),
+        },
+        "timestamp_or_step": {
+            "cycle": cycle,
+            "instret": profile_int(summary.get("instret", 0)),
+        },
+        "effect": "observed",
+        "payload": shadow_cache,
+        "evidence_ref": {
+            "debug_json": "snapshot",
+            "profile_json": "snapshot.profile.shadow_cache",
+        },
+    }
+
+
+def emit_cache_shadow_observation_event(args, snapshot) -> None:
+    event = build_cache_shadow_observation_event(args, snapshot)
+    if event is None:
+        return
+    print(
+        "observation-event:",
+        json.dumps(event, sort_keys=True, separators=(",", ":")),
+    )
+
+
 def profile_int(value, default=0) -> int:
     try:
         if isinstance(value, str):
@@ -397,6 +566,16 @@ def emit_jit_dispatch_summary(dispatch) -> None:
     )
 
 
+def emit_jit_dispatch_observation_event(dispatch) -> None:
+    event = dispatch.get("observation_event") if dispatch else None
+    if not event:
+        return
+    print(
+        "observation-event:",
+        json.dumps(event, sort_keys=True, separators=(",", ":")),
+    )
+
+
 def emit_l1d_cache_summary(snapshot) -> None:
     cache = snapshot.get("l1_data_cache", {})
     if not cache or not cache.get("enabled", False):
@@ -459,6 +638,9 @@ def emit_probe_summary(args, lines) -> int:
         f"privilege={summary['privilege']}",
         f"backend={summary['backend']}",
     )
+    emit_probe_observation_event(args, snapshot)
+    emit_memory_observation_event(args, snapshot)
+    emit_cache_shadow_observation_event(args, snapshot)
     print(
         "trap-m:",
         f"mcause={csrs['mcause']}",
@@ -478,6 +660,7 @@ def emit_probe_summary(args, lines) -> int:
         emit_translation_plan_summary(translation_plan)
     if args.jit_dispatch:
         emit_jit_dispatch_summary(jit_dispatch)
+        emit_jit_dispatch_observation_event(jit_dispatch)
     emit_l1d_cache_summary(snapshot)
     uart_snapshot = snapshot.get("devices", {}).get("uart", {})
     print(

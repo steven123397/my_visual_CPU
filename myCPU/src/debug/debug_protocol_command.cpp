@@ -320,6 +320,14 @@ uint64_t extract_u64(const JsonObject& object, const char* key) {
     throw std::runtime_error(std::string("expected number for key: ") + key);
 }
 
+uint32_t extract_memory_size(const JsonObject& object) {
+    const uint64_t size = try_extract_u64(object, "size", 8);
+    if (size != 1 && size != 2 && size != 4 && size != 8) {
+        throw std::runtime_error("set_memory size must be 1, 2, 4, or 8 bytes");
+    }
+    return static_cast<uint32_t>(size);
+}
+
 }  // namespace
 
 DebugCliCommand parse_debug_cli_command(const std::string& line) {
@@ -350,6 +358,25 @@ DebugCliCommand parse_debug_cli_command(const std::string& line) {
         parsed.kind = DebugCliCommandKind::SetGpr;
         parsed.reg_name = extract_string(object, "reg");
         parsed.value = extract_u64(object, "value");
+        return parsed;
+    }
+    if (command == "set_memory") {
+        parsed.kind = DebugCliCommandKind::SetMemory;
+        parsed.addr = extract_u64(object, "addr");
+        parsed.value = extract_u64(object, "value");
+        parsed.memory_size = extract_memory_size(object);
+        parsed.virtual_address = try_extract_bool(object, "virtual", false);
+        return parsed;
+    }
+    if (command == "set_csr") {
+        parsed.kind = DebugCliCommandKind::SetCsr;
+        parsed.csr_name = extract_string(object, "csr");
+        parsed.value = extract_u64(object, "value");
+        return parsed;
+    }
+    if (command == "break_at") {
+        parsed.kind = DebugCliCommandKind::BreakAt;
+        parsed.addr = extract_u64(object, "addr");
         return parsed;
     }
     if (command == "snapshot") {

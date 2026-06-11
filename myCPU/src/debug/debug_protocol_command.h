@@ -10,6 +10,9 @@ enum class DebugCliCommandKind {
     Load,
     LoadPayload,
     SetGpr,
+    SetMemory,
+    SetCsr,
+    BreakAt,
     Snapshot,
     StepCycle,
     StepCommit,
@@ -31,15 +34,18 @@ struct DebugCliCommand {
     std::string block_transport{};
     std::string disk{};
     std::string text{};
+    std::string csr_name{};
     bool disk_ready{true};
     bool disk_magic_valid{true};
     bool flat{false};
     bool l1d_enabled{false};
+    bool virtual_address{false};
     std::string reg_name{};
     uint64_t addr{MEM_BASE};
     uint64_t value{0};
     uint64_t count{1};
     uint64_t max_steps{0};
+    uint32_t memory_size{8};
     size_t offset{0};
 };
 

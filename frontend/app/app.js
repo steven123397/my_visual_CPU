@@ -73,6 +73,10 @@ const elements = {
   guide: document.querySelector('#guide-slot'),
   notice: document.querySelector('#notice'),
   authPanel: document.querySelector('#auth-panel'),
+  customElfPath: document.querySelector('#custom-elf-path'),
+  customElfBase64: document.querySelector('#custom-elf-base64'),
+  customElfName: document.querySelector('#custom-elf-name'),
+  loadCustomElfButton: document.querySelector('#load-custom-elf-button'),
 };
 let snapshotSocket = null;
 
@@ -159,6 +163,55 @@ async function handleLoad() {
   state.runState = 'paused';
   paint();
   showNotice(`已加载 ${requestedTest}`, 'success');
+}
+
+function readCustomElfPayload() {
+  const elfPath = elements.customElfPath?.value?.trim() ?? '';
+  const elfBase64 = elements.customElfBase64?.value?.trim() ?? '';
+  const elfName = elements.customElfName?.value?.trim() ?? '';
+  if (elfPath && elfBase64) {
+    throw new Error('只能选择服务器路径或 base64 ELF 其中一种。');
+  }
+  if (elfPath) {
+    return { elfPath };
+  }
+  if (elfBase64) {
+    return {
+      elfBase64,
+      ...(elfName ? { elfName } : {}),
+    };
+  }
+  throw new Error('请输入服务器路径或 base64 ELF。');
+}
+
+async function handleLoadCustomElf() {
+  const requestedBackend = state.backend;
+  const customElf = readCustomElfPayload();
+  state.runState = 'loading';
+  clearLoadedSession(state);
+  state.runState = 'loading';
+  setLoadProgress(state, {
+    test: customElf.elfPath ? 'custom-elf-path' : 'custom-elf-base64',
+    backend: requestedBackend,
+    startedAt: Date.now(),
+    label: 'Loading local ELF',
+  });
+  paint();
+  const response = await loadSession(null, requestedBackend, customElf);
+  clearLoadProgress(state);
+  const loadedName = response.customElf?.name ?? 'custom.elf';
+  setLoadedSession(state, {
+    test: loadedName,
+    backend: response?.snapshot?.summary?.backend ?? requestedBackend,
+  });
+  pushSnapshot(state, response.snapshot);
+  mergeTerminal(response.terminal, true);
+  if (!response.terminal) {
+    await syncTerminal(0, true);
+  }
+  state.runState = 'paused';
+  paint();
+  showNotice(`已加载本地 ELF ${loadedName}`, 'success');
 }
 
 async function handleTerminate() {
@@ -594,6 +647,22 @@ async function init() {
     } catch (error) {
       const loadContext = state.loadProgress ?? {
         test: state.selectedTest,
+        backend: state.backend,
+      };
+      state.runState = 'error';
+      clearLoadProgress(state);
+      paint();
+      showNotice(formatLoadErrorMessage(error, loadContext), 'error');
+    }
+  });
+
+  elements.loadCustomElfButton?.addEventListener('click', async () => {
+    try {
+      terminalInputPump.reset();
+      await handleLoadCustomElf();
+    } catch (error) {
+      const loadContext = state.loadProgress ?? {
+        test: 'custom-elf',
         backend: state.backend,
       };
       state.runState = 'error';

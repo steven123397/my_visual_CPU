@@ -88,6 +88,11 @@ export function createDebugServerRuntime({
     };
   }
 
+  function snapshotHasBreakpoint(snapshot) {
+    return Array.isArray(snapshot?.events) &&
+      snapshot.events.some((event) => event?.kind === 'breakpoint');
+  }
+
   async function readTerminalOutput(offset = currentTerminalOffset, generation = currentGeneration) {
     requireSessionLoaded();
     const chunk = normalizeCliResponse(await currentSession.uartOutput(offset), 'session uartOutput');
@@ -180,6 +185,9 @@ export function createDebugServerRuntime({
       }
 
       if (currentSnapshot.summary?.halted) {
+        break;
+      }
+      if (snapshotHasBreakpoint(currentSnapshot)) {
         break;
       }
     }
@@ -286,7 +294,7 @@ export function createDebugServerRuntime({
             assertGeneration(generation);
             wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
             await syncTerminalDelta({ broadcast: true, generation });
-            if (currentSnapshot.summary?.halted) {
+            if (currentSnapshot.summary?.halted || snapshotHasBreakpoint(currentSnapshot)) {
               stopRunLoop();
             }
           });
@@ -299,7 +307,12 @@ export function createDebugServerRuntime({
           return;
         }
 
-        if (token === runLoopToken && generation === currentGeneration && !currentSnapshot?.summary?.halted) {
+        if (
+          token === runLoopToken &&
+          generation === currentGeneration &&
+          !currentSnapshot?.summary?.halted &&
+          !snapshotHasBreakpoint(currentSnapshot)
+        ) {
           scheduleNextTick();
         }
       }, intervalMs);
@@ -477,6 +490,39 @@ export function createDebugServerRuntime({
         wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
         const terminal = await syncTerminalDelta({ broadcast: true, generation });
         return { snapshot: currentSnapshot, terminal };
+      });
+    },
+
+    async debugCommand(command = {}) {
+      const generation = currentGeneration;
+      stopRunLoop();
+      return runQueued(async () => {
+        assertGeneration(generation);
+        requireSessionLoaded();
+        let response;
+        switch (command?.cmd) {
+        case 'set_memory':
+          response = await callSession(
+            'setMemory',
+            command.addr,
+            command.value,
+            command.size ?? 8,
+            command.virtual === true,
+          );
+          break;
+        case 'set_csr':
+          response = await callSession('setCsr', command.csr, command.value);
+          break;
+        case 'break_at':
+          response = await callSession('breakAt', command.addr);
+          break;
+        default:
+          throw new DebugServerRuntimeError(`unsupported debug command: ${command?.cmd ?? '<missing>'}`, 400);
+        }
+        currentSnapshot = await callSession('snapshot');
+        assertGeneration(generation);
+        wsHub.broadcast({ type: 'snapshot', snapshot: currentSnapshot });
+        return { ok: true, response, snapshot: currentSnapshot };
       });
     },
 

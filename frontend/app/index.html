@@ -73,6 +73,26 @@
               </div>
             </div>
 
+            <div class="control-group control-group-custom-elf">
+              <p class="control-group__title">Local ELF</p>
+              <div class="control-group__body control-group__body-fields custom-elf-fields">
+                <label>
+                  <span>服务器路径</span>
+                  <input id="custom-elf-path" type="text" placeholder="/path/to/demo.elf" autocomplete="off">
+                </label>
+                <label>
+                  <span>base64 ELF</span>
+                  <textarea id="custom-elf-base64" rows="3" spellcheck="false"></textarea>
+                </label>
+                <label>
+                  <span>显示名</span>
+                  <input id="custom-elf-name" type="text" placeholder="custom.elf" autocomplete="off">
+                </label>
+                <p class="custom-elf-fields__note">本地开发 server 能力；路径受 <code>MYCPU_FRONTEND_CUSTOM_ELF_ROOTS</code> 限制。</p>
+                <button id="load-custom-elf-button" type="button">Load ELF</button>
+              </div>
+            </div>
+
             <div class="control-group control-group-detail">
               <p class="control-group__title">精细控制</p>
               <div class="control-group__body button-row button-row-secondary">

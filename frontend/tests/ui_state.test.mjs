@@ -21,6 +21,7 @@ import {
   clearLoadProgress,
   diffRegisters,
   diffVectorRegisters,
+  normalizeObservationEvidence,
   pushSnapshot,
   syncScenarioSessionSelection,
   shouldAutoScrollToBottom,
@@ -332,4 +333,87 @@ test('clearLoadedSession resets snapshot history, terminal state, and active ses
   assert.equal(state.terminal.pendingInput, false);
   assert.equal(state.loadProgress, null);
   assert.equal(state.runState, 'idle');
+});
+
+test('normalizeObservationEvidence prefers observation_event and keeps evidence references', () => {
+  const evidence = normalizeObservationEvidence({
+    observation_event: {
+      schema_version: 1,
+      source: 'execution-profile',
+      phase: 'snapshot-summary',
+      effect: 'observed',
+      subject: {
+        backend: 'pipeline',
+        pc: '0x80000020',
+        privilege: 'S',
+      },
+      timestamp_or_step: {
+        cycle: 12,
+        instret: 8,
+      },
+      payload: {
+        total_retirements: 8,
+        total_memory_observations: 2,
+        top_hot_path: {
+          start_pc: '0x80000020',
+          end_pc: '0x80000030',
+          executions: 3,
+        },
+      },
+      evidence_ref: {
+        debug_json: 'snapshot.profile',
+      },
+    },
+    profile: {
+      total_retirements: 1,
+    },
+  });
+
+  assert.equal(evidence.contract, 'observation_event');
+  assert.equal(evidence.source, 'execution-profile');
+  assert.equal(evidence.phase, 'snapshot-summary');
+  assert.equal(evidence.evidenceRef, 'snapshot.profile');
+  assert.deepEqual(evidence.lines, [
+    'effect observed',
+    'cycle 12 / instret 8',
+    'backend pipeline / pc 0x80000020',
+    'retirements 8',
+    'memory observations 2',
+    'top hot path 0x80000020 -> 0x80000030',
+  ]);
+});
+
+test('normalizeObservationEvidence falls back to legacy snapshot profile when event is absent', () => {
+  const evidence = normalizeObservationEvidence({
+    profile: {
+      total_retirements: 5,
+      total_traps: 1,
+      total_memory_observations: 3,
+      hot_paths: [
+        {
+          start_pc: '0x80000010',
+          end_pc: '0x80000018',
+          executions: 2,
+        },
+      ],
+      pc_costs: [
+        {
+          pc: '0x80000010',
+          cycles: 4,
+        },
+      ],
+    },
+  });
+
+  assert.equal(evidence.contract, 'legacy-profile');
+  assert.equal(evidence.source, 'snapshot.profile');
+  assert.equal(evidence.phase, 'compat-fallback');
+  assert.equal(evidence.evidenceRef, 'snapshot.profile');
+  assert.deepEqual(evidence.lines, [
+    'retirements 5',
+    'traps 1',
+    'memory observations 3',
+    'top hot path 0x80000010 -> 0x80000018',
+    'top pc cost 0x80000010 / cycles 4',
+  ]);
 });

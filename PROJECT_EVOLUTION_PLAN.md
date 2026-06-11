@@ -13,7 +13,7 @@
 
 - **Linux / AI 主线**：继续作为近期产品工程主线。Linux 侧聚焦标准 Alpine / Debian 发行版平台剩余 capability、F/D / FS state 和 runtime 资产合同；AI 侧聚焦设备契约、bounded-dynamic shape、profile schema 和后续协同仿真故事。两条线都应继续以 `docs/status/mainline_status.md` 和各自专项 status 为实时事实来源。
 - **OS 课程设计线**：`kernel_alpha` Stage 1 / Stage 2 已完成，当前默认进入维护、验证和展示材料整理状态。除非课程交付明确要求新阶段，否则不继续扩大 Stage 2 范围。
-- **全项目升级改造线**：本文件承接战略改造方向，不直接替代 Linux / AI 的执行计划。近期第一刀应先做认知和协议边界：统一 observability schema、AI 设备契约定调、bounded-dynamic shape 文档化、frontend-simulator protocol 版本化，以及 JIT/DBT dry-run 去留决策。
+- **全项目升级改造线**：本文件承接战略改造方向，不直接替代 Linux / AI 的执行计划。近期第一刀先做认知和协议边界：统一 observability schema 第一版设计已落到 `docs/design/simulator_evolution_observability_schema_design.md`；AI 设备契约定调、bounded-dynamic shape 文档化、frontend-simulator protocol 版本化，以及 JIT/DBT dry-run 去留决策仍按后续独立切片推进。
 
 `2026-05-29` 全仓库 code review remediation 已完成并归档，四条 `code-reself-*` 整改线已合入本地主线，12 条 `必须修复` 与 19 条 `建议修改` active findings 已关闭；后续只保留 `code_reself_status.md` 中的长期观察项。
 
@@ -40,7 +40,7 @@
 现在的接口是为 host smoke 设计的（task-spec 导入、profile 拉取）。如果路线是 "Linux-facing driver"，需要重新设计成 "DT node + ioctl + DMA descriptor + IRQ" 风格的真实设备契约。host smoke 接口可保留为底层 API，上面叠一层"真实设备视角"。越早确定方向越好。
 
 **3. observability 数据 schema 不统一**
-`AiAcceleratorProfileSummary`、`ExecutionProfile`、`shadow_cache`、各种 kernel / guest trace 各说各话。建议提一份独立 design 文档定义 observation event schema，再把各模块的 profile 收敛到同一协议。**这件事不做，时间旅行 / 因果切片 / Lab 协议化全部受阻**。
+`AiAcceleratorProfileSummary`、`ExecutionProfile`、`shadow_cache`、各种 kernel / guest trace 各说各话。统一 observation event schema 第一版已经落到 `docs/design/simulator_evolution_observability_schema_design.md`，当前已完成 debug-probe summary、ExecutionProfile core snapshot、JIT / DBT dispatch summary、memory observation、`shadow_cache`、AI profile 的只读 wrapper，以及 frontend Evidence Drawer 的首个 read-side consumer；后续再把 Lab protocol / event view 逐步收敛到同一协议。**这件事不继续推进，时间旅行 / 因果切片 / Lab 协议化仍会受阻**。
 
 **4. `InstructionSemantics` 的形式**
 作为 ISA 真值，长期看 C++ 代码形式不够。需要演化为表驱动 / DSL / 半结构化描述，是 ISA 形式化方向的前置。短期不必做，但需要在 design 里留"未来形态"占位，避免在它上面长出更多耦合。
@@ -152,10 +152,16 @@ RAM 大小通过板级 makefile 固定为 128MiB（`BOARD_RAM_SIZE := 0x08000000
 
 ### 1.5 重构优先级建议
 
+本节对应的活跃执行计划：
+[P1](docs/plan/project_evolution_priority_p1_plan.md) /
+[P2](docs/plan/project_evolution_priority_p2_plan.md) /
+[P3](docs/plan/project_evolution_priority_p3_plan.md)。P0 已完成并归档到
+[history_plan.md#project-evolution-priority-p0-plan](docs/plan/history_plan.md#project-evolution-priority-p0-plan)。
+
 | 优先级 | 项目 | 原因 |
 |---|---|---|
-| P0 | kernel_alpha 课程 OS Stage 2 门禁维护（#1） | Stage 2 已落地，需守住当前正向证据面和旧负向 guardrail |
-| P0 | observability schema 统一（#3） | 所有"内核创新方向"的前置 |
+| P0（已完成） | kernel_alpha 课程 OS Stage 2 门禁维护（#1） | Stage 2 正向证据面和旧负向 guardrail 已重跑守住 |
+| P0（已完成） | observability schema 统一（#3） | 已建立 schema，并完成 producer wrapper 与首个 frontend consumer |
 | P1 | AI 加速器设备契约重设计（#2） | 决定 6 个月路线能否落地 |
 | P1 | JIT dry-run 决断（#7） | 防止变成僵尸代码 |
 | P1 | 测试矩阵分层执行纪律（#6） | 分层入口已落地，后续要防止默认 / slow / opt-in 边界漂移 |
@@ -166,8 +172,8 @@ RAM 大小通过板级 makefile 固定为 128MiB（`BOARD_RAM_SIZE := 0x08000000
 | P3 | Pipeline 后端诚实标注（#9） | 文档清晰度 |
 | P3 | 状态文档边界规则（#8） | 治理规则 |
 | P3 | Showcase 冻结归档（#12） | 治理规则 |
-| P0 | 前端打破硬编码 manifest（#13） | 最小改动把"展示器"变成"可加载任意 ELF 的模拟器"，是所有交互性提升的最短路径 |
-| P0 | 调试协议补写能力（#14） | 有读+写+断点才有交互式调试的完整闭环，否则前端只能"看"不能"改" |
+| P0（已完成） | 前端打破硬编码 manifest（#13） | `/api/session/load` 已支持受控 `elfPath` / `elfBase64` 本地 ELF |
+| P0（已完成） | 调试协议补写能力（#14） | debug CLI / debug server 已支持 `set_memory`、`set_csr` 和 `break_at` |
 | P1 | course_os_shell 支持外部 ELF（#15） | 课程 OS 有了真正的用户程序加载能力，教学价值拉满；复用 Stage 7 已有资产 |
 | P1 | kernel_alpha 增加交互式观察面（#16） | 让 procfs / 调度 / COW 统计变成用户可主动查询的实时数据，而不是一次性 summary |
 | P1 | AI 加速器前端自定义（#17） | 设备本身已可编程，前端打开自定义图包入口即可释放硬件能力 |
@@ -226,7 +232,7 @@ kernel_alpha vs xv6 vs Alpine vs Debian 跑同一个 workload，对比 syscall t
 
 **认知重构（来自第一部分）：**
 - 守住 `kernel_alpha` 课程 OS Stage 2 正向证据面和旧负向 guardrail
-- 提出统一 observability schema 的 design 文档
+- 按 `docs/design/simulator_evolution_observability_schema_design.md` 推进首批 observability schema 迁移候选
 - AI 加速器设备契约方向定调
 - JIT dry-run 决断
 - 固化测试矩阵分层执行纪律

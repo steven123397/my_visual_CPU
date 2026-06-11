@@ -84,6 +84,61 @@ void append_json_string(std::ostringstream& out, const std::string& value) {
     out << '"' << json_escape(value) << '"';
 }
 
+void append_jit_dispatch_observation_event(std::ostringstream& out,
+                                           const DbtJitDryRunSummary& summary) {
+    out << "{"
+        << "\"schema_version\":1"
+        << ",\"event_id\":";
+    append_json_string(out,
+                       "jit-dbt-dispatch:" + summary.source + ":" + summary.action + ":" +
+                           summary.start_pc + ":" + summary.end_pc);
+    out << ",\"source\":\"jit-dbt-dispatch\""
+        << ",\"phase\":\"dry-run\""
+        << ",\"subject\":{"
+        << "\"start_pc\":";
+    append_json_string(out, summary.start_pc);
+    out << ",\"end_pc\":";
+    append_json_string(out, summary.end_pc);
+    out << ",\"dispatch_source\":";
+    append_json_string(out, summary.source);
+    out << "}"
+        << ",\"timestamp_or_step\":{"
+        << "\"candidate_executions\":" << summary.candidate_executions
+        << ",\"candidate_retired_instructions\":" << summary.candidate_retired_instructions
+        << "}"
+        << ",\"effect\":";
+    append_json_string(out, summary.action);
+    out << ",\"payload\":{"
+        << "\"ok\":" << (summary.ok ? "true" : "false")
+        << ",\"cache_state\":";
+    append_json_string(out, summary.cache_state);
+    out << ",\"planned\":" << (summary.planned ? "true" : "false")
+        << ",\"translated\":" << (summary.translated ? "true" : "false")
+        << ",\"lowered\":" << (summary.lowered ? "true" : "false")
+        << ",\"fallback_to_reference\":" << (summary.fallback_to_reference ? "true" : "false")
+        << ",\"lowered_instruction_count\":" << summary.lowered_instruction_count
+        << ",\"reject\":{"
+        << "\"kind\":";
+    append_json_string(out, summary.reject_kind);
+    out << ",\"reason\":";
+    append_json_string(out, summary.reject_reason);
+    out << "}"
+        << ",\"helper_replay_kind\":";
+    append_json_string(out, summary.helper_replay_kind);
+    out << ",\"no_execution\":{"
+        << "\"generated_host_code\":" << (summary.generated_host_code ? "true" : "false")
+        << ",\"requested_executable_memory\":"
+        << (summary.requested_executable_memory ? "true" : "false")
+        << ",\"executed_guest_code\":" << (summary.executed_guest_code ? "true" : "false")
+        << "}"
+        << "}"
+        << ",\"evidence_ref\":{"
+        << "\"debug_json\":\"jit_dispatch\""
+        << ",\"text_line\":\"jit-dispatch\""
+        << "}"
+        << "}";
+}
+
 void append_stage(std::ostringstream& out, const DebugStageSnapshot& stage) {
     out << "{"
         << "\"valid\":" << (stage.valid ? "true" : "false")
@@ -114,6 +169,81 @@ void append_retire_trace(std::ostringstream& out, const std::vector<RetireTraceE
             << "}";
     }
     out << "]";
+}
+
+void append_execution_profile_observation_event(std::ostringstream& out,
+                                                const ExecutionProfileSnapshot& profile,
+                                                const DebugSummarySnapshot& summary) {
+    out << "{"
+        << "\"schema_version\":1"
+        << ",\"event_id\":";
+    append_json_string(out,
+                       "execution-profile:" + summary.backend + ":" +
+                           std::to_string(summary.cycle) + ":" + hex_u64(summary.pc));
+    out << ",\"source\":\"execution-profile\""
+        << ",\"phase\":\"snapshot-summary\""
+        << ",\"subject\":{"
+        << "\"backend\":";
+    append_json_string(out, summary.backend);
+    out << ",\"pc\":";
+    append_json_string(out, hex_u64(summary.pc));
+    out << ",\"privilege\":";
+    append_json_string(out, privilege_name(summary.privilege));
+    out << "}"
+        << ",\"timestamp_or_step\":{"
+        << "\"cycle\":" << summary.cycle
+        << ",\"instret\":" << summary.instret
+        << "}"
+        << ",\"effect\":\"observed\""
+        << ",\"payload\":{"
+        << "\"total_retirements\":" << profile.total_retirements
+        << ",\"total_traps\":" << profile.total_traps
+        << ",\"total_memory_observations\":" << profile.total_memory_observations
+        << ",\"hot_path_count\":" << profile.hot_paths.size()
+        << ",\"branch_count\":" << profile.branches.size()
+        << ",\"branch_target_count\":" << profile.branch_targets.size()
+        << ",\"syscall_count\":" << profile.syscalls.size()
+        << ",\"trap_count\":" << profile.traps.size()
+        << ",\"memory_region_count\":" << profile.memory_regions.size()
+        << ",\"pc_cost_count\":" << profile.pc_costs.size()
+        << ",\"top_hot_path\":";
+    if (profile.hot_paths.empty()) {
+        out << "null";
+    } else {
+        const ExecutionHotPathEntry& hot_path = profile.hot_paths.front();
+        out << "{"
+            << "\"start_pc\":";
+        append_json_string(out, hex_u64(hot_path.start_pc));
+        out << ",\"end_pc\":";
+        append_json_string(out, hex_u64(hot_path.end_pc));
+        out << ",\"executions\":" << hot_path.executions
+            << ",\"retired_instructions\":" << hot_path.retired_instructions
+            << "}";
+    }
+    out << ",\"top_pc_cost\":";
+    if (profile.pc_costs.empty()) {
+        out << "null";
+    } else {
+        const ExecutionPcCostEntry& pc_cost = profile.pc_costs.front();
+        out << "{"
+            << "\"pc\":";
+        append_json_string(out, hex_u64(pc_cost.pc));
+        out << ",\"raw\":";
+        append_json_string(out, hex_u64(pc_cost.raw));
+        out << ",\"retirements\":" << pc_cost.retirements
+            << ",\"cycles\":" << pc_cost.cycles
+            << ",\"memory_observations\":" << pc_cost.memory_observations
+            << ",\"memory_reads\":" << pc_cost.memory_reads
+            << ",\"memory_writes\":" << pc_cost.memory_writes
+            << ",\"memory_faults\":" << pc_cost.memory_faults
+            << ",\"memory_bytes\":" << pc_cost.memory_bytes
+            << "}";
+    }
+    out << "}"
+        << ",\"evidence_ref\":{"
+        << "\"debug_json\":\"snapshot.profile\""
+        << "}"
+        << "}";
 }
 
 void append_execution_profile(std::ostringstream& out, const ExecutionProfileSnapshot& profile) {
@@ -362,6 +492,8 @@ std::string serialize_snapshot_json(const DebugSnapshot& snapshot) {
         << "}";
     out << "},\"profile\":";
     append_execution_profile(out, snapshot.profile);
+    out << ",\"observation_event\":";
+    append_execution_profile_observation_event(out, snapshot.profile, snapshot.summary);
     out << ",\"l1_data_cache\":";
     append_l1_data_cache(out, snapshot.l1_data_cache);
     out << ",\"gpr\":[";
@@ -569,7 +701,9 @@ std::string debug_protocol_jit_dispatch_json(const DbtJitDryRunSummary& summary)
     out << ",\"host_code\":" << (summary.generated_host_code ? "true" : "false")
         << ",\"executable_memory\":" << (summary.requested_executable_memory ? "true" : "false")
         << ",\"guest_execution\":" << (summary.executed_guest_code ? "true" : "false")
-        << "}";
+        << ",\"observation_event\":";
+    append_jit_dispatch_observation_event(out, summary);
+    out << "}";
     return out.str();
 }
 

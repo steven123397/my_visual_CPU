@@ -141,6 +141,18 @@ bool expect_line_with_fields(const std::vector<std::string>& lines,
     return false;
 }
 
+template <typename Fn>
+bool expect_throws(const char* message, Fn action) {
+    try {
+        action();
+    } catch (...) {
+        return true;
+    }
+
+    std::fprintf(stderr, "%s\n", message);
+    return false;
+}
+
 std::string build_flat_load_command(const std::string& path, const char* backend) {
     std::ostringstream command;
     command << "{\"cmd\":\"load\",\"image\":\"" << path
@@ -267,6 +279,36 @@ int main() {
     if (!expect_contains(jit_dispatch_output,
                          "\"host_code\":false",
                          "jit dispatch response should preserve no-host-code flag")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"observation_event\":{",
+                         "jit dispatch response should expose observation event wrapper")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"source\":\"jit-dbt-dispatch\"",
+                         "jit dispatch observation event should expose schema source")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"phase\":\"dry-run\"",
+                         "jit dispatch observation event should expose dry-run phase")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"generated_host_code\":false",
+                         "jit dispatch observation event should preserve generated-host-code flag")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"requested_executable_memory\":false",
+                         "jit dispatch observation event should preserve executable-memory flag")) {
+        return 1;
+    }
+    if (!expect_contains(jit_dispatch_output,
+                         "\"executed_guest_code\":false",
+                         "jit dispatch observation event should preserve guest-execution flag")) {
         return 1;
     }
 
@@ -506,6 +548,35 @@ int main() {
             predictor_output,
             "\"syscalls\":[{\"pc\":\"0x80000084\",\"raw\":\"0x73\",\"count\":1}]",
             "predictor snapshot should lock representative syscall profile counts")) {
+        return 1;
+    }
+
+    const std::string breakpoint_output =
+        run_cli_script(build_flat_load_command(predictor_binary.path, "functional") +
+                       "{\"cmd\":\"break_at\",\"addr\":\"0x80000080\"}\n" +
+                       run_until_halt_command(16) + "{\"cmd\":\"quit\"}\n");
+    const std::vector<std::string> breakpoint_lines = split_lines(breakpoint_output);
+    if (!expect_line_with_fields(
+            breakpoint_lines,
+            breakpoint_output,
+            {
+                "\"type\":\"snapshot\"",
+                "\"halted\":false",
+                "\"pc\":\"0x80000080\"",
+                "\"kind\":\"breakpoint\"",
+                "\"detail\":\"hit breakpoint at 0x80000080\"",
+            },
+            "break_at should stop run_until_halt at the configured PC and emit a breakpoint event")) {
+        return 1;
+    }
+
+    const std::string set_csr_output =
+        run_cli_script(build_flat_load_command(predictor_binary.path, "functional") +
+                       "{\"cmd\":\"set_csr\",\"csr\":\"mepc\",\"value\":\"0x80000090\"}\n"
+                       "{\"cmd\":\"snapshot\"}\n{\"cmd\":\"quit\"}\n");
+    if (!expect_contains(set_csr_output,
+                         "\"mepc\":\"0x80000090\"",
+                         "set_csr should update a writable CSR visible in the debug snapshot")) {
         return 1;
     }
 
@@ -756,6 +827,102 @@ int main() {
         uint64_t value = 0;
         if (!(session.machine().bus().try_load(kDebugProgramAddr + 0x100, 1, value) && value == 0x93)) {
             std::fprintf(stderr, "debug session reset should replay configured payload loads\n");
+            return 1;
+        }
+    }
+
+    {
+        DebugSession session;
+        session.load_binary(predictor_binary.path,
+                            kDebugProgramAddr,
+                            BackendKind::Functional,
+                            BlockTransport::SimpleStorage,
+                            nullptr);
+
+        session.set_memory(kDebugProgramAddr + 0x100, 0x1122334455667788ULL, 8, false);
+        uint64_t value = 0;
+        if (!session.debug_try_load_guest_memory(kDebugProgramAddr + 0x100, 8, value) ||
+            value != 0x1122334455667788ULL) {
+            std::fprintf(stderr, "debug session set_memory should write physical RAM bytes\n");
+            return 1;
+        }
+
+        session.set_memory(kDebugProgramAddr + 0x108, 0xaaULL, 1, true);
+        if (!session.debug_try_load_guest_memory(kDebugProgramAddr + 0x108, 1, value) ||
+            value != 0xaaULL) {
+            std::fprintf(stderr, "debug session set_memory should support virtual stores through AddressSpace\n");
+            return 1;
+        }
+
+        session.set_csr("mepc", 0x80000090ULL);
+        if (session.snapshot().csrs.mepc != 0x80000090ULL) {
+            std::fprintf(stderr, "debug session set_csr should update writable CSR state\n");
+            return 1;
+        }
+
+        if (!expect_throws("debug session set_memory should reject unmapped physical addresses", [&predictor_binary]() {
+                DebugSession failing;
+                failing.load_binary(predictor_binary.path,
+                                    kDebugProgramAddr,
+                                    BackendKind::Functional,
+                                    BlockTransport::SimpleStorage,
+                                    nullptr);
+                failing.set_memory(0x40000000ULL, 0x1ULL, 8, false);
+            })) {
+            return 1;
+        }
+        if (!expect_throws("debug session set_memory should reject side-effect MMIO regions", [&predictor_binary]() {
+                DebugSession failing;
+                failing.load_binary(predictor_binary.path,
+                                    kDebugProgramAddr,
+                                    BackendKind::Functional,
+                                    BlockTransport::SimpleStorage,
+                                    nullptr);
+                failing.set_memory(0x10000000ULL, 0x41ULL, 1, false);
+            })) {
+            return 1;
+        }
+        if (!expect_throws("debug session set_csr should reject illegal CSR addresses", [&predictor_binary]() {
+                DebugSession failing;
+                failing.load_binary(predictor_binary.path,
+                                    kDebugProgramAddr,
+                                    BackendKind::Functional,
+                                    BlockTransport::SimpleStorage,
+                                    nullptr);
+                failing.set_csr("0x999", 0x1ULL);
+            })) {
+            return 1;
+        }
+        if (!expect_throws("debug session set_csr should reject read-only CSRs", [&predictor_binary]() {
+                DebugSession failing;
+                failing.load_binary(predictor_binary.path,
+                                    kDebugProgramAddr,
+                                    BackendKind::Functional,
+                                    BlockTransport::SimpleStorage,
+                                    nullptr);
+                failing.set_csr("misa", 0x1ULL);
+            })) {
+            return 1;
+        }
+
+        session.break_at(kDebugProgramAddr + 8);
+        session.run_until_halt(16);
+        DebugSnapshot breakpoint_snapshot = session.snapshot();
+        if (breakpoint_snapshot.summary.halted || breakpoint_snapshot.summary.pc != kDebugProgramAddr + 8) {
+            std::fprintf(stderr, "debug session break_at should stop before executing the breakpoint PC\n");
+            return 1;
+        }
+        if (!expect_contains(debug_snapshot_json(breakpoint_snapshot),
+                             "\"kind\":\"breakpoint\"",
+                             "debug session break_at should emit a breakpoint event")) {
+            return 1;
+        }
+
+        session.reset();
+        session.run_until_halt(16);
+        breakpoint_snapshot = session.snapshot();
+        if (breakpoint_snapshot.summary.halted || breakpoint_snapshot.summary.pc != kDebugProgramAddr + 8) {
+            std::fprintf(stderr, "debug session reset should preserve breakpoint configuration\n");
             return 1;
         }
     }

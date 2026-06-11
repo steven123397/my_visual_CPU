@@ -6,21 +6,29 @@
 
 1. [status/mainline_status.md](status/mainline_status.md)
    仓库唯一的主线实时状态、当前优先级和下一步。
-2. [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
+2. [plan/project_evolution_priority_p1_plan.md](plan/project_evolution_priority_p1_plan.md)
+   `PROJECT_EVOLUTION_PLAN.md` 中 P1 事项的路线决断和交互能力计划。
+3. [plan/project_evolution_priority_p2_plan.md](plan/project_evolution_priority_p2_plan.md)
+   `PROJECT_EVOLUTION_PLAN.md` 中 P2 事项的协议化和可配置性计划。
+4. [plan/project_evolution_priority_p3_plan.md](plan/project_evolution_priority_p3_plan.md)
+   `PROJECT_EVOLUTION_PLAN.md` 中 P3 事项的治理和远期占位计划。
+5. [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
    `simulator-evolution` 模拟器架构、协议和可观察性升级分线状态。
-3. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
+6. [design/simulator_evolution_observability_schema_design.md](design/simulator_evolution_observability_schema_design.md)
+   `simulator-evolution` 统一 observability schema 第一版设计入口。
+7. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
    `Post-Wave 7 标准 Linux 发行版平台` 的当前状态、风险和下一步。
-4. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
+8. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
    `用户自定义 AI 任务 + NPU 性能模型` 与独立 AI accelerator 方向状态。
-5. [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
+9. [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
    当前 `/console` 从 demo workspace 走向 Lab workbench 的设计边界。
-6. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
+10. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
    标准 Linux 发行版平台设计入口。
-7. [plan/post_wave7_linux_distribution_platform_longterm_plan.md](plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+11. [plan/post_wave7_linux_distribution_platform_longterm_plan.md](plan/post_wave7_linux_distribution_platform_longterm_plan.md)
    标准 Linux 发行版平台五阶段长线活跃计划。
-8. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
+12. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
    用户 AI 任务与 NPU 性能模型设计入口。
-9. [showcase/README.md](showcase/README.md)
+13. [showcase/README.md](showcase/README.md)
    课程结题、PPT、讲稿、截图和演示材料入口。
 
 历史设计和专项资料按专题读取即可。
@@ -29,15 +37,29 @@
 
 - `主线状态`
   - [status/mainline_status.md](status/mainline_status.md)
+  - [plan/project_evolution_priority_p1_plan.md](plan/project_evolution_priority_p1_plan.md)
+  - [plan/project_evolution_priority_p2_plan.md](plan/project_evolution_priority_p2_plan.md)
+  - [plan/project_evolution_priority_p3_plan.md](plan/project_evolution_priority_p3_plan.md)
   - [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
-  - [plan/simulator_evolution_slice1_observability_schema_plan.md](plan/simulator_evolution_slice1_observability_schema_plan.md)
+  - [design/simulator_evolution_observability_schema_design.md](design/simulator_evolution_observability_schema_design.md)
+  - [plan/history_plan.md#project-evolution-priority-p0-plan](plan/history_plan.md#project-evolution-priority-p0-plan)
+  - [plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
+  - [plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
   - [status/code_reself_status.md](status/code_reself_status.md)
   - [plan/history_plan.md#code-reself-remediation-plan](plan/history_plan.md#code-reself-remediation-plan)
   - [plan/history_plan.md](plan/history_plan.md)
 
+- `PROJECT_EVOLUTION 优先级计划`
+  - [plan/project_evolution_priority_p1_plan.md](plan/project_evolution_priority_p1_plan.md)
+  - [plan/project_evolution_priority_p2_plan.md](plan/project_evolution_priority_p2_plan.md)
+  - [plan/project_evolution_priority_p3_plan.md](plan/project_evolution_priority_p3_plan.md)
+  - [plan/history_plan.md#project-evolution-priority-p0-plan](plan/history_plan.md#project-evolution-priority-p0-plan)
+
 - `simulator-evolution`
   - [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
-  - [plan/simulator_evolution_slice1_observability_schema_plan.md](plan/simulator_evolution_slice1_observability_schema_plan.md)
+  - [design/simulator_evolution_observability_schema_design.md](design/simulator_evolution_observability_schema_design.md)
+  - [plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
+  - [plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
   - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
   - [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
   - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)

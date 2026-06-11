@@ -50,11 +50,13 @@ export const INTERACTIVE_OS_COMMAND_BUDGET = Object.freeze({
 
 export const COURSE_OS_SHELL_BOOT_BUDGET = Object.freeze({
   maxSteps: 5000000,
+  requestTimeoutMs: 30000,
   prompt: 'course-os> ',
 });
 
 export const COURSE_OS_SHELL_COMMAND_BUDGET = Object.freeze({
   maxSteps: 1000000,
+  requestTimeoutMs: 30000,
 });
 
 export const interactiveOsBudgets = Object.freeze({
@@ -65,7 +67,9 @@ export const interactiveOsBudgets = Object.freeze({
 
 export const courseOsShellBudgets = Object.freeze({
   bootMaxSteps: COURSE_OS_SHELL_BOOT_BUDGET.maxSteps,
+  bootRequestTimeoutMs: COURSE_OS_SHELL_BOOT_BUDGET.requestTimeoutMs,
   commandMaxSteps: COURSE_OS_SHELL_COMMAND_BUDGET.maxSteps,
+  commandRequestTimeoutMs: COURSE_OS_SHELL_COMMAND_BUDGET.requestTimeoutMs,
   prompt: COURSE_OS_SHELL_BOOT_BUDGET.prompt,
 });
 

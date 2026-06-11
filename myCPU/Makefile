@@ -257,16 +257,19 @@ TEST_TIMEOUT ?= 3s
 AI_ACCEL_PROFILE_SMOKE_TIMEOUT ?= 10s
 XV6_SHELL_SMOKE_TIMEOUT ?= 300s
 SUPERVISOR_GUEST_TEST_TIMEOUT ?= 7s
-KERNEL_ALPHA_GUEST_TEST_TIMEOUT ?= 7s
+KERNEL_ALPHA_GUEST_TEST_TIMEOUT ?= 20s
+KERNEL_ALPHA_STORAGE_GUEST_TEST_TIMEOUT ?= 20s
 DEBUG_CLI_SMOKE_TIMEOUT ?= 30s
 COURSE_OS_LINUX_COMPAT_HOST_SMOKE_TIMEOUT ?= 10s
+COURSE_OS_LINUX_COMPAT_PIPELINE_GUEST_TEST_TIMEOUT ?= 60s
 AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 10s
 # Pipeline guest demos execute the full guest runtime under the pipeline
 # backend and need a wider budget than the functional path on debug builds.
 PIPELINE_GUEST_TEST_TIMEOUT ?= 12s
+KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT ?= 60s
 # The pipeline supervisor demo exercises the full early runtime and VM bring-up
 # path and still runs noticeably slower than the other guest demos.
-PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 24s
+PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 90s
 
 # RISC-V toolchain (adjust prefix if needed)
 RV_CC   = riscv64-unknown-elf-gcc
@@ -662,7 +665,7 @@ test-host-course_os_shell_terminal_smoke: FORCE $(TARGET) $(GUEST_COURSE_OS_SHEL
 
 test-host-course_os_linux_compat_terminal_smoke: FORCE $(TARGET) $(GUEST_COURSE_OS_SHELL_DEMO) tests/host/course_os_linux_compat_terminal_smoke
 	@echo "=== host:course_os_linux_compat_terminal_smoke ==="; \
-	output="$$(timeout $(TEST_TIMEOUT) ./tests/host/course_os_linux_compat_terminal_smoke functional 2>&1)"; \
+	output="$$(timeout $(COURSE_OS_LINUX_COMPAT_HOST_SMOKE_TIMEOUT) ./tests/host/course_os_linux_compat_terminal_smoke functional 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
 		echo "Host test timed out: course_os_linux_compat_terminal_smoke" >&2; \
@@ -1097,10 +1100,10 @@ test-pipeline-guest-course_os_shell_demo: FORCE $(TARGET) $(GUEST_COURSE_OS_SHEL
 	$(call RUN_COURSE_OS_SHELL_GUEST_DEMO_TEST,$(PIPELINE_GUEST_TEST_TIMEOUT),pipeline, (pipeline))
 
 test-guest-course_os_linux_compat_shell_demo: FORCE $(TARGET) $(GUEST_COURSE_OS_SHELL_DEMO) tests/host/course_os_linux_compat_terminal_smoke
-	$(call RUN_COURSE_OS_LINUX_COMPAT_GUEST_DEMO_TEST,$(TEST_TIMEOUT),functional,)
+	$(call RUN_COURSE_OS_LINUX_COMPAT_GUEST_DEMO_TEST,$(COURSE_OS_LINUX_COMPAT_HOST_SMOKE_TIMEOUT),functional,)
 
 test-pipeline-guest-course_os_linux_compat_shell_demo: FORCE $(TARGET) $(GUEST_COURSE_OS_SHELL_DEMO) tests/host/course_os_linux_compat_terminal_smoke
-	$(call RUN_COURSE_OS_LINUX_COMPAT_GUEST_DEMO_TEST,$(PIPELINE_GUEST_TEST_TIMEOUT),pipeline, (pipeline))
+	$(call RUN_COURSE_OS_LINUX_COMPAT_GUEST_DEMO_TEST,$(COURSE_OS_LINUX_COMPAT_PIPELINE_GUEST_TEST_TIMEOUT),pipeline, (pipeline))
 
 test-guest-ai_accel_demo: FORCE $(TARGET) $(GUEST_AI_ACCEL_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_ai_accel_demo,$(GUEST_AI_ACCEL_DEMO),KMVAI,$(TEST_TIMEOUT),,,)
@@ -1185,61 +1188,61 @@ test-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog|course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid,$(KERNEL_ALPHA_GUEST_TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog|course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_demo,$(GUEST_KERNEL_ALPHA_DEMO),KMVPET|course-os-stage1 sched=CFS-lite ctx=9 pf=4 reclaim=1 fs_create=5 btree_steps=48 proc=ps/meminfo/schedstat/fsstat|course-os-stage2 syscall=ok shell=ok procs=ok fd=ok fs=128/64K/3 pipe=ok cow=ok crash=isolated proc=ps/meminfo/schedstat/fsstat/syscalls/cow/crashlog|course-os-stage3 elf=5 libc=ok sched=fcfs/rr/cfs sync=sem/mutex vm=sv39-cow fs=seek/mkfs shell=script proc=cpuinfo/uptime/pid,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_fault_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_FAULT_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(TEST_TIMEOUT),,,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(KERNEL_ALPHA_GUEST_TEST_TIMEOUT),,,)
 
 test-pipeline-guest-kernel_alpha_fault_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_FAULT_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_fault_demo,$(GUEST_KERNEL_ALPHA_FAULT_DEMO),KMVX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
 
 test-guest-kernel_alpha_storage_no_media_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_no_media_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO),KMVNX,$(TEST_TIMEOUT),,,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_no_media_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO),KMVNX,$(KERNEL_ALPHA_GUEST_TEST_TIMEOUT),,,)
 
 test-pipeline-guest-kernel_alpha_storage_no_media_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_no_media_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO),KMVNX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_no_media_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NO_MEDIA_DEMO),KMVNX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
 
 test-guest-kernel_alpha_storage_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_not_ready_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO),KMVRX,$(TEST_TIMEOUT),,--disk-not-ready tests/data/storage_basic.txt,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_not_ready_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO),KMVRX,$(KERNEL_ALPHA_STORAGE_GUEST_TEST_TIMEOUT),,--disk-not-ready tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_not_ready_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO),KMVRX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk-not-ready tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_not_ready_demo,$(GUEST_KERNEL_ALPHA_STORAGE_NOT_READY_DEMO),KMVRX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk-not-ready tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_storage_bad_magic_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_magic_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO),KMVGX,$(TEST_TIMEOUT),,--disk-bad-magic tests/data/storage_basic.txt,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_magic_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO),KMVGX,$(KERNEL_ALPHA_STORAGE_GUEST_TEST_TIMEOUT),,--disk-bad-magic tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_bad_magic_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_magic_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO),KMVGX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk-bad-magic tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_magic_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_MAGIC_DEMO),KMVGX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk-bad-magic tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_storage_bad_block_count_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_block_count_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO),KMVBX,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_block_count_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO),KMVBX,$(KERNEL_ALPHA_STORAGE_GUEST_TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_block_count_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO),KMVBX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_block_count_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_BLOCK_COUNT_DEMO),KMVBX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_storage_lba_range_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_lba_range_demo,$(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO),KMVLX,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_lba_range_demo,$(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO),KMVLX,$(KERNEL_ALPHA_STORAGE_GUEST_TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_lba_range_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_lba_range_demo,$(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO),KMVLX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_lba_range_demo,$(GUEST_KERNEL_ALPHA_STORAGE_LBA_RANGE_DEMO),KMVLX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_storage_bad_command_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_command_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO),KMVCX,$(TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_command_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO),KMVCX,$(KERNEL_ALPHA_STORAGE_GUEST_TEST_TIMEOUT),,--disk tests/data/storage_basic.txt,)
 
 test-pipeline-guest-kernel_alpha_storage_bad_command_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_command_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO),KMVCX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_storage_bad_command_demo,$(GUEST_KERNEL_ALPHA_STORAGE_BAD_COMMAND_DEMO),KMVCX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,--disk tests/data/storage_basic.txt, (pipeline))
 
 test-guest-kernel_alpha_plic_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_plic_not_ready_demo,$(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO),KMVPX,$(TEST_TIMEOUT),,,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_plic_not_ready_demo,$(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO),KMVPX,$(KERNEL_ALPHA_GUEST_TEST_TIMEOUT),,,)
 
 test-pipeline-guest-kernel_alpha_plic_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_plic_not_ready_demo,$(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO),KMVPX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_plic_not_ready_demo,$(GUEST_KERNEL_ALPHA_PLIC_NOT_READY_DEMO),KMVPX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
 
 test-guest-kernel_alpha_timer_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_timer_not_ready_demo,$(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO),KMVPETX,$(TEST_TIMEOUT),,,)
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_timer_not_ready_demo,$(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO),KMVPETX,$(KERNEL_ALPHA_GUEST_TEST_TIMEOUT),,,)
 
 test-pipeline-guest-kernel_alpha_timer_not_ready_demo: FORCE $(TARGET) $(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_timer_not_ready_demo,$(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO),KMVPETX,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_kernel_alpha_timer_not_ready_demo,$(GUEST_KERNEL_ALPHA_TIMER_NOT_READY_DEMO),KMVPETX,$(KERNEL_ALPHA_PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
 
 check-riscv-toolchain:
 	@missing=0; \

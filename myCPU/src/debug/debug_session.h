@@ -50,6 +50,9 @@ public:
                      bool l1d_enabled = false);
     void load_binary_payload(const std::string& path, uint64_t addr);
     void set_gpr(std::string_view reg_name, uint64_t value);
+    void set_memory(uint64_t addr, uint64_t value, uint32_t size, bool virtual_address);
+    void set_csr(std::string_view csr_name, uint64_t value);
+    void break_at(uint64_t addr);
     void reset();
     void step_cycle();
     void step_commit();
@@ -104,6 +107,9 @@ private:
     DebugSnapshot collect_snapshot() const;
     void append_event(const char* kind, const std::string& detail);
     void record_step_events(const DebugSnapshot& before, const DebugSnapshot& after);
+    bool is_breakpoint_pc(uint64_t pc) const;
+    bool record_breakpoint_hit(uint64_t pc);
+    bool record_current_breakpoint_hit();
     void ensure_loaded() const;
     Machine& machine();
     const Machine& machine() const;
@@ -111,4 +117,5 @@ private:
     std::unique_ptr<Machine> machine_{};
     LoadConfig config_{};
     std::vector<DebugEvent> events_{};
+    std::vector<uint64_t> breakpoints_{};
 };

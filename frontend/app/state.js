@@ -268,6 +268,134 @@ export function clearLoadProgress(state) {
   state.loadProgress = null;
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function displayValue(value, fallback = '-') {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+  return String(value);
+}
+
+function evidenceRefLabel(evidenceRef) {
+  if (typeof evidenceRef === 'string' && evidenceRef.length > 0) {
+    return evidenceRef;
+  }
+  if (!isPlainObject(evidenceRef)) {
+    return 'snapshot.profile';
+  }
+  const preferred = [
+    evidenceRef.debug_json,
+    evidenceRef.profile,
+    evidenceRef.text_line,
+    evidenceRef.probe_line,
+    evidenceRef.host_smoke,
+  ].find((value) => typeof value === 'string' && value.length > 0);
+  if (preferred) {
+    return preferred;
+  }
+  const firstString = Object.values(evidenceRef).find(
+    (value) => typeof value === 'string' && value.length > 0,
+  );
+  return firstString ?? 'snapshot.profile';
+}
+
+function appendNumberLine(lines, label, value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    lines.push(`${label} ${value}`);
+  }
+}
+
+function observationEventLines(event) {
+  const lines = [];
+  if (typeof event.effect === 'string' && event.effect.length > 0) {
+    lines.push(`effect ${event.effect}`);
+  }
+  const step = isPlainObject(event.timestamp_or_step) ? event.timestamp_or_step : {};
+  if (
+    typeof step.cycle === 'number' && Number.isFinite(step.cycle) &&
+    typeof step.instret === 'number' && Number.isFinite(step.instret)
+  ) {
+    lines.push(`cycle ${step.cycle} / instret ${step.instret}`);
+  } else if (typeof step.cycle === 'number' && Number.isFinite(step.cycle)) {
+    lines.push(`cycle ${step.cycle}`);
+  } else if (typeof step.instret === 'number' && Number.isFinite(step.instret)) {
+    lines.push(`instret ${step.instret}`);
+  }
+
+  const subject = isPlainObject(event.subject) ? event.subject : {};
+  if (subject.backend || subject.pc) {
+    lines.push(`backend ${displayValue(subject.backend)} / pc ${displayValue(subject.pc)}`);
+  }
+
+  const payload = isPlainObject(event.payload) ? event.payload : {};
+  appendNumberLine(lines, 'retirements', payload.total_retirements);
+  appendNumberLine(lines, 'memory observations', payload.total_memory_observations);
+  if (isPlainObject(payload.top_hot_path)) {
+    lines.push(
+      `top hot path ${displayValue(payload.top_hot_path.start_pc)} -> ${displayValue(payload.top_hot_path.end_pc)}`,
+    );
+  }
+  if (isPlainObject(payload.top_pc_cost)) {
+    const cycles = typeof payload.top_pc_cost.cycles === 'number'
+      ? ` / cycles ${payload.top_pc_cost.cycles}`
+      : '';
+    lines.push(`top pc cost ${displayValue(payload.top_pc_cost.pc)}${cycles}`);
+  }
+  return lines;
+}
+
+function legacyProfileLines(profile) {
+  const lines = [];
+  appendNumberLine(lines, 'retirements', profile.total_retirements);
+  appendNumberLine(lines, 'traps', profile.total_traps);
+  appendNumberLine(lines, 'memory observations', profile.total_memory_observations);
+  const hotPath = Array.isArray(profile.hot_paths) ? profile.hot_paths[0] : null;
+  if (isPlainObject(hotPath)) {
+    lines.push(`top hot path ${displayValue(hotPath.start_pc)} -> ${displayValue(hotPath.end_pc)}`);
+  }
+  const pcCost = Array.isArray(profile.pc_costs) ? profile.pc_costs[0] : null;
+  if (isPlainObject(pcCost)) {
+    const cycles = typeof pcCost.cycles === 'number' ? ` / cycles ${pcCost.cycles}` : '';
+    lines.push(`top pc cost ${displayValue(pcCost.pc)}${cycles}`);
+  }
+  return lines;
+}
+
+export function normalizeObservationEvidence(snapshot) {
+  const event = snapshot?.observation_event;
+  if (
+    isPlainObject(event) &&
+    typeof event.source === 'string' &&
+    event.source.length > 0 &&
+    typeof event.phase === 'string' &&
+    event.phase.length > 0
+  ) {
+    return {
+      contract: 'observation_event',
+      source: event.source,
+      phase: event.phase,
+      evidenceRef: evidenceRefLabel(event.evidence_ref),
+      lines: observationEventLines(event),
+    };
+  }
+
+  const profile = snapshot?.profile;
+  if (isPlainObject(profile)) {
+    return {
+      contract: 'legacy-profile',
+      source: 'snapshot.profile',
+      phase: 'compat-fallback',
+      evidenceRef: 'snapshot.profile',
+      lines: legacyProfileLines(profile),
+    };
+  }
+
+  return null;
+}
+
 export function pushSnapshot(state, snapshot) {
   state.currentSnapshot = snapshot;
   state.history = [...state.history, snapshot].slice(-MAX_HISTORY);
