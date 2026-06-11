@@ -330,6 +330,13 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
   reference fallback 和 invalidation guardrail 继续作为 host smoke 资产保留；若未来重启
   backend-candidate 路线，必须另开窄计划并先补 guest 范围、差分门禁、fallback coverage、
   可重复性能证据和 workload-level scheduler 边界。
+- `PROJECT_EVOLUTION` P1 当前已完成任务 3：测试矩阵分层执行纪律已收敛到
+  `default / slow guest / opt-in external` 三类计划声明口径，并新增
+  `make test-verification-layers` 轻量元门禁，用于确认 `test-fast-smoke`、
+  `test-standard-regression`、`test-slow-guest` 和 `test-opt-in-external` 四个入口仍可被
+  `make -n` 解析。完整层级语义继续以
+  [regression_completion_criteria.md](../design/regression_completion_criteria.md) 为准，
+  不在 status 复制测试矩阵。
 - `2026-05-29` 全仓库 code review remediation 已完成并归档；12 条
   `必须修复` 与 19 条 `建议修改` active findings 已由四条整改线关闭，合并后守住
   `test-fast-smoke`、`test-standard-regression`、`test-pipeline`、`make test`

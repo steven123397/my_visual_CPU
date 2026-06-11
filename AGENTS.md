@@ -113,6 +113,15 @@
 
 ## 全局验证基线
 
+新建或修改正式计划时，必须先声明验证层级：
+
+- 默认门禁：不依赖外部资产，优先选择 `test-fast-smoke`、`test-standard-regression`、
+  `frontend && node --test` 或更窄的等价目标。
+- Slow guest 门禁：只在触及 guest demo、pipeline guest、`xv6` shell 或长耗时 workload
+  时列入，并写清具体命令。
+- Opt-in external 门禁：只在需要真实 Linux Image、外部发行版 rootfs、Spike 或其他外部
+  资产时列入，并写清环境变量 / 资产路径与缺资产时的跳过或 fail-closed 口径。
+
 修改架构相关路径后，至少应守住：
 
 - `cd myCPU && make test`

@@ -11,6 +11,8 @@
 - 相关状态：
   - [status/mainline_status.md](../status/mainline_status.md)
   - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
+- 当前活跃计划：
+  - [plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
 - 已完成计划：
   - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
 
@@ -98,10 +100,15 @@
 
 ## 验证基线
 
+每份新建或修改的计划必须声明本切片使用哪一层验证。默认层不应依赖外部资产；
+slow guest 层只在触及 guest demo、pipeline guest、`xv6` shell 或长耗时 workload 时列入；
+opt-in external 层必须显式写清所需资产、环境变量和缺资产时的跳过或 fail-closed 口径。
+
 - `cd myCPU && make test-fast-smoke`
 - `cd myCPU && make test-standard-regression`
 - `cd myCPU && make test-slow-guest`
 - `cd myCPU && make test-opt-in-external`
+- `cd myCPU && make test-verification-layers`
 - `cd myCPU && make test`
 - `cd myCPU && make test-pipeline`
 - `cd frontend && node --test`
@@ -114,3 +121,5 @@
 - `test-standard-regression`：当前标准回归，等价覆盖既有 `make test` 与关键 pipeline guardrail。
 - `test-slow-guest`：guest demos、pipeline guest demos 与 `xv6` shell 类慢门禁。
 - `test-opt-in-external`：真实 Linux Image / 外部发行版 rootfs / Spike 等显式外部资产入口；缺资产时必须 fail-closed。
+- `test-verification-layers`：轻量元门禁，只验证上述四个分层入口名称和依赖图仍可被
+  `make -n` 解析；它不替代实际运行对应层级。

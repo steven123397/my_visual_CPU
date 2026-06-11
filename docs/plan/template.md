@@ -24,6 +24,19 @@
 
 - 
 
+## 验证层级
+
+- 默认门禁：
+  - `cd myCPU && make test-fast-smoke`
+  - 按触及范围补充 `cd myCPU && make test-standard-regression`、`cd frontend && node --test`
+    或更窄的等价目标。
+- Slow guest 门禁：
+  - 仅当改动触及 guest demo、pipeline guest 路径、`xv6` shell 或长耗时 workload 时运行。
+  - 计划中必须列出具体命令，或说明本切片不触发 slow guest。
+- Opt-in external 门禁：
+  - 仅当依赖真实 Linux Image、外部发行版 rootfs、Spike 或其他外部资产时运行。
+  - 计划中必须写明所需环境变量 / 资产路径，以及缺资产时的跳过或 fail-closed 口径。
+
 ## 任务
 
 ### 任务 1：<任务名>

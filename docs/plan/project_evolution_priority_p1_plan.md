@@ -118,12 +118,23 @@ fallback coverage、可重复性能证据和 workload-level scheduler 边界。
   - `AGENTS.md`
   - `myCPU/Makefile`
 
-- [ ] **步骤 1：** 检查 `test-fast-smoke`、`test-standard-regression`、
+- [x] **步骤 1：** 检查 `test-fast-smoke`、`test-standard-regression`、
       `test-slow-guest`、`test-opt-in-external` 当前覆盖和触发条件。
-- [ ] **步骤 2：** 更新计划模板，要求新计划显式声明验证层级和 opt-in 资产条件。
-- [ ] **步骤 3：** 把 AGENTS / regression 文档中的验证规则收敛到同一口径，避免
+- [x] **步骤 2：** 更新计划模板，要求新计划显式声明验证层级和 opt-in 资产条件。
+- [x] **步骤 3：** 把 AGENTS / regression 文档中的验证规则收敛到同一口径，避免
       status 复制完整测试矩阵。
-- [ ] **步骤 4：** 为测试分层入口运行一次 smoke，确认命令名和目标仍然有效。
+- [x] **步骤 4：** 为测试分层入口运行一次 smoke，确认命令名和目标仍然有效。
+
+**结果：** 分层验证纪律固定为计划必须声明 `default / slow guest / opt-in external`
+三类触发口径。`docs/plan/template.md` 现在要求每份计划写清默认门禁、slow guest
+触发条件和 opt-in external 资产 / 环境变量 / 缺资产处理；根 `AGENTS.md` 只保留
+全局规则，`regression_completion_criteria.md` 承接完整层级语义，`mainline_status.md`
+只记录完成事实。`myCPU/Makefile` 新增 `test-verification-layers` 轻量元门禁，用
+`make -n` 确认四个分层入口名称和依赖图仍有效，不替代实际运行对应层级。
+
+**验证：** `cd myCPU && make test-verification-layers` 通过；
+`cd myCPU && make -n test-fast-smoke test-standard-regression test-slow-guest test-opt-in-external`
+可解析；`git diff --check` 通过。
 
 ### 任务 4：`course_os_shell` 外部 ELF 加载
 

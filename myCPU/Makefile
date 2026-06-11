@@ -319,7 +319,7 @@ else
 $(error unsupported WORKLOAD_RUN_MODE: $(WORKLOAD_RUN_MODE))
 endif
 
-.PHONY: all clean test test-pipeline test-fast-smoke test-standard-regression test-slow-guest test-opt-in-external check-riscv-toolchain check-dtc-tool FORCE build-workload build-workload-xv6 run-workload run-workload-xv6 smoke-workload smoke-workload-xv6
+.PHONY: all clean test test-pipeline test-fast-smoke test-standard-regression test-slow-guest test-opt-in-external test-verification-layers check-riscv-toolchain check-dtc-tool FORCE build-workload build-workload-xv6 run-workload run-workload-xv6 smoke-workload smoke-workload-xv6
 
 all: $(TARGET)
 
@@ -469,6 +469,10 @@ test-standard-regression: test test-pipeline
 test-slow-guest: test-guest-supervisor_demo test-guest-kernel_alpha_demo test-guest-kernel_alpha_fault_demo test-guest-kernel_alpha_storage_no_media_demo test-guest-kernel_alpha_storage_not_ready_demo test-guest-kernel_alpha_storage_bad_magic_demo test-guest-kernel_alpha_storage_bad_block_count_demo test-guest-kernel_alpha_storage_lba_range_demo test-guest-kernel_alpha_storage_bad_command_demo test-guest-kernel_alpha_plic_not_ready_demo test-guest-kernel_alpha_timer_not_ready_demo test-guest-interactive_os_demo test-guest-course_os_shell_demo test-guest-course_os_linux_compat_shell_demo test-guest-ai_accel_demo test-guest-vector_demo test-guest-vector_cnn_demo test-pipeline-guest-supervisor_demo test-pipeline-guest-kernel_alpha_demo test-pipeline-guest-kernel_alpha_fault_demo test-pipeline-guest-kernel_alpha_storage_no_media_demo test-pipeline-guest-kernel_alpha_storage_not_ready_demo test-pipeline-guest-kernel_alpha_storage_bad_magic_demo test-pipeline-guest-kernel_alpha_storage_bad_block_count_demo test-pipeline-guest-kernel_alpha_storage_lba_range_demo test-pipeline-guest-kernel_alpha_storage_bad_command_demo test-pipeline-guest-kernel_alpha_plic_not_ready_demo test-pipeline-guest-kernel_alpha_timer_not_ready_demo test-pipeline-guest-interactive_os_demo test-pipeline-guest-course_os_shell_demo test-pipeline-guest-course_os_linux_compat_shell_demo test-pipeline-guest-ai_accel_demo test-pipeline-guest-vector_demo test-pipeline-guest-vector_cnn_demo test-host-xv6_boot_smoke test-host-xv6_shell_smoke run-workload-xv6
 
 test-opt-in-external: test-host-run_debug_cli_probe_linux_proto_runtime test-host-run_debug_cli_probe_linux_distribution_runtime test-host-run_debug_cli_probe_linux_distribution_curated_matrix test-host-spike_differential
+
+test-verification-layers:
+	@$(MAKE) -n test-fast-smoke test-standard-regression test-slow-guest test-opt-in-external >/dev/null
+	@printf '%s\n' 'verification-layers: fast-smoke standard-regression slow-guest opt-in-external'
 
 FORCE:
 
