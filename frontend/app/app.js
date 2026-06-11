@@ -4,6 +4,7 @@ import {
   listTests,
   listAiTinyModelTemplates,
   login,
+  runAiCustomGraph,
   runAiTinyModel,
   loadSession,
   logout,
@@ -30,6 +31,7 @@ import {
   setLoadedSession,
   setLoadProgress,
   setAiTinyModelTemplates,
+  setAiTinyModelCustomGraphJson,
   setAiTinyModelParameters,
   setAiTinyModelRunState,
   setAiTinyModelResult,
@@ -347,6 +349,31 @@ async function handleRunAiTinyModel() {
   }
 }
 
+async function handleRunAiCustomGraph() {
+  let payload = null;
+  try {
+    payload = JSON.parse(state.aiTinyModel.customGraphJson);
+  } catch (error) {
+    setAiTinyModelRunState(state, 'error', `custom graph JSON parse failed: ${error.message}`);
+    paint();
+    showNotice(state.aiTinyModel.error, 'error');
+    return;
+  }
+
+  setAiTinyModelRunState(state, 'running', null);
+  paint();
+  try {
+    const result = await runAiCustomGraph(payload);
+    setAiTinyModelResult(state, result);
+    paint();
+    showNotice('AI custom graph profile 已完成。', 'success');
+  } catch (error) {
+    setAiTinyModelRunState(state, 'error', error.message);
+    paint();
+    showNotice(error.message, 'error');
+  }
+}
+
 async function handleRunJitDispatch() {
   setJitDispatchRunState(state, 'running', null);
   paint();
@@ -465,6 +492,13 @@ async function init() {
     if (aiRunButton) {
       event.preventDefault();
       await handleRunAiTinyModel();
+      return;
+    }
+
+    const aiCustomRunButton = event.target.closest?.('[data-action="run-ai-custom-graph"]');
+    if (aiCustomRunButton) {
+      event.preventDefault();
+      await handleRunAiCustomGraph();
       return;
     }
 
@@ -617,6 +651,13 @@ async function init() {
     } catch (error) {
       showNotice(error.message, 'error');
     }
+  });
+
+  document.addEventListener('input', (event) => {
+    if (!event.target.matches?.('[data-ai-custom-graph-json]')) {
+      return;
+    }
+    setAiTinyModelCustomGraphJson(state, event.target.value);
   });
 
   document.addEventListener('change', (event) => {

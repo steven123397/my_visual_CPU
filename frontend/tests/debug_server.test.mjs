@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { startServer } from '../server/debug_server.mjs';
+import { createAiTinyModelService } from '../server/ai_tiny_model_service.mjs';
 import { buildPasswordHashForTests } from '../server/security.mjs';
 import { listTests } from '../server/tests_manifest.mjs';
 
@@ -1196,6 +1197,197 @@ test('POST /api/ai/tiny-model/run forwards template-specific runtime-shape param
     assert.deepEqual(response.body.output.values, [15, 31]);
   } finally {
     await server.close();
+  }
+});
+
+test('POST /api/ai/custom-graph returns a bounded profile result from the AI custom graph service', async () => {
+  const calls = [];
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+    aiTinyModelService: {
+      templates() {
+        return { templates: [] };
+      },
+      async customGraph(payload) {
+        calls.push(payload);
+        return {
+          ok: true,
+          schema: 'ai_custom_graph_result_v1',
+          customGraph: {
+            schema: 'ai_custom_graph_v1',
+            taskKind: 'bounded_dynamic_gemm_v1',
+            opSequence: ['gemm'],
+            dtype: 'int8/int32',
+            shape: { batch: 2, inputColumns: 8, outputColumns: 4 },
+            inputPreset: 'balanced_rows',
+          },
+          output: {
+            dtype: 'int32',
+            shape: [2, 4],
+            values: [10, 5, 9, 5, 12, 10, 9, 10],
+            expected: [10, 5, 9, 5, 12, 10, 9, 10],
+          },
+          profile: {
+            progress: 'completed',
+            shapeMode: 'dynamic_bounded',
+            runtimeShapes: 't0:2x8,t2:2x4',
+            bytesMoved: 80,
+            retiredOps: 64,
+            deviceCycles: 15,
+            dmaCycles: 11,
+            computeCycles: 2,
+            stallCycles: 2,
+            utilization: 11,
+          },
+          aggregate: {
+            tileCount: 2,
+            scratchpadPeakBytes: 80,
+            opCount: 1,
+          },
+          ops: [
+            { opIndex: 0, opcode: 'gemm', retiredOps: 64, computeCycles: 2, stallCycles: 2, tileCount: 2 },
+          ],
+          boundary: {
+            allowsGraphPackageUpload: false,
+            allowsModelUpload: false,
+            serverGeneratedGraph: true,
+          },
+        };
+      },
+    },
+  });
+
+  try {
+    const payload = {
+      schema: 'ai_custom_graph_v1',
+      opSequence: ['gemm'],
+      dtype: 'int8/int32',
+      shape: {
+        kind: 'bounded_dynamic_gemm_v1',
+        batch: 2,
+      },
+      inputPreset: 'balanced_rows',
+    };
+    const response = await postJson(server.baseUrl, '/api/ai/custom-graph', payload);
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls, [payload]);
+    assert.equal(response.body.schema, 'ai_custom_graph_result_v1');
+    assert.equal(response.body.customGraph.taskKind, 'bounded_dynamic_gemm_v1');
+    assert.deepEqual(response.body.customGraph.opSequence, ['gemm']);
+    assert.deepEqual(response.body.output.values, [10, 5, 9, 5, 12, 10, 9, 10]);
+    assert.equal(response.body.profile.runtimeShapes, 't0:2x8,t2:2x4');
+    assert.equal(response.body.boundary.allowsGraphPackageUpload, false);
+  } finally {
+    await server.close();
+  }
+});
+
+test('default AI custom graph service rejects unsafe or out-of-contract payloads', async () => {
+  const server = await startServer({
+    port: 0,
+    createSession: createFakeSessionFactory(),
+  });
+
+  try {
+    const basePayload = {
+      schema: 'ai_custom_graph_v1',
+      opSequence: ['gemm'],
+      dtype: 'int8/int32',
+      shape: {
+        kind: 'bounded_dynamic_gemm_v1',
+        batch: 2,
+      },
+      inputPreset: 'balanced_rows',
+    };
+
+    const illegalOp = await postJson(server.baseUrl, '/api/ai/custom-graph', {
+      ...basePayload,
+      opSequence: ['matmul'],
+    });
+    assert.equal(illegalOp.status, 400);
+    assert.equal(illegalOp.body.error, 'unsupported custom graph op: matmul');
+
+    const shapeTooLarge = await postJson(server.baseUrl, '/api/ai/custom-graph', {
+      ...basePayload,
+      shape: {
+        kind: 'bounded_dynamic_gemm_v1',
+        batch: 3,
+      },
+    });
+    assert.equal(shapeTooLarge.status, 400);
+    assert.equal(shapeTooLarge.body.error, 'custom graph GEMM batch must be one of: 1, 2');
+
+    const dtypeMismatch = await postJson(server.baseUrl, '/api/ai/custom-graph', {
+      ...basePayload,
+      dtype: 'fp16/fp32',
+    });
+    assert.equal(dtypeMismatch.status, 400);
+    assert.equal(dtypeMismatch.body.error, 'custom graph dtype must be int8/int32 for gemm');
+
+    const graphPackageUpload = await postJson(server.baseUrl, '/api/ai/custom-graph', {
+      ...basePayload,
+      graphPackage: 'browser-supplied.bin',
+    });
+    assert.equal(graphPackageUpload.status, 400);
+    assert.equal(graphPackageUpload.body.error, 'custom graph package upload is not allowed');
+  } finally {
+    await server.close();
+  }
+});
+
+test('default AI custom graph service lowers bounded GEMM through task-spec packaging', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-ai-custom-graph-test-'));
+  const fakeBinary = path.join(tempRoot, 'fake-mycpu.mjs');
+  fs.writeFileSync(fakeBinary, `#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+
+const manifestIndex = process.argv.indexOf('--ai-profile-manifest');
+const manifestPath = process.argv[manifestIndex + 1];
+const manifestDir = path.dirname(manifestPath);
+let outputPath = null;
+let expectedPath = null;
+for (const line of fs.readFileSync(manifestPath, 'utf8').trim().split(/\\n/)) {
+  if (line.startsWith('output=')) {
+    outputPath = path.join(manifestDir, line.slice('output='.length));
+  }
+  if (line.startsWith('expected_output=')) {
+    expectedPath = path.join(manifestDir, line.slice('expected_output='.length));
+  }
+}
+fs.copyFileSync(expectedPath, outputPath);
+process.stdout.write('ai_profile progress=completed shape_mode=dynamic_bounded runtime_shapes=t0:2x8,t2:2x4 bytes_moved=80 retired_ops=64 device_cycles=15 dma_cycles=11 compute_cycles=2 stall_cycles=2 busy_cycles=15 queue_cycles=0 completion_cycles=0 utilization=11 effective_ops_per_cycle=4\\n');
+process.stdout.write('ai_profile_aggregate tile_count=2 scratchpad_peak_bytes=80 op_count=1\\n');
+process.stdout.write('ai_profile_op op_index=0 opcode=gemm retired_ops=64 compute_cycles=2 stall_cycles=2 tile_count=2\\n');
+`);
+  fs.chmodSync(fakeBinary, 0o755);
+
+  try {
+    const service = createAiTinyModelService({
+      repoRoot,
+      binaryPath: fakeBinary,
+    });
+    const response = await service.customGraph({
+      schema: 'ai_custom_graph_v1',
+      opSequence: ['gemm'],
+      dtype: 'int8/int32',
+      shape: {
+        kind: 'bounded_dynamic_gemm_v1',
+        batch: 2,
+      },
+      inputPreset: 'balanced_rows',
+    });
+
+    assert.equal(response.schema, 'ai_custom_graph_result_v1');
+    assert.equal(response.customGraph.taskKind, 'bounded_dynamic_gemm_v1');
+    assert.deepEqual(response.output.values, [10, 5, 9, 5, 12, 10, 9, 10]);
+    assert.deepEqual(response.output.expected, [10, 5, 9, 5, 12, 10, 9, 10]);
+    assert.equal(response.profile.runtimeShapes, 't0:2x8,t2:2x4');
+    assert.equal(response.aggregate.opCount, 1);
+    assert.equal(response.boundary.taskSpecImporter, true);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 

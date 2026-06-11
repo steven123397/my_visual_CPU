@@ -1,6 +1,17 @@
 const MAX_HISTORY = 32;
 export const MAX_TERMINAL_BUFFER = 32768;
 
+export const DEFAULT_AI_CUSTOM_GRAPH_JSON = JSON.stringify({
+  schema: 'ai_custom_graph_v1',
+  opSequence: ['gemm'],
+  dtype: 'int8/int32',
+  shape: {
+    kind: 'bounded_dynamic_gemm_v1',
+    batch: 2,
+  },
+  inputPreset: 'balanced_rows',
+}, null, 2);
+
 import {
   applyTerminalChunk,
   createTerminalProjectionState,
@@ -58,6 +69,7 @@ export function createAppState() {
       runState: 'idle',
       error: null,
       result: null,
+      customGraphJson: DEFAULT_AI_CUSTOM_GRAPH_JSON,
     },
     jitDispatch: createJitDispatchState(),
     selectedTest: 'hello',
@@ -135,6 +147,10 @@ export function setAiTinyModelParameters(state, parameters = {}) {
     ...state.aiTinyModel.parameters,
     ...parameters,
   };
+}
+
+export function setAiTinyModelCustomGraphJson(state, value) {
+  state.aiTinyModel.customGraphJson = String(value ?? '');
 }
 
 export function setAiTinyModelRunState(state, runState, error = null) {

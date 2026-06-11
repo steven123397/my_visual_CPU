@@ -151,6 +151,56 @@ const CUSTOM_BOUNDED_DYNAMIC_CNN_PRESETS = Object.freeze({
   }),
 });
 
+const CUSTOM_GRAPH_GEMM_OPS = Object.freeze(['gemm']);
+const CUSTOM_GRAPH_CNN_OPS = Object.freeze([
+  'conv2d',
+  'eltwise_relu',
+  'layout_transpose',
+  'reduce_sum',
+]);
+const CUSTOM_GRAPH_UPLOAD_KEYS = Object.freeze([
+  'graph',
+  'graphPackage',
+  'graphPackageBase64',
+  'model',
+  'modelUpload',
+  'onnx',
+]);
+const CUSTOM_GRAPH_CONTRACT = Object.freeze({
+  schema: 'ai_custom_graph_v1',
+  endpoint: 'POST /api/ai/custom-graph',
+  firstCut: 'bounded-task-spec-facade',
+  allowedWorkloads: Object.freeze([
+    Object.freeze({
+      taskKind: 'bounded_dynamic_gemm_v1',
+      opSequence: CUSTOM_GRAPH_GEMM_OPS,
+      dtype: 'int8/int32',
+      shape: Object.freeze({
+        batch: Object.freeze([1, 2]),
+        inputColumns: 8,
+        outputColumns: 4,
+      }),
+      inputPresets: Object.freeze(Object.keys(CUSTOM_BOUNDED_DYNAMIC_GEMM_PRESETS)),
+    }),
+    Object.freeze({
+      taskKind: 'bounded_dynamic_cnn_v1',
+      opSequence: CUSTOM_GRAPH_CNN_OPS,
+      dtype: 'int8/int32',
+      shape: Object.freeze({
+        inputSize: Object.freeze([3, 4]),
+        kernelSize: 2,
+      }),
+      inputPresets: Object.freeze(Object.keys(CUSTOM_BOUNDED_DYNAMIC_CNN_PRESETS)),
+    }),
+  ]),
+  boundaries: Object.freeze({
+    arbitraryGraphPackageUpload: false,
+    arbitraryModelUpload: false,
+    serverGeneratedGraphPackage: true,
+    taskSpecImporterOnly: true,
+  }),
+});
+
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -161,10 +211,35 @@ function httpError(statusCode, message) {
   return error;
 }
 
-function assertPlainObject(value) {
+function assertPlainObject(value, message = 'request body must be a JSON object') {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw httpError(400, 'request body must be a JSON object');
+    throw httpError(400, message);
   }
+}
+
+function assertAllowedKeys(payload, allowedKeys, label) {
+  for (const key of Object.keys(payload)) {
+    if (!allowedKeys.has(key)) {
+      throw httpError(400, `unsupported ${label} field: ${key}`);
+    }
+  }
+}
+
+function assertInteger(value, message) {
+  if (!Number.isInteger(value)) {
+    throw httpError(400, message);
+  }
+  return value;
+}
+
+function sameSequence(lhs, rhs) {
+  return Array.isArray(lhs) &&
+    lhs.length === rhs.length &&
+    lhs.every((item, index) => item === rhs[index]);
+}
+
+function hasOwn(value, key) {
+  return Object.prototype.hasOwnProperty.call(value, key);
 }
 
 function writeU8(buffer, offset, value) {
@@ -940,6 +1015,231 @@ function normalizeRunRequest(payload) {
   return parameters;
 }
 
+function assertNoCustomGraphUpload(payload) {
+  for (const key of CUSTOM_GRAPH_UPLOAD_KEYS) {
+    if (hasOwn(payload, key)) {
+      throw httpError(400, 'custom graph package upload is not allowed');
+    }
+  }
+}
+
+function normalizeOpSequence(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw httpError(400, 'custom graph opSequence must be a non-empty array');
+  }
+  const allowedOps = new Set([
+    ...CUSTOM_GRAPH_GEMM_OPS,
+    ...CUSTOM_GRAPH_CNN_OPS,
+  ]);
+  return value.map((item) => {
+    if (typeof item !== 'string' || item.length === 0) {
+      throw httpError(400, 'custom graph opSequence entries must be non-empty strings');
+    }
+    if (!allowedOps.has(item)) {
+      throw httpError(400, `unsupported custom graph op: ${item}`);
+    }
+    return item;
+  });
+}
+
+function normalizeInputPreset(rawValue, presets, fallback, label) {
+  const choices = Object.keys(presets);
+  const value = rawValue == null ? fallback : String(rawValue);
+  if (!choices.includes(value)) {
+    throw httpError(400, `custom graph ${label} inputPreset must be one of: ${choices.join(', ')}`);
+  }
+  return value;
+}
+
+function normalizeCustomGraphGemm(payload, opSequence) {
+  if (payload.dtype !== 'int8/int32') {
+    throw httpError(400, 'custom graph dtype must be int8/int32 for gemm');
+  }
+
+  const shape = payload.shape;
+  assertPlainObject(shape, 'custom graph shape must be a JSON object');
+  assertAllowedKeys(shape, new Set(['kind', 'batch', 'inputColumns', 'outputColumns']), 'custom graph GEMM shape');
+  if (shape.kind != null && shape.kind !== 'bounded_dynamic_gemm_v1') {
+    throw httpError(400, 'custom graph GEMM shape kind must be bounded_dynamic_gemm_v1');
+  }
+
+  const batch = assertInteger(shape.batch, 'custom graph GEMM batch must be one of: 1, 2');
+  if (![1, 2].includes(batch)) {
+    throw httpError(400, 'custom graph GEMM batch must be one of: 1, 2');
+  }
+  if (shape.inputColumns != null && shape.inputColumns !== 8) {
+    throw httpError(400, 'custom graph GEMM inputColumns must be 8');
+  }
+  if (shape.outputColumns != null && shape.outputColumns !== 4) {
+    throw httpError(400, 'custom graph GEMM outputColumns must be 4');
+  }
+
+  return {
+    schema: CUSTOM_GRAPH_CONTRACT.schema,
+    taskKind: 'bounded_dynamic_gemm_v1',
+    opSequence,
+    dtype: 'int8/int32',
+    shape: {
+      batch,
+      inputColumns: 8,
+      outputColumns: 4,
+    },
+    inputPreset: normalizeInputPreset(
+      payload.inputPreset,
+      CUSTOM_BOUNDED_DYNAMIC_GEMM_PRESETS,
+      'balanced_rows',
+      'GEMM',
+    ),
+  };
+}
+
+function normalizeCustomGraphCnn(payload, opSequence) {
+  if (payload.dtype !== 'int8/int32') {
+    throw httpError(400, 'custom graph dtype must be int8/int32 for cnn');
+  }
+
+  const shape = payload.shape;
+  assertPlainObject(shape, 'custom graph shape must be a JSON object');
+  assertAllowedKeys(shape, new Set(['kind', 'inputSize', 'kernelSize']), 'custom graph CNN shape');
+  if (shape.kind != null && shape.kind !== 'bounded_dynamic_cnn_v1') {
+    throw httpError(400, 'custom graph CNN shape kind must be bounded_dynamic_cnn_v1');
+  }
+
+  const inputSize = assertInteger(shape.inputSize, 'custom graph CNN inputSize must be one of: 3, 4');
+  if (![3, 4].includes(inputSize)) {
+    throw httpError(400, 'custom graph CNN inputSize must be one of: 3, 4');
+  }
+  if (shape.kernelSize != null && shape.kernelSize !== 2) {
+    throw httpError(400, 'custom graph CNN kernelSize must be 2');
+  }
+
+  const expectedPreset = inputSize === 3 ? 'compact_2x2' : 'full_3x3';
+  const inputPreset = normalizeInputPreset(
+    payload.inputPreset,
+    CUSTOM_BOUNDED_DYNAMIC_CNN_PRESETS,
+    expectedPreset,
+    'CNN',
+  );
+  if (inputPreset !== expectedPreset) {
+    throw httpError(400, `custom graph CNN inputPreset for inputSize ${inputSize} must be ${expectedPreset}`);
+  }
+
+  return {
+    schema: CUSTOM_GRAPH_CONTRACT.schema,
+    taskKind: 'bounded_dynamic_cnn_v1',
+    opSequence,
+    dtype: 'int8/int32',
+    shape: {
+      inputSize,
+      kernelSize: 2,
+    },
+    inputPreset,
+  };
+}
+
+function normalizeCustomGraphRequest(payload) {
+  assertPlainObject(payload);
+  assertNoCustomGraphUpload(payload);
+  assertAllowedKeys(
+    payload,
+    new Set(['schema', 'opSequence', 'dtype', 'shape', 'inputPreset', 'name']),
+    'custom graph',
+  );
+
+  const schema = payload.schema ?? CUSTOM_GRAPH_CONTRACT.schema;
+  if (schema !== CUSTOM_GRAPH_CONTRACT.schema) {
+    throw httpError(400, `custom graph schema must be ${CUSTOM_GRAPH_CONTRACT.schema}`);
+  }
+
+  const opSequence = normalizeOpSequence(payload.opSequence);
+  if (sameSequence(opSequence, CUSTOM_GRAPH_GEMM_OPS)) {
+    return normalizeCustomGraphGemm(payload, opSequence);
+  }
+  if (sameSequence(opSequence, CUSTOM_GRAPH_CNN_OPS)) {
+    return normalizeCustomGraphCnn(payload, opSequence);
+  }
+  throw httpError(400, `unsupported custom graph op sequence: ${opSequence.join(' -> ')}`);
+}
+
+async function prepareCustomGraph({ outDir, parameters, repoRoot }) {
+  const name = parameters.taskKind === 'bounded_dynamic_cnn_v1'
+    ? 'frontend_custom_cnn'
+    : 'frontend_custom_gemm';
+  const taskSpecPath = path.join(outDir, `${name}.task_spec.json`);
+  if (parameters.taskKind === 'bounded_dynamic_gemm_v1') {
+    const preset = CUSTOM_BOUNDED_DYNAMIC_GEMM_PRESETS[parameters.inputPreset];
+    const input0 = preset.input0.slice(0, parameters.shape.batch);
+    const expected = preset.expected.slice(0, parameters.shape.batch * 4);
+    await writeTaskSpec(taskSpecPath, {
+      format: 'ai_task_spec_v1',
+      task_kind: 'bounded_dynamic_gemm_v1',
+      name,
+      source_tag: 101,
+      max_ticks: 128,
+      input0,
+      input1: preset.input1,
+    });
+    await packTaskSpec({
+      repoRoot,
+      outDir,
+      taskSpecPath,
+    });
+    return {
+      manifestPath: path.join(outDir, `${name}.manifest`),
+      actualPath: path.join(outDir, `${name}.output0.actual.bin`),
+      expected: [...expected],
+      output: {
+        dtype: 'int32',
+        shape: [parameters.shape.batch, 4],
+      },
+    };
+  }
+
+  const preset = CUSTOM_BOUNDED_DYNAMIC_CNN_PRESETS[parameters.inputPreset];
+  await writeTaskSpec(taskSpecPath, {
+    format: 'ai_task_spec_v1',
+    task_kind: 'bounded_dynamic_cnn_v1',
+    name,
+    source_tag: 103,
+    max_ticks: 128,
+    input0: preset.input0,
+    input1: preset.input1,
+  });
+  await packTaskSpec({
+    repoRoot,
+    outDir,
+    taskSpecPath,
+  });
+  return {
+    manifestPath: path.join(outDir, `${name}.manifest`),
+    actualPath: path.join(outDir, `${name}.output0.actual.bin`),
+    expected: [...preset.expected],
+    output: {
+      dtype: 'int32',
+      shape: [preset.expected.length],
+    },
+  };
+}
+
+async function runPreparedProfile({ binaryPath, repoRoot, prepared }) {
+  const { stdout } = await execFileAsync(binaryPath, [
+    '--ai-profile-manifest',
+    prepared.manifestPath,
+  ], {
+    cwd: path.join(repoRoot, 'myCPU'),
+    timeout: 15000,
+    maxBuffer: 1024 * 1024,
+  });
+  const actual = readTypedValues(
+    await fs.readFile(prepared.actualPath),
+    prepared.output.dtype,
+  );
+  return {
+    actual,
+    parsed: parseProfileStdout(stdout),
+  };
+}
+
 export function createAiTinyModelService({
   repoRoot,
   binaryPath = path.join(repoRoot, 'myCPU', 'mycpu'),
@@ -953,6 +1253,7 @@ export function createAiTinyModelService({
       return {
         templates: cloneJson(TEMPLATE_DEFINITIONS.map((template) => publicTemplate(template))),
         linuxFacingContract: cloneJson(LINUX_FACING_CONTRACT),
+        customGraphContract: cloneJson(CUSTOM_GRAPH_CONTRACT),
       };
     },
 
@@ -966,19 +1267,11 @@ export function createAiTinyModelService({
           parameters,
           repoRoot,
         });
-        const { stdout } = await execFileAsync(binaryPath, [
-          '--ai-profile-manifest',
-          prepared.manifestPath,
-        ], {
-          cwd: path.join(repoRoot, 'myCPU'),
-          timeout: 15000,
-          maxBuffer: 1024 * 1024,
+        const { actual, parsed } = await runPreparedProfile({
+          binaryPath,
+          repoRoot,
+          prepared,
         });
-        const actual = readTypedValues(
-          await fs.readFile(prepared.actualPath),
-          prepared.output.dtype,
-        );
-        const parsed = parseProfileStdout(stdout);
         return {
           ok: true,
           template: template.id,
@@ -1001,6 +1294,51 @@ export function createAiTinyModelService({
           ? String(error.stderr).trim()
           : (error?.message ?? 'AI tiny model run failed');
         throw httpError(500, message || 'AI tiny model run failed');
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    },
+
+    async customGraph(payload = {}) {
+      const parameters = normalizeCustomGraphRequest(payload);
+      const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mycpu-ai-custom-graph-'));
+      try {
+        const prepared = await prepareCustomGraph({
+          outDir: tempRoot,
+          parameters,
+          repoRoot,
+        });
+        const { actual, parsed } = await runPreparedProfile({
+          binaryPath,
+          repoRoot,
+          prepared,
+        });
+        return {
+          ok: true,
+          schema: 'ai_custom_graph_result_v1',
+          customGraph: cloneJson(parameters),
+          output: {
+            dtype: prepared.output.dtype,
+            shape: prepared.output.shape,
+            values: actual,
+            expected: prepared.expected,
+          },
+          ...parsed,
+          boundary: {
+            allowsGraphPackageUpload: false,
+            allowsModelUpload: false,
+            serverGeneratedGraph: true,
+            taskSpecImporter: true,
+          },
+        };
+      } catch (error) {
+        if (Number.isInteger(error?.statusCode)) {
+          throw error;
+        }
+        const message = error?.stderr
+          ? String(error.stderr).trim()
+          : (error?.message ?? 'AI custom graph run failed');
+        throw httpError(500, message || 'AI custom graph run failed');
       } finally {
         await fs.rm(tempRoot, { recursive: true, force: true });
       }

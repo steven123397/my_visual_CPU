@@ -179,24 +179,51 @@ fallback coverage、可重复性能证据和 workload-level scheduler 边界。
 ### 任务 6：AI 前端自定义 workload
 
 **文件：**
-- 创建：按实现需要新增 AI custom graph fixture
+- 创建：无。当前复用既有 task-spec importer，不新增 fixture。
 - 修改：
   - `frontend/server/ai_tiny_model_service.mjs`
+  - `frontend/server/debug_server.mjs`
+  - `frontend/app/api.js`
   - `frontend/app/app.js`
+  - `frontend/app/render.js`
+  - `frontend/app/state.js`
+  - `frontend/app/styles.css`
+  - `frontend/tests/api.test.mjs`
   - `frontend/tests/debug_server.test.mjs`
-  - `frontend/tests/debug_server_e2e.test.mjs`
-  - `myCPU/workloads/ai_proto/pack_graph.py`
+  - `frontend/tests/render.test.mjs`
+  - `frontend/tests/ui_state.test.mjs`
   - `docs/design/post_wave7_ai_user_tasks_npu_performance_design.md`
   - `docs/status/npu_tpu_accelerator_status.md`
+  - `docs/status/mainline_status.md`
 
-- [ ] **步骤 1：** 定义 `POST /api/ai/custom-graph` 的 JSON schema：op 白名单、
+- [x] **步骤 1：** 定义 `POST /api/ai/custom-graph` 的 JSON schema：op 白名单、
       dtype、shape、batch、input preset、输出 profile 字段和拒绝原因。
-- [ ] **步骤 2：** 先补 server 测试，覆盖合法 op 序列、非法 op、越界 shape、dtype
+- [x] **步骤 2：** 先补 server 测试，覆盖合法 op 序列、非法 op、越界 shape、dtype
       mismatch、超限 batch 和 profile 返回。
-- [ ] **步骤 3：** 服务端复用 `pack_graph.py` 生成受控 graph package，前端只提交
+- [x] **步骤 3：** 服务端复用 `pack_graph.py` 生成受控 graph package，前端只提交
       bounded-dynamic shape 描述。
-- [ ] **步骤 4：** 前端提供 JSON editor 或结构化表单；用户可修改 op 序列和 shape，
+- [x] **步骤 4：** 前端提供 JSON editor 或结构化表单；用户可修改 op 序列和 shape，
       但不能上传任意 graph package。
+
+**结果：** 新增 `POST /api/ai/custom-graph`，第一刀固定为 bounded task-spec facade。
+请求只接受 `schema=ai_custom_graph_v1`、白名单 op sequence、`int8/int32` dtype、
+`bounded_dynamic_gemm_v1` 的 batch `1 / 2` 或 `bounded_dynamic_cnn_v1` 的 input size
+`3 / 4`，以及受控 input preset；`graphPackage / model / onnx` 等上传字段直接
+fail-closed。服务端复用现有 `pack_graph.py --task-spec` 和
+`task_spec_lowering.py` 生成 graph package / runtime shape table / manifest，再调用
+`mycpu --ai-profile-manifest` 返回 `ai_custom_graph_result_v1`、输出、expected、
+profile counters、aggregate 和 per-op summary。前端 AI 面板新增 JSON editor，
+浏览器只提交受限 JSON，不上传 graph package 或任意模型。
+
+**验证：**
+- `cd frontend && node --test tests/debug_server.test.mjs`
+- `cd frontend && node --test tests/api.test.mjs`
+- `cd frontend && node --test tests/ui_state.test.mjs`
+- `cd frontend && node --test tests/render.test.mjs`
+- `cd frontend && node --test`
+- `cd myCPU && make test-host-ai_accelerator_profile_smoke`
+- `cd myCPU && make test-verification-layers`
+- `git diff --check`
 
 ## 验证基线
 

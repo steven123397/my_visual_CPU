@@ -173,6 +173,23 @@ NPU 的 tile scheduler、DMA + compute overlap 或 multi outstanding queue。
   Transformer runtime 已经打开；它只是把现有静态 attention-like guardrail 也纳入统一的
   host-side task-spec importer 路线。
 
+前端第一刀当前也已经把这条 importer 路线接成受限 JSON facade：
+
+- `POST /api/ai/custom-graph` 固定接受 `schema=ai_custom_graph_v1`，只开放两类
+  bounded-dynamic shape 壳：
+  - `opSequence=["gemm"]`、`dtype="int8/int32"`、`shape.kind="bounded_dynamic_gemm_v1"`、
+    batch `1 / 2`、输入列 `8`、输出列 `4`；
+  - `opSequence=["conv2d","eltwise_relu","layout_transpose","reduce_sum"]`、
+    `dtype="int8/int32"`、`shape.kind="bounded_dynamic_cnn_v1"`、input size `3 / 4`、
+    kernel size `2`。
+- 浏览器提交的只是 schema / op sequence / dtype / shape / input preset；服务端继续用
+  `pack_graph.py --task-spec` 生成 graph package、runtime shape table、manifest、expected
+  output，再走既有 `mycpu --ai-profile-manifest`。
+- `graphPackage / model / onnx` 等上传字段必须在 HTTP facade 层直接 fail-closed；
+  这条入口不是 browser-side graph interpreter，也不是任意 graph package 或模型上传通道。
+- `/api/ai/tiny-model/templates` 返回的 `customGraphContract` 只是只读前端合同摘要，
+  设备 ABI 事实来源仍然是 host-side task-spec importer 和统一 graph package / submission ABI。
+
 这意味着当前已经真正打开了“用户定义任务 contract”，但仍明确不开放：
 
 - 任意模型上传

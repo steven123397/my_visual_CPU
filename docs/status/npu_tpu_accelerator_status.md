@@ -42,6 +42,15 @@
   `/api/ai/tiny-model/templates` 同步暴露 `linuxFacingContract`，但它仍只是只读摘要，
   不成为设备 ABI 的事实来源。后续真实 `/dev/mycpu-ai0`、kernel driver、DTB 接线、
   ioctl 和 Linux integration smoke 必须另开窄计划。
+- `2026-06-11` `PROJECT_EVOLUTION` P1 任务 6 已完成前端 AI 自定义 workload 第一刀。
+  `POST /api/ai/custom-graph` 现在固定为 bounded task-spec facade：浏览器只提交
+  `ai_custom_graph_v1` JSON、白名单 op sequence、`int8/int32` dtype、GEMM batch `1 / 2`
+  或 CNN input size `3 / 4` 这类受控 shape，以及 input preset；服务端复用
+  `pack_graph.py --task-spec` / `task_spec_lowering.py` 生成 graph package、runtime shape
+  table、manifest 和 expected output，再走 `mycpu --ai-profile-manifest` 返回
+  `ai_custom_graph_result_v1` profile。`graphPackage / model / onnx` 等上传字段会在
+  HTTP facade 层 fail-closed；该入口仍不是任意 graph authoring、任意模型上传、
+  browser-side graph interpreter 或 Linux-facing driver。
 - `2026-05-02` 已把 `Wave 7` 阶段性收口之后的 AI accelerator 后续方向正式收口为
   `用户自定义 AI 任务 + 更接近商用 NPU 的性能模型` 新主线，并补齐独立
   `design / plan` 入口；当前实时推进仍由本文档承接。

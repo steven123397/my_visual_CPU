@@ -1163,6 +1163,33 @@ function renderAiTinyModelDemoGuide(state, template) {
   `;
 }
 
+function renderAiCustomGraphEditor(state, isRunning) {
+  const customGraphJson = state.aiTinyModel.customGraphJson ?? '';
+  return `
+    <section class="ai-custom-graph" data-ai-custom-graph-editor>
+      <div class="ai-custom-graph__head">
+        <div>
+          <span>Custom graph facade</span>
+          <strong>Bounded JSON task spec</strong>
+        </div>
+        <button data-action="run-ai-custom-graph" ${isRunning ? 'disabled' : ''}>
+          ${isRunning ? 'Running...' : 'Run custom graph'}
+        </button>
+      </div>
+      <label class="ai-custom-graph__editor">
+        <span>Task spec JSON</span>
+        <textarea data-ai-custom-graph-json rows="10" spellcheck="false">${escapeHtml(customGraphJson)}</textarea>
+      </label>
+      <div class="ai-custom-graph__chips">
+        <span>ai_custom_graph_v1</span>
+        <span>task-spec importer</span>
+        <span>server-generated package</span>
+        <span>no graph upload</span>
+      </div>
+    </section>
+  `;
+}
+
 function renderAiTinyModelPanel(state) {
   const template = selectedAiTinyModelTemplate(state);
   if (!template) {
@@ -1200,6 +1227,7 @@ function renderAiTinyModelPanel(state) {
         <span>${escapeHtml(template.shapeMode ?? 'dynamic_bounded')}</span>
         <span>${escapeHtml(customGraphDisabled)}</span>
       </div>
+      ${renderAiCustomGraphEditor(state, isRunning)}
       ${state.aiTinyModel.error ? `<div class="ai-tiny-model__error">${escapeHtml(state.aiTinyModel.error)}</div>` : ''}
       ${renderAiTinyModelResult(state.aiTinyModel.result)}
     </section>

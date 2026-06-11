@@ -15,6 +15,7 @@ import {
   setLoadedSession,
   setTests,
   setAiTinyModelTemplates,
+  setAiTinyModelCustomGraphJson,
   setAiTinyModelParameters,
   setAiTinyModelRunState,
   setAiTinyModelResult,
@@ -266,6 +267,19 @@ test('AI tiny model state records run errors without preserving stale results', 
   assert.equal(state.aiTinyModel.runState, 'error');
   assert.equal(state.aiTinyModel.error, 'batch must be one of: 1, 2');
   assert.equal(state.aiTinyModel.result, null);
+});
+
+test('AI tiny model state keeps bounded custom graph JSON editable', () => {
+  const state = createAppState();
+  assert.match(state.aiTinyModel.customGraphJson, /ai_custom_graph_v1/);
+  assert.match(state.aiTinyModel.customGraphJson, /bounded_dynamic_gemm_v1/);
+
+  setAiTinyModelCustomGraphJson(state, '{"schema":"ai_custom_graph_v1","opSequence":["gemm"]}');
+
+  assert.equal(
+    state.aiTinyModel.customGraphJson,
+    '{"schema":"ai_custom_graph_v1","opSequence":["gemm"]}',
+  );
 });
 
 test('load progress records Linux boot wait metadata and can be cleared', () => {

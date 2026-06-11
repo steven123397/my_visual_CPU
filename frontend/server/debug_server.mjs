@@ -425,6 +425,13 @@ export async function startServer({
         return;
       }
 
+      if (request.method === 'POST' && url.pathname === '/api/ai/custom-graph') {
+        security.requireController(request, 'ai-custom-graph');
+        const body = await readBody(request);
+        await respondWithAction(response, () => aiTinyModelService.customGraph(body), securityHeaders);
+        return;
+      }
+
       if (request.method === 'POST' && url.pathname === '/api/session/load') {
         security.requireController(request, 'load');
         const body = await readBody(request);

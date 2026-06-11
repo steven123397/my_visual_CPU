@@ -240,7 +240,8 @@ boot marker 的 entry 会在 reset 后重新加载 Linux `Image` payload、DTB�
 Evidence Drawer` 组织场景；解释层固定成 `Session contract -> Primary stage ->
 Observation trail -> Evidence / boundary`；`Linux Distro Labs` 也已从单一卡片扩成
 `Linux Serial Console + Alpine Distro Evidence + Capability & ISA Matrix` 的专题 family。
-当前仍暂不扩写 AI Labs 的新专题内容；Linux 更深一层的发行版专题页仍可作为后续单独切片继续推进。
+当前 AI Labs 仍不扩写成任意模型上传、完整 AI runtime 或 Linux-facing NPU driver；
+Linux 更深一层的发行版专题页仍可作为后续单独切片继续推进。
 这套 `Lab workbench` 当前又完成了一轮补完并归档到
 [../plan/history_plan.md#post-wave7-frontend-lab-completion-plan](../plan/history_plan.md#post-wave7-frontend-lab-completion-plan)：
 本机真实 Linux `Image` 已接到当前 worktree 的 debug server，`/api/tests` 现会把
@@ -249,8 +250,8 @@ Observation trail -> Evidence / boundary`；`Linux Distro Labs` 也已从单一�
 它绑定的 runnable route 和 backend，`Open live shell` / `Load current scenario`
 可直接回到真实串口 shell；`Runtime Labs` 也不再只剩占位卡，而是通过
 `POST /api/session/jit-dispatch` 把当前 loaded session 的 JIT / DBT dry-run summary
-接进专题工作台。AI Labs 这轮仍只保持现有 guest demo 与 parameterized tiny model，
-没有提前扩写尚未完成的 AI 分支内容。
+接进专题工作台。AI Labs 这轮仍只保持 guest demo 与 parameterized tiny model 的
+专题组织边界，没有提前扩写成完整 AI runtime。
 当前 active line 已经拆成两部分：远端服务器上的 `Wave 7` 部署 / 运维升级继续在远端
 checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，并分别补齐独立文档入口：
 - 标准 Linux 发行版平台：
@@ -337,6 +338,13 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
   `make -n` 解析。完整层级语义继续以
   [regression_completion_criteria.md](../design/regression_completion_criteria.md) 为准，
   不在 status 复制测试矩阵。
+- `PROJECT_EVOLUTION` P1 当前已完成任务 6：前端 AI 自定义 workload 第一刀收敛为
+  `POST /api/ai/custom-graph` 的 bounded task-spec facade。浏览器只提交
+  `ai_custom_graph_v1` JSON、白名单 op sequence、`int8/int32` dtype、受控 shape 和 input
+  preset；服务端复用 `pack_graph.py --task-spec` 生成 graph package / runtime shape table /
+  manifest，再调用 `mycpu --ai-profile-manifest` 返回输出、expected、profile counters、
+  aggregate 和 per-op summary。该入口仍不接受任意 graph package、任意模型上传、
+  ONNX / PyTorch runtime 或 Linux-facing NPU driver。
 - `2026-05-29` 全仓库 code review remediation 已完成并归档；12 条
   `必须修复` 与 19 条 `建议修改` active findings 已由四条整改线关闭，合并后守住
   `test-fast-smoke`、`test-standard-regression`、`test-pipeline`、`make test`
@@ -570,7 +578,8 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
    [../plan/history_plan.md#post-wave7-frontend-lab-product-plan](../plan/history_plan.md#post-wave7-frontend-lab-product-plan)。
    现行设计入口为 [Post-Wave 7 前端 Lab 产品设计](../design/post_wave7_frontend_lab_product_design.md)；
    `/console` 当前已固定 `Session contract -> Primary stage -> Observation trail ->
-   Evidence / boundary` 的解释层，并把 Linux family 扩成更明确的专题导航；AI Labs 暂不继续扩写。
+   Evidence / boundary` 的解释层，并把 Linux family 扩成更明确的专题导航；AI Labs
+   不扩写成任意模型上传或完整 AI runtime。
    本轮仍不做公网部署、底层 session API 重构、标准发行版镜像支持或任意用户镜像上传。
 3. AI accelerator 的 `INT4 / training / MobileNet / Linux-facing NPU driver /
    real DMA overlap / multi outstanding queue` 等后续专项不得改写主线 `Wave 6`

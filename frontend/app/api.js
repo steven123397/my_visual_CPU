@@ -52,6 +52,10 @@ export async function runAiTinyModel(parameters) {
   return postJson('/api/ai/tiny-model/run', parameters);
 }
 
+export async function runAiCustomGraph(parameters) {
+  return postJson('/api/ai/custom-graph', parameters);
+}
+
 export async function loadSession(test, backend, customElf = null) {
   const payload = { backend };
   if (customElf?.elfPath) {

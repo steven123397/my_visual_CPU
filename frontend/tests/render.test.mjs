@@ -2017,6 +2017,12 @@ test('renderApp shows the AI parameterized tiny model controls and profile resul
   assert.match(elements.aiLab.innerHTML, /gemm/);
   assert.match(elements.aiLab.innerHTML, /pool_max/);
   assert.match(elements.aiLab.innerHTML, /Custom graph upload is disabled/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-custom-graph-editor/);
+  assert.match(elements.aiLab.innerHTML, /data-ai-custom-graph-json/);
+  assert.match(elements.aiLab.innerHTML, /Run custom graph/);
+  assert.match(elements.aiLab.innerHTML, /ai_custom_graph_v1/);
+  assert.match(elements.aiLab.innerHTML, /bounded_dynamic_gemm_v1/);
+  assert.match(elements.aiLab.innerHTML, /balanced_rows/);
 });
 
 test('renderApp shows the AI whitelist template selector and template-specific controls', () => {
