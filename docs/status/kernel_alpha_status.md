@@ -16,6 +16,7 @@
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan](../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
@@ -164,6 +165,21 @@ Undefined-OS 参考的采用边界也已明确：可参考 process lifecycle 对
 metadata、地址空间 backend 和 syscall stub 分层治理；谨慎参考完整 futex / signal /
 mmap / ext4；不采用换底座、多架构优先或继续追完整 Linux userland 的方向。
 
+2026-06-11 已完成 Stage 11 v0 后续收敛。external workflow smoke 现在使用显式
+command list 和 per-command summary，并把 Linux compat run summary 接入 host 断言面；
+Linux compat process state 已抽成 `linux_compat_process_table`；overlay / VFS metadata
+补齐 `nlink`、`mtime`、opened-fd rename / unlink 生命周期和 close-on-exec 释放；
+pseudo filesystem 合同固定 `/dev/null`、`/dev/random`、`/proc/self/exe` 和 overlay-created
+`/tmp` 的支持 / fail-closed 边界；`mprotect(PROT_NONE)` 已落到 VM region 权限元数据，
+file-backed `MAP_PRIVATE` 读路径和 `MAP_SHARED` fail-closed 边界也已有回归；syscall trace
+新增 `policy=bypass|errno|unsupported` 分类合同。
+
+该轮调研结论是：futex 继续保持当前 low-effect `FUTEX_WAIT` / `FUTEX_WAKE`，不补 wait
+queue / requeue / bitset；signal 继续保持 `rt_sigaction` / `rt_sigprocmask` bypass，
+不先引入 ProcessGroup；Stage 11 command list 继续 host-only，不接入前端 external opt-in
+route。下一步若继续推进，应以新的真实 trace blocker 为入口，优先在完整 Linux 子进程链、
+signal / futex 或前端 host-only manifest 中另建窄计划，而不是直接扩大 Stage 12 / Stage 13。
+
 2026-06-10 已完成质量审查后的 `fix-and-validate` 小步收敛。`course_fd_read()` 现在明确为
 raw read 合同，只写实际返回的字节数，不再隐式追加 `NUL`；`test-unit-course_os_stage2_fd_fs`
 新增 exact-size read canary 回归覆盖该边界。`linux_compat.c` 也完成第一刀行为保持拆分：
@@ -215,6 +231,10 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
 ## 关键历史节点
 
 - `2026-06-11`
+  - 完成 Stage 11 post-v0 收敛：external workflow command-list / per-command summary、
+    Linux compat process table、overlay metadata / opened-fd 生命周期、pseudo path 合同、
+    VM `mprotect` / file-backed mmap 边界，以及 syscall stub policy trace 分类均已落地；
+    external rootfs opt-in 未设置时仍不声明 external workflow 重新通过。
   - `PROJECT_EVOLUTION` P0 维护门禁重跑 `kernel_alpha` Stage 2 正向证据面、课程 OS 单元门禁、
     functional / pipeline `kernel_alpha_demo` 和旧 Phase 1 负向 demo；当前结论是 Stage 2 marker、
     Stage 3 串联 marker、storage / PLIC / timer / fault 历史 guardrail 继续稳定，不把新能力混入旧

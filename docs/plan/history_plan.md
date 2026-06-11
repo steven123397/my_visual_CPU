@@ -23,6 +23,35 @@
 
 ### 2026-06-11
 
+#### course-os-kernel-alpha-stage11-post-v0-convergence-plan
+
+- 完成时间：2026-06-11
+- 原文件：`course_os_kernel_alpha_stage11_post_v0_convergence_plan.md`
+- 完成内容：完成 Stage 11 writable rootfs / process-file workflow v0 后续收敛。
+  external workflow smoke 改为显式 command list 和统一 per-command summary，并把
+  Linux compat run summary 字段接入 host 断言；Linux compat process state 抽成
+  `linux_compat_process_table`；overlay / VFS metadata 补齐 opened-fd rename /
+  unlink 生命周期、`nlink`、`mtime` 和 close-on-exec 释放；pseudo filesystem 合同固定
+  `/dev/null`、`/dev/random`、`/proc/self/exe` 和 overlay-created `/tmp` 边界；
+  `mprotect(PROT_NONE)`、file-backed `MAP_PRIVATE` 读路径、`MAP_SHARED` fail-closed
+  和 syscall stub policy trace 分类均已落地。
+- 实现过程摘要：本轮按窄红灯推进，不新增网络 git、完整 signal / futex、完整 toolchain、
+  `rustc` 或 Stage 12 / Stage 13 范围。调研结论是 futex 继续 low-effect
+  `FUTEX_WAIT` / `FUTEX_WAKE`，signal 继续 `rt_sigaction` / `rt_sigprocmask` bypass，
+  Stage 11 command list 继续 host-only，不接入前端 external opt-in route。
+- 验证摘要：已运行并通过 `git diff --check`、
+  `cd myCPU && make tests/host/course_os_linux_compat_external_workflow_smoke`、
+  `make test-unit-course_os_stage11_linux_compat`、
+  `make test-unit-course_os_stage9_linux_compat_vm`、
+  `make test-host-course_os_linux_compat_terminal_smoke` 和
+  `make test-host-course_os_linux_compat_oscomp_help_smoke`。本轮未设置
+  `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS`，因此未声明 external rootfs opt-in workflow
+  重新通过。
+- 剩余风险：Stage 11 仍是 v0 workflow shim，不声明真实 `cc1/as/ld` 子进程链、完整
+  toolchain、完整 signal / futex、完整 TTY、网络 git、`rustc` 大工具链或通用 Linux
+  用户态兼容。
+- 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)、[course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)
+
 #### project-evolution-priority-p0-plan
 
 - 完成时间：2026-06-11

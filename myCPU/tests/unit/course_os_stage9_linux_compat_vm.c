@@ -1137,6 +1137,169 @@ static int test_syscall_mmap_fixed_prot_none_replaces_existing_page(void) {
     return 0;
 }
 
+static int test_syscall_mprotect_updates_bound_vm_region_permissions(void) {
+    vm_address_space_t address_space;
+    vm_process_t process;
+    linux_compat_vm_t vm;
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    linux_compat_vm_region_t* region = NULL;
+    const char payload[] = "mprotect payload";
+    const char updated[] = "mprotect updated";
+    char readback[sizeof(updated)] = {0};
+    uintptr_t addr = 0;
+
+    reset_stub_state();
+    if (!make_process(&address_space, &process)) {
+        return fail("expected test process setup to succeed");
+    }
+    linux_compat_vm_init(&vm, &address_space, &process);
+    linux_compat_runtime_init(&runtime);
+    runtime.vm = &vm;
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MMAP;
+    request.length = MEMORY_PAGE_SIZE;
+    request.prot = LINUX_COMPAT_PROT_READ | LINUX_COMPAT_PROT_WRITE;
+    request.flags = 0x22U;
+    request.fd = -1;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != (int64_t)LINUX_COMPAT_MMAP_BASE) {
+        return fail("expected mmap setup before mprotect to succeed");
+    }
+    addr = (uintptr_t)response.value;
+    region = find_vm_region(&vm, addr);
+    if (region == NULL ||
+        !linux_compat_vm_write_user(&vm, addr, payload, sizeof(payload))) {
+        return fail("expected mapped region to accept initial writes");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MPROTECT;
+    request.addr = addr;
+    request.length = MEMORY_PAGE_SIZE;
+    request.prot = 0;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        region->prot != 0U ||
+        linux_compat_vm_read_user(&vm, addr, readback, sizeof(readback)) ||
+        linux_compat_vm_write_user(&vm, addr, updated, sizeof(updated))) {
+        return fail("expected mprotect PROT_NONE to block VM user copies");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MPROTECT;
+    request.addr = addr;
+    request.length = MEMORY_PAGE_SIZE;
+    request.prot = LINUX_COMPAT_PROT_READ | LINUX_COMPAT_PROT_WRITE;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        region->prot !=
+            (LINUX_COMPAT_PROT_READ | LINUX_COMPAT_PROT_WRITE) ||
+        !linux_compat_vm_write_user(&vm, addr, updated, sizeof(updated)) ||
+        !linux_compat_vm_read_user(&vm, addr, readback, sizeof(readback)) ||
+        memcmp(readback, updated, sizeof(updated)) != 0) {
+        return fail("expected mprotect restore to allow VM user copies again");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MPROTECT;
+    request.addr = addr + MEMORY_PAGE_SIZE;
+    request.length = MEMORY_PAGE_SIZE;
+    request.prot = LINUX_COMPAT_PROT_READ;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != -22) {
+        return fail("expected mprotect missing region to fail closed");
+    }
+
+    linux_compat_vm_destroy(&vm);
+    return 0;
+}
+
+static int test_syscall_mmap_overlay_file_private_and_shared_boundary(void) {
+    vm_address_space_t address_space;
+    vm_process_t process;
+    linux_compat_vm_t vm;
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    const char payload[] = "overlay mmap payload";
+    char readback[sizeof(payload)] = {0};
+    int32_t fd = -1;
+
+    reset_stub_state();
+    if (!make_process(&address_space, &process)) {
+        return fail("expected test process setup to succeed");
+    }
+    linux_compat_vm_init(&vm, &address_space, &process);
+    linux_compat_runtime_init(&runtime);
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_OPENAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/stage9-mmap-overlay.txt";
+    request.flags = LINUX_COMPAT_O_CREAT | LINUX_COMPAT_O_RDWR;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value < 3) {
+        return fail("expected overlay mmap test file to open");
+    }
+    fd = (int32_t)response.value;
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_WRITE;
+    request.fd = fd;
+    request.write_buffer = payload;
+    request.length = sizeof(payload);
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != (int64_t)sizeof(payload)) {
+        return fail("expected overlay mmap test file write to succeed");
+    }
+
+    runtime.vm = &vm;
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MMAP;
+    request.length = MEMORY_PAGE_SIZE;
+    request.prot = LINUX_COMPAT_PROT_READ;
+    request.flags = LINUX_COMPAT_MAP_SHARED;
+    request.fd = fd;
+    request.offset = 0;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != -22) {
+        return fail("expected file-backed MAP_SHARED mmap to fail closed");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MMAP;
+    request.length = MEMORY_PAGE_SIZE;
+    request.prot = LINUX_COMPAT_PROT_READ;
+    request.flags = LINUX_COMPAT_MAP_PRIVATE;
+    request.fd = fd;
+    request.offset = 0;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != (int64_t)LINUX_COMPAT_MMAP_BASE ||
+        !linux_compat_vm_read_user(&vm,
+                                   LINUX_COMPAT_MMAP_BASE,
+                                   readback,
+                                   sizeof(readback)) ||
+        memcmp(readback, payload, sizeof(payload)) != 0) {
+        return fail("expected overlay file-backed MAP_PRIVATE mmap to read bytes");
+    }
+
+    linux_compat_vm_destroy(&vm);
+    return 0;
+}
+
 static int test_write_only_mmap_supports_kernel_copyin(void) {
     vm_address_space_t address_space;
     vm_process_t process;
@@ -1198,6 +1361,8 @@ int main(void) {
         test_mmap_file_uses_physical_mapping_for_aligned_readonly_asset() != 0 ||
         test_mmap_fixed_writable_file_segment_over_physical_mapping() != 0 ||
         test_syscall_mmap_fixed_prot_none_replaces_existing_page() != 0 ||
+        test_syscall_mprotect_updates_bound_vm_region_permissions() != 0 ||
+        test_syscall_mmap_overlay_file_private_and_shared_boundary() != 0 ||
         test_write_only_mmap_supports_kernel_copyin() != 0) {
         return 1;
     }

@@ -247,6 +247,10 @@ static bool find_available_mmap_addr(linux_compat_vm_t* vm,
     return false;
 }
 
+static uint32_t descriptor_prot_for_region(uint32_t prot) {
+    return prot != 0U ? prot : LINUX_COMPAT_PROT_READ;
+}
+
 static bool release_region(linux_compat_vm_t* vm,
                            linux_compat_vm_region_t* slot) {
     bool ok = true;
@@ -930,6 +934,36 @@ int32_t linux_compat_vm_munmap(linux_compat_vm_t* vm,
         return -22;
     }
     return release_region(vm, slot) ? 0 : -22;
+}
+
+int32_t linux_compat_vm_mprotect(linux_compat_vm_t* vm,
+                                 uintptr_t addr,
+                                 size_t length,
+                                 uint32_t prot) {
+    static const uint32_t kSupportedProt =
+        LINUX_COMPAT_PROT_READ | LINUX_COMPAT_PROT_WRITE |
+        LINUX_COMPAT_PROT_EXEC;
+    linux_compat_vm_region_t* slot = 0;
+    size_t mapped_length = 0;
+    bool changed = false;
+
+    if (!vm_ready(vm) || length == 0U ||
+        (addr & ((uintptr_t)MEMORY_PAGE_SIZE - 1U)) != 0U ||
+        (prot & ~kSupportedProt) != 0U) {
+        return -22;
+    }
+    mapped_length = align_up_page_size(length);
+    slot = find_region_covering(vm, addr, mapped_length);
+    if (slot == 0 || slot->vaddr != addr || slot->length != mapped_length ||
+        !clear_region_page_mappings(&slot->region, &changed)) {
+        return -22;
+    }
+    if (changed) {
+        flush_tlb_if_enabled();
+    }
+    slot->prot = prot;
+    slot->region.flags = prot_to_vm_flags(descriptor_prot_for_region(prot));
+    return 0;
 }
 
 bool linux_compat_vm_read_user(linux_compat_vm_t* vm,

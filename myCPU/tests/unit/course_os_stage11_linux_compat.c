@@ -6,6 +6,7 @@
 #include "../../guest/include/course_shell.h"
 #include "../../guest/include/linux_compat.h"
 #include "../../guest/include/linux_compat_minimal_elf_asset.h"
+#include "../../guest/include/linux_compat_process.h"
 #include "../../guest/include/linux_compat_vm.h"
 
 #ifndef COURSE_SHELL_COMMAND_OUTPUT_SIZE
@@ -76,7 +77,9 @@ static int stat_path(linux_compat_runtime_t* runtime,
                      linux_compat_stat_t* stat,
                      linux_compat_trace_t* trace) {
     enum {
+        kLinuxStatInodeOffset = 8,
         kLinuxStatModeOffset = 16,
+        kLinuxStatNlinkOffset = 20,
         kLinuxStatSizeOffset = 48,
         kLinuxStatSize = 128
     };
@@ -98,7 +101,9 @@ static int stat_path(linux_compat_runtime_t* runtime,
     }
     result = (int)response.value;
     if (result == 0) {
+        stat->inode = read_u64_le(stat_buffer, kLinuxStatInodeOffset);
         stat->mode = read_u32_le(stat_buffer, kLinuxStatModeOffset);
+        stat->nlink = read_u32_le(stat_buffer, kLinuxStatNlinkOffset);
         stat->size = read_u64_le(stat_buffer, kLinuxStatSizeOffset);
         stat->directory =
             (stat->mode & LINUX_COMPAT_S_IFDIR) == LINUX_COMPAT_S_IFDIR;
@@ -467,6 +472,123 @@ static int test_mkdir_dirents_rename_unlink_and_sync(void) {
     if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
         response.value != 0) {
         return fail("expected sync to succeed as no-op");
+    }
+
+    return 0;
+}
+
+static int test_opened_overlay_fd_survives_rename_unlink_until_close(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_stat_t stat;
+    linux_compat_overlay_node_t* renamed_node = 0;
+    linux_compat_overlay_node_t* unlinked_node = 0;
+    char readback[8] = {0};
+    uint64_t renamed_inode = 0;
+    uint64_t renamed_mtime = 0;
+    int fd = -1;
+    int reuse_fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/stage11dir";
+    request.flags = 0755U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected opened-fd test directory setup to succeed");
+    }
+
+    fd = open_path(&runtime,
+                   "/stage11dir/open.txt",
+                   LINUX_COMPAT_O_CREAT | LINUX_COMPAT_O_TRUNC |
+                       LINUX_COMPAT_O_RDWR,
+                   &trace);
+    if (fd < 3 ||
+        write_fd(&runtime, fd, "rename", 6U, &trace) != 6) {
+        return fail("expected opened rename file setup to succeed");
+    }
+    renamed_node = (linux_compat_overlay_node_t*)runtime.fds[fd].node;
+    renamed_inode = renamed_node->inode;
+    renamed_mtime = renamed_node->mtime;
+    if (renamed_node->nlink != 1U || renamed_node->open_count != 1U) {
+        return fail("expected opened overlay file to start linked and open");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_RENAMEAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/stage11dir/open.txt";
+    request.new_path = "/stage11dir/renamed.txt";
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected opened fd rename syscall to succeed");
+    }
+    if (stat_path(&runtime, "/stage11dir/open.txt", &stat, &trace) != -1000) {
+        return fail("expected old path to disappear after opened fd rename");
+    }
+    if (stat_path(&runtime, "/stage11dir/renamed.txt", &stat, &trace) != 0) {
+        return fail("expected new path to appear after opened fd rename");
+    }
+    if (stat.inode != renamed_inode) {
+        return fail("expected rename to preserve overlay inode");
+    }
+    if (stat.nlink != 1U) {
+        return fail("expected rename to keep one overlay link");
+    }
+    if (renamed_node->mtime <= renamed_mtime) {
+        return fail("expected rename to advance overlay mtime");
+    }
+    if (linux_compat_lseek(&runtime, fd, 0, 0U, &trace) != 0 ||
+        linux_compat_read(&runtime, fd, readback, 6U, &trace) != 6 ||
+        memcmp(readback, "rename", 6U) != 0 ||
+        linux_compat_close(&runtime, fd, &trace) != 0) {
+        return fail("expected old fd to remain readable after rename");
+    }
+
+    fd = open_path(&runtime,
+                   "/stage11dir/unlink.txt",
+                   LINUX_COMPAT_O_CREAT | LINUX_COMPAT_O_TRUNC |
+                       LINUX_COMPAT_O_RDWR,
+                   &trace);
+    if (fd < 3 ||
+        write_fd(&runtime, fd, "oldfd", 5U, &trace) != 5) {
+        return fail("expected opened unlink file setup to succeed");
+    }
+    unlinked_node = (linux_compat_overlay_node_t*)runtime.fds[fd].node;
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_UNLINKAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/stage11dir/unlink.txt";
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        stat_path(&runtime, "/stage11dir/unlink.txt", &stat, &trace) != -1000 ||
+        !unlinked_node->used ||
+        unlinked_node->nlink != 0U) {
+        return fail("expected unlink to hide path while preserving opened node");
+    }
+
+    reuse_fd = open_path(&runtime,
+                         "/stage11dir/reuse.txt",
+                         LINUX_COMPAT_O_CREAT | LINUX_COMPAT_O_TRUNC |
+                             LINUX_COMPAT_O_RDWR,
+                         &trace);
+    if (reuse_fd < 3 ||
+        runtime.fds[reuse_fd].node == unlinked_node ||
+        write_fd(&runtime, reuse_fd, "new", 3U, &trace) != 3 ||
+        linux_compat_lseek(&runtime, fd, 0, 0U, &trace) != 0 ||
+        linux_compat_read(&runtime, fd, readback, 5U, &trace) != 5 ||
+        memcmp(readback, "oldfd", 5U) != 0) {
+        return fail("expected opened unlinked fd to keep bytes until close");
+    }
+    if (linux_compat_close(&runtime, fd, &trace) != 0 ||
+        unlinked_node->used ||
+        linux_compat_close(&runtime, reuse_fd, &trace) != 0) {
+        return fail("expected close after unlink to recycle overlay node");
     }
 
     return 0;
@@ -1081,6 +1203,109 @@ static int test_process_exec_wait_and_pipe_syscalls(void) {
     return 0;
 }
 
+static int test_process_table_reparents_orphan_to_init(void) {
+    linux_compat_process_table_t table;
+    linux_compat_process_t* parent = 0;
+    linux_compat_process_t* child = 0;
+    const linux_compat_process_t* observed_child = 0;
+    const uint32_t init_pid = 1U;
+    uint32_t parent_pid = 0;
+    uint32_t child_pid = 0;
+
+    linux_compat_process_table_init(&table, "/");
+    parent = linux_compat_process_table_spawn_helper(&table,
+                                                     init_pid,
+                                                     "/usr/bin/git",
+                                                     "/repo",
+                                                     0);
+    if (parent == 0 || parent->pid <= init_pid || parent->ppid != init_pid) {
+        return fail("expected process table to create child of init");
+    }
+    parent_pid = parent->pid;
+
+    child = linux_compat_process_table_spawn_helper(&table,
+                                                    parent_pid,
+                                                    "/usr/bin/gcc",
+                                                    "/repo",
+                                                    0);
+    if (child == 0 || child->pid <= parent_pid || child->ppid != parent_pid) {
+        return fail("expected process table to create grandchild under parent");
+    }
+    child_pid = child->pid;
+
+    if (!linux_compat_process_table_mark_exited(&table,
+                                                parent_pid,
+                                                7,
+                                                init_pid)) {
+        return fail("expected parent exit to be recorded in process table");
+    }
+
+    observed_child = linux_compat_process_table_find(&table, child_pid);
+    if (observed_child == 0 || observed_child->ppid != init_pid) {
+        return fail("expected orphaned child to be reparented to init");
+    }
+    parent = linux_compat_process_table_find_mut(&table, parent_pid);
+    if (parent == 0 || !parent->exited || parent->exit_code != 7) {
+        return fail("expected exited parent to remain observable as zombie");
+    }
+
+    return 0;
+}
+
+static int test_execve_clone_inherits_cwd_path_and_reports_cloexec(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_trace_t trace;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    const linux_compat_process_t* child = 0;
+    int cloexec_fd = -1;
+    int stable_fd = -1;
+    int64_t child_pid = 0;
+
+    linux_compat_runtime_init(&runtime);
+    if (!linux_compat_runtime_set_cwd(&runtime, "/repo")) {
+        return fail("expected exec inheritance test cwd setup to succeed");
+    }
+
+    cloexec_fd = open_path(&runtime,
+                           "/bin/busybox",
+                           LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_CLOEXEC,
+                           &trace);
+    stable_fd = open_path(&runtime, "/usr/bin/git", LINUX_COMPAT_O_RDONLY, &trace);
+    if (cloexec_fd < 3 || stable_fd < 3) {
+        return fail("expected exec inheritance test to open rootfs files");
+    }
+
+    memset(&request, 0, sizeof(request));
+    memset(&response, 0, sizeof(response));
+    request.number = LINUX_COMPAT_SYS_EXECVE;
+    request.path = "/bin/busybox";
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        runtime.fds[cloexec_fd].open ||
+        !runtime.fds[stable_fd].open ||
+        !contains(trace.message, "cloexec_closed=1")) {
+        return fail("expected execve to close CLOEXEC fd and report it in trace");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_CLONE;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value <= 1) {
+        return fail("expected clone after execve to create helper child");
+    }
+    child_pid = response.value;
+    child = linux_compat_process_table_find(&runtime.process_table,
+                                            (uint32_t)child_pid);
+    if (child == 0 ||
+        strcmp(child->cwd, "/repo") != 0 ||
+        strcmp(child->path, "/bin/busybox") != 0) {
+        return fail("expected clone child to inherit cwd and exec path");
+    }
+
+    return 0;
+}
+
 static int test_thread_clone_is_rejected_in_single_thread_compat(void) {
     linux_compat_runtime_t runtime;
     linux_compat_trace_t trace;
@@ -1093,12 +1318,12 @@ static int test_thread_clone_is_rejected_in_single_thread_compat(void) {
     memset(&request, 0, sizeof(request));
     request.number = LINUX_COMPAT_SYS_CLONE;
     request.flags = thread_clone_flags;
-    request.addr = 0x6fff0000U;
+        request.addr = 0x6fff0000U;
     if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
         response.value != -38 ||
-        runtime.clone_count != 0U ||
-        runtime.last_clone_flags != thread_clone_flags ||
-        runtime.last_clone_stack != request.addr ||
+        runtime.process_table.clone_count != 0U ||
+        runtime.process_table.last_clone_flags != thread_clone_flags ||
+        runtime.process_table.last_clone_stack != request.addr ||
         !contains(trace.message, "unsupported thread") ||
         !runtime.latest_error_trace_valid ||
         runtime.latest_error_trace_record.number != LINUX_COMPAT_SYS_CLONE ||
@@ -1376,6 +1601,143 @@ static int test_dev_null_open_read_write_and_fstat(void) {
     return 0;
 }
 
+static int test_pseudo_paths_are_explicit_and_fail_closed(void) {
+    enum {
+        kLinuxStatModeOffset = 16,
+        kLinuxStatSizeOffset = 48,
+        kLinuxStatSize = 128
+    };
+    const char* proc_self_exe = "linux-compat:/proc/self/exe";
+    const uint32_t kSIfChr = 0020000U;
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    linux_compat_stat_t stat;
+    uint8_t stat_buffer[kLinuxStatSize];
+    char link_target[64];
+    uint8_t random_bytes[4] = {0};
+    int fd = -1;
+
+    linux_compat_runtime_init(&runtime);
+
+    fd = open_path(&runtime,
+                   "/dev/null",
+                   LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_DIRECTORY,
+                   &trace);
+    if (fd != -20) {
+        return fail("expected /dev/null O_DIRECTORY to fail as not-directory");
+    }
+
+    fd = open_path(&runtime, "/dev/random", LINUX_COMPAT_O_WRONLY, &trace);
+    if (fd != -13) {
+        return fail("expected /dev/random writable open to fail with EACCES");
+    }
+
+    fd = open_path(&runtime,
+                   "/dev/random",
+                   LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_LARGEFILE,
+                   &trace);
+    if (fd < 3) {
+        return fail("expected /dev/random to open read-only");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_READ;
+    request.fd = fd;
+    request.read_buffer = random_bytes;
+    request.length = sizeof(random_bytes);
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != (int64_t)sizeof(random_bytes) ||
+        memcmp(random_bytes, "\0\0\0\0", sizeof(random_bytes)) == 0) {
+        return fail("expected /dev/random read to fill deterministic bytes");
+    }
+    (void)linux_compat_close(&runtime, fd, &trace);
+
+    memset(&request, 0, sizeof(request));
+    memset(link_target, 0, sizeof(link_target));
+    request.number = LINUX_COMPAT_SYS_READLINKAT;
+    request.path = "/proc/self/exe";
+    request.read_buffer = link_target;
+    request.length = sizeof(link_target);
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != (int64_t)strlen(proc_self_exe) ||
+        strcmp(link_target, proc_self_exe) != 0) {
+        return fail("expected /proc/self/exe readlinkat to expose course evidence path");
+    }
+
+    memset(&request, 0, sizeof(request));
+    memset(&response, 0, sizeof(response));
+    request.number = LINUX_COMPAT_SYS_OPENAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/proc/self/exe";
+    request.flags = LINUX_COMPAT_O_RDONLY;
+    if (dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_ERR_NO_SUCH_FILE ||
+        response.value != -2) {
+        return fail("expected /proc/self/exe openat to remain fail-closed");
+    }
+
+    memset(&request, 0, sizeof(request));
+    memset(link_target, 0, sizeof(link_target));
+    request.number = LINUX_COMPAT_SYS_READLINKAT;
+    request.path = "/proc/self/fd/0";
+    request.read_buffer = link_target;
+    request.length = sizeof(link_target);
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != -2) {
+        return fail("expected unsupported /proc paths to fail closed");
+    }
+
+    memset(&request, 0, sizeof(request));
+    memset(&response, 0, sizeof(response));
+    request.number = LINUX_COMPAT_SYS_OPENAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/tmp";
+    request.flags = LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_DIRECTORY;
+    if (dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_ERR_NO_SUCH_FILE ||
+        response.value != -2) {
+        return fail("expected /tmp to remain overlay-created, not builtin");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MKDIRAT;
+    request.dirfd = LINUX_COMPAT_AT_FDCWD;
+    request.path = "/tmp";
+    request.flags = 0777U;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        stat_path(&runtime, "/tmp", &stat, &trace) != 0 ||
+        !stat.directory ||
+        stat.nlink != 1U) {
+        return fail("expected /tmp to work as an explicit overlay directory");
+    }
+
+    fd = open_path(&runtime,
+                   "/tmp",
+                   LINUX_COMPAT_O_RDONLY | LINUX_COMPAT_O_DIRECTORY,
+                   &trace);
+    if (fd < 3) {
+        return fail("expected overlay /tmp to open with O_DIRECTORY after mkdir");
+    }
+
+    memset(&request, 0, sizeof(request));
+    memset(stat_buffer, 0, sizeof(stat_buffer));
+    request.number = LINUX_COMPAT_SYS_FSTAT;
+    request.fd = fd;
+    request.stat = (linux_compat_stat_t*)stat_buffer;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        read_u64_le(stat_buffer, kLinuxStatSizeOffset) != 0U ||
+        (read_u32_le(stat_buffer, kLinuxStatModeOffset) & kSIfChr) != 0U) {
+        return fail("expected overlay /tmp fstat to report directory metadata");
+    }
+    (void)linux_compat_close(&runtime, fd, &trace);
+
+    return 0;
+}
+
 static int test_stdin_read_consumes_uart_queue_raw_bytes(void) {
     linux_compat_runtime_t runtime;
     linux_compat_syscall_request_t request;
@@ -1649,6 +2011,79 @@ static int test_syscall_trace_records_include_stage11_diagnostics(void) {
     return 0;
 }
 
+static int test_syscall_stub_policy_records_bypass_errno_and_unsupported(void) {
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    linux_compat_statx_t statx;
+    const linux_compat_syscall_trace_record_t* record = 0;
+    const uint64_t kUnknownSyscall = 9999U;
+
+    linux_compat_runtime_init(&runtime);
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_SET_ROBUST_LIST;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != 0 ||
+        !runtime.latest_trace_valid) {
+        return fail("expected set_robust_list bypass policy call to succeed");
+    }
+    record = &runtime.latest_trace_record;
+    if (record->number != LINUX_COMPAT_SYS_SET_ROBUST_LIST ||
+        record->return_value != 0 ||
+        record->errno_value != 0 ||
+        !contains(record->message, "set_robust_list") ||
+        !contains(record->message, "policy=bypass") ||
+        !contains(record->message, "ret=0") ||
+        !contains(record->message, "errno=0")) {
+        return fail("expected bypass syscall policy trace to be explicit");
+    }
+
+    memset(&request, 0, sizeof(request));
+    memset(&statx, 0, sizeof(statx));
+    request.number = LINUX_COMPAT_SYS_STATX;
+    request.path = "/missing-statx-policy";
+    request.statx = &statx;
+    if (dispatch(&runtime, &request, &response, &trace) != LINUX_COMPAT_OK ||
+        response.value != -2 ||
+        !runtime.latest_error_trace_valid) {
+        return fail("expected statx missing path to return stable errno");
+    }
+    record = &runtime.latest_error_trace_record;
+    if (record->number != LINUX_COMPAT_SYS_STATX ||
+        record->return_value != -2 ||
+        record->errno_value != 2 ||
+        !contains(record->message, "statx") ||
+        !contains(record->message, "path=/missing-statx-policy") ||
+        !contains(record->message, "policy=errno") ||
+        !contains(record->message, "ret=-2") ||
+        !contains(record->message, "errno=2")) {
+        return fail("expected explicit errno syscall policy trace to be stable");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = kUnknownSyscall;
+    if (dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_ERR_UNSUPPORTED_SYSCALL ||
+        response.value != -38 ||
+        !runtime.latest_error_trace_valid) {
+        return fail("expected unknown syscall to use unsupported policy");
+    }
+    record = &runtime.latest_error_trace_record;
+    if (record->number != kUnknownSyscall ||
+        record->return_value != -38 ||
+        record->errno_value != 38 ||
+        !contains(record->message, "unsupported syscall") ||
+        !contains(record->message, "policy=unsupported") ||
+        !contains(record->message, "ret=-38") ||
+        !contains(record->message, "errno=38")) {
+        return fail("expected unsupported syscall policy trace to fail closed");
+    }
+
+    return 0;
+}
+
 static int test_lseek_syscall_dispatch_uses_whence_argument(void) {
     linux_compat_runtime_t runtime;
     linux_compat_trace_t trace;
@@ -1785,6 +2220,7 @@ int main(void) {
         test_fstat_and_newfstatat_write_linux_abi_stat_layout() != 0 ||
         test_overlay_shadows_lower_rootfs() != 0 ||
         test_mkdir_dirents_rename_unlink_and_sync() != 0 ||
+        test_opened_overlay_fd_survives_rename_unlink_until_close() != 0 ||
         test_getdents64_advances_directory_offset_to_eof() != 0 ||
         test_git_object_rename_supports_long_overlay_path() != 0 ||
         test_bad_path_bad_fd_and_lower_guardrails() != 0 ||
@@ -1795,17 +2231,21 @@ int main(void) {
         test_course_shell_stage11_output_buffer_contract() != 0 ||
         test_linux_run_uses_session_overlay_for_exec_lookup() != 0 ||
         test_process_exec_wait_and_pipe_syscalls() != 0 ||
+        test_process_table_reparents_orphan_to_init() != 0 ||
+        test_execve_clone_inherits_cwd_path_and_reports_cloexec() != 0 ||
         test_thread_clone_is_rejected_in_single_thread_compat() != 0 ||
         test_openat_cloexec_sets_fd_flag() != 0 ||
         test_openat_largefile_is_accepted_as_low_effect_status_flag() != 0 ||
         test_openat_append_writes_at_end_for_git_reflog() != 0 ||
         test_openat_directory_and_exclusive_create_flags() != 0 ||
         test_dev_null_open_read_write_and_fstat() != 0 ||
+        test_pseudo_paths_are_explicit_and_fail_closed() != 0 ||
         test_stdin_read_consumes_uart_queue_raw_bytes() != 0 ||
         test_stdin_read_consumes_piped_text_before_uart() != 0 ||
         test_pselect6_reports_stdin_ready_from_uart_queue() != 0 ||
         test_futex_wait_and_wake_are_low_effect_not_unsupported() != 0 ||
         test_syscall_trace_records_include_stage11_diagnostics() != 0 ||
+        test_syscall_stub_policy_records_bypass_errno_and_unsupported() != 0 ||
         test_lseek_syscall_dispatch_uses_whence_argument() != 0 ||
         test_syscall_trace_keeps_latest_record_after_truncation() != 0 ||
         test_syscall_trace_keeps_latest_error_after_success() != 0) {

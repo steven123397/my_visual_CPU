@@ -695,7 +695,9 @@ static void clear_stat(linux_compat_stat_t* stat) {
     }
     stat->inode = 0;
     stat->mode = 0;
+    stat->nlink = 0;
     stat->size = 0;
+    stat->mtime = 0;
     stat->directory = false;
     stat->executable = false;
 }
@@ -730,7 +732,7 @@ static void fill_linux_stat_abi(uint8_t out[128],
     write_u64_le(out, 0U, 1U);
     write_u64_le(out, 8U, stat->inode);
     write_u32_le(out, 16U, stat->mode);
-    write_u32_le(out, 20U, 1U);
+    write_u32_le(out, 20U, stat->nlink);
     write_u64_le(out, 32U, stat->mode & LINUX_COMPAT_S_IFCHR ? 1U : 0U);
     write_u64_le(out, 48U, stat->size);
     write_u32_le(out, 56U, 4096U);
@@ -782,7 +784,9 @@ static void fill_stat_from_node(linux_compat_stat_t* stat,
     }
     stat->inode = node->inode;
     stat->mode = node->mode;
+    stat->nlink = 1U;
     stat->size = node->size;
+    stat->mtime = 0;
     stat->directory = node->directory;
     stat->executable = node->executable;
 }
@@ -1309,6 +1313,8 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
         runtime->overlay_nodes[i].dirty = false;
         runtime->overlay_nodes[i].inode = 0;
         runtime->overlay_nodes[i].mode = 0;
+        runtime->overlay_nodes[i].nlink = 0;
+        runtime->overlay_nodes[i].open_count = 0;
         runtime->overlay_nodes[i].mtime = 0;
         runtime->overlay_nodes[i].path[0] = '\0';
         runtime->overlay_nodes[i].size = 0;
@@ -1321,23 +1327,7 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
         runtime->pipes[i].read_offset = 0;
         zero_bytes(runtime->pipes[i].data, sizeof(runtime->pipes[i].data));
     }
-    runtime->current_pid = 1U;
-    runtime->next_pid = 2U;
-    for (i = 0; i < LINUX_COMPAT_MAX_PROCESSES; ++i) {
-        runtime->processes[i].used = false;
-        runtime->processes[i].pid = 0;
-        runtime->processes[i].ppid = 0;
-        runtime->processes[i].exited = false;
-        runtime->processes[i].exit_code = 0;
-        runtime->processes[i].path[0] = '\0';
-        runtime->processes[i].cwd[0] = '\0';
-    }
-    runtime->processes[0].used = true;
-    runtime->processes[0].pid = runtime->current_pid;
-    runtime->processes[0].ppid = 0;
-    copy_str(runtime->processes[0].cwd,
-             sizeof(runtime->processes[0].cwd),
-             runtime->cwd);
+    linux_compat_process_table_init(&runtime->process_table, runtime->cwd);
     runtime->trace_count = 0;
     runtime->trace_truncated = false;
     runtime->latest_trace_valid = false;
@@ -1354,9 +1344,6 @@ void linux_compat_runtime_init(linux_compat_runtime_t* runtime) {
     runtime->latest_error_trace_record.message[0] = '\0';
     runtime->futex_wait_count = 0;
     runtime->futex_wake_count = 0;
-    runtime->clone_count = 0;
-    runtime->last_clone_flags = 0;
-    runtime->last_clone_stack = 0;
     runtime->user_faulted = false;
     runtime->user_fault_cause = 0;
     runtime->user_fault_pc = 0;
@@ -1378,12 +1365,8 @@ bool linux_compat_runtime_set_cwd(linux_compat_runtime_t* runtime,
         return false;
     }
     copy_str(runtime->cwd, sizeof(runtime->cwd), cwd);
-    if (runtime->processes[0].used &&
-        runtime->processes[0].pid == runtime->current_pid) {
-        copy_str(runtime->processes[0].cwd,
-                 sizeof(runtime->processes[0].cwd),
-                 cwd);
-    }
+    (void)linux_compat_process_table_set_current_cwd(&runtime->process_table,
+                                                     cwd);
     return true;
 }
 
@@ -1433,23 +1416,8 @@ static void linux_compat_runtime_reset_for_exec(
         runtime->pipes[i].read_offset = 0;
         zero_bytes(runtime->pipes[i].data, sizeof(runtime->pipes[i].data));
     }
-    runtime->current_pid = 1U;
-    runtime->next_pid = 2U;
-    for (i = 0; i < LINUX_COMPAT_MAX_PROCESSES; ++i) {
-        runtime->processes[i].used = false;
-        runtime->processes[i].pid = 0;
-        runtime->processes[i].ppid = 0;
-        runtime->processes[i].exited = false;
-        runtime->processes[i].exit_code = 0;
-        runtime->processes[i].path[0] = '\0';
-        runtime->processes[i].cwd[0] = '\0';
-    }
-    runtime->processes[0].used = true;
-    runtime->processes[0].pid = runtime->current_pid;
-    runtime->processes[0].ppid = 0;
-    copy_str(runtime->processes[0].cwd,
-             sizeof(runtime->processes[0].cwd),
-             linux_compat_runtime_cwd(runtime));
+    linux_compat_process_table_init(&runtime->process_table,
+                                    linux_compat_runtime_cwd(runtime));
     runtime->trace_count = 0;
     runtime->trace_truncated = false;
     runtime->latest_trace_valid = false;
@@ -1466,9 +1434,6 @@ static void linux_compat_runtime_reset_for_exec(
     runtime->latest_error_trace_record.message[0] = '\0';
     runtime->futex_wait_count = 0;
     runtime->futex_wake_count = 0;
-    runtime->clone_count = 0;
-    runtime->last_clone_flags = 0;
-    runtime->last_clone_stack = 0;
     runtime->user_faulted = false;
     runtime->user_fault_cause = 0;
     runtime->user_fault_pc = 0;
@@ -1725,6 +1690,8 @@ static linux_compat_overlay_node_t* alloc_overlay_node(
         node->inode = runtime->next_overlay_inode;
         runtime->next_overlay_inode += 1U;
         node->mode = mode;
+        node->nlink = 1U;
+        node->open_count = 0;
         node->mtime = runtime->next_overlay_mtime;
         runtime->next_overlay_mtime += 1U;
         copy_str(node->path, sizeof(node->path), path);
@@ -1733,6 +1700,47 @@ static linux_compat_overlay_node_t* alloc_overlay_node(
         return node;
     }
     return 0;
+}
+
+static void overlay_touch(linux_compat_runtime_t* runtime,
+                          linux_compat_overlay_node_t* node) {
+    if (runtime == 0 || node == 0) {
+        return;
+    }
+    node->mtime = runtime->next_overlay_mtime;
+    runtime->next_overlay_mtime += 1U;
+}
+
+static void overlay_retain_open(linux_compat_overlay_node_t* node) {
+    if (node != 0) {
+        node->open_count += 1U;
+    }
+}
+
+static void overlay_release_open(linux_compat_overlay_node_t* node) {
+    if (node == 0) {
+        return;
+    }
+    if (node->open_count != 0U) {
+        node->open_count -= 1U;
+    }
+    if (node->open_count == 0U && node->nlink == 0U) {
+        node->used = false;
+    }
+}
+
+static void overlay_drop_link(linux_compat_runtime_t* runtime,
+                              linux_compat_overlay_node_t* node) {
+    if (runtime == 0 || node == 0) {
+        return;
+    }
+    node->nlink = 0U;
+    node->path[0] = '\0';
+    node->dirty = true;
+    overlay_touch(runtime, node);
+    if (node->open_count == 0U) {
+        node->used = false;
+    }
 }
 
 static bool linux_compat_path_basename_eq(const char* path, const char* name) {
@@ -1934,7 +1942,9 @@ static void fill_stat_from_overlay(linux_compat_stat_t* stat,
     }
     stat->inode = node->inode;
     stat->mode = node->mode;
+    stat->nlink = node->nlink;
     stat->size = node->directory ? 0U : node->size;
+    stat->mtime = node->mtime;
     stat->directory = node->directory;
     stat->executable = node->executable;
 }
@@ -2488,6 +2498,11 @@ int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
         return -22;
     }
     if (str_eq(lookup_path, "/dev/null")) {
+        if (require_directory) {
+            set_trace(out_trace, lookup_path, 20,
+                      "linux-compat: openat: not directory");
+            return -20;
+        }
         for (i = 3U; i < LINUX_COMPAT_MAX_FDS; ++i) {
             if (!runtime->fds[i].open) {
                 runtime->fds[i].open = true;
@@ -2514,6 +2529,11 @@ int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
         return -24;
     }
     if (linux_compat_path_is_random_device(lookup_path)) {
+        if (require_directory) {
+            set_trace(out_trace, lookup_path, 20,
+                      "linux-compat: openat: not directory");
+            return -20;
+        }
         if (writable) {
             set_trace(out_trace, lookup_path, 13,
                       "linux-compat: openat: random not writable");
@@ -2610,8 +2630,7 @@ int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
     if (overlay != 0 && truncate) {
         overlay->size = 0;
         overlay->dirty = true;
-        overlay->mtime = runtime->next_overlay_mtime;
-        runtime->next_overlay_mtime += 1U;
+        overlay_touch(runtime, overlay);
     }
     for (i = 3U; i < LINUX_COMPAT_MAX_FDS; ++i) {
         if (!runtime->fds[i].open) {
@@ -2628,6 +2647,9 @@ int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
             runtime->fds[i].pipe_index = 0;
             runtime->fds[i].dev_null = false;
             runtime->fds[i].dev_random = false;
+            if (overlay != 0) {
+                overlay_retain_open(overlay);
+            }
             set_trace(out_trace,
                       lookup_path,
                       0,
@@ -2776,6 +2798,9 @@ int32_t linux_compat_close(linux_compat_runtime_t* runtime,
         set_trace(out_trace, "", 9, "linux-compat: close: bad fd");
         return -9;
     }
+    if (runtime->fds[fd].overlay_node) {
+        overlay_release_open((linux_compat_overlay_node_t*)runtime->fds[fd].node);
+    }
     runtime->fds[fd].open = false;
     runtime->fds[fd].node = 0;
     runtime->fds[fd].offset = 0;
@@ -2790,6 +2815,29 @@ int32_t linux_compat_close(linux_compat_runtime_t* runtime,
     runtime->fds[fd].dev_random = false;
     set_trace(out_trace, "", 0, "linux-compat: close: ok");
     return 0;
+}
+
+static void linux_compat_close_fd_slot(linux_compat_runtime_t* runtime,
+                                       int32_t fd) {
+    if (runtime == 0 || fd < 3 || fd >= (int32_t)LINUX_COMPAT_MAX_FDS ||
+        !runtime->fds[fd].open) {
+        return;
+    }
+    if (runtime->fds[fd].overlay_node) {
+        overlay_release_open((linux_compat_overlay_node_t*)runtime->fds[fd].node);
+    }
+    runtime->fds[fd].open = false;
+    runtime->fds[fd].node = 0;
+    runtime->fds[fd].offset = 0;
+    runtime->fds[fd].flags = LINUX_COMPAT_O_RDONLY;
+    runtime->fds[fd].fd_flags = 0;
+    runtime->fds[fd].overlay_node = false;
+    runtime->fds[fd].pipe_node = false;
+    runtime->fds[fd].pipe_read = false;
+    runtime->fds[fd].pipe_write = false;
+    runtime->fds[fd].pipe_index = 0;
+    runtime->fds[fd].dev_null = false;
+    runtime->fds[fd].dev_random = false;
 }
 
 static bool linux_compat_fd_valid(const linux_compat_runtime_t* runtime,
@@ -3288,15 +3336,28 @@ static int64_t linux_compat_getdents64(linux_compat_runtime_t* runtime,
     return (int64_t)(count * sizeof(linux_compat_dirent_t));
 }
 
-static int64_t linux_compat_mprotect(uint64_t addr,
+static int64_t linux_compat_mprotect(linux_compat_runtime_t* runtime,
+                                     uint64_t addr,
                                      size_t length,
                                      uint32_t prot,
                                      linux_compat_trace_t* out_trace) {
-    (void)addr;
-    (void)prot;
+    int32_t result = 0;
+
     if (length == 0U) {
         set_trace(out_trace, "", 22, "linux-compat: mprotect: empty range");
         return -22;
+    }
+    if (runtime != 0 && runtime->vm != 0) {
+        result = linux_compat_vm_mprotect(runtime->vm,
+                                          (uintptr_t)addr,
+                                          length,
+                                          prot);
+        set_trace(out_trace,
+                  "",
+                  result < 0 ? -result : 0,
+                  result == 0 ? "linux-compat: mprotect"
+                              : "linux-compat: mprotect: failed");
+        return result;
     }
     set_trace(out_trace, "", 0, "linux-compat: mprotect");
     return 0;
@@ -3697,8 +3758,11 @@ static int64_t linux_compat_execve(linux_compat_runtime_t* runtime,
                                    const char* path,
                                    linux_compat_trace_t* out_trace) {
     char resolved_path[LINUX_COMPAT_MAX_PATH];
+    char message[LINUX_COMPAT_MAX_MESSAGE];
     linux_compat_stat_t stat;
+    uint64_t cloexec_closed = 0;
     size_t i = 0;
+    size_t used = 0;
 
     if (runtime == 0) {
         set_trace(out_trace, "", 22, "linux-compat: execve: bad runtime");
@@ -3720,18 +3784,20 @@ static int64_t linux_compat_execve(linux_compat_runtime_t* runtime,
     for (i = 3U; i < LINUX_COMPAT_MAX_FDS; ++i) {
         if (runtime->fds[i].open &&
             (runtime->fds[i].fd_flags & LINUX_COMPAT_FD_CLOEXEC) != 0U) {
-            runtime->fds[i].open = false;
-            runtime->fds[i].node = 0;
-            runtime->fds[i].pipe_node = false;
+            linux_compat_close_fd_slot(runtime, (int32_t)i);
+            cloexec_closed += 1U;
         }
     }
-    if (runtime->processes[0].used &&
-        runtime->processes[0].pid == runtime->current_pid) {
-        copy_str(runtime->processes[0].path,
-                 sizeof(runtime->processes[0].path),
-                 resolved_path);
-    }
-    set_trace(out_trace, resolved_path, 0, "linux-compat: execve");
+    (void)linux_compat_process_table_set_current_exec_path(
+        &runtime->process_table,
+        resolved_path);
+    message[0] = '\0';
+    (void)append_str(message,
+                     sizeof(message),
+                     &used,
+                     "linux-compat: execve cloexec_closed=");
+    (void)append_u64_dec(message, sizeof(message), &used, cloexec_closed);
+    set_trace(out_trace, resolved_path, 0, message);
     return 0;
 }
 
@@ -3739,14 +3805,14 @@ static int64_t linux_compat_clone(linux_compat_runtime_t* runtime,
                                   uint32_t flags,
                                   uint64_t child_stack,
                                   linux_compat_trace_t* out_trace) {
-    size_t i = 0;
+    linux_compat_process_t* child = 0;
 
-    if (runtime == 0 || runtime->next_pid == 0U) {
+    if (runtime == 0 || runtime->process_table.next_pid == 0U) {
         set_trace(out_trace, "", 22, "linux-compat: clone: bad runtime");
         return -22;
     }
-    runtime->last_clone_flags = flags;
-    runtime->last_clone_stack = child_stack;
+    runtime->process_table.last_clone_flags = flags;
+    runtime->process_table.last_clone_stack = child_stack;
     if ((flags & LINUX_COMPAT_CLONE_THREAD) != 0U) {
         set_trace(out_trace,
                   runtime->exec_path,
@@ -3754,24 +3820,14 @@ static int64_t linux_compat_clone(linux_compat_runtime_t* runtime,
                   "linux-compat: clone: unsupported thread");
         return -38;
     }
-    for (i = 0; i < LINUX_COMPAT_MAX_PROCESSES; ++i) {
-        linux_compat_process_t* child = &runtime->processes[i];
-
-        if (child->used) {
-            continue;
-        }
-        child->used = true;
-        child->pid = runtime->next_pid;
-        runtime->next_pid += 1U;
-        runtime->clone_count += 1U;
-        child->ppid = runtime->current_pid;
-        child->exited = true;
-        child->exit_code = 0;
-        copy_str(child->path,
-                 sizeof(child->path),
-                 runtime->exec_path[0] != '\0' ? runtime->exec_path
-                                                : "linux-compat-child");
-        copy_str(child->cwd, sizeof(child->cwd), runtime->cwd);
+    child = linux_compat_process_table_spawn_helper(
+        &runtime->process_table,
+        runtime->process_table.current_pid,
+        runtime->exec_path[0] != '\0' ? runtime->exec_path
+                                      : "linux-compat-child",
+        runtime->cwd,
+        0);
+    if (child != 0) {
         set_trace(out_trace, child->path, 0, "linux-compat: clone");
         return (int64_t)child->pid;
     }
@@ -3783,36 +3839,40 @@ static int64_t linux_compat_wait4(linux_compat_runtime_t* runtime,
                                   int32_t pid,
                                   void* status_buffer,
                                   linux_compat_trace_t* out_trace) {
-    size_t i = 0;
+    int32_t status = 0;
+    int64_t result = 0;
+    const linux_compat_process_t* child = 0;
 
     if (runtime == 0) {
         set_trace(out_trace, "", 22, "linux-compat: wait4: bad runtime");
         return -22;
     }
-    for (i = 0; i < LINUX_COMPAT_MAX_PROCESSES; ++i) {
-        linux_compat_process_t* child = &runtime->processes[i];
-
-        if (!child->used || child->ppid != runtime->current_pid ||
-            !child->exited ||
-            (pid > 0 && child->pid != (uint32_t)pid)) {
-            continue;
+    if (pid > 0) {
+        child = linux_compat_process_table_find(&runtime->process_table,
+                                                (uint32_t)pid);
+    }
+    result = linux_compat_process_table_wait_exited(
+        &runtime->process_table,
+        runtime->process_table.current_pid,
+        pid,
+        status_buffer != 0 ? &status : 0);
+    if (result > 0) {
+        if (status_buffer != 0 &&
+            !linux_compat_write_result_buffer(runtime,
+                                              status_buffer,
+                                              &status,
+                                              sizeof(status))) {
+            set_trace(out_trace,
+                      child != 0 ? child->path : "",
+                      14,
+                      "linux-compat: wait4: bad status");
+            return -14;
         }
-        if (status_buffer != 0) {
-            const int32_t status = child->exit_code << 8;
-
-            if (!linux_compat_write_result_buffer(runtime,
-                                                  status_buffer,
-                                                  &status,
-                                                  sizeof(status))) {
-                set_trace(out_trace, child->path, 14,
-                          "linux-compat: wait4: bad status");
-                return -14;
-            }
-        }
-        set_trace(out_trace, child->path, 0, "linux-compat: wait4");
-        pid = (int32_t)child->pid;
-        child->used = false;
-        return pid;
+        set_trace(out_trace,
+                  child != 0 ? child->path : "",
+                  0,
+                  "linux-compat: wait4");
+        return result;
     }
     set_trace(out_trace, "", 10, "linux-compat: wait4: no child");
     return -10;
@@ -3898,10 +3958,14 @@ static int64_t linux_compat_dup3(linux_compat_runtime_t* runtime,
         set_trace(out_trace, "", 22, "linux-compat: dup3: bad args");
         return -22;
     }
+    linux_compat_close_fd_slot(runtime, new_fd);
     runtime->fds[new_fd] = runtime->fds[old_fd];
     runtime->fds[new_fd].open = true;
     runtime->fds[new_fd].fd_flags =
         (flags & LINUX_COMPAT_O_CLOEXEC) != 0U ? LINUX_COMPAT_FD_CLOEXEC : 0U;
+    if (runtime->fds[new_fd].overlay_node) {
+        overlay_retain_open((linux_compat_overlay_node_t*)runtime->fds[new_fd].node);
+    }
     set_trace(out_trace, "", 0, "linux-compat: dup3");
     return new_fd;
 }
@@ -3982,8 +4046,7 @@ static int64_t linux_compat_unlinkat(linux_compat_runtime_t* runtime,
                       "linux-compat: unlinkat: is directory");
             return -21;
         }
-        overlay->used = false;
-        overlay->dirty = true;
+        overlay_drop_link(runtime, overlay);
         set_trace(out_trace, resolved_path, 0, "linux-compat: unlinkat");
         return 0;
     }
@@ -4052,12 +4115,12 @@ static int64_t linux_compat_renameat(linux_compat_runtime_t* runtime,
     }
     target = find_overlay_node(runtime, new_resolved);
     if (target != 0 && target != source) {
-        target->used = false;
+        overlay_drop_link(runtime, target);
     }
     copy_str(source->path, sizeof(source->path), new_resolved);
+    source->nlink = 1U;
     source->dirty = true;
-    source->mtime = runtime->next_overlay_mtime;
-    runtime->next_overlay_mtime += 1U;
+    overlay_touch(runtime, source);
     set_trace(out_trace, old_resolved, 0, "linux-compat: renameat");
     return 0;
 }
@@ -4251,6 +4314,30 @@ static uint64_t trace_fd_offset_before(linux_compat_runtime_t* runtime,
     return current;
 }
 
+static bool syscall_is_low_effect_bypass(uint64_t number) {
+    return number == LINUX_COMPAT_SYS_SET_ROBUST_LIST ||
+           number == LINUX_COMPAT_SYS_RT_SIGACTION ||
+           number == LINUX_COMPAT_SYS_RT_SIGPROCMASK;
+}
+
+static const char* syscall_policy_label(
+    const linux_compat_syscall_request_t* request,
+    int64_t return_value) {
+    if (request == 0) {
+        return "";
+    }
+    if (return_value == -38) {
+        return "unsupported";
+    }
+    if (return_value < 0) {
+        return "errno";
+    }
+    if (syscall_is_low_effect_bypass(request->number)) {
+        return "bypass";
+    }
+    return "";
+}
+
 static void format_syscall_trace_record_message(
     linux_compat_runtime_t* runtime,
     const linux_compat_syscall_request_t* request,
@@ -4263,6 +4350,7 @@ static void format_syscall_trace_record_message(
         trace != 0 ? (int64_t)trace->errno_value
                    : (return_value < 0 ? -return_value : 0);
     const char* name = linux_compat_syscall_name(request->number);
+    const char* policy = syscall_policy_label(request, return_value);
     bool only_name = false;
 
     if (record == 0 || request == 0) {
@@ -4278,6 +4366,7 @@ static void format_syscall_trace_record_message(
         request->number == LINUX_COMPAT_SYS_NEWFSTATAT ||
         request->number == LINUX_COMPAT_SYS_FACCESSAT ||
         request->number == LINUX_COMPAT_SYS_READLINKAT ||
+        request->number == LINUX_COMPAT_SYS_STATX ||
         request->number == LINUX_COMPAT_SYS_MKDIRAT ||
         request->number == LINUX_COMPAT_SYS_UNLINKAT ||
         request->number == LINUX_COMPAT_SYS_RENAMEAT ||
@@ -4446,8 +4535,10 @@ static void format_syscall_trace_record_message(
                                      sizeof(record->message),
                                      &used,
                                      "pid",
-                                     runtime != 0 ? (uint64_t)runtime->current_pid
-                                                  : 0U);
+                                     runtime != 0
+                                         ? (uint64_t)runtime->process_table
+                                               .current_pid
+                                         : 0U);
     }
     if (request->number == LINUX_COMPAT_SYS_CLONE) {
         (void)append_trace_field_u64(record->message,
@@ -4560,20 +4651,40 @@ static void format_syscall_trace_record_message(
                                      sizeof(record->message),
                                      &used,
                                      "clone_count",
-                                     runtime != 0 ? runtime->clone_count : 0U);
+                                     runtime != 0
+                                         ? runtime->process_table.clone_count
+                                         : 0U);
         (void)append_trace_field_u64(record->message,
                                      sizeof(record->message),
                                      &used,
                                      "clone_flags",
                                      runtime != 0
-                                         ? (uint64_t)runtime->last_clone_flags
+                                         ? (uint64_t)runtime->process_table
+                                               .last_clone_flags
                                          : 0U);
         (void)append_trace_field_hex(record->message,
                                      sizeof(record->message),
                                      &used,
                                      "clone_stack",
-                                     runtime != 0 ? runtime->last_clone_stack
-                                                  : 0U);
+                                     runtime != 0
+                                         ? runtime->process_table
+                                               .last_clone_stack
+                                         : 0U);
+    }
+    if (policy[0] != '\0') {
+        (void)append_trace_field_str(record->message,
+                                     sizeof(record->message),
+                                     &used,
+                                     "policy",
+                                     policy);
+        if (str_eq(name, "unknown") && trace != 0 &&
+            trace->message[0] != '\0') {
+            (void)append_trace_field_str(record->message,
+                                         sizeof(record->message),
+                                         &used,
+                                         "reason",
+                                         trace->message);
+        }
     }
 
     only_name = used == str_len(name);
@@ -4681,8 +4792,15 @@ linux_compat_result_t linux_compat_syscall_dispatch(
         set_trace(out_trace, "", 0, "linux-compat: syscall: brk");
     } else if (request->number == LINUX_COMPAT_SYS_MMAP) {
         const uint64_t length = request->length == 0U ? 4096U : request->length;
+        const uint32_t map_type =
+            request->flags & (LINUX_COMPAT_MAP_SHARED |
+                              LINUX_COMPAT_MAP_PRIVATE);
 
-        if (runtime->vm != 0) {
+        if (map_type == LINUX_COMPAT_MAP_SHARED ||
+            map_type == (LINUX_COMPAT_MAP_SHARED |
+                         LINUX_COMPAT_MAP_PRIVATE)) {
+            value = -22;
+        } else if (runtime->vm != 0) {
             const bool fixed_prot_none =
                 request->prot == 0U &&
                 (request->flags & LINUX_COMPAT_MAP_FIXED) != 0U;
@@ -4737,7 +4855,8 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                                     request->flags,
                                     out_trace);
     } else if (request->number == LINUX_COMPAT_SYS_MPROTECT) {
-        value = linux_compat_mprotect(request->addr,
+        value = linux_compat_mprotect(runtime,
+                                      request->addr,
                                       request->length,
                                       request->prot,
                                       out_trace);
@@ -4986,7 +5105,9 @@ linux_compat_result_t linux_compat_syscall_dispatch(
         value = 0;
         set_trace(out_trace, "", 0, "linux-compat: rt_sigprocmask");
     } else if (request->number == LINUX_COMPAT_SYS_GETPID) {
-        value = runtime->current_pid != 0U ? (int64_t)runtime->current_pid : 1;
+        value = runtime->process_table.current_pid != 0U
+                    ? (int64_t)runtime->process_table.current_pid
+                    : 1;
         set_trace(out_trace, "", 0, "linux-compat: getpid");
     } else if (request->number == LINUX_COMPAT_SYS_STATX) {
         value = linux_compat_statx(runtime,
@@ -4997,6 +5118,11 @@ linux_compat_result_t linux_compat_syscall_dispatch(
                request->number == LINUX_COMPAT_SYS_EXIT_GROUP) {
         runtime->exited = true;
         runtime->exit_code = request->fd;
+        (void)linux_compat_process_table_mark_exited(
+            &runtime->process_table,
+            runtime->process_table.current_pid,
+            request->fd,
+            1U);
         value = 0;
         set_trace(out_trace, "", 0, "linux-compat: syscall: exit");
     } else if (request->number == LINUX_COMPAT_SYS_GETRANDOM) {

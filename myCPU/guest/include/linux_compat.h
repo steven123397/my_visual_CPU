@@ -50,7 +50,10 @@
 #define LINUX_COMPAT_O_DIRECTORY 00200000U
 #define LINUX_COMPAT_O_NOFOLLOW 00400000U
 #define LINUX_COMPAT_O_CLOEXEC 02000000U
+#define LINUX_COMPAT_MAP_SHARED 0x01U
+#define LINUX_COMPAT_MAP_PRIVATE 0x02U
 #define LINUX_COMPAT_MAP_FIXED 0x10U
+#define LINUX_COMPAT_MAP_ANONYMOUS 0x20U
 #define LINUX_COMPAT_F_DUPFD 0U
 #define LINUX_COMPAT_F_GETFD 1U
 #define LINUX_COMPAT_F_SETFD 2U
@@ -123,6 +126,8 @@
 #define LINUX_COMPAT_SYS_GETRANDOM 278U
 #define LINUX_COMPAT_SYS_STATX 291U
 
+#include "linux_compat_process.h"
+
 struct LinuxCompatVm;
 typedef struct TrapContext trap_context_t;
 typedef struct TrapUserRuntime trap_user_runtime_t;
@@ -184,7 +189,9 @@ typedef struct LinuxCompatElfInfo {
 typedef struct LinuxCompatStat {
     uint64_t inode;
     uint32_t mode;
+    uint32_t nlink;
     uint64_t size;
+    uint64_t mtime;
     bool directory;
     bool executable;
 } linux_compat_stat_t;
@@ -231,6 +238,8 @@ typedef struct LinuxCompatOverlayNode {
     bool dirty;
     uint64_t inode;
     uint32_t mode;
+    uint32_t nlink;
+    uint32_t open_count;
     uint64_t mtime;
     char path[LINUX_COMPAT_MAX_PATH];
     uint8_t data[LINUX_COMPAT_MAX_OVERLAY_FILE_SIZE];
@@ -258,16 +267,6 @@ typedef struct LinuxCompatPipe {
     size_t size;
     size_t read_offset;
 } linux_compat_pipe_t;
-
-typedef struct LinuxCompatProcess {
-    bool used;
-    uint32_t pid;
-    uint32_t ppid;
-    bool exited;
-    int32_t exit_code;
-    char path[LINUX_COMPAT_MAX_PATH];
-    char cwd[LINUX_COMPAT_MAX_PATH];
-} linux_compat_process_t;
 
 typedef struct LinuxCompatTimespec {
     int64_t tv_sec;
@@ -314,9 +313,7 @@ struct LinuxCompatRuntime {
     char cwd[LINUX_COMPAT_MAX_PATH];
     char exec_path[LINUX_COMPAT_MAX_PATH];
     linux_compat_pipe_t pipes[LINUX_COMPAT_MAX_PIPES];
-    linux_compat_process_t processes[LINUX_COMPAT_MAX_PROCESSES];
-    uint32_t current_pid;
-    uint32_t next_pid;
+    linux_compat_process_table_t process_table;
     linux_compat_syscall_trace_record_t trace_records[LINUX_COMPAT_MAX_TRACE_RECORDS];
     linux_compat_syscall_trace_record_t latest_trace_record;
     linux_compat_syscall_trace_record_t latest_error_trace_record;
@@ -326,9 +323,6 @@ struct LinuxCompatRuntime {
     bool latest_error_trace_valid;
     uint64_t futex_wait_count;
     uint64_t futex_wake_count;
-    uint64_t clone_count;
-    uint32_t last_clone_flags;
-    uint64_t last_clone_stack;
     bool user_faulted;
     uint64_t user_fault_cause;
     uintptr_t user_fault_pc;

@@ -73,6 +73,17 @@ int32_t linux_compat_vm_munmap(linux_compat_vm_t* vm,
     return -22;
 }
 
+int32_t linux_compat_vm_mprotect(linux_compat_vm_t* vm,
+                                 uintptr_t addr,
+                                 size_t length,
+                                 uint32_t prot) {
+    (void)vm;
+    (void)addr;
+    (void)length;
+    (void)prot;
+    return -22;
+}
+
 bool linux_compat_vm_read_user(linux_compat_vm_t* vm,
                                uintptr_t addr,
                                void* out,

@@ -15,7 +15,10 @@
 #define LINUX_COMPAT_PROT_EXEC 0x4U
 #endif
 #ifndef LINUX_COMPAT_MAP_FIXED
+#define LINUX_COMPAT_MAP_SHARED 0x01U
+#define LINUX_COMPAT_MAP_PRIVATE 0x02U
 #define LINUX_COMPAT_MAP_FIXED 0x10U
+#define LINUX_COMPAT_MAP_ANONYMOUS 0x20U
 #endif
 
 typedef struct LinuxCompatVmRegion {
@@ -68,6 +71,10 @@ linux_compat_vm_region_t* linux_compat_vm_map_fixed(linux_compat_vm_t* vm,
 int32_t linux_compat_vm_munmap(linux_compat_vm_t* vm,
                                uintptr_t addr,
                                size_t length);
+int32_t linux_compat_vm_mprotect(linux_compat_vm_t* vm,
+                                 uintptr_t addr,
+                                 size_t length,
+                                 uint32_t prot);
 bool linux_compat_vm_read_user(linux_compat_vm_t* vm,
                                uintptr_t addr,
                                void* out,

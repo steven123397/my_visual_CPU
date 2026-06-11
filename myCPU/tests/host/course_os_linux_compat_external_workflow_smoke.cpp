@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -112,6 +113,68 @@ struct ExpectedText {
     const char* message;
 };
 
+enum class Stage11WorkflowStopMode {
+    ExpectationSequence,
+    StopNeedle,
+    PromptThenValidate,
+    ProbeStop,
+};
+
+constexpr uint32_t kStage11ProbeNone = 0U;
+constexpr uint32_t kStage11ProbeFastCommit = 1U << 0U;
+constexpr uint32_t kStage11ProbeDirectGcc = 1U << 1U;
+constexpr uint32_t kStage11ProbeFinalCommand = 1U << 2U;
+
+struct Stage11WorkflowCommand {
+    const char* command;
+    const char* description;
+    Stage11WorkflowStopMode stop_mode;
+    uint32_t probe_flags;
+    const ExpectedText* expectations;
+    size_t expectation_count;
+    const char* stop_needle;
+    const char* fallback_needle;
+    bool expect_linux_summary;
+};
+
+const char* stop_mode_name(Stage11WorkflowStopMode mode) {
+    switch (mode) {
+        case Stage11WorkflowStopMode::ExpectationSequence:
+            return "expectation-sequence";
+        case Stage11WorkflowStopMode::StopNeedle:
+            return "stop-needle";
+        case Stage11WorkflowStopMode::PromptThenValidate:
+            return "prompt-then-validate";
+        case Stage11WorkflowStopMode::ProbeStop:
+            return "probe-stop";
+    }
+    return "unknown";
+}
+
+bool expect_linux_run_summary(const std::string& output,
+                              const char* command) {
+    constexpr ExpectedText kRunSummary[] = {
+        {"loader=", "Linux compat run should report loader kind"},
+        {"interp=", "Linux compat run should report interpreter path"},
+        {"trace_count=", "Linux compat run should report trace count"},
+        {"last=", "Linux compat run should report latest syscall"},
+        {"/errno=", "Linux compat run should report latest syscall errno"},
+    };
+
+    for (size_t i = 0; i < sizeof(kRunSummary) / sizeof(kRunSummary[0]);
+         ++i) {
+        if (!expect_contains(output,
+                             kRunSummary[i].needle,
+                             kRunSummary[i].message)) {
+            std::fprintf(stderr,
+                         "Linux compat summary assertion failed for command: %s\n",
+                         command);
+            return false;
+        }
+    }
+    return true;
+}
+
 void print_guest_linux_trace(DebugSession& session) {
     static course_os_linux_compat_trace_debug::GuestLinuxTraceReader reader(
         kExternalShellElf);
@@ -208,10 +271,12 @@ void print_missing_uart_diagnostics(DebugSession& session,
                  needle);
     std::fprintf(stderr,
                  "Stage 11 workflow command summary command=\"%s\" "
-                 "step_budget=%llu stop=missing-uart needle=\"%s\" "
-                 "offset=%zu\n",
+                 "step_budget=%llu stop=missing-uart output_bytes=%zu "
+                 "next_offset=%zu needle=\"%s\" offset=%zu\n",
                  command,
                  (unsigned long long)max_steps,
+                 chunk.text.size(),
+                 chunk.next_offset,
                  needle,
                  offset);
     std::fprintf(stderr,
@@ -295,7 +360,8 @@ bool run_shell_command(DebugSession& session,
                        size_t& offset,
                        const char* command,
                        const ExpectedText* expectations,
-                       size_t expectation_count) {
+                       size_t expectation_count,
+                       DebugSession::UartOutputChunk* out_chunk = nullptr) {
     DebugSession::UartOutputChunk chunk{};
     const uint64_t max_steps = stage11_workflow_command_max_steps();
     std::fprintf(stderr,
@@ -331,11 +397,16 @@ bool run_shell_command(DebugSession& session,
                      chunk.text.c_str());
         print_guest_linux_trace(session);
     }
+    if (out_chunk != nullptr) {
+        *out_chunk = chunk;
+    }
     offset = drain_uart_until_quiet(session);
     std::fprintf(stderr,
                  "Stage 11 workflow command summary command=\"%s\" "
-                 "output_bytes=%zu next_offset=%zu stop=matched-prompt\n",
+                 "step_budget=%llu stop=matched-prompt output_bytes=%zu "
+                 "next_offset=%zu\n",
                  command,
+                 (unsigned long long)max_steps,
                  chunk.text.size(),
                  offset);
     return true;
@@ -346,7 +417,9 @@ bool run_shell_command_waiting_for(DebugSession& session,
                                    const char* command,
                                    const ExpectedText* expectations,
                                    size_t expectation_count,
-                                   const char* stop_needle) {
+                                   const char* stop_needle,
+                                   DebugSession::UartOutputChunk* out_chunk =
+                                       nullptr) {
     DebugSession::UartOutputChunk chunk{};
     const uint64_t max_steps = stage11_workflow_command_max_steps();
     std::fprintf(stderr,
@@ -390,7 +463,18 @@ bool run_shell_command_waiting_for(DebugSession& session,
                      chunk.text.c_str());
         print_guest_linux_trace(session);
     }
+    if (out_chunk != nullptr) {
+        *out_chunk = chunk;
+    }
     offset = drain_uart_until_quiet(session);
+    std::fprintf(stderr,
+                 "Stage 11 workflow command summary command=\"%s\" "
+                 "step_budget=%llu stop=matched-stop-needle "
+                 "output_bytes=%zu next_offset=%zu\n",
+                 command,
+                 (unsigned long long)max_steps,
+                 chunk.text.size(),
+                 offset);
     return true;
 }
 
@@ -398,7 +482,9 @@ bool run_shell_command_until_prompt_and_validate(DebugSession& session,
                                                  size_t& offset,
                                                  const char* command,
                                                  const ExpectedText* expectations,
-                                                 size_t expectation_count) {
+                                                 size_t expectation_count,
+                                                 DebugSession::UartOutputChunk*
+                                                     out_chunk = nullptr) {
     DebugSession::UartOutputChunk chunk{};
     const uint64_t max_steps = stage11_workflow_command_max_steps();
     std::fprintf(stderr,
@@ -430,11 +516,16 @@ bool run_shell_command_until_prompt_and_validate(DebugSession& session,
                      chunk.text.c_str());
         print_guest_linux_trace(session);
     }
+    if (out_chunk != nullptr) {
+        *out_chunk = chunk;
+    }
     offset = drain_uart_until_quiet(session);
     std::fprintf(stderr,
                  "Stage 11 workflow command summary command=\"%s\" "
-                 "output_bytes=%zu next_offset=%zu stop=matched-prompt\n",
+                 "step_budget=%llu stop=matched-prompt output_bytes=%zu "
+                 "next_offset=%zu\n",
                  command,
+                 (unsigned long long)max_steps,
                  chunk.text.size(),
                  offset);
     return true;
@@ -444,7 +535,9 @@ bool run_shell_command_probe_stop(DebugSession& session,
                                   size_t offset,
                                   const char* command,
                                   const char* stop_needle,
-                                  const char* fallback_needle) {
+                                  const char* fallback_needle,
+                                  DebugSession::UartOutputChunk* out_chunk =
+                                      nullptr) {
     DebugSession::UartOutputChunk chunk{};
     const uint64_t max_steps = stage11_workflow_command_max_steps();
     std::fprintf(stderr,
@@ -461,9 +554,17 @@ bool run_shell_command_probe_stop(DebugSession& session,
         chunk = session.uart_output(offset);
         if (chunk.text.find(stop_needle) != std::string::npos ||
             chunk.text.find(fallback_needle) != std::string::npos) {
+            if (out_chunk != nullptr) {
+                *out_chunk = chunk;
+            }
             std::fprintf(stderr,
-                         "Stage 11 workflow probe matched output_bytes=%zu\n",
-                         chunk.text.size());
+                         "Stage 11 workflow command summary command=\"%s\" "
+                         "step_budget=%llu stop=matched-probe "
+                         "output_bytes=%zu next_offset=%zu\n",
+                         command,
+                         (unsigned long long)max_steps,
+                         chunk.text.size(),
+                         chunk.next_offset);
             std::fprintf(stderr,
                          "probe output since offset %zu was:\n%s\n",
                          offset,
@@ -479,6 +580,17 @@ bool run_shell_command_probe_stop(DebugSession& session,
     }
     std::fprintf(stderr, "Stage 11 workflow probe exceeded step budget\n");
     chunk = session.uart_output(offset);
+    if (out_chunk != nullptr) {
+        *out_chunk = chunk;
+    }
+    std::fprintf(stderr,
+                 "Stage 11 workflow command summary command=\"%s\" "
+                 "step_budget=%llu stop=probe-step-budget output_bytes=%zu "
+                 "next_offset=%zu\n",
+                 command,
+                 (unsigned long long)max_steps,
+                 chunk.text.size(),
+                 chunk.next_offset);
     std::fprintf(stderr,
                  "probe output since offset %zu was:\n%s\n",
                  offset,
@@ -486,6 +598,67 @@ bool run_shell_command_probe_stop(DebugSession& session,
     print_guest_linux_trace(session);
     print_debug_snapshot_full(session);
     return false;
+}
+
+bool run_stage11_workflow_command(DebugSession& session,
+                                  size_t& offset,
+                                  const Stage11WorkflowCommand& spec) {
+    bool ok = false;
+    DebugSession::UartOutputChunk chunk{};
+
+    std::fprintf(stderr,
+                 "Stage 11 workflow command plan command=\"%s\" "
+                 "description=\"%s\" stop_mode=%s probe_flags=0x%x\n",
+                 spec.command,
+                 spec.description,
+                 stop_mode_name(spec.stop_mode),
+                 spec.probe_flags);
+
+    switch (spec.stop_mode) {
+        case Stage11WorkflowStopMode::ExpectationSequence:
+            ok = run_shell_command(session,
+                                   offset,
+                                   spec.command,
+                                   spec.expectations,
+                                   spec.expectation_count,
+                                   &chunk);
+            break;
+        case Stage11WorkflowStopMode::StopNeedle:
+            ok = run_shell_command_waiting_for(session,
+                                               offset,
+                                               spec.command,
+                                               spec.expectations,
+                                               spec.expectation_count,
+                                               spec.stop_needle,
+                                               &chunk);
+            break;
+        case Stage11WorkflowStopMode::PromptThenValidate:
+            ok = run_shell_command_until_prompt_and_validate(
+                session,
+                offset,
+                spec.command,
+                spec.expectations,
+                spec.expectation_count,
+                &chunk);
+            break;
+        case Stage11WorkflowStopMode::ProbeStop:
+            ok = run_shell_command_probe_stop(session,
+                                              offset,
+                                              spec.command,
+                                              spec.stop_needle,
+                                              spec.fallback_needle,
+                                              &chunk);
+            break;
+    }
+
+    if (!ok) {
+        return false;
+    }
+    if (spec.expect_linux_summary &&
+        !expect_linux_run_summary(chunk.text, spec.command)) {
+        return false;
+    }
+    return true;
 }
 
 }  // namespace
@@ -521,11 +694,18 @@ int main(int argc, char** argv) {
                 ? sizeof(kDirectGccAndAout) / sizeof(kDirectGccAndAout[0])
                 : sizeof(kDirectGcc) / sizeof(kDirectGcc[0]);
 
-        if (!run_shell_command(session,
-                               offset,
-                               command,
-                               expected,
-                               expected_count)) {
+        const Stage11WorkflowCommand direct_gcc_probe = {
+            command,
+            "direct gcc probe requested by environment",
+            Stage11WorkflowStopMode::ExpectationSequence,
+            kStage11ProbeDirectGcc,
+            expected,
+            expected_count,
+            nullptr,
+            nullptr,
+            true,
+        };
+        if (!run_stage11_workflow_command(session, offset, direct_gcc_probe)) {
             return 1;
         }
         const DebugSession::UartOutputChunk chunk = session.uart_output(0);
@@ -546,106 +726,130 @@ int main(int argc, char** argv) {
         {"Initialized", "git init should create a repository"},
         {"course-os> ", "git init should return to prompt"},
     };
-    if (!run_shell_command(session,
-                           offset,
-                           "git init stage11repo\r",
-                           kGitInit,
-                           sizeof(kGitInit) / sizeof(kGitInit[0]))) {
-        return 1;
-    }
-
-    if (stage11_workflow_fast_commit_probe()) {
-        return run_shell_command_probe_stop(
-                   session,
-                   offset,
-                   "git -c safe.directory=/stage11repo -C stage11repo "
-                   "-c user.name=s -c user.email=e@e "
-                   "commit --allow-empty -m i\r",
-                   "Bad address",
-                   "course-os> ")
-                   ? 1
-                   : 1;
-    }
-
-    if (!run_shell_command_waiting_for(session,
-                                       offset,
-                                       "vim stage11repo/hello.c\r",
-                                       nullptr,
-                                       0,
-                                       "Press ENTER or type command to continue")) {
-        return 1;
-    }
-    if (!run_shell_command_waiting_for(session,
-                                       offset,
-                                       "\r",
-                                       nullptr,
-                                       0,
-                                       "[New File]")) {
-        return 1;
-    }
     constexpr ExpectedText kVimSave[] = {
         {"linux-compat: path=/usr/bin/vim", "vim should resolve through PATH"},
         {"course-os> ", "vim save should return to prompt"},
     };
-    if (!run_shell_command_waiting_for(
-            session,
-            offset,
-            "i#include <stdio.h>\nint main(){puts(\"stage11 hello\");return 0;}\x1b:wq\r",
-            nullptr,
-            0,
-            "Press ENTER or type command to continue")) {
-        return 1;
-    }
-    if (!run_shell_command(session,
-                           offset,
-                           "\r",
-                           kVimSave,
-                           sizeof(kVimSave) / sizeof(kVimSave[0]))) {
-        return 1;
-    }
-
     constexpr ExpectedText kGitAdd[] = {
         {"linux-compat: path=/usr/bin/git", "git add should resolve through PATH"},
         {"course-os> ", "git add should return to prompt"},
     };
-    if (!run_shell_command(session,
-                           offset,
-                           "git -c safe.directory=/stage11repo "
-                           "-C stage11repo add hello.c\r",
-                           kGitAdd,
-                           sizeof(kGitAdd) / sizeof(kGitAdd[0]))) {
-        return 1;
-    }
-
     constexpr ExpectedText kGitCommit[] = {
         {"linux-compat: path=/usr/bin/git", "git commit should resolve through PATH"},
         {"file changed", "git commit should report the staged file delta"},
         {"create mode", "git commit should create hello.c in the first commit"},
     };
-    if (!run_shell_command_until_prompt_and_validate(
-            session,
-            offset,
-            "git -C stage11repo -c safe.directory=/stage11repo "
-            "-c user.name=stage11 "
-            "-c user.email=stage11@example.invalid commit -m init\r",
-            kGitCommit,
-            sizeof(kGitCommit) / sizeof(kGitCommit[0]))) {
-        return 1;
-    }
-
     constexpr ExpectedText kGitLog[] = {
         {"linux-compat: path=/usr/bin/git", "git log should resolve through PATH"},
         {"init", "git log should show the committed subject"},
         {"course-os> ", "git log should return to prompt"},
     };
-    if (!run_shell_command(session,
-                           offset,
-                           "git -C stage11repo "
-                           "-c safe.directory=/stage11repo "
-                           "--no-pager log --oneline\r",
-                           kGitLog,
-                           sizeof(kGitLog) / sizeof(kGitLog[0]))) {
+    const Stage11WorkflowCommand kWorkflowCommands[] = {
+        {"git init stage11repo\r",
+         "create the writable workflow repository",
+         Stage11WorkflowStopMode::ExpectationSequence,
+         kStage11ProbeNone,
+         kGitInit,
+         sizeof(kGitInit) / sizeof(kGitInit[0]),
+         nullptr,
+         nullptr,
+         true},
+        {"vim stage11repo/hello.c\r",
+         "open hello.c in vim",
+         Stage11WorkflowStopMode::StopNeedle,
+         kStage11ProbeNone,
+         nullptr,
+         0,
+         "Press ENTER or type command to continue",
+         nullptr,
+         false},
+        {"\r",
+         "acknowledge vim new-file prompt",
+         Stage11WorkflowStopMode::StopNeedle,
+         kStage11ProbeNone,
+         nullptr,
+         0,
+         "[New File]",
+         nullptr,
+         false},
+        {"i#include <stdio.h>\nint main(){puts(\"stage11 hello\");return 0;}\x1b:wq\r",
+         "write and save hello.c from vim",
+         Stage11WorkflowStopMode::StopNeedle,
+         kStage11ProbeNone,
+         nullptr,
+         0,
+         "Press ENTER or type command to continue",
+         nullptr,
+         false},
+        {"\r",
+         "leave vim and return to shell",
+         Stage11WorkflowStopMode::ExpectationSequence,
+         kStage11ProbeNone,
+         kVimSave,
+         sizeof(kVimSave) / sizeof(kVimSave[0]),
+         nullptr,
+         nullptr,
+         true},
+        {"git -c safe.directory=/stage11repo -C stage11repo add hello.c\r",
+         "stage hello.c in git",
+         Stage11WorkflowStopMode::ExpectationSequence,
+         kStage11ProbeNone,
+         kGitAdd,
+         sizeof(kGitAdd) / sizeof(kGitAdd[0]),
+         nullptr,
+         nullptr,
+         true},
+        {"git -C stage11repo -c safe.directory=/stage11repo "
+         "-c user.name=stage11 "
+         "-c user.email=stage11@example.invalid commit -m init\r",
+         "commit the staged source file",
+         Stage11WorkflowStopMode::PromptThenValidate,
+         kStage11ProbeNone,
+         kGitCommit,
+         sizeof(kGitCommit) / sizeof(kGitCommit[0]),
+         nullptr,
+         nullptr,
+         true},
+        {"git -C stage11repo "
+         "-c safe.directory=/stage11repo "
+         "--no-pager log --oneline\r",
+         "read back the git log",
+         Stage11WorkflowStopMode::ExpectationSequence,
+         kStage11ProbeNone,
+         kGitLog,
+         sizeof(kGitLog) / sizeof(kGitLog[0]),
+         nullptr,
+         nullptr,
+         true},
+    };
+
+    if (!run_stage11_workflow_command(session, offset, kWorkflowCommands[0])) {
         return 1;
+    }
+
+    if (stage11_workflow_fast_commit_probe()) {
+        const Stage11WorkflowCommand fast_commit_probe = {
+            "git -c safe.directory=/stage11repo -C stage11repo "
+            "-c user.name=s -c user.email=e@e "
+            "commit --allow-empty -m i\r",
+            "diagnostic fast commit probe requested by environment",
+            Stage11WorkflowStopMode::ProbeStop,
+            kStage11ProbeFastCommit,
+            nullptr,
+            0,
+            "Bad address",
+            "course-os> ",
+            false,
+        };
+        (void)run_stage11_workflow_command(session, offset, fast_commit_probe);
+        return 1;
+    }
+
+    for (size_t i = 1; i < sizeof(kWorkflowCommands) / sizeof(kWorkflowCommands[0]);
+         ++i) {
+        if (!run_stage11_workflow_command(session, offset, kWorkflowCommands[i])) {
+            return 1;
+        }
     }
 
     constexpr ExpectedText kFinalProbe[] = {
@@ -658,15 +862,19 @@ int main(int argc, char** argv) {
         {"exec=real", "./a.out should run through Linux compat real exec"},
         {"course-os> ", "gcc workflow should return to prompt"},
     };
-    if (!run_shell_command(session,
-                           offset,
-                           stage11_workflow_final_command(),
-                           stage11_workflow_final_probe()
-                               ? kFinalProbe
-                               : kGcc,
-                           stage11_workflow_final_probe()
-                               ? sizeof(kFinalProbe) / sizeof(kFinalProbe[0])
-                               : sizeof(kGcc) / sizeof(kGcc[0]))) {
+    const Stage11WorkflowCommand final_command = {
+        stage11_workflow_final_command(),
+        "compile hello.c and run the generated a.out",
+        Stage11WorkflowStopMode::ExpectationSequence,
+        kStage11ProbeFinalCommand,
+        stage11_workflow_final_probe() ? kFinalProbe : kGcc,
+        stage11_workflow_final_probe() ? sizeof(kFinalProbe) / sizeof(kFinalProbe[0])
+                                       : sizeof(kGcc) / sizeof(kGcc[0]),
+        nullptr,
+        nullptr,
+        true,
+    };
+    if (!run_stage11_workflow_command(session, offset, final_command)) {
         return 1;
     }
 

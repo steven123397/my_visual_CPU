@@ -116,6 +116,7 @@
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
   - [design/course_os_kernel_alpha_course_os_baseline_design.md](design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [design/course_os_kernel_alpha_linux_compat_plus_design.md](design/course_os_kernel_alpha_linux_compat_plus_design.md)
+  - [plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan](plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan](plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-quality-review-plan](plan/history_plan.md#course-os-kernel-alpha-quality-review-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
