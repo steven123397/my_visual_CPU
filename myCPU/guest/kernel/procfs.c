@@ -569,20 +569,35 @@ static const char* fd_kind_name(course_fd_kind_t kind) {
     }
 }
 
+static const course_fd_table_t* resolve_fd_table(const procfs_t* procfs,
+                                                 uint32_t pid) {
+    if (procfs == NULL || pid == 0U) {
+        return NULL;
+    }
+    if (procfs->fd_table_resolver != NULL) {
+        return procfs->fd_table_resolver(procfs->fd_table_resolver_context, pid);
+    }
+    if (procfs->fd_table != NULL && procfs->fd_owner_pid == pid) {
+        return procfs->fd_table;
+    }
+    return NULL;
+}
+
 static bool read_pid_fd(const procfs_t* procfs,
                         uint32_t pid,
                         char* out,
                         size_t out_size) {
+    const course_fd_table_t* fd_table = resolve_fd_table(procfs, pid);
     size_t used = 0;
     size_t i = 0;
 
     if (procfs == NULL || procfs->processes == NULL ||
         find_const_process(procfs->processes, pid) == NULL ||
-        procfs->fd_table == NULL || procfs->fd_owner_pid != pid) {
+        fd_table == NULL) {
         return false;
     }
     for (i = 0; i < COURSE_FD_MAX_OPEN; ++i) {
-        const course_fd_entry_t* entry = &procfs->fd_table->entries[i];
+        const course_fd_entry_t* entry = &fd_table->entries[i];
 
         if (entry->kind == COURSE_FD_KIND_UNUSED) {
             continue;
@@ -682,6 +697,8 @@ void procfs_init(procfs_t* procfs,
     procfs->processes = NULL;
     procfs->fd_table = NULL;
     procfs->fd_owner_pid = 0;
+    procfs->fd_table_resolver = NULL;
+    procfs->fd_table_resolver_context = NULL;
 }
 
 bool procfs_read(const procfs_t* procfs,
@@ -768,5 +785,16 @@ bool procfs_attach_fd_table(procfs_t* procfs,
     }
     procfs->fd_table = fd_table;
     procfs->fd_owner_pid = owner_pid;
+    return true;
+}
+
+bool procfs_attach_fd_table_resolver(procfs_t* procfs,
+                                     procfs_fd_table_resolver_t resolver,
+                                     const void* context) {
+    if (procfs == NULL || resolver == NULL) {
+        return false;
+    }
+    procfs->fd_table_resolver = resolver;
+    procfs->fd_table_resolver_context = context;
     return true;
 }

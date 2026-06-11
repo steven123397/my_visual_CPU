@@ -18,6 +18,30 @@ static bool contains(const char* haystack, const char* needle) {
     return strstr(haystack, needle) != NULL;
 }
 
+typedef struct TestFdResolverContext {
+    uint32_t shell_pid;
+    uint32_t child_pid;
+    const course_fd_table_t* shell_fds;
+    const course_fd_table_t* child_fds;
+} test_fd_resolver_context_t;
+
+static const course_fd_table_t* resolve_test_fd_table(const void* context,
+                                                      uint32_t pid) {
+    const test_fd_resolver_context_t* resolver =
+        (const test_fd_resolver_context_t*)context;
+
+    if (resolver == NULL) {
+        return NULL;
+    }
+    if (pid == resolver->shell_pid) {
+        return resolver->shell_fds;
+    }
+    if (pid == resolver->child_pid) {
+        return resolver->child_fds;
+    }
+    return NULL;
+}
+
 static int test_procfs_stage3_global_and_per_pid_nodes(void) {
     static course_fs_t fs;
     course_scheduler_t scheduler;
@@ -27,8 +51,11 @@ static int test_procfs_stage3_global_and_per_pid_nodes(void) {
     course_process_t* child = NULL;
     procfs_t procfs;
     course_fd_table_t fds;
+    course_fd_table_t child_fds;
+    test_fd_resolver_context_t fd_resolver;
     char out[1024];
     int proc_fd = -1;
+    int child_proc_fd = -1;
 
     course_fs_mkfs(&fs);
     course_scheduler_init(&scheduler);
@@ -49,9 +76,22 @@ static int test_procfs_stage3_global_and_per_pid_nodes(void) {
     procfs_attach_processes(&procfs, &processes);
     course_fd_table_init(&fds, &fs, &procfs);
     procfs_attach_fd_table(&procfs, shell->pid, &fds);
+    course_fd_table_init(&child_fds, &fs, &procfs);
+    fd_resolver.shell_pid = shell->pid;
+    fd_resolver.child_pid = child->pid;
+    fd_resolver.shell_fds = &fds;
+    fd_resolver.child_fds = &child_fds;
+    procfs_attach_fd_table_resolver(&procfs,
+                                    resolve_test_fd_table,
+                                    &fd_resolver);
     proc_fd = course_fd_open(&fds, "/proc/cpuinfo", COURSE_FD_OPEN_READ);
+    child_proc_fd =
+        course_fd_open(&child_fds, "/proc/uptime", COURSE_FD_OPEN_READ);
     if (proc_fd < 3) {
         return fail("expected fd table to hold an open proc fd");
+    }
+    if (child_proc_fd < 3) {
+        return fail("expected child fd table to hold an open proc fd");
     }
 
     if (!procfs_read(&procfs, "/proc/cpuinfo", out, sizeof(out)) ||
@@ -77,6 +117,15 @@ static int test_procfs_stage3_global_and_per_pid_nodes(void) {
         !contains(out, "fd=1 kind=stdio") ||
         !contains(out, "fd=3 kind=proc path=/proc/cpuinfo")) {
         return fail("expected /proc/<pid>/fd");
+    }
+    if (contains(out, "path=/proc/uptime")) {
+        return fail("expected /proc/1/fd not to include child proc fd");
+    }
+    if (!procfs_read(&procfs, "/proc/2/fd", out, sizeof(out)) ||
+        !contains(out, "fd=0 kind=stdio") ||
+        !contains(out, "fd=3 kind=proc path=/proc/uptime") ||
+        contains(out, "path=/proc/cpuinfo")) {
+        return fail("expected /proc/<pid>/fd to resolve child fd table");
     }
     if (!procfs_read(&procfs, "/proc/1/maps", out, sizeof(out)) ||
         !contains(out, "code") ||

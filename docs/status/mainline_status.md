@@ -35,7 +35,6 @@
   - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
   - [../plan/project_evolution_priority_p2_plan.md](../plan/project_evolution_priority_p2_plan.md)
   - [../plan/project_evolution_priority_p3_plan.md](../plan/project_evolution_priority_p3_plan.md)
-  - [../plan/course_os_kernel_alpha_quality_review_plan.md](../plan/course_os_kernel_alpha_quality_review_plan.md)
   - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
   - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划归档：
@@ -43,6 +42,9 @@
   - [../plan/history_plan.md#project-evolution-priority-p0-plan](../plan/history_plan.md#project-evolution-priority-p0-plan)
   - [../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
   - [../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
+  - [../plan/history_plan.md#course-os-kernel-alpha-quality-review-safe-fixes-closeout](../plan/history_plan.md#course-os-kernel-alpha-quality-review-safe-fixes-closeout)
+  - [../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan)
+  - [../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan](../plan/history_plan.md#course-os-kernel-alpha-quality-review-plan)
   - [../plan/history_plan.md#code-reself-remediation-plan](../plan/history_plan.md#code-reself-remediation-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
   - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)

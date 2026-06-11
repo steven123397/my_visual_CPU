@@ -12,6 +12,10 @@
 
 struct CourseFdTable;
 
+typedef const struct CourseFdTable* (*procfs_fd_table_resolver_t)(
+    const void* context,
+    uint32_t pid);
+
 typedef struct Procfs {
     const course_scheduler_t* scheduler;
     const course_memory_t* memory;
@@ -20,6 +24,8 @@ typedef struct Procfs {
     const course_process_table_t* processes;
     const struct CourseFdTable* fd_table;
     uint32_t fd_owner_pid;
+    procfs_fd_table_resolver_t fd_table_resolver;
+    const void* fd_table_resolver_context;
 } procfs_t;
 
 void procfs_init(procfs_t* procfs,
@@ -41,3 +47,6 @@ bool procfs_attach_processes(procfs_t* procfs,
 bool procfs_attach_fd_table(procfs_t* procfs,
                             uint32_t owner_pid,
                             const struct CourseFdTable* fd_table);
+bool procfs_attach_fd_table_resolver(procfs_t* procfs,
+                                     procfs_fd_table_resolver_t resolver,
+                                     const void* context);
