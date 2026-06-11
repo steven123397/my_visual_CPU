@@ -15,7 +15,10 @@
 - 相关设计：
   - [../design/npu_tpu_accelerator_direction_design.md](../design/npu_tpu_accelerator_direction_design.md)
   - [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
+  - [../design/ai_accelerator_linux_facing_contract_design.md](../design/ai_accelerator_linux_facing_contract_design.md)
   - [../design/phase4_preparation_design.md](../design/phase4_preparation_design.md)
+- 当前活跃计划：
+  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
 - 已完成计划：
   - [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
   - [../plan/history_plan.md#post-wave7-ai-demo-v1-plan](../plan/history_plan.md#post-wave7-ai-demo-v1-plan)
@@ -30,6 +33,15 @@
 
 ## 当前状态
 
+- `2026-06-11` `PROJECT_EVOLUTION` P1 任务 1 已完成 AI accelerator Linux-facing
+  设备契约定调。当前结论是拆阶段推进：第一刀只做 `host-facade`，不声明 Linux driver
+  已完成。`./mycpu --ai-linux-contract` 现在会输出 `schema=ai_linux_contract_v1` 的只读
+  contract summary，固定 DT compatible / reg / interrupt、MMIO base、PLIC source、
+  descriptor / completion entry 尺寸、queue 上限、DMA buffer 口径、devfs / ioctl 预留面、
+  profile / timing schema，以及 `linux_driver=not-implemented` 边界；frontend
+  `/api/ai/tiny-model/templates` 同步暴露 `linuxFacingContract`，但它仍只是只读摘要，
+  不成为设备 ABI 的事实来源。后续真实 `/dev/mycpu-ai0`、kernel driver、DTB 接线、
+  ioctl 和 Linux integration smoke 必须另开窄计划。
 - `2026-05-02` 已把 `Wave 7` 阶段性收口之后的 AI accelerator 后续方向正式收口为
   `用户自定义 AI 任务 + 更接近商用 NPU 的性能模型` 新主线，并补齐独立
   `design / plan` 入口；当前实时推进仍由本文档承接。

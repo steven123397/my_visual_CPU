@@ -2,12 +2,15 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "debug/debug_protocol.h"
+#include "devices/ai_accelerator.h"
+#include "devices/ai_submission_queue.h"
 #include "platform/address_map.h"
 #include "platform/machine.h"
 
@@ -172,13 +175,42 @@ static void emit_ai_profile_observation_event(const Machine::AiProfileRunResult&
     std::cout << event.str() << '\n';
 }
 
+static void emit_ai_linux_contract_summary() {
+    std::cout << "ai_linux_contract"
+              << " schema=ai_linux_contract_v1"
+              << " first_cut=host-facade"
+              << " dt_compatible=mycpu,ai-accelerator"
+              << " dt_reg=0x" << std::hex << AI_ACCEL_MMIO_BASE << ":0x" << AI_ACCEL_MMIO_SIZE
+              << std::dec
+              << " dt_interrupts=" << AI_ACCEL_PLIC_SOURCE
+              << " mmio_base=0x" << std::hex << AI_ACCEL_MMIO_BASE
+              << " mmio_size=0x" << AI_ACCEL_MMIO_SIZE
+              << std::dec
+              << " plic_source=" << AI_ACCEL_PLIC_SOURCE
+              << " descriptor_bytes=" << kAiSubmissionDescriptorBytes
+              << " completion_bytes=" << kAiCompletionEntryBytes
+              << " max_queue_entries=" << kAiQueueMaxEntries
+              << " graph_package_max_bytes=" << AI_ACCEL_MAX_GRAPH_PACKAGE_BYTES
+              << " dma_buffers=guest-physical-contiguous"
+              << " devfs=/dev/mycpu-ai0"
+              << " ioctl_surface=submit/wait/profile"
+              << " profile_schema=" << AI_ACCEL_PROFILE_SCHEMA_VERSION
+              << " timing_schema=" << AI_ACCEL_TIMING_SCHEMA_VERSION
+              << " linux_driver=not-implemented"
+              << " linux_smoke=not-started"
+              << " arbitrary_model_upload=forbidden"
+              << '\n';
+}
+
 static void usage(const char* prog) {
     std::fprintf(stderr,
                  "Usage: %s [--debug-cli] [--backend kind] [--block-transport kind] [-b addr] [--payload image addr] [--set-reg reg value] [-d image|--disk image] [--disk-not-ready image] [--disk-bad-magic image] <image>\n",
                  prog);
     std::fprintf(stderr, "       %s --ai-profile-manifest manifest\n", prog);
+    std::fprintf(stderr, "       %s --ai-linux-contract\n", prog);
     std::fprintf(stderr, "  --debug-cli     run JSON line debug protocol on stdin/stdout\n");
     std::fprintf(stderr, "  --ai-profile-manifest manifest  run a packaged AI accelerator profile workload\n");
+    std::fprintf(stderr, "  --ai-linux-contract  print the read-only Linux-facing AI device contract summary\n");
     std::fprintf(stderr, "  --backend kind  select execution backend: functional or pipeline\n");
     std::fprintf(stderr,
                  "  --block-transport kind  select block transport: simple_storage or virtio-blk\n");
@@ -214,6 +246,7 @@ int main(int argc, char* argv[]) {
     BackendKind backend_kind = BackendKind::Functional;
     BlockTransport block_transport = BlockTransport::SimpleStorage;
     const char* ai_profile_manifest = nullptr;
+    bool ai_linux_contract = false;
     const char* image = nullptr;
     struct PayloadArg {
         const char* image;
@@ -262,6 +295,8 @@ int main(int argc, char* argv[]) {
                 usage(argv[0]);
             }
             ai_profile_manifest = argv[i];
+        } else if (std::strcmp(argv[i], "--ai-linux-contract") == 0) {
+            ai_linux_contract = true;
         } else if (std::strcmp(argv[i], "-d") == 0 || std::strcmp(argv[i], "--disk") == 0) {
             if (++i >= argc) {
                 usage(argv[0]);
@@ -286,6 +321,16 @@ int main(int argc, char* argv[]) {
         } else {
             image = argv[i];
         }
+    }
+
+    if (ai_linux_contract) {
+        if (image != nullptr || ai_profile_manifest != nullptr || flat || disk_image != nullptr ||
+            !payloads.empty() || !gpr_seeds.empty()) {
+            std::fprintf(stderr, "--ai-linux-contract cannot be combined with guest image loading options\n");
+            return 1;
+        }
+        emit_ai_linux_contract_summary();
+        return 0;
     }
 
     if (ai_profile_manifest != nullptr) {

@@ -25,6 +25,7 @@
   - [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
   - [../design/wave7_productization_and_showcase_design.md](../design/wave7_productization_and_showcase_design.md)
   - [../design/wave7_remote_cloud_dev_environment_design.md](../design/wave7_remote_cloud_dev_environment_design.md)
+  - [../design/ai_accelerator_linux_facing_contract_design.md](../design/ai_accelerator_linux_facing_contract_design.md)
 - 相关状态：
   - [kernel_alpha_status.md](kernel_alpha_status.md)
   - [simulator_evolution_status.md](simulator_evolution_status.md)
@@ -317,6 +318,11 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
   guardrail 已重跑守住；observability schema 已扩到 producer wrapper 和首个 frontend
   Evidence Drawer consumer；`/api/session/load` 已支持受控本地 `elfPath` / `elfBase64`；
   debug CLI / debug server 已补 `set_memory`、`set_csr` 和单地址 `break_at`。
+- `PROJECT_EVOLUTION` P1 当前已完成任务 1：AI accelerator Linux-facing contract
+  第一刀定调为 `host-facade`。`./mycpu --ai-linux-contract` 与 frontend
+  `linuxFacingContract` 只读摘要现在固定 DT node、MMIO / PLIC、descriptor /
+  completion queue、DMA buffer、devfs / ioctl 预留面和 profile schema 边界；真实 Linux
+  driver、`/dev/mycpu-ai0`、ioctl 和 Linux integration smoke 仍未启动。
 - `2026-05-29` 全仓库 code review remediation 已完成并归档；12 条
   `必须修复` 与 19 条 `建议修改` active findings 已由四条整改线关闭，合并后守住
   `test-fast-smoke`、`test-standard-regression`、`test-pipeline`、`make test`

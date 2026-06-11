@@ -14,6 +14,7 @@
 - 来源设计：
   - [../../PROJECT_EVOLUTION_PLAN.md](../../PROJECT_EVOLUTION_PLAN.md)
   - [../design/post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)
+  - [../design/ai_accelerator_linux_facing_contract_design.md](../design/ai_accelerator_linux_facing_contract_design.md)
   - [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
@@ -49,21 +50,28 @@
 ### 任务 1：AI 加速器设备契约定调
 
 **文件：**
-- 创建：按结论需要新增 AI 设备契约设计补充文档
+- 创建：
+  - `docs/design/ai_accelerator_linux_facing_contract_design.md`
 - 修改：
   - `docs/design/post_wave7_ai_user_tasks_npu_performance_design.md`
   - `docs/status/npu_tpu_accelerator_status.md`
   - `myCPU/src/main.cpp`
-  - `myCPU/workloads/ai_proto/pack_graph.py`
   - `frontend/server/ai_tiny_model_service.mjs`
 
-- [ ] **步骤 1：** 盘点当前 host smoke API、MMIO 寄存器、profile summary、graph package
+- [x] **步骤 1：** 盘点当前 host smoke API、MMIO 寄存器、profile summary、graph package
       和前端参数化 tiny model 的真实边界。
-- [ ] **步骤 2：** 写清 Linux-facing 路线的最小 contract：DT node、descriptor、DMA
+- [x] **步骤 2：** 写清 Linux-facing 路线的最小 contract：DT node、descriptor、DMA
       buffer、IRQ、ioctl/devfs 入口和 profile 回读字段。
-- [ ] **步骤 3：** 选择第一刀：只做 contract doc、host facade、guest driver stub，或
+- [x] **步骤 3：** 选择第一刀：只做 contract doc、host facade、guest driver stub，或
       最小真实 Linux driver smoke；选择结果写入设计文档。
-- [ ] **步骤 4：** 为选定第一刀补最窄测试，再实施必要代码或文档变更。
+- [x] **步骤 4：** 为选定第一刀补最窄测试，再实施必要代码或文档变更。
+
+**结果：** 第一刀选择 `host-facade`。`./mycpu --ai-linux-contract` 输出
+`schema=ai_linux_contract_v1` 的只读文本摘要，frontend
+`/api/ai/tiny-model/templates` 同步返回 `linuxFacingContract`；二者固定 DT node、
+MMIO / PLIC、descriptor / completion queue、DMA buffer、devfs / ioctl 预留面和
+profile schema 边界。真实 Linux driver、`/dev/mycpu-ai0`、ioctl 与 Linux integration
+smoke 仍未启动，后续需要独立窄计划。
 
 ### 任务 2：JIT / DBT dry-run 去留决断
 

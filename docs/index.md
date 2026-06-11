@@ -28,7 +28,9 @@
    标准 Linux 发行版平台五阶段长线活跃计划。
 12. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
    用户 AI 任务与 NPU 性能模型设计入口。
-13. [showcase/README.md](showcase/README.md)
+13. [design/ai_accelerator_linux_facing_contract_design.md](design/ai_accelerator_linux_facing_contract_design.md)
+   AI accelerator 面向未来 Linux driver 的最小设备契约。
+14. [showcase/README.md](showcase/README.md)
    课程结题、PPT、讲稿、截图和演示材料入口。
 
 历史设计和专项资料按专题读取即可。
@@ -75,6 +77,7 @@
 - `Post-Wave 7 AI / NPU`
   - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
   - [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
+  - [design/ai_accelerator_linux_facing_contract_design.md](design/ai_accelerator_linux_facing_contract_design.md)
   - [showcase/post_wave7_ai_demo_v1_guide.md](showcase/post_wave7_ai_demo_v1_guide.md)
   - [plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
   - [plan/history_plan.md#post-wave7-ai-demo-v1-plan](plan/history_plan.md#post-wave7-ai-demo-v1-plan)

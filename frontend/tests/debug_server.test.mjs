@@ -739,6 +739,16 @@ test('GET /api/ai/tiny-model/templates returns the server-side whitelist', async
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.ok(Array.isArray(body.templates));
+    assert.equal(body.linuxFacingContract.schema, 'ai_linux_contract_v1');
+    assert.equal(body.linuxFacingContract.firstCut, 'host-facade');
+    assert.equal(body.linuxFacingContract.deviceTree.compatible, 'mycpu,ai-accelerator');
+    assert.equal(body.linuxFacingContract.mmio.base, '0x10002000');
+    assert.equal(body.linuxFacingContract.irq.plicSource, 9);
+    assert.equal(body.linuxFacingContract.queue.descriptorBytes, 48);
+    assert.equal(body.linuxFacingContract.queue.completionBytes, 40);
+    assert.equal(body.linuxFacingContract.profile.schemaVersion, 1);
+    assert.equal(body.linuxFacingContract.profile.timingSchemaVersion, 1);
+    assert.equal(body.linuxFacingContract.linuxDriver.status, 'not-implemented');
     const tinyModel = body.templates.find((item) => item.id === 'dynamic_tiny_model');
     const dynamicGemm = body.templates.find((item) => item.id === 'dynamic_gemm');
     const dynamicCnn = body.templates.find((item) => item.id === 'dynamic_cnn');

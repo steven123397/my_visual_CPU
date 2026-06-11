@@ -808,6 +808,68 @@ const KNOWN_PARAMETER_KEYS = new Set([
 ]);
 const DEFAULT_TEMPLATE_ID = TEMPLATE_DEFINITIONS[0]?.id ?? 'dynamic_tiny_model';
 
+const LINUX_FACING_CONTRACT = Object.freeze({
+  schema: 'ai_linux_contract_v1',
+  firstCut: 'host-facade',
+  deviceTree: Object.freeze({
+    compatible: 'mycpu,ai-accelerator',
+    reg: Object.freeze({
+      base: '0x10002000',
+      size: '0x1000',
+    }),
+    interrupts: Object.freeze([9]),
+  }),
+  mmio: Object.freeze({
+    base: '0x10002000',
+    size: '0x1000',
+    magic: '0x41495055',
+    version: 1,
+    capabilities: Object.freeze(['queue', 'quantized', 'semi_precision', 'static_graph', 'profile']),
+  }),
+  irq: Object.freeze({
+    controller: 'plic',
+    plicSource: 9,
+    statusBits: Object.freeze(['completion', 'fault']),
+  }),
+  queue: Object.freeze({
+    descriptorBytes: 48,
+    completionBytes: 40,
+    maxEntries: 1024,
+    submissionFlagProfile: '0x1',
+  }),
+  dma: Object.freeze({
+    addressing: 'guest-physical',
+    buffers: 'contiguous-system-ram',
+    maxGraphPackageBytes: 1048576,
+  }),
+  profile: Object.freeze({
+    schemaVersion: 1,
+    timingSchemaVersion: 1,
+    timingModel: 'TimedSimpleNoOverlap',
+    fields: Object.freeze([
+      'device_cycles',
+      'dma_cycles',
+      'compute_cycles',
+      'stall_cycles',
+      'queue_cycles',
+      'completion_cycles',
+      'bytes_moved',
+      'retired_ops',
+    ]),
+  }),
+  linuxDriver: Object.freeze({
+    status: 'not-implemented',
+    devfs: '/dev/mycpu-ai0',
+    ioctlSurface: Object.freeze(['submit', 'wait', 'read_profile']),
+    firstSmoke: 'future-opt-in',
+  }),
+  boundaries: Object.freeze({
+    arbitraryModelUpload: false,
+    arbitraryGraphPackageUpload: false,
+    guestVisibleAbiFork: false,
+  }),
+});
+
 function listChoices(parameter) {
   return Array.isArray(parameter?.choices) ? parameter.choices : [];
 }
@@ -890,6 +952,7 @@ export function createAiTinyModelService({
     templates() {
       return {
         templates: cloneJson(TEMPLATE_DEFINITIONS.map((template) => publicTemplate(template))),
+        linuxFacingContract: cloneJson(LINUX_FACING_CONTRACT),
       };
     },
 

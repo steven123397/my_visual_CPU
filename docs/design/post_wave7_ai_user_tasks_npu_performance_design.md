@@ -22,7 +22,10 @@
   - [../status/mainline_status.md](../status/mainline_status.md)
 - 已完成计划：
   - [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
+- 当前活跃计划：
+  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
 - 相关设计：
+  - [ai_accelerator_linux_facing_contract_design.md](ai_accelerator_linux_facing_contract_design.md)
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [wave7_productization_and_showcase_design.md](wave7_productization_and_showcase_design.md)
@@ -389,6 +392,12 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
     per-op 摘要。
   - 未来 Linux-facing driver 也必须继续消费这同一套 queue / completion / counter /
     profile-summary 设备事实；它可以增加更系统的 driver/runtime 包装，但不能分叉设备 ABI。
+    当前最小 Linux-facing contract 已单独固定在
+    [ai_accelerator_linux_facing_contract_design.md](ai_accelerator_linux_facing_contract_design.md)：
+    第一刀选择 `host-facade`，通过 `./mycpu --ai-linux-contract` 和 frontend
+    `linuxFacingContract` 暴露 DT node、descriptor、DMA buffer、IRQ、devfs / ioctl
+    预留面和 profile readback 摘要；这仍不表示 Linux driver、`/dev/mycpu-ai0`
+    或真实 ioctl 已实现。
   - 前端产品入口继续是受控展示面，不成为编译器或设备 ABI 的事实来源。
 
 ### 验证思路

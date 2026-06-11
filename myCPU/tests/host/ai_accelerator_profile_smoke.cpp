@@ -2578,6 +2578,7 @@ int main() {
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=dynamic_cnn");
         const CommandResult tiny_attention_make_run = run_command(
             "make -n run-workload WORKLOAD_NAME=ai_proto AI_PROTO_WORKLOAD=tiny_attention_static");
+        const CommandResult linux_contract = run_command("./mycpu --ai-linux-contract");
         if (!expect(make_run.exit_code == 0, "expected ai workload make dry-run to succeed") ||
             !expect(tiny_model_make_run.exit_code == 0,
                     "expected tiny model ai workload make dry-run to succeed") ||
@@ -2591,6 +2592,35 @@ int main() {
                     "expected dynamic_cnn ai workload make dry-run to succeed") ||
             !expect(tiny_attention_make_run.exit_code == 0,
                     "expected tiny_attention_static ai workload make dry-run to succeed") ||
+            !expect(linux_contract.exit_code == 0,
+                    "expected AI linux-facing contract summary command to succeed") ||
+            !expect_contains(linux_contract.output,
+                             "ai_linux_contract schema=ai_linux_contract_v1",
+                             "expected AI linux-facing contract schema summary") ||
+            !expect_contains(linux_contract.output,
+                             "first_cut=host-facade",
+                             "expected AI linux-facing contract first-cut decision") ||
+            !expect_contains(linux_contract.output,
+                             "dt_compatible=mycpu,ai-accelerator",
+                             "expected AI linux-facing contract device tree compatible") ||
+            !expect_contains(linux_contract.output,
+                             "mmio_base=0x10002000",
+                             "expected AI linux-facing contract MMIO base") ||
+            !expect_contains(linux_contract.output,
+                             "plic_source=9",
+                             "expected AI linux-facing contract PLIC source") ||
+            !expect_contains(linux_contract.output,
+                             "descriptor_bytes=48",
+                             "expected AI linux-facing contract descriptor bytes") ||
+            !expect_contains(linux_contract.output,
+                             "completion_bytes=40",
+                             "expected AI linux-facing contract completion bytes") ||
+            !expect_contains(linux_contract.output,
+                             "profile_schema=1 timing_schema=1",
+                             "expected AI linux-facing contract profile schema versions") ||
+            !expect_contains(linux_contract.output,
+                             "linux_driver=not-implemented",
+                             "expected AI linux-facing contract to reject driver completion claims") ||
             !expect_contains(profile_text,
                              "WORKLOAD_RUN_MODE := ai-profile",
                              "expected ai_proto workload run mode") ||
