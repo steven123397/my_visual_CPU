@@ -1222,6 +1222,57 @@ static int test_syscall_mprotect_updates_bound_vm_region_permissions(void) {
     return 0;
 }
 
+static int test_syscall_mprotect_accepts_read_only_subrange(void) {
+    vm_address_space_t address_space;
+    vm_process_t process;
+    linux_compat_vm_t vm;
+    linux_compat_runtime_t runtime;
+    linux_compat_syscall_request_t request;
+    linux_compat_syscall_response_t response;
+    linux_compat_trace_t trace;
+    linux_compat_vm_region_t* region = NULL;
+    uintptr_t addr = 0;
+
+    reset_stub_state();
+    if (!make_process(&address_space, &process)) {
+        return fail("expected test process setup to succeed");
+    }
+    linux_compat_vm_init(&vm, &address_space, &process);
+    linux_compat_runtime_init(&runtime);
+    runtime.vm = &vm;
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MMAP;
+    request.length = MEMORY_PAGE_SIZE * 3U;
+    request.prot = LINUX_COMPAT_PROT_READ | LINUX_COMPAT_PROT_WRITE;
+    request.flags = 0x22U;
+    request.fd = -1;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != (int64_t)LINUX_COMPAT_MMAP_BASE) {
+        return fail("expected mmap setup before subrange mprotect to succeed");
+    }
+    addr = (uintptr_t)response.value;
+    region = find_vm_region(&vm, addr);
+    if (region == NULL || region->length != MEMORY_PAGE_SIZE * 3U) {
+        return fail("expected mmap setup to create a multi-page VM region");
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.number = LINUX_COMPAT_SYS_MPROTECT;
+    request.addr = addr + MEMORY_PAGE_SIZE;
+    request.length = MEMORY_PAGE_SIZE;
+    request.prot = LINUX_COMPAT_PROT_READ;
+    if (linux_compat_syscall_dispatch(&runtime, &request, &response, &trace) !=
+            LINUX_COMPAT_OK ||
+        response.value != 0) {
+        return fail("expected mprotect PROT_READ subrange to succeed");
+    }
+
+    linux_compat_vm_destroy(&vm);
+    return 0;
+}
+
 static int test_syscall_mmap_overlay_file_private_and_shared_boundary(void) {
     vm_address_space_t address_space;
     vm_process_t process;
@@ -1362,6 +1413,7 @@ int main(void) {
         test_mmap_fixed_writable_file_segment_over_physical_mapping() != 0 ||
         test_syscall_mmap_fixed_prot_none_replaces_existing_page() != 0 ||
         test_syscall_mprotect_updates_bound_vm_region_permissions() != 0 ||
+        test_syscall_mprotect_accepts_read_only_subrange() != 0 ||
         test_syscall_mmap_overlay_file_private_and_shared_boundary() != 0 ||
         test_write_only_mmap_supports_kernel_copyin() != 0) {
         return 1;

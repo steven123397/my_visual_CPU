@@ -174,6 +174,14 @@ pseudo filesystem 合同固定 `/dev/null`、`/dev/random`、`/proc/self/exe` �
 file-backed `MAP_PRIVATE` 读路径和 `MAP_SHARED` fail-closed 边界也已有回归；syscall trace
 新增 `policy=bypass|errno|unsupported` 分类合同。
 
+2026-06-12 已用本机 Alpine riscv64 ext4 rootfs 重新复验 Stage 11 external workflow opt-in。
+首轮真实复验在 `git init stage11repo` 暴露动态加载器 RELRO `mprotect(PROT_READ)` 子范围
+请求返回 `EINVAL`，导致 `/usr/bin/git` 以 127 退出；本轮把 Linux compat VM 的
+page-aligned read-only subrange `mprotect` 固定为 low-effect 成功合同，并用回归锁住。
+随后 `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img`
+的 `test-host-course_os_linux_compat_external_workflow_smoke` 已重新跑通 `git init`、
+`vim hello.c`、`git add/commit/log` 和 `gcc hello.c && ./a.out`。
+
 该轮调研结论是：futex 继续保持当前 low-effect `FUTEX_WAIT` / `FUTEX_WAKE`，不补 wait
 queue / requeue / bitset；signal 继续保持 `rt_sigaction` / `rt_sigprocmask` bypass，
 不先引入 ProcessGroup；Stage 11 command list 继续 host-only，不接入前端 external opt-in
@@ -230,6 +238,11 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
 
 ## 关键历史节点
 
+- `2026-06-12`
+  - 完成 external rootfs opt-in 复验：真实 rootfs 首轮暴露 `/usr/bin/git` 动态加载器
+    RELRO `mprotect(PROT_READ)` 子范围失败，本轮补 Linux compat VM low-effect 子范围
+    mprotect 回归后，external workflow smoke 重新跑通 `git init`、`vim`、
+    `git add/commit/log` 和 `gcc hello.c && ./a.out`。
 - `2026-06-11`
   - 完成 Stage 11 post-v0 收敛：external workflow command-list / per-command summary、
     Linux compat process table、overlay metadata / opened-fd 生命周期、pseudo path 合同、

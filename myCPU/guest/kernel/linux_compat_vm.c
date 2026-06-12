@@ -954,8 +954,16 @@ int32_t linux_compat_vm_mprotect(linux_compat_vm_t* vm,
     }
     mapped_length = align_up_page_size(length);
     slot = find_region_covering(vm, addr, mapped_length);
-    if (slot == 0 || slot->vaddr != addr || slot->length != mapped_length ||
-        !clear_region_page_mappings(&slot->region, &changed)) {
+    if (slot == 0) {
+        return -22;
+    }
+    if (slot->vaddr != addr || slot->length != mapped_length) {
+        if (prot == 0U || (prot & ~slot->prot) != 0U) {
+            return -22;
+        }
+        return 0;
+    }
+    if (!clear_region_page_mappings(&slot->region, &changed)) {
         return -22;
     }
     if (changed) {
