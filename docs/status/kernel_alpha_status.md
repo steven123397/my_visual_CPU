@@ -182,6 +182,12 @@ page-aligned read-only subrange `mprotect` 固定为 low-effect 成功合同，�
 的 `test-host-course_os_linux_compat_external_workflow_smoke` 已重新跑通 `git init`、
 `vim hello.c`、`git add/commit/log` 和 `gcc hello.c && ./a.out`。
 
+同日已完成 Stage 11 frontend host-only manifest 小切片：`/api/tests` 中的
+`guest_course_os_shell_demo` 现在携带只读 `hostOnlyWorkflow`，列出 external workflow
+的 `git init`、`vim`、`git add/commit/log` 和 `gcc hello.c && ./a.out` 命令及关键
+markers；Scenario inspector 会展示这组 host-only 命令清单，但不新增浏览器 external rootfs
+运行入口，也不改变现有 session load / terminal API。
+
 该轮调研结论是：futex 继续保持当前 low-effect `FUTEX_WAIT` / `FUTEX_WAKE`，不补 wait
 queue / requeue / bitset；signal 继续保持 `rt_sigaction` / `rt_sigprocmask` bypass，
 不先引入 ProcessGroup；Stage 11 command list 继续 host-only，不接入前端 external opt-in
@@ -243,6 +249,9 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
     RELRO `mprotect(PROT_READ)` 子范围失败，本轮补 Linux compat VM low-effect 子范围
     mprotect 回归后，external workflow smoke 重新跑通 `git init`、`vim`、
     `git add/commit/log` 和 `gcc hello.c && ./a.out`。
+  - 完成 frontend host-only manifest：`guest_course_os_shell_demo` 的前端 manifest
+    增加只读 Stage 11 workflow 命令清单和 markers，Scenario inspector 展示该 host-only
+    合同，但仍不暴露 external rootfs 浏览器运行 route。
 - `2026-06-11`
   - 完成 Stage 11 post-v0 收敛：external workflow command-list / per-command summary、
     Linux compat process table、overlay metadata / opened-fd 生命周期、pseudo path 合同、

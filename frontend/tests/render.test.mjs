@@ -731,6 +731,21 @@ test('renderApp exposes Course OS Shell as a selectable system lab', () => {
         category: 'course-os-shell',
         expectedMarker: 'course-os> ',
         ops: ['terminal', 'procfs', 'FD / FS', 'COW'],
+        hostOnlyWorkflow: {
+          enabled: true,
+          title: 'Stage 11 external workflow',
+          route: 'host-only',
+          commands: [
+            {
+              command: 'git init stage11repo',
+              markers: ['Initialized', 'course-os> '],
+            },
+            {
+              command: 'cd stage11repo && gcc hello.c && ./a.out',
+              markers: ['stage11 hello', 'exec=real', 'course-os> '],
+            },
+          ],
+        },
       },
     },
   ];
@@ -747,6 +762,9 @@ test('renderApp exposes Course OS Shell as a selectable system lab', () => {
   assert.match(elements.demoWorkspace.innerHTML, /course-os&gt; /);
   assert.match(elements.demoWorkspace.innerHTML, /procfs/);
   assert.match(elements.demoWorkspace.innerHTML, /COW/);
+  assert.match(elements.workload.innerHTML, /Stage 11 external workflow/);
+  assert.match(elements.workload.innerHTML, /git init stage11repo/);
+  assert.match(elements.workload.innerHTML, /gcc hello\.c && \.\/a\.out/);
   assert.match(elements.demoWorkspace.innerHTML, /data-demo-test="guest_course_os_shell_demo"/);
   assert.match(elements.guide.innerHTML, /Course OS shell/);
   assert.match(elements.guide.innerHTML, /not a Linux shell|不是 Linux shell/);

@@ -192,6 +192,67 @@ function linuxConsoleEntry(myCpuRoot, diagnostic) {
   };
 }
 
+function stage11HostOnlyWorkflowManifest() {
+  return {
+    enabled: true,
+    route: 'host-only',
+    title: 'Stage 11 external workflow',
+    externalRootfsEnv: 'MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS',
+    target: 'test-host-course_os_linux_compat_external_workflow_smoke',
+    boundary: 'Visible for host smoke and CI evidence only; the browser console does not run external rootfs workflows.',
+    commands: [
+      {
+        command: 'git init stage11repo',
+        markers: [
+          'linux-compat: rootfs=external',
+          'linux-compat: path=/usr/bin/git',
+          'Initialized',
+          'course-os> ',
+        ],
+      },
+      {
+        command: 'vim stage11repo/hello.c',
+        markers: [
+          'linux-compat: path=/usr/bin/vim',
+          'course-os> ',
+        ],
+      },
+      {
+        command: 'git -c safe.directory=/stage11repo -C stage11repo add hello.c',
+        markers: [
+          'linux-compat: path=/usr/bin/git',
+          'course-os> ',
+        ],
+      },
+      {
+        command: 'git -C stage11repo -c safe.directory=/stage11repo -c user.name=stage11 -c user.email=stage11@example.invalid commit -m init',
+        markers: [
+          'file changed',
+          'create mode',
+          'course-os> ',
+        ],
+      },
+      {
+        command: 'git -C stage11repo -c safe.directory=/stage11repo --no-pager log --oneline',
+        markers: [
+          'linux-compat: path=/usr/bin/git',
+          'init',
+          'course-os> ',
+        ],
+      },
+      {
+        command: 'cd stage11repo && gcc hello.c && ./a.out',
+        markers: [
+          'linux-compat: path=/usr/bin/gcc',
+          'stage11 hello',
+          'exec=real',
+          'course-os> ',
+        ],
+      },
+    ],
+  };
+}
+
 export function listTests(repoRoot) {
   const myCpuRoot = path.join(repoRoot, 'myCPU');
   const linuxConsole = linuxConsoleDiagnostic();
@@ -240,6 +301,7 @@ export function listTests(repoRoot) {
         expectedMarker: courseOsShellBudgets.prompt,
         ops: ['UART terminal', 'course shell', 'procfs shortcuts', 'ELF / libc programs', 'COW / crash evidence'],
         pipelineNote: '默认使用 pipeline backend；前端只复用 manifest、debug session、terminal prompt 和 snapshot 合同，不新增专用执行协议。',
+        hostOnlyWorkflow: stage11HostOnlyWorkflowManifest(),
         progress: [
           ['Boot', '独立 guest_course_os_shell_demo 进入 course-os> prompt'],
           ['Shell', 'help、文件重定向、pipe 和 exec 命令经 guest shell 执行'],

@@ -546,6 +546,33 @@ test('Course OS shell manifest carries wider debug CLI runtime budgets', () => {
   assert.equal(courseOsShell.commandRequestTimeoutMs, 30000);
 });
 
+test('Course OS shell manifest exposes the Stage 11 host-only workflow contract', () => {
+  const courseOsShell = listTests(repoRoot)
+    .find((item) => item.name === 'guest_course_os_shell_demo');
+  assert.ok(courseOsShell);
+  assert.equal(courseOsShell.workload.hostOnlyWorkflow.enabled, true);
+  assert.equal(courseOsShell.workload.hostOnlyWorkflow.route, 'host-only');
+  assert.equal(
+    courseOsShell.workload.hostOnlyWorkflow.externalRootfsEnv,
+    'MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS',
+  );
+  assert.deepEqual(
+    courseOsShell.workload.hostOnlyWorkflow.commands.map((item) => item.command),
+    [
+      'git init stage11repo',
+      'vim stage11repo/hello.c',
+      'git -c safe.directory=/stage11repo -C stage11repo add hello.c',
+      'git -C stage11repo -c safe.directory=/stage11repo -c user.name=stage11 -c user.email=stage11@example.invalid commit -m init',
+      'git -C stage11repo -c safe.directory=/stage11repo --no-pager log --oneline',
+      'cd stage11repo && gcc hello.c && ./a.out',
+    ],
+  );
+  assert.deepEqual(
+    courseOsShell.workload.hostOnlyWorkflow.commands.at(-1).markers,
+    ['linux-compat: path=/usr/bin/gcc', 'stage11 hello', 'exec=real', 'course-os> '],
+  );
+});
+
 test('GET /api/tests returns built-in test manifest', async () => {
   const server = await startServer({
     port: 0,
@@ -575,6 +602,7 @@ test('GET /api/tests returns built-in test manifest', async () => {
     assert.equal(courseOsShell.commandUntilUartText, 'course-os> ');
     assert.equal(courseOsShell.title, 'Course OS Shell');
     assert.equal(courseOsShell.workload.expectedMarker, 'course-os> ');
+    assert.equal(courseOsShell.workload.hostOnlyWorkflow.route, 'host-only');
     assert.equal(aiAccelDemo.badge, 'AI Accelerator');
     assert.equal(aiAccelDemo.workload.expectedMarker, 'KMVAI');
     assert.deepEqual(aiAccelDemo.workload.ops, ['graph package', 'MMIO doorbell', 'DMA load/store', 'timed-simple profile']);

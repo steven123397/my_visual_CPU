@@ -52,6 +52,29 @@ function workloadProgressItems(workload) {
   ];
 }
 
+function renderHostOnlyWorkflow(workflow) {
+  if (!workflow?.enabled) {
+    return '';
+  }
+
+  const commands = workflow.commands ?? [];
+  return `
+    <div class="workload-callout workload-callout-secondary">
+      <strong>${workflow.title ?? 'Host-only workflow'}</strong>
+      <p>${workflow.boundary ?? 'This workflow is listed for host-side verification only.'}</p>
+      <div class="workload-progress">
+        ${commands.map((item, index) => `
+          <div class="workload-progress__item">
+            <span>${String(index + 1).padStart(2, '0')}</span>
+            <strong>${item.command}</strong>
+          </div>
+        `).join('')}
+      </div>
+      ${workflow.externalRootfsEnv ? `<p><code>${workflow.externalRootfsEnv}</code></p>` : ''}
+    </div>
+  `;
+}
+
 export function renderWorkloadPanel(testEntry, snapshot) {
   if (!testEntry) {
     return '';
@@ -94,6 +117,7 @@ export function renderWorkloadPanel(testEntry, snapshot) {
             <p><code>${workload.assetNote}</code></p>
           </div>
         ` : ''}
+        ${renderHostOnlyWorkflow(workload.hostOnlyWorkflow)}
         ${activeStages.length > 0 ? `
           <div class="workload-active">
             <span>当前可见的向量 stage</span>
