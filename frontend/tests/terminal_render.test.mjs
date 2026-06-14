@@ -224,6 +224,50 @@ test('renderTerminal labels a loaded Course OS shell session without interactive
   assert.doesNotMatch(html, /guest monitor/);
 });
 
+test('renderTerminal prefers manifest terminal presentation for active sessions', () => {
+  const html = renderTerminal({
+    tests: [
+      {
+        name: 'guest_course_os_shell_demo',
+        workload: {
+          terminal: {
+            title: 'Manifest Course Console',
+            target: 'manifest shell target',
+          },
+        },
+      },
+    ],
+    selectedTest: 'guest_interactive_os_demo',
+    backend: 'functional',
+    loadedSession: {
+      test: 'guest_course_os_shell_demo',
+      backend: 'pipeline',
+    },
+    runState: 'paused',
+    currentSnapshot: {
+      summary: {
+        pc: '0x80000000',
+        privilege: 'S',
+        cycle: 4500000,
+        backend: 'pipeline',
+      },
+    },
+    layout: {
+      terminalCollapsed: false,
+    },
+    terminal: {
+      connected: true,
+      pendingInput: true,
+      focused: false,
+      buffer: 'course-os> ',
+    },
+  });
+
+  assert.match(html, /Manifest Course Console/);
+  assert.match(html, /正在把按键送入 manifest shell target/);
+  assert.doesNotMatch(html, /Course OS shell terminal/);
+});
+
 test('renderTerminal shows Linux boot progress while the load request is pending', () => {
   const html = renderTerminal({
     selectedTest: 'linux_proto_console',

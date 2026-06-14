@@ -39,6 +39,7 @@
   - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划归档：
   - [../plan/history_plan.md](../plan/history_plan.md)
+  - [../plan/history_plan.md#shell-terminal-unification-plan](../plan/history_plan.md#shell-terminal-unification-plan)
   - [../plan/history_plan.md#project-evolution-priority-p0-plan](../plan/history_plan.md#project-evolution-priority-p0-plan)
   - [../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
   - [../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
@@ -81,6 +82,13 @@
 `Wave 3` 已按真实实现现状收口：Linux fourth-stage checkpoint 线冻结在
 `timerfd-one-shot-readback-ok`，后续不再默认继续扩同类 syscall breadth。
 主线 `Wave 4` 的 AI accelerator A/B/C 三段切片已经完成并归档。
+
+Shell / terminal 收敛小切片已完成并归档到
+[../plan/history_plan.md#shell-terminal-unification-plan](../plan/history_plan.md#shell-terminal-unification-plan)。
+当前已统一 interactive terminal manifest metadata、host terminal smoke helper 和前端 terminal
+manifest-first 呈现；guest 侧命令分发经审查后选择 no-extraction，继续保持 `monitor> `、
+`course-os> `、`mycpu-linux# ` 与 xv6 `$ ` 的命令语义分离，Stage 11 external rootfs
+workflow 也仍是 host-only 证据面。
 
 `Wave 5 / cache / memory-system` 的 `Slice A ~ F` 已完成首轮收口：已有
 `shadow_cache` 证据补上一条 pipeline-side `xv6` memory observation guardrail；

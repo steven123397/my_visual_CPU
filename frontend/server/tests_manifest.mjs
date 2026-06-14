@@ -66,6 +66,46 @@ function withPresentation(entry, presentation = {}) {
   };
 }
 
+function withTerminalMetadata(entry, {
+  prompt,
+  bootMaxSteps,
+  bootRequestTimeoutMs,
+  commandMaxSteps,
+  commandRequestTimeoutMs,
+  commandWait = 'activity',
+  commandUntilUartText = commandWait === 'prompt' ? prompt : undefined,
+  presentation = {},
+  workload = {},
+  terminal = {},
+}) {
+  return withPresentation(
+    {
+      ...entry,
+      bootUntilUartText: prompt,
+      bootMaxSteps,
+      ...(bootRequestTimeoutMs == null ? {} : { bootRequestTimeoutMs }),
+      terminalPrompt: prompt,
+      ...(commandUntilUartText == null ? {} : { commandUntilUartText }),
+      commandMaxSteps,
+      ...(commandRequestTimeoutMs == null ? {} : { commandRequestTimeoutMs }),
+    },
+    {
+      ...presentation,
+      workload: {
+        ...workload,
+        expectedMarker: workload.expectedMarker ?? prompt,
+        terminal: {
+          kind: terminal.kind,
+          target: terminal.target,
+          commandWait,
+          prompt,
+          ...(terminal.title == null ? {} : { title: terminal.title }),
+        },
+      },
+    },
+  );
+}
+
 function resolveLinuxConsoleConfig() {
   if (process.env[linuxConsolePrimaryEnv]) {
     return {
@@ -144,52 +184,63 @@ function linuxConsoleEntry(myCpuRoot, diagnostic) {
 
   const linuxImage = diagnostic.path;
   const linuxProtoRoot = path.join(myCpuRoot, 'workloads', 'linux_proto');
-  return {
-    name: 'linux_proto_console',
-    menuLabel: 'linux_proto_console · Linux serial',
-    backend: 'functional',
-    image: path.join(linuxProtoRoot, 'linux_sbi_shim.bin'),
-    imageFormat: 'flat',
-    loadAddr: linuxConsoleBoot.loadAddr,
-    disk: path.join(linuxProtoRoot, 'rootfs.ext4'),
-    diskReady: true,
-    diskMagicValid: true,
-    blockTransport: 'virtio-blk',
-    kind: 'linux',
-    payloads: [
-      { image: linuxImage, addr: linuxConsoleBoot.kernelAddr },
-      { image: path.join(linuxProtoRoot, 'mycpu_virt.dtb'), addr: linuxConsoleBoot.dtbAddr },
-    ],
-    gprSeeds: [
-      { reg: 'a0', value: '0x0' },
-      { reg: 'a1', value: linuxConsoleBoot.dtbAddr },
-      { reg: 'a2', value: linuxConsoleBoot.kernelAddr },
-    ],
-    bootUntilUartText: linuxConsoleBoot.marker,
-    bootMaxSteps: linuxConsoleBoot.bootMaxSteps,
-    bootRequestTimeoutMs: LINUX_CONSOLE_BOOT_BUDGET.requestTimeoutMs,
-    commandUntilUartText: linuxConsoleBoot.prompt,
-    commandMaxSteps: LINUX_CONSOLE_COMMAND_BUDGET.maxSteps,
-    commandRequestTimeoutMs: LINUX_CONSOLE_COMMAND_BUDGET.requestTimeoutMs,
-    terminalPrompt: linuxConsoleBoot.prompt,
-    title: 'Linux Serial Console',
-    badge: 'Linux runtime',
-    summary: '启动受控 linux_proto runtime，进入 UART 串口 console，观察 Linux userland smoke marker。',
-    workload: {
-      stage: 'Wave 7',
-      category: 'linux-serial-console',
-      expectedMarker: linuxConsoleBoot.prompt,
-      ops: ['flat SBI shim', 'Linux Image payload', 'DTB', 'virtio-blk rootfs'],
-      pipelineNote: '配置本机 Linux Image 后才可运行；前端桥接 UART 与现有 debug session，并进入 linux_proto mini shell prompt；不在浏览器内运行 Linux。',
-      assetNote: 'Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image before starting the frontend server.',
-      progress: [
-        ['Boot', 'flat SBI shim 加载 Linux Image、DTB 和 rootfs'],
-        ['UART', 'serial console 输出通过 debug server 增量投影到浏览器'],
-        ['Control', 'Load / Run / Pause / Reset 复用现有 session 控制'],
-        ['Guardrail', '缺少 runtime Image 时不创建虚假 Linux session'],
+  return withTerminalMetadata(
+    {
+      name: 'linux_proto_console',
+      menuLabel: 'linux_proto_console · Linux serial',
+      backend: 'functional',
+      image: path.join(linuxProtoRoot, 'linux_sbi_shim.bin'),
+      imageFormat: 'flat',
+      loadAddr: linuxConsoleBoot.loadAddr,
+      disk: path.join(linuxProtoRoot, 'rootfs.ext4'),
+      diskReady: true,
+      diskMagicValid: true,
+      blockTransport: 'virtio-blk',
+      kind: 'linux',
+      payloads: [
+        { image: linuxImage, addr: linuxConsoleBoot.kernelAddr },
+        { image: path.join(linuxProtoRoot, 'mycpu_virt.dtb'), addr: linuxConsoleBoot.dtbAddr },
+      ],
+      gprSeeds: [
+        { reg: 'a0', value: '0x0' },
+        { reg: 'a1', value: linuxConsoleBoot.dtbAddr },
+        { reg: 'a2', value: linuxConsoleBoot.kernelAddr },
       ],
     },
-  };
+    {
+      prompt: linuxConsoleBoot.prompt,
+      bootMaxSteps: linuxConsoleBoot.bootMaxSteps,
+      bootRequestTimeoutMs: LINUX_CONSOLE_BOOT_BUDGET.requestTimeoutMs,
+      commandMaxSteps: LINUX_CONSOLE_COMMAND_BUDGET.maxSteps,
+      commandRequestTimeoutMs: LINUX_CONSOLE_COMMAND_BUDGET.requestTimeoutMs,
+      commandWait: 'prompt',
+      presentation: {
+        menuLabel: 'linux_proto_console · Linux serial',
+        title: 'Linux Serial Console',
+        badge: 'Linux runtime',
+        summary: '启动受控 linux_proto runtime，进入 UART 串口 console，观察 Linux userland smoke marker。',
+      },
+      terminal: {
+        kind: 'linux-serial',
+        target: 'Linux serial console',
+        title: 'Linux serial terminal',
+      },
+      workload: {
+        stage: 'Wave 7',
+        category: 'linux-serial-console',
+        ops: ['flat SBI shim', 'Linux Image payload', 'DTB', 'virtio-blk rootfs'],
+        pipelineNote: '配置本机 Linux Image 后才可运行；前端桥接 UART 与现有 debug session，并进入 linux_proto mini shell prompt；不在浏览器内运行 Linux。',
+        assetEnvVar: linuxConsolePrimaryEnv,
+        assetNote: 'Set MYCPU_LINUX_PROTO_CONSOLE_IMAGE=/path/to/Image before starting the frontend server.',
+        progress: [
+          ['Boot', 'flat SBI shim 加载 Linux Image、DTB 和 rootfs'],
+          ['UART', 'serial console 输出通过 debug server 增量投影到浏览器'],
+          ['Control', 'Load / Run / Pause / Reset 复用现有 session 控制'],
+          ['Guardrail', '缺少 runtime Image 时不创建虚假 Linux session'],
+        ],
+      },
+    },
+  );
 }
 
 function stage11HostOnlyWorkflowManifest() {
@@ -271,34 +322,58 @@ export function listTests(repoRoot) {
   }));
 
   manifest.push(guestEntry(myCpuRoot, 'guest_supervisor_demo', 'ready'));
-  manifest.push({
-    ...guestEntry(myCpuRoot, 'guest_interactive_os_demo', 'ready', 'interactive_os'),
-    bootUntilUartText: interactiveOsBudgets.prompt,
-    bootMaxSteps: interactiveOsBudgets.bootMaxSteps,
-    terminalPrompt: interactiveOsBudgets.prompt,
-    commandMaxSteps: interactiveOsBudgets.commandMaxSteps,
-  });
-  manifest.push(withPresentation(
+  manifest.push(withTerminalMetadata(
+    guestEntry(myCpuRoot, 'guest_interactive_os_demo', 'ready', 'interactive_os'),
+    {
+      prompt: interactiveOsBudgets.prompt,
+      bootMaxSteps: interactiveOsBudgets.bootMaxSteps,
+      commandMaxSteps: interactiveOsBudgets.commandMaxSteps,
+      commandWait: 'activity',
+      presentation: {
+        menuLabel: 'guest_interactive_os_demo · interactive OS',
+        title: 'Interactive OS Monitor',
+        badge: 'Monitor',
+        summary: '进入 interactive_os guest monitor，通过 UART 操作 help、echo、time、uptime、disk、regs、peek、pagewalk 和 pte 命令。',
+      },
+      terminal: {
+        kind: 'monitor',
+        target: 'guest monitor',
+        title: 'interactive_os terminal',
+      },
+      workload: {
+        stage: 'interactive_os',
+        category: 'interactive-monitor',
+        ops: ['UART terminal', 'guest monitor', 'storage probe', 'runtime counters', 'page table inspection'],
+        pipelineNote: '保留 monitor> 命令语义；manifest 只声明 prompt、terminal presentation 和 command budget。',
+      },
+    },
+  ));
+  manifest.push(withTerminalMetadata(
     {
       ...guestEntry(myCpuRoot, 'guest_course_os_shell_demo', 'ready', 'course_os_shell'),
       backend: 'pipeline',
-      bootUntilUartText: courseOsShellBudgets.prompt,
-      bootMaxSteps: courseOsShellBudgets.bootMaxSteps,
-      bootRequestTimeoutMs: courseOsShellBudgets.bootRequestTimeoutMs,
-      terminalPrompt: courseOsShellBudgets.prompt,
-      commandUntilUartText: courseOsShellBudgets.prompt,
-      commandMaxSteps: courseOsShellBudgets.commandMaxSteps,
-      commandRequestTimeoutMs: courseOsShellBudgets.commandRequestTimeoutMs,
     },
     {
-      menuLabel: 'guest_course_os_shell_demo · Course OS shell',
-      title: 'Course OS Shell',
-      badge: 'Course OS',
-      summary: '打开课程 OS Stage 4 交互 shell，通过 UART terminal 操作 procfs、FD / FS、pipe、ELF / libc、COW 与 crash evidence。',
+      prompt: courseOsShellBudgets.prompt,
+      bootMaxSteps: courseOsShellBudgets.bootMaxSteps,
+      bootRequestTimeoutMs: courseOsShellBudgets.bootRequestTimeoutMs,
+      commandMaxSteps: courseOsShellBudgets.commandMaxSteps,
+      commandRequestTimeoutMs: courseOsShellBudgets.commandRequestTimeoutMs,
+      commandWait: 'prompt',
+      presentation: {
+        menuLabel: 'guest_course_os_shell_demo · Course OS shell',
+        title: 'Course OS Shell',
+        badge: 'Course OS',
+        summary: '打开课程 OS Stage 4 交互 shell，通过 UART terminal 操作 procfs、FD / FS、pipe、ELF / libc、COW 与 crash evidence。',
+      },
+      terminal: {
+        kind: 'course-os',
+        target: 'Course OS shell',
+        title: 'Course OS shell terminal',
+      },
       workload: {
         stage: 'Course OS Stage 4',
         category: 'course-os-shell',
-        expectedMarker: courseOsShellBudgets.prompt,
         ops: ['UART terminal', 'course shell', 'procfs shortcuts', 'ELF / libc programs', 'COW / crash evidence'],
         pipelineNote: '默认使用 pipeline backend；前端只复用 manifest、debug session、terminal prompt 和 snapshot 合同，不新增专用执行协议。',
         hostOnlyWorkflow: stage11HostOnlyWorkflowManifest(),

@@ -188,6 +188,19 @@ page-aligned read-only subrange `mprotect` 固定为 low-effect 成功合同，�
 markers；Scenario inspector 会展示这组 host-only 命令清单，但不新增浏览器 external rootfs
 运行入口，也不改变现有 session load / terminal API。
 
+2026-06-14 已完成 shell / terminal 统一收敛小切片。`guest_interactive_os_demo`、
+`guest_course_os_shell_demo` 和配置后出现的 `linux_proto_console` 现在通过统一 manifest
+metadata 表达 prompt、boot marker、command budget、terminal title / target 和外部资产信息；
+前端 terminal 标题与 pending-input hint 优先读取 manifest presentation metadata，旧 entry
+继续保守 fallback。三条 host terminal smoke 复用 `tests/host/terminal_smoke_harness.h`
+的 load / prompt wait / UART input / command-output failure helper；默认 builtin
+Course OS shell 的 `git init` 继续是 help-run / usage 行为，不会初始化 writable repo。
+Stage 11 external workflow 仍只通过 `hostOnlyWorkflow` 暴露给 Scenario inspector 和 host
+smoke，未新增浏览器 loadable external-rootfs route。guest 侧 `monitor_commands.c` 与
+`course_shell.c` 的 parser / dispatch 边界已审查：两者只有 token equality 级别表面相似，
+Course OS shell 还承载 argv、pipe、redirect、`&&`、课程程序和 Linux fallback，因此本轮明确
+`no guest extraction`，不新增 `guest_command_dispatch`。
+
 该轮调研结论是：futex 继续保持当前 low-effect `FUTEX_WAIT` / `FUTEX_WAKE`，不补 wait
 queue / requeue / bitset；signal 继续保持 `rt_sigaction` / `rt_sigprocmask` bypass，
 不先引入 ProcessGroup；Stage 11 command list 继续 host-only，不接入前端 external opt-in

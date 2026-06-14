@@ -76,6 +76,9 @@ __pycache__/
 # Reasonix Code
 .reasonix/
 
+# CodeGraph local index
+.codegraph/
+
 # Local git worktrees
 .worktrees/
 

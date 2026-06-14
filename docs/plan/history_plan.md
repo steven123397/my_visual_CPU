@@ -21,6 +21,41 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-06-14
+
+#### shell-terminal-unification-plan
+
+- 完成时间：2026-06-14
+- 原文件：`shell_terminal_unification_plan.md`
+- 完成内容：完成 shell / terminal 统一收敛小切片。`frontend/server/tests_manifest.mjs`
+  现在用 data-only terminal metadata helper 统一 `guest_interactive_os_demo`、
+  `guest_course_os_shell_demo` 和配置后出现的 `linux_proto_console` 的 prompt、boot
+  marker、command budget、title / badge / summary、terminal title / target 和外部资产
+  metadata；前端 terminal 标题与 pending-input hint 优先读取 manifest presentation
+  metadata。三条 host terminal smoke 复用 `myCPU/tests/host/terminal_smoke_harness.h`
+  的 load / prompt wait / UART input / command-output failure helper。
+- 实现过程摘要：本轮保持各 shell 语义分离，不把 `monitor> `、`course-os> `、
+  `mycpu-linux# ` 或 xv6 `$ ` 合并为同一种命令语言。guest 侧已审查
+  `monitor_commands.c`、`course_shell.c` 和 `course_shell_linux.c`：monitor 是 token-stream
+  调试命令解析，Course OS shell 是 argv / pipe / redirect / `&&` / 课程程序 /
+  Linux fallback 编排，两者只有 token equality 级别表面相似，因此明确 `no guest extraction`，
+  不新增 `guest_command_dispatch`。Stage 11 external rootfs workflow 继续只通过
+  `hostOnlyWorkflow` 暴露为 host-only 证据面；默认 builtin Course OS shell 的 `git init`
+  仍固定为 help-run / usage 行为，不初始化 writable repo。
+- 验证摘要：本轮已先用窄红灯验证 manifest metadata 与前端 manifest-first terminal
+  presentation；实现后已运行并通过 `cd frontend && node --test tests/terminal_render.test.mjs`、
+  `cd frontend && node --test --test-name-pattern "Course OS shell manifest exposes the Stage 11 host-only workflow contract" tests/debug_server.test.mjs`、
+  `cd myCPU && make test-host-interactive_terminal_smoke`、
+  `make test-host-course_os_shell_terminal_smoke`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、
+  `cd frontend && node --test`、`cd myCPU && make test-fast-smoke`、
+  `cd myCPU && make test-pipeline` 和 `git diff --check`。本机存在
+  `/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img` 时，已额外运行并通过
+  `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img TEST_TIMEOUT=120s make test-host-course_os_linux_compat_external_workflow_smoke`。
+- 剩余风险：本轮不扩 Linux compat syscall breadth，不启动网络 git / full vim / full gcc /
+  `rustc` / full signal / futex，不把 Stage 11 external rootfs workflow 做成浏览器默认入口。
+- 结果参考：[mainline_status.md](../status/mainline_status.md)、[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 ### 2026-06-11
 
 #### course-os-kernel-alpha-stage11-post-v0-convergence-plan

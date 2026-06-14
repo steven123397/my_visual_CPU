@@ -6,18 +6,11 @@
 #include <vector>
 
 #include "../../src/debug/debug_budget.h"
-#include "../../src/debug/debug_protocol.h"
+#include "terminal_smoke_harness.h"
 
 namespace {
 
-bool expect_contains(const std::string& haystack, const char* needle, const char* message) {
-    if (haystack.find(needle) == std::string::npos) {
-        std::fprintf(stderr, "%s\n", message);
-        std::fprintf(stderr, "output was:\n%s\n", haystack.c_str());
-        return false;
-    }
-    return true;
-}
+using terminal_smoke::expect_contains;
 
 std::vector<std::string> split_lines(const std::string& text) {
     std::vector<std::string> lines;
@@ -55,31 +48,15 @@ bool expect_line_with_fields(const std::vector<std::string>& lines,
 
 std::string run_until_uart_contains_command(const char* text,
                                             std::uint64_t max_steps) {
-    std::ostringstream script;
-    script << "{\"cmd\":\"run_until_uart_contains\",\"text\":\"" << text
-           << "\",\"max_steps\":" << max_steps << "}\n";
-    return script.str();
+    return terminal_smoke::debug_cli_run_until_uart_contains_command(text, max_steps);
 }
 
 std::string run_until_halt_command(std::uint64_t max_steps) {
-    std::ostringstream script;
-    script << "{\"cmd\":\"run_until_halt\",\"max_steps\":" << max_steps << "}\n";
-    return script.str();
+    return terminal_smoke::debug_cli_run_until_halt_command(max_steps);
 }
 
 std::string run_cli_script(const std::string& script) {
-    std::istringstream in(script);
-    std::ostringstream out;
-    std::ostringstream err;
-
-    const int status = run_debug_cli(in, out, err);
-    if (status != 0) {
-        std::fprintf(stderr, "debug cli exited with status %d\n", status);
-        std::fprintf(stderr, "stderr:\n%s\n", err.str().c_str());
-        std::exit(1);
-    }
-
-    return out.str();
+    return terminal_smoke::run_debug_cli_script(script);
 }
 
 }  // namespace

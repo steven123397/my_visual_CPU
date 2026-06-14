@@ -1666,5 +1666,9 @@ tests/unit/kernel_alpha_interrupt: $(KERNEL_ALPHA_INTERRUPT_UNIT_OBJS)
 tests/unit/%: tests/unit/%.cpp $(CORE_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(CORE_OBJS)
 
+tests/host/interactive_terminal_smoke \
+tests/host/course_os_shell_terminal_smoke \
+tests/host/course_os_linux_compat_terminal_smoke: tests/host/terminal_smoke_harness.h
+
 tests/host/%: tests/host/%.cpp $(CORE_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(CORE_OBJS)

@@ -549,12 +549,28 @@ test('Course OS shell manifest carries wider debug CLI runtime budgets', () => {
 test('Course OS shell manifest exposes the Stage 11 host-only workflow contract', () => {
   const courseOsShell = listTests(repoRoot)
     .find((item) => item.name === 'guest_course_os_shell_demo');
+  const stage11Entries = listTests(repoRoot)
+    .filter((item) => item.name.includes('stage11') || item.name.includes('external_workflow'));
+
   assert.ok(courseOsShell);
+  assert.deepEqual(
+    stage11Entries.map((item) => item.name),
+    [],
+    'Stage 11 external workflow should not become a browser-loadable manifest entry',
+  );
   assert.equal(courseOsShell.workload.hostOnlyWorkflow.enabled, true);
   assert.equal(courseOsShell.workload.hostOnlyWorkflow.route, 'host-only');
   assert.equal(
     courseOsShell.workload.hostOnlyWorkflow.externalRootfsEnv,
     'MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS',
+  );
+  assert.equal(
+    courseOsShell.workload.hostOnlyWorkflow.target,
+    'test-host-course_os_linux_compat_external_workflow_smoke',
+  );
+  assert.match(
+    courseOsShell.workload.hostOnlyWorkflow.boundary,
+    /browser console does not run external rootfs workflows/,
   );
   assert.deepEqual(
     courseOsShell.workload.hostOnlyWorkflow.commands.map((item) => item.command),
@@ -571,6 +587,98 @@ test('Course OS shell manifest exposes the Stage 11 host-only workflow contract'
     courseOsShell.workload.hostOnlyWorkflow.commands.at(-1).markers,
     ['linux-compat: path=/usr/bin/gcc', 'stage11 hello', 'exec=real', 'course-os> '],
   );
+});
+
+test('interactive terminal manifest entries carry unified presentation metadata', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mycpu-linux-console-'));
+  try {
+    const imagePath = path.join(tempDir, 'Image');
+    fs.writeFileSync(imagePath, 'fake linux image');
+
+    const tests = withEnv({
+      MYCPU_LINUX_PROTO_CONSOLE_IMAGE: imagePath,
+    }, () => listTests(repoRoot));
+    const byName = new Map(tests.map((item) => [item.name, item]));
+
+    assert.deepEqual(
+      [
+        'guest_interactive_os_demo',
+        'guest_course_os_shell_demo',
+        'linux_proto_console',
+      ].map((name) => {
+        const entry = byName.get(name);
+        assert.ok(entry, `${name} should be present`);
+        return {
+          name,
+          title: entry.title,
+          badge: entry.badge,
+          summary: entry.summary,
+          prompt: entry.terminalPrompt,
+          bootUntil: entry.bootUntilUartText,
+          commandUntil: entry.commandUntilUartText,
+          commandMaxSteps: Number.isInteger(entry.commandMaxSteps),
+          commandWait: entry.workload?.terminal?.commandWait,
+          category: entry.workload?.category,
+          target: entry.workload?.terminal?.target,
+          kind: entry.workload?.terminal?.kind,
+        };
+      }),
+      [
+        {
+          name: 'guest_interactive_os_demo',
+          title: 'Interactive OS Monitor',
+          badge: 'Monitor',
+          summary: '进入 interactive_os guest monitor，通过 UART 操作 help、echo、time、uptime、disk、regs、peek、pagewalk 和 pte 命令。',
+          prompt: 'monitor> ',
+          bootUntil: 'monitor> ',
+          commandUntil: undefined,
+          commandMaxSteps: true,
+          commandWait: 'activity',
+          category: 'interactive-monitor',
+          target: 'guest monitor',
+          kind: 'monitor',
+        },
+        {
+          name: 'guest_course_os_shell_demo',
+          title: 'Course OS Shell',
+          badge: 'Course OS',
+          summary: '打开课程 OS Stage 4 交互 shell，通过 UART terminal 操作 procfs、FD / FS、pipe、ELF / libc、COW 与 crash evidence。',
+          prompt: 'course-os> ',
+          bootUntil: 'course-os> ',
+          commandUntil: 'course-os> ',
+          commandMaxSteps: true,
+          commandWait: 'prompt',
+          category: 'course-os-shell',
+          target: 'Course OS shell',
+          kind: 'course-os',
+        },
+        {
+          name: 'linux_proto_console',
+          title: 'Linux Serial Console',
+          badge: 'Linux runtime',
+          summary: '启动受控 linux_proto runtime，进入 UART 串口 console，观察 Linux userland smoke marker。',
+          prompt: 'mycpu-linux# ',
+          bootUntil: 'mycpu-linux# ',
+          commandUntil: 'mycpu-linux# ',
+          commandMaxSteps: true,
+          commandWait: 'prompt',
+          category: 'linux-serial-console',
+          target: 'Linux serial console',
+          kind: 'linux-serial',
+        },
+      ],
+    );
+    assert.equal(
+      byName.get('guest_course_os_shell_demo').workload.hostOnlyWorkflow.route,
+      'host-only',
+    );
+    assert.equal(
+      byName.get('linux_proto_console').workload.assetEnvVar,
+      'MYCPU_LINUX_PROTO_CONSOLE_IMAGE',
+    );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('GET /api/tests returns built-in test manifest', async () => {
@@ -602,6 +710,13 @@ test('GET /api/tests returns built-in test manifest', async () => {
     assert.equal(courseOsShell.commandUntilUartText, 'course-os> ');
     assert.equal(courseOsShell.title, 'Course OS Shell');
     assert.equal(courseOsShell.workload.expectedMarker, 'course-os> ');
+    assert.deepEqual(courseOsShell.workload.terminal, {
+      kind: 'course-os',
+      target: 'Course OS shell',
+      commandWait: 'prompt',
+      prompt: 'course-os> ',
+      title: 'Course OS shell terminal',
+    });
     assert.equal(courseOsShell.workload.hostOnlyWorkflow.route, 'host-only');
     assert.equal(aiAccelDemo.badge, 'AI Accelerator');
     assert.equal(aiAccelDemo.workload.expectedMarker, 'KMVAI');

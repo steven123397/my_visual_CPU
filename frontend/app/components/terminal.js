@@ -13,7 +13,38 @@ export function projectTerminalBuffer(text = '') {
   return projectTerminalText(text);
 }
 
-function terminalPresentation(activeTest) {
+function manifestTerminalPresentation(state, activeTest) {
+  const entry = Array.isArray(state.tests)
+    ? state.tests.find((item) => item.name === activeTest)
+    : null;
+  const terminal = entry?.workload?.terminal;
+  if (!terminal || typeof terminal !== 'object') {
+    return null;
+  }
+
+  const title =
+    typeof terminal.title === 'string' && terminal.title.length > 0
+      ? terminal.title
+      : null;
+  const target =
+    typeof terminal.target === 'string' && terminal.target.length > 0
+      ? terminal.target
+      : null;
+  if (!title && !target) {
+    return null;
+  }
+  return {
+    title: title ?? entry.title ?? entry.menuLabel ?? `${activeTest} terminal`,
+    target: target ?? entry.title ?? activeTest,
+  };
+}
+
+function terminalPresentation(state, activeTest) {
+  const manifestPresentation = manifestTerminalPresentation(state, activeTest);
+  if (manifestPresentation) {
+    return manifestPresentation;
+  }
+
   if (activeTest === 'linux_proto_console') {
     return {
       title: 'Linux serial terminal',
@@ -83,7 +114,7 @@ export function renderTerminal(state) {
         ? loadedSession.backend
         : (typeof loadProgress?.backend === 'string' && loadProgress.backend.length > 0 ? loadProgress.backend : '-'));
   const sessionLabel = activeTest ? `${activeTest} · ${activeBackend}` : `未加载会话 · ${activeBackend}`;
-  const presentation = terminalPresentation(activeTest);
+  const presentation = terminalPresentation(state, activeTest);
   let hint = '点击终端开始输入。';
   if (!terminal.connected) {
     if (loadProgress) {
