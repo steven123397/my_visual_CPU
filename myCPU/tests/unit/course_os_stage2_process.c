@@ -146,10 +146,58 @@ static int test_crash_report_and_wait_reap(void) {
     return 0;
 }
 
+static int test_kill_sets_zombie_and_prevents_self_and_init(void) {
+    course_process_table_t table;
+    course_process_t* init = NULL;
+    course_process_t* child = NULL;
+    course_process_t* child2 = NULL;
+    int32_t status = 0;
+
+    course_process_table_init(&table);
+    init = course_process_spawn(&table, 0U, "init");
+    child = course_process_fork(&table, init->pid, "child");
+    child2 = course_process_fork(&table, init->pid, "child2");
+    if (init == NULL || child == NULL || child2 == NULL) {
+        return fail("expected process table setup");
+    }
+
+    if (course_process_kill(&table, 999U, child->pid)) {
+        return fail("expected kill from nonexistent caller to fail");
+    }
+
+    if (course_process_kill(&table, child->pid, child->pid)) {
+        return fail("expected kill self to fail");
+    }
+
+    if (course_process_kill(&table, child->pid, init->pid)) {
+        return fail("expected child to be unable to kill init");
+    }
+
+    if (!course_process_kill(&table, init->pid, child2->pid) ||
+        child2->state != COURSE_PROCESS_ZOMBIE ||
+        child2->exit_code != 9) {
+        return fail("expected kill to set target to zombie with exit_code=9");
+    }
+
+    if (course_process_waitpid(&table, init->pid, child2->pid, &status) !=
+            COURSE_PROCESS_OK ||
+        status != 9 ||
+        child2->state != COURSE_PROCESS_DEAD) {
+        return fail("expected parent to reap killed child");
+    }
+
+    if (course_process_kill(&table, init->pid, 999U)) {
+        return fail("expected kill nonexistent pid to fail");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_pid_parent_state_exit_wait() != 0 ||
         test_exec_user_program_catalog_and_procfs_ps() != 0 ||
-        test_crash_report_and_wait_reap() != 0) {
+        test_crash_report_and_wait_reap() != 0 ||
+        test_kill_sets_zombie_and_prevents_self_and_init() != 0) {
         return 1;
     }
 

@@ -159,6 +159,57 @@ static int test_course_fs_crud_seek_btree_stats(void) {
     return 0;
 }
 
+static int test_course_fs_listdir(void) {
+    static course_fs_t fs;
+    char out[256];
+    char tiny[6] = {'x', '\0'};
+
+    course_fs_init(&fs);
+
+    if (course_fs_listdir(&fs, "/no_such_path", out, sizeof(out))) {
+        return fail("expected listdir on nonexistent path to fail");
+    }
+
+    if (!course_fs_listdir(&fs, "/", out, sizeof(out)) ||
+        strcmp(out, "\n") != 0) {
+        return fail("expected listdir on empty root to return only newline");
+    }
+
+    if (!course_fs_mkdir(&fs, "/home") ||
+        !course_fs_mkdir(&fs, "/home/user") ||
+        !course_fs_create(&fs, "/home/user/a.txt", false) ||
+        !course_fs_create(&fs, "/home/user/b.txt", false)) {
+        return fail("expected fs to create test structure");
+    }
+
+    if (!course_fs_listdir(&fs, "/home", out, sizeof(out)) ||
+        strcmp(out, "user\n") != 0) {
+        return fail("expected listdir /home to list the user directory");
+    }
+
+    if (!course_fs_listdir(&fs, "/home/user", out, sizeof(out)) ||
+        strcmp(out, "a.txt b.txt\n") != 0) {
+        return fail("expected listdir /home/user to list a.txt and b.txt");
+    }
+
+    if (!course_fs_create(&fs, "/home/user/c.txt", false) ||
+        !course_fs_listdir(&fs, "/home/user", out, sizeof(out)) ||
+        strcmp(out, "a.txt b.txt c.txt\n") != 0) {
+        return fail("expected listdir to reflect newly created file");
+    }
+
+    if (course_fs_listdir(&fs, "/home/user", tiny, sizeof(tiny)) ||
+        tiny[0] != '\0') {
+        return fail("expected listdir with insufficient buffer to fail closed");
+    }
+
+    if (course_fs_listdir(&fs, "/home/user/a.txt", out, sizeof(out))) {
+        return fail("expected listdir on a file (non-directory) to fail");
+    }
+
+    return 0;
+}
+
 static int test_procfs_readonly_outputs(void) {
     course_scheduler_t scheduler;
     course_memory_t memory;
@@ -222,6 +273,7 @@ int main(void) {
     if (test_scheduler_policies_and_stats() != 0 ||
         test_memory_demand_clock_and_kmalloc() != 0 ||
         test_course_fs_crud_seek_btree_stats() != 0 ||
+        test_course_fs_listdir() != 0 ||
         test_procfs_readonly_outputs() != 0) {
         return 1;
     }

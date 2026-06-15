@@ -106,6 +106,15 @@ static int test_and_chain_uses_command_status_not_output_text(void) {
         return fail("expected && chain to use command status instead of output text");
     }
 
+    if (!course_shell_run_line(&shell,
+                               "kill abc && echo after",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "kill: invalid pid") ||
+        contains(out, "after\n")) {
+        return fail("expected invalid kill to stop && chain");
+    }
+
     return 0;
 }
 
@@ -152,12 +161,100 @@ static int test_proc_shortcut_commands(void) {
     return 0;
 }
 
+static int test_kill_command_in_shell(void) {
+    static course_shell_t shell;
+    course_process_t* child = NULL;
+    int32_t status = 0;
+    char out[1024];
+
+    course_shell_init(&shell);
+    child = course_process_fork(&shell.processes, shell.shell_pid, "victim");
+    if (child == NULL) {
+        return fail("expected shell test to fork a kill target");
+    }
+
+    if (!course_shell_run_line(&shell, "kill", out, sizeof(out)) ||
+        !contains(out, "missing pid")) {
+        return fail("expected kill without pid to report missing pid");
+    }
+
+    if (!course_shell_run_line(&shell, "kill abc", out, sizeof(out)) ||
+        !contains(out, "invalid pid")) {
+        return fail("expected kill with non-numeric pid to report invalid pid");
+    }
+
+    if (!course_shell_run_line(&shell, "kill 1", out, sizeof(out)) ||
+        !contains(out, "permission denied")) {
+        return fail("expected kill init to fail with permission denied");
+    }
+
+    {
+        char command[32];
+
+        snprintf(command, sizeof(command), "kill %u", child->pid);
+        if (!course_shell_run_line(&shell, command, out, sizeof(out)) ||
+        !contains(out, "killed") ||
+        child->state != COURSE_PROCESS_ZOMBIE ||
+        course_process_waitpid(&shell.processes,
+                               shell.shell_pid,
+                               child->pid,
+                               &status) != COURSE_PROCESS_OK ||
+        status != 9) {
+            return fail("expected shell kill to terminate and reap target process");
+        }
+    }
+
+    return 0;
+}
+
+static int test_ls_lists_directory_contents(void) {
+    static course_shell_t shell;
+    char out[1024];
+
+    course_shell_init(&shell);
+
+    if (!course_shell_run_line(&shell, "ls", out, sizeof(out)) ||
+        !contains(out, "home") ||
+        !contains(out, "tmp")) {
+        return fail("expected ls with no args to list cwd entries including home and tmp");
+    }
+
+    if (!course_shell_run_line(&shell, "ls /home", out, sizeof(out)) ||
+        !contains(out, "user")) {
+        return fail("expected ls /home to list user directory");
+    }
+
+    if (!course_fs_create(&shell.fs, "/home/user/test.txt", false) ||
+        !course_shell_run_line(&shell, "ls /home/user", out, sizeof(out)) ||
+        !contains(out, "test.txt")) {
+        return fail("expected ls /home/user to show newly created file");
+    }
+
+    if (!course_shell_run_line(&shell, "ls /no/such/path", out, sizeof(out)) ||
+        !contains(out, "ls: cannot access")) {
+        return fail("expected ls on nonexistent path to report a diagnostic");
+    }
+
+    if (!course_shell_run_line(&shell,
+                               "ls /no/such/path && echo after",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "ls: cannot access") ||
+        contains(out, "after\n")) {
+        return fail("expected failed ls to stop && chain");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_parser_pipeline_and_redirection() != 0 ||
         test_builtins_external_programs_and_transcript() != 0 ||
         test_redirection_and_pipe_execution() != 0 ||
         test_and_chain_uses_command_status_not_output_text() != 0 ||
-        test_proc_shortcut_commands() != 0) {
+        test_proc_shortcut_commands() != 0 ||
+        test_kill_command_in_shell() != 0 ||
+        test_ls_lists_directory_contents() != 0) {
         return 1;
     }
 

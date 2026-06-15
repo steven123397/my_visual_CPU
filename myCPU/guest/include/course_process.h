@@ -152,6 +152,9 @@ bool course_process_page_refcount(const course_process_table_t* table,
                                   uint32_t pid,
                                   uint32_t page_index,
                                   uint32_t* out_refcount);
+bool course_process_kill(course_process_table_t* table,
+                        uint32_t caller_pid,
+                        uint32_t target_pid);
 bool course_process_cow_stats(const course_process_table_t* table,
                               course_process_cow_stats_t* out_stats);
 course_process_t* course_process_find(course_process_table_t* table,

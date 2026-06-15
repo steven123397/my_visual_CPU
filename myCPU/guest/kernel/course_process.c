@@ -405,6 +405,34 @@ bool course_process_exit(course_process_table_t* table,
     return true;
 }
 
+bool course_process_kill(course_process_table_t* table,
+                        uint32_t caller_pid,
+                        uint32_t target_pid) {
+    course_process_t* caller = NULL;
+    course_process_t* target = NULL;
+
+    if (table == 0) {
+        return false;
+    }
+
+    caller = course_process_find(table, caller_pid);
+    target = course_process_find(table, target_pid);
+    if (caller == 0 || caller->state == COURSE_PROCESS_UNUSED ||
+        caller->state == COURSE_PROCESS_DEAD || target == 0 ||
+        target->state == COURSE_PROCESS_UNUSED ||
+        target->state == COURSE_PROCESS_DEAD) {
+        return false;
+    }
+
+    if (target_pid == 1U || target_pid == caller_pid) {
+        return false;
+    }
+
+    target->exit_code = 9;
+    target->state = COURSE_PROCESS_ZOMBIE;
+    return true;
+}
+
 int32_t course_process_waitpid(course_process_table_t* table,
                                uint32_t parent_pid,
                                uint32_t child_pid,

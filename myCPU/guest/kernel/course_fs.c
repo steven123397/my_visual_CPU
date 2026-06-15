@@ -551,6 +551,89 @@ bool course_fs_size(course_fs_t* fs, const char* path, size_t* out_size) {
     return true;
 }
 
+bool course_fs_listdir(course_fs_t* fs,
+                       const char* path,
+                       char* out,
+                       size_t out_size) {
+    int node_index = 0;
+    const course_fs_node_t* dir_node = NULL;
+    size_t required = 1U;
+    size_t used = 0;
+    size_t i = 0;
+    bool emitted = false;
+
+    if (fs == NULL || path == NULL || out == NULL || out_size == 0) {
+        return false;
+    }
+    out[0] = '\0';
+
+    node_index = resolve_path(fs, path, NULL, NULL, NULL);
+    if (node_index < 0) {
+        return false;
+    }
+
+    dir_node = &fs->nodes[node_index];
+    if (!dir_node->is_dir) {
+        return false;
+    }
+
+    for (i = 0; i < dir_node->dir_index_count; ++i) {
+        const int child_index = dir_node->dir_index[i];
+        const course_fs_node_t* child = &fs->nodes[child_index];
+        size_t name_len = 0;
+
+        if (!child->used) {
+            continue;
+        }
+
+        while (child->name[name_len] != '\0') {
+            name_len += 1U;
+        }
+
+        required += name_len;
+        if (emitted) {
+            required += 1U;
+        }
+        emitted = true;
+    }
+
+    if (required + 1U > out_size) {
+        return false;
+    }
+
+    emitted = false;
+    for (i = 0; i < dir_node->dir_index_count; ++i) {
+        const int child_index = dir_node->dir_index[i];
+        const course_fs_node_t* child = &fs->nodes[child_index];
+        size_t name_len = 0;
+        size_t j = 0;
+
+        if (!child->used) {
+            continue;
+        }
+
+        while (child->name[name_len] != '\0') {
+            name_len += 1U;
+        }
+
+        if (emitted) {
+            out[used] = ' ';
+            used += 1U;
+        }
+
+        for (j = 0; j < name_len; ++j) {
+            out[used + j] = child->name[j];
+        }
+        used += name_len;
+        emitted = true;
+    }
+
+    out[used] = '\n';
+    used += 1U;
+    out[used] = '\0';
+    return true;
+}
+
 bool course_fs_stats(const course_fs_t* fs, course_fs_stats_t* out_stats) {
     if (fs == NULL || out_stats == NULL) {
         return false;

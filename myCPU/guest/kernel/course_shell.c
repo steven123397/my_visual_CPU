@@ -808,10 +808,54 @@ static bool run_simple(course_shell_t* shell,
         return read_pid_proc_file(shell, command, "maps", out, out_size);
     }
     if (str_eq(command->argv[0], "ls")) {
-        return append_str(out, out_size, &used, ".\n");
+        const char* target = command->argc > 1U ? command->argv[1]
+                                                  : course_fd_cwd(&shell->fds);
+        char resolved[COURSE_FD_MAX_PATH];
+
+        if (target[0] != '/' &&
+            course_fd_resolve_path(&shell->fds, target, resolved,
+                                   sizeof(resolved)) == COURSE_FD_OK) {
+            target = resolved;
+        }
+        if (course_fs_listdir(&shell->fs, target, out, out_size)) {
+            return true;
+        }
+        set_command_success(command_success, false);
+        return append_str(out, out_size, &used, "ls: cannot access ") &&
+               append_str(out, out_size, &used, target) &&
+               append_char(out, out_size, &used, '\n');
     }
     if (str_eq(command->argv[0], "kill")) {
-        return append_str(out, out_size, &used, "kill=ok\n");
+        uint32_t target_pid = 0U;
+        size_t i = 0;
+        unsigned long parsed = 0UL;
+        const char* digits = command->argc > 1U ? command->argv[1] : "";
+
+        if (digits[0] == '\0') {
+            set_command_success(command_success, false);
+            return append_str(out, out_size, &used, "kill: missing pid\n");
+        }
+        for (i = 0; digits[i] != '\0'; ++i) {
+            if (digits[i] < '0' || digits[i] > '9') {
+                set_command_success(command_success, false);
+                return append_str(out, out_size, &used,
+                                 "kill: invalid pid\n");
+            }
+            parsed = parsed * 10U + (unsigned long)(digits[i] - '0');
+        }
+        target_pid = (uint32_t)parsed;
+        if (target_pid == 1U || target_pid == shell->shell_pid) {
+            set_command_success(command_success, false);
+            return append_str(out, out_size, &used, "kill: permission denied\n");
+        }
+        if (!course_process_kill(&shell->processes, shell->shell_pid, target_pid)) {
+            set_command_success(command_success, false);
+            return append_str(out, out_size, &used, "kill: no such process\n");
+        }
+        set_command_success(command_success, true);
+        return append_str(out, out_size, &used, "killed ") &&
+               append_str(out, out_size, &used, digits) &&
+               append_char(out, out_size, &used, '\n');
     }
     if (str_eq(command->argv[0], "exit")) {
         return append_str(out, out_size, &used, "exit\n");

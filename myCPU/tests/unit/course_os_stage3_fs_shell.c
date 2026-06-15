@@ -217,12 +217,42 @@ static int test_linux_compat_launcher_is_explicit_and_fails_closed_without_runti
     return 0;
 }
 
+static int test_ls_with_path_argument(void) {
+    static course_shell_t shell;
+    char out[1024];
+
+    course_shell_init(&shell);
+
+    course_fs_create(&shell.fs, "/tmp/ls_test.txt", false);
+    course_fs_write(&shell.fs, "/tmp/ls_test.txt", 0U, "data", 4U);
+
+    if (!course_shell_run_line(&shell, "ls /tmp", out, sizeof(out)) ||
+        !contains(out, "ls_test.txt")) {
+        return fail("expected ls /tmp to show created file");
+    }
+
+    course_fs_create(&shell.fs, "/home/user/readme.txt", false);
+    if (!course_shell_run_line(&shell, "ls /home/user", out, sizeof(out)) ||
+        !contains(out, "readme.txt")) {
+        return fail("expected ls /home/user to show created file");
+    }
+
+    if (!course_shell_run_line(&shell, "cd /home/user", out, sizeof(out)) ||
+        !course_shell_run_line(&shell, "ls", out, sizeof(out)) ||
+        !contains(out, "readme.txt")) {
+        return fail("expected ls with cwd to list current dir entries");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_fs_mkfs_seek_unlink_rmdir_and_capacity() != 0 ||
         test_fd_seek_only_accepts_regular_files() != 0 ||
         test_shell_script_mode_success_and_failure_line() != 0 ||
         test_exec_cat_reads_file_through_user_program_path() != 0 ||
-        test_linux_compat_launcher_is_explicit_and_fails_closed_without_runtime() != 0) {
+        test_linux_compat_launcher_is_explicit_and_fails_closed_without_runtime() != 0 ||
+        test_ls_with_path_argument() != 0) {
         return 1;
     }
 

@@ -11,8 +11,13 @@
 - 相关设计：
   - [../design/course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
+  - [../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
+- 当前计划：
+  - [../plan/course_os_display_gap_closure_plan.md](../plan/course_os_display_gap_closure_plan.md)
+  - [../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md)
+  - [../plan/course_os_plus_external_validation_plan.md](../plan/course_os_plus_external_validation_plan.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
@@ -206,6 +211,15 @@ queue / requeue / bitset；signal 继续保持 `rt_sigaction` / `rt_sigprocmask`
 不先引入 ProcessGroup；Stage 11 command list 继续 host-only，不接入前端 external opt-in
 route。下一步若继续推进，应以新的真实 trace blocker 为入口，优先在完整 Linux 子进程链、
 signal / futex 或前端 host-only manifest 中另建窄计划，而不是直接扩大 Stage 12 / Stage 13。
+
+2026-06-15 已将课程 OS 对照 A 方案的缺口收口拆成三条计划：展示前课程证据补洞、架构后续增强、
+Plus / 外部验证，并新增上游边界设计。展示前计划当前只把目录枚举 `course_fs_listdir` 作为已完成
+小切片；在线抢占调度、真实课程 ELF、UART 中断驱动、context switch cost 和 OSComp 验证不再作为
+展示前 P0 混入同一计划。
+
+2026-06-15 已把展示前计划的任务 1-3 收口完成并回写为已完成：`course_fs_listdir` 变成完整输出合同，
+`ls` 不再是 stub，`kill` 现在能区分缺失 pid、权限拒绝和真实进程终止；任务 4-6 保持待办，
+用于后续基于当前版本继续做同步演示、`mkfs` 与 `timer_hz` 证据。
 
 2026-06-10 已完成质量审查后的 `fix-and-validate` 小步收敛。`course_fd_read()` 现在明确为
 raw read 合同，只写实际返回的字节数，不再隐式追加 `NUL`；`test-unit-course_os_stage2_fd_fs`

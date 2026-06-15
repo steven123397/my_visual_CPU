@@ -79,6 +79,12 @@ bool course_fs_read(course_fs_t* fs,
                     size_t size);
 bool course_fs_lookup(course_fs_t* fs, const char* path);
 bool course_fs_size(course_fs_t* fs, const char* path, size_t* out_size);
+/* Lists direct child names separated by spaces and terminated by '\n'.
+   Returns false unless the full listing and trailing NUL fit in out. */
+bool course_fs_listdir(course_fs_t* fs,
+                       const char* path,
+                       char* out,
+                       size_t out_size);
 bool course_fs_stats(const course_fs_t* fs, course_fs_stats_t* out_stats);
 void course_fs_record_open(course_fs_t* fs);
 void course_fs_record_close(course_fs_t* fs);
