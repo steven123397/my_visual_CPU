@@ -83,6 +83,23 @@ static bool append_u32(char* out,
     return true;
 }
 
+static bool append_i32(char* out,
+                       size_t out_size,
+                       size_t* used,
+                       int32_t value) {
+    uint32_t magnitude = 0;
+
+    if (value < 0) {
+        if (!append_char(out, out_size, used, '-')) {
+            return false;
+        }
+        magnitude = (uint32_t)(-(value + 1)) + 1U;
+    } else {
+        magnitude = (uint32_t)value;
+    }
+    return append_u32(out, out_size, used, magnitude);
+}
+
 static void set_command_success(bool* command_success, bool value) {
     if (command_success != 0) {
         *command_success = value;
@@ -296,6 +313,10 @@ void course_shell_init(course_shell_t* shell) {
                                               &shell->processes);
     (void)procfs_attach_syscalls(&shell->procfs, &shell->syscalls);
     (void)course_fd_set_cwd(&shell->fds, "/");
+    course_semaphore_init(&shell->semaphore, &shell->processes, 0);
+    course_mutex_init(&shell->mutex, &shell->processes);
+    shell->semaphore_initialized = false;
+    shell->mutex_initialized = false;
     linux_compat_runtime_init(&shell->linux_compat_runtime);
     shell->linux_trace.path[0] = '\0';
     shell->linux_trace.errno_value = 0;
@@ -696,6 +717,338 @@ static bool run_cd_command(course_shell_t* shell,
            append_char(out, out_size, used, '\n');
 }
 
+static const char* sync_result_name(course_sync_result_t result) {
+    switch (result) {
+    case COURSE_SYNC_OK:
+        return "ok";
+    case COURSE_SYNC_BLOCKED:
+        return "blocked";
+    case COURSE_SYNC_ERR_BAD_PROCESS:
+        return "bad-process";
+    case COURSE_SYNC_ERR_NOT_OWNER:
+        return "not-owner";
+    default:
+        return "error";
+    }
+}
+
+static bool append_semaphore_state(char* out,
+                                   size_t out_size,
+                                   size_t* used,
+                                   const course_semaphore_t* semaphore) {
+    if (semaphore == 0) {
+        return false;
+    }
+    return append_str(out, out_size, used, "sem value=") &&
+           append_i32(out, out_size, used, semaphore->value) &&
+           append_str(out, out_size, used, " waiters=") &&
+           append_u32(out, out_size, used, semaphore->waiter_count);
+}
+
+static bool append_mutex_state(char* out,
+                               size_t out_size,
+                               size_t* used,
+                               const course_mutex_t* mutex) {
+    if (mutex == 0) {
+        return false;
+    }
+    return append_str(out, out_size, used, "mutex owner=") &&
+           append_u32(out, out_size, used, mutex->owner_pid) &&
+           append_str(out, out_size, used, " waiters=") &&
+           append_u32(out, out_size, used, mutex->waiter_count) &&
+           append_str(out, out_size, used, " misuse=") &&
+           append_u32(out, out_size, used, mutex->misuse_guard_count);
+}
+
+static bool append_sync_result(char* out,
+                               size_t out_size,
+                               size_t* used,
+                               course_sync_result_t result) {
+    return append_str(out, out_size, used, " result=") &&
+           append_str(out, out_size, used, sync_result_name(result));
+}
+
+static bool append_command_error(char* out,
+                                 size_t out_size,
+                                 size_t* used,
+                                 bool* command_success,
+                                 const char* message) {
+    set_command_success(command_success, false);
+    return append_str(out, out_size, used, message);
+}
+
+static bool run_sem_command(course_shell_t* shell,
+                            const course_shell_simple_command_t* command,
+                            char* out,
+                            size_t out_size,
+                            size_t* used,
+                            bool* command_success) {
+    course_sync_result_t result = COURSE_SYNC_OK;
+    uint32_t value = 0;
+    uint32_t pid = 0;
+
+    if (command->argc < 2U) {
+        return append_command_error(out,
+                                    out_size,
+                                    used,
+                                    command_success,
+                                    "sem: usage: sem init <value>|wait [pid]|post|status\n");
+    }
+
+    if (str_eq(command->argv[1], "init")) {
+        if (command->argc < 3U || !parse_pid_arg(command->argv[2], &value)) {
+            return append_command_error(out,
+                                        out_size,
+                                        used,
+                                        command_success,
+                                        "sem: usage: sem init <value>\n");
+        }
+        course_semaphore_init(&shell->semaphore,
+                              &shell->processes,
+                              (int32_t)value);
+        shell->semaphore_initialized = true;
+        return append_semaphore_state(out, out_size, used, &shell->semaphore) &&
+               append_char(out, out_size, used, '\n');
+    }
+
+    if (!shell->semaphore_initialized) {
+        return append_command_error(out,
+                                    out_size,
+                                    used,
+                                    command_success,
+                                    "sem: not initialized\n");
+    }
+
+    if (str_eq(command->argv[1], "status")) {
+        return append_semaphore_state(out, out_size, used, &shell->semaphore) &&
+               append_char(out, out_size, used, '\n');
+    }
+    if (str_eq(command->argv[1], "wait")) {
+        pid = shell->shell_pid;
+        if (command->argc > 2U && !parse_pid_arg(command->argv[2], &pid)) {
+            return append_command_error(out,
+                                        out_size,
+                                        used,
+                                        command_success,
+                                        "sem: invalid pid\n");
+        }
+        result = course_semaphore_wait(&shell->semaphore, pid);
+        set_command_success(command_success,
+                            result != COURSE_SYNC_ERR_BAD_PROCESS);
+        return append_semaphore_state(out, out_size, used, &shell->semaphore) &&
+               append_sync_result(out, out_size, used, result) &&
+               append_char(out, out_size, used, '\n');
+    }
+    if (str_eq(command->argv[1], "post")) {
+        result = course_semaphore_post(&shell->semaphore);
+        set_command_success(command_success,
+                            result != COURSE_SYNC_ERR_BAD_PROCESS);
+        return append_semaphore_state(out, out_size, used, &shell->semaphore) &&
+               append_sync_result(out, out_size, used, result) &&
+               append_char(out, out_size, used, '\n');
+    }
+
+    return append_command_error(out,
+                                out_size,
+                                used,
+                                command_success,
+                                "sem: usage: sem init <value>|wait [pid]|post|status\n");
+}
+
+static bool run_mutex_command(course_shell_t* shell,
+                              const course_shell_simple_command_t* command,
+                              char* out,
+                              size_t out_size,
+                              size_t* used,
+                              bool* command_success) {
+    course_sync_result_t result = COURSE_SYNC_OK;
+    uint32_t pid = shell != 0 ? shell->shell_pid : 0U;
+
+    if (command->argc < 2U) {
+        return append_command_error(out,
+                                    out_size,
+                                    used,
+                                    command_success,
+                                    "mutex: usage: mutex init|lock [pid]|unlock [pid]|status\n");
+    }
+
+    if (str_eq(command->argv[1], "init")) {
+        course_mutex_init(&shell->mutex, &shell->processes);
+        shell->mutex_initialized = true;
+        return append_mutex_state(out, out_size, used, &shell->mutex) &&
+               append_char(out, out_size, used, '\n');
+    }
+
+    if (!shell->mutex_initialized) {
+        return append_command_error(out,
+                                    out_size,
+                                    used,
+                                    command_success,
+                                    "mutex: not initialized\n");
+    }
+
+    if (str_eq(command->argv[1], "status")) {
+        return append_mutex_state(out, out_size, used, &shell->mutex) &&
+               append_char(out, out_size, used, '\n');
+    }
+    if (str_eq(command->argv[1], "lock") ||
+        str_eq(command->argv[1], "unlock")) {
+        if (command->argc > 2U && !parse_pid_arg(command->argv[2], &pid)) {
+            return append_command_error(out,
+                                        out_size,
+                                        used,
+                                        command_success,
+                                        "mutex: invalid pid\n");
+        }
+        result = str_eq(command->argv[1], "lock")
+                     ? course_mutex_lock(&shell->mutex, pid)
+                     : course_mutex_unlock(&shell->mutex, pid);
+        set_command_success(command_success,
+                            result == COURSE_SYNC_OK ||
+                                result == COURSE_SYNC_BLOCKED);
+        return append_mutex_state(out, out_size, used, &shell->mutex) &&
+               append_sync_result(out, out_size, used, result) &&
+               append_char(out, out_size, used, '\n');
+    }
+
+    return append_command_error(out,
+                                out_size,
+                                used,
+                                command_success,
+                                "mutex: usage: mutex init|lock [pid]|unlock [pid]|status\n");
+}
+
+static bool run_concurrency_demo(course_shell_t* shell,
+                                 char* out,
+                                 size_t out_size,
+                                 size_t* used,
+                                 bool* command_success) {
+    course_process_t* worker_a = 0;
+    course_process_t* worker_b = 0;
+    course_process_t* sem_owner = 0;
+    course_semaphore_t semaphore;
+    course_mutex_t mutex;
+    int32_t status = 0;
+    bool sem_blocked_ok = false;
+    bool sem_posted_ok = false;
+    bool mutex_lock_ok = false;
+    bool mutex_blocked_ok = false;
+    bool mutex_misuse_ok = false;
+    bool mutex_release_ok = false;
+
+    if (shell == 0) {
+        return false;
+    }
+
+    worker_a = course_process_fork(&shell->processes,
+                                   shell->shell_pid,
+                                   "worker-a");
+    worker_b = course_process_fork(&shell->processes,
+                                   shell->shell_pid,
+                                   "worker-b");
+    sem_owner = course_process_fork(&shell->processes,
+                                    shell->shell_pid,
+                                    "sem-owner");
+    if (worker_a == 0 || worker_b == 0 || sem_owner == 0) {
+        if (worker_a != 0) {
+            (void)course_process_exit(&shell->processes, worker_a->pid, 1);
+            (void)course_process_waitpid(&shell->processes,
+                                         shell->shell_pid,
+                                         worker_a->pid,
+                                         &status);
+        }
+        if (worker_b != 0) {
+            (void)course_process_exit(&shell->processes, worker_b->pid, 1);
+            (void)course_process_waitpid(&shell->processes,
+                                         shell->shell_pid,
+                                         worker_b->pid,
+                                         &status);
+        }
+        if (sem_owner != 0) {
+            (void)course_process_exit(&shell->processes, sem_owner->pid, 1);
+            (void)course_process_waitpid(&shell->processes,
+                                         shell->shell_pid,
+                                         sem_owner->pid,
+                                         &status);
+        }
+        return append_command_error(out,
+                                    out_size,
+                                    used,
+                                    command_success,
+                                    "concurrency_demo: process setup failed\n");
+    }
+
+    course_semaphore_init(&semaphore, &shell->processes, 0);
+    course_mutex_init(&mutex, &shell->processes);
+    sem_blocked_ok = course_semaphore_wait(&semaphore, worker_b->pid) ==
+                         COURSE_SYNC_BLOCKED &&
+                     worker_b->state == COURSE_PROCESS_BLOCKED &&
+                     semaphore.waiter_count == 1U;
+    sem_posted_ok = course_semaphore_post(&semaphore) == COURSE_SYNC_OK &&
+                    worker_b->state == COURSE_PROCESS_READY &&
+                    semaphore.waiter_count == 0U;
+    mutex_lock_ok = course_mutex_lock(&mutex, worker_a->pid) == COURSE_SYNC_OK &&
+                    mutex.owner_pid == worker_a->pid;
+    mutex_blocked_ok = course_mutex_lock(&mutex, worker_b->pid) ==
+                           COURSE_SYNC_BLOCKED &&
+                       worker_b->state == COURSE_PROCESS_BLOCKED &&
+                       mutex.waiter_count == 1U;
+    mutex_misuse_ok = course_mutex_unlock(&mutex, worker_b->pid) ==
+                          COURSE_SYNC_ERR_NOT_OWNER &&
+                      mutex.misuse_guard_count == 1U &&
+                      mutex.owner_pid == worker_a->pid;
+    mutex_release_ok = course_mutex_unlock(&mutex, worker_a->pid) ==
+                           COURSE_SYNC_OK &&
+                       worker_b->state == COURSE_PROCESS_READY &&
+                       mutex.owner_pid == worker_b->pid;
+
+    set_command_success(command_success,
+                        sem_blocked_ok && sem_posted_ok && mutex_lock_ok &&
+                            mutex_blocked_ok && mutex_misuse_ok &&
+                            mutex_release_ok);
+    if (!course_process_exit(&shell->processes, worker_a->pid, 0) ||
+        !course_process_exit(&shell->processes, worker_b->pid, 0) ||
+        !course_process_exit(&shell->processes, sem_owner->pid, 0) ||
+        course_process_waitpid(&shell->processes,
+                               shell->shell_pid,
+                               worker_a->pid,
+                               &status) != COURSE_PROCESS_OK ||
+        course_process_waitpid(&shell->processes,
+                               shell->shell_pid,
+                               worker_b->pid,
+                               &status) != COURSE_PROCESS_OK ||
+        course_process_waitpid(&shell->processes,
+                               shell->shell_pid,
+                               sem_owner->pid,
+                               &status) != COURSE_PROCESS_OK) {
+        set_command_success(command_success, false);
+        return append_str(out,
+                          out_size,
+                          used,
+                          "concurrency_demo: teardown failed\n");
+    }
+
+    return append_str(out, out_size, used, "concurrency_demo worker-a=") &&
+           append_u32(out, out_size, used, worker_a->pid) &&
+           append_str(out, out_size, used, " worker-b=") &&
+           append_u32(out, out_size, used, worker_b->pid) &&
+           append_str(out, out_size, used, " sem-owner=") &&
+           append_u32(out, out_size, used, sem_owner->pid) &&
+           append_str(out, out_size, used, " sem-blocked=") &&
+           append_str(out, out_size, used, sem_blocked_ok ? "ok" : "error") &&
+           append_str(out, out_size, used, " sem-posted=") &&
+           append_str(out, out_size, used, sem_posted_ok ? "ok" : "error") &&
+           append_str(out, out_size, used, " mutex-lock=") &&
+           append_str(out, out_size, used, mutex_lock_ok ? "ok" : "error") &&
+           append_str(out, out_size, used, " mutex-blocked=") &&
+           append_str(out, out_size, used, mutex_blocked_ok ? "ok" : "error") &&
+           append_str(out, out_size, used, " mutex-misuse=") &&
+           append_str(out, out_size, used, mutex_misuse_ok ? "ok" : "error") &&
+           append_str(out, out_size, used, " mutex-release=") &&
+           append_str(out, out_size, used, mutex_release_ok ? "ok" : "error") &&
+           append_char(out, out_size, used, '\n');
+}
+
 static bool run_simple(course_shell_t* shell,
                        const course_shell_simple_command_t* command,
                        const char* stdin_text,
@@ -718,7 +1071,8 @@ static bool run_simple(course_shell_t* shell,
                           &used,
                           "help ls cat echo ps kill cd pwd exit exec sh "
                           "meminfo schedstat fsstat syscalls cow crashlog "
-                          "cpuinfo uptime status fd maps\n");
+                          "cpuinfo uptime status fd maps sem mutex mkfs "
+                          "concurrency_demo\n");
     }
     if (str_eq(command->argv[0], "pwd")) {
         return append_str(out, out_size, &used, course_fd_cwd(&shell->fds)) &&
@@ -783,6 +1137,17 @@ static bool run_simple(course_shell_t* shell,
     if (str_eq(command->argv[0], "fsstat")) {
         return read_proc_file(shell, "/proc/fsstat", out, out_size);
     }
+    if (str_eq(command->argv[0], "mkfs")) {
+        course_fs_mkfs(&shell->fs);
+        course_fd_table_init(&shell->fds, &shell->fs, &shell->procfs);
+        procfs_attach_fd_table(&shell->procfs, shell->shell_pid, &shell->fds);
+        (void)course_syscall_attach_fd_table(&shell->syscalls, &shell->fds);
+        (void)linux_compat_runtime_set_cwd(&shell->linux_compat_runtime, "/");
+        return append_str(out,
+                          out_size,
+                          &used,
+                          "mkfs: filesystem initialized\n");
+    }
     if (str_eq(command->argv[0], "syscalls")) {
         return read_proc_file(shell, "/proc/syscalls", out, out_size);
     }
@@ -806,6 +1171,29 @@ static bool run_simple(course_shell_t* shell,
     }
     if (str_eq(command->argv[0], "maps")) {
         return read_pid_proc_file(shell, command, "maps", out, out_size);
+    }
+    if (str_eq(command->argv[0], "sem")) {
+        return run_sem_command(shell,
+                               command,
+                               out,
+                               out_size,
+                               &used,
+                               command_success);
+    }
+    if (str_eq(command->argv[0], "mutex")) {
+        return run_mutex_command(shell,
+                                 command,
+                                 out,
+                                 out_size,
+                                 &used,
+                                 command_success);
+    }
+    if (str_eq(command->argv[0], "concurrency_demo")) {
+        return run_concurrency_demo(shell,
+                                    out,
+                                    out_size,
+                                    &used,
+                                    command_success);
     }
     if (str_eq(command->argv[0], "ls")) {
         const char* target = command->argc > 1U ? command->argv[1]

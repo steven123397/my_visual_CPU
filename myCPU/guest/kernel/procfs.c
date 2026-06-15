@@ -1,6 +1,7 @@
 #include "procfs.h"
 
 #include "course_fd.h"
+#include "timer.h"
 
 static bool str_eq(const char* a, const char* b) {
     size_t i = 0;
@@ -503,7 +504,8 @@ static bool read_cpuinfo(const procfs_t* procfs, char* out, size_t out_size) {
     (void)procfs;
     return append_str(out, out_size, &used, "isa=rv64im\n") &&
            append_str(out, out_size, &used, "backend=myCPU\n") &&
-           append_str(out, out_size, &used, "stage=kernel_alpha_stage3\n");
+           append_str(out, out_size, &used, "stage=kernel_alpha_stage3\n") &&
+           append_key_value_u32(out, out_size, &used, "timer_hz", TIMER_HZ);
 }
 
 static bool read_uptime(const procfs_t* procfs, char* out, size_t out_size) {

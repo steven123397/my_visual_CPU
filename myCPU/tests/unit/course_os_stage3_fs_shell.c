@@ -246,13 +246,37 @@ static int test_ls_with_path_argument(void) {
     return 0;
 }
 
+static int test_mkfs_command_reinitializes_shell_filesystem(void) {
+    static course_shell_t shell;
+    char out[1024];
+
+    course_shell_init(&shell);
+    if (!course_shell_run_line(&shell, "echo payload > /tmp/payload.txt", out, sizeof(out)) ||
+        !course_shell_run_line(&shell, "ls /tmp", out, sizeof(out)) ||
+        !contains(out, "payload.txt")) {
+        return fail("expected setup file before mkfs");
+    }
+
+    if (!course_shell_run_line(&shell, "mkfs", out, sizeof(out)) ||
+        !contains(out, "mkfs: filesystem initialized")) {
+        return fail("expected mkfs command to report filesystem reset");
+    }
+    if (!course_shell_run_line(&shell, "ls", out, sizeof(out)) ||
+        strcmp(out, "\n") != 0) {
+        return fail("expected ls after mkfs to show empty root directory");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_fs_mkfs_seek_unlink_rmdir_and_capacity() != 0 ||
         test_fd_seek_only_accepts_regular_files() != 0 ||
         test_shell_script_mode_success_and_failure_line() != 0 ||
         test_exec_cat_reads_file_through_user_program_path() != 0 ||
         test_linux_compat_launcher_is_explicit_and_fails_closed_without_runtime() != 0 ||
-        test_ls_with_path_argument() != 0) {
+        test_ls_with_path_argument() != 0 ||
+        test_mkfs_command_reinitializes_shell_filesystem() != 0) {
         return 1;
     }
 

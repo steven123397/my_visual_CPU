@@ -21,6 +21,35 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-06-15
+
+#### course-os-display-gap-closure-plan
+
+- 完成时间：2026-06-15
+- 原文件：`course_os_display_gap_closure_plan.md`
+- 完成内容：完成课程 OS 展示前证据补洞计划。`course_fs_listdir` 固定完整输出合同，
+  `course-os> ls` 改为真实目录枚举，`kill <pid>` 改为课程 process table 终止路径；
+  shell 新增 `sem`、`mutex`、`concurrency_demo` 和 `mkfs` 展示命令，`/proc/cpuinfo`
+  新增 `timer_hz=100` 证据字段。
+- 实现过程摘要：本计划只补展示前低风险证据面，不改 Stage 1 / Stage 2 / Stage 3 marker，
+  不改 Stage 4 `course-os> ` prompt，也不把在线抢占调度、真实 trap / timer 中断证据、
+  UART interrupt-driven I/O、OSComp 或外部 rootfs 验证混入展示前 P0。新增 shell 同步命令
+  只复用既有 `course_sync` semaphore / mutex 状态转移；`mkfs` 只重置课程 FS 与 shell fd
+  表；`TIMER_HZ` 作为只读课程证据字段暴露，不重写平台 timer 调度合同。
+- 验证摘要：已按红绿流程先让新增断言失败，再实现并运行通过
+  `cd myCPU && make test-unit-course_os_stage3_sched_sync`、
+  `make test-unit-course_os_stage3_fs_shell` 和 `make test-unit-course_os_stage3_proc`。
+  收尾阶段已运行并通过 `make test-unit-course_os_stage1`、
+  `make test-unit-course_os_stage2_shell`、`make test-unit-course_os_stage2_process`、
+  `make test-unit-course_os_stage3_fs_shell`、`make test-unit-course_os_stage3_sched_sync`、
+  `make test-unit-course_os_stage3_proc`、`make test-guest-course_os_shell_demo`
+  和 `git diff --check`。
+- 剩余风险：展示前计划只证明课程 OS 已有能力在 shell / procfs / guest smoke 中可见；
+  在线抢占调度、真实 trap / timer 证据、UART 中断驱动、OSComp / 外部资产验证仍按
+  `course_os_arch_followup_plan.md` 与 `course_os_plus_external_validation_plan.md`
+  独立推进。
+- 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)
+
 ### 2026-06-14
 
 #### shell-terminal-unification-plan

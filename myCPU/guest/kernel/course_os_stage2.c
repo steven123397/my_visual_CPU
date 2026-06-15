@@ -102,7 +102,7 @@ bool course_os_stage2_run(course_os_stage2_t* stage) {
     if (!course_shell_run_line(&stage->shell, "echo stage2", out, sizeof(out)) ||
         !str_contains(out, "stage2") ||
         !course_shell_run_line(&stage->shell, "ls", out, sizeof(out)) ||
-        !str_contains(out, ".") ||
+        !str_contains(out, "tmp") ||
         !course_shell_run_line(&stage->shell, "echo file > /tmp/stage2", out, sizeof(out)) ||
         !course_shell_run_line(&stage->shell, "cat /tmp/stage2", out, sizeof(out)) ||
         !str_contains(out, "file") ||

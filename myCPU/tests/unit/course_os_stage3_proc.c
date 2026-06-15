@@ -97,7 +97,8 @@ static int test_procfs_stage3_global_and_per_pid_nodes(void) {
     if (!procfs_read(&procfs, "/proc/cpuinfo", out, sizeof(out)) ||
         !contains(out, "isa=rv64im") ||
         !contains(out, "backend=myCPU") ||
-        !contains(out, "stage=kernel_alpha_stage3")) {
+        !contains(out, "stage=kernel_alpha_stage3") ||
+        !contains(out, "timer_hz=100")) {
         return fail("expected /proc/cpuinfo");
     }
     if (!procfs_read(&procfs, "/proc/uptime", out, sizeof(out)) ||

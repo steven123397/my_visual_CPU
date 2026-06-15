@@ -15,7 +15,7 @@
 - 课程 OS 基线设计：[course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)
 - Linux compat Plus 设计：[course_os_kernel_alpha_linux_compat_plus_design.md](course_os_kernel_alpha_linux_compat_plus_design.md)
 - 当前状态：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 展示前计划：[../plan/course_os_display_gap_closure_plan.md](../plan/course_os_display_gap_closure_plan.md)
+- 展示前计划归档：[../plan/history_plan.md#course-os-display-gap-closure-plan](../plan/history_plan.md#course-os-display-gap-closure-plan)
 - 架构后续计划：[../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md)
 - Plus / 外部验证计划：[../plan/course_os_plus_external_validation_plan.md](../plan/course_os_plus_external_validation_plan.md)
 

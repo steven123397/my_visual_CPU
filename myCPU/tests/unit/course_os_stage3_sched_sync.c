@@ -6,6 +6,7 @@
 #include "../../guest/include/course_memory.h"
 #include "../../guest/include/course_process.h"
 #include "../../guest/include/course_scheduler.h"
+#include "../../guest/include/course_shell.h"
 #include "../../guest/include/course_sync.h"
 #include "../../guest/include/procfs.h"
 
@@ -115,9 +116,89 @@ static int test_semaphore_and_mutex_state_transitions(void) {
     return 0;
 }
 
+static int test_shell_sync_commands_expose_state_transitions(void) {
+    static course_shell_t shell;
+    course_process_t* waiter = NULL;
+    char command[64];
+    char out[1024];
+
+    course_shell_init(&shell);
+    waiter = course_process_fork(&shell.processes, shell.shell_pid, "waiter");
+    if (waiter == NULL) {
+        return fail("expected waiter process for shell sync command tests");
+    }
+
+    if (!course_shell_run_line(&shell, "sem wait", out, sizeof(out)) ||
+        !contains(out, "sem: not initialized")) {
+        return fail("expected sem wait before init to report ordering error");
+    }
+    if (!course_shell_run_line(&shell, "sem init 1", out, sizeof(out)) ||
+        !contains(out, "sem value=1 waiters=0")) {
+        return fail("expected sem init to expose initial value");
+    }
+    if (!course_shell_run_line(&shell, "sem wait", out, sizeof(out)) ||
+        !contains(out, "result=ok") ||
+        !contains(out, "sem value=0 waiters=0")) {
+        return fail("expected sem wait to decrement value");
+    }
+    snprintf(command, sizeof(command), "sem wait %u", waiter->pid);
+    if (!course_shell_run_line(&shell, command, out, sizeof(out)) ||
+        !contains(out, "result=blocked") ||
+        !contains(out, "sem value=0 waiters=1") ||
+        waiter->state != COURSE_PROCESS_BLOCKED) {
+        return fail("expected sem wait to expose blocked waiter");
+    }
+    if (!course_shell_run_line(&shell, "sem post", out, sizeof(out)) ||
+        !contains(out, "result=ok") ||
+        !contains(out, "sem value=0 waiters=0") ||
+        waiter->state != COURSE_PROCESS_READY) {
+        return fail("expected sem post to wake waiter");
+    }
+
+    if (!course_shell_run_line(&shell, "mutex unlock", out, sizeof(out)) ||
+        !contains(out, "mutex: not initialized")) {
+        return fail("expected mutex unlock before init to report ordering error");
+    }
+    if (!course_shell_run_line(&shell, "mutex init", out, sizeof(out)) ||
+        !contains(out, "mutex owner=0 waiters=0 misuse=0")) {
+        return fail("expected mutex init to expose empty owner state");
+    }
+    if (!course_shell_run_line(&shell, "mutex lock", out, sizeof(out)) ||
+        !contains(out, "result=ok") ||
+        !contains(out, "mutex owner=1 waiters=0")) {
+        return fail("expected mutex lock to expose owner");
+    }
+    snprintf(command, sizeof(command), "mutex unlock %u", waiter->pid);
+    if (!course_shell_run_line(&shell, command, out, sizeof(out)) ||
+        !contains(out, "result=not-owner") ||
+        !contains(out, "misuse=1")) {
+        return fail("expected wrong mutex owner to expose misuse guard");
+    }
+    if (!course_shell_run_line(&shell, "mutex unlock", out, sizeof(out)) ||
+        !contains(out, "result=ok") ||
+        !contains(out, "mutex owner=0 waiters=0")) {
+        return fail("expected mutex unlock to release owner");
+    }
+
+    if (!course_shell_run_line(&shell, "concurrency_demo", out, sizeof(out)) ||
+        !contains(out, "worker-a") ||
+        !contains(out, "worker-b") ||
+        !contains(out, "sem-blocked=ok") ||
+        !contains(out, "sem-posted=ok") ||
+        !contains(out, "mutex-lock=ok") ||
+        !contains(out, "mutex-blocked=ok") ||
+        !contains(out, "mutex-misuse=ok") ||
+        !contains(out, "mutex-release=ok")) {
+        return fail("expected concurrency_demo to show sync state transitions");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_scheduler_stage3_metrics() != 0 ||
-        test_semaphore_and_mutex_state_transitions() != 0) {
+        test_semaphore_and_mutex_state_transitions() != 0 ||
+        test_shell_sync_commands_expose_state_transitions() != 0) {
         return 1;
     }
 

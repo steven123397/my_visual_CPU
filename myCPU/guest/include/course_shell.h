@@ -8,6 +8,7 @@
 #include "course_memory.h"
 #include "course_process.h"
 #include "course_scheduler.h"
+#include "course_sync.h"
 #include "trap.h"
 #include "vm.h"
 
@@ -45,6 +46,10 @@ typedef struct CourseShell {
     linux_compat_trace_t linux_trace;
     vm_process_t linux_compat_process;
     trap_user_runtime_t linux_compat_user_runtime;
+    course_semaphore_t semaphore;
+    course_mutex_t mutex;
+    bool semaphore_initialized;
+    bool mutex_initialized;
     uint8_t linux_compat_trap_stack[COURSE_SHELL_LINUX_COMPAT_TRAP_STACK_SIZE]
         __attribute__((aligned(TRAP_USER_RUNTIME_STACK_ALIGNMENT)));
     char command_output_scratch[COURSE_SHELL_COMMAND_OUTPUT_SIZE];
