@@ -81,17 +81,21 @@
 - [ ] **步骤 3：替换课程用户程序资产。** 若使用工具链，生成步骤必须可重复；若使用手写 ELF，必须保留构造说明。
 - [ ] **步骤 4：验证。** 运行 `cd myCPU && make test-unit-course_os_stage3_elf test-guest-kernel_alpha_demo`。
 
-### 任务 4：多级管道（G8）
+### 任务 4：多级管道（G8） - 已完成
 
 **文件：**
 - 修改：`myCPU/guest/include/course_shell.h`
 - 修改：`myCPU/guest/kernel/course_shell.c`
 - 修改：`myCPU/tests/unit/course_os_stage2_shell.c`
 
-- [ ] **步骤 1：确认需求边界。** 当前课程基线已满足单级管道；多级管道是 shell 能力增强，不阻塞展示前验收。
-- [ ] **步骤 2：补红灯回归。** 新增 `echo hello | cat | cat` 和空 stage 错误输入测试。
-- [ ] **步骤 3：改 parser 和执行模型。** 将 `left/right` 管道结构扩展为有上限的 stage 数组，逐级传递 stdout 到下一级 stdin。
-- [ ] **步骤 4：验证。** 运行 `cd myCPU && make test-unit-course_os_stage2_shell test-guest-course_os_shell_demo`。
+- [x] **步骤 1：确认需求边界。** 当前课程基线已满足单级管道；多级管道是 shell 能力增强，不阻塞展示前验收。
+- [x] **步骤 2：补红灯回归。** 新增 `echo hello | cat | cat` 和空 stage 错误输入测试。
+- [x] **步骤 3：改 parser 和执行模型。** 将 `left/right` 管道结构扩展为有上限的 stage 数组，逐级传递 stdout 到下一级 stdin。
+- [x] **步骤 4：验证。** 运行 `cd myCPU && make test-unit-course_os_stage2_shell test-guest-course_os_shell_demo`。
+
+完成标注（2026-06-15）：shell parser 已切换为最多 8 级的 `pipeline[]`，多级管道执行通过双 scratch buffer
+逐级传递 stdout；单 stage 命令保留原有直接写 caller output 的语义，避免脚本模式递归执行时破坏输出汇总。
+本项只完成 G8，多级管道之外的任务 1 / 2 / 3 / 5 仍按本计划后续推进。
 
 ### 任务 5：context switch cost 证据（G9）
 

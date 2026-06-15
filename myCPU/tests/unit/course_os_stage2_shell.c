@@ -17,20 +17,37 @@ static int test_parser_pipeline_and_redirection(void) {
     course_shell_command_t command;
 
     if (!course_shell_parse("echo hello | cat > out.txt", &command) ||
-        strcmp(command.left.argv[0], "echo") != 0 ||
-        strcmp(command.left.argv[1], "hello") != 0 ||
-        strcmp(command.right.argv[0], "cat") != 0 ||
+        command.pipeline_len != 2U ||
+        strcmp(command.pipeline[0].argv[0], "echo") != 0 ||
+        strcmp(command.pipeline[0].argv[1], "hello") != 0 ||
+        strcmp(command.pipeline[1].argv[0], "cat") != 0 ||
         strcmp(command.output_path, "out.txt") != 0 ||
-        !command.has_pipe ||
+        command.has_input_redirect ||
         !command.has_output_redirect) {
         return fail("expected shell parser to capture argv pipe and output redirect");
     }
 
     if (!course_shell_parse("cat < in.txt", &command) ||
-        strcmp(command.left.argv[0], "cat") != 0 ||
+        command.pipeline_len != 1U ||
+        strcmp(command.pipeline[0].argv[0], "cat") != 0 ||
         strcmp(command.input_path, "in.txt") != 0 ||
         !command.has_input_redirect) {
         return fail("expected shell parser to capture input redirect");
+    }
+
+    if (!course_shell_parse("echo a | cat | cat", &command) ||
+        command.pipeline_len != 3U ||
+        strcmp(command.pipeline[0].argv[0], "echo") != 0 ||
+        strcmp(command.pipeline[1].argv[0], "cat") != 0 ||
+        strcmp(command.pipeline[2].argv[0], "cat") != 0) {
+        return fail("expected shell parser to capture multi-stage pipeline");
+    }
+
+    if (course_shell_parse("| cat", &command) ||
+        course_shell_parse("echo a |", &command) ||
+        course_shell_parse("echo a || cat", &command) ||
+        course_shell_parse("echo a > /tmp/mid | cat", &command)) {
+        return fail("expected shell parser to reject invalid pipeline syntax");
     }
 
     return 0;
@@ -87,6 +104,32 @@ static int test_redirection_and_pipe_execution(void) {
     if (!course_shell_run_line(&shell, "echo pipe | cat", out, sizeof(out)) ||
         !contains(out, "pipe")) {
         return fail("expected single pipe to connect stdout to stdin");
+    }
+
+    if (!course_shell_run_line(&shell, "echo alpha | cat | cat", out, sizeof(out)) ||
+        !contains(out, "alpha")) {
+        return fail("expected multi-stage pipeline to propagate stdout through all stages");
+    }
+
+    if (!course_shell_run_line(&shell,
+                               "echo nested pipe | cat | cat > /tmp/pipeline_out",
+                               out,
+                               sizeof(out)) ||
+        !course_shell_run_line(&shell,
+                               "cat < /tmp/pipeline_out",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "nested pipe")) {
+        return fail("expected multi-stage pipeline to cooperate with redirection");
+    }
+
+    if (!course_shell_run_line(&shell,
+                               "echo chain-pipe | cat | cat && echo after",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "chain-pipe") ||
+        !contains(out, "after")) {
+        return fail("expected multi-stage pipeline to preserve output inside && chains");
     }
 
     return 0;

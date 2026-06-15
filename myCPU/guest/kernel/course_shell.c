@@ -107,21 +107,22 @@ static void set_command_success(bool* command_success, bool value) {
 }
 
 static void clear_command(course_shell_command_t* command) {
-    size_t i = 0;
+    size_t stage = 0;
+    size_t arg = 0;
 
     if (command == 0) {
         return;
     }
-    command->left.argc = 0;
-    command->right.argc = 0;
-    command->has_pipe = false;
+    command->pipeline_len = 0;
     command->has_output_redirect = false;
     command->has_input_redirect = false;
     command->output_path[0] = '\0';
     command->input_path[0] = '\0';
-    for (i = 0; i < COURSE_SHELL_MAX_ARGS; ++i) {
-        command->left.argv[i][0] = '\0';
-        command->right.argv[i][0] = '\0';
+    for (stage = 0; stage < COURSE_SHELL_MAX_PIPELINE_STAGES; ++stage) {
+        command->pipeline[stage].argc = 0;
+        for (arg = 0; arg < COURSE_SHELL_MAX_ARGS; ++arg) {
+            command->pipeline[stage].argv[arg][0] = '\0';
+        }
     }
 }
 
@@ -192,6 +193,8 @@ static bool add_arg(course_shell_simple_command_t* command,
 
 bool course_shell_parse(const char* line, course_shell_command_t* out_command) {
     const char* p = line;
+    size_t stage = 0;
+    bool expect_command = true;
     course_shell_simple_command_t* target = 0;
 
     clear_command(out_command);
@@ -199,7 +202,7 @@ bool course_shell_parse(const char* line, course_shell_command_t* out_command) {
         return false;
     }
 
-    target = &out_command->left;
+    target = &out_command->pipeline[0];
     while (*p != '\0') {
         const char* start = 0;
         size_t len = 0;
@@ -211,8 +214,12 @@ bool course_shell_parse(const char* line, course_shell_command_t* out_command) {
             break;
         }
         if (*p == '|') {
-            out_command->has_pipe = true;
-            target = &out_command->right;
+            if (expect_command || stage + 1U >= COURSE_SHELL_MAX_PIPELINE_STAGES) {
+                return false;
+            }
+            stage += 1U;
+            target = &out_command->pipeline[stage];
+            expect_command = true;
             p += 1;
             continue;
         }
@@ -231,6 +238,14 @@ bool course_shell_parse(const char* line, course_shell_command_t* out_command) {
                 return false;
             }
             if (output) {
+                const char* after_path = p + len;
+
+                while (*after_path == ' ') {
+                    after_path += 1;
+                }
+                if (*after_path == '|') {
+                    return false;
+                }
                 out_command->has_output_redirect = true;
                 copy_token(out_command->output_path,
                            sizeof(out_command->output_path),
@@ -255,10 +270,12 @@ bool course_shell_parse(const char* line, course_shell_command_t* out_command) {
         if (!add_arg(target, start, len)) {
             return false;
         }
+        expect_command = false;
         p += len;
     }
 
-    return out_command->left.argc > 0;
+    out_command->pipeline_len = stage + 1U;
+    return out_command->pipeline[0].argc > 0 && !expect_command;
 }
 
 static bool transcript_append(course_shell_t* shell, const char* line) {
@@ -1317,24 +1334,51 @@ static bool run_single_command_line_internal(course_shell_t* shell,
         stdin_text = left_out;
     }
 
-    ok = run_simple(shell,
-                    &command.left,
-                    stdin_text,
-                    command.has_pipe ? left_out : out,
-                    command.has_pipe ? COURSE_SHELL_LINE_OUTPUT_SIZE : out_size,
-                    command_success);
-    if (!ok) {
+    if (command.pipeline_len == 0U) {
         return false;
     }
-    if (command.has_pipe) {
+    if (command.pipeline_len == 1U) {
         ok = run_simple(shell,
-                        &command.right,
-                        left_out,
+                        &command.pipeline[0],
+                        stdin_text,
                         out,
                         out_size,
                         command_success);
         if (!ok) {
             return false;
+        }
+    } else {
+        char* stage_buffers[2] = {shell->line_output_scratch,
+                                  shell->command_output_scratch};
+        char* stage_input = (char*)stdin_text;
+        size_t stage = 0;
+
+        for (stage = 0; stage < command.pipeline_len; ++stage) {
+            char* stage_output = stage_buffers[stage % 2U];
+            const size_t stage_output_size = COURSE_SHELL_COMMAND_OUTPUT_SIZE;
+
+            if (stage_output == stage_input) {
+                stage_output = stage_buffers[(stage + 1U) % 2U];
+            }
+
+            ok = run_simple(shell,
+                            &command.pipeline[stage],
+                            stage_input,
+                            stage_output,
+                            stage_output_size,
+                            command_success);
+            if (!ok) {
+                return false;
+            }
+            stage_input = stage_output;
+        }
+        if (stage_input != out) {
+            size_t copied = 0;
+
+            out[0] = '\0';
+            if (!append_str(out, out_size, &copied, stage_input)) {
+                return false;
+            }
         }
     }
     if (command.has_output_redirect) {

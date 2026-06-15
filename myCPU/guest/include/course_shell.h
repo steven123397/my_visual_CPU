@@ -14,6 +14,7 @@
 
 #define COURSE_SHELL_MAX_ARGS 16U
 #define COURSE_SHELL_MAX_ARG_LEN 32U
+#define COURSE_SHELL_MAX_PIPELINE_STAGES 8U
 #define COURSE_SHELL_MAX_TRANSCRIPT 2048U
 #define COURSE_SHELL_COMMAND_OUTPUT_SIZE 16384U
 #define COURSE_SHELL_LINE_OUTPUT_SIZE COURSE_SHELL_COMMAND_OUTPUT_SIZE
@@ -25,9 +26,8 @@ typedef struct CourseShellSimpleCommand {
 } course_shell_simple_command_t;
 
 typedef struct CourseShellCommand {
-    course_shell_simple_command_t left;
-    course_shell_simple_command_t right;
-    bool has_pipe;
+    course_shell_simple_command_t pipeline[COURSE_SHELL_MAX_PIPELINE_STAGES];
+    size_t pipeline_len;
     bool has_output_redirect;
     bool has_input_redirect;
     char output_path[COURSE_FD_MAX_PATH];

@@ -926,9 +926,10 @@ static int test_course_shell_minimal_and_chain(void) {
             "git -C stage11repo -c user.name=stage11 "
             "-c user.email=stage11@example.invalid commit -m init",
             &command) ||
-        command.left.argc != 10U ||
-        strcmp(command.left.argv[0], "git") != 0 ||
-        strcmp(command.left.argv[9], "init") != 0) {
+        command.pipeline_len != 1U ||
+        command.pipeline[0].argc != 10U ||
+        strcmp(command.pipeline[0].argv[0], "git") != 0 ||
+        strcmp(command.pipeline[0].argv[9], "init") != 0) {
         return fail("expected Stage 11 git commit command to fit shell argv budget");
     }
 
