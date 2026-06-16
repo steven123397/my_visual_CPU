@@ -23,6 +23,38 @@
 
 ### 2026-06-16
 
+#### course-os-plus-external-validation-plan
+
+- 完成时间：2026-06-16
+- 原文件：`course_os_plus_external_validation_plan.md`
+- 完成内容：完成课程 OS Plus / 外部验证计划。新增
+  [course_os_oscomp_external_validation_design.md](../design/course_os_oscomp_external_validation_design.md)，
+  固定 OSComp / `testsuits-for-oskernel` 基础子集、资产合同、环境变量、缺资产行为和验收口径；
+  新增 host-only opt-in target `test-host-course_os_oscomp_basic_smoke`，用显式
+  `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS` 验证 `/bin/busybox`、`/usr/bin/git` 和缺失 guest path
+  诊断。结果只作为 Linux compat Plus 外部证据，不写成 Stage 1-4 课程 OS 基线完成条件。
+- 实现过程摘要：默认 `make test` 不依赖 external rootfs、`testsuits-for-oskernel` checkout
+  或真实包管理器；未设置 rootfs 时 opt-in target 只打印清晰 `SKIP` 并退出 0。有 rootfs 时
+  target 生成独立 host-only provider 和 `guest/generated/course_os_oscomp_basic_shell.elf`，
+  输出 resolved rootfs / testsuits path、guest path、loader / trace / exit、unsupported syscall
+  或 errno 诊断。本轮不新增浏览器 external rootfs route，不推进 Stage 12 / Stage 13、网络 git、
+  完整 toolchain、完整 signal / futex / pthread 或 `rustc`。
+- 验证摘要：已运行并通过缺资产路径
+  `cd myCPU && make test-host-course_os_oscomp_basic_smoke`；本机有
+  `/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img` 时，已运行并通过
+  `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=/home/liangjiaqi/local/oscomp-rootfs/alpine-linux-riscv64-ext4fs.img make test-host-course_os_oscomp_basic_smoke`。
+  收口阶段还运行并通过 `make test-unit-course_os_stage10_linux_compat`、
+  `make test-host-course_os_linux_compat_oscomp_help_smoke`、
+  `make test-guest-course_os_shell_demo`、`make test-guest-course_os_linux_compat_shell_demo`、
+  `make test-pipeline` 和 `git diff --check`；`make -n test` 已确认默认回归不包含
+  `course_os_oscomp_basic`。
+- 剩余风险：本计划只证明 low-risk OSComp basic evidence 和 fail-closed 诊断；不声明完整
+  `testsuits-for-oskernel`、完整 Linux 用户态兼容、网络、真实包管理器、完整 signal /
+  futex / pthread、完整 toolchain、`rustc`、浏览器 external rootfs route 或默认外部资产
+  门禁已经完成。
+- 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)、
+  [course_os_oscomp_external_validation_design.md](../design/course_os_oscomp_external_validation_design.md)
+
 #### course-os-arch-followup-plan
 
 - 完成时间：2026-06-16
@@ -80,7 +112,8 @@
 - 剩余风险：展示前计划只证明课程 OS 已有能力在 shell / procfs / guest smoke 中可见；
   在线抢占调度、真实 trap / timer 证据和 UART 中断驱动已在
   [course-os-arch-followup-plan](#course-os-arch-followup-plan) 收口；OSComp / 外部资产验证
-  仍按 `course_os_plus_external_validation_plan.md` 独立推进。
+  已在 [course-os-plus-external-validation-plan](#course-os-plus-external-validation-plan) 收口为
+  Plus 证据。
 - 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
 ### 2026-06-14

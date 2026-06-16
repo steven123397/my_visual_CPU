@@ -10,6 +10,7 @@
 
 - 相关设计：
   - [../design/course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)
+  - [../design/course_os_oscomp_external_validation_design.md](../design/course_os_oscomp_external_validation_design.md)
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
   - [../design/course_os_preemptive_scheduler_design.md](../design/course_os_preemptive_scheduler_design.md)
@@ -20,10 +21,10 @@
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
   - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
-  - [../plan/course_os_plus_external_validation_plan.md](../plan/course_os_plus_external_validation_plan.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-plus-external-validation-plan](../plan/history_plan.md#course-os-plus-external-validation-plan)
   - [../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
   - [../plan/history_plan.md#course-os-display-gap-closure-plan](../plan/history_plan.md#course-os-display-gap-closure-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan)
@@ -246,7 +247,18 @@ stub，`kill` 现在能区分缺失 pid、权限拒绝和真实进程终止；`c
 `sem`、`mutex`、`concurrency_demo` 和 `mkfs` 展示命令，`/proc/cpuinfo` 也固定输出
 `timer_hz=100` 作为课程时钟频率证据。后续在线抢占调度、真实 trap / timer 证据和
 UART 中断驱动曾拆入架构后续计划，并已于 2026-06-16 完成归档；OSComp / 外部资产验证
-继续留在 Plus / 外部验证计划中，不混入展示前 P0。
+已按 Plus / 外部验证计划收口为外部验证证据，不混入展示前 P0。
+
+2026-06-16 已完成 OSComp / `testsuits-for-oskernel` 基础外部验证归档。新边界只把
+`/bin/busybox`、`/usr/bin/git` 这类 low-risk Linux 用户态路径作为 Linux compat Plus
+外部证据；缺 `MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS` 时
+`test-host-course_os_oscomp_basic_smoke` 明确 skip，不生成 external provider，也不污染默认
+`make test`。有 rootfs 时该 target 使用独立 host-only generated provider 和
+`guest/generated/course_os_oscomp_basic_shell.elf`，输出 resolved rootfs / testsuits path、
+guest path、loader / trace / exit 或 errno 诊断；本机 Alpine riscv64 ext4 rootfs opt-in
+复验已覆盖 BusyBox help / echo、`git -h` 和缺失 guest path fail-closed 诊断。该证据只进入
+Linux compat Plus 外部验证口径，不进入 Stage 1-4 课程 OS 基线，也不新增浏览器 external
+rootfs route。
 
 2026-06-16 已完成架构后续计划中的 context switch cost 证据切片。该合同把 cycle 来源限定为
 离线 `course_scheduler_run()` 的 scheduler-local dispatch delta，不声明 QEMU / host /
@@ -450,16 +462,20 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
   这仍不支持完整 testsuits-for-oskernel、网络 `git clone/push/pull`、真实 `cc1/as/ld`
   toolchain 子进程链、`rustc helloworld.rs && ./helloworld`、完整 `execve` / `wait4` /
   `futex` / signal、完整 termios / TTY、job control 或通用 Linux 发行版兼容。
+- OSComp basic external smoke 只证明显式外部 rootfs 下的 `/bin/busybox`、`/usr/bin/git`
+  和缺失路径诊断；它不声明完整 `testsuits-for-oskernel`、完整 signal / futex / pthread、
+  真实包管理器、网络、浏览器 external rootfs route 或默认回归外部资产门禁已经完成。
 - 课程级 ELF catalog、课程 syscall ABI、RAMFS、固定小进程表、教学 COW 和课程 shell 仍不能直接
   声明为 Linux ABI 兼容层；Linux ABI 扩展必须继续走旁路 `linux_compat_*` 模块和进程 ABI 分流。
 
 ## 下一步
 
-1. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11 v0 本地 workflow。
-2. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
-3. 如果要把 Stage 11 v0 的 `gcc` shim 升级为完整 toolchain，应另起计划补真实 `cc1/as/ld` 子进程链、fd/env/cwd 继承、pipe、临时文件、signal / futex 和相关 VM / loader 语义。
-4. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补能力，不直接改大 `course_*` 教学模块；AI/NPU、JIT/DBT 或 Pipeline-aware 调度继续作为独立后续方向。
-5. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
+1. OSComp basic 外部验证计划已归档；后续若扩大 `testsuits-for-oskernel` 覆盖面，应另起 trace-driven Plus 计划，仍不得写成 Stage 1-4 基线。
+2. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11 v0 本地 workflow。
+3. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
+4. 如果要把 Stage 11 v0 的 `gcc` shim 升级为完整 toolchain，应另起计划补真实 `cc1/as/ld` 子进程链、fd/env/cwd 继承、pipe、临时文件、signal / futex 和相关 VM / loader 语义。
+5. 后续新增 Linux 语义继续放在旁路 `linux_compat_*`，按真实 trace 补能力，不直接改大 `course_*` 教学模块；AI/NPU、JIT/DBT 或 Pipeline-aware 调度继续作为独立后续方向。
+6. 保留旧 Phase 1 负向 demo 作为基础设施 guardrail；除非真实 bug 或课程 OS 迁移需要，不继续扩旧 bring-up marker 面。
 
 ## 验证基线
 
@@ -518,3 +534,6 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
   - `cd myCPU && make test-host-course_os_linux_compat_oscomp_help_smoke`
   - `cd myCPU && make test-guest-course_os_linux_compat_shell_demo`
   - `cd myCPU && make test-pipeline-guest-course_os_linux_compat_shell_demo`
+- Plus / OSComp external opt-in 门禁：
+  - 缺资产 skip 诊断：`cd myCPU && make test-host-course_os_oscomp_basic_smoke`
+  - 有资产外部验证：`cd myCPU && MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=/path/to/rootfs make test-host-course_os_oscomp_basic_smoke`

@@ -17,7 +17,7 @@
 - 当前状态：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 展示前计划归档：[../plan/history_plan.md#course-os-display-gap-closure-plan](../plan/history_plan.md#course-os-display-gap-closure-plan)
 - 架构后续计划归档：[../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
-- Plus / 外部验证计划：[../plan/course_os_plus_external_validation_plan.md](../plan/course_os_plus_external_validation_plan.md)
+- Plus / 外部验证计划归档：[../plan/history_plan.md#course-os-plus-external-validation-plan](../plan/history_plan.md#course-os-plus-external-validation-plan)
 
 ## 分层原则
 
