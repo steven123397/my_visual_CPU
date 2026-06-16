@@ -698,15 +698,36 @@ bool trap_context_install_standard_user_runtime_policies(
     void* supervisor_timer_post_context,
     trap_supervisor_external_post_handler_t supervisor_external_post_handler,
     void* supervisor_external_post_context) {
+    trap_interrupt_handler_t timer_post_handler = supervisor_timer_post_handler;
+    void* timer_post_context = supervisor_timer_post_context;
+    trap_supervisor_external_post_handler_t external_post_handler =
+        supervisor_external_post_handler;
+    void* external_post_context = supervisor_external_post_context;
+
+    if (trap_context != NULL) {
+        if (timer_post_handler == NULL) {
+            timer_post_handler =
+                trap_context->supervisor_timer_policy.post_handler;
+            timer_post_context =
+                trap_context->supervisor_timer_policy.post_context;
+        }
+        if (external_post_handler == NULL) {
+            external_post_handler =
+                trap_context->supervisor_external_policy.post_handler;
+            external_post_context =
+                trap_context->supervisor_external_policy.post_context;
+        }
+    }
+
     if (trap_context == NULL ||
         !trap_context_install_supervisor_timer_policy(
             trap_context,
-            supervisor_timer_post_handler,
-            supervisor_timer_post_context) ||
+            timer_post_handler,
+            timer_post_context) ||
         !trap_context_install_supervisor_external_policy(
             trap_context,
-            supervisor_external_post_handler,
-            supervisor_external_post_context)) {
+            external_post_handler,
+            external_post_context)) {
         return false;
     }
 

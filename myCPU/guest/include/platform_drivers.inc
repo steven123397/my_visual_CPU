@@ -23,6 +23,12 @@ platform_uart_enable_thre_irq:
     sb   t1, UART_REG_IER(t0)
     ret
 
+platform_uart_enable_rx_irq:
+    li   t0, UART_BASE
+    li   t1, UART_IER_RDI
+    sb   t1, UART_REG_IER(t0)
+    ret
+
 platform_uart_disable_irq:
     li   t0, UART_BASE
     sb   zero, UART_REG_IER(t0)

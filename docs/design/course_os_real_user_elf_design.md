@@ -2,9 +2,9 @@
 
 ## 文档定位
 
-本文档定义课程 OS Stage 3 用户程序和 `course_os_shell` 外部 ELF 加载的统一来源合同，服务
-[../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md) 的真实课程
-ELF 用户程序任务，以及
+本文档定义课程 OS Stage 3 用户程序和 `course_os_shell` 外部 ELF 加载的统一来源合同，对应
+[课程 OS 架构后续增强计划](../plan/history_plan.md#course-os-arch-followup-plan)
+中的真实课程 ELF 用户程序任务，以及
 [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md) 的
 `course_os_shell` 外部 ELF 加载任务。
 
@@ -15,7 +15,7 @@ ELF 用户程序任务，以及
 
 - 状态文档：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 - 相关计划：
-  - [../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md)
+  - [../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
   - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
 - 边界设计：[course_os_gap_closure_boundary_design.md](course_os_gap_closure_boundary_design.md)
 - 课程 OS 基线设计：[course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)

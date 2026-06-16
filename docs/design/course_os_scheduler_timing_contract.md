@@ -2,16 +2,16 @@
 
 ## 文档定位
 
-本文档定义课程 OS scheduler 当前可复验的 cycle 证据合同，服务
-[../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md) 的
-context switch cost 后续增强项。
+本文档定义课程 OS scheduler 当前可复验的 cycle 证据合同，对应已归档的
+[课程 OS 架构后续增强计划](../plan/history_plan.md#course-os-arch-followup-plan)
+中的 context switch cost 后续增强项。
 
 本文档不声明真实 wall-clock 时间、QEMU 耗时、host 耗时或完整在线抢占调度器已经完成。
 
 ## 关联文档
 
 - 状态文档：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 相关计划：[../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md)
+- 相关计划归档：[../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
 - 边界设计：[course_os_gap_closure_boundary_design.md](course_os_gap_closure_boundary_design.md)
 - 课程 OS 基线设计：[course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)
 

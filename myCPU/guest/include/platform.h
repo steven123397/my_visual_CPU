@@ -8,6 +8,7 @@ void platform_uart_putc(uint8_t ch);
 uint64_t platform_uart_rx_ready(void);
 uint8_t platform_uart_getc(void);
 void platform_uart_enable_thre_irq(void);
+void platform_uart_enable_rx_irq(void);
 void platform_uart_disable_irq(void);
 
 void platform_plic_supervisor_init(void);

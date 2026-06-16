@@ -13,17 +13,18 @@
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
   - [../design/course_os_preemptive_scheduler_design.md](../design/course_os_preemptive_scheduler_design.md)
+  - [../design/course_os_uart_interrupt_input_design.md](../design/course_os_uart_interrupt_input_design.md)
   - [../design/course_os_scheduler_timing_contract.md](../design/course_os_scheduler_timing_contract.md)
   - [../design/course_os_real_user_elf_design.md](../design/course_os_real_user_elf_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
-  - [../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md)
   - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
   - [../plan/course_os_plus_external_validation_plan.md](../plan/course_os_plus_external_validation_plan.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
 - 已完成计划归档：
+  - [../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
   - [../plan/history_plan.md#course-os-display-gap-closure-plan](../plan/history_plan.md#course-os-display-gap-closure-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan)
   - [../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan](../plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan)
@@ -84,6 +85,16 @@ Stage 1 / Stage 2 / Stage 3 summary，而是新增独立 `guest_course_os_shell_
 启动后进入 `course-os> ` prompt，并通过 `/console` 的 manifest / terminal / Lab workbench
 展示 Stage 3 已完成的课程 shell、FD / FS、procfs、ELF / libc、COW 和 crash isolation 能力。
 前端继续复用现有 debug session 和 UART terminal 合同，没有新增并行执行协议。
+
+2026-06-16 已完成 UART 中断驱动输入接入。Stage 4 `course-os> ` shell 现在显式
+opt-in supervisor external counter policy、PLIC supervisor context 和 `UART_IER_RDI`；
+UART RX external post handler 只把字节 drain 到 `console_input_state_t` raw FIFO，
+`console_input_poll()` 继续统一处理回显、退格、不可见字符过滤、溢出和行完成。FIFO
+为空时保留轮询 fallback，前端 `/console` terminal API 不变，输入逻辑没有硬编码进
+`trap_dispatch.c` 主流程，也不影响 Stage 1 / Stage 2 / Stage 3 marker。标准
+user runtime policy 重新安装默认 timer / external interrupt handler 时会保留已存在的
+post hook，因此连续执行 `linux ...` 这类 Linux compat 命令后，shell 的 UART RX 中断输入
+仍能继续 drain 并回到 prompt。
 
 2026-06-16 已完成课程 ELF 来源统一化第一刀。Stage 3 的 5 个课程用户程序现在使用不同
 entry / code segment 的最小 RV64 `ET_EXEC` bytes，不再共享一段占位 ELF；`course_process_exec()`
@@ -233,9 +244,9 @@ Plus / 外部验证，并新增上游边界设计。展示前计划当前只把�
 2026-06-15 已把展示前计划收口完成并归档：`course_fs_listdir` 变成完整输出合同，`ls` 不再是
 stub，`kill` 现在能区分缺失 pid、权限拒绝和真实进程终止；`course-os> ` shell 新增
 `sem`、`mutex`、`concurrency_demo` 和 `mkfs` 展示命令，`/proc/cpuinfo` 也固定输出
-`timer_hz=100` 作为课程时钟频率证据。后续在线抢占调度、真实 trap / timer 证据、
-UART 中断驱动、OSComp / 外部资产验证继续留在架构后续计划和 Plus / 外部验证计划中，不混入
-展示前 P0。
+`timer_hz=100` 作为课程时钟频率证据。后续在线抢占调度、真实 trap / timer 证据和
+UART 中断驱动曾拆入架构后续计划，并已于 2026-06-16 完成归档；OSComp / 外部资产验证
+继续留在 Plus / 外部验证计划中，不混入展示前 P0。
 
 2026-06-16 已完成架构后续计划中的 context switch cost 证据切片。该合同把 cycle 来源限定为
 离线 `course_scheduler_run()` 的 scheduler-local dispatch delta，不声明 QEMU / host /

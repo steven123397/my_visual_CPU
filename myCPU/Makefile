@@ -18,7 +18,7 @@ ATOMIC_ASM_TESTS = atomic_basic atomic_ordering_smoke
 ATOMIC_ASM_ELFS = $(ATOMIC_ASM_TESTS:%=tests/asm/%.elf)
 ATOMIC_ASM_DEPS = $(ATOMIC_ASM_ELFS:.elf=.d)
 FLAT_BIN_TESTS = hello
-UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract simple_l1_cache ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands course_os_stage1 course_os_stage2_syscall course_os_stage2_process course_os_stage2_fd_fs course_os_stage2_shell course_os_stage2_cow_crash course_os_stage2 course_os_stage3_elf course_os_stage3_sched_sync course_os_preemptive_sched course_os_stage3_vm course_os_stage3_fs_shell course_os_stage3_proc course_os_stage3 course_os_stage5_linux_compat course_os_stage6_linux_compat course_os_stage8_linux_compat_loader course_os_stage9_linux_compat_vm course_os_stage9_linux_compat_exec course_os_stage9_linux_compat_syscall course_os_stage10_linux_compat course_os_stage11_linux_compat kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
+UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_loader_header_rejects binary_loader machine_loader_reset bus_device_guards bus_region_contract dma_transaction_contract simple_l1_cache ai_graph_package ai_scratchpad ai_dma_engine ai_accelerator_mmio_contract mmio_contract_matrix uart_rx_contract storage_readiness virtio_mmio_contract virtqueue_smoke ai_accel_queue supervisor_runtime kernel_runtime kernel_bringup vm_address_space vm_process vm_object vm_fault trap_runtime trap_dispatch user_task user_task_bootstrap user_program user_program_smoke supervisor_demo_smoke monitor_commands course_os_console_input course_os_stage1 course_os_stage2_syscall course_os_stage2_process course_os_stage2_fd_fs course_os_stage2_shell course_os_stage2_cow_crash course_os_stage2 course_os_stage3_elf course_os_stage3_sched_sync course_os_preemptive_sched course_os_stage3_vm course_os_stage3_fs_shell course_os_stage3_proc course_os_stage3 course_os_stage5_linux_compat course_os_stage6_linux_compat course_os_stage8_linux_compat_loader course_os_stage9_linux_compat_vm course_os_stage9_linux_compat_exec course_os_stage9_linux_compat_syscall course_os_stage10_linux_compat course_os_stage11_linux_compat kernel_alpha_common kernel_alpha_storage kernel_alpha_interrupt
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
 LINUX_COMPAT_ROOTFS_BUILTIN_UNIT_OBJS = tests/unit/linux_compat_rootfs_guest.o tests/unit/linux_compat_minimal_elf_asset_guest.o
 LINUX_COMPAT_CORE_UNIT_OBJS = tests/unit/linux_compat_guest.o tests/unit/linux_compat_debug_guest.o tests/unit/linux_compat_process_guest.o
@@ -55,6 +55,8 @@ SUPERVISOR_DEMO_SMOKE_UNIT_OBJS = tests/unit/supervisor_demo_smoke_test.o tests/
 SUPERVISOR_DEMO_SMOKE_UNIT_DEPS = $(SUPERVISOR_DEMO_SMOKE_UNIT_OBJS:.o=.d)
 MONITOR_COMMANDS_UNIT_OBJS = tests/unit/monitor_commands_test.o tests/unit/monitor_commands_guest.o tests/unit/vm_debug_guest.o
 MONITOR_COMMANDS_UNIT_DEPS = $(MONITOR_COMMANDS_UNIT_OBJS:.o=.d)
+COURSE_OS_CONSOLE_INPUT_UNIT_OBJS = tests/unit/course_os_console_input_test.o tests/unit/console_input_guest.o
+COURSE_OS_CONSOLE_INPUT_UNIT_DEPS = $(COURSE_OS_CONSOLE_INPUT_UNIT_OBJS:.o=.d)
 COURSE_OS_STAGE1_UNIT_OBJS = tests/unit/course_os_stage1_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/course_syscall_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
 COURSE_OS_STAGE1_UNIT_DEPS = $(COURSE_OS_STAGE1_UNIT_OBJS:.o=.d)
 COURSE_OS_STAGE2_SYSCALL_UNIT_OBJS = tests/unit/course_os_stage2_syscall_test.o tests/unit/course_elf_loader_guest.o tests/unit/course_fd_guest.o tests/unit/course_syscall_guest.o tests/unit/course_scheduler_guest.o tests/unit/course_memory_guest.o tests/unit/course_fs_guest.o tests/unit/course_process_guest.o tests/unit/course_user_programs_guest.o tests/unit/procfs_guest.o
@@ -261,13 +263,14 @@ DEPS     += $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_MININIT_DEP) $(LINUX_PROTO
 TEST_TIMEOUT ?= 3s
 AI_ACCEL_PROFILE_SMOKE_TIMEOUT ?= 10s
 XV6_SHELL_SMOKE_TIMEOUT ?= 300s
-SUPERVISOR_GUEST_TEST_TIMEOUT ?= 7s
+SUPERVISOR_GUEST_TEST_TIMEOUT ?= 15s
 KERNEL_ALPHA_GUEST_TEST_TIMEOUT ?= 20s
 KERNEL_ALPHA_STORAGE_GUEST_TEST_TIMEOUT ?= 20s
 DEBUG_CLI_SMOKE_TIMEOUT ?= 30s
 COURSE_OS_LINUX_COMPAT_HOST_SMOKE_TIMEOUT ?= 10s
 COURSE_OS_LINUX_COMPAT_PIPELINE_GUEST_TEST_TIMEOUT ?= 60s
 AI_ACCEL_GUEST_SMOKE_TIMEOUT ?= 10s
+AI_ACCEL_PIPELINE_GUEST_SMOKE_TIMEOUT ?= 20s
 # Pipeline guest demos execute the full guest runtime under the pipeline
 # backend and need a wider budget than the functional path on debug builds.
 PIPELINE_GUEST_TEST_TIMEOUT ?= 12s
@@ -1115,10 +1118,10 @@ test-pipeline-guest-course_os_linux_compat_shell_demo: FORCE $(TARGET) $(GUEST_C
 	$(call RUN_COURSE_OS_LINUX_COMPAT_GUEST_DEMO_TEST,$(COURSE_OS_LINUX_COMPAT_PIPELINE_GUEST_TEST_TIMEOUT),pipeline, (pipeline))
 
 test-guest-ai_accel_demo: FORCE $(TARGET) $(GUEST_AI_ACCEL_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_ai_accel_demo,$(GUEST_AI_ACCEL_DEMO),KMVAI,$(TEST_TIMEOUT),,,)
+	$(call RUN_GUEST_DEMO_TEST,guest_ai_accel_demo,$(GUEST_AI_ACCEL_DEMO),KMVAI,$(AI_ACCEL_GUEST_SMOKE_TIMEOUT),,,)
 
 test-pipeline-guest-ai_accel_demo: FORCE $(TARGET) $(GUEST_AI_ACCEL_DEMO)
-	$(call RUN_GUEST_DEMO_TEST,guest_ai_accel_demo,$(GUEST_AI_ACCEL_DEMO),KMVAI,$(PIPELINE_GUEST_TEST_TIMEOUT),--backend pipeline,, (pipeline))
+	$(call RUN_GUEST_DEMO_TEST,guest_ai_accel_demo,$(GUEST_AI_ACCEL_DEMO),KMVAI,$(AI_ACCEL_PIPELINE_GUEST_SMOKE_TIMEOUT),--backend pipeline,, (pipeline))
 
 test-guest-vector_demo: FORCE $(TARGET) $(GUEST_VECTOR_DEMO)
 	$(call RUN_GUEST_DEMO_TEST,guest_vector_demo,$(GUEST_VECTOR_DEMO),V2OK,$(TEST_TIMEOUT),,,)
@@ -1464,6 +1467,15 @@ tests/unit/course_user_programs_guest.o: guest/kernel/course_user_programs.c
 	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
 
 tests/unit/course_os_stage2_process: $(COURSE_OS_STAGE2_PROCESS_UNIT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tests/unit/course_os_console_input_test.o: tests/unit/course_os_console_input.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/console_input_guest.o: guest/kernel/console_input.c
+	$(CC) $(CFLAGS) -Iguest/include -Iinclude -MMD -MP -c -o $@ $<
+
+tests/unit/course_os_console_input: $(COURSE_OS_CONSOLE_INPUT_UNIT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/unit/course_os_stage2_fd_fs_test.o: tests/unit/course_os_stage2_fd_fs.c

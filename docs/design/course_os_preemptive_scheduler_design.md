@@ -3,8 +3,8 @@
 ## 文档定位
 
 本文档定义课程 OS 在线抢占调度器的职责边界、timer tick 输入、进程状态转换、
-context switch 统计和 Stage marker 兼容策略，服务
-[../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md) 的
+context switch 统计和 Stage marker 兼容策略，对应已归档的
+[课程 OS 架构后续增强计划](../plan/history_plan.md#course-os-arch-followup-plan)
 任务 1。
 
 本文档不替代 [course_os_scheduler_timing_contract.md](course_os_scheduler_timing_contract.md)
@@ -13,7 +13,7 @@ context switch 统计和 Stage marker 兼容策略，服务
 ## 关联文档
 
 - 状态文档：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 相关计划：[../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md)
+- 相关计划归档：[../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
 - 边界设计：[course_os_gap_closure_boundary_design.md](course_os_gap_closure_boundary_design.md)
 - 调度 timing 合同：[course_os_scheduler_timing_contract.md](course_os_scheduler_timing_contract.md)
 - 课程 OS 基线设计：[course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)

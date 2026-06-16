@@ -21,6 +21,39 @@
 - `design`、`status` 与后续活跃计划引用历史计划时，统一链接到本文档对应条目。
 - 当前如果没有活跃计划，`docs/plan/` 只保留 [template.md](template.md) 和本文档。
 
+### 2026-06-16
+
+#### course-os-arch-followup-plan
+
+- 完成时间：2026-06-16
+- 原文件：`course_os_arch_followup_plan.md`
+- 完成内容：完成课程 OS 架构后续增强计划。在线抢占调度、UART 中断驱动输入、真实课程
+  ELF 用户程序、多级管道和 context switch cost 证据均已收口；Stage 1 / Stage 2 /
+  Stage 3 marker、Stage 4 `course-os> ` prompt、Linux compat Plus 旁路和前端
+  `/console` terminal 合同保持稳定。
+- 实现过程摘要：本计划按“先设计 / 合同、再窄回归、最后实现和总门禁”的节奏推进。在线
+  调度器以 timer tick 和 supervisor timer post handler opt-in 接入，不改变离线
+  `course_scheduler_run()` 统计语义；UART 输入以 shell-local external post adapter
+  drain RX 到 `console_input_state_t` raw FIFO，行编辑继续统一在 `console_input_poll()`
+  内处理；真实课程 ELF 路径统一内置 catalog 与课程 FS 文件 ELF 装载；多级管道保持
+  bounded stage 数组和脚本模式输出合同；context switch cost 只声明 scheduler-local
+  cycle 证据，不输出 wall-clock 时间换算。
+- 验证摘要：收口阶段已运行并通过 `cd myCPU && make test-unit-course_os_preemptive_sched`、
+  `make test-unit-course_os_stage2_shell`、`make test-unit-course_os_stage3_elf`、
+  `make test-unit-course_os_console_input`、`make test-unit-trap_dispatch`、
+  `make test-host-course_os_linux_compat_terminal_smoke`、`make test-guest-course_os_shell_demo`、
+  `make test-guest-kernel_alpha_demo`、`make test-pipeline-guest-course_os_shell_demo`、
+  `make test-pipeline-guest-kernel_alpha_demo`、`make test`、`make test-pipeline`
+  和 `git diff --check`。
+- 剩余风险：本计划不声明完整 TTY / signal / futex、完整 Linux 用户态兼容、OSComp
+  外部资产默认门禁或真实 wall-clock 调度延迟已经完成；这些仍归属 Linux compat Plus /
+  外部验证和后续 trace-driven 计划。
+- 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)、
+  [course_os_preemptive_scheduler_design.md](../design/course_os_preemptive_scheduler_design.md)、
+  [course_os_uart_interrupt_input_design.md](../design/course_os_uart_interrupt_input_design.md)、
+  [course_os_real_user_elf_design.md](../design/course_os_real_user_elf_design.md)、
+  [course_os_scheduler_timing_contract.md](../design/course_os_scheduler_timing_contract.md)
+
 ### 2026-06-15
 
 #### course-os-display-gap-closure-plan
@@ -45,9 +78,9 @@
   `make test-unit-course_os_stage3_proc`、`make test-guest-course_os_shell_demo`
   和 `git diff --check`。
 - 剩余风险：展示前计划只证明课程 OS 已有能力在 shell / procfs / guest smoke 中可见；
-  在线抢占调度、真实 trap / timer 证据、UART 中断驱动、OSComp / 外部资产验证仍按
-  `course_os_arch_followup_plan.md` 与 `course_os_plus_external_validation_plan.md`
-  独立推进。
+  在线抢占调度、真实 trap / timer 证据和 UART 中断驱动已在
+  [course-os-arch-followup-plan](#course-os-arch-followup-plan) 收口；OSComp / 外部资产验证
+  仍按 `course_os_plus_external_validation_plan.md` 独立推进。
 - 结果参考：[kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
 ### 2026-06-14

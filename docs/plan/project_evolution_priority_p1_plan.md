@@ -149,7 +149,7 @@ fallback coverage、可重复性能证据和 workload-level scheduler 边界。
   - `myCPU/guest/kernel/course_shell.c`
   - `myCPU/tests/unit/course_os_stage2_shell.c`
   - `myCPU/tests/unit/course_os_stage3_elf.c`
-  - `docs/plan/course_os_arch_followup_plan.md`
+  - `docs/plan/history_plan.md#course-os-arch-followup-plan`
   - `docs/status/kernel_alpha_status.md`
 
 - [x] **步骤 1：** 固定 `exec builtin-name` 旧行为和 `exec /path/to/prog` 新行为的解析
@@ -161,7 +161,8 @@ fallback coverage、可重复性能证据和 workload-level scheduler 边界。
 - [x] **步骤 4：** 运行 course OS 相关单元测试和 guest demo，确认 summary marker 未漂移。
 
 **结果：** 本项与
-[course_os_arch_followup_plan.md](course_os_arch_followup_plan.md) 的任务 3 合并落地。`exec hello`
+[history_plan.md#course-os-arch-followup-plan](history_plan.md#course-os-arch-followup-plan) 中归档的
+架构后续计划任务 3 合并落地。`exec hello`
 和直接 `hello` 继续走内置课程 catalog；`exec /path/to/prog [arg]` 现在从课程 FS 读取小型
 RV64 `ET_EXEC` bytes，并复用 `course_process_exec_image()`、`course_elf_loader` 和课程
 process image 更新路径。缺文件 / 目录输出 `exec: no such file`；文件存在但不是合格 ELF 输出

@@ -442,11 +442,32 @@ static int test_install_standard_user_runtime_policies(void) {
 
     if (trap_context.supervisor_timer_policy.user_runtime != &user_runtime ||
         trap_context.supervisor_external_policy.user_runtime != &user_runtime ||
+        trap_context.supervisor_timer_policy.post_handler != stub_timer_post_handler ||
+        trap_context.supervisor_timer_policy.post_context != &process ||
+        trap_context.supervisor_external_policy.post_handler != stub_external_post_handler ||
+        trap_context.supervisor_external_policy.post_context != &address_space ||
         trap_context.interrupt_handlers[RISCV_SUPERVISOR_TIMER_INTERRUPT].handler == NULL ||
         trap_context.interrupt_handlers[RISCV_SUPERVISOR_EXTERNAL_INTERRUPT].handler == NULL ||
         trap_context.user_ecall_policy.user_runtime != &user_runtime ||
         trap_context.exception_handlers[RISCV_EXC_ECALL_FROM_U].handler == NULL) {
         return fail("expected standard policy install to bind runtime and handlers");
+    }
+
+    if (!trap_context_install_standard_user_runtime_policies(&trap_context,
+                                                             &user_runtime,
+                                                             NULL,
+                                                             NULL,
+                                                             NULL,
+                                                             NULL)) {
+        return fail("expected standard runtime policy reinstall with inherited post handlers to succeed");
+    }
+    if (trap_context.supervisor_timer_policy.user_runtime != &user_runtime ||
+        trap_context.supervisor_external_policy.user_runtime != &user_runtime ||
+        trap_context.supervisor_timer_policy.post_handler != stub_timer_post_handler ||
+        trap_context.supervisor_timer_policy.post_context != &process ||
+        trap_context.supervisor_external_policy.post_handler != stub_external_post_handler ||
+        trap_context.supervisor_external_policy.post_context != &address_space) {
+        return fail("expected standard policy reinstall with NULL post handlers to preserve existing hooks");
     }
 
     return 0;

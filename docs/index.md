@@ -32,7 +32,9 @@
    AI accelerator 面向未来 Linux driver 的最小设备契约。
 14. [design/course_os_real_user_elf_design.md](design/course_os_real_user_elf_design.md)
    课程 OS 真实用户 ELF 来源与 `exec /path` 统一合同。
-15. [showcase/README.md](showcase/README.md)
+15. [design/course_os_uart_interrupt_input_design.md](design/course_os_uart_interrupt_input_design.md)
+   课程 OS shell UART 中断驱动输入与轮询 fallback 设计。
+16. [showcase/README.md](showcase/README.md)
    课程结题、PPT、讲稿、截图和演示材料入口。
 
 历史设计和专项资料按专题读取即可。
@@ -118,13 +120,14 @@
 - `kernel_alpha`
   - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
   - [design/course_os_kernel_alpha_course_os_baseline_design.md](design/course_os_kernel_alpha_course_os_baseline_design.md)
+  - [design/course_os_uart_interrupt_input_design.md](design/course_os_uart_interrupt_input_design.md)
   - [design/course_os_kernel_alpha_linux_compat_plus_design.md](design/course_os_kernel_alpha_linux_compat_plus_design.md)
   - [design/course_os_gap_closure_boundary_design.md](design/course_os_gap_closure_boundary_design.md)
   - [design/course_os_preemptive_scheduler_design.md](design/course_os_preemptive_scheduler_design.md)
   - [design/course_os_scheduler_timing_contract.md](design/course_os_scheduler_timing_contract.md)
   - [design/course_os_real_user_elf_design.md](design/course_os_real_user_elf_design.md)
-  - [plan/course_os_arch_followup_plan.md](plan/course_os_arch_followup_plan.md)
   - [plan/course_os_plus_external_validation_plan.md](plan/course_os_plus_external_validation_plan.md)
+  - [plan/history_plan.md#course-os-arch-followup-plan](plan/history_plan.md#course-os-arch-followup-plan)
   - [plan/history_plan.md#course-os-display-gap-closure-plan](plan/history_plan.md#course-os-display-gap-closure-plan)
   - [plan/history_plan.md#shell-terminal-unification-plan](plan/history_plan.md#shell-terminal-unification-plan)
   - [plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan](plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan)
