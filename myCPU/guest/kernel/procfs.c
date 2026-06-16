@@ -255,6 +255,16 @@ static bool read_schedstat(const procfs_t* procfs, char* out, size_t out_size) {
            append_key_value_u32(out,
                                 out_size,
                                 &used,
+                                "last_switch_cycle_cost",
+                                summary.last_switch_cycle_cost) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
+                                "total_switch_cycle_cost",
+                                summary.total_switch_cycle_cost) &&
+           append_key_value_u32(out,
+                                out_size,
+                                &used,
                                 "time_slice",
                                 summary.time_slice) &&
            append_key_value_u32(out,

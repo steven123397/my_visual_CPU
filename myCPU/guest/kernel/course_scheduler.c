@@ -12,6 +12,13 @@ static void reset_runtime_fields(course_scheduler_t* scheduler) {
     }
 }
 
+static void record_context_switch(course_scheduler_t* scheduler,
+                                  uint32_t cycle_cost) {
+    scheduler->summary.context_switches += 1U;
+    scheduler->summary.last_switch_cycle_cost = cycle_cost;
+    scheduler->summary.total_switch_cycle_cost += cycle_cost;
+}
+
 static bool all_tasks_complete(const course_scheduler_t* scheduler) {
     size_t i = 0;
 
@@ -150,7 +157,7 @@ static bool run_fcfs(course_scheduler_t* scheduler) {
         }
 
         task = &scheduler->tasks[task_index];
-        scheduler->summary.context_switches += 1U;
+        record_context_switch(scheduler, task->remaining_time);
         now += task->remaining_time;
         task->remaining_time = 0;
         task->completion_time = now;
@@ -198,7 +205,7 @@ static bool run_rr(course_scheduler_t* scheduler, uint32_t time_slice) {
         task = &scheduler->tasks[task_index];
         run_for = task->remaining_time < time_slice ? task->remaining_time
                                                     : time_slice;
-        scheduler->summary.context_switches += 1U;
+        record_context_switch(scheduler, run_for);
         now += run_for;
         task->remaining_time -= run_for;
         rr_enqueue_arrivals(scheduler, queue, &queue_count, discovered, now);
@@ -239,7 +246,7 @@ static bool run_cfs_lite(course_scheduler_t* scheduler, uint32_t time_slice) {
         task = &scheduler->tasks[task_index];
         run_for = task->remaining_time < time_slice ? task->remaining_time
                                                     : time_slice;
-        scheduler->summary.context_switches += 1U;
+        record_context_switch(scheduler, run_for);
         now += run_for;
         task->remaining_time -= run_for;
         task->vruntime += run_for;
@@ -283,6 +290,8 @@ void course_scheduler_init(course_scheduler_t* scheduler) {
     scheduler->task_count = 0;
     scheduler->summary.policy = COURSE_SCHED_POLICY_FCFS;
     scheduler->summary.context_switches = 0;
+    scheduler->summary.last_switch_cycle_cost = 0;
+    scheduler->summary.total_switch_cycle_cost = 0;
     scheduler->summary.time_slice = 0;
     scheduler->summary.preempt_count = 0;
     scheduler->summary.total_wait_time = 0;
@@ -340,6 +349,8 @@ bool course_scheduler_run(course_scheduler_t* scheduler,
     reset_runtime_fields(scheduler);
     scheduler->summary.policy = policy;
     scheduler->summary.context_switches = 0;
+    scheduler->summary.last_switch_cycle_cost = 0;
+    scheduler->summary.total_switch_cycle_cost = 0;
     scheduler->summary.time_slice =
         policy == COURSE_SCHED_POLICY_FCFS ? 0U : time_slice;
     scheduler->summary.preempt_count = 0;

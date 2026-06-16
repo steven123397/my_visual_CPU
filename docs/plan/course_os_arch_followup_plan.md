@@ -10,6 +10,7 @@
 
 - 边界设计：[../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
 - 课程 OS 基线设计：[../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
+- 调度 timing 合同：[../design/course_os_scheduler_timing_contract.md](../design/course_os_scheduler_timing_contract.md)
 - 平台 MMIO 合同：[../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前状态：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
@@ -97,7 +98,7 @@
 逐级传递 stdout；单 stage 命令保留原有直接写 caller output 的语义，避免脚本模式递归执行时破坏输出汇总。
 本项只完成 G8，多级管道之外的任务 1 / 2 / 3 / 5 仍按本计划后续推进。
 
-### 任务 5：context switch cost 证据（G9）
+### 任务 5：context switch cost 证据（G9） - 已完成
 
 **文件：**
 - 新增或修改：`docs/design/course_os_scheduler_timing_contract.md`
@@ -105,10 +106,15 @@
 - 修改：`myCPU/guest/kernel/procfs.c`
 - 修改：`myCPU/tests/unit/course_os_preemptive_sched.c`
 
-- [ ] **步骤 1：先补 timing 合同。** 明确模拟器 cycle 到时间的换算来源；没有该合同前不写死“QEMU < 1ms”。
-- [ ] **步骤 2：补红灯回归。** 单测验证 scheduler 能记录最近一次 switch cycle cost，procfs 能输出该字段。
-- [ ] **步骤 3：实现统计。** 在 online scheduler 的切换路径记录 cycle 差值；`/proc/schedstat` 输出 cycle 字段，时间字段只在换算合同存在时输出。
-- [ ] **步骤 4：验证。** 运行 `cd myCPU && make test-unit-course_os_preemptive_sched`。
+- [x] **步骤 1：先补 timing 合同。** 明确模拟器 cycle 到时间的换算来源；没有该合同前不写死“QEMU < 1ms”。
+- [x] **步骤 2：补红灯回归。** 单测验证 scheduler 能记录最近一次 switch cycle cost，procfs 能输出该字段。
+- [x] **步骤 3：实现统计。** 在当前离线 scheduler run path 记录 cycle 差值；`/proc/schedstat` 输出 cycle 字段，时间字段只在换算合同存在时输出。
+- [x] **步骤 4：验证。** 运行 `cd myCPU && make test-unit-course_os_preemptive_sched`。
+
+完成标注（2026-06-16）：当前任务未实现任务 1 的在线调度器，也未接 trap / timer path；本轮先把合同限定为
+离线 `course_scheduler_run()` 的 scheduler-local cycle delta。`course_scheduler_summary_t` 新增
+`last_switch_cycle_cost` / `total_switch_cycle_cost`，`/proc/schedstat` 输出 cycle-only 字段，不输出
+ns / us / ms 时间换算字段。后续在线调度器完成后可在保持字段名稳定的前提下替换 cycle 来源。
 
 ## 完成态回写要求
 

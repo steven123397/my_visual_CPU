@@ -26,6 +26,8 @@ typedef struct CourseSchedulerTaskStats {
 typedef struct CourseSchedulerSummary {
     course_sched_policy_t policy;
     uint32_t context_switches;
+    uint32_t last_switch_cycle_cost;
+    uint32_t total_switch_cycle_cost;
     uint32_t time_slice;
     uint32_t preempt_count;
     uint32_t total_wait_time;

@@ -12,6 +12,7 @@
   - [../design/course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
+  - [../design/course_os_scheduler_timing_contract.md](../design/course_os_scheduler_timing_contract.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
@@ -223,6 +224,12 @@ stub，`kill` 现在能区分缺失 pid、权限拒绝和真实进程终止；`c
 `timer_hz=100` 作为课程时钟频率证据。后续在线抢占调度、真实 trap / timer 证据、
 UART 中断驱动、OSComp / 外部资产验证继续留在架构后续计划和 Plus / 外部验证计划中，不混入
 展示前 P0。
+
+2026-06-16 已完成架构后续计划中的 context switch cost 证据切片。当前合同把 cycle 来源限定为
+离线 `course_scheduler_run()` 的 scheduler-local dispatch delta，不声明 QEMU / host /
+真实硬件 wall-clock latency；`course_scheduler_summary_t` 现在记录
+`last_switch_cycle_cost` 和 `total_switch_cycle_cost`，`/proc/schedstat` 输出对应 cycle-only
+字段。在线抢占调度器、trap / timer 接入和 ns / us / ms 时间换算仍属于后续任务，不在本切片内完成。
 
 2026-06-10 已完成质量审查后的 `fix-and-validate` 小步收敛。`course_fd_read()` 现在明确为
 raw read 合同，只写实际返回的字节数，不再隐式追加 `NUL`；`test-unit-course_os_stage2_fd_fs`
