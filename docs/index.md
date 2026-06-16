@@ -120,6 +120,7 @@
   - [design/course_os_kernel_alpha_course_os_baseline_design.md](design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [design/course_os_kernel_alpha_linux_compat_plus_design.md](design/course_os_kernel_alpha_linux_compat_plus_design.md)
   - [design/course_os_gap_closure_boundary_design.md](design/course_os_gap_closure_boundary_design.md)
+  - [design/course_os_preemptive_scheduler_design.md](design/course_os_preemptive_scheduler_design.md)
   - [design/course_os_scheduler_timing_contract.md](design/course_os_scheduler_timing_contract.md)
   - [design/course_os_real_user_elf_design.md](design/course_os_real_user_elf_design.md)
   - [plan/course_os_arch_followup_plan.md](plan/course_os_arch_followup_plan.md)

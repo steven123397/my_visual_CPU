@@ -10,6 +10,7 @@
 
 - 边界设计：[../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
 - 课程 OS 基线设计：[../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
+- 在线抢占调度设计：[../design/course_os_preemptive_scheduler_design.md](../design/course_os_preemptive_scheduler_design.md)
 - 调度 timing 合同：[../design/course_os_scheduler_timing_contract.md](../design/course_os_scheduler_timing_contract.md)
 - 课程 OS 真实用户 ELF 来源设计：[../design/course_os_real_user_elf_design.md](../design/course_os_real_user_elf_design.md)
 - 平台 MMIO 合同：[../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
@@ -41,20 +42,29 @@
 
 ## 任务
 
-### 任务 1：在线抢占调度设计与实现（G3）
+### 任务 1：在线抢占调度设计与实现（G3） - 已完成
 
 **文件：**
-- 新增或修改：`docs/design/course_os_preemptive_scheduler_design.md`
+- 新增：`docs/design/course_os_preemptive_scheduler_design.md`
+- 修改：`docs/index.md`
+- 修改：`docs/status/kernel_alpha_status.md`
 - 修改：`myCPU/guest/include/course_scheduler.h`
 - 修改：`myCPU/guest/kernel/course_scheduler.c`
-- 修改：`myCPU/guest/kernel/trap_dispatch.c`
-- 新增：`myCPU/tests/unit/course_os_preemptive_sched.c`
+- 修改：`myCPU/tests/unit/course_os_preemptive_sched.c`
 
-- [ ] **步骤 1：先补设计。** 明确离线统计调度器与在线调度器的职责边界、timer tick 输入、进程状态转换、context switch 统计和 Stage marker 兼容策略。
-- [ ] **步骤 2：补红灯回归。** 新增在线 RR 时间片到期切换、FCFS 不抢占、CFS-lite 权重调度的 host 单测。
-- [ ] **步骤 3：实现在线调度器。** 新增独立 online scheduler 状态，不改坏现有 `course_scheduler_run()` 离线统计证据。
-- [ ] **步骤 4：接入 timer path。** 只在明确启用 online scheduler 时让 supervisor timer handler 驱动 tick。
-- [ ] **步骤 5：验证。** 运行 `cd myCPU && make test-unit-course_os_preemptive_sched test-guest-kernel_alpha_demo`。
+- [x] **步骤 1：先补设计。** 明确离线统计调度器与在线调度器的职责边界、timer tick 输入、进程状态转换、context switch 统计和 Stage marker 兼容策略。
+- [x] **步骤 2：补红灯回归。** 新增在线 RR 时间片到期切换、FCFS 不抢占、CFS-lite `vruntime` 调度、BLOCKED / ZOMBIE 跳过和 timer post handler 驱动 tick 的 host 单测。
+- [x] **步骤 3：实现在线调度器。** 新增独立 online scheduler 状态，不改坏现有 `course_scheduler_run()` 离线统计证据。
+- [x] **步骤 4：接入 timer path。** 通过 `course_online_scheduler_timer_post_handler()` 复用 supervisor timer post handler opt-in 合同；未显式安装时默认 trap / timer 路径不驱动在线调度器。
+- [x] **步骤 5：验证。** 已运行并通过 `cd myCPU && make test-unit-course_os_preemptive_sched test-guest-kernel_alpha_demo`、`cd myCPU && make test`、`cd myCPU && make test-pipeline` 和 `git diff --check`。
+
+完成标注（2026-06-16）：本项完成课程级在线抢占调度第一刀。`course_online_scheduler_t`
+独立于离线 `course_scheduler_run()`，以 timer tick 为推进单位，复用 `course_process_state_t`
+完成 READY / RUNNING / BLOCKED / ZOMBIE / DEAD 选择边界。RR 在 time slice 到期后抢占，
+FCFS 不因 tick 抢占，CFS-lite 按 online `vruntime` 选择；context switch cost 仍是
+scheduler-local cycle，不输出 ns / us / ms。timer path 通过 supervisor timer post handler
+显式 opt-in 接入，默认不改变 Stage 1 / Stage 2 / Stage 3 marker 和 Stage 4 `course-os> `
+prompt。当前本计划仍未完成的任务是任务 2 UART 中断驱动输入。
 
 ### 任务 2：UART 中断驱动输入（G7）
 

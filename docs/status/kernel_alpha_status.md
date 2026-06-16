@@ -12,6 +12,7 @@
   - [../design/course_os_kernel_alpha_linux_compat_plus_design.md](../design/course_os_kernel_alpha_linux_compat_plus_design.md)
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
+  - [../design/course_os_preemptive_scheduler_design.md](../design/course_os_preemptive_scheduler_design.md)
   - [../design/course_os_scheduler_timing_contract.md](../design/course_os_scheduler_timing_contract.md)
   - [../design/course_os_real_user_elf_design.md](../design/course_os_real_user_elf_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
@@ -236,11 +237,20 @@ stub，`kill` 现在能区分缺失 pid、权限拒绝和真实进程终止；`c
 UART 中断驱动、OSComp / 外部资产验证继续留在架构后续计划和 Plus / 外部验证计划中，不混入
 展示前 P0。
 
-2026-06-16 已完成架构后续计划中的 context switch cost 证据切片。当前合同把 cycle 来源限定为
+2026-06-16 已完成架构后续计划中的 context switch cost 证据切片。该合同把 cycle 来源限定为
 离线 `course_scheduler_run()` 的 scheduler-local dispatch delta，不声明 QEMU / host /
 真实硬件 wall-clock latency；`course_scheduler_summary_t` 现在记录
 `last_switch_cycle_cost` 和 `total_switch_cycle_cost`，`/proc/schedstat` 输出对应 cycle-only
-字段。在线抢占调度器、trap / timer 接入和 ns / us / ms 时间换算仍属于后续任务，不在本切片内完成。
+字段，不输出 ns / us / ms 时间换算。
+
+同日已完成课程级在线抢占调度第一刀。新增 `course_online_scheduler_t` 独立在线状态，不改变
+离线 `course_scheduler_run()` 的 Stage 1 / Stage 3 统计证据；online tick 复用
+`course_process_state_t`，按 READY / RUNNING / BLOCKED / ZOMBIE / DEAD 选择可运行进程。
+RR 支持 time slice 到期抢占，FCFS 不因 tick 抢占，CFS-lite 按 online `vruntime` 选择；
+online summary 记录 tick、idle tick、current pid、context switch、preempt 和 cycle-only
+switch cost。timer path 通过 `course_online_scheduler_timer_post_handler()` 复用 supervisor
+timer post handler 显式 opt-in，未安装时默认 `kernel_alpha_demo`、Stage 1 / Stage 2 /
+Stage 3 marker、Stage 4 `course-os> ` prompt 和 Linux compat Plus 旁路不变。
 
 2026-06-10 已完成质量审查后的 `fix-and-validate` 小步收敛。`course_fd_read()` 现在明确为
 raw read 合同，只写实际返回的字节数，不再隐式追加 `NUL`；`test-unit-course_os_stage2_fd_fs`
@@ -293,6 +303,9 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
 ## 关键历史节点
 
 - `2026-06-16`
+  - 完成课程级在线抢占调度第一刀：新增独立 `course_online_scheduler_t`，以 online tick
+    驱动 FCFS / RR / CFS-lite 选择和 READY / RUNNING / BLOCKED / ZOMBIE / DEAD 边界；
+    timer 接入通过 supervisor timer post handler opt-in，不改变默认 Stage marker。
   - 完成课程 ELF 来源统一化第一刀：5 个 Stage 3 课程程序改为不同的手写最小 RV64
     `ET_EXEC` bytes，`exec /path` 可从课程 FS 读取受控 ELF 并复用课程 ELF / process
     装载路径；缺文件、目录、非 ELF 和坏 entry 等失败场景 fail-closed，不进入
