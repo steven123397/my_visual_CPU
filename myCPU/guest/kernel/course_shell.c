@@ -100,6 +100,31 @@ static bool append_i32(char* out,
     return append_u32(out, out_size, used, magnitude);
 }
 
+static bool append_hex_u64(char* out,
+                           size_t out_size,
+                           size_t* used,
+                           uint64_t value) {
+    static const char digits[] = "0123456789abcdef";
+    bool started = false;
+    int shift = 60;
+
+    if (!append_str(out, out_size, used, "0x")) {
+        return false;
+    }
+    while (shift >= 0) {
+        const uint8_t nibble = (uint8_t)((value >> (uint32_t)shift) & 0xFU);
+
+        if (nibble != 0U || started || shift == 0) {
+            if (!append_char(out, out_size, used, digits[nibble])) {
+                return false;
+            }
+            started = true;
+        }
+        shift -= 4;
+    }
+    return true;
+}
+
 static void set_command_success(bool* command_success, bool value) {
     if (command_success != 0) {
         *command_success = value;
@@ -296,6 +321,20 @@ static bool transcript_append(course_shell_t* shell, const char* line) {
                        '\n');
 }
 
+static course_shell_command_t* acquire_command_scratch(course_shell_t* shell) {
+    if (shell == 0 ||
+        shell->command_scratch_depth >= COURSE_SHELL_COMMAND_SCRATCH_DEPTH) {
+        return 0;
+    }
+    return &shell->command_scratch[shell->command_scratch_depth++];
+}
+
+static void release_command_scratch(course_shell_t* shell) {
+    if (shell != 0 && shell->command_scratch_depth > 0U) {
+        shell->command_scratch_depth -= 1U;
+    }
+}
+
 void course_shell_init(course_shell_t* shell) {
     course_process_t* init = 0;
 
@@ -340,6 +379,7 @@ void course_shell_init(course_shell_t* shell) {
     shell->linux_trace.syscall_number = 0;
     shell->linux_trace.pc = 0;
     shell->linux_trace.message[0] = '\0';
+    shell->command_scratch_depth = 0U;
     shell->transcript[0] = '\0';
     shell->transcript_size = 0;
 }
@@ -532,6 +572,23 @@ static bool run_program_libc_effect(course_shell_t* shell,
     return true;
 }
 
+static void cleanup_failed_program_child(course_shell_t* shell,
+                                         course_process_t* child) {
+    int32_t ignored_status = 0;
+
+    if (shell == 0 || child == 0 || child->state == COURSE_PROCESS_DEAD ||
+        child->state == COURSE_PROCESS_UNUSED) {
+        return;
+    }
+    if (child->state != COURSE_PROCESS_ZOMBIE) {
+        (void)course_process_exit(&shell->processes, child->pid, 127);
+    }
+    (void)course_process_waitpid(&shell->processes,
+                                 shell->shell_pid,
+                                 child->pid,
+                                 &ignored_status);
+}
+
 static bool run_program_command(course_shell_t* shell,
                                 const course_shell_simple_command_t* command,
                                 char* out,
@@ -541,22 +598,88 @@ static bool run_program_command(course_shell_t* shell,
     course_process_t* child = 0;
     int32_t status = 0;
     char program_stdout[COURSE_SYSCALL_IO_BUFFER_SIZE];
+    size_t external_elf_size = 0;
+    bool external_program = false;
+    bool program_found = false;
 
     if (shell == 0 || command == 0 || command->argc == 0 || out == 0 ||
-        out_size == 0 ||
-        !course_user_program_lookup(command->argv[0], &program)) {
+        out_size == 0) {
         return false;
     }
 
     out[0] = '\0';
-    child = course_process_fork(&shell->processes, shell->shell_pid, program.name);
-    if (child == 0 ||
-        course_process_exec(&shell->processes,
-                            child->pid,
-                            program.name,
-                            command->argc > 1U ? command->argv[1] : "") !=
-            COURSE_PROCESS_OK) {
+    program_found = course_user_program_lookup(command->argv[0], &program);
+    if (!program_found && command->argv[0][0] != '/') {
         return false;
+    }
+    child = course_process_fork(&shell->processes,
+                                shell->shell_pid,
+                                command->argv[0]);
+    if (child == 0) {
+        return false;
+    }
+    if (program_found) {
+        if (course_process_exec(&shell->processes,
+                                child->pid,
+                                program.name,
+                                command->argc > 1U ? command->argv[1] : "") !=
+            COURSE_PROCESS_OK) {
+            cleanup_failed_program_child(shell, child);
+            return false;
+        }
+    } else {
+        int fd = 0;
+        int read_size = 0;
+
+        if (!course_fs_size(&shell->fs,
+                            command->argv[0],
+                            &external_elf_size) ||
+            external_elf_size == 0U ||
+            external_elf_size > sizeof(shell->external_elf_scratch)) {
+            cleanup_failed_program_child(shell, child);
+            return false;
+        }
+        fd = course_fd_open(&shell->fds, command->argv[0], COURSE_FD_OPEN_READ);
+        if (fd < 0) {
+            cleanup_failed_program_child(shell, child);
+            return false;
+        }
+        read_size = course_fd_read(&shell->fds,
+                                   fd,
+                                   (char*)(void*)shell->external_elf_scratch,
+                                   sizeof(shell->external_elf_scratch));
+        (void)course_fd_close(&shell->fds, fd);
+        if (read_size <= 0 || (size_t)read_size != external_elf_size) {
+            cleanup_failed_program_child(shell, child);
+            return false;
+        }
+        if (course_process_exec_image(&shell->processes,
+                                      child->pid,
+                                      command->argv[0],
+                                      shell->external_elf_scratch,
+                                      external_elf_size,
+                                      command->argc > 1U ? command->argv[1] : "") !=
+            COURSE_PROCESS_OK) {
+            cleanup_failed_program_child(shell, child);
+            return false;
+        }
+        external_program = true;
+    }
+    if (external_program) {
+        if (!course_process_exit(&shell->processes, child->pid, 0) ||
+            course_process_waitpid(&shell->processes,
+                                   shell->shell_pid,
+                                   child->pid,
+                                   &status) != COURSE_PROCESS_OK) {
+            return false;
+        }
+        return append_str(out, out_size, &used, "program=") &&
+               append_str(out, out_size, &used, command->argv[0]) &&
+               append_str(out, out_size, &used, " entry=") &&
+               append_hex_u64(out, out_size, &used, (uint64_t)child->entry_pc) &&
+               append_str(out, out_size, &used, " exit=") &&
+               append_u32(out, out_size, &used, (uint32_t)status) &&
+               append_char(out, out_size, &used, '\n');
     }
     if (!run_program_libc_effect(shell,
                                  command,
@@ -1272,6 +1395,14 @@ static bool run_simple(course_shell_t* shell,
         if (command->argc < 2U) {
             return false;
         }
+        if (command->argv[1][0] == '/') {
+            size_t external_size = 0;
+
+            if (!course_fs_size(&shell->fs, command->argv[1], &external_size)) {
+                set_command_success(command_success, false);
+                return append_str(out, out_size, &used, "exec: no such file\n");
+            }
+        }
         exec_command.argc = command->argc - 1U;
         for (i = 0; i < exec_command.argc; ++i) {
             copy_token(exec_command.argv[i],
@@ -1279,7 +1410,15 @@ static bool run_simple(course_shell_t* shell,
                        command->argv[i + 1U],
                        str_len(command->argv[i + 1U]));
         }
-        return run_program_command(shell, &exec_command, out, out_size);
+        if (!run_program_command(shell, &exec_command, out, out_size)) {
+            set_command_success(command_success, false);
+            if (command->argv[1][0] == '/') {
+                out[0] = '\0';
+                return append_str(out, out_size, &used, "exec: bad elf\n");
+            }
+            return false;
+        }
+        return true;
     }
 
     if (course_user_program_lookup(command->argv[0], &program)) {
@@ -1299,29 +1438,34 @@ static bool run_single_command_line_internal(course_shell_t* shell,
                                              size_t out_size,
                                              bool record_transcript,
                                              bool* command_success) {
-    course_shell_command_t command;
+    course_shell_command_t* command = 0;
     char* left_out = 0;
     const char* stdin_text = 0;
     bool ok = false;
+    bool result = false;
 
     if (shell == 0 || line == 0 || out == 0 || out_size == 0) {
         return false;
     }
     set_command_success(command_success, false);
     left_out = shell->line_output_scratch;
-
-    if (!course_shell_parse(line, &command) ||
-        (record_transcript && !transcript_append(shell, line))) {
+    command = acquire_command_scratch(shell);
+    if (command == 0) {
         return false;
     }
 
-    if (command.has_input_redirect) {
+    if (!course_shell_parse(line, command) ||
+        (record_transcript && !transcript_append(shell, line))) {
+        goto out;
+    }
+
+    if (command->has_input_redirect) {
         int fd = course_fd_open(&shell->fds,
-                                command.input_path,
+                                command->input_path,
                                 COURSE_FD_OPEN_READ);
 
         if (fd < 0) {
-            return false;
+            goto out;
         }
         ok = read_all_fd(&shell->fds,
                          fd,
@@ -1329,23 +1473,23 @@ static bool run_single_command_line_internal(course_shell_t* shell,
                          COURSE_SHELL_LINE_OUTPUT_SIZE);
         (void)course_fd_close(&shell->fds, fd);
         if (!ok) {
-            return false;
+            goto out;
         }
         stdin_text = left_out;
     }
 
-    if (command.pipeline_len == 0U) {
-        return false;
+    if (command->pipeline_len == 0U) {
+        goto out;
     }
-    if (command.pipeline_len == 1U) {
+    if (command->pipeline_len == 1U) {
         ok = run_simple(shell,
-                        &command.pipeline[0],
+                        &command->pipeline[0],
                         stdin_text,
                         out,
                         out_size,
                         command_success);
         if (!ok) {
-            return false;
+            goto out;
         }
     } else {
         char* stage_buffers[2] = {shell->line_output_scratch,
@@ -1353,7 +1497,7 @@ static bool run_single_command_line_internal(course_shell_t* shell,
         char* stage_input = (char*)stdin_text;
         size_t stage = 0;
 
-        for (stage = 0; stage < command.pipeline_len; ++stage) {
+        for (stage = 0; stage < command->pipeline_len; ++stage) {
             char* stage_output = stage_buffers[stage % 2U];
             const size_t stage_output_size = COURSE_SHELL_COMMAND_OUTPUT_SIZE;
 
@@ -1362,13 +1506,13 @@ static bool run_single_command_line_internal(course_shell_t* shell,
             }
 
             ok = run_simple(shell,
-                            &command.pipeline[stage],
+                            &command->pipeline[stage],
                             stage_input,
                             stage_output,
                             stage_output_size,
                             command_success);
             if (!ok) {
-                return false;
+                goto out;
             }
             stage_input = stage_output;
         }
@@ -1377,23 +1521,27 @@ static bool run_single_command_line_internal(course_shell_t* shell,
 
             out[0] = '\0';
             if (!append_str(out, out_size, &copied, stage_input)) {
-                return false;
+                goto out;
             }
         }
     }
-    if (command.has_output_redirect) {
+    if (command->has_output_redirect) {
         int fd = course_fd_open(&shell->fds,
-                                command.output_path,
+                                command->output_path,
                                 COURSE_FD_OPEN_CREATE | COURSE_FD_OPEN_WRITE);
         size_t len = str_len(out);
 
         if (fd < 0 ||
             course_fd_write(&shell->fds, fd, out, len) != (int)len ||
             course_fd_close(&shell->fds, fd) != COURSE_FD_OK) {
-            return false;
+            goto out;
         }
     }
-    return true;
+    result = true;
+
+out:
+    release_command_scratch(shell);
+    return result;
 }
 
 static bool course_shell_run_line_internal(course_shell_t* shell,

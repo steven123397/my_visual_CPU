@@ -124,6 +124,12 @@ int32_t course_process_exec(course_process_table_t* table,
                             uint32_t pid,
                             const char* program_name,
                             const char* argv);
+int32_t course_process_exec_image(course_process_table_t* table,
+                                  uint32_t pid,
+                                  const char* image_name,
+                                  const uint8_t* elf_image,
+                                  size_t elf_size,
+                                  const char* argv);
 bool course_process_record_crash(course_process_table_t* table,
                                  uint32_t pid,
                                  uintptr_t sepc,

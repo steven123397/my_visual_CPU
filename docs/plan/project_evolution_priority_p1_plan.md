@@ -18,6 +18,7 @@
   - [../design/wave6_jit_dbt_readiness_design.md](../design/wave6_jit_dbt_readiness_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
+  - [../design/course_os_real_user_elf_design.md](../design/course_os_real_user_elf_design.md)
   - [../design/post_wave7_frontend_lab_product_design.md](../design/post_wave7_frontend_lab_product_design.md)
 - 目标状态：
   - [../status/mainline_status.md](../status/mainline_status.md)
@@ -136,26 +137,40 @@ fallback coverage、可重复性能证据和 workload-level scheduler 边界。
 `cd myCPU && make -n test-fast-smoke test-standard-regression test-slow-guest test-opt-in-external`
 可解析；`git diff --check` 通过。
 
-### 任务 4：`course_os_shell` 外部 ELF 加载
+### 任务 4：`course_os_shell` 外部 ELF 加载 - 已完成
 
 **文件：**
-- 创建：按实现需要新增 guest unit fixture
+- 创建：
+  - `docs/design/course_os_real_user_elf_design.md`
 - 修改：
+  - `myCPU/guest/include/course_process.h`
+  - `myCPU/guest/kernel/course_process.c`
   - `myCPU/guest/kernel/course_user_programs.c`
-  - `myCPU/guest/include/course_user_programs.h`
   - `myCPU/guest/kernel/course_shell.c`
-  - `myCPU/guest/include/course_shell.h`
-  - `myCPU/tests/unit/user_program.c`
-  - `myCPU/tests/unit/kernel_alpha_common.c`
+  - `myCPU/tests/unit/course_os_stage2_shell.c`
+  - `myCPU/tests/unit/course_os_stage3_elf.c`
+  - `docs/plan/course_os_arch_followup_plan.md`
   - `docs/status/kernel_alpha_status.md`
 
-- [ ] **步骤 1：** 固定 `exec builtin-name` 旧行为和 `exec /path/to/prog` 新行为的解析
+- [x] **步骤 1：** 固定 `exec builtin-name` 旧行为和 `exec /path/to/prog` 新行为的解析
       合同。
-- [ ] **步骤 2：** 先补 guest/unit 红灯，覆盖合法 ELF、缺文件、非 ELF、权限/格式错误和
+- [x] **步骤 2：** 先补 guest/unit 红灯，覆盖合法 ELF、缺文件、非 ELF、权限/格式错误和
       参数传递。
-- [ ] **步骤 3：** 实现从课程 OS rootfs 或内置 FS 读取 ELF 的最小 loader 路径，不破坏
+- [x] **步骤 3：** 实现从课程 OS rootfs 或内置 FS 读取 ELF 的最小 loader 路径，不破坏
       现有 7 个内置程序。
-- [ ] **步骤 4：** 运行 course OS 相关单元测试和 guest demo，确认 summary marker 未漂移。
+- [x] **步骤 4：** 运行 course OS 相关单元测试和 guest demo，确认 summary marker 未漂移。
+
+**结果：** 本项与
+[course_os_arch_followup_plan.md](course_os_arch_followup_plan.md) 的任务 3 合并落地。`exec hello`
+和直接 `hello` 继续走内置课程 catalog；`exec /path/to/prog [arg]` 现在从课程 FS 读取小型
+RV64 `ET_EXEC` bytes，并复用 `course_process_exec_image()`、`course_elf_loader` 和课程
+process image 更新路径。缺文件 / 目录输出 `exec: no such file`；文件存在但不是合格 ELF 输出
+`exec: bad elf`；失败命令会阻断 `&&` 右侧命令。该路径不执行 host 任意路径，不接外部 rootfs，
+也不进入 `linux_compat_*`。
+
+**验证：** 已运行并通过 `cd myCPU && make test-unit-course_os_stage2_shell test-unit-course_os_stage3_elf`、
+`cd myCPU && make test`、`cd myCPU && make test-pipeline-guest-course_os_shell_demo test-pipeline-guest-kernel_alpha_demo`、
+`cd myCPU && make test-pipeline` 和 `git diff --check`。
 
 ### 任务 5：`kernel_alpha` 交互式观察面
 

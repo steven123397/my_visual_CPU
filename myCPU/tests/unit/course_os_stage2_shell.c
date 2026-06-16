@@ -1,8 +1,10 @@
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "../../guest/include/course_shell.h"
+#include "../../guest/include/course_user_programs.h"
 
 static int fail(const char* message) {
     fprintf(stderr, "%s\n", message);
@@ -11,6 +13,37 @@ static int fail(const char* message) {
 
 static bool contains(const char* haystack, const char* needle) {
     return strstr(haystack, needle) != NULL;
+}
+
+static void write_le64(uint8_t* image, size_t offset, uint64_t value) {
+    size_t i = 0;
+
+    for (i = 0; i < 8U; ++i) {
+        image[offset + i] = (uint8_t)((value >> (i * 8U)) & 0xFFU);
+    }
+}
+
+static bool install_external_elf(course_shell_t* shell,
+                                 const char* path,
+                                 const char* source_program,
+                                 uint64_t entry) {
+    course_user_program_t program;
+    uint8_t image[256];
+
+    if (shell == NULL ||
+        !course_user_program_lookup(source_program, &program) ||
+        program.elf_size > sizeof(image) ||
+        !course_fs_create(&shell->fs, path, false)) {
+        return false;
+    }
+    memcpy(image, program.elf_image, program.elf_size);
+    write_le64(image, 24U, entry);
+    write_le64(image, 80U, entry & ~UINT64_C(0xF));
+    return course_fs_write(&shell->fs,
+                           path,
+                           0U,
+                           (const char*)(const void*)image,
+                           program.elf_size);
 }
 
 static int test_parser_pipeline_and_redirection(void) {
@@ -290,6 +323,60 @@ static int test_ls_lists_directory_contents(void) {
     return 0;
 }
 
+static int test_exec_loads_external_elf_from_course_fs(void) {
+    static course_shell_t shell;
+    char out[1024];
+
+    course_shell_init(&shell);
+    if (!course_fs_mkdir(&shell.fs, "/demo") ||
+        !install_external_elf(&shell,
+                              "/demo/ext.elf",
+                              "hello",
+                              UINT64_C(0x40000004))) {
+        return fail("expected test fixture to install external ELF");
+    }
+
+    if (!course_shell_run_line(&shell,
+                               "exec /demo/ext.elf external-arg",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "program=/demo/ext.elf") ||
+        !contains(out, "entry=0x40000004") ||
+        !contains(out, "exit=0")) {
+        return fail("expected exec /path to load an external course ELF from FS");
+    }
+
+    if (!course_shell_run_line(&shell,
+                               "exec /demo/missing.elf && echo after",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "exec: no such file") ||
+        contains(out, "after\n")) {
+        return fail("expected missing external ELF to fail closed and stop && chain");
+    }
+
+    if (!course_fs_create(&shell.fs, "/demo/not-elf", false) ||
+        !course_fs_write(&shell.fs, "/demo/not-elf", 0U, "nope", 4U) ||
+        !course_shell_run_line(&shell,
+                               "exec /demo/not-elf && echo after",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "exec: bad elf") ||
+        contains(out, "after\n")) {
+        return fail("expected non-ELF file exec to fail closed and stop && chain");
+    }
+
+    if (!course_shell_run_line(&shell,
+                               "exec /demo",
+                               out,
+                               sizeof(out)) ||
+        !contains(out, "exec: no such file")) {
+        return fail("expected directory exec to fail closed");
+    }
+
+    return 0;
+}
+
 int main(void) {
     if (test_parser_pipeline_and_redirection() != 0 ||
         test_builtins_external_programs_and_transcript() != 0 ||
@@ -297,7 +384,8 @@ int main(void) {
         test_and_chain_uses_command_status_not_output_text() != 0 ||
         test_proc_shortcut_commands() != 0 ||
         test_kill_command_in_shell() != 0 ||
-        test_ls_lists_directory_contents() != 0) {
+        test_ls_lists_directory_contents() != 0 ||
+        test_exec_loads_external_elf_from_course_fs() != 0) {
         return 1;
     }
 

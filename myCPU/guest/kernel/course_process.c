@@ -482,26 +482,43 @@ int32_t course_process_exec(course_process_table_t* table,
                             uint32_t pid,
                             const char* program_name,
                             const char* argv) {
-    course_process_t* process = course_process_find(table, pid);
     course_user_program_t program;
+
+    if (course_process_find(table, pid) == 0) {
+        return COURSE_PROCESS_ERR_NO_PROCESS;
+    }
+    if (!course_user_program_lookup(program_name, &program)) {
+        return COURSE_PROCESS_ERR_NO_SUCH_PROGRAM;
+    }
+    return course_process_exec_image(table,
+                                     pid,
+                                     program.name,
+                                     program.elf_image,
+                                     program.elf_size,
+                                     argv);
+}
+
+int32_t course_process_exec_image(course_process_table_t* table,
+                                  uint32_t pid,
+                                  const char* image_name,
+                                  const uint8_t* elf_image,
+                                  size_t elf_size,
+                                  const char* argv) {
+    course_process_t* process = course_process_find(table, pid);
     course_elf_load_result_t load;
     size_t i = 0;
 
     if (process == 0) {
         return COURSE_PROCESS_ERR_NO_PROCESS;
     }
-    if (!course_user_program_lookup(program_name, &program)) {
-        return COURSE_PROCESS_ERR_NO_SUCH_PROGRAM;
-    }
-    if (course_elf_loader_load(program.elf_image,
-                               program.elf_size,
-                               argv,
-                               &load) != COURSE_ELF_OK) {
+    if (image_name == 0 || elf_image == 0 || elf_size == 0U ||
+        course_elf_loader_load(elf_image, elf_size, argv, &load) !=
+            COURSE_ELF_OK) {
         return COURSE_PROCESS_ERR_BAD_ELF;
     }
 
     release_process_user_pages(table, process);
-    copy_str(process->name, sizeof(process->name), program.name);
+    copy_str(process->name, sizeof(process->name), image_name);
     copy_str(process->argv, sizeof(process->argv), load.argv);
     process->abi = COURSE_PROCESS_ABI_COURSE;
     process->entry_pc = load.entry_pc;

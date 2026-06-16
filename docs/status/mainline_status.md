@@ -348,6 +348,12 @@ checkout 推进；本地工作区正式打开两条 `Post-Wave 7` 新主线，�
   `make -n` 解析。完整层级语义继续以
   [regression_completion_criteria.md](../design/regression_completion_criteria.md) 为准，
   不在 status 复制测试矩阵。
+- `PROJECT_EVOLUTION` P1 当前已完成任务 4：`course_os_shell` 外部 ELF 加载与课程
+  ELF 来源统一化合并落地。`exec /path/to/prog [arg]` 现在从课程 FS 读取受控小型 RV64
+  `ET_EXEC` 文件，并复用 `course_process_exec_image()`、`course_elf_loader` 和课程
+  process image 更新路径；内置 Stage 3 课程程序也已从共享占位 ELF 改成不同 entry /
+  code segment 的最小 ELF。该入口不执行 host 任意路径，不接外部 rootfs，也不进入
+  `linux_compat_*`。
 - `PROJECT_EVOLUTION` P1 当前已完成任务 6：前端 AI 自定义 workload 第一刀收敛为
   `POST /api/ai/custom-graph` 的 bounded task-spec facade。浏览器只提交
   `ai_custom_graph_v1` JSON、白名单 op sequence、`int8/int32` dtype、受控 shape 和 input

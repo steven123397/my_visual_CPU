@@ -27,6 +27,16 @@ static void write_le64(uint8_t* image, size_t offset, uint64_t value) {
     }
 }
 
+static bool load_program(const char* name,
+                         course_user_program_t* program,
+                         course_elf_load_result_t* load) {
+    return course_user_program_lookup(name, program) &&
+           course_elf_loader_load(program->elf_image,
+                                  program->elf_size,
+                                  name,
+                                  load) == COURSE_ELF_OK;
+}
+
 static int test_elf_catalog_and_loader_maps(void) {
     course_user_program_t program;
     course_elf_load_result_t load;
@@ -83,6 +93,48 @@ static int test_elf_catalog_and_loader_maps(void) {
     return 0;
 }
 
+static int test_stage3_program_images_are_distinct_real_elfs(void) {
+    static const char* names[] = {
+        "hello",
+        "echo",
+        "cat",
+        "forktest",
+        "crashdemo",
+    };
+    course_user_program_t programs[5];
+    course_elf_load_result_t loads[5];
+    size_t i = 0;
+    size_t j = 0;
+
+    for (i = 0; i < 5U; ++i) {
+        if (!load_program(names[i], &programs[i], &loads[i]) ||
+            programs[i].elf_image == NULL ||
+            programs[i].elf_size < 192U ||
+            loads[i].entry_pc != programs[i].entry_pc ||
+            loads[i].map_count < 4U ||
+            strcmp(loads[i].maps[0].name, "code") != 0 ||
+            strcmp(loads[i].maps[1].name, "data") != 0) {
+            return fail("expected every Stage 3 program to expose a valid distinct ELF load plan");
+        }
+    }
+
+    for (i = 0; i < 5U; ++i) {
+        for (j = i + 1U; j < 5U; ++j) {
+            if (programs[i].elf_image == programs[j].elf_image ||
+                programs[i].entry_pc == programs[j].entry_pc ||
+                loads[i].maps[0].start == loads[j].maps[0].start ||
+                (programs[i].elf_size == programs[j].elf_size &&
+                 memcmp(programs[i].elf_image,
+                        programs[j].elf_image,
+                        programs[i].elf_size) == 0)) {
+                return fail("expected Stage 3 programs to stop sharing one placeholder ELF image");
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int test_process_exec_uses_elf_without_mutating_on_bad_image(void) {
     course_process_table_t table;
     course_process_t* process = NULL;
@@ -111,6 +163,53 @@ static int test_process_exec_uses_elf_without_mutating_on_bad_image(void) {
         strcmp(process->name, "hello") != 0 ||
         strcmp(process->argv, "arg0") != 0) {
         return fail("expected bad ELF exec to leave current process image intact");
+    }
+
+    return 0;
+}
+
+static int test_process_exec_image_accepts_external_elf_bytes(void) {
+    course_process_table_t table;
+    course_process_t* process = NULL;
+    course_user_program_t program;
+    uint8_t image[256];
+
+    course_process_table_init(&table);
+    process = course_process_spawn(&table, 0U, "shell");
+    if (process == NULL ||
+        !course_user_program_lookup("hello", &program) ||
+        program.elf_size > sizeof(image)) {
+        return fail("expected process and source program for external exec image");
+    }
+    memcpy(image, program.elf_image, program.elf_size);
+    write_le64(image, 24U, 0x40000004U);
+    write_le64(image, 80U, 0x40000000U);
+
+    if (course_process_exec_image(&table,
+                                  process->pid,
+                                  "/demo/ext.elf",
+                                  image,
+                                  program.elf_size,
+                                  "external-arg") != COURSE_PROCESS_OK ||
+        strcmp(process->name, "/demo/ext.elf") != 0 ||
+        strcmp(process->argv, "external-arg") != 0 ||
+        process->entry_pc != 0x40000004U ||
+        process->map_count < 4U ||
+        strcmp(process->maps[0].name, "code") != 0) {
+        return fail("expected exec_image to populate process from external ELF bytes");
+    }
+
+    image[0] = 0;
+    if (course_process_exec_image(&table,
+                                  process->pid,
+                                  "/demo/bad.elf",
+                                  image,
+                                  program.elf_size,
+                                  "bad") != COURSE_PROCESS_ERR_BAD_ELF ||
+        strcmp(process->name, "/demo/ext.elf") != 0 ||
+        strcmp(process->argv, "external-arg") != 0 ||
+        process->entry_pc != 0x40000004U) {
+        return fail("expected bad external ELF image to leave process image intact");
     }
 
     return 0;
@@ -286,7 +385,9 @@ static int test_fixed_stage3_programs_are_available(void) {
 
 int main(void) {
     if (test_elf_catalog_and_loader_maps() != 0 ||
+        test_stage3_program_images_are_distinct_real_elfs() != 0 ||
         test_process_exec_uses_elf_without_mutating_on_bad_image() != 0 ||
+        test_process_exec_image_accepts_external_elf_bytes() != 0 ||
         test_process_fork_inherits_elf_maps() != 0 ||
         test_libc_wrappers_drive_syscall_and_fd_paths() != 0 ||
         test_wait_syscall_reaps_any_zombie_child() != 0 ||

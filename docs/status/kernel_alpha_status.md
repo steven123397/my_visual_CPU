@@ -13,10 +13,12 @@
   - [../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
   - [../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
   - [../design/course_os_scheduler_timing_contract.md](../design/course_os_scheduler_timing_contract.md)
+  - [../design/course_os_real_user_elf_design.md](../design/course_os_real_user_elf_design.md)
   - [../design/regression_completion_criteria.md](../design/regression_completion_criteria.md)
   - [../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前计划：
   - [../plan/course_os_arch_followup_plan.md](../plan/course_os_arch_followup_plan.md)
+  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
   - [../plan/course_os_plus_external_validation_plan.md](../plan/course_os_plus_external_validation_plan.md)
 - 相关状态：
   - [mainline_status.md](mainline_status.md)
@@ -81,6 +83,15 @@ Stage 1 / Stage 2 / Stage 3 summary，而是新增独立 `guest_course_os_shell_
 启动后进入 `course-os> ` prompt，并通过 `/console` 的 manifest / terminal / Lab workbench
 展示 Stage 3 已完成的课程 shell、FD / FS、procfs、ELF / libc、COW 和 crash isolation 能力。
 前端继续复用现有 debug session 和 UART terminal 合同，没有新增并行执行协议。
+
+2026-06-16 已完成课程 ELF 来源统一化第一刀。Stage 3 的 5 个课程用户程序现在使用不同
+entry / code segment 的最小 RV64 `ET_EXEC` bytes，不再共享一段占位 ELF；`course_process_exec()`
+保留为内置 catalog wrapper，内置课程程序和课程 FS 文件 ELF 统一复用
+`course_process_exec_image()`、`course_elf_loader` 和课程 process image 更新路径。
+`course-os> exec /path/to/prog [arg]` 现在能从课程 FS 读取受控 ELF 文件，成功输出
+`program=<path> entry=<hex> exit=<status>`，缺文件 / 目录和坏 ELF 均 fail-closed 并阻断
+`&&` 右侧命令。该能力不执行 host 任意路径，不依赖外部 rootfs 或交叉编译器，也不进入
+`linux_compat_*`。
 
 Stage 4 之后的 plus 方向已补充为独立设计边界：在本 myCPU 模拟器上继续扩展自写
 `kernel_alpha` 内核，尝试运行 testsuits-for-oskernel README 中涉及的 Linux 用户态程序。
@@ -281,6 +292,11 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
 
 ## 关键历史节点
 
+- `2026-06-16`
+  - 完成课程 ELF 来源统一化第一刀：5 个 Stage 3 课程程序改为不同的手写最小 RV64
+    `ET_EXEC` bytes，`exec /path` 可从课程 FS 读取受控 ELF 并复用课程 ELF / process
+    装载路径；缺文件、目录、非 ELF 和坏 entry 等失败场景 fail-closed，不进入
+    `linux_compat_*`。
 - `2026-06-12`
   - 完成 external rootfs opt-in 复验：真实 rootfs 首轮暴露 `/usr/bin/git` 动态加载器
     RELRO `mprotect(PROT_READ)` 子范围失败，本轮补 Linux compat VM low-effect 子范围
@@ -391,7 +407,9 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
 
 ## 当前仍然有效的风险 / 限制
 
-- 课程 OS 第三阶段仍是教学级满分基线，不声明完整 POSIX shell、完整信号语义、多级管道、真实磁盘一致性、journaling、完整 ELF 动态链接或通用 Linux 用户态兼容。
+- 课程 OS 第三阶段仍是教学级满分基线，不声明完整 POSIX shell、完整信号语义、真实磁盘一致性、journaling、完整 ELF 动态链接或通用 Linux 用户态兼容。
+- `course-os> exec /path` 只接受课程 FS 内的小型静态 RV64 `ET_EXEC` 文件；它不执行 host
+  任意路径，不接外部 rootfs，不默认依赖交叉编译器，也不证明 ELF 指令已经由真实 U-mode 执行。
 - COW Fork 当前优先覆盖课程级匿名用户页，不扩展到文件系统 snapshot 或完整文件页 COW。
 - AI/NPU、JIT/DBT、Pipeline-aware scheduling、微内核和安全隔离不进入 Stage 3 / Stage 4 完成范围。
 - Stage 4 `guest_course_os_shell_demo` 是课程级 shell 展示入口，不声明完整 POSIX shell、完整 Linux shell、job control 或通用用户态兼容。

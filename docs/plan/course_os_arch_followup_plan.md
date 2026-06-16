@@ -11,6 +11,7 @@
 - 边界设计：[../design/course_os_gap_closure_boundary_design.md](../design/course_os_gap_closure_boundary_design.md)
 - 课程 OS 基线设计：[../design/course_os_kernel_alpha_course_os_baseline_design.md](../design/course_os_kernel_alpha_course_os_baseline_design.md)
 - 调度 timing 合同：[../design/course_os_scheduler_timing_contract.md](../design/course_os_scheduler_timing_contract.md)
+- 课程 OS 真实用户 ELF 来源设计：[../design/course_os_real_user_elf_design.md](../design/course_os_real_user_elf_design.md)
 - 平台 MMIO 合同：[../design/platform_mmio_contract.md](../design/platform_mmio_contract.md)
 - 当前状态：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
 
@@ -68,19 +69,30 @@
 - [ ] **步骤 3：实现 interrupt mode。** 在 external interrupt handler 中读取 UART RX 字符并写入 console input buffer。
 - [ ] **步骤 4：验证。** 运行 `cd myCPU && make test-guest-course_os_shell_demo`；若改动 PLIC / trap 共享路径，再运行 `cd myCPU && make test-guest-kernel_alpha_demo`。
 
-### 任务 3：真实课程 ELF 用户程序（G5）
+### 任务 3：真实课程 ELF 用户程序（G5） - 已完成
 
 **文件：**
-- 新增或修改：`docs/design/course_os_real_user_elf_design.md`
+- 新增：`docs/design/course_os_real_user_elf_design.md`
+- 修改：`docs/plan/project_evolution_priority_p1_plan.md`
+- 修改：`docs/status/kernel_alpha_status.md`
+- 修改：`docs/index.md`
+- 修改：`myCPU/guest/include/course_process.h`
+- 修改：`myCPU/guest/kernel/course_process.c`
+- 修改：`myCPU/guest/kernel/course_shell.c`
 - 修改：`myCPU/guest/kernel/course_user_programs.c`
+- 修改：`myCPU/tests/unit/course_os_stage2_shell.c`
 - 修改：`myCPU/tests/unit/course_os_stage3_elf.c`
-- 可选新增：`myCPU/guest/programs/*`
-- 可选修改：`myCPU/Makefile`
 
-- [ ] **步骤 1：先补设计。** 在“手写最小 RV64 ELF”与“交叉编译器生成 ELF”之间选一条默认可复验路径；不能让默认回归依赖本机未声明工具链。
-- [ ] **步骤 2：补红灯回归。** 断言 5 个课程用户程序不是共用同一段占位 ELF，且 loader 能看到真实 `PT_LOAD` / entry 差异。
-- [ ] **步骤 3：替换课程用户程序资产。** 若使用工具链，生成步骤必须可重复；若使用手写 ELF，必须保留构造说明。
-- [ ] **步骤 4：验证。** 运行 `cd myCPU && make test-unit-course_os_stage3_elf test-guest-kernel_alpha_demo`。
+- [x] **步骤 1：先补设计。** 默认路径选择仓库内手写最小 RV64 `ET_EXEC`，不让默认回归依赖本机未声明交叉工具链；同时把 P1 的 `exec /path` 外部 ELF 合同合并到同一份设计中。
+- [x] **步骤 2：补红灯回归。** 断言 5 个课程用户程序不是共用同一段占位 ELF，且 loader 能看到真实 `PT_LOAD` / entry 差异；同时覆盖 `course_process_exec_image()` 和 shell `exec /path` 从课程 FS 读取 ELF。
+- [x] **步骤 3：替换课程用户程序资产。** 内置 Stage 3 catalog 改为 5 份不同的手写最小 RV64 ELF；`course_process_exec()` 变成 catalog wrapper，内置 ELF 和课程 FS 文件 ELF 统一进入 `course_process_exec_image()`。
+- [x] **步骤 4：验证。** 已运行并通过 `cd myCPU && make test-unit-course_os_stage2_shell test-unit-course_os_stage3_elf`、`cd myCPU && make test`、`cd myCPU && make test-pipeline-guest-course_os_shell_demo test-pipeline-guest-kernel_alpha_demo`、`cd myCPU && make test-pipeline` 和 `git diff --check`。
+
+完成标注（2026-06-16）：本项完成课程 ELF 来源统一化第一刀。5 个 Stage 3 课程程序现在有不同
+entry / code segment 的最小 RV64 `ET_EXEC` bytes；`course-os> exec /path/to/prog [arg]`
+能从课程 FS 中读取受控 ELF 文件并复用 `course_elf_loader` / `course_process` 装载路径。
+该能力不执行 host 任意路径，不依赖外部 rootfs 或交叉编译器，也不把 Linux compat 语义倒灌进
+课程 `course_*` 模块；坏 ELF、缺文件和目录路径按设计 fail-closed。
 
 ### 任务 4：多级管道（G8） - 已完成
 
@@ -96,7 +108,7 @@
 
 完成标注（2026-06-15）：shell parser 已切换为最多 8 级的 `pipeline[]`，多级管道执行通过双 scratch buffer
 逐级传递 stdout；单 stage 命令保留原有直接写 caller output 的语义，避免脚本模式递归执行时破坏输出汇总。
-本项只完成 G8，多级管道之外的任务 1 / 2 / 3 / 5 仍按本计划后续推进。
+本项只完成 G8；当前本计划仍未完成的任务是任务 1 在线抢占调度和任务 2 UART 中断驱动输入。
 
 ### 任务 5：context switch cost 证据（G9） - 已完成
 
