@@ -2,9 +2,9 @@
 
 myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系统模拟器。当前仓库已经是可运行的模拟器原型，不是纯设计稿：它能运行自制 guest 内核、交互式 monitor、`xv6-riscv` shell、Linux-facing probe，并通过浏览器 Lab 工作台观察 terminal、pipeline、寄存器、CSR、设备和 AI profile。
 
-当前实时状态、active line、近端 blocker 和下一步只看 [docs/status/mainline_status.md](docs/status/mainline_status.md)。课程结题材料集中放在 [docs/showcase](docs/showcase)。
+当前实时状态、active line、近端 blocker 和下一步只看 [docs/status/mainline_status.md](docs/status/mainline_status.md)。展示材料按 `course-os` / `simulator` 分目录放在 [docs/showcase](docs/showcase)。
 
-![myCPU Lab workbench](docs/showcase/ppt_screenshot_console_overview.png)
+![myCPU Lab workbench](docs/showcase/simulator/ppt_screenshot_console_overview.png)
 
 ## 当前定位
 
@@ -129,15 +129,19 @@ my_visual_CPU/
 - [docs/status/linux_distribution_platform_status.md](docs/status/linux_distribution_platform_status.md)：Post-Wave 7 标准 Linux 发行版平台状态。
 - [docs/status/npu_tpu_accelerator_status.md](docs/status/npu_tpu_accelerator_status.md)：AI accelerator / NPU-like 方向状态。
 - [docs/design/post_wave7_frontend_lab_product_design.md](docs/design/post_wave7_frontend_lab_product_design.md)：当前 Lab workbench 设计边界。
-- [docs/showcase/README.md](docs/showcase/README.md)：课程结题、PPT、讲稿、截图和展示页入口。
+- [docs/showcase/README.md](docs/showcase/README.md)：展示材料总入口，按 `course-os` / `simulator` 分目录维护。
+- [docs/showcase/course-os/README.md](docs/showcase/course-os/README.md)：本轮操作系统课程最终总结与展示入口。
+- [docs/showcase/simulator/README.md](docs/showcase/simulator/README.md)：原有模拟器结题展示入口。
 
 ## 展示材料
 
-课程结题和对外展示材料已经统一收口到 [docs/showcase](docs/showcase)：
+课程结题和对外展示材料已经统一收口到 [docs/showcase](docs/showcase)，并按主题拆分：
 
-- 结题 PPT：`docs/showcase/myCPU_结题汇报.pptx`
-- 十分钟演讲稿：`docs/showcase/myCPU_结题汇报_十分钟演讲稿.md`
-- 结题报告：`docs/showcase/结题报告-梁家琦-20231071332-电计2304.md`
-- HTML 预览页：`docs/showcase/preview.html`
+- 操作系统课程最终总结与展示入口：`docs/showcase/course-os/README.md`
+- 原有模拟器展示入口：`docs/showcase/simulator/README.md`
+- 结题 PPT：`docs/showcase/simulator/myCPU_结题汇报.pptx`
+- 十分钟演讲稿：`docs/showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md`
+- 结题报告：`docs/showcase/simulator/结题报告-梁家琦-20231071332-电计2304.md`
+- HTML 预览页：`docs/showcase/simulator/preview.html`
 
 这些材料只服务汇报与展示，不替代 `docs/status/mainline_status.md` 的实时工程事实。

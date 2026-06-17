@@ -35,7 +35,7 @@
 15. [design/course_os_uart_interrupt_input_design.md](design/course_os_uart_interrupt_input_design.md)
    课程 OS shell UART 中断驱动输入与轮询 fallback 设计。
 16. [showcase/README.md](showcase/README.md)
-   课程结题、PPT、讲稿、截图和演示材料入口。
+   展示材料总入口，按 `course-os` / `simulator` 分目录维护。
 
 历史设计和专项资料按专题读取即可。
 
@@ -82,7 +82,7 @@
   - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
   - [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
   - [design/ai_accelerator_linux_facing_contract_design.md](design/ai_accelerator_linux_facing_contract_design.md)
-  - [showcase/post_wave7_ai_demo_v1_guide.md](showcase/post_wave7_ai_demo_v1_guide.md)
+  - [showcase/simulator/post_wave7_ai_demo_v1_guide.md](showcase/simulator/post_wave7_ai_demo_v1_guide.md)
   - [plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
   - [plan/history_plan.md#post-wave7-ai-demo-v1-plan](plan/history_plan.md#post-wave7-ai-demo-v1-plan)
 
@@ -127,6 +127,7 @@
   - [design/course_os_preemptive_scheduler_design.md](design/course_os_preemptive_scheduler_design.md)
   - [design/course_os_scheduler_timing_contract.md](design/course_os_scheduler_timing_contract.md)
   - [design/course_os_real_user_elf_design.md](design/course_os_real_user_elf_design.md)
+  - [showcase/course-os/README.md](showcase/course-os/README.md)
   - [plan/history_plan.md#course-os-plus-external-validation-plan](plan/history_plan.md#course-os-plus-external-validation-plan)
   - [plan/history_plan.md#course-os-arch-followup-plan](plan/history_plan.md#course-os-arch-followup-plan)
   - [plan/history_plan.md#course-os-display-gap-closure-plan](plan/history_plan.md#course-os-display-gap-closure-plan)
@@ -158,9 +159,11 @@
 
 - `课程结题 / 展示`
   - [showcase/README.md](showcase/README.md)
-  - [showcase/preview.html](showcase/preview.html)
-  - [showcase/myCPU_结题汇报_十分钟演讲稿.md](showcase/myCPU_结题汇报_十分钟演讲稿.md)
-  - [showcase/结题报告-梁家琦-20231071332-电计2304.md](showcase/结题报告-梁家琦-20231071332-电计2304.md)
+  - [showcase/course-os/README.md](showcase/course-os/README.md)
+  - [showcase/simulator/README.md](showcase/simulator/README.md)
+  - [showcase/simulator/preview.html](showcase/simulator/preview.html)
+  - [showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md](showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md)
+  - [showcase/simulator/结题报告-梁家琦-20231071332-电计2304.md](showcase/simulator/结题报告-梁家琦-20231071332-电计2304.md)
 
 ## 目录说明
 
@@ -173,7 +176,7 @@
 - [plan](plan)
   活跃计划、模板和已完成归档。
 - [showcase](showcase)
-  项目展示材料、HTML 预览页、PPT、讲稿和展示截图。
+  项目展示材料总入口，按 `course-os` / `simulator` 分目录维护。
 
 ## 维护约束
 

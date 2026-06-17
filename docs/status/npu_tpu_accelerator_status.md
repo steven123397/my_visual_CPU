@@ -213,7 +213,7 @@
   `custom_dynamic_tiny_model` 这 4 条推荐正向样例，再验证 1 条 fail-closed 样例；
   `custom_tiny_attention_static` 保留为可选第五条正向 manifest，不作为默认脚本步骤。
 - `2026-05-07` 同日也把 `Demo V1` 的展示资产与最小验证矩阵补齐到正式文档：
-  `myCPU/workloads/ai_proto/README.md`、`docs/showcase/post_wave7_ai_demo_v1_guide.md`、
+  `myCPU/workloads/ai_proto/README.md`、`docs/showcase/simulator/post_wave7_ai_demo_v1_guide.md`、
   `docs/status/npu_tpu_accelerator_status.md` 与归档后的计划条目现在统一明确：
   本轮只展示 4 条 task-spec user-task 入口和 1 条 guest/host bridge workload，
   不误报任意模型上传、通用 compiler、Linux-facing driver 或更深性能模型已完成。

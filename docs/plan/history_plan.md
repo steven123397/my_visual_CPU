@@ -522,7 +522,7 @@
   `test-host-ai_accelerator_profile_smoke` 锁住固定样例、固定错误样例和脚本输出要点。
   本轮仍不开放任意模型上传、通用 compiler、Linux-facing NPU driver、
   `DMA + compute overlap`、tile scheduler 或 multi outstanding queue。
-- 结果参考：[post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[../showcase/post_wave7_ai_demo_v1_guide.md](../showcase/post_wave7_ai_demo_v1_guide.md)
+- 结果参考：[post_wave7_ai_user_tasks_npu_performance_design.md](../design/post_wave7_ai_user_tasks_npu_performance_design.md)、[npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)、[../showcase/simulator/post_wave7_ai_demo_v1_guide.md](../showcase/simulator/post_wave7_ai_demo_v1_guide.md)
 
 #### post-wave7-frontend-lab-completion-plan
 

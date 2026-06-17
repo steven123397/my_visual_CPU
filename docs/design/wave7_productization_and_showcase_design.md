@@ -8,7 +8,7 @@
 
 - `Wave 7` 为什么不是继续堆核心执行功能，而是把已有能力整理成可访问、可体验、可解释的产品形态。
 - 面向用户时，首页、控制台和产品文档应如何分工。
-- 首页如何从 [../showcase/preview.html](../showcase/preview.html) 演化成真正产品官网。
+- 首页如何从 [../showcase/simulator/preview.html](../showcase/simulator/preview.html) 演化成真正产品官网。
 - `frontend/` 控制台为什么最初会按 demo workspace 重新组织展示内容。
 - `Wave 7` 和 Post-Wave 7 新主线之间的边界。
 
@@ -44,7 +44,7 @@
 双后端、`interactive_os`、`xv6`、Linux checkpoint / probe、AI accelerator、向量 /
 ML workload、L1D / shadow cache、JIT / DBT opt-in 原型和完整回归门禁。技术能力已经足够支撑一次阶段性展示，但现有入口仍更像“开发者调试台 + 汇报预览页”。
 
-如果直接把当前 [../showcase/preview.html](../showcase/preview.html) 和 `frontend/`
+如果直接把当前 [../showcase/simulator/preview.html](../showcase/simulator/preview.html) 和 `frontend/`
 暴露到公网，用户需要自己理解 Makefile、workload、backend、marker、probe 和状态文档，体验成本偏高。`Wave 7` 的核心问题不是“再做一个功能”，而是把这些能力整理成一个通过域名可访问的产品化站点：
 
 ```text
@@ -104,7 +104,7 @@ Product Site
 
 #### 1. 首页
 
-首页从 [../showcase/preview.html](../showcase/preview.html) 演化，但不沿用“汇报 HTML 预览”的信息密度。推荐的叙事顺序是：
+首页从 [../showcase/simulator/preview.html](../showcase/simulator/preview.html) 演化，但不沿用“汇报 HTML 预览”的信息密度。推荐的叙事顺序是：
 
 1. **Hero / First View**
    - `myCPU`

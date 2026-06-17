@@ -260,6 +260,12 @@ guest path、loader / trace / exit 或 errno 诊断；本机 Alpine riscv64 ext4
 Linux compat Plus 外部验证口径，不进入 Stage 1-4 课程 OS 基线，也不新增浏览器 external
 rootfs route。
 
+2026-06-17 已完成 Course OS 最终总结入口收口。`docs/showcase/course-os/README.md`
+现在按课程设计要求对照、交互展示能力、架构增强、Linux compat Plus、OSComp / 外部验证
+和明确不声明边界六层组织全部 Course OS 相关成果；`docs/showcase/simulator/` 保留原有
+myCPU 模拟器展示材料。该入口服务总结与展示，不替代本文档、长期 design 或
+`history_plan.md` 的事实来源。
+
 2026-06-16 已完成架构后续计划中的 context switch cost 证据切片。该合同把 cycle 来源限定为
 离线 `course_scheduler_run()` 的 scheduler-local dispatch delta，不声明 QEMU / host /
 真实硬件 wall-clock latency；`course_scheduler_summary_t` 现在记录
@@ -470,7 +476,8 @@ UART debug / syscall diagnostic helper 已迁移到独立 `linux_compat_debug.c`
 
 ## 下一步
 
-1. OSComp basic 外部验证计划已归档；后续若扩大 `testsuits-for-oskernel` 覆盖面，应另起 trace-driven Plus 计划，仍不得写成 Stage 1-4 基线。
+1. Course OS 基线、展示前补洞、架构增强和 OSComp basic 外部验证均已收口；后续若扩大
+   `testsuits-for-oskernel` 覆盖面，应另起 trace-driven Plus 计划，仍不得写成 Stage 1-4 基线。
 2. Stage 12 再推进 virtio-net、socket、DNS、SSH / TLS 或最小 git remote path，目标放到 `git clone/push/pull`，不混入 Stage 11 v0 本地 workflow。
 3. Stage 13 再处理 `rustc` 大内存 / 重工具链闭环和稳定性，不把 Rust 编译成功作为 Stage 11 完成条件。
 4. 如果要把 Stage 11 v0 的 `gcc` shim 升级为完整 toolchain，应另起计划补真实 `cc1/as/ld` 子进程链、fd/env/cwd 继承、pipe、临时文件、signal / futex 和相关 VM / loader 语义。
