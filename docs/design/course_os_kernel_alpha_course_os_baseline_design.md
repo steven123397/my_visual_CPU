@@ -29,7 +29,7 @@ Stage 1-3 定义 `kernel_alpha_demo` 的一次性课程 OS summary smoke；Stage
   - [minimal_interactive_os_design.md](minimal_interactive_os_design.md)
 - 背景与创新来源：
   - [../background/操作系统课程设计-A方案-OS内核实现.md](../background/操作系统课程设计-A方案-OS内核实现.md)
-  - [../../OS_innovative_ideas.md](../../OS_innovative_ideas.md)
+  - [../showcase/course-os/course_os_technical_report.md](../showcase/course-os/course_os_technical_report.md)
 
 ## 总体边界
 

@@ -128,6 +128,7 @@
   - [design/course_os_scheduler_timing_contract.md](design/course_os_scheduler_timing_contract.md)
   - [design/course_os_real_user_elf_design.md](design/course_os_real_user_elf_design.md)
   - [showcase/course-os/README.md](showcase/course-os/README.md)
+  - [showcase/course-os/course_os_technical_report.md](showcase/course-os/course_os_technical_report.md)
   - [plan/history_plan.md#course-os-plus-external-validation-plan](plan/history_plan.md#course-os-plus-external-validation-plan)
   - [plan/history_plan.md#course-os-arch-followup-plan](plan/history_plan.md#course-os-arch-followup-plan)
   - [plan/history_plan.md#course-os-display-gap-closure-plan](plan/history_plan.md#course-os-display-gap-closure-plan)
@@ -160,6 +161,7 @@
 - `课程结题 / 展示`
   - [showcase/README.md](showcase/README.md)
   - [showcase/course-os/README.md](showcase/course-os/README.md)
+  - [showcase/course-os/course_os_technical_report.md](showcase/course-os/course_os_technical_report.md)
   - [showcase/simulator/README.md](showcase/simulator/README.md)
   - [showcase/simulator/preview.html](showcase/simulator/preview.html)
   - [showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md](showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md)
