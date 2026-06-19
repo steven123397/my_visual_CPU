@@ -17,6 +17,8 @@
    - [course_os_technical_report.md](course_os_technical_report.md) 按操作系统大赛设计文档风格整理
      Course OS 已实现内容，覆盖整体架构、内核基础、进程 / 内存 / 文件系统、shell、
      Linux compat Plus、OSComp 外部验证、验证体系和问题解决。
+   - [course_os_presentation_work_split.md](course_os_presentation_work_split.md) 面向三人 15 分钟
+     课程设计答辩，整理梁家琦、杨皓宇、余健超的讲述分工、交叉边界和对应源码。
 
 1. 课程设计要求对照
    - 进程管理：课程进程生命周期、syscall ABI、shell、管道、重定向、COW fork、crash
@@ -73,6 +75,7 @@
 ## 关联文档
 
 - [course_os_technical_report.md](course_os_technical_report.md)
+- [course_os_presentation_work_split.md](course_os_presentation_work_split.md)
 - [kernel_alpha_status.md](../../status/kernel_alpha_status.md)
 - [course_os_kernel_alpha_course_os_baseline_design.md](../../design/course_os_kernel_alpha_course_os_baseline_design.md)
 - [course_os_gap_closure_boundary_design.md](../../design/course_os_gap_closure_boundary_design.md)

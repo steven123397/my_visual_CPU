@@ -1,6 +1,6 @@
 # myCPU — RISC-V 系统模拟器原型
 
-myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系统模拟器。当前仓库已经是可运行的模拟器原型，不是纯设计稿：它能运行自制 guest 内核、交互式 monitor、`xv6-riscv` shell、Linux-facing probe，并通过浏览器 Lab 工作台观察 terminal、pipeline、寄存器、CSR、设备和 AI profile。
+myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系统模拟器。当前仓库已经是可运行的模拟器原型，不是纯设计稿：它能运行 Course OS 教学内核、浏览器终端 shell、交互式 monitor、`xv6-riscv` shell 和 Linux-facing probe，并通过浏览器 Lab 工作台观察 terminal、pipeline、寄存器、CSR、设备和 AI profile。
 
 当前实时状态、active line、近端 blocker 和下一步只看 [docs/status/mainline_status.md](docs/status/mainline_status.md)。展示材料按 `course-os` / `simulator` 分目录放在 [docs/showcase](docs/showcase)。
 
@@ -9,7 +9,7 @@ myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系�
 ## 当前定位
 
 - **参考优先**：共享 `InstructionSemantics + functional backend` 是 ISA 语义真值来源，`pipeline`、JIT/DBT 原型和前端观察面都围绕它对齐。
-- **系统级 bring-up**：已覆盖 M / S / U 特权级、CSR、trap、Sv39、TLB、UART、CLINT、PLIC、块设备和 `virtio-blk` 路径。
+- **系统级 bring-up**：已覆盖 M / S / U 特权级、CSR、trap、Sv39、TLB、UART、CLINT、PLIC、块设备和 `virtio-blk` 路径，并在其上收口 Course OS 课程操作系统展示主线。
 - **多后端执行**：`functional` 是正确性基线；`pipeline` 已具备 rename、ROB、LSQ 和最小真实 OoO execute；JIT/DBT 保持 opt-in 原型和 guardrail。
 - **可观察实验台**：`mycpu --debug-cli`、Node debug server 和浏览器 `/console` 组成 Lab workbench。
 - **Post-Wave 7 继续开发**：本地工作区已进入两条新主线：标准 Linux 发行版平台，以及用户自定义 AI 任务 / NPU 性能模型。
@@ -22,7 +22,7 @@ myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系�
 | 执行后端 | `functional` reference；`pipeline` 支持 rename / ROB / LSQ / OoO observation；JIT/DBT 为 opt-in harness |
 | 特权 / 内存 | M / S / U、trap delegation、`mret/sret`、Sv39、TLB、`sfence.vma`、page fault |
 | 平台设备 | UART、CLINT、PLIC、SimpleStorage、`virtio-blk`、MMIO AI accelerator |
-| Guest | `kernel_alpha` 课程 OS 主线入口、`interactive_os`、`xv6-riscv` shell、Linux-facing console/probe |
+| Guest | Course OS 教学内核与 `course-os> ` 浏览器 shell、`interactive_os`、`xv6-riscv` shell、Linux-facing console/probe |
 | Linux 发行版线 | 外部 Alpine / Debian rootfs 走 opt-in runtime 合同；仓库默认不携带真实 `Image/rootfs` |
 | AI 线 | task spec importer、bounded dynamic GEMM/CNN/tiny model、guest bridge、timed-simple profile summary |
 | 前端 | `/` 产品首页、`/console` Lab workbench、`/docs` 产品文档入口 |
@@ -106,9 +106,15 @@ SPIKE_PATH=/path/to/spike make test-host-spike_differential
 
 真实 Linux / 发行版 runtime 需要外部资产，仓库默认保持 fail-closed。相关环境变量和路线见 [docs/status/linux_distribution_platform_status.md](docs/status/linux_distribution_platform_status.md) 与 [deploy/README.md](deploy/README.md)。
 
-## kernel_alpha 口径
+## Course OS 口径
 
-`kernel_alpha` 当前是《操作系统课程设计》A 方案主线入口，不再以旧 Phase 1 `KMVPETDS` 正向输出作为当前能力承诺。当前正向 smoke 在基础 `K/M/V/P/E/T` bring-up 之后输出课程 OS Stage 1 / Stage 2 / Stage 3 summary；旧 `KMVPETDS` 仅作为历史 guardrail 记录，storage readiness / signature 合同由负向 demo 和 `kernel_alpha_*` 单元门禁继续覆盖。实时状态见 [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)。
+Course OS 是当前操作系统课程设计的展示主线，建立在 `kernel_alpha` bring-up、guest supervisor runtime 和浏览器 `/console` 终端之上。它已经从一次性内核 smoke 扩展为可交互、可观察、可回归的教学 OS 原型：
+
+- `kernel_alpha_demo` 负责基础 `K/M/V/P/E/T` bring-up 和课程 OS 正向 smoke，覆盖进程、调度、内存、文件系统、syscall、FD、ELF、同步和 `/proc` 证据面。
+- `guest_course_os_shell_demo` 提供常驻 `course-os> ` shell，可在浏览器终端中执行 `cpuinfo`、`schedstat`、`fsstat`、`sem`、`mutex`、`exec` 和受控 `linux ...` 命令。
+- Linux compat Plus 作为旁路验证能力存在，只用于最小 Linux 用户态兼容和 opt-in 外部验证，不替代课程 OS 主体，也不声明完整 Linux。
+
+旧 Phase 1 `KMVPETDS` 只作为历史 guardrail 记录；storage readiness / signature 合同仍由负向 demo 和 `kernel_alpha_*` 单元门禁覆盖。实时工程状态见 [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)，展示材料见 [docs/showcase/course-os/README.md](docs/showcase/course-os/README.md)。
 
 ## 仓库结构
 
@@ -131,6 +137,8 @@ my_visual_CPU/
 - [docs/design/post_wave7_frontend_lab_product_design.md](docs/design/post_wave7_frontend_lab_product_design.md)：当前 Lab workbench 设计边界。
 - [docs/showcase/README.md](docs/showcase/README.md)：展示材料总入口，按 `course-os` / `simulator` 分目录维护。
 - [docs/showcase/course-os/README.md](docs/showcase/course-os/README.md)：本轮操作系统课程最终总结与展示入口。
+- [docs/showcase/course-os/course_os_technical_report.md](docs/showcase/course-os/course_os_technical_report.md)：Course OS 技术报告。
+- [docs/showcase/course-os/course_os_presentation_work_split.md](docs/showcase/course-os/course_os_presentation_work_split.md)：三人汇报分工与源码对应关系。
 - [docs/showcase/simulator/README.md](docs/showcase/simulator/README.md)：原有模拟器结题展示入口。
 
 ## 展示材料
@@ -138,6 +146,8 @@ my_visual_CPU/
 课程结题和对外展示材料已经统一收口到 [docs/showcase](docs/showcase)，并按主题拆分：
 
 - 操作系统课程最终总结与展示入口：`docs/showcase/course-os/README.md`
+- Course OS 技术报告：`docs/showcase/course-os/course_os_technical_report.md`
+- 三人汇报分工与源码对应关系：`docs/showcase/course-os/course_os_presentation_work_split.md`
 - 原有模拟器展示入口：`docs/showcase/simulator/README.md`
 - 结题 PPT：`docs/showcase/simulator/myCPU_结题汇报.pptx`
 - 十分钟演讲稿：`docs/showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md`
