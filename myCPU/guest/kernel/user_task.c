@@ -1,5 +1,6 @@
 #include "user_task.h"
 
+/* 把进程描述符清空（无地址空间、无 region）。 */
 static void clear_user_task_process(user_task_t* user_task) {
     size_t i = 0;
 
@@ -15,31 +16,37 @@ static void clear_user_task_process(user_task_t* user_task) {
     }
 }
 
+/* 是否处于可 create 状态（无地址空间且进程未绑定）。 */
 static bool user_task_create_ready(const user_task_t* user_task) {
     return user_task != NULL && user_task->address_space == NULL &&
            user_task->process.address_space == NULL;
 }
 
+/* user_task 是否已创建（有地址空间且进程已绑定）。 */
 static bool user_task_created(const user_task_t* user_task) {
     return user_task != NULL &&
            user_task->address_space != NULL &&
            user_task->process.address_space == user_task->address_space;
 }
 
+/* 取可写进程指针（未创建返回 NULL）。 */
 static vm_process_t* user_task_process_mut(user_task_t* user_task) {
     return user_task_created(user_task) ? &user_task->process : NULL;
 }
 
+/* 取只读进程指针（未创建返回 NULL）。 */
 static const vm_process_t* user_task_process_view(const user_task_t* user_task) {
     return user_task_created(user_task) ? &user_task->process : NULL;
 }
 
+/* 释放 runtime：活跃则先 deactivate。 */
 static bool user_task_release_runtime(user_task_t* user_task) {
     return user_task != NULL &&
            (!trap_user_runtime_is_active(&user_task->runtime) ||
             trap_user_runtime_deactivate(&user_task->runtime));
 }
 
+/* 复位进程并销毁地址空间。 */
 static bool user_task_release_process_and_address_space(user_task_t* user_task) {
     vm_address_space_t* address_space = NULL;
     vm_process_t* process = user_task_process_mut(user_task);

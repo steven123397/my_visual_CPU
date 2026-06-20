@@ -3,6 +3,9 @@
 #include "course_fd.h"
 #include "timer.h"
 
+/* procfs 是 Course OS 的只读观测面：所有节点都即时格式化，不保存独立文件内容。 */
+
+/* 判断两个 C 字符串是否完全相等。 */
 static bool str_eq(const char* a, const char* b) {
     size_t i = 0;
 
@@ -18,6 +21,7 @@ static bool str_eq(const char* a, const char* b) {
     return a[i] == b[i];
 }
 
+/* 向 out 追加一个字符并保持 NUL 结尾，越界返回 false。 */
 static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     if (out == NULL || used == NULL || *used + 1U >= out_size) {
         return false;
@@ -29,6 +33,7 @@ static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     return true;
 }
 
+/* 向 out 追加字符串。 */
 static bool append_str(char* out,
                        size_t out_size,
                        size_t* used,
@@ -48,6 +53,7 @@ static bool append_str(char* out,
     return true;
 }
 
+/* 向 out 追加无符号 32 位十进制。 */
 static bool append_u32(char* out,
                        size_t out_size,
                        size_t* used,
@@ -73,6 +79,7 @@ static bool append_u32(char* out,
     return true;
 }
 
+/* 向 out 追加带符号 32 位十进制（负数加前导 '-'）。 */
 static bool append_i32(char* out,
                        size_t out_size,
                        size_t* used,
@@ -90,6 +97,7 @@ static bool append_i32(char* out,
     return append_u32(out, out_size, used, magnitude);
 }
 
+/* 追加一行 key=value\n（u32）。 */
 static bool append_key_value_u32(char* out,
                                  size_t out_size,
                                  size_t* used,
@@ -101,6 +109,7 @@ static bool append_key_value_u32(char* out,
            append_char(out, out_size, used, '\n');
 }
 
+/* 追加一行 key=value\n（i32）。 */
 static bool append_key_value_i32(char* out,
                                  size_t out_size,
                                  size_t* used,
@@ -112,6 +121,7 @@ static bool append_key_value_i32(char* out,
            append_char(out, out_size, used, '\n');
 }
 
+/* 把一段纯数字文本解析成 u32。 */
 static bool parse_u32_component(const char* text,
                                 size_t len,
                                 uint32_t* out_value) {
@@ -131,6 +141,7 @@ static bool parse_u32_component(const char* text,
     return true;
 }
 
+/* 在进程表里按 pid 查活跃进程（只读）。 */
 static const course_process_t* find_const_process(
     const course_process_table_t* table,
     uint32_t pid) {
@@ -151,6 +162,7 @@ static const course_process_t* find_const_process(
     return NULL;
 }
 
+/* 输出 /proc/ps：有进程表时列进程状态，否则回退到调度任务。 */
 static bool read_ps(const procfs_t* procfs, char* out, size_t out_size) {
     course_scheduler_summary_t summary;
     course_scheduler_task_stats_t stats[COURSE_SCHEDULER_MAX_TASKS];
@@ -158,6 +170,7 @@ static bool read_ps(const procfs_t* procfs, char* out, size_t out_size) {
     size_t i = 0;
 
     if (procfs->processes != NULL) {
+        /* 有真实课程进程表时，/proc/ps 优先展示进程状态而不是离线调度任务。 */
         for (i = 0; i < COURSE_PROCESS_MAX_PROCESSES; ++i) {
             const course_process_t* process =
                 course_process_at(procfs->processes, i);
@@ -199,6 +212,7 @@ static bool read_ps(const procfs_t* procfs, char* out, size_t out_size) {
         return false;
     }
 
+    /* 没有进程表的早期 smoke 使用 scheduler task 作为兼容输出。 */
     for (i = 0; i < procfs->scheduler->task_count; ++i) {
         if (!append_str(out, out_size, &used, "pid=") ||
             !append_u32(out, out_size, &used, stats[i].pid) ||
@@ -216,6 +230,7 @@ static bool read_ps(const procfs_t* procfs, char* out, size_t out_size) {
     return true;
 }
 
+/* 输出 /proc/meminfo：页框/缺页/回收统计。 */
 static bool read_meminfo(const procfs_t* procfs, char* out, size_t out_size) {
     course_memory_stats_t stats;
     size_t used = 0;
@@ -236,6 +251,7 @@ static bool read_meminfo(const procfs_t* procfs, char* out, size_t out_size) {
                                 stats.page_reclaims);
 }
 
+/* 输出 /proc/schedstat：策略、上下文切换、平均等待/周转与各策略运行次数。 */
 static bool read_schedstat(const procfs_t* procfs, char* out, size_t out_size) {
     course_scheduler_summary_t summary;
     size_t used = 0;
@@ -300,6 +316,7 @@ static bool read_schedstat(const procfs_t* procfs, char* out, size_t out_size) {
                summary.policy_runs[COURSE_SCHED_POLICY_CFS_LITE]);
 }
 
+/* 输出 /proc/fsstat：文件系统 CRUD 与 B 树索引统计。 */
 static bool read_fsstat(const procfs_t* procfs, char* out, size_t out_size) {
     course_fs_stats_t stats;
     size_t used = 0;
@@ -380,6 +397,7 @@ static bool read_fsstat(const procfs_t* procfs, char* out, size_t out_size) {
                                 stats.max_depth);
 }
 
+/* 输出 /proc/syscalls：syscall 总数、失败与每条调用计数。 */
 static bool read_syscalls(const procfs_t* procfs, char* out, size_t out_size) {
     course_syscall_stats_t stats;
     size_t used = 0;
@@ -417,6 +435,7 @@ static bool read_syscalls(const procfs_t* procfs, char* out, size_t out_size) {
     return true;
 }
 
+/* 输出 /proc/cow：COW 映射/共享/复制/节省页数与泄漏判定。 */
 static bool read_cow(const procfs_t* procfs, char* out, size_t out_size) {
     course_process_cow_stats_t stats;
     size_t used = 0;
@@ -466,6 +485,7 @@ static bool read_cow(const procfs_t* procfs, char* out, size_t out_size) {
            append_char(out, out_size, &used, '\n');
 }
 
+/* 输出 /proc/crashlog：最近一次崩溃进程的异常上下文。 */
 static bool read_crashlog(const procfs_t* procfs, char* out, size_t out_size) {
     size_t i = 0;
     size_t used = 0;
@@ -508,6 +528,7 @@ static bool read_crashlog(const procfs_t* procfs, char* out, size_t out_size) {
            append_char(out, out_size, &used, '\n');
 }
 
+/* 输出 /proc/cpuinfo：ISA、后端、阶段与 timer 频率。 */
 static bool read_cpuinfo(const procfs_t* procfs, char* out, size_t out_size) {
     size_t used = 0;
 
@@ -518,6 +539,7 @@ static bool read_cpuinfo(const procfs_t* procfs, char* out, size_t out_size) {
            append_key_value_u32(out, out_size, &used, "timer_hz", TIMER_HZ);
 }
 
+/* 输出 /proc/uptime：由调度统计派生的 ticks 计数。 */
 static bool read_uptime(const procfs_t* procfs, char* out, size_t out_size) {
     size_t used = 0;
     uint32_t ticks = 1U;
@@ -532,6 +554,7 @@ static bool read_uptime(const procfs_t* procfs, char* out, size_t out_size) {
     return append_key_value_u32(out, out_size, &used, "ticks", ticks);
 }
 
+/* 输出 /proc/<pid>/status：进程 pid/ppid/状态/退出码/崩溃标记。 */
 static bool read_pid_status(const procfs_t* procfs,
                             uint32_t pid,
                             char* out,
@@ -567,6 +590,7 @@ static bool read_pid_status(const procfs_t* procfs,
            append_char(out, out_size, &used, '\n');
 }
 
+/* 把 FD kind 枚举转成展示字符串。 */
 static const char* fd_kind_name(course_fd_kind_t kind) {
     switch (kind) {
     case COURSE_FD_KIND_STDIO:
@@ -581,6 +605,7 @@ static const char* fd_kind_name(course_fd_kind_t kind) {
     }
 }
 
+/* 按 pid 解析对应 FD 表：优先 resolver 回调，其次直接绑定的表。 */
 static const course_fd_table_t* resolve_fd_table(const procfs_t* procfs,
                                                  uint32_t pid) {
     if (procfs == NULL || pid == 0U) {
@@ -595,6 +620,7 @@ static const course_fd_table_t* resolve_fd_table(const procfs_t* procfs,
     return NULL;
 }
 
+/* 输出 /proc/<pid>/fd：列出该进程已打开的 FD 与路径。 */
 static bool read_pid_fd(const procfs_t* procfs,
                         uint32_t pid,
                         char* out,
@@ -633,6 +659,7 @@ static bool read_pid_fd(const procfs_t* procfs,
     return true;
 }
 
+/* 输出 /proc/<pid>/maps：列出该进程的 ELF 映射段。 */
 static bool read_pid_maps(const procfs_t* procfs,
                           uint32_t pid,
                           char* out,
@@ -662,6 +689,7 @@ static bool read_pid_maps(const procfs_t* procfs,
     return process->map_count > 0U;
 }
 
+/* 解析 /proc/<pid>/{status,fd,maps} 路径并分发到对应 reader。 */
 static bool read_pid_node(const procfs_t* procfs,
                           const char* path,
                           char* out,

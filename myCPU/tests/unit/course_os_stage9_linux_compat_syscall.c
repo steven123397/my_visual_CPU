@@ -1,3 +1,4 @@
+/* Linux compat Stage9 syscall 单测：验证 Linux ABI 子集、trace 和错误码转换。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

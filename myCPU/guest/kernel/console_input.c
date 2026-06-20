@@ -5,10 +5,12 @@
 #include "console.h"
 #include "platform.h"
 
+/* 字节是否为可显示 ASCII。 */
 static bool console_input_is_visible_ascii(uint8_t ch) {
     return ch >= 0x20U && ch <= 0x7eU;
 }
 
+/* UART RX 就绪时读一个字节到 out。 */
 static bool console_input_read_uart_byte(uint8_t* out_ch) {
     if (out_ch == 0 || platform_uart_rx_ready() == 0U) {
         return false;
@@ -17,6 +19,7 @@ static bool console_input_read_uart_byte(uint8_t* out_ch) {
     return true;
 }
 
+/* 复位当前行缓冲与溢出标记（不动 RX 环形缓冲）。 */
 static void console_input_reset_line(console_input_state_t* state) {
     if (state == NULL) {
         return;
@@ -28,6 +31,7 @@ static void console_input_reset_line(console_input_state_t* state) {
     state->rx_overflow = false;
 }
 
+/* 复位 RX 环形缓冲的 head/tail/count。 */
 static void console_input_reset_rx(console_input_state_t* state) {
     if (state == NULL) {
         return;
@@ -39,6 +43,7 @@ static void console_input_reset_rx(console_input_state_t* state) {
     state->rx_overflow = false;
 }
 
+/* 从 RX 环形缓冲弹出一个字节。 */
 static bool console_input_pop_interrupt_byte(console_input_state_t* state,
                                              uint8_t* out_ch) {
     if (state == NULL || out_ch == 0 || state->rx_count == 0U) {
@@ -51,12 +56,14 @@ static bool console_input_pop_interrupt_byte(console_input_state_t* state,
     return true;
 }
 
+/* 取下一个字节：优先从环形缓冲弹，否则直接读 UART。 */
 static bool console_input_read_next_byte(console_input_state_t* state,
                                          uint8_t* out_ch) {
     return console_input_pop_interrupt_byte(state, out_ch) ||
            console_input_read_uart_byte(out_ch);
 }
 
+/* 处理一个字节：回车收行、退格删字符、可显示字符入行，并回显。 */
 static console_input_poll_result_t console_input_accept_byte(
     console_input_state_t* state,
     uint8_t ch) {

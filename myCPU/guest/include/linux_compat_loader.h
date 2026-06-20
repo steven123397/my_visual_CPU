@@ -6,6 +6,7 @@
 
 #include "linux_compat.h"
 
+/* Linux compat ELF load plan：只描述如何映射 ELF，实际映射由 exec/vm 层执行。 */
 #define LINUX_COMPAT_MAX_LOAD_SEGMENTS 8U
 #define LINUX_COMPAT_DYN_LOAD_BIAS UINT64_C(0x40000000)
 #define LINUX_COMPAT_INTERP_LOAD_BIAS UINT64_C(0x50000000)
@@ -39,6 +40,7 @@ typedef struct LinuxCompatLoadPlan {
     char diagnostic[LINUX_COMPAT_MAX_MESSAGE];
 } linux_compat_load_plan_t;
 
+/* 解析 ELF 镜像，输出 load plan（段映射、入口、栈顶、argv/envp/auxv 计数）。 */
 linux_compat_result_t linux_compat_build_load_plan(
     const uint8_t* image,
     size_t image_size,

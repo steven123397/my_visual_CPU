@@ -71,6 +71,7 @@ struct VmAddressSpace {
     vm_user_region_t* user_regions[VM_MAX_USER_REGIONS];
 };
 
+/* 以下为 Sv39 页表位运算与参数校验的内联小工具，供 vm_*.c 共享；均为纯函数式检查，无副作用。 */
 static inline size_t vpn_index(uintptr_t vaddr, unsigned level) {
     return (size_t)((vaddr >> (SV39_PAGE_SHIFT + level * SV39_LEVEL_BITS)) &
                     (SV39_LEVEL_ENTRIES - 1U));
@@ -291,25 +292,35 @@ static inline bool fault_range_allows_access(uint64_t flags, uint64_t cause) {
     }
 }
 
+/* 内部：从地址空间用户区表里摘除指定 region（不清理 region 描述符）。 */
 bool vm_address_space_unregister_user_region_internal(
     vm_address_space_t* address_space,
     vm_user_region_t* region);
+/* 分配一个全 0 的 4KB 物理页。 */
 void* alloc_zeroed_page(void);
+/* 在地址空间里把一页 vaddr→paddr 映射写进 Sv39 页表。 */
 bool map_page_internal(vm_address_space_t* address_space,
                        uintptr_t vaddr,
                        uintptr_t paddr,
                        uint64_t flags);
+/* 清除 vaddr 对应页表项的有效位。 */
 bool unmap_page_internal(vm_address_space_t* address_space, uintptr_t vaddr);
+/* vaddr 当前是否可映射（无冲突且未占用）。 */
 bool can_map_page(vm_address_space_t* address_space, uintptr_t vaddr);
+/* 当前地址空间已开启分页时刷新 TLB。 */
 void flush_tlb_if_enabled(void);
+/* 解析对象 offset 对应页的物理地址，匿名对象可按 create 决定是否分配。 */
 bool object_resolve_page(vm_object_t* object,
                          size_t offset,
                          bool create,
                          uintptr_t* out_paddr);
+/* region 与对象+offset 是否兼容（描述符有效且区间合法）。 */
 bool region_object_compatible(const vm_user_region_t* region,
                               const vm_object_t* object,
                               size_t object_offset);
+/* 清掉 region 覆盖页的映射，changed 反映是否真的改动。 */
 bool clear_region_page_mappings(vm_user_region_t* region, bool* changed);
+/* 把对象页逐页映射进 region（带回滚）。 */
 bool map_region_object_pages(vm_user_region_t* region,
                              vm_object_t* object,
                              size_t object_offset);

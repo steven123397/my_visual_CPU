@@ -8,15 +8,18 @@
 
 static vm_address_space_t address_space_pool[VM_MAX_ADDRESS_SPACES];
 
+/* 分配一个全 0 的页表页并按 uint64 数组返回。 */
 static uint64_t* alloc_table_page(void) {
     return (uint64_t*)alloc_zeroed_page();
 }
 
+/* 地址空间是否已分配且有根页表。 */
 static bool address_space_storage_ready(const vm_address_space_t* address_space) {
     return address_space != NULL && address_space->allocated &&
            address_space->root_table != NULL;
 }
 
+/* 区间是否与已登记的 fault range 集合重叠。 */
 static bool range_overlaps_fault_ranges(const struct VmFaultRange* ranges,
                                         size_t count,
                                         uintptr_t vaddr,
@@ -38,6 +41,7 @@ static bool range_overlaps_fault_ranges(const struct VmFaultRange* ranges,
     return false;
 }
 
+/* 区间是否与任何已注册用户区重叠。 */
 static bool range_overlaps_user_regions(const vm_address_space_t* address_space,
                                         uintptr_t vaddr,
                                         size_t size) {
@@ -62,6 +66,7 @@ static bool range_overlaps_user_regions(const vm_address_space_t* address_space,
     return false;
 }
 
+/* 区间是否与内核 mapping / fault range 集合重叠。 */
 static bool range_overlaps_kernel_globals(const vm_address_space_t* address_space,
                                           uintptr_t vaddr,
                                           size_t size) {
@@ -79,6 +84,7 @@ static bool range_overlaps_kernel_globals(const vm_address_space_t* address_spac
                                        size);
 }
 
+/* 区间是否落在已知平台 MMIO 窗口（UART/CLINT/PLIC/Storage/AI）。 */
 static bool range_is_platform_mmio(uintptr_t vaddr, size_t size) {
     return range_within_window(vaddr, size, UART_BASE, UART_BASE + MEMORY_PAGE_SIZE) ||
            range_within_window(vaddr, size, CLINT_BASE, CLINT_BASE + CLINT_SIZE) ||
@@ -93,6 +99,7 @@ static bool range_is_platform_mmio(uintptr_t vaddr, size_t size) {
                                AI_ACCEL_BASE + MEMORY_PAGE_SIZE);
 }
 
+/* 在 fault range 数组里找一个空闲槽位。 */
 static struct VmFaultRange* find_free_fault_range_slot(struct VmFaultRange* ranges,
                                                        size_t count) {
     size_t i = 0;
@@ -106,6 +113,7 @@ static struct VmFaultRange* find_free_fault_range_slot(struct VmFaultRange* rang
     return NULL;
 }
 
+/* 找一个空闲的用户区指针槽位。 */
 static vm_user_region_t** find_free_user_region_slot(vm_address_space_t* address_space) {
     size_t i = 0;
 
@@ -122,6 +130,7 @@ static vm_user_region_t** find_free_user_region_slot(vm_address_space_t* address
     return NULL;
 }
 
+/* 按指针等值找到用户区所在的槽位。 */
 static vm_user_region_t** find_address_space_region_slot(
     vm_address_space_t* address_space,
     const vm_user_region_t* region) {
@@ -140,6 +149,7 @@ static vm_user_region_t** find_address_space_region_slot(
     return NULL;
 }
 
+/* 校验并登记用户区到地址空间（含重叠/边界检查），成功后置 registered。 */
 static bool register_user_region(vm_address_space_t* address_space,
                                  vm_user_region_t* region) {
     vm_user_region_t** slot = NULL;
@@ -168,6 +178,7 @@ static bool register_user_region(vm_address_space_t* address_space,
     return true;
 }
 
+/* 把 fault range 数组整批标记为无效。 */
 static void clear_fault_ranges(struct VmFaultRange* ranges, size_t count) {
     size_t i = 0;
 
@@ -180,6 +191,7 @@ static void clear_fault_ranges(struct VmFaultRange* ranges, size_t count) {
     }
 }
 
+/* 把 fault action 数组整批标记为无效并复位动作。 */
 static void clear_fault_actions(struct VmFaultActionRule* actions, size_t count) {
     size_t i = 0;
 
@@ -193,6 +205,7 @@ static void clear_fault_actions(struct VmFaultActionRule* actions, size_t count)
     }
 }
 
+/* 把用户区指针表清空。 */
 static void clear_user_region_slots(vm_user_region_t** user_regions, size_t count) {
     size_t i = 0;
 
@@ -201,6 +214,7 @@ static void clear_user_region_slots(vm_user_region_t** user_regions, size_t coun
     }
 }
 
+/* 清空地址空间的全部跟踪表（mapping/fault range/action/用户区槽）。 */
 static void initialize_address_space_tracking(vm_address_space_t* address_space) {
     if (address_space == NULL) {
         return;
@@ -213,6 +227,7 @@ static void initialize_address_space_tracking(vm_address_space_t* address_space)
     clear_user_region_slots(address_space->user_regions, VM_MAX_USER_REGIONS);
 }
 
+/* 装配地址空间描述符：置 allocated、记录根表、组装 satp、清跟踪表。 */
 static void initialize_address_space(vm_address_space_t* address_space,
                                      uint64_t* root_table) {
     if (address_space == NULL || root_table == NULL) {
@@ -230,6 +245,7 @@ static void initialize_address_space(vm_address_space_t* address_space,
     initialize_address_space_tracking(address_space);
 }
 
+/* 把地址空间描述符复位到未分配状态并清跟踪表。 */
 static void reset_address_space(vm_address_space_t* address_space) {
     if (address_space == NULL) {
         return;
@@ -243,6 +259,7 @@ static void reset_address_space(vm_address_space_t* address_space) {
     initialize_address_space_tracking(address_space);
 }
 
+/* 递归释放页表页：清非叶表项并递归下层，最后归还当前表页。 */
 static bool free_table_pages_recursive(uint64_t* table, unsigned level) {
     size_t i = 0;
     bool ok = true;
@@ -269,6 +286,7 @@ static bool free_table_pages_recursive(uint64_t* table, unsigned level) {
     return pmm_free_page(table) && ok;
 }
 
+/* 逐页映射一段区间，先全量预检可映射性，失败时回滚已映射页。 */
 static bool map_range_pages_internal(vm_address_space_t* address_space,
                                      uintptr_t vaddr,
                                      uintptr_t paddr,
@@ -309,6 +327,7 @@ static bool map_range_pages_internal(vm_address_space_t* address_space,
     return true;
 }
 
+/* 映射一段内核全局区并登记到 kernel_mappings，成功后刷新 TLB。 */
 static bool map_kernel_global_range(vm_address_space_t* address_space,
                                     uintptr_t vaddr,
                                     uintptr_t paddr,
@@ -340,6 +359,7 @@ static bool map_kernel_global_range(vm_address_space_t* address_space,
     return true;
 }
 
+/* 校验 kernel fault range 参数：内核/MMIO 窗口、flags、无重叠。 */
 static bool kernel_fault_range_args_valid(const vm_address_space_t* address_space,
                                           uintptr_t vaddr,
                                           uintptr_t paddr,
@@ -356,6 +376,7 @@ static bool kernel_fault_range_args_valid(const vm_address_space_t* address_spac
            !range_overlaps_user_regions(address_space, vaddr, size);
 }
 
+/* 校验后从 kernel_fault_ranges 里预留一个空槽并返回（不写内容）。 */
 static struct VmFaultRange* reserve_kernel_fault_range(
     vm_address_space_t* address_space,
     uintptr_t vaddr,
@@ -370,6 +391,7 @@ static struct VmFaultRange* reserve_kernel_fault_range(
                                       VM_MAX_KERNEL_FAULT_RANGES);
 }
 
+/* 把 vaddr/paddr/size/flags 写进 fault range 槽位。 */
 static void write_fault_range_record(struct VmFaultRange* record,
                                      uintptr_t vaddr,
                                      uintptr_t paddr,
@@ -386,6 +408,7 @@ static void write_fault_range_record(struct VmFaultRange* record,
     record->flags = flags;
 }
 
+/* 预留并写入一段 kernel fault range。 */
 static bool register_kernel_fault_range(vm_address_space_t* address_space,
                                         uintptr_t vaddr,
                                         uintptr_t paddr,

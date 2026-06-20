@@ -1,3 +1,5 @@
+// 调试 HTTP 服务器：路由分发、鉴权、自定义 ELF 解析、静态文件服务，
+// session/AI/测试接口的实际业务逻辑委托给 runtime/ai_service/tests_manifest 等模块。
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
@@ -32,10 +34,12 @@ class HttpError extends Error {
   }
 }
 
+// 构造并返回带状态码的 HttpError 实例。
 function httpError(statusCode, code, message) {
   return new HttpError(statusCode, code, message);
 }
 
+// 写入 JSON 响应并结束 HTTP 连接。
 function json(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
     'content-type': 'application/json; charset=utf-8',
@@ -44,6 +48,7 @@ function json(response, statusCode, payload, headers = {}) {
   response.end(JSON.stringify(payload));
 }
 
+// 读取并解析请求体为 JSON 对象。
 async function readBody(request) {
   let body = '';
   for await (const chunk of request) {
@@ -52,6 +57,7 @@ async function readBody(request) {
   return body ? JSON.parse(body) : {};
 }
 
+// 按扩展名返回静态文件的 MIME 类型。
 function contentTypeFor(filePath) {
   if (filePath.endsWith('.html')) {
     return 'text/html; charset=utf-8';
@@ -74,6 +80,7 @@ function contentTypeFor(filePath) {
   return 'text/plain; charset=utf-8';
 }
 
+// 将路径名映射到静态 HTML 入口。
 function staticRouteFor(pathname) {
   if (pathname === '/') {
     return '/home.html';
@@ -87,6 +94,7 @@ function staticRouteFor(pathname) {
   return pathname;
 }
 
+// 安全校验后读取并返回静态文件。
 async function serveStatic(response, pathname, headers = {}) {
   const relative = staticRouteFor(pathname);
   if (relative.startsWith('/source/docs/')) {
@@ -115,6 +123,7 @@ async function serveStatic(response, pathname, headers = {}) {
   }
 }
 
+// 受限读取并返回 docs 目录的 md 文件。
 async function serveSourceDoc(response, pathname, headers = {}) {
   const trimmed = pathname.replace(/^\/source\/docs\/+/, '');
   const filePath = path.join(docsRoot, trimmed);
@@ -131,6 +140,7 @@ async function serveSourceDoc(response, pathname, headers = {}) {
   }
 }
 
+// 受限读取并返回 showcase 的 png 资源。
 async function serveShowcaseAsset(response, pathname, headers = {}) {
   const trimmed = pathname.replace(/^\/source\/showcase\/+/, '');
   const filePath = path.join(showcaseRoot, trimmed);
@@ -147,6 +157,7 @@ async function serveShowcaseAsset(response, pathname, headers = {}) {
   }
 }
 
+// 执行 action 并统一包装成功/错误响应。
 async function respondWithAction(response, action, headers = {}) {
   try {
     json(response, 200, await action(), headers);
@@ -160,6 +171,7 @@ async function respondWithAction(response, action, headers = {}) {
   }
 }
 
+// 解析环境变量得到自定义 ELF 大小上限。
 function parseCustomElfMaxBytes() {
   const raw = process.env[customElfMaxBytesEnv];
   if (!raw) {
@@ -171,6 +183,7 @@ function parseCustomElfMaxBytes() {
     : defaultCustomElfMaxBytes;
 }
 
+// 解析允许的自定义 ELF 根目录列表。
 function customElfAllowedRoots() {
   const configured = (process.env[customElfRootsEnv] ?? '')
     .split(path.delimiter)
@@ -180,17 +193,20 @@ function customElfAllowedRoots() {
   return configured.length > 0 ? configured : [repoRoot];
 }
 
+// 判断文件路径是否位于根目录内（防越界）。
 function isInsideRoot(filePath, root) {
   const relative = path.relative(root, filePath);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+// 清洗 ELF 文件名只保留安全字符。
 function sanitizeElfName(rawName, fallback = 'custom.elf') {
   const base = path.basename(String(rawName || fallback));
   const sanitized = base.replace(/[^A-Za-z0-9._-]/g, '_');
   return sanitized.length > 0 ? sanitized : fallback;
 }
 
+// 组装自定义 ELF 的元数据对象。
 function customElfMetadata(source, name) {
   return {
     source,
@@ -199,6 +215,7 @@ function customElfMetadata(source, name) {
   };
 }
 
+// 构造自定义 ELF 的 manifest 条目。
 function customElfEntry({ image, name, source }) {
   return {
     name: `custom_${source}_${name}`,
@@ -225,6 +242,7 @@ function customElfEntry({ image, name, source }) {
   };
 }
 
+// 校验文件头四字节是否为 ELF 魔数。
 async function assertElfMagic(filePath) {
   let handle = null;
   try {
@@ -245,6 +263,7 @@ async function assertElfMagic(filePath) {
   }
 }
 
+// 校验缓冲区头四字节是否为 ELF 魔数。
 function assertElfBufferMagic(buffer) {
   if (
     buffer.length < 4 ||
@@ -257,6 +276,7 @@ function assertElfBufferMagic(buffer) {
   }
 }
 
+// 校验并解析本地路径形式自定义 ELF。
 async function resolveCustomElfPath(rawPath) {
   if (typeof rawPath !== 'string' || rawPath.length === 0) {
     throw httpError(400, 'custom_elf_path_required', 'custom ELF path is required');
@@ -291,6 +311,7 @@ async function resolveCustomElfPath(rawPath) {
   };
 }
 
+// 解码 base64 并落盘为临时自定义 ELF。
 async function resolveCustomElfBase64(body) {
   const raw = body?.elfBase64;
   if (typeof raw !== 'string' || raw.length === 0) {
@@ -312,6 +333,7 @@ async function resolveCustomElfBase64(body) {
   };
 }
 
+// 根据 body 解析会话加载入口条目。
 async function resolveSessionLoadEntry(body, tests) {
   if (typeof body?.elfPath === 'string' && body.elfPath.length > 0) {
     return resolveCustomElfPath(body.elfPath);
@@ -331,6 +353,7 @@ async function resolveSessionLoadEntry(body, tests) {
   };
 }
 
+// 创建并启动调试 HTTP 服务器（含路由、鉴权、WebSocket、runtime）。
 export async function startServer({
   host = '127.0.0.1',
   port = 4173,

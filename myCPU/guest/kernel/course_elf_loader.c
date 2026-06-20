@@ -1,5 +1,8 @@
 #include "course_elf_loader.h"
 
+/* 课程 ELF loader 实现：解析最小 RV64 ET_EXEC + PT_LOAD 子集，并产出 maps/stack 摘要。
+   它不直接搬运段内容，只为 course_process_exec_image 提供可验证的进程映像元数据。 */
+
 #define ELF64_EHDR_SIZE 64U
 #define ELF64_PHDR_SIZE 56U
 #define ELF_MAGIC0 0x7FU
@@ -16,11 +19,13 @@
 #define PF_W 2U
 #define COURSE_ELF_DEFAULT_ENVP "PATH=/bin"
 
+/* 按小端读取 2 字节。 */
 static uint16_t read_le16(const uint8_t* image, size_t offset) {
     return (uint16_t)image[offset] |
            (uint16_t)((uint16_t)image[offset + 1U] << 8U);
 }
 
+/* 按小端读取 4 字节。 */
 static uint32_t read_le32(const uint8_t* image, size_t offset) {
     return (uint32_t)image[offset] |
            ((uint32_t)image[offset + 1U] << 8U) |
@@ -28,11 +33,13 @@ static uint32_t read_le32(const uint8_t* image, size_t offset) {
            ((uint32_t)image[offset + 3U] << 24U);
 }
 
+/* 按小端读取 8 字节。 */
 static uint64_t read_le64(const uint8_t* image, size_t offset) {
     return (uint64_t)read_le32(image, offset) |
            ((uint64_t)read_le32(image, offset + 4U) << 32U);
 }
 
+/* 把 load 结果清零，用于出错回滚或初始化。 */
 static void clear_load(course_elf_load_result_t* load) {
     size_t i = 0;
     size_t j = 0;
@@ -61,6 +68,7 @@ static void clear_load(course_elf_load_result_t* load) {
     }
 }
 
+/* 安全拷贝字符串到定长缓冲并补 NUL。 */
 static void copy_str(char* out, size_t out_size, const char* value) {
     size_t i = 0;
 
@@ -76,6 +84,7 @@ static void copy_str(char* out, size_t out_size, const char* value) {
     out[i] = '\0';
 }
 
+/* 向 load 结果追加一段映射摘要，满了或区间非法则失败。 */
 static bool add_map(course_elf_load_result_t* load,
                     const char* name,
                     uintptr_t start,
@@ -136,6 +145,7 @@ course_elf_result_t course_elf_loader_load(const uint8_t* image,
         return COURSE_ELF_ERR_UNSUPPORTED;
     }
 
+    /* 从这里开始所有 offset/数量都必须先通过边界检查，避免坏 ELF 读越界。 */
     entry = read_le64(image, (size_t)entry_offset);
     phoff = read_le64(image, (size_t)phoff_offset);
     ehsize = read_le16(image, (size_t)ehsize_offset);
@@ -166,6 +176,7 @@ course_elf_result_t course_elf_loader_load(const uint8_t* image,
         if (p_type != PT_LOAD) {
             continue;
         }
+        /* filesz 必须落在镜像内，memsz 可大于 filesz，用于表示 BSS。 */
         if (p_memsz < p_filesz || p_offset > image_size ||
             p_filesz > (uint64_t)image_size - p_offset ||
             p_vaddr == 0U || p_memsz == 0U ||
@@ -207,6 +218,7 @@ course_elf_result_t course_elf_loader_load(const uint8_t* image,
         heap_start = (uintptr_t)entry;
     }
     heap_start = (heap_start + 0xFFFU) & ~(uintptr_t)0xFFFU;
+    /* loader 固定补 heap/stack 两段，让 procfs maps 和用户程序 smoke 都有完整布局。 */
     if (!add_map(out_load,
                  "heap",
                  heap_start,

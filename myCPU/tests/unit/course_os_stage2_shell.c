@@ -1,3 +1,4 @@
+/* Stage2 shell 单测：覆盖 parser、内建命令、管道、重定向和脚本执行。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

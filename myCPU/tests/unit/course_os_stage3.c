@@ -1,3 +1,4 @@
+/* Course OS Stage3 汇总单测：确认 ELF/libc、同步、COW、脚本和 procfs marker。 */
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

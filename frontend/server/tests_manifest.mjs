@@ -1,3 +1,4 @@
+// 测试/工作流 manifest 构建：组装 asm/guest/linux 全量测试条目、Linux console 诊断与展示元数据。
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -20,6 +21,7 @@ const linuxConsoleBoot = Object.freeze({
 const linuxConsolePrimaryEnv = 'MYCPU_LINUX_PROTO_CONSOLE_IMAGE';
 const linuxConsoleFallbackEnv = 'MYCPU_LINUX_PROTO_RUNTIME_IMAGE';
 
+// 从 Makefile 解析 ASM_TESTS 测试名并缓存结果。
 function parseAsmTestsFromMakefile(myCpuRoot) {
   const cacheKey = myCpuRoot;
   if (asmTestsCache.has(cacheKey)) {
@@ -38,6 +40,7 @@ function parseAsmTestsFromMakefile(myCpuRoot) {
   return asmTests;
 }
 
+// 构造一个 guest 类型测试条目对象（含磁盘模式）。
 function guestEntry(myCpuRoot, name, diskMode = 'none', imageName = null) {
   const withDisk = diskMode !== 'none';
   const resolvedImageName = imageName ?? name.replace(/^guest_/, '');
@@ -55,6 +58,7 @@ function guestEntry(myCpuRoot, name, diskMode = 'none', imageName = null) {
   };
 }
 
+// 为条目叠加菜单标签/标题/徽章等展示元数据。
 function withPresentation(entry, presentation = {}) {
   return {
     ...entry,
@@ -66,6 +70,7 @@ function withPresentation(entry, presentation = {}) {
   };
 }
 
+// 为条目叠加终端 prompt 与运行预算元数据。
 function withTerminalMetadata(entry, {
   prompt,
   bootMaxSteps,
@@ -106,6 +111,7 @@ function withTerminalMetadata(entry, {
   );
 }
 
+// 从主/备环境变量解析 Linux console 镜像路径。
 function resolveLinuxConsoleConfig() {
   if (process.env[linuxConsolePrimaryEnv]) {
     return {
@@ -122,6 +128,7 @@ function resolveLinuxConsoleConfig() {
   return null;
 }
 
+// 检查 Linux console 镜像就绪状态并返回诊断（env/路径/可读性）。
 export function linuxConsoleDiagnostic() {
   const config = resolveLinuxConsoleConfig();
   if (!config) {
@@ -177,6 +184,7 @@ export function linuxConsoleDiagnostic() {
   };
 }
 
+// 构建受控 Linux 串口 console 的测试条目（gated runtime route）。
 function linuxConsoleEntry(myCpuRoot, diagnostic) {
   if (!diagnostic.ready) {
     return null;
@@ -243,6 +251,7 @@ function linuxConsoleEntry(myCpuRoot, diagnostic) {
   );
 }
 
+// 构建 Stage 11 host-only 工作流命令清单。
 function stage11HostOnlyWorkflowManifest() {
   return {
     enabled: true,
@@ -304,6 +313,7 @@ function stage11HostOnlyWorkflowManifest() {
   };
 }
 
+// 组装 asm/guest/linux 全量测试 manifest 并返回（含 diagnostics 与展示元数据）。
 export function listTests(repoRoot) {
   const myCpuRoot = path.join(repoRoot, 'myCPU');
   const linuxConsole = linuxConsoleDiagnostic();

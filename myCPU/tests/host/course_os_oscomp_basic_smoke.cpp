@@ -9,6 +9,9 @@
 #include "../../src/debug/debug_budget.h"
 #include "../../src/debug/debug_session.h"
 
+// Host-only opt-in OSComp 基础 smoke：只有显式提供外部 rootfs 环境变量时才运行。
+// 默认 make test 不应依赖 testsuits checkout 或外部 rootfs；本测试负责输出清晰诊断。
+
 namespace {
 
 constexpr const char* kOscompBasicShellElf =
@@ -75,6 +78,7 @@ bool expect_real_exec_or_fail_closed(const std::string& output,
         output.find("unsupported") != std::string::npos ||
         output.find("loader reason=") != std::string::npos;
 
+    // 外部资产差异较大：命令可以真实执行成功，也可以 fail-closed，但必须带诊断。
     if (output.find("exec=real") != std::string::npos) {
         if (!expect_contains(output,
                              "trace_count=",
@@ -229,6 +233,7 @@ void print_input_contract() {
         std::exit(1);
     }
 
+    // 先打印 resolved path，便于 CI 或本地复现确认实际使用的资产。
     const std::filesystem::path rootfs_path(rootfs);
     std::fprintf(stderr,
                  "OSComp basic resolved rootfs=%s\n",
@@ -280,6 +285,7 @@ int main(int argc, char** argv) {
         {"linux-compat: path=/bin/busybox", "busybox should resolve /bin/busybox"},
         {"course-os> ", "busybox help should return to prompt"},
     };
+    // 子集选择保守：busybox help/echo、git -h、缺失路径诊断，不覆盖网络或完整包管理器。
     if (!run_shell_command(session,
                            offset,
                            "linux /bin/busybox --help\r",

@@ -1,3 +1,4 @@
+/* Course OS 在线抢占调度单测：验证 timer tick 驱动的 READY/RUNNING 切换。 */
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

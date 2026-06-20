@@ -8,6 +8,9 @@
 #include "linux_compat_vm.h"
 #include "runtime_context.h"
 
+/* Linux compat Plus 主入口：提供保守 Linux 用户态 ABI 子集和 fail-closed 诊断。
+   它是 Course OS 的可选外部验证旁路，不改变 course_* 教学 ABI。 */
+
 #ifndef LINUX_COMPAT_TRACE_DEBUG_UART
 #define LINUX_COMPAT_TRACE_DEBUG_UART 0
 #endif
@@ -34,6 +37,7 @@ typedef struct LinuxCompatRunScratch {
  * Keep the large load/runtime scratch in .bss so the guest shell does not
  * corrupt adjacent state before the real U-mode path even starts.
  */
+/* run 主流程的 scratch 单例（避免栈上大缓冲）。 */
 static linux_compat_run_scratch_t g_linux_compat_run_scratch;
 
 static const uint8_t k_stage11_gcc_output_elf[] = {
@@ -162,6 +166,7 @@ static bool str_eq(const char* a, const char* b) {
     return a[i] == b[i];
 }
 
+/* 判断 exec request 是否带完整 U-mode 上下文（可真实进入用户态）。 */
 static bool request_has_real_exec_context(
     const linux_compat_exec_request_t* request) {
     return request != 0 &&
@@ -173,9 +178,11 @@ static bool request_has_real_exec_context(
            request->trap_stack_size != 0U;
 }
 
+/* 只有可执行条目且带完整 U-mode 上下文时才尝试真实进入用户态。 */
 static bool request_wants_real_exec(
     const linux_compat_exec_request_t* request,
     const linux_compat_rootfs_entry_t* entry) {
+    /* 只有可执行文件且调用方传入完整 U-mode 上下文时，才尝试真实进入用户态。 */
     return request_has_real_exec_context(request) && entry != 0 &&
            entry->executable;
 }
@@ -315,6 +322,7 @@ static bool append_rootfs_source_line(char* out,
            append_char(out, out_size, used, '\n');
 }
 
+/* load plan 的 ELF 类型名（EXEC/DYN）。 */
 static const char* load_plan_type_name(const linux_compat_load_plan_t* plan) {
     if (plan != 0 && plan->elf_type == 3U) {
         return "dyn";
@@ -322,6 +330,7 @@ static const char* load_plan_type_name(const linux_compat_load_plan_t* plan) {
     return "exec";
 }
 
+/* load plan 的 loader 名（builtin interp / 无 interp）。 */
 static const char* load_plan_loader_name(const linux_compat_load_plan_t* plan) {
     if (plan != 0 && plan->elf_type == 3U) {
         return "dynamic";
@@ -329,6 +338,7 @@ static const char* load_plan_loader_name(const linux_compat_load_plan_t* plan) {
     return "static";
 }
 
+/* 把 load plan 摘要追加到输出（类型/loader/段/interp 等）。 */
 static bool append_load_plan_summary(char* out,
                                      size_t out_size,
                                      size_t* used,
@@ -367,6 +377,7 @@ static bool append_load_plan_summary(char* out,
                           plan != 0 ? (uint64_t)plan->auxv_count : 0U);
 }
 
+/* 把 syscall 号转成展示名（read/write/openat/...）。 */
 static const char* linux_compat_syscall_name(uint64_t number) {
     switch (number) {
         case LINUX_COMPAT_TRACE_USER_FAULT:
@@ -466,6 +477,7 @@ static const char* linux_compat_syscall_name(uint64_t number) {
     }
 }
 
+/* 把最近一次 trace 记录汇总成文本追加到输出。 */
 static bool append_trace_summary(char* out,
                                  size_t out_size,
                                  size_t* used,
@@ -476,6 +488,7 @@ static bool append_trace_summary(char* out,
     if (!append_str(out, out_size, used, " trace=")) {
         return false;
     }
+    /* trace 是外部 smoke 的核心诊断：即便失败，也必须说明最后一个 syscall/errno/pc。 */
     if (runtime == 0 || runtime->trace_count == 0U) {
         return append_str(out, out_size, used, "none");
     }
@@ -547,6 +560,7 @@ static bool append_trace_summary(char* out,
     return true;
 }
 
+/* 把用户态异常摘要追加到输出。 */
 static bool append_user_fault_summary(char* out,
                                       size_t out_size,
                                       size_t* used,
@@ -572,6 +586,7 @@ static bool append_user_fault_summary(char* out,
                           (uint64_t)runtime->user_fault_tval);
 }
 
+/* 把 exec 命令摘要追加到输出。 */
 static bool append_command_summary(char* out,
                                    size_t out_size,
                                    size_t* used,
@@ -628,6 +643,7 @@ static bool append_command_summary(char* out,
            append_u64_hex(out, out_size, used, (uint64_t)last->pc);
 }
 
+/* 给 load plan 的所有地址加上 load_bias（重新基址化）。 */
 static bool rebase_load_plan(linux_compat_load_plan_t* plan,
                              uint64_t new_load_bias) {
     uint64_t old_load_bias = 0;
@@ -717,6 +733,7 @@ static void write_u64_le(uint8_t* out, size_t offset, uint64_t value) {
     }
 }
 
+/* 按 Linux stat ABI 填 128 字节 stat 缓冲。 */
 static void fill_linux_stat_abi(uint8_t out[128],
                                 const linux_compat_stat_t* stat) {
     uint64_t blocks = 0;
@@ -743,6 +760,7 @@ static bool linux_compat_write_stat_result(linux_compat_runtime_t* runtime,
                                            linux_compat_stat_t* buffer,
                                            const linux_compat_stat_t* stat);
 
+/* 从 rootfs 节点填充 entry 描述符。 */
 static void fill_entry_from_node(linux_compat_rootfs_entry_t* entry,
                                  const linux_compat_rootfs_node_t* node) {
     if (entry == 0) {
@@ -758,6 +776,7 @@ static void fill_entry_from_node(linux_compat_rootfs_entry_t* entry,
     entry->executable = node->executable;
 }
 
+/* 从 overlay 条目填充 entry 描述符（外部 rootfs 覆盖）。 */
 static void fill_entry_from_overlay(linux_compat_rootfs_entry_t* entry,
                                     const linux_compat_overlay_node_t* node) {
     if (entry == 0) {
@@ -773,6 +792,7 @@ static void fill_entry_from_overlay(linux_compat_rootfs_entry_t* entry,
     entry->executable = node->executable;
 }
 
+/* 从 rootfs 节点填充 stat 描述符。 */
 static void fill_stat_from_node(linux_compat_stat_t* stat,
                                 const linux_compat_rootfs_node_t* node) {
     if (stat == 0) {
@@ -791,6 +811,7 @@ static void fill_stat_from_node(linux_compat_stat_t* stat,
     stat->executable = node->executable;
 }
 
+/* 按路径在 rootfs 节点表里查找。 */
 static const linux_compat_rootfs_node_t* find_node(const char* path) {
     size_t i = 0;
 
@@ -808,6 +829,7 @@ static const linux_compat_rootfs_node_t* find_node(const char* path) {
     return 0;
 }
 
+/* 若 child 是 parent 的直接子项，拷出它的 basename。 */
 static bool copy_basename_if_child(const char* parent,
                                    const char* child,
                                    char* out,
@@ -863,6 +885,7 @@ static void copy_bytes(uint8_t* out, const uint8_t* in, size_t length) {
     }
 }
 
+/* 从用户态缓冲读一段路径到内核缓冲。 */
 static bool linux_compat_read_user_buffer(const linux_compat_runtime_t* runtime,
                                           const void* buffer,
                                           void* out,
@@ -882,6 +905,7 @@ static bool linux_compat_read_user_buffer(const linux_compat_runtime_t* runtime,
     return true;
 }
 
+/* 路径是否含 `..` 父级引用（安全检查）。 */
 static bool path_has_parent_reference(const char* path) {
     size_t i = 0;
 
@@ -903,6 +927,7 @@ static bool path_has_parent_reference(const char* path) {
     return false;
 }
 
+/* 跳过路径开头的 `./` 前缀。 */
 static const char* skip_dot_slash_prefixes(const char* path) {
     if (path == 0) {
         return "";
@@ -913,6 +938,7 @@ static const char* skip_dot_slash_prefixes(const char* path) {
     return path;
 }
 
+/* 按 runtime cwd 解析相对路径成绝对路径。 */
 static bool resolve_runtime_path(const linux_compat_runtime_t* runtime,
                                  const char* raw_path,
                                  char* out,
@@ -955,6 +981,7 @@ static bool resolve_runtime_path(const linux_compat_runtime_t* runtime,
     return true;
 }
 
+/* 从用户态拷入路径并做安全检查。 */
 static bool linux_compat_copy_in_path(const linux_compat_runtime_t* runtime,
                                       const char* path,
                                       char* out,
@@ -1023,6 +1050,7 @@ static uint64_t read_u64_le(const uint8_t* image, size_t offset) {
     return value;
 }
 
+/* 清空 ELF info 摘要。 */
 static void clear_elf_info(linux_compat_elf_info_t* info) {
     if (info == 0) {
         return;
@@ -1061,6 +1089,7 @@ linux_compat_result_t linux_compat_lookup(
     return LINUX_COMPAT_ERR_NO_SUCH_FILE;
 }
 
+/* 路径是否含 `/`（区分命令名与路径）。 */
 static bool path_contains_slash(const char* value) {
     size_t i = 0;
 
@@ -1076,12 +1105,14 @@ static bool path_contains_slash(const char* value) {
     return false;
 }
 
+/* fallback 命令名是否在白名单内。 */
 static bool fallback_name_allowed(const char* value) {
     return str_eq(value, "busybox") || str_eq(value, "git") ||
            str_eq(value, "vim") || str_eq(value, "gcc") ||
            str_eq(value, "rustc");
 }
 
+/* fallback 命令的规范化前缀目录。 */
 static const char* fallback_canonical_prefix(const char* value) {
     if (str_eq(value, "busybox")) {
         return "/bin/";
@@ -1093,6 +1124,7 @@ static const char* fallback_canonical_prefix(const char* value) {
     return 0;
 }
 
+/* 拼一个路径候选（prefix + name）。 */
 static bool build_path_candidate(char* out,
                                  size_t out_size,
                                  const char* prefix,
@@ -1377,6 +1409,7 @@ const char* linux_compat_runtime_cwd(const linux_compat_runtime_t* runtime) {
     return runtime->cwd;
 }
 
+/* exec 前复位 runtime 状态（fd/VM/进程表）。 */
 static void linux_compat_runtime_reset_for_exec(
     linux_compat_runtime_t* runtime) {
     size_t i = 0;
@@ -1447,6 +1480,7 @@ static void linux_compat_runtime_reset_for_exec(
     }
 }
 
+/* 从 trace 环形缓冲预留一条记录槽位。 */
 static linux_compat_syscall_trace_record_t* reserve_trace_record(
     linux_compat_runtime_t* runtime) {
     size_t i = 0;
@@ -1468,6 +1502,7 @@ static linux_compat_syscall_trace_record_t* reserve_trace_record(
     return &runtime->trace_records[LINUX_COMPAT_MAX_TRACE_RECORDS - 1U];
 }
 
+/* 提交最近预留的 trace 记录。 */
 static void commit_latest_trace_record(
     linux_compat_runtime_t* runtime,
     const linux_compat_syscall_trace_record_t* record) {
@@ -2979,6 +3014,7 @@ static int64_t linux_compat_ioctl(linux_compat_runtime_t* runtime,
     }
 }
 
+/* 把结果缓冲写回用户态。 */
 static bool linux_compat_write_result_buffer(linux_compat_runtime_t* runtime,
                                              void* buffer,
                                              const void* data,
@@ -3004,6 +3040,7 @@ static bool linux_compat_write_result_buffer(linux_compat_runtime_t* runtime,
     return true;
 }
 
+/* 把 stat 结果写回用户态缓冲。 */
 static bool linux_compat_write_stat_result(linux_compat_runtime_t* runtime,
                                            linux_compat_stat_t* buffer,
                                            const linux_compat_stat_t* stat) {
@@ -3016,6 +3053,7 @@ static bool linux_compat_write_stat_result(linux_compat_runtime_t* runtime,
                                             sizeof(abi_stat));
 }
 
+/* getrandom：填入确定性伪随机字节。 */
 static int64_t linux_compat_getrandom(linux_compat_runtime_t* runtime,
                                       void* buffer,
                                       size_t length,

@@ -22,11 +22,13 @@ static uintptr_t heap_cursor = 0;
 static uintptr_t heap_limit_ptr = 0;
 static uintptr_t heap_alloc_limit_ptr = 0;
 
+/* 把 value 向上对齐到 alignment（必须为 2 的幂）。 */
 static uintptr_t align_up(uintptr_t value, size_t alignment) {
     const uintptr_t mask = (uintptr_t)alignment - 1U;
     return (value + mask) & ~mask;
 }
 
+/* freestanding memset：把 ptr 的 size 字节置为 value。 */
 void* memset(void* ptr, int value, size_t size) {
     size_t i = 0;
     uint8_t* bytes = (uint8_t*)ptr;

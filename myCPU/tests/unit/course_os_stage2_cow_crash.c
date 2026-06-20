@@ -1,3 +1,4 @@
+/* Stage2 COW/crash 单测：验证用户崩溃隔离和父子页写入隔离。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

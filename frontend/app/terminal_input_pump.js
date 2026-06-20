@@ -1,3 +1,5 @@
+// 终端输入泵：把浏览器侧的输入文本排队后异步批量发给 debug server，
+// 跟踪 pending 状态并在响应/错误时回调，避免并发请求互相覆盖。
 export function createTerminalInputPump({
   sendInput,
   onResponse = () => {},
@@ -10,6 +12,7 @@ export function createTerminalInputPump({
   let generation = 0;
   let pending = false;
 
+  // 更新 pending 标记并通知 onPendingChange。
   function setPending(nextPending) {
     if (pending === nextPending) {
       return;
@@ -18,6 +21,7 @@ export function createTerminalInputPump({
     onPendingChange(nextPending);
   }
 
+  // 串行排空队列：每次取全部排队文本批量发送，期间置 pending，结束清掉。
   async function flushQueue() {
     if (inFlight) {
       return;
@@ -47,6 +51,7 @@ export function createTerminalInputPump({
     setPending(false);
   }
 
+  // 用 microtask 调度一次 flush，避免同 tick 多次 enqueue 触发并发请求。
   function scheduleFlush() {
     if (flushScheduled) {
       return;

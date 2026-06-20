@@ -6,6 +6,7 @@
 #include "runtime_context.h"
 #include "vm_private.h"
 
+/* 把一页按 64 位字清零。 */
 static void zero_page(void* page) {
     size_t i = 0;
     uint64_t* words = (uint64_t*)page;
@@ -26,10 +27,12 @@ void* alloc_zeroed_page(void) {
     return page;
 }
 
+/* 分配一个全 0 的页表页并按 uint64 数组返回。 */
 static uint64_t* alloc_table_page(void) {
     return (uint64_t*)alloc_zeroed_page();
 }
 
+/* 走 Sv39 三级页表定位 vaddr 的 level0 页表项；create 时按需建中间表，叶子冲突置 conflict。 */
 static uint64_t* lookup_level0_slot(vm_address_space_t* address_space,
                                     uintptr_t vaddr,
                                     bool create,

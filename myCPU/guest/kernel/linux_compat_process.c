@@ -1,5 +1,7 @@
+/* Linux compat 旁路进程表：记录当前 pid/cwd/exec path 和 wait/clone 最小状态。 */
 #include "linux_compat_process.h"
 
+/* 取 C 字符串长度。 */
 static size_t process_str_len(const char* value) {
     size_t length = 0;
 
@@ -12,6 +14,7 @@ static size_t process_str_len(const char* value) {
     return length;
 }
 
+/* 安全拷贝字符串到定长缓冲并补 NUL。 */
 static void process_copy_str(char* out, size_t out_size, const char* value) {
     size_t i = 0;
 
@@ -28,11 +31,13 @@ static void process_copy_str(char* out, size_t out_size, const char* value) {
     out[i] = '\0';
 }
 
+/* 校验 cwd 是否合法（非空且不太长）。 */
 static bool valid_cwd(const char* cwd) {
     return cwd != 0 && cwd[0] == '/' &&
            process_str_len(cwd) < LINUX_COMPAT_MAX_PATH;
 }
 
+/* 把进程槽位复位为未使用。 */
 static void clear_process(linux_compat_process_t* process) {
     if (process == 0) {
         return;

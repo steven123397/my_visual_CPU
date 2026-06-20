@@ -1,3 +1,4 @@
+// 外部 Linux compat 工作流 smoke：用于本地长流程诊断，默认不代表课程 OS 基线。
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>

@@ -4,6 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Linux compat Plus 是 Course OS 的可选旁路验证层。
+   它承载保守 Linux 用户态 ABI 子集、rootfs catalog、trace 和 fail-closed 诊断，
+   不作为 course_* 教学模块的完成条件。 */
 #define LINUX_COMPAT_MAX_PATH 128U
 #define LINUX_COMPAT_MAX_MESSAGE 128U
 #define LINUX_COMPAT_MAX_ARGS 16U
@@ -144,6 +147,7 @@ typedef enum LinuxCompatResult {
 } linux_compat_result_t;
 
 typedef struct LinuxCompatExecRequest {
+    /* 所有运行所需对象由调用方显式传入，避免 linux_compat 隐式接管 shell/runtime。 */
     const char* path;
     const char* cwd;
     size_t argc;
@@ -160,6 +164,7 @@ typedef struct LinuxCompatExecRequest {
 } linux_compat_exec_request_t;
 
 typedef struct LinuxCompatTrace {
+    /* trace 保存最近一次失败或关键边界，host smoke 和 shell 诊断直接读取它。 */
     char path[LINUX_COMPAT_MAX_PATH];
     int32_t errno_value;
     uint64_t syscall_number;
@@ -355,70 +360,85 @@ typedef struct LinuxCompatSyscallResponse {
     int64_t value;
 } linux_compat_syscall_response_t;
 
+/* 在 rootfs 目录里按路径查找条目。 */
 linux_compat_result_t linux_compat_lookup(
     const char* path,
     linux_compat_rootfs_entry_t* out_entry,
     linux_compat_trace_t* out_trace);
 
+/* 按 PATH 规则把命令名解析成绝对路径。 */
 linux_compat_result_t linux_compat_resolve_path(
     const char* command,
     char* out_path,
     size_t out_path_size,
     linux_compat_trace_t* out_trace);
 
+/* 检查 ELF 镜像头信息，输出类型/入口/段数等摘要。 */
 linux_compat_result_t linux_compat_inspect_elf(
     const uint8_t* image,
     size_t image_size,
     linux_compat_elf_info_t* out_info,
     linux_compat_trace_t* out_trace);
 
+/* Linux compat 主入口：装载 ELF、构造栈、进入 U-mode 执行并收集输出。 */
 linux_compat_result_t linux_compat_run(
     const linux_compat_exec_request_t* request,
     char* out,
     size_t out_size,
     linux_compat_trace_t* out_trace);
 
+/* 对路径做 stat，输出文件大小/类型/权限等信息。 */
 linux_compat_result_t linux_compat_stat_path(
     const char* path,
     linux_compat_stat_t* out_stat,
     linux_compat_trace_t* out_trace);
 
+/* 初始化 runtime 状态（cwd、fd 表、进程表等）。 */
 void linux_compat_runtime_init(linux_compat_runtime_t* runtime);
+/* 设置当前工作目录。 */
 bool linux_compat_runtime_set_cwd(linux_compat_runtime_t* runtime,
                                   const char* cwd);
+/* chdir：解析路径后更新 cwd。 */
 bool linux_compat_runtime_chdir(linux_compat_runtime_t* runtime,
                                 const char* path,
                                 linux_compat_trace_t* out_trace);
+/* 取当前工作目录。 */
 const char* linux_compat_runtime_cwd(const linux_compat_runtime_t* runtime);
 
+/* openat：相对 dirfd 打开文件，返回 fd。 */
 int32_t linux_compat_openat(linux_compat_runtime_t* runtime,
                             int32_t dirfd,
                             const char* path,
                             uint32_t flags,
                             linux_compat_trace_t* out_trace);
 
+/* read：从 fd 读 length 字节到 buffer。 */
 int64_t linux_compat_read(linux_compat_runtime_t* runtime,
                           int32_t fd,
                           void* buffer,
                           size_t length,
                           linux_compat_trace_t* out_trace);
 
+/* lseek：设置 fd 读写偏移。 */
 int64_t linux_compat_lseek(linux_compat_runtime_t* runtime,
                            int32_t fd,
                            int64_t offset,
                            uint32_t whence,
                            linux_compat_trace_t* out_trace);
 
+/* close：关闭 fd。 */
 int32_t linux_compat_close(linux_compat_runtime_t* runtime,
                            int32_t fd,
                            linux_compat_trace_t* out_trace);
 
+/* Linux syscall 统一分发：按 request->command 路由到对应 handler。 */
 linux_compat_result_t linux_compat_syscall_dispatch(
     linux_compat_runtime_t* runtime,
     const linux_compat_syscall_request_t* request,
     linux_compat_syscall_response_t* response,
     linux_compat_trace_t* out_trace);
 
+/* 记录一次用户态异常（cause/pc/tval），供崩溃诊断。 */
 void linux_compat_runtime_record_user_fault(linux_compat_runtime_t* runtime,
                                             uint64_t cause,
                                             uintptr_t pc,

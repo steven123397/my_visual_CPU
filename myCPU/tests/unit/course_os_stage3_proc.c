@@ -1,3 +1,4 @@
+/* Stage3 procfs 单测：验证 cpuinfo/uptime/pid/fd/maps 等只读证据节点。 */
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

@@ -1,8 +1,10 @@
+/* Linux compat syscall 调试输出：只在显式 trace/debug 场景打印关键信息。 */
 #include "linux_compat_debug.h"
 
 #include "console.h"
 #include "linux_compat_vm.h"
 
+/* 向 console 输出字符串。 */
 static void debug_console_puts(const char* value) {
     size_t i = 0;
 
@@ -15,6 +17,7 @@ static void debug_console_puts(const char* value) {
     }
 }
 
+/* 向 console 输出带符号 64 位十进制。 */
 static void debug_console_i64(int64_t value) {
     char digits[24];
     size_t used = 0;
@@ -38,6 +41,7 @@ static void debug_console_i64(int64_t value) {
     }
 }
 
+/* 统计 runtime 当前 VM 区间数。 */
 static size_t debug_vm_region_count(const linux_compat_runtime_t* runtime) {
     size_t i = 0;
     size_t used = 0;
@@ -53,6 +57,7 @@ static size_t debug_vm_region_count(const linux_compat_runtime_t* runtime) {
     return used;
 }
 
+/* 判断 haystack 是否包含 needle 子串。 */
 static bool debug_str_contains(const char* haystack, const char* needle) {
     size_t i = 0;
     size_t j = 0;
@@ -74,6 +79,7 @@ static bool debug_str_contains(const char* haystack, const char* needle) {
     return false;
 }
 
+/* 判断路径是否值得 trace（过滤噪声路径）。 */
 static bool debug_path_interesting(const char* path) {
     return debug_str_contains(path, ".git") ||
            debug_str_contains(path, "config") ||
@@ -82,6 +88,7 @@ static bool debug_path_interesting(const char* path) {
            debug_str_contains(path, "stage11repo");
 }
 
+/* 判断一次成功结果是否值得 trace。 */
 static bool debug_success_interesting(
     const linux_compat_syscall_request_t* request,
     int64_t value,

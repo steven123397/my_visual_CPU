@@ -1,3 +1,4 @@
+/* Stage2 FD/FS 单测：覆盖 cwd、相对路径、procfs 只读和 raw read 合同。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

@@ -2,10 +2,12 @@
 
 #include "memory.h"
 
+/* 把地址向下对齐到页边界。 */
 static uintptr_t align_down_page(uintptr_t value) {
     return value & ~((uintptr_t)MEMORY_PAGE_SIZE - 1U);
 }
 
+/* 清空布局字段（地址/入口/栈顶等），不动 region/object。 */
 static void clear_bootstrap_layout(user_task_bootstrap_t* bootstrap) {
     if (bootstrap == NULL) {
         return;
@@ -26,6 +28,7 @@ static void clear_bootstrap_layout(user_task_bootstrap_t* bootstrap) {
     bootstrap->user_sp = 0;
 }
 
+/* 把单个 region 描述符复位到未注册状态。 */
 static void clear_region(vm_user_region_t* region) {
     if (region == NULL) {
         return;
@@ -41,6 +44,7 @@ static void clear_region(vm_user_region_t* region) {
     region->object_mode = VM_REGION_OBJECT_NONE;
 }
 
+/* 把单个 object 描述符复位到未初始化状态。 */
 static void clear_object(vm_object_t* object) {
     size_t i = 0;
 
@@ -59,6 +63,7 @@ static void clear_object(vm_object_t* object) {
     }
 }
 
+/* 整体清空 bootstrap：布局字段 + 全部 region + 全部 object。 */
 static void clear_bootstrap(user_task_bootstrap_t* bootstrap) {
     if (bootstrap == NULL) {
         return;
@@ -76,6 +81,7 @@ static void clear_bootstrap(user_task_bootstrap_t* bootstrap) {
     clear_object(&bootstrap->anon_object);
 }
 
+/* 已初始化对象才复位，未初始化直接成功。 */
 static bool reset_object_if_initialized(vm_object_t* object) {
     if (object == NULL || !object->initialized) {
         return true;
@@ -84,12 +90,14 @@ static bool reset_object_if_initialized(vm_object_t* object) {
     return vm_object_reset(object);
 }
 
+/* user_task 三件套（地址空间/进程/runtime）是否都就绪。 */
 static bool user_task_ready(user_task_t* user_task) {
     return user_task != NULL && user_task_address_space(user_task) != NULL &&
            user_task_process(user_task) != NULL &&
            user_task_runtime(user_task) != NULL;
 }
 
+/* 复位 bootstrap 持有的四个对象。 */
 static bool reset_bootstrap_objects(user_task_bootstrap_t* bootstrap) {
     return bootstrap != NULL &&
            reset_object_if_initialized(&bootstrap->anon_object) &&
@@ -98,6 +106,7 @@ static bool reset_bootstrap_objects(user_task_bootstrap_t* bootstrap) {
            reset_object_if_initialized(&bootstrap->exec_object);
 }
 
+/* 判断 exec/ecall 两个符号是否落在同一物理页，输出 exec 页地址。 */
 static bool layout_symbols_share_page(uintptr_t exec_symbol,
                                       uintptr_t ecall_symbol,
                                       uintptr_t* exec_page_paddr) {
@@ -110,6 +119,7 @@ static bool layout_symbols_share_page(uintptr_t exec_symbol,
     return align_down_page(ecall_symbol) == exec_page;
 }
 
+/* 判断规划出的各 region 虚拟地址是否都在用户窗口内。 */
 static bool layout_slots_are_user_accessible(uintptr_t anon_tail_vaddr,
                                              uintptr_t anon_vaddr,
                                              uintptr_t stack_vaddr,
@@ -120,6 +130,7 @@ static bool layout_slots_are_user_accessible(uintptr_t anon_tail_vaddr,
            vm_range_is_user(exec_vaddr, MEMORY_PAGE_SIZE);
 }
 
+/* 把规划好的地址与入口写入 bootstrap 字段并置 planned。 */
 static void assign_planned_layout(user_task_bootstrap_t* bootstrap,
                                   uintptr_t exec_page_paddr,
                                   uintptr_t exec_vaddr,
@@ -141,6 +152,7 @@ static void assign_planned_layout(user_task_bootstrap_t* bootstrap,
     bootstrap->user_sp = stack_vaddr + MEMORY_PAGE_SIZE;
 }
 
+/* 初始化四个对象：exec/stack/alias 用物理后端，anon 用匿名后端。 */
 static bool configure_bootstrap_objects(user_task_bootstrap_t* bootstrap,
                                         uintptr_t alias_backing_paddr,
                                         uintptr_t user_stack_paddr) {
@@ -157,6 +169,7 @@ static bool configure_bootstrap_objects(user_task_bootstrap_t* bootstrap,
            vm_object_init_anon(&bootstrap->anon_object, 2U * MEMORY_PAGE_SIZE);
 }
 
+/* 填充一条 region binding 描述符。 */
 static void set_region_binding(vm_process_user_region_binding_t* binding,
                                vm_user_region_t* region,
                                uintptr_t vaddr,
@@ -177,6 +190,7 @@ static void set_region_binding(vm_process_user_region_binding_t* binding,
     binding->object_mode = object_mode;
 }
 
+/* 按 exec/stack/alias/anon/anon_tail 顺序构造标准 region binding 数组。 */
 static void build_standard_bindings(user_task_bootstrap_t* bootstrap,
                                     vm_process_user_region_binding_t bindings[5]) {
     const uint64_t user_rw_flags =

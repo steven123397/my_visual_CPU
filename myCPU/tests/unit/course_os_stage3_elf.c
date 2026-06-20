@@ -1,3 +1,4 @@
+/* Stage3 ELF/libc 单测：覆盖最小 ELF loader、用户程序目录和 libc wrapper。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

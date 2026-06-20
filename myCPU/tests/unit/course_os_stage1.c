@@ -1,3 +1,4 @@
+/* Course OS Stage1 单测：覆盖调度、内存、文件系统和 procfs 基础证据。 */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

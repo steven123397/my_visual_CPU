@@ -1,5 +1,8 @@
 #include "course_user_programs.h"
 
+/* 内嵌课程用户程序资产：每个数组都是受控最小 ELF，用于稳定测试 loader/libc/shell。
+   这些不是完整应用镜像，程序行为由 shell 中的 libc-effect 模拟固定。 */
+
 #define COURSE_ELF_IMAGE(NAME, BASE_LO, TAG0, TAG1, TAG2, TAG3) \
 static const uint8_t NAME[] = { \
     [0] = 0x7f, [1] = 'E', [2] = 'L', [3] = 'F', \
@@ -56,6 +59,7 @@ static const course_user_program_t k_programs[] = {
      k_bad_static_elf, sizeof(k_bad_static_elf), false},
 };
 
+/* 判断两个 C 字符串是否完全相等。 */
 static bool str_eq(const char* a, const char* b) {
     size_t i = 0;
 

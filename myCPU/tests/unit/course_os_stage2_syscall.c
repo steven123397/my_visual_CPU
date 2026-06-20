@@ -1,3 +1,4 @@
+/* Stage2 syscall 单测：验证课程 ABI 分发、用户指针校验和错误统计。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

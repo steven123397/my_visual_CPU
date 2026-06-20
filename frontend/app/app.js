@@ -82,10 +82,15 @@ const elements = {
 };
 let snapshotSocket = null;
 
+// 应用入口：管理前端状态、会话加载/运行/终止、终端输入、AI/JIT 交互与实时快照。
+// 本文件无 export，末尾以 init() 启动；全局事件绑定集中在 init()。
+
+// 判断当前是否应建立实时通道连接（认证通过或无需认证）。
 function shouldConnectRealtime() {
   return !state.auth.required || state.auth.authenticated;
 }
 
+// 将面板折叠状态同步到 DOM 节点。
 function applyPanelCollapses() {
   const collapsed = new Set(state.layout.collapsedPanels);
   document.querySelectorAll('.panel').forEach((panel) => {
@@ -110,17 +115,20 @@ function applyPanelCollapses() {
   });
 }
 
+// 触发控件更新并完成一次面板渲染。
 function paint() {
   updateControls(elements, state);
   renderApp(elements, state);
   applyPanelCollapses();
 }
 
+// 设置通知栏的文本与类型。
 function showNotice(message, kind = 'info') {
   elements.notice.textContent = message;
   elements.notice.dataset.kind = kind;
 }
 
+// 将终端输出载荷合并写入状态。
 function mergeTerminal(payload, reset = false) {
   if (!payload) {
     return;
@@ -132,11 +140,13 @@ function mergeTerminal(payload, reset = false) {
   });
 }
 
+// 按偏移拉取并合并最新终端输出。
 async function syncTerminal(offset = state.terminal.nextOffset, reset = false) {
   const payload = await terminalOutput(offset);
   mergeTerminal(payload, reset);
 }
 
+// 加载选中测试会话并刷新快照。
 async function handleLoad() {
   const requestedTest = state.selectedTest;
   const requestedBackend = state.backend;
@@ -167,6 +177,7 @@ async function handleLoad() {
   showNotice(`已加载 ${requestedTest}`, 'success');
 }
 
+// 读取并校验自定义 ELF 输入载荷。
 function readCustomElfPayload() {
   const elfPath = elements.customElfPath?.value?.trim() ?? '';
   const elfBase64 = elements.customElfBase64?.value?.trim() ?? '';
@@ -186,6 +197,7 @@ function readCustomElfPayload() {
   throw new Error('请输入服务器路径或 base64 ELF。');
 }
 
+// 加载自定义 ELF 会话并刷新。
 async function handleLoadCustomElf() {
   const requestedBackend = state.backend;
   const customElf = readCustomElfPayload();
@@ -216,6 +228,7 @@ async function handleLoadCustomElf() {
   showNotice(`已加载本地 ELF ${loadedName}`, 'success');
 }
 
+// 结束当前会话并清理本地状态。
 async function handleTerminate() {
   await terminateSession();
   clearLoadedSession(state);
@@ -223,6 +236,7 @@ async function handleTerminate() {
   showNotice('已结束当前会话。', 'success');
 }
 
+// 执行单步动作并刷新快照与提示。
 async function handleAction(action, label) {
   const response = await action();
   if (response?.snapshot) {
@@ -234,16 +248,19 @@ async function handleAction(action, label) {
   showNotice(label, 'success');
 }
 
+// 将终端输入文本加入发送队列。
 async function handleTerminalInput(text) {
   terminalInputPump.enqueue(text);
 }
 
+// 拉取 AI 小模型模板列表。
 async function loadAiTinyModelTemplates() {
   const response = await listAiTinyModelTemplates();
   setAiTinyModelTemplates(state, response.templates);
   paint();
 }
 
+// 刷新登录认证状态并清理。
 async function refreshAuthState() {
   const response = await getAuthSession();
   setAuthState(state, response.auth);
@@ -256,6 +273,7 @@ async function refreshAuthState() {
   paint();
 }
 
+// 处理登录表单提交与后续初始化。
 async function handleLogin(form) {
   const formData = new FormData(form);
   const username = String(formData.get('username') ?? '');
@@ -280,6 +298,7 @@ async function handleLogin(form) {
   }
 }
 
+// 处理退出登录并清理状态。
 async function handleLogout() {
   const response = await logout();
   setAuthState(state, response.auth);
@@ -290,6 +309,7 @@ async function handleLogout() {
   connectRealtime();
 }
 
+// 处理释放控制权请求。
 async function handleReleaseControl() {
   const response = await releaseControl();
   setAuthState(state, response.auth);
@@ -297,6 +317,7 @@ async function handleReleaseControl() {
   showNotice('已释放控制权。', 'success');
 }
 
+// 登录后加载测试列表与模板。
 async function initDataAfterAuth() {
   const testsResponse = await listTests();
   setTests(state, testsResponse.tests, testsResponse.diagnostics);
@@ -304,6 +325,7 @@ async function initDataAfterAuth() {
   await loadAiTinyModelTemplates();
 }
 
+// 建立或重建实时快照 WebSocket。
 function connectRealtime() {
   snapshotSocket?.close?.();
   snapshotSocket = null;
@@ -334,6 +356,7 @@ function connectRealtime() {
   );
 }
 
+// 运行 AI 小模型并展示结果。
 async function handleRunAiTinyModel() {
   setAiTinyModelRunState(state, 'running', null);
   paint();
@@ -349,6 +372,7 @@ async function handleRunAiTinyModel() {
   }
 }
 
+// 运行 AI 自定义图并展示结果。
 async function handleRunAiCustomGraph() {
   let payload = null;
   try {
@@ -374,6 +398,7 @@ async function handleRunAiCustomGraph() {
   }
 }
 
+// 运行 JIT 探测并刷新结果。
 async function handleRunJitDispatch() {
   setJitDispatchRunState(state, 'running', null);
   paint();
@@ -404,6 +429,7 @@ const terminalInputPump = createTerminalInputPump({
   },
 });
 
+// 初始化应用并绑定全部全局事件。
 async function init() {
   paint();
   await refreshAuthState();

@@ -10,6 +10,7 @@
 #include "timer.h"
 #include "trap.h"
 
+/* 以下为中断等待原语的内部前向声明：counter 校验/基线/deadline/清理等 helper。 */
 static bool supervisor_runtime_wait_for_interrupts(
     volatile uint32_t* timer_counter,
     uint32_t timer_target,
@@ -329,6 +330,7 @@ void supervisor_runtime_cancel_timer_delivery(void) {
     timer_handle_interrupt();
 }
 
+/* 同时等待 timer 与 external 计数器到达各自目标，超时失败。 */
 static bool supervisor_runtime_wait_for_interrupts(
     volatile uint32_t* timer_counter,
     uint32_t timer_target,
@@ -355,37 +357,45 @@ static bool supervisor_runtime_wait_for_interrupts(
     return true;
 }
 
+/* counter 等待参数是否合法（非空、timeout 合理）。 */
 static bool counter_wait_args_valid(const volatile uint32_t* counter,
                                     uint64_t timeout_delta) {
     return counter != NULL && timeout_delta != 0;
 }
 
+/* 由 timeout_delta 算出绝对 deadline（当前时间 + delta）。 */
 static uint64_t counter_wait_deadline(uint64_t timeout_delta) {
     return timeout_delta != 0 ? platform_clint_read_mtime() + timeout_delta : 0;
 }
 
+/* counter 是否已达 target_value。 */
 static bool counter_reached(const volatile uint32_t* counter,
                             uint32_t target_value) {
     return counter != NULL && *counter >= target_value;
 }
 
+/* 取 counter 当前基线值。 */
 static uint32_t counter_baseline(const volatile uint32_t* counter) {
     return counter != NULL ? *counter : UINT32_MAX;
 }
 
+/* 基线值是否有效（非 0 溢出标记）。 */
 static bool counter_baseline_valid(uint32_t baseline) {
     return baseline != UINT32_MAX;
 }
 
+/* UART 等待失败后清理：禁用 THRE。 */
 static void cleanup_failed_uart_wait(void) {
     platform_uart_disable_irq();
 }
 
+/* 平台中断等待失败后清理：取消 timer 安排。 */
 static void cleanup_failed_platform_interrupt_wait(void) {
     platform_uart_disable_irq();
     timer_handle_interrupt();
 }
 
+/* timer + external 等待参数是否合法。 */
 static bool interrupt_wait_args_valid(const volatile uint32_t* timer_counter,
                                       const volatile uint32_t* external_counter,
                                       uint64_t timeout_delta) {
@@ -393,6 +403,7 @@ static bool interrupt_wait_args_valid(const volatile uint32_t* timer_counter,
            timeout_delta != 0;
 }
 
+/* 两类中断是否都已达到各自目标计数。 */
 static bool interrupt_targets_reached(
     const volatile uint32_t* timer_counter,
     uint32_t timer_target,

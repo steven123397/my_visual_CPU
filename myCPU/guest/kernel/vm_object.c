@@ -6,6 +6,7 @@
 #include "pmm.h"
 #include "vm_private.h"
 
+/* 把对象描述符复位到未初始化状态，清空匿名 slot 指针。 */
 static void clear_object_descriptor(vm_object_t* object) {
     size_t i = 0;
 
@@ -24,6 +25,7 @@ static void clear_object_descriptor(vm_object_t* object) {
     }
 }
 
+/* 物理对象：返回 base_paddr + offset 的物理地址。 */
 static bool resolve_physical_object_page(const vm_object_t* object,
                                          size_t offset,
                                          uintptr_t* out_paddr) {
@@ -35,6 +37,7 @@ static bool resolve_physical_object_page(const vm_object_t* object,
     return true;
 }
 
+/* 匿名对象：解析页槽，为空时按 create 分配并清零新页。 */
 static bool resolve_anon_object_page(vm_object_t* object,
                                      size_t offset,
                                      bool create,
@@ -190,6 +193,7 @@ bool map_region_object_pages(vm_user_region_t* region,
     return true;
 }
 
+/* 释放匿名对象的全部页与 slot 表。 */
 static bool release_anon_object_pages(vm_object_t* object) {
     size_t i = 0;
     const size_t slot_table_count =
@@ -347,6 +351,7 @@ bool vm_user_region_clear_object(vm_user_region_t* region) {
     return true;
 }
 
+/* 把对象绑到 region：校验兼容性后立即映射或仅登记 fault 模式，并增引用计数。 */
 static bool bind_region_object(vm_user_region_t* region,
                                vm_object_t* object,
                                size_t object_offset,

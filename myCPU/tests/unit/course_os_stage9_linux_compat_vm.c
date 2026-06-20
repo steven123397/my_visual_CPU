@@ -1,3 +1,4 @@
+/* Linux compat Stage9 VM 单测：覆盖 mmap/brk/mprotect/mremap/用户读写边界。 */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

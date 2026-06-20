@@ -1,5 +1,9 @@
 #include "course_sync.h"
 
+/* 课程同步实现：等待队列只保存 pid，阻塞/唤醒通过 course_process_set_state 体现。
+   这足够展示 semaphore/mutex 语义，同时保持实现可读、可测。 */
+
+/* 把等待者数组清空。 */
 static void clear_waiters(uint32_t* waiters, uint32_t count) {
     uint32_t i = 0;
 
@@ -11,6 +15,7 @@ static void clear_waiters(uint32_t* waiters, uint32_t count) {
     }
 }
 
+/* 按 pid 在进程表里找活跃进程。 */
 static course_process_t* find_process(course_process_table_t* table,
                                       uint32_t pid) {
     course_process_t* process = course_process_find(table, pid);
@@ -22,6 +27,7 @@ static course_process_t* find_process(course_process_table_t* table,
     return process;
 }
 
+/* 把 pid 加入等待者队列，重复或满则失败。 */
 static bool enqueue_waiter(uint32_t* waiters,
                            uint32_t* waiter_count,
                            uint32_t pid) {
@@ -34,6 +40,7 @@ static bool enqueue_waiter(uint32_t* waiters,
     return true;
 }
 
+/* 弹出队首等待者 pid。 */
 static uint32_t pop_waiter(uint32_t* waiters, uint32_t* waiter_count) {
     uint32_t pid = 0;
     uint32_t i = 0;
@@ -77,6 +84,7 @@ course_sync_result_t course_semaphore_wait(course_semaphore_t* semaphore,
         semaphore->value -= 1;
         return COURSE_SYNC_OK;
     }
+    /* value 不足时进入等待队列，并把进程状态置为 BLOCKED。 */
     if (!enqueue_waiter(semaphore->waiters, &semaphore->waiter_count, pid) ||
         !course_process_set_state(semaphore->processes,
                                   pid,
@@ -94,6 +102,7 @@ course_sync_result_t course_semaphore_post(course_semaphore_t* semaphore) {
     }
     pid = pop_waiter(semaphore->waiters, &semaphore->waiter_count);
     if (pid != 0U) {
+        /* post 优先唤醒一个等待者；没有等待者时才增加计数。 */
         if (!course_process_set_state(semaphore->processes,
                                       pid,
                                       COURSE_PROCESS_READY)) {
@@ -130,6 +139,7 @@ course_sync_result_t course_mutex_lock(course_mutex_t* mutex, uint32_t pid) {
         mutex->owner_pid = pid;
         return COURSE_SYNC_OK;
     }
+    /* mutex 不支持递归锁；已被持有时，调用者进入等待队列。 */
     if (!enqueue_waiter(mutex->waiters, &mutex->waiter_count, pid) ||
         !course_process_set_state(mutex->processes,
                                   pid,
@@ -146,6 +156,7 @@ course_sync_result_t course_mutex_unlock(course_mutex_t* mutex, uint32_t pid) {
         return COURSE_SYNC_ERR_NOT_OWNER;
     }
     if (mutex->owner_pid != pid) {
+        /* 非 owner 解锁必须失败，并留下 misuse 计数作为 guardrail 证据。 */
         mutex->misuse_guard_count += 1U;
         return COURSE_SYNC_ERR_NOT_OWNER;
     }

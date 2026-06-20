@@ -1,3 +1,4 @@
+// 外部 rootfs opt-in smoke：显式环境变量提供资产时才运行，不污染默认回归。
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>

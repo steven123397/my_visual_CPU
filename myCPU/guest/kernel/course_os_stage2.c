@@ -1,5 +1,9 @@
 #include "course_os_stage2.h"
 
+/* Stage2 编排层：验证课程 syscall、进程、FD/FS、shell、COW 和崩溃隔离。
+   这里固定一组可重复命令与负向 guardrail，输出稳定 marker。 */
+
+/* 取 C 字符串长度。 */
 static size_t str_len(const char* value) {
     size_t i = 0;
 
@@ -12,6 +16,7 @@ static size_t str_len(const char* value) {
     return i;
 }
 
+/* 判断 haystack 是否包含 needle 子串。 */
 static bool str_contains(const char* haystack, const char* needle) {
     size_t i = 0;
     const size_t needle_len = str_len(needle);
@@ -39,6 +44,7 @@ static bool str_contains(const char* haystack, const char* needle) {
     return false;
 }
 
+/* 向 out 追加一个字符并保持 NUL。 */
 static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     if (out == 0 || used == 0 || *used + 1U >= out_size) {
         return false;
@@ -49,6 +55,7 @@ static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     return true;
 }
 
+/* 向 out 追加字符串。 */
 static bool append_str(char* out,
                        size_t out_size,
                        size_t* used,
@@ -75,6 +82,7 @@ void course_os_stage2_init(course_os_stage2_t* stage) {
     }
 
     course_shell_init(&stage->shell);
+    /* 独立 syscall 对象使用极小用户内存，专门验证坏指针和非法 syscall。 */
     course_syscall_init(&stage->syscalls,
                         stage->shell.shell_pid,
                         (uintptr_t)user_memory,
@@ -121,6 +129,7 @@ bool course_os_stage2_run(course_os_stage2_t* stage) {
         return false;
     }
 
+    /* 下面这些 guardrail 固定“错误必须失败”，防止展示路径伪造成功。 */
     stage->bad_syscall_guarded =
         course_syscall_dispatch(&stage->syscalls, 99U, 0U, 0U, 0U, 0U) ==
         COURSE_SYSCALL_ERR_INVALID_SYSCALL;
@@ -148,6 +157,7 @@ bool course_os_stage2_run(course_os_stage2_t* stage) {
                                       (uint8_t)'A')) {
         return false;
     }
+    /* COW 子进程写页后，父进程原字节必须保持不变。 */
     cow_child = course_process_fork(&stage->shell.processes,
                                     stage->shell.shell_pid,
                                     "cowcheck");

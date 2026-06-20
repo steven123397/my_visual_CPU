@@ -1,3 +1,4 @@
+/* Stage3 VM/COW 单测：验证 fault-driven COW、引用计数和泄漏释放证据。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

@@ -3,6 +3,10 @@
 #include "course_fd.h"
 #include "course_process.h"
 
+/* 课程 syscall 分发层：只接受课程 ABI 的小号表，统一做用户指针检查、
+   FD/进程表转发和错误码统计。Linux syscall 不进入这里。 */
+
+/* 把缓冲整批清 0。 */
 static void clear_buffer(char* buffer, size_t size) {
     size_t i = 0;
 
@@ -14,6 +18,7 @@ static void clear_buffer(char* buffer, size_t size) {
     }
 }
 
+/* 判断两个 C 字符串是否完全相等。 */
 static bool str_eq(const char* a, const char* b) {
     size_t i = 0;
 
@@ -29,6 +34,7 @@ static bool str_eq(const char* a, const char* b) {
     return a[i] == b[i];
 }
 
+/* 记一次 syscall 调用（总数 + 分项）。 */
 static bool record_call(course_syscall_t* syscalls, uint32_t number) {
     if (syscalls == 0) {
         return false;
@@ -41,6 +47,7 @@ static bool record_call(course_syscall_t* syscalls, uint32_t number) {
     return true;
 }
 
+/* 记 syscall 结果：负值记失败与 last_error。 */
 static int64_t record_result(course_syscall_t* syscalls, int64_t result) {
     if (syscalls == 0) {
         return COURSE_SYSCALL_ERR_INVALID_SYSCALL;
@@ -53,6 +60,7 @@ static int64_t record_result(course_syscall_t* syscalls, int64_t result) {
     return result;
 }
 
+/* 向 IO 缓冲追加 size 字节并补 NUL，溢出返回 false。 */
 static bool append_to_buffer(char* out,
                              size_t* used,
                              const char* data,
@@ -73,6 +81,7 @@ static bool append_to_buffer(char* out,
     return true;
 }
 
+/* write syscall：fd=1 写 stdout、fd=2 写 stderr，其它拒绝。 */
 static int64_t dispatch_write(course_syscall_t* syscalls,
                               uint64_t fd,
                               uintptr_t user_ptr,
@@ -102,6 +111,7 @@ static int64_t dispatch_write(course_syscall_t* syscalls,
     return COURSE_SYSCALL_ERR_BAD_FD;
 }
 
+/* 校验用户字符串在沙箱内以 NUL 结尾，可输出长度。 */
 static bool user_string_valid(const course_syscall_t* syscalls,
                               uintptr_t user_ptr,
                               size_t* out_len) {
@@ -115,6 +125,7 @@ static bool user_string_valid(const course_syscall_t* syscalls,
         !course_syscall_user_range_valid(syscalls, user_ptr, 1U)) {
         return false;
     }
+    /* 字符串必须在用户沙箱内遇到 NUL；不能只检查首地址。 */
     while (course_syscall_user_range_valid(syscalls, user_ptr, i + 1U)) {
         if (value[i] == '\0') {
             if (out_len != 0) {
@@ -127,6 +138,7 @@ static bool user_string_valid(const course_syscall_t* syscalls,
     return false;
 }
 
+/* read syscall：转发到 FD 表。 */
 static int64_t dispatch_read(course_syscall_t* syscalls,
                              uint64_t fd,
                              uintptr_t user_ptr,
@@ -143,6 +155,7 @@ static int64_t dispatch_read(course_syscall_t* syscalls,
                                    size);
 }
 
+/* open syscall：校验路径后转发到 FD 表。 */
 static int64_t dispatch_open(course_syscall_t* syscalls,
                              uintptr_t path_ptr,
                              uint32_t flags) {
@@ -157,6 +170,7 @@ static int64_t dispatch_open(course_syscall_t* syscalls,
                                    flags);
 }
 
+/* close syscall：转发到 FD 表。 */
 static int64_t dispatch_close(course_syscall_t* syscalls, uint64_t fd) {
     if (syscalls == 0 || syscalls->fd_table == 0) {
         return COURSE_SYSCALL_ERR_BAD_FD;
@@ -164,6 +178,7 @@ static int64_t dispatch_close(course_syscall_t* syscalls, uint64_t fd) {
     return (int64_t)course_fd_close(syscalls->fd_table, (int)fd);
 }
 
+/* seek syscall：转发到 FD 表。 */
 static int64_t dispatch_seek(course_syscall_t* syscalls,
                              uint64_t fd,
                              size_t offset) {
@@ -173,6 +188,7 @@ static int64_t dispatch_seek(course_syscall_t* syscalls,
     return (int64_t)course_fd_seek(syscalls->fd_table, (int)fd, offset);
 }
 
+/* fork syscall：在进程表里 fork 当前进程，返回子 pid。 */
 static int64_t dispatch_fork(course_syscall_t* syscalls,
                              uintptr_t child_name_ptr) {
     course_process_t* child = 0;
@@ -191,6 +207,7 @@ static int64_t dispatch_fork(course_syscall_t* syscalls,
     return child != 0 ? (int64_t)child->pid : COURSE_SYSCALL_ERR_NO_MEMORY;
 }
 
+/* exec syscall：用程序名替换当前进程映像，转成 syscall 错误码。 */
 static int64_t dispatch_exec(course_syscall_t* syscalls,
                              uintptr_t program_ptr,
                              uintptr_t argv_ptr) {
@@ -223,6 +240,7 @@ static int64_t dispatch_exec(course_syscall_t* syscalls,
     return COURSE_SYSCALL_ERR_NO_MEMORY;
 }
 
+/* waitpid syscall：等待指定子进程并把状态写回用户态。 */
 static int64_t dispatch_waitpid(course_syscall_t* syscalls,
                                 uint32_t child_pid,
                                 uintptr_t status_ptr) {
@@ -251,6 +269,7 @@ static int64_t dispatch_waitpid(course_syscall_t* syscalls,
     return COURSE_SYSCALL_OK;
 }
 
+/* wait syscall：等待任意子进程并把状态写回用户态。 */
 static int64_t dispatch_wait(course_syscall_t* syscalls, uintptr_t status_ptr) {
     int32_t status = 0;
     int32_t result = 0;
@@ -276,6 +295,7 @@ static int64_t dispatch_wait(course_syscall_t* syscalls, uintptr_t status_ptr) {
     return COURSE_SYSCALL_OK;
 }
 
+/* exit syscall：标记退出、记退出码并通知进程表。 */
 static int64_t dispatch_exit(course_syscall_t* syscalls, int32_t exit_code) {
     if (syscalls == 0) {
         return COURSE_SYSCALL_ERR_INVALID_SYSCALL;
@@ -333,6 +353,7 @@ int64_t course_syscall_dispatch(course_syscall_t* syscalls,
         return COURSE_SYSCALL_ERR_INVALID_SYSCALL;
     }
 
+    /* 每个 case 只做类型转换和转发，成功/失败统计统一由 record_result 记录。 */
     switch (number) {
     case COURSE_SYSCALL_READ:
         result = dispatch_read(syscalls, arg0, (uintptr_t)arg1, (size_t)arg2);
@@ -386,6 +407,7 @@ bool course_syscall_user_range_valid(const course_syscall_t* syscalls,
     if (size == 0) {
         return true;
     }
+    /* 使用减法形式避免 user_ptr + size 溢出后绕回合法区间。 */
     if (syscalls->user_size == 0 ||
         user_ptr - syscalls->user_base > syscalls->user_size) {
         return false;

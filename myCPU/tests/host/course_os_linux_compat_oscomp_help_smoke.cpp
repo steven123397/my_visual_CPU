@@ -8,6 +8,9 @@
 #include "../../src/debug/debug_budget.h"
 #include "../../src/debug/debug_session.h"
 
+// Built-in rootfs 的 OSComp help smoke：验证 Linux compat PATH fallback 和 fail-closed 诊断。
+// 该测试不要求外部 testsuits 或完整 toolchain，作为默认回归的一条保守证据。
+
 namespace {
 
 bool expect_contains(const std::string& haystack,
@@ -136,6 +139,7 @@ int main(int argc, char** argv) {
         {"path: no such file", "missing Stage 10 tool should report PATH miss"},
         {"course-os> ", "missing Stage 10 tool should return to prompt"},
     };
+    // vim/gcc/rustc 在内置 rootfs 中应明确 ENOENT，不能静默伪造支持。
     if (!run_shell_command(session,
                            offset,
                            "vim -h\r",

@@ -4,9 +4,13 @@
 
 #include "riscv.h"
 
+/* 课程调度实现分成离线和在线两条路径：
+   离线路径服务稳定统计，在线路径由 timer tick 推动真实课程进程状态切换。 */
+
 #define COURSE_ONLINE_SCHEDULER_NO_INDEX COURSE_SCHEDULER_MAX_TASKS
 #define COURSE_ONLINE_SWITCH_CYCLE_COST 1U
 
+/* 把所有任务的 remaining / completion / vruntime 重置为排程前初值。 */
 static void reset_runtime_fields(course_scheduler_t* scheduler) {
     size_t i = 0;
 
@@ -17,6 +21,7 @@ static void reset_runtime_fields(course_scheduler_t* scheduler) {
     }
 }
 
+/* 记一次上下文切换：累加次数、单次与累计切换代价。 */
 static void record_context_switch(course_scheduler_t* scheduler,
                                   uint32_t cycle_cost) {
     scheduler->summary.context_switches += 1U;
@@ -24,6 +29,7 @@ static void record_context_switch(course_scheduler_t* scheduler,
     scheduler->summary.total_switch_cycle_cost += cycle_cost;
 }
 
+/* 判断所有任务是否都已排完（remaining 全为 0）。 */
 static bool all_tasks_complete(const course_scheduler_t* scheduler) {
     size_t i = 0;
 
@@ -36,6 +42,7 @@ static bool all_tasks_complete(const course_scheduler_t* scheduler) {
     return true;
 }
 
+/* 找出 now 之后最早到达的未完成任务，用于队列空时跳过空闲时间。 */
 static uint32_t next_arrival_time(const course_scheduler_t* scheduler,
                                   uint32_t now) {
     size_t i = 0;
@@ -53,6 +60,7 @@ static uint32_t next_arrival_time(const course_scheduler_t* scheduler,
     return next;
 }
 
+/* FCFS 选任务：在已到达的未完成任务里取到达最早者，并列时取 pid 最小。 */
 static size_t pick_fcfs(const course_scheduler_t* scheduler, uint32_t now) {
     size_t i = 0;
     size_t best = COURSE_SCHEDULER_MAX_TASKS;
@@ -74,6 +82,7 @@ static size_t pick_fcfs(const course_scheduler_t* scheduler, uint32_t now) {
     return best;
 }
 
+/* CFS-lite 选任务：在已到达的未完成任务里取 vruntime 最小者，并列按到达 / pid 兜底。 */
 static size_t pick_cfs_lite(const course_scheduler_t* scheduler, uint32_t now) {
     size_t i = 0;
     size_t best = COURSE_SCHEDULER_MAX_TASKS;
@@ -98,10 +107,12 @@ static size_t pick_cfs_lite(const course_scheduler_t* scheduler, uint32_t now) {
     return best;
 }
 
+/* 任务未完成且已到达 now，可被本轮排程。 */
 static bool task_ready(const course_scheduler_task_t* task, uint32_t now) {
     return task != NULL && task->remaining_time != 0 && task->arrival_time <= now;
 }
 
+/* 判断任务索引是否已在 RR 队列里，避免重复入队。 */
 static bool rr_queue_contains(const size_t* queue,
                               size_t queue_count,
                               size_t task_index) {
@@ -116,6 +127,7 @@ static bool rr_queue_contains(const size_t* queue,
     return false;
 }
 
+/* 把当前时刻新到达的任务按顺序追加进 RR 队列，并标记已发现。 */
 static void rr_enqueue_arrivals(const course_scheduler_t* scheduler,
                                 size_t* queue,
                                 size_t* queue_count,
@@ -133,6 +145,7 @@ static void rr_enqueue_arrivals(const course_scheduler_t* scheduler,
     }
 }
 
+/* 弹出 RR 队首任务并把后续元素整体前移。 */
 static size_t rr_pop(size_t* queue, size_t* queue_count) {
     size_t i = 0;
     const size_t task_index = queue[0];
@@ -144,6 +157,7 @@ static size_t rr_pop(size_t* queue, size_t* queue_count) {
     return task_index;
 }
 
+/* FCFS 离线排程主循环：选最早到达任务一次性跑到完成，空档跳到下一到达时刻。 */
 static bool run_fcfs(course_scheduler_t* scheduler) {
     uint32_t now = 0;
 
@@ -171,6 +185,7 @@ static bool run_fcfs(course_scheduler_t* scheduler) {
     return true;
 }
 
+/* RR 离线排程主循环：时间片轮转，未完成者回队尾，记录抢占次数。 */
 static bool run_rr(course_scheduler_t* scheduler, uint32_t time_slice) {
     size_t queue[COURSE_SCHEDULER_MAX_TASKS];
     bool discovered[COURSE_SCHEDULER_MAX_TASKS];
@@ -187,6 +202,7 @@ static bool run_rr(course_scheduler_t* scheduler, uint32_t time_slice) {
         discovered[i] = false;
     }
 
+    /* RR 使用固定数组队列，arrival 到达后入队；未完成任务在时间片结束后回队尾。 */
     while (!all_tasks_complete(scheduler)) {
         size_t task_index = 0;
         course_scheduler_task_t* task = NULL;
@@ -226,6 +242,7 @@ static bool run_rr(course_scheduler_t* scheduler, uint32_t time_slice) {
     return true;
 }
 
+/* CFS-lite 离线排程主循环：每轮选 vruntime 最小者跑一个时间片，累加其 vruntime。 */
 static bool run_cfs_lite(course_scheduler_t* scheduler, uint32_t time_slice) {
     uint32_t now = 0;
 
@@ -233,6 +250,7 @@ static bool run_cfs_lite(course_scheduler_t* scheduler, uint32_t time_slice) {
         return false;
     }
 
+    /* CFS-lite 只使用 vruntime 最小者优先，保留公平性直觉但避免引入权重/红黑树。 */
     while (!all_tasks_complete(scheduler)) {
         const size_t task_index = pick_cfs_lite(scheduler, now);
         course_scheduler_task_t* task = NULL;
@@ -263,6 +281,7 @@ static bool run_cfs_lite(course_scheduler_t* scheduler, uint32_t time_slice) {
     return true;
 }
 
+/* 用完成时间算出每个任务的等待 / 周转时间，并汇总成总计与平均。 */
 static void update_wait_turnaround(course_scheduler_t* scheduler) {
     size_t i = 0;
 
@@ -352,6 +371,7 @@ bool course_scheduler_run(course_scheduler_t* scheduler,
     }
 
     reset_runtime_fields(scheduler);
+    /* 每次运行前重置本轮统计，policy_runs 保留跨多次运行的展示计数。 */
     scheduler->summary.policy = policy;
     scheduler->summary.context_switches = 0;
     scheduler->summary.last_switch_cycle_cost = 0;
@@ -440,12 +460,14 @@ const char* course_scheduler_policy_name(course_sched_policy_t policy) {
     return "unknown";
 }
 
+/* 校验在线调度槽位索引是否在范围内且已占用。 */
 static bool online_index_valid(const course_online_scheduler_t* scheduler,
                                size_t index) {
     return scheduler != NULL && index < scheduler->task_count &&
            scheduler->tasks[index].used;
 }
 
+/* 取指定槽位对应的课程进程指针（依赖已绑定的进程表）。 */
 static course_process_t* online_process_at(course_online_scheduler_t* scheduler,
                                            size_t index) {
     if (!online_index_valid(scheduler, index) ||
@@ -457,11 +479,13 @@ static course_process_t* online_process_at(course_online_scheduler_t* scheduler,
                                scheduler->tasks[index].pid);
 }
 
+/* 进程存在且处于 READY 态，可被选为下一运行者。 */
 static bool online_process_runnable(const course_process_t* process) {
     return process != NULL && process->used &&
            process->state == COURSE_PROCESS_READY;
 }
 
+/* CFS 候选判定：READY 态可入选，或当前 RUNNING 态（保留当前者参与比较）。 */
 static bool online_process_cfs_candidate(
     const course_online_scheduler_t* scheduler,
     size_t index,
@@ -476,6 +500,7 @@ static bool online_process_cfs_candidate(
            process->state == COURSE_PROCESS_RUNNING;
 }
 
+/* 当前槽位的进程是否真的处于 RUNNING 态。 */
 static bool online_current_running(course_online_scheduler_t* scheduler) {
     course_process_t* process = NULL;
 
@@ -487,6 +512,7 @@ static bool online_current_running(course_online_scheduler_t* scheduler) {
     return process != NULL && process->state == COURSE_PROCESS_RUNNING;
 }
 
+/* 仅当目标 pid 与当前 pid 不同时记一次在线上下文切换与代价。 */
 static void online_record_context_switch(course_online_scheduler_t* scheduler,
                                          uint32_t next_pid) {
     if (scheduler == NULL || scheduler->summary.current_pid == next_pid) {
@@ -500,6 +526,7 @@ static void online_record_context_switch(course_online_scheduler_t* scheduler,
         COURSE_ONLINE_SWITCH_CYCLE_COST;
 }
 
+/* 释放当前运行者：把它降回 READY 并清空 current 槽位 / 已用时间片。 */
 static void online_release_current(course_online_scheduler_t* scheduler) {
     course_process_t* process = NULL;
 
@@ -521,6 +548,7 @@ static void online_release_current(course_online_scheduler_t* scheduler) {
     scheduler->slice_used = 0;
 }
 
+/* FCFS 在线选槽：取第一个 READY 的进程。 */
 static size_t online_pick_fcfs(course_online_scheduler_t* scheduler) {
     size_t i = 0;
 
@@ -533,6 +561,7 @@ static size_t online_pick_fcfs(course_online_scheduler_t* scheduler) {
     return COURSE_ONLINE_SCHEDULER_NO_INDEX;
 }
 
+/* RR 在线选槽：从上一运行者的下一个位置开始环形找下一个 READY。 */
 static size_t online_pick_rr(course_online_scheduler_t* scheduler,
                              size_t previous_index) {
     size_t step = 0;
@@ -556,6 +585,7 @@ static size_t online_pick_rr(course_online_scheduler_t* scheduler,
     return COURSE_ONLINE_SCHEDULER_NO_INDEX;
 }
 
+/* CFS-lite 在线选槽：在候选进程里取 vruntime 最小者，并列取 pid 最小。 */
 static size_t online_pick_cfs_lite(course_online_scheduler_t* scheduler) {
     size_t i = 0;
     size_t best = COURSE_ONLINE_SCHEDULER_NO_INDEX;
@@ -578,6 +608,7 @@ static size_t online_pick_cfs_lite(course_online_scheduler_t* scheduler) {
     return best;
 }
 
+/* 切换到指定槽位运行：更新进程 RUNNING / READY 状态、记上下文切换、刷新 current 与已用时间片。 */
 static bool online_select(course_online_scheduler_t* scheduler,
                           size_t next_index) {
     course_process_t* next_process = NULL;
@@ -619,6 +650,7 @@ static bool online_select(course_online_scheduler_t* scheduler,
     return true;
 }
 
+/* 按当前策略选出下一槽位并交给 online_select 执行切换。 */
 static bool online_select_next(course_online_scheduler_t* scheduler,
                                size_t previous_index) {
     size_t next_index = COURSE_ONLINE_SCHEDULER_NO_INDEX;
@@ -640,6 +672,7 @@ static bool online_select_next(course_online_scheduler_t* scheduler,
     return online_select(scheduler, next_index);
 }
 
+/* 决定本 tick 是否切进程：当前不运行则重新选；RR 按时间片、CFS 按 vruntime 抢占。 */
 static bool online_prepare_current(course_online_scheduler_t* scheduler) {
     const size_t previous_index = scheduler->current_index;
 

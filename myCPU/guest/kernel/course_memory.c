@@ -2,6 +2,10 @@
 
 #include <stddef.h>
 
+/* 本文件是课程级内存管理模型：用小规模页框数组固定展示 demand paging、
+   Clock 回收和 kmalloc 复用计数，避免把教学证据和真实 VM/PMM 实现混在一起。 */
+
+/* 统计当前已驻留页框数量。 */
 static uint32_t count_used_frames(const course_memory_t* memory) {
     uint32_t i = 0;
     uint32_t used = 0;
@@ -15,6 +19,7 @@ static uint32_t count_used_frames(const course_memory_t* memory) {
     return used;
 }
 
+/* 按 page_id 查找已驻留页框，返回索引或 -1。 */
 static int find_resident_frame(const course_memory_t* memory, uint32_t page_id) {
     uint32_t i = 0;
 
@@ -27,6 +32,7 @@ static int find_resident_frame(const course_memory_t* memory, uint32_t page_id) 
     return -1;
 }
 
+/* 找一个空闲页框，返回索引或 -1。 */
 static int find_free_frame(const course_memory_t* memory) {
     uint32_t i = 0;
 
@@ -39,9 +45,12 @@ static int find_free_frame(const course_memory_t* memory) {
     return -1;
 }
 
+/* Clock 算法选牺牲页：两圈内取首个 referenced=false 的页框。 */
 static uint32_t clock_select_victim(course_memory_t* memory) {
     uint32_t probes = 0;
 
+    /* Clock 置换最多扫两圈：第一圈清 referenced，第二圈应能选到牺牲页。
+       这样单测能稳定断言 page_reclaims，同时不会陷入无限循环。 */
     while (probes < memory->frame_count * 2U) {
         course_memory_frame_t* frame = &memory->frames[memory->clock_hand];
         const uint32_t selected = memory->clock_hand;
@@ -57,6 +66,7 @@ static uint32_t clock_select_victim(course_memory_t* memory) {
     return memory->clock_hand;
 }
 
+/* 把 page_id 装入指定页框并置 resident/referenced/dirty。 */
 static void install_page(course_memory_t* memory,
                          uint32_t frame_index,
                          uint32_t page_id,
@@ -113,6 +123,7 @@ bool course_memory_touch(course_memory_t* memory, uint32_t page_id, bool write) 
 
     frame_index = find_resident_frame(memory, page_id);
     if (frame_index >= 0) {
+        /* 命中页只更新访问位/脏位；缺页统计只在真正装入新页时增加。 */
         memory->frames[frame_index].referenced = true;
         memory->frames[frame_index].dirty =
             memory->frames[frame_index].dirty || write;
@@ -156,6 +167,7 @@ void* course_kmalloc(course_memory_t* memory, size_t size) {
         if (block->allocated) {
             continue;
         }
+        /* ever_allocated 用来区分首次分配和复用，是 /proc/meminfo 的展示证据。 */
         if (block->ever_allocated) {
             memory->stats.kmalloc_reuses += 1U;
         }

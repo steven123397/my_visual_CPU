@@ -1,3 +1,4 @@
+/* Linux compat Stage8 loader 单测：固定 RV64 ELF plan、interp 和诊断边界。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

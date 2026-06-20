@@ -1,3 +1,4 @@
+/* Linux compat Stage10 单测：固定 writable rootfs 和 process/file 相关 syscall 边界。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

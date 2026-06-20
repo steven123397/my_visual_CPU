@@ -8,6 +8,7 @@
 #include "panic.h"
 #include "platform.h"
 
+/* kernel_alpha_demo 入口：bring-up 后依次跑 Stage1/2/3 smoke，输出三段 marker。 */
 void kernel_main(void) {
     kernel_runtime_t runtime;
     static course_os_stage1_t stage1;

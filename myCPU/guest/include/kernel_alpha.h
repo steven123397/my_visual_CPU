@@ -6,6 +6,7 @@
 #include "kernel_bringup.h"
 #include "kernel_runtime.h"
 
+/* kernel_alpha 入口共享合同：保留 bring-up/interrupt/storage negative demo 的公共 wrapper。 */
 enum {
     KERNEL_ALPHA_MMIO_UART = KERNEL_BRINGUP_MMIO_UART,
     KERNEL_ALPHA_MMIO_CLINT = KERNEL_BRINGUP_MMIO_CLINT,

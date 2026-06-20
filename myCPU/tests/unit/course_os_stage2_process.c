@@ -1,3 +1,4 @@
+/* Stage2 进程单测：覆盖 spawn/fork/exec/wait/kill 和 procfs 进程视图。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

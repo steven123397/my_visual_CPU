@@ -18,7 +18,9 @@ extern void trap_user_runtime_arch_call(trap_user_runtime_t* user_runtime,
                                         uintptr_t user_sp);
 extern void trap_user_runtime_arch_resume(void);
 
+/* 当前活跃 user runtime 单例。 */
 static trap_user_runtime_t* active_user_runtime = NULL;
+/* 前向声明：校验 user runtime 栈有效性。 */
 static bool user_runtime_stack_valid(const trap_user_runtime_t* user_runtime);
 typedef struct TrapUserRuntimeRollbackEntry {
     trap_user_runtime_t* runtime;
@@ -60,12 +62,14 @@ _Static_assert(sizeof(trap_user_runtime_bind_rollback_t) <= 1024U,
 _Static_assert(sizeof(trap_user_runtime_standard_rollback_t) <= 1152U,
                "trap runtime standard rollback grew too large for guest stack budget");
 
+/* user runtime 基本字段是否有效（已绑 context/process）。 */
 static bool user_runtime_valid(const trap_user_runtime_t* user_runtime) {
     return user_runtime != NULL &&
            user_runtime->trap_context != NULL &&
            user_runtime->process != NULL;
 }
 
+/* bind 阶段参数是否可绑定（runtime/context/process 都非空）。 */
 static bool user_runtime_prepare_binding_valid(trap_user_runtime_t* user_runtime,
                                                trap_context_t* trap_context,
                                                vm_process_t* process) {
@@ -73,6 +77,7 @@ static bool user_runtime_prepare_binding_valid(trap_user_runtime_t* user_runtime
            process->address_space != NULL;
 }
 
+/* trap 栈参数是否合法（非空、对齐、够大）。 */
 static bool user_runtime_stack_args_valid(void* trap_stack_base,
                                           size_t trap_stack_size) {
     const uintptr_t stack_base = (uintptr_t)trap_stack_base;
@@ -84,6 +89,7 @@ static bool user_runtime_stack_args_valid(void* trap_stack_base,
            stack_base <= UINTPTR_MAX - (uintptr_t)trap_stack_size;
 }
 
+/* prepare 阶段全部参数是否合法。 */
 static bool user_runtime_prepare_args_valid(trap_user_runtime_t* user_runtime,
                                             trap_context_t* trap_context,
                                             vm_process_t* process,
@@ -95,6 +101,7 @@ static bool user_runtime_prepare_args_valid(trap_user_runtime_t* user_runtime,
            expected_ecall_pc != 0;
 }
 
+/* 快照 context 的 timer/external policy，用于回滚。 */
 static trap_context_binding_snapshot_t capture_context_binding_snapshot(
     const trap_context_t* trap_context) {
     trap_context_binding_snapshot_t snapshot;
@@ -123,6 +130,7 @@ static trap_context_binding_snapshot_t capture_context_binding_snapshot(
     return snapshot;
 }
 
+/* 用快照恢复 context 的 timer/external policy。 */
 static void restore_context_binding_snapshot(
     trap_context_t* trap_context,
     const trap_context_binding_snapshot_t* snapshot) {
@@ -136,6 +144,7 @@ static void restore_context_binding_snapshot(
     trap_context->user_ecall_policy = snapshot->user_ecall_policy;
 }
 
+/* 快照 standard policy 安装前的 handler 槽，用于回滚。 */
 static trap_context_standard_handler_snapshot_t capture_standard_handler_snapshot(
     const trap_context_t* trap_context) {
     trap_context_standard_handler_snapshot_t snapshot;
@@ -160,6 +169,7 @@ static trap_context_standard_handler_snapshot_t capture_standard_handler_snapsho
     return snapshot;
 }
 
+/* 用快照恢复 standard handler 槽。 */
 static void restore_standard_handler_snapshot(
     trap_context_t* trap_context,
     const trap_context_standard_handler_snapshot_t* snapshot) {
@@ -175,6 +185,7 @@ static void restore_standard_handler_snapshot(
         snapshot->user_ecall_handler;
 }
 
+/* 记录 runtime 回滚入口（保存 runtime 指针与快照）。 */
 static void capture_runtime_rollback_entry(
     trap_user_runtime_bind_rollback_t* rollback,
     trap_user_runtime_t* runtime) {
@@ -201,6 +212,7 @@ static void capture_runtime_rollback_entry(
     rollback->runtime_entry_count += 1U;
 }
 
+/* 准备 bind 阶段的回滚条目。 */
 static void prepare_runtime_bind_rollback(
     trap_user_runtime_bind_rollback_t* rollback,
     trap_user_runtime_t* user_runtime,
@@ -241,6 +253,7 @@ static void prepare_runtime_bind_rollback(
     }
 }
 
+/* 准备 standard 阶段的回滚条目。 */
 static void prepare_runtime_standard_rollback(
     trap_user_runtime_standard_rollback_t* rollback,
     trap_user_runtime_t* user_runtime,
@@ -257,6 +270,7 @@ static void prepare_runtime_standard_rollback(
     }
 }
 
+/* 回滚 bind 阶段已改动的 runtime/context。 */
 static void rollback_prepared_bind_runtime(
     const trap_user_runtime_bind_rollback_t* rollback) {
     size_t i = 0;
@@ -287,6 +301,7 @@ static void rollback_prepared_bind_runtime(
     active_user_runtime = rollback->active_runtime_snapshot;
 }
 
+/* 回滚 standard 阶段已改动的 runtime/context/policy。 */
 static void rollback_prepared_standard_runtime(
     const trap_user_runtime_standard_rollback_t* rollback) {
     if (rollback == NULL) {
@@ -301,12 +316,14 @@ static void rollback_prepared_standard_runtime(
     }
 }
 
+/* user runtime 是否满足激活条件。 */
 static bool user_runtime_activation_ready(const trap_user_runtime_t* user_runtime) {
     return user_runtime_valid(user_runtime) &&
            user_runtime_stack_valid(user_runtime) &&
            vm_process_is_runnable(user_runtime->process);
 }
 
+/* 清空一个 user signal 装配。 */
 static void clear_user_signal(trap_user_signal_t* signal) {
     if (signal == NULL) {
         return;
@@ -319,6 +336,7 @@ static void clear_user_signal(trap_user_signal_t* signal) {
     signal->delivered = false;
 }
 
+/* 清空全部中断 handler 槽。 */
 static void clear_interrupt_handlers(trap_context_t* trap_context) {
     uint64_t i = 0;
 
@@ -332,6 +350,7 @@ static void clear_interrupt_handlers(trap_context_t* trap_context) {
     }
 }
 
+/* 清空全部异常 handler 槽。 */
 static void clear_exception_handlers(trap_context_t* trap_context) {
     uint64_t i = 0;
 
@@ -345,6 +364,7 @@ static void clear_exception_handlers(trap_context_t* trap_context) {
     }
 }
 
+/* 复位 prepare 阶段写入的 runtime 状态。 */
 static void reset_prepared_runtime_state(trap_user_runtime_t* user_runtime) {
     if (user_runtime == NULL) {
         return;
@@ -366,6 +386,7 @@ static void reset_prepared_runtime_state(trap_user_runtime_t* user_runtime) {
     clear_user_signal(&user_runtime->external_signal);
 }
 
+/* 清掉 context 里指向该 runtime 的 policy 引用。 */
 static void clear_runtime_policy_refs(trap_context_t* trap_context,
                                       const trap_user_runtime_t* user_runtime) {
     if (trap_context == NULL || user_runtime == NULL) {
@@ -389,6 +410,7 @@ static void clear_runtime_policy_refs(trap_context_t* trap_context,
     }
 }
 
+/* 从 context 的 policy 绑定中摘除该 runtime。 */
 static void detach_runtime_from_context_binding(trap_user_runtime_t* user_runtime,
                                                 trap_context_t* trap_context) {
     if (user_runtime == NULL || trap_context == NULL) {
@@ -402,6 +424,7 @@ static void detach_runtime_from_context_binding(trap_user_runtime_t* user_runtim
     }
 }
 
+/* 校验 user runtime 的 supervisor trap 栈是否有效（定义在文件后段）。 */
 static bool user_runtime_stack_valid(const trap_user_runtime_t* user_runtime) {
     const uintptr_t stack_top =
         user_runtime != NULL ? user_runtime->arch_state.supervisor_trap_stack_top : 0;

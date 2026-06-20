@@ -6,6 +6,7 @@
 #include "runtime_context.h"
 #include "vm_private.h"
 
+/* 找一个空闲的进程用户区槽位。 */
 static vm_user_region_t** find_free_process_region_slot(vm_process_t* process) {
     size_t i = 0;
 
@@ -22,6 +23,7 @@ static vm_user_region_t** find_free_process_region_slot(vm_process_t* process) {
     return NULL;
 }
 
+/* 把进程的全部用户区槽位清空（只清指针，不动 region）。 */
 static void clear_process_region_slots(vm_process_t* process) {
     size_t i = 0;
 
@@ -34,6 +36,7 @@ static void clear_process_region_slots(vm_process_t* process) {
     }
 }
 
+/* 进程是否处于未绑定的干净状态（无地址空间/上下文/用户区）。 */
 static bool process_is_clean(const vm_process_t* process) {
     size_t i = 0;
 
@@ -51,11 +54,13 @@ static bool process_is_clean(const vm_process_t* process) {
     return true;
 }
 
+/* 进程是否已绑定可用地址空间。 */
 static bool process_has_address_space(const vm_process_t* process) {
     return process != NULL && process->address_space != NULL &&
            vm_address_space_root_table(process->address_space) != 0;
 }
 
+/* 按指针等值找到 region 所在的进程槽位。 */
 static vm_user_region_t** find_process_region_slot(vm_process_t* process,
                                                    const vm_user_region_t* region) {
     size_t i = 0;
@@ -73,6 +78,7 @@ static vm_user_region_t** find_process_region_slot(vm_process_t* process,
     return NULL;
 }
 
+/* 进程当前是否持有该 region。 */
 static bool process_owns_region(const vm_process_t* process,
                                 const vm_user_region_t* region) {
     size_t i = 0;
@@ -90,6 +96,7 @@ static bool process_owns_region(const vm_process_t* process,
     return false;
 }
 
+/* 找到包含 vaddr..+size 且 flags 满足要求的用户区。 */
 static const vm_user_region_t* find_process_region_containing(
     const vm_process_t* process,
     uintptr_t vaddr,
@@ -116,6 +123,7 @@ static const vm_user_region_t* find_process_region_containing(
     return NULL;
 }
 
+/* 把 region 描述符复位到未注册状态。 */
 static void clear_region_descriptor(vm_user_region_t* region) {
     if (region == NULL) {
         return;
@@ -131,6 +139,7 @@ static void clear_region_descriptor(vm_user_region_t* region) {
     region->object_mode = VM_REGION_OBJECT_NONE;
 }
 
+/* 若 entry_pc / user_sp 落在被摘除的 region 内，清掉对应上下文字段。 */
 static void clear_process_context_if_region_contains(vm_process_t* process,
                                                      const vm_user_region_t* region) {
     if (process == NULL || region == NULL) {
@@ -146,6 +155,7 @@ static void clear_process_context_if_region_contains(vm_process_t* process,
     }
 }
 
+/* 按 object_mode 把对象重新绑回 region（用于回滚恢复）。 */
 static bool restore_region_object_binding(vm_user_region_t* region,
                                           vm_object_t* object,
                                           size_t object_offset,
@@ -166,6 +176,7 @@ static bool restore_region_object_binding(vm_user_region_t* region,
     return false;
 }
 
+/* 注册用户区并按 map_now 决定立即映射或设为 fault 对象，失败回滚摘除。 */
 static bool process_bind_object_region(vm_process_t* process,
                                        vm_user_region_t* region,
                                        uintptr_t vaddr,
@@ -198,6 +209,7 @@ static bool process_bind_object_region(vm_process_t* process,
     return false;
 }
 
+/* 把单条 binding 转成 process_bind_object_region 调用。 */
 static bool process_bind_region_from_binding(
     vm_process_t* process,
     const vm_process_user_region_binding_t* binding) {
@@ -230,6 +242,7 @@ static bool process_bind_region_from_binding(
     }
 }
 
+/* 逆序摘除已绑定 region，用于批量绑定失败回滚。 */
 static bool rollback_bound_regions(vm_process_t* process,
                                    vm_user_region_t** bound_regions,
                                    size_t bound_count) {
@@ -243,6 +256,7 @@ static bool rollback_bound_regions(vm_process_t* process,
     return true;
 }
 
+/* 校验入口 PC 落可执行用户区、栈顶落可写用户区，可运行才返回 true。 */
 static bool process_context_valid(const vm_process_t* process,
                                   uintptr_t entry_pc,
                                   uintptr_t user_sp) {

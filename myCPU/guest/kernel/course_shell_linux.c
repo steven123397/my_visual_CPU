@@ -4,6 +4,10 @@
 #include "trap.h"
 #include "vm.h"
 
+/* Shell 与 Linux compat 的桥接层：把 `linux ...` 或 PATH fallback 转成显式请求。
+   这里负责进程/VM/栈等运行上下文，真实 ABI 处理仍在 linux_compat_* 中。 */
+
+/* 取 C 字符串长度。 */
 static size_t str_len(const char* value) {
     size_t i = 0;
 
@@ -16,6 +20,7 @@ static size_t str_len(const char* value) {
     return i;
 }
 
+/* 向 out 追加一个字符并保持 NUL。 */
 static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     if (out == 0 || used == 0 || *used + 1U >= out_size) {
         return false;
@@ -26,6 +31,7 @@ static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     return true;
 }
 
+/* 向 out 追加字符串。 */
 static bool append_str(char* out,
                        size_t out_size,
                        size_t* used,
@@ -44,6 +50,7 @@ static bool append_str(char* out,
     return true;
 }
 
+/* 把 ptr 的 size 字节清零。 */
 static void zero_bytes(void* ptr, size_t size) {
     size_t i = 0;
     uint8_t* bytes = (uint8_t*)ptr;
@@ -56,6 +63,7 @@ static void zero_bytes(void* ptr, size_t size) {
     }
 }
 
+/* 把一段 token 拷进 out 并补 NUL。 */
 static void copy_token(char* out, size_t out_size, const char* start, size_t len) {
     size_t i = 0;
 
@@ -69,6 +77,7 @@ static void copy_token(char* out, size_t out_size, const char* start, size_t len
     out[i] = '\0';
 }
 
+/* 设置命令成功标记。 */
 static void set_command_success(bool* command_success, bool value) {
     if (command_success != 0) {
         *command_success = value;
@@ -123,6 +132,7 @@ bool course_shell_run_linux_command(course_shell_t* shell,
         argv[i - 1U] = command->argv[i];
     }
 
+    /* Linux compat 子进程单独标 ABI，避免 procfs/调度视角把它当成课程 ABI 程序。 */
     child = course_process_fork(&shell->processes,
                                 shell->shell_pid,
                                 command->argv[1]);
@@ -178,6 +188,7 @@ bool course_shell_run_linux_command(course_shell_t* shell,
     request.process = &shell->linux_compat_process;
     request.trap_stack_base = shell->linux_compat_trap_stack;
     request.trap_stack_size = sizeof(shell->linux_compat_trap_stack);
+    /* 所有上下文显式装入 request，linux_compat_run 不隐式依赖 shell 全局状态。 */
     result = linux_compat_run(&request, out, out_size, &shell->linux_trace);
     set_command_success(command_success,
                         result == LINUX_COMPAT_OK &&
@@ -244,6 +255,7 @@ bool course_shell_run_linux_fallback_command(
         return false;
     }
 
+    /* PATH fallback 只是把命令改写成显式 linux <resolved>，保持入口合同单一。 */
     zero_bytes(&linux_command, sizeof(linux_command));
     linux_command.argc = command->argc + 1U;
     copy_token(linux_command.argv[0],

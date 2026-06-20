@@ -1,3 +1,4 @@
+/* 内置 Linux compat rootfs catalog：提供无外部资产时的 busybox/git/minimal-elf 证据。 */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

@@ -1,3 +1,4 @@
+/* Linux compat Stage6 单测：覆盖内置 rootfs catalog、PATH 解析和基础 syscall。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

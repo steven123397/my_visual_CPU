@@ -1,3 +1,4 @@
+/* Stage3 FS/shell 单测：覆盖 mkfs、seek、unlink/rmdir 和脚本化 shell 输出。 */
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

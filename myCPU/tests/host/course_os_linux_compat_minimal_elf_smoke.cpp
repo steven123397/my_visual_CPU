@@ -1,3 +1,4 @@
+// 内置 minimal ELF host smoke：验证 Linux compat 无外部资产时仍有最小执行证据。
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>

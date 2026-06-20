@@ -1,3 +1,4 @@
+// Host smoke trace helper：从 guest 符号中读取 linux_compat trace，辅助定位卡点。
 #pragma once
 
 #include <cstddef>

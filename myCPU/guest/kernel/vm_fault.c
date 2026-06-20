@@ -6,6 +6,7 @@
 #include "riscv.h"
 #include "vm_private.h"
 
+/* 在 kernel_fault_ranges 里找包含 fault_page 的记录。 */
 static const struct VmFaultRange* find_kernel_fault_range(
     const vm_address_space_t* address_space,
     uintptr_t fault_page) {
@@ -31,6 +32,7 @@ static const struct VmFaultRange* find_kernel_fault_range(
     return NULL;
 }
 
+/* 按 cause + 地址匹配已登记的 fault action 规则。 */
 static const struct VmFaultActionRule* find_fault_action(
     const vm_address_space_t* address_space,
     uint64_t cause,
@@ -57,6 +59,7 @@ static const struct VmFaultActionRule* find_fault_action(
     return NULL;
 }
 
+/* 校验 fault action 参数：cause 合法、区间合法、resume 模式必须有 slot。 */
 static bool fault_action_args_valid(const vm_address_space_t* address_space,
                                     uint64_t cause,
                                     uintptr_t vaddr,
@@ -68,6 +71,7 @@ static bool fault_action_args_valid(const vm_address_space_t* address_space,
            (action != VM_FAULT_ACTION_RESUME_AT_SLOT || resume_pc_slot != NULL);
 }
 
+/* 把 fault action 规则写进槽位。 */
 static void write_fault_action_rule(struct VmFaultActionRule* rule,
                                     uint64_t cause,
                                     uintptr_t vaddr,
@@ -86,6 +90,7 @@ static void write_fault_action_rule(struct VmFaultActionRule* rule,
     rule->resume_pc_slot = resume_pc_slot;
 }
 
+/* 校验并登记 fault action：与同 cause 的重叠规则冲突则失败。 */
 static bool register_fault_action(vm_address_space_t* address_space,
                                   uint64_t cause,
                                   uintptr_t vaddr,

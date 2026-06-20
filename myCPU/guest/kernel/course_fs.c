@@ -2,8 +2,12 @@
 
 #include <stddef.h>
 
+/* 课程文件系统实现：固定节点表 + 可注入 backing storage。
+   路径解析和目录索引都在内存里完成，目标是展示文件系统 API 和索引统计。 */
+
 static course_fs_storage_t g_course_fs_default_storage;
 
+/* 取 C 字符串长度，NULL 视为 0。 */
 static size_t cstr_len(const char* value) {
     size_t i = 0;
 
@@ -16,6 +20,7 @@ static size_t cstr_len(const char* value) {
     return i;
 }
 
+/* 比较 a 与 b 的前 b_len 字节，返回 -1/0/1。 */
 static int cmp_cstr_len(const char* a, const char* b, size_t b_len) {
     size_t i = 0;
 
@@ -37,10 +42,12 @@ static int cmp_cstr_len(const char* a, const char* b, size_t b_len) {
     return a[i] == '\0' ? -1 : 1;
 }
 
+/* 比较两个 C 字符串（用 b 的全长），返回 -1/0/1。 */
 static int cmp_cstr(const char* a, const char* b) {
     return cmp_cstr_len(a, b, cstr_len(b));
 }
 
+/* 把前 len 字符拷进节点名缓冲并补 NUL，最多 COURSE_FS_MAX_NAME-1 字符。 */
 static void copy_name(char* dest, const char* src, size_t len) {
     size_t i = 0;
 
@@ -50,6 +57,7 @@ static void copy_name(char* dest, const char* src, size_t len) {
     dest[i] = '\0';
 }
 
+/* 把 src 的 size 字节拷进 dest（原始字节，不做 NUL 处理）。 */
 static void copy_bytes(unsigned char* dest, const char* src, size_t size) {
     size_t i = 0;
 
@@ -58,6 +66,7 @@ static void copy_bytes(unsigned char* dest, const char* src, size_t size) {
     }
 }
 
+/* 把 backing storage 的 size 字节读进 dest（char 视图）。 */
 static void read_bytes(char* dest, const unsigned char* src, size_t size) {
     size_t i = 0;
 
@@ -66,6 +75,7 @@ static void read_bytes(char* dest, const unsigned char* src, size_t size) {
     }
 }
 
+/* 把 dest 的 size 字节清零，用于稀疏写入的空洞填充。 */
 static void zero_bytes(unsigned char* dest, size_t size) {
     size_t i = 0;
 
@@ -74,6 +84,7 @@ static void zero_bytes(unsigned char* dest, size_t size) {
     }
 }
 
+/* 取 FS 实际使用的 backing storage，NULL 时回退到全局默认。 */
 static course_fs_storage_t* fs_storage(course_fs_t* fs) {
     if (fs == NULL || fs->storage == NULL) {
         return &g_course_fs_default_storage;
@@ -81,6 +92,7 @@ static course_fs_storage_t* fs_storage(course_fs_t* fs) {
     return fs->storage;
 }
 
+/* 在节点表里找一个空闲槽位，返回索引，满了返回 -1。 */
 static int alloc_node(course_fs_t* fs) {
     int i = 0;
 
@@ -92,6 +104,7 @@ static int alloc_node(course_fs_t* fs) {
     return -1;
 }
 
+/* 判断节点是否还有子节点（用于 rmdir 拒绝非空目录）。 */
 static bool node_has_children(const course_fs_t* fs, int node_index) {
     int i = 0;
 
@@ -103,6 +116,7 @@ static bool node_has_children(const course_fs_t* fs, int node_index) {
     return false;
 }
 
+/* 在父目录的 B 树索引里按名查找子节点，返回节点索引或 -1。 */
 static int find_child(course_fs_t* fs,
                       int parent,
                       const char* name,
@@ -125,6 +139,8 @@ static int find_child(course_fs_t* fs,
         return -1;
     }
 
+    /* 目录索引用“小 B 树”近似：先在叶子分段上二分，再在叶子内部二分。
+       这里不追求通用 B 树插删，只保留可解释、可统计的查找路径。 */
     leaf_high = parent_node->btree_leaf_count;
     while (leaf_low < leaf_high) {
         const size_t mid = leaf_low + ((leaf_high - leaf_low) / 2U);
@@ -169,6 +185,7 @@ static int find_child(course_fs_t* fs,
     return -1;
 }
 
+/* 用已排序的 dir_index 重建父目录的叶子分段与内部节点计数。 */
 static void rebuild_child_btree(course_fs_t* fs, int parent) {
     course_fs_node_t* parent_node = NULL;
     size_t entry = 0;
@@ -183,6 +200,7 @@ static void rebuild_child_btree(course_fs_t* fs, int parent) {
     parent_node->btree_leaf_count = 0;
     parent_node->btree_internal_count = 0;
 
+    /* dir_index 已排序，rebuild 只把连续数组切成固定容量叶子。 */
     while (entry < parent_node->dir_index_count &&
            leaf < COURSE_FS_BTREE_MAX_LEAVES) {
         size_t count = parent_node->dir_index_count - entry;
@@ -202,6 +220,7 @@ static void rebuild_child_btree(course_fs_t* fs, int parent) {
     }
 }
 
+/* 汇总所有目录的叶子 / 内部节点数到全局统计。 */
 static void refresh_btree_stats(course_fs_t* fs) {
     int i = 0;
     uint32_t internal_nodes = 0;
@@ -223,6 +242,7 @@ static void refresh_btree_stats(course_fs_t* fs) {
     fs->stats.btree_leaf_nodes = leaf_nodes;
 }
 
+/* 把子节点按名有序插入父目录 dir_index，并重建 B 树索引。 */
 static bool insert_child_index(course_fs_t* fs, int parent, int child) {
     course_fs_node_t* parent_node = NULL;
     size_t pos = 0;
@@ -252,6 +272,7 @@ static bool insert_child_index(course_fs_t* fs, int parent, int child) {
     return true;
 }
 
+/* 从父目录 dir_index 删除指定子节点，并重建 B 树索引。 */
 static void remove_child_index(course_fs_t* fs, int parent, int child) {
     course_fs_node_t* parent_node = NULL;
     size_t i = 0;
@@ -278,6 +299,7 @@ static void remove_child_index(course_fs_t* fs, int parent, int child) {
     }
 }
 
+/* 从路径游标切出下一段路径分量，返回是否还有分量。 */
 static bool next_component(const char** cursor,
                            const char** name,
                            size_t* name_len) {
@@ -303,6 +325,7 @@ static bool next_component(const char** cursor,
     return true;
 }
 
+/* 解析绝对路径，返回终节点索引；可顺带输出父目录与叶子分量。 */
 static int resolve_path(course_fs_t* fs,
                         const char* path,
                         int* out_parent,
@@ -317,6 +340,7 @@ static int resolve_path(course_fs_t* fs,
         return -1;
     }
 
+    /* 所有公开 FS API 统一走绝对路径解析，便于统计 path_resolves。 */
     fs->stats.path_resolves += 1U;
     if (path[1] == '\0') {
         if (out_parent != NULL) {
@@ -394,6 +418,7 @@ void course_fs_init_with_storage(course_fs_t* fs, course_fs_storage_t* storage) 
     fs->stats.max_file_size = COURSE_FS_MAX_DATA;
     fs->stats.max_depth = 3U;
 
+    /* 0 号节点固定为根目录，其他节点按需分配。 */
     fs->nodes[0].used = true;
     fs->nodes[0].is_dir = true;
     fs->nodes[0].parent = -1;
@@ -501,6 +526,7 @@ bool course_fs_write(course_fs_t* fs,
 
     node = &fs->nodes[node_index];
     if (offset > node->size) {
+        /* 支持 seek 后稀疏写入，空洞区域以 0 填充，方便 shell/FD 层复用。 */
         zero_bytes(&fs_storage(fs)->data[node_index][node->size],
                    offset - node->size);
     }

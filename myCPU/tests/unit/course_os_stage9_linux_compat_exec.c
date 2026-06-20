@@ -1,3 +1,4 @@
+/* Linux compat Stage9 exec 单测：覆盖 PT_LOAD 映射、用户栈和 U-mode 入口合同。 */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

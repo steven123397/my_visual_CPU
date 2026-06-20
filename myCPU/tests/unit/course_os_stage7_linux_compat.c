@@ -1,3 +1,4 @@
+/* Linux compat Stage7 单测：验证外部 rootfs manifest 接入和缺资产行为。 */
 #include <stdio.h>
 #include <string.h>
 

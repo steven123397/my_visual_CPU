@@ -1,3 +1,4 @@
+/* Linux compat Stage5 单测：验证显式 linux launcher、ABI 标记和 fail-closed 诊断。 */
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

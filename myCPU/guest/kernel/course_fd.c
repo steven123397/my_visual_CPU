@@ -1,5 +1,9 @@
 #include "course_fd.h"
 
+/* 课程 FD 表实现：统一普通文件和只读 procfs 节点，保持每个 fd 的独立 offset。
+   这里返回 raw bytes，不替调用方追加字符串结束符。 */
+
+/* 取 C 字符串长度，NULL 视为 0。 */
 static size_t str_len(const char* value) {
     size_t i = 0;
 
@@ -12,6 +16,7 @@ static size_t str_len(const char* value) {
     return i;
 }
 
+/* 判断 value 是否以 prefix 开头。 */
 static bool str_eq_prefix(const char* value, const char* prefix) {
     size_t i = 0;
 
@@ -27,6 +32,7 @@ static bool str_eq_prefix(const char* value, const char* prefix) {
     return true;
 }
 
+/* 安全拷贝字符串到定长缓冲并补 NUL。 */
 static void copy_str(char* out, size_t out_size, const char* value) {
     size_t i = 0;
 
@@ -42,6 +48,7 @@ static void copy_str(char* out, size_t out_size, const char* value) {
     out[i] = '\0';
 }
 
+/* 从 fd 3 起找一个空闲 FD 槽位。 */
 static int find_free_fd(course_fd_table_t* table) {
     size_t i = 3U;
 
@@ -56,6 +63,7 @@ static int find_free_fd(course_fd_table_t* table) {
     return COURSE_FD_ERR_NO_SLOT;
 }
 
+/* 取 fd 对应的表项指针，越界或未使用返回 NULL。 */
 static course_fd_entry_t* fd_entry(course_fd_table_t* table, int fd) {
     if (table == 0 || fd < 0 || fd >= (int)COURSE_FD_MAX_OPEN ||
         table->entries[fd].kind == COURSE_FD_KIND_UNUSED) {
@@ -64,6 +72,7 @@ static course_fd_entry_t* fd_entry(course_fd_table_t* table, int fd) {
     return &table->entries[fd];
 }
 
+/* 判断路径是否为 /proc/ 前缀。 */
 static bool is_proc_path(const char* path) {
     return str_eq_prefix(path, "/proc/");
 }
@@ -108,6 +117,7 @@ int course_fd_resolve_path(const course_fd_table_t* table,
         return COURSE_FD_OK;
     }
 
+    /* 相对路径只基于 table->cwd 拼接，不解析 ..，保持 shell 工作流可预测。 */
     copy_str(out, out_size, table->cwd);
     used = str_len(out);
     if (used == 0 || out[0] != '/') {
@@ -145,6 +155,7 @@ int course_fd_open(course_fd_table_t* table, const char* path, uint32_t flags) {
         if ((flags & COURSE_FD_OPEN_WRITE) != 0) {
             return COURSE_FD_ERR_PERMISSION_DENIED;
         }
+        /* procfs 节点是只读快照，open 时只记录 path，read 时再动态格式化。 */
         table->entries[fd].kind = COURSE_FD_KIND_PROC;
         table->entries[fd].flags = COURSE_FD_OPEN_READ;
         table->entries[fd].offset = 0;
@@ -219,6 +230,7 @@ int course_fd_read(course_fd_table_t* table, int fd, char* out, size_t size) {
             !procfs_read(table->procfs, entry->path, proc_out, sizeof(proc_out))) {
             return COURSE_FD_ERR_NO_SUCH_FILE;
         }
+        /* procfs 先生成完整文本，再按 fd offset 切片，模拟普通文件读取体验。 */
         available = str_len(proc_out);
         if (entry->offset > available) {
             return 0;

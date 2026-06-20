@@ -5,6 +5,9 @@
 #include "../../src/debug/debug_budget.h"
 #include "terminal_smoke_harness.h"
 
+// 浏览器终端同源的 host smoke：通过 debug CLI 驱动 guest_course_os_shell_demo，
+// 覆盖 prompt、procfs 快捷命令、FD/FS、pipe、ELF/libc 和 crash evidence。
+
 namespace {
 
 std::string wait_for_course_os_text(const char* text) {
@@ -18,6 +21,7 @@ int main(int argc, char** argv) {
     const char* backend = argc > 1 ? argv[1] : "functional";
     std::ostringstream script;
 
+    // 脚本按真实 UART 输入推进，避免只检查一次性 kernel_alpha marker。
     script << "{\"cmd\":\"load\",\"image\":\"guest/course_os_shell.elf\","
            << "\"backend\":\"" << backend
            << "\",\"disk\":\"tests/data/storage_basic.txt\"}\n"

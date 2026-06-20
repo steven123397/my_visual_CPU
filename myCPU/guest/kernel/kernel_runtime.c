@@ -16,7 +16,9 @@
 uint64_t riscv_read_satp(void);
 #endif
 
+/* 前向声明：销毁 runtime 拥有的地址空间。 */
 static bool kernel_runtime_destroy_owned_address_space(kernel_runtime_t* runtime);
+/* demo storage signature 校验谓词：检查 LBA0 块的固定签名。 */
 static bool demo_storage_signature_guardrail(const uint8_t* block,
                                              size_t block_size,
                                              void* context);
@@ -77,6 +79,7 @@ bool kernel_runtime_run_entry_bringup(kernel_runtime_t* runtime) {
            trap_active_context() == trap_context;
 }
 
+/* 销毁 runtime 拥有的地址空间并清引用。 */
 static bool kernel_runtime_destroy_owned_address_space(kernel_runtime_t* runtime) {
     vm_address_space_t* address_space = kernel_runtime_address_space(runtime);
 
@@ -232,6 +235,7 @@ bool kernel_runtime_complete_storage_signature_and_wait_platform_interrupts(
                                                    timeout_delta);
 }
 
+/* demo storage signature guardrail 实现：比对 LBA0 块内固定字节。 */
 static bool demo_storage_signature_guardrail(const uint8_t* block,
                                              size_t block_size,
                                              void* context) {

@@ -2,6 +2,9 @@
 
 #include "memory.h"
 
+/* Linux compat 执行层：把 load_plan 映射进 guest VM，构造 argv/envp/auxv 栈，
+   最后通过 trap_user_runtime 进入 U-mode。默认路径仍是 Course OS shell 显式调用。 */
+
 #ifdef __riscv
 #include "riscv.h"
 #endif
@@ -59,29 +62,35 @@ __attribute__((weak)) void linux_compat_exec_clear_sstatus_bits(uint64_t value) 
 #endif
 }
 
+/* 把地址向下对齐到页边界。 */
 static uintptr_t align_down_page(uintptr_t value) {
     return value & ~((uintptr_t)MEMORY_PAGE_SIZE - 1U);
 }
 
+/* 把地址向下对齐到 16 字节。 */
 static uintptr_t align_down_16(uintptr_t value) {
     return value & ~(uintptr_t)15U;
 }
 
+/* 把 size 向上对齐到页大小。 */
 static size_t align_up_page_size(size_t value) {
     const size_t mask = (size_t)MEMORY_PAGE_SIZE - 1U;
 
     return (value + mask) & ~mask;
 }
 
+/* 临时打开 Linux compat 浮点状态，返回原 fs 值。 */
 static uint64_t enable_linux_compat_floating_state(void) {
     const uint64_t previous_fs =
         linux_compat_exec_read_sstatus() & RISCV_SSTATUS_FS_MASK;
 
+    /* 部分外部 ELF 会碰浮点寄存器；进入前临时打开 FS，返回后恢复。 */
     linux_compat_exec_clear_sstatus_bits(RISCV_SSTATUS_FS_MASK);
     linux_compat_exec_set_sstatus_bits(RISCV_SSTATUS_FS_INITIAL);
     return previous_fs;
 }
 
+/* 恢复之前的浮点状态。 */
 static void restore_linux_compat_floating_state(uint64_t previous_fs) {
     linux_compat_exec_clear_sstatus_bits(RISCV_SSTATUS_FS_MASK);
     if (previous_fs != 0U) {
@@ -89,6 +98,7 @@ static void restore_linux_compat_floating_state(uint64_t previous_fs) {
     }
 }
 
+/* 取 C 字符串长度。 */
 static size_t str_len(const char* value) {
     size_t i = 0;
 
@@ -101,6 +111,7 @@ static size_t str_len(const char* value) {
     return i;
 }
 
+/* 安全拷贝字符串到定长缓冲并补 NUL。 */
 static void copy_str(char* out, size_t out_size, const char* value) {
     size_t i = 0;
 
@@ -116,6 +127,7 @@ static void copy_str(char* out, size_t out_size, const char* value) {
     out[i] = '\0';
 }
 
+/* 设置 trace 为一次失败/边界记录。 */
 static void set_trace(linux_compat_trace_t* trace,
                       int32_t errno_value,
                       const char* message) {
@@ -129,6 +141,7 @@ static void set_trace(linux_compat_trace_t* trace,
     copy_str(trace->message, sizeof(trace->message), message);
 }
 
+/* 区间 [offset, offset+length) 是否完全落在镜像内。 */
 static bool range_in_image(uint64_t offset, uint64_t length, size_t image_size) {
     const uint64_t end = offset + length;
 
@@ -136,6 +149,7 @@ static bool range_in_image(uint64_t offset, uint64_t length, size_t image_size) 
            end <= (uint64_t)image_size;
 }
 
+/* 把 ELF 段 flags 转成 VM 权限 flags。 */
 static uint32_t segment_prot(uint32_t flags) {
     uint32_t prot = 0;
 
@@ -151,14 +165,17 @@ static uint32_t segment_prot(uint32_t flags) {
     return prot;
 }
 
+/* 取两值较小者。 */
 static size_t min_size(size_t a, size_t b) {
     return a < b ? a : b;
 }
 
+/* 取两值较大者。 */
 static size_t max_size(size_t a, size_t b) {
     return a > b ? a : b;
 }
 
+/* 把镜像字节写入 VM 对象（按对象页解析后逐页写）。 */
 static bool write_object_bytes(vm_object_t* object,
                                size_t object_offset,
                                const uint8_t* bytes,
@@ -191,6 +208,7 @@ static bool write_object_bytes(vm_object_t* object,
     return true;
 }
 
+/* 按小端写 8 字节到 out+offset。 */
 static void write_u64_le(uint8_t* out, size_t offset, uint64_t value) {
     size_t i = 0;
 
@@ -199,6 +217,7 @@ static void write_u64_le(uint8_t* out, size_t offset, uint64_t value) {
     }
 }
 
+/* 在栈页内 offset 处写一个 64 位值。 */
 static bool stack_write_u64(uint8_t* stack_page,
                             uintptr_t stack_base,
                             uintptr_t addr,
@@ -211,6 +230,7 @@ static bool stack_write_u64(uint8_t* stack_page,
     return true;
 }
 
+/* 向栈对象压入一个 64 位值，返回压入后栈顶。 */
 static bool push_u64(vm_object_t* object,
                      uintptr_t stack_base,
                      uintptr_t* cursor,
@@ -254,6 +274,7 @@ linux_compat_result_t linux_compat_exec_load(
             align_up_page_size(page_delta + (size_t)segment->memsz);
         size_t chunk_offset = 0;
 
+        /* PT_LOAD 以页为单位注册匿名对象，filesz 之外的 memsz 区间自然为 BSS。 */
         if (segment->memsz == 0U ||
             segment->filesz > segment->memsz ||
             !range_in_image(segment->offset, segment->filesz, image_size)) {

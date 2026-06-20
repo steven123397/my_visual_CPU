@@ -1,29 +1,35 @@
 #include "user_program.h"
 
+/* 取底层 user_task 可写指针。 */
 static user_task_t* user_program_task(user_program_t* program) {
     return program != NULL ? &program->user_task : NULL;
 }
 
+/* 取底层 user_task 只读指针。 */
 static const user_task_t* user_program_task_view(const user_program_t* program) {
     return program != NULL ? &program->user_task : NULL;
 }
 
+/* user_task 是否已创建（有地址空间且进程已绑定）。 */
 static bool user_program_created(const user_program_t* program) {
     return program != NULL && program->user_task.address_space != NULL &&
            program->user_task.process.address_space ==
                program->user_task.address_space;
 }
 
+/* bootstrap 是否已完成布局规划。 */
 static bool user_program_planned(const user_program_t* program) {
     return program != NULL && program->bootstrap.planned;
 }
 
+/* 是否处于可 create 状态：已规划、未创建、未配置、未绑定。 */
 static bool user_program_ready_for_create(const user_program_t* program) {
     return program != NULL && !user_program_created(program) &&
            program->bootstrap.planned && !program->bootstrap.configured &&
            !program->bootstrap.bound;
 }
 
+/* 由 exec 虚拟地址反推其对应物理页内偏移地址。 */
 static uintptr_t user_program_exec_symbol(const user_program_t* program) {
     return user_program_planned(program)
                ? program->bootstrap.exec_page_paddr +
@@ -31,6 +37,7 @@ static uintptr_t user_program_exec_symbol(const user_program_t* program) {
                : 0;
 }
 
+/* 由预期 ecall 虚拟地址反推其物理页内偏移地址。 */
 static uintptr_t user_program_ecall_symbol(const user_program_t* program) {
     return user_program_planned(program)
                ? program->bootstrap.exec_page_paddr +
@@ -39,12 +46,14 @@ static uintptr_t user_program_ecall_symbol(const user_program_t* program) {
                : 0;
 }
 
+/* 复位生命周期：已创建则先销毁 user_task，再复位 bootstrap。 */
 static bool user_program_reset_lifecycle(user_program_t* program) {
     return program != NULL &&
            (!user_program_created(program) || user_task_destroy(&program->user_task)) &&
            user_task_bootstrap_reset(&program->bootstrap);
 }
 
+/* create 失败后销毁并重新规划，回到 planned 状态。 */
 static bool user_program_replan_after_create_failure(user_program_t* program,
                                                      uintptr_t exec_symbol,
                                                      uintptr_t ecall_symbol) {
@@ -52,6 +61,7 @@ static bool user_program_replan_after_create_failure(user_program_t* program,
            user_program_plan_standard(program, exec_symbol, ecall_symbol);
 }
 
+/* 标准配置：configure + bind 两步。 */
 static bool user_program_configure_standard(user_program_t* program,
                                             uintptr_t alias_backing_paddr,
                                             uintptr_t user_stack_paddr) {
@@ -63,6 +73,7 @@ static bool user_program_configure_standard(user_program_t* program,
            user_task_bootstrap_bind(&program->bootstrap);
 }
 
+/* 按 region_id 取只读 region 指针。 */
 static const vm_user_region_t* user_program_region_view(
     const user_program_t* program,
     user_program_region_id_t region_id) {
@@ -86,6 +97,7 @@ static const vm_user_region_t* user_program_region_view(
     return NULL;
 }
 
+/* 按 object_mode 把对象重新绑回 region（回滚恢复用）。 */
 static bool restore_region_object_binding(vm_user_region_t* region,
                                           vm_object_t* object,
                                           size_t object_offset,

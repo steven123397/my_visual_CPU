@@ -1,3 +1,4 @@
+/* 内置最小 ELF 二进制资产：用于无外部 rootfs 的 Linux compat 基础执行 smoke。 */
 #include <stddef.h>
 #include <stdint.h>
 

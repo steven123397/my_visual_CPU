@@ -1,3 +1,4 @@
+/* Linux compat Stage11 单测：验证 shell 工作流、overlay 状态和本地工具链旁路边界。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

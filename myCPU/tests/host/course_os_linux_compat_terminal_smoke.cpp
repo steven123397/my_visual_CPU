@@ -1,3 +1,4 @@
+// Linux compat 终端 smoke：通过 Course OS shell 驱动 linux 命令和 PATH fallback。
 #include <cstdint>
 #include <cstdio>
 #include <string>

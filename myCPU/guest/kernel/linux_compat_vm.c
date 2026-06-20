@@ -4,29 +4,38 @@
 #include "pmm.h"
 #include "vm_private.h"
 
+/* Linux compat VM 适配层：把 mmap/brk/mprotect 等 Linux 用户态需求映射到现有
+   vm_process/vm_object 机制。它只服务 linux_compat 旁路，不改变课程 VM 模型。 */
+
+/* 把 uintptr 向上对齐到页边界。 */
 static uintptr_t align_up_page_uintptr(uintptr_t value) {
     const uintptr_t mask = (uintptr_t)MEMORY_PAGE_SIZE - 1U;
 
     return (value + mask) & ~mask;
 }
 
+/* 把 size 向上对齐到页大小。 */
 static size_t align_up_page_size(size_t value) {
     const size_t mask = (size_t)MEMORY_PAGE_SIZE - 1U;
 
     return (value + mask) & ~mask;
 }
 
+/* 取两值较小者。 */
 static size_t min_size(size_t a, size_t b) {
     return a < b ? a : b;
 }
 
+/* VM 是否已就绪（绑了地址空间与进程）。 */
 static bool vm_ready(const linux_compat_vm_t* vm) {
     return vm != 0 && vm->address_space != 0 && vm->process != 0;
 }
 
+/* 把 Linux prot 位转成 VM 权限 flags。 */
 static uint64_t prot_to_vm_flags(uint32_t prot) {
     uint64_t flags = VM_PAGE_USER;
 
+    /* Linux PROT_WRITE 隐含可读，映射到 guest VM 标志时也保留 READ。 */
     if ((prot & LINUX_COMPAT_PROT_READ) != 0U) {
         flags |= VM_PAGE_READ;
     }
@@ -39,6 +48,7 @@ static uint64_t prot_to_vm_flags(uint32_t prot) {
     return flags;
 }
 
+/* 清空一个 VM 区间槽（region + object）。 */
 static void clear_region_slot(linux_compat_vm_region_t* slot) {
     size_t i = 0;
 
@@ -70,6 +80,7 @@ static void clear_region_slot(linux_compat_vm_region_t* slot) {
     slot->flags = 0;
 }
 
+/* 复位对象并释放匿名页。 */
 static void clear_object_value(vm_object_t* object) {
     size_t i = 0;
 
@@ -87,6 +98,7 @@ static void clear_object_value(vm_object_t* object) {
     }
 }
 
+/* 找 heap 区间。 */
 static linux_compat_vm_region_t* find_heap_region(linux_compat_vm_t* vm) {
     size_t i = 0;
 
@@ -101,6 +113,7 @@ static linux_compat_vm_region_t* find_heap_region(linux_compat_vm_t* vm) {
     return 0;
 }
 
+/* 找一个空闲 VM 区间槽。 */
 static linux_compat_vm_region_t* find_free_region(linux_compat_vm_t* vm) {
     size_t i = 0;
 
@@ -115,6 +128,7 @@ static linux_compat_vm_region_t* find_free_region(linux_compat_vm_t* vm) {
     return 0;
 }
 
+/* 按起始地址精确找区间。 */
 static linux_compat_vm_region_t* find_exact_region(linux_compat_vm_t* vm,
                                                    uintptr_t addr,
                                                    size_t length,
@@ -135,6 +149,7 @@ static linux_compat_vm_region_t* find_exact_region(linux_compat_vm_t* vm,
     return 0;
 }
 
+/* 找包含某地址的区间。 */
 static linux_compat_vm_region_t* find_region_containing(linux_compat_vm_t* vm,
                                                         uintptr_t addr,
                                                         size_t length,
@@ -158,6 +173,7 @@ static linux_compat_vm_region_t* find_region_containing(linux_compat_vm_t* vm,
     return 0;
 }
 
+/* 找内核可读的区间（用于 read_user 路径）。 */
 static linux_compat_vm_region_t* find_region_readable_by_kernel(
     linux_compat_vm_t* vm,
     uintptr_t addr,
@@ -173,6 +189,7 @@ static linux_compat_vm_region_t* find_region_readable_by_kernel(
             (slot->prot & (LINUX_COMPAT_PROT_READ |
                            LINUX_COMPAT_PROT_WRITE)) != 0U;
 
+        /* 内核读用户内存时接受 R 或 W 映射，匹配 Linux 用户缓冲区常见用法。 */
         if (!slot->used ||
             !user_mapped_readable ||
             addr < slot->vaddr ||
@@ -184,6 +201,7 @@ static linux_compat_vm_region_t* find_region_readable_by_kernel(
     return 0;
 }
 
+/* 找覆盖某地址区间的区间。 */
 static linux_compat_vm_region_t* find_region_covering(linux_compat_vm_t* vm,
                                                       uintptr_t addr,
                                                       size_t length) {
@@ -206,6 +224,7 @@ static linux_compat_vm_region_t* find_region_covering(linux_compat_vm_t* vm,
     return 0;
 }
 
+/* 区间 [addr, addr+length) 是否可用（无重叠）。 */
 static bool mmap_range_available(linux_compat_vm_t* vm,
                                  uintptr_t addr,
                                  size_t length) {
@@ -216,6 +235,7 @@ static bool mmap_range_available(linux_compat_vm_t* vm,
         length > (size_t)(vm_user_limit() - addr)) {
         return false;
     }
+    /* fixed mmap 必须完整避开现有 region，防止覆盖 loader/stack/heap。 */
     for (i = 0; i < VM_PROCESS_MAX_USER_REGIONS; ++i) {
         linux_compat_vm_region_t* slot = &vm->regions[i];
 
@@ -227,6 +247,7 @@ static bool mmap_range_available(linux_compat_vm_t* vm,
     return true;
 }
 
+/* 从 next_mmap 起找一个可用 mmap 地址。 */
 static bool find_available_mmap_addr(linux_compat_vm_t* vm,
                                      uintptr_t start,
                                      size_t length,
@@ -247,10 +268,12 @@ static bool find_available_mmap_addr(linux_compat_vm_t* vm,
     return false;
 }
 
+/* 把 prot 转成区间描述符权限（含 none 语义）。 */
 static uint32_t descriptor_prot_for_region(uint32_t prot) {
     return prot != 0U ? prot : LINUX_COMPAT_PROT_READ;
 }
 
+/* 释放一个区间（解绑对象 + 清槽位）。 */
 static bool release_region(linux_compat_vm_t* vm,
                            linux_compat_vm_region_t* slot) {
     bool ok = true;
@@ -269,6 +292,7 @@ static bool release_region(linux_compat_vm_t* vm,
     return ok;
 }
 
+/* 建立一段区间映射（建对象 + 绑 region）。 */
 static bool map_region(linux_compat_vm_t* vm,
                        linux_compat_vm_region_t* slot,
                        uintptr_t vaddr,
@@ -315,6 +339,7 @@ static bool map_region(linux_compat_vm_t* vm,
     return true;
 }
 
+/* 把字节写入 VM 对象（按对象页解析后逐页写）。 */
 static bool write_object_bytes(vm_object_t* object,
                                size_t object_offset,
                                const uint8_t* bytes,
@@ -348,6 +373,7 @@ static bool write_object_bytes(vm_object_t* object,
     return true;
 }
 
+/* 把对象若干页清零。 */
 static bool zero_object_bytes(vm_object_t* object,
                               size_t object_offset,
                               size_t length) {
@@ -368,6 +394,7 @@ static bool zero_object_bytes(vm_object_t* object,
     return true;
 }
 
+/* 把已有区间的页重新映射到新对象（mremap 用）。 */
 static bool remap_existing_region_pages(linux_compat_vm_t* vm,
                                         linux_compat_vm_region_t* region,
                                         uintptr_t addr,
@@ -404,6 +431,7 @@ static bool remap_existing_region_pages(linux_compat_vm_t* vm,
     return true;
 }
 
+/* 把区间转为私有匿名（MAP_PRIVATE 转换）。 */
 static bool convert_region_to_private_anon(linux_compat_vm_t* vm,
                                            linux_compat_vm_region_t* region,
                                            uint32_t prot) {
@@ -458,6 +486,7 @@ static bool convert_region_to_private_anon(linux_compat_vm_t* vm,
     return true;
 }
 
+/* 解除固定地址区间的页映射。 */
 static bool unmap_fixed_pages(linux_compat_vm_t* vm,
                               uintptr_t addr,
                               size_t length) {
@@ -484,6 +513,7 @@ static bool unmap_fixed_pages(linux_compat_vm_t* vm,
     return true;
 }
 
+/* 在固定地址映射一段 PROT_NONE 占位区间。 */
 static uintptr_t mmap_fixed_prot_none(linux_compat_vm_t* vm,
                                       uintptr_t addr,
                                       size_t length) {
@@ -498,6 +528,7 @@ static uintptr_t mmap_fixed_prot_none(linux_compat_vm_t* vm,
     return unmap_fixed_pages(vm, addr, mapped_length) ? addr : (uintptr_t)-12;
 }
 
+/* 在已存在的固定区间上映射文件内容。 */
 static uintptr_t mmap_file_fixed_existing(linux_compat_vm_t* vm,
                                           uintptr_t addr,
                                           size_t length,
@@ -534,6 +565,7 @@ static uintptr_t mmap_file_fixed_existing(linux_compat_vm_t* vm,
     return addr;
 }
 
+/* 建立一段 mmap 区间（匿名或文件，固定或自动选址）。 */
 static uintptr_t map_mmap_region(linux_compat_vm_t* vm,
                                  uintptr_t addr,
                                  size_t length,
@@ -584,6 +616,7 @@ static uintptr_t map_mmap_region(linux_compat_vm_t* vm,
     return vaddr;
 }
 
+/* 把匿名页搬到新区间（mremap 移动用）。 */
 static bool move_anon_pages_to_region(linux_compat_vm_t* vm,
                                       linux_compat_vm_region_t* old_region,
                                       linux_compat_vm_region_t* new_region,
@@ -632,6 +665,7 @@ static bool move_anon_pages_to_region(linux_compat_vm_t* vm,
     return true;
 }
 
+/* 建立物理后端的 mmap 区间（文件映射）。 */
 static uintptr_t map_physical_mmap_region(linux_compat_vm_t* vm,
                                           uintptr_t addr,
                                           size_t length,

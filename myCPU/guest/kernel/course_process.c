@@ -2,6 +2,10 @@
 
 #include "course_user_programs.h"
 
+/* 课程进程模型：用固定进程表展示 spawn/fork/exec/wait、崩溃隔离和 COW。
+   它保存课程可观察状态，不直接管理真实 guest 页表。 */
+
+/* 清空单个用户页引用描述符。 */
 static void clear_user_page_ref(course_process_user_page_ref_t* ref) {
     if (ref == 0) {
         return;
@@ -13,6 +17,7 @@ static void clear_user_page_ref(course_process_user_page_ref_t* ref) {
     ref->cow = false;
 }
 
+/* 把进程槽位复位到 UNUSED 干净状态。 */
 static void clear_process(course_process_t* process) {
     size_t i = 0;
     size_t j = 0;
@@ -56,6 +61,7 @@ static void clear_process(course_process_t* process) {
     }
 }
 
+/* 安全拷贝字符串到定长缓冲并补 NUL。 */
 static void copy_str(char* out, size_t out_size, const char* value) {
     size_t i = 0;
 
@@ -71,6 +77,7 @@ static void copy_str(char* out, size_t out_size, const char* value) {
     out[i] = '\0';
 }
 
+/* 把 COW 页槽位复位为未使用。 */
 static void clear_cow_page(course_process_cow_page_t* page) {
     size_t i = 0;
 
@@ -86,6 +93,7 @@ static void clear_cow_page(course_process_cow_page_t* page) {
     }
 }
 
+/* 从进程表里找一个空闲进程槽位。 */
 static course_process_t* alloc_process(course_process_table_t* table) {
     size_t i = 0;
 
@@ -102,6 +110,7 @@ static course_process_t* alloc_process(course_process_table_t* table) {
     return 0;
 }
 
+/* 按 COW 页 id 查可写页槽位。 */
 static course_process_cow_page_t* find_cow_page_by_id(
     course_process_table_t* table,
     uint32_t id) {
@@ -119,6 +128,7 @@ static course_process_cow_page_t* find_cow_page_by_id(
     return 0;
 }
 
+/* 按 COW 页 id 查只读页槽位。 */
 static const course_process_cow_page_t* find_const_cow_page_by_id(
     const course_process_table_t* table,
     uint32_t id) {
@@ -136,6 +146,7 @@ static const course_process_cow_page_t* find_const_cow_page_by_id(
     return 0;
 }
 
+/* 分配一个 COW 页槽位并分配新 id。 */
 static course_process_cow_page_t* alloc_cow_page(course_process_table_t* table) {
     size_t i = 0;
     course_process_cow_page_t* page = 0;
@@ -161,6 +172,7 @@ static course_process_cow_page_t* alloc_cow_page(course_process_table_t* table) 
     return 0;
 }
 
+/* 释放对某 COW 页的引用，refcount 归零则回收页槽位。 */
 static void release_cow_page_ref(course_process_table_t* table, uint32_t id) {
     course_process_cow_page_t* page = find_cow_page_by_id(table, id);
 
@@ -175,6 +187,7 @@ static void release_cow_page_ref(course_process_table_t* table, uint32_t id) {
     }
 }
 
+/* 释放进程全部用户页引用。 */
 static void release_process_user_pages(course_process_table_t* table,
                                        course_process_t* process) {
     size_t i = 0;
@@ -191,6 +204,7 @@ static void release_process_user_pages(course_process_table_t* table,
     }
 }
 
+/* COW 复制：共享页 refcount>1 时复制新页，独占页直接恢复可写。 */
 static bool duplicate_cow_page(course_process_table_t* table,
                                course_process_t* process,
                                uint32_t page_index) {
@@ -214,6 +228,7 @@ static bool duplicate_cow_page(course_process_table_t* table,
         return true;
     }
     if (old_page->refcount == 1U) {
+        /* 独占页无需复制，只要恢复可写即可；这也是 COW 节省页数的展示点。 */
         ref->cow = false;
         ref->writable = true;
         return true;
@@ -311,6 +326,7 @@ course_process_t* course_process_fork(course_process_table_t* table,
     {
         size_t i = 0;
 
+        /* fork 时父子共享同一份课程页，把双方都标记为只读 COW。 */
         for (i = 0; i < COURSE_PROCESS_MAX_USER_PAGES; ++i) {
             course_process_user_page_ref_t* parent_ref = &parent->user_pages[i];
             course_process_user_page_ref_t* child_ref = &child->user_pages[i];
@@ -401,6 +417,7 @@ bool course_process_exit(course_process_table_t* table,
     }
 
     process->exit_code = exit_code;
+    /* 退出先进入 zombie，直到父进程 wait/waitpid 才释放用户页并转 DEAD。 */
     process->state = COURSE_PROCESS_ZOMBIE;
     return true;
 }
@@ -517,6 +534,7 @@ int32_t course_process_exec_image(course_process_table_t* table,
         return COURSE_PROCESS_ERR_BAD_ELF;
     }
 
+    /* exec 替换课程进程映像：释放旧用户页，写入 loader 给出的 entry/栈/maps 摘要。 */
     release_process_user_pages(table, process);
     copy_str(process->name, sizeof(process->name), image_name);
     copy_str(process->argv, sizeof(process->argv), load.argv);
@@ -554,6 +572,7 @@ bool course_process_record_crash(course_process_table_t* table,
     process->crash_scause = scause;
     process->crash_stval = stval;
     copy_str(process->crash_reason, sizeof(process->crash_reason), reason);
+    /* 崩溃被记录成异常退出，shell/procfs 可继续观察，不让整个课程 OS 停机。 */
     return course_process_exit(table, pid, COURSE_PROCESS_EXIT_CRASH);
 }
 

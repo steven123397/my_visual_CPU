@@ -1,3 +1,5 @@
+// 调试服务器运行时：管理 debug CLI 会话生命周期、run loop、终端 I/O 投影、
+// Linux boot marker 等待与 session 代次状态机，供 debug_server.mjs 调用。
 import {
   applyTerminalChunk,
   createTerminalProjectionState,
@@ -10,6 +12,7 @@ import {
 } from './debug_budget.mjs';
 import { normalizeCliResponse } from './debug_cli_session.mjs';
 
+// 运行时错误基类，携带 HTTP 状态码。
 class DebugServerRuntimeError extends Error {
   constructor(message, statusCode = 500) {
     super(message);
@@ -18,6 +21,7 @@ class DebugServerRuntimeError extends Error {
   }
 }
 
+// 过期会话错误（代次不一致），固定状态码 409。
 export class StaleSessionError extends DebugServerRuntimeError {
   constructor(message = 'stale session action') {
     super(message, 409);
@@ -25,6 +29,7 @@ export class StaleSessionError extends DebugServerRuntimeError {
   }
 }
 
+// 创建并返回调试服务器运行时实例（会话/run loop/终端/snapshot 全部封装在内）。
 export function createDebugServerRuntime({
   createSession,
   wsHub,
@@ -43,23 +48,27 @@ export function createDebugServerRuntime({
   let sessionActionQueue = Promise.resolve();
   let runLoopToken = 0;
 
+  // 串行化会话动作到队列执行，避免并发请求互相覆盖。
   function enqueueSessionAction(action) {
     const queued = sessionActionQueue.then(action, action);
     sessionActionQueue = queued.catch(() => {});
     return queued;
   }
 
+  // 递增会话代次并返回新代次（用于失效旧请求）。
   function beginSessionGeneration() {
     currentGeneration += 1;
     return currentGeneration;
   }
 
+  // 校验代次一致，否则抛 StaleSessionError。
   function assertGeneration(generation) {
     if (generation !== currentGeneration) {
       throw new StaleSessionError();
     }
   }
 
+  // 停止 run loop 定时器并失效令牌。
   function stopRunLoop() {
     if (runTimer) {
       clearTimeout(runTimer);
@@ -68,17 +77,20 @@ export function createDebugServerRuntime({
     runLoopToken += 1;
   }
 
+  // 校验会话已加载，否则抛 400。
   function requireSessionLoaded() {
     if (!currentSession) {
       throw new DebugServerRuntimeError('session not loaded', 400);
     }
   }
 
+  // 重置终端投影与偏移跟踪。
   function resetTerminalTracking() {
     resetTerminalProjectionState(currentTerminalProjection);
     currentTerminalOffset = 0;
   }
 
+  // 构造终端重置广播空消息。
   function buildTerminalResetMessage() {
     return {
       type: 'terminal',
@@ -88,11 +100,13 @@ export function createDebugServerRuntime({
     };
   }
 
+  // 判断快照是否含断点事件。
   function snapshotHasBreakpoint(snapshot) {
     return Array.isArray(snapshot?.events) &&
       snapshot.events.some((event) => event?.kind === 'breakpoint');
   }
 
+  // 读取会话 UART 输出并校验代次。
   async function readTerminalOutput(offset = currentTerminalOffset, generation = currentGeneration) {
     requireSessionLoaded();
     const chunk = normalizeCliResponse(await currentSession.uartOutput(offset), 'session uartOutput');
@@ -103,12 +117,14 @@ export function createDebugServerRuntime({
     };
   }
 
+  // 调用会话方法并规范化响应。
   async function callSession(method, ...args) {
     requireSessionLoaded();
     const response = await currentSession[method](...args);
     return normalizeCliResponse(response, `session ${method}`);
   }
 
+  // 归一化终端块并更新投影与偏移。
   function trackTerminalChunk(chunk, { reset = false } = {}) {
     const normalized = {
       type: 'terminal',
@@ -127,6 +143,7 @@ export function createDebugServerRuntime({
     return normalized;
   }
 
+  // 同步终端增量并按需广播。
   async function syncTerminalDelta({
     offset = currentTerminalOffset,
     reset = false,
@@ -140,6 +157,7 @@ export function createDebugServerRuntime({
     return message;
   }
 
+  // 步进提交直到终端有输出或运行停止。
   async function advanceUntilTerminalActivity({
     maxCommits = terminalLimits.stepCommitBudget,
     settleCommits = terminalLimits.ascii.settleCommits,
@@ -198,6 +216,7 @@ export function createDebugServerRuntime({
     };
   }
 
+  // 依据输入文本生成终端推进计划。
   function buildTerminalAdvancePlan(text) {
     if (!text) {
       return null;
@@ -258,6 +277,7 @@ export function createDebugServerRuntime({
     }
   }
 
+  // 生成命令等待计划直到匹配文本。
   function buildTerminalCommandWaitPlan(text) {
     if (!currentEntry?.commandUntilUartText) {
       return null;
@@ -272,6 +292,7 @@ export function createDebugServerRuntime({
     };
   }
 
+  // 启动周期性步进 run loop 定时器。
   function startRunLoop(intervalMs, generation) {
     stopRunLoop();
     const token = runLoopToken;
@@ -321,10 +342,12 @@ export function createDebugServerRuntime({
     scheduleNextTick();
   }
 
+  // 通过会话动作队列执行并返回 Promise。
   function runQueued(action) {
     return enqueueSessionAction(action);
   }
 
+  // 加载会话并初始化快照与终端（含 Linux boot marker 等待）。
   async function initializeSessionState(session, entry, backend) {
     const terminalPrompt = entry.terminalPrompt ?? null;
     await normalizeCliResponse(await session.load(entry, backend), 'session load');
@@ -377,6 +400,7 @@ export function createDebugServerRuntime({
     };
   }
 
+  // 复位后等待 boot marker 重新武装会话。
   async function rearmSessionStateAfterReset(session, entry) {
     const snapshot = entry.bootUntilUartText
       ? normalizeCliResponse(
@@ -405,6 +429,7 @@ export function createDebugServerRuntime({
     };
   }
 
+  // 判断复位后是否需重新武装会话（Linux console 等带 payload 入口）。
   function shouldRearmSessionOnReset(entry) {
     return (entry?.payloads?.length ?? 0) > 0
       || (entry?.gprSeeds?.length ?? 0) > 0
@@ -412,6 +437,7 @@ export function createDebugServerRuntime({
   }
 
   return {
+    // 创建并加载新会话替换旧会话。
     async load(entry, backend = 'pipeline') {
       const generation = beginSessionGeneration();
       stopRunLoop();
@@ -456,6 +482,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 请求并返回当前快照。
     async snapshot() {
       const generation = currentGeneration;
       return runQueued(async () => {
@@ -467,6 +494,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 单周期步进并广播快照与终端。
     async stepCycle() {
       const generation = currentGeneration;
       return runQueued(async () => {
@@ -480,6 +508,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 单提交步进并广播快照与终端。
     async stepCommit() {
       const generation = currentGeneration;
       return runQueued(async () => {
@@ -493,6 +522,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 分发内存/CSR/断点调试命令。
     async debugCommand(command = {}) {
       const generation = currentGeneration;
       stopRunLoop();
@@ -526,6 +556,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 复位会话并按需重新武装终端（Linux console rearm）。
     async reset() {
       const generation = beginSessionGeneration();
       stopRunLoop();
@@ -557,6 +588,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 终止会话并清理全部状态。
     async terminate() {
       const generation = beginSessionGeneration();
       stopRunLoop();
@@ -580,6 +612,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 以指定频率启动 run loop。
     async run(rateHz = DEFAULT_DEBUG_RUN_RATE_HZ) {
       const intervalMs = Math.max(20, Math.floor(1000 / Math.max(1, rateHz)));
       const generation = currentGeneration;
@@ -591,6 +624,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 处理终端输入并推进输出（等待 prompt settling）。
     async terminalInput(text = '') {
       const generation = currentGeneration;
       return runQueued(async () => {
@@ -642,6 +676,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 读取指定偏移起的终端输出。
     async terminalOutput(offset = 0) {
       const generation = currentGeneration;
       return runQueued(async () => {
@@ -651,6 +686,7 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 调用会话 JIT 派发并返回摘要。
     async jitDispatch() {
       const generation = currentGeneration;
       return runQueued(async () => {
@@ -662,11 +698,13 @@ export function createDebugServerRuntime({
       });
     },
 
+    // 停止 run loop 并返回当前快照。
     async pause() {
       stopRunLoop();
       return runQueued(async () => ({ ok: true, snapshot: currentSnapshot }));
     },
 
+    // 停止运行时并关闭底层会话。
     async close() {
       stopRunLoop();
       if (currentSession) {

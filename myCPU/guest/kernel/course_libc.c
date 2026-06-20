@@ -1,5 +1,8 @@
 #include "course_libc.h"
 
+/* 简化 libc wrapper：每个函数只把 C 调用参数转成课程 syscall 分发参数。
+   这样用户程序 smoke 能以 libc 形态覆盖 read/write/open/fork/exec/wait。 */
+
 void course_libc_init(course_libc_t* libc, course_syscall_t* syscalls) {
     if (libc == 0) {
         return;

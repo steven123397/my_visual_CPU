@@ -1,3 +1,4 @@
+/* Course OS UART 行输入单测：固定回车、退格、溢出和 prompt 交互边界。 */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

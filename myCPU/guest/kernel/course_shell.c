@@ -4,6 +4,10 @@
 #include "course_shell_linux.h"
 #include "course_user_programs.h"
 
+/* Course OS 交互 shell：负责命令解析、内建命令、课程用户程序执行、
+   procfs 快捷查看，以及显式 linux/PATH fallback 到 Linux compat 旁路。 */
+
+/* 取 C 字符串长度。 */
 static size_t str_len(const char* value) {
     size_t i = 0;
 
@@ -16,6 +20,7 @@ static size_t str_len(const char* value) {
     return i;
 }
 
+/* 判断两个 C 字符串是否完全相等。 */
 static bool str_eq(const char* a, const char* b) {
     size_t i = 0;
 
@@ -31,6 +36,7 @@ static bool str_eq(const char* a, const char* b) {
     return a[i] == b[i];
 }
 
+/* 向 out 追加一个字符并保持 NUL。 */
 static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     if (out == 0 || used == 0 || *used + 1U >= out_size) {
         return false;
@@ -41,6 +47,7 @@ static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     return true;
 }
 
+/* 向 out 追加字符串。 */
 static bool append_str(char* out,
                        size_t out_size,
                        size_t* used,
@@ -59,6 +66,7 @@ static bool append_str(char* out,
     return true;
 }
 
+/* 向 out 追加无符号 32 位十进制。 */
 static bool append_u32(char* out,
                        size_t out_size,
                        size_t* used,
@@ -83,6 +91,7 @@ static bool append_u32(char* out,
     return true;
 }
 
+/* 向 out 追加带符号 32 位十进制。 */
 static bool append_i32(char* out,
                        size_t out_size,
                        size_t* used,
@@ -100,6 +109,7 @@ static bool append_i32(char* out,
     return append_u32(out, out_size, used, magnitude);
 }
 
+/* 向 out 追加 64 位十六进制（0x 前缀）。 */
 static bool append_hex_u64(char* out,
                            size_t out_size,
                            size_t* used,
@@ -125,12 +135,14 @@ static bool append_hex_u64(char* out,
     return true;
 }
 
+/* 设置命令成功标记（统一入口便于观测）。 */
 static void set_command_success(bool* command_success, bool value) {
     if (command_success != 0) {
         *command_success = value;
     }
 }
 
+/* 把命令结构清空（argc/pipeline/重定向）。 */
 static void clear_command(course_shell_command_t* command) {
     size_t stage = 0;
     size_t arg = 0;
@@ -151,6 +163,7 @@ static void clear_command(course_shell_command_t* command) {
     }
 }
 
+/* 把一段 token 拷进 argv 槽并补 NUL。 */
 static void copy_token(char* out, size_t out_size, const char* start, size_t len) {
     size_t i = 0;
 
@@ -164,6 +177,7 @@ static void copy_token(char* out, size_t out_size, const char* start, size_t len
     out[i] = '\0';
 }
 
+/* 拷贝并裁剪前后空格后的一段命令文本到 out。 */
 static bool copy_trimmed_segment(char* out,
                                  size_t out_size,
                                  const char* start,
@@ -186,6 +200,7 @@ static bool copy_trimmed_segment(char* out,
     return true;
 }
 
+/* 在 line 里找 && 分隔位置。 */
 static bool find_and_separator(const char* line, size_t* offset) {
     size_t i = 0;
 
@@ -202,6 +217,7 @@ static bool find_and_separator(const char* line, size_t* offset) {
     return false;
 }
 
+/* 向当前简单命令追加一个 argv，超容量返回 false。 */
 static bool add_arg(course_shell_simple_command_t* command,
                     const char* start,
                     size_t len) {
@@ -228,6 +244,7 @@ bool course_shell_parse(const char* line, course_shell_command_t* out_command) {
     }
 
     target = &out_command->pipeline[0];
+    /* 解析器只支持空格分词、管道和单条命令级重定向，避免引号/展开等复杂 shell 语义。 */
     while (*p != '\0') {
         const char* start = 0;
         size_t len = 0;
@@ -303,6 +320,7 @@ bool course_shell_parse(const char* line, course_shell_command_t* out_command) {
     return out_command->pipeline[0].argc > 0 && !expect_command;
 }
 
+/* 把一行命令追加进 transcript（带 "$ " 前缀）。 */
 static bool transcript_append(course_shell_t* shell, const char* line) {
     if (shell == 0) {
         return false;
@@ -321,6 +339,7 @@ static bool transcript_append(course_shell_t* shell, const char* line) {
                        '\n');
 }
 
+/* 从 scratch 栈申请一个命令结构（支持嵌套调用，用完 release）。 */
 static course_shell_command_t* acquire_command_scratch(course_shell_t* shell) {
     if (shell == 0 ||
         shell->command_scratch_depth >= COURSE_SHELL_COMMAND_SCRATCH_DEPTH) {
@@ -329,6 +348,7 @@ static course_shell_command_t* acquire_command_scratch(course_shell_t* shell) {
     return &shell->command_scratch[shell->command_scratch_depth++];
 }
 
+/* 归还一层 scratch 栈。 */
 static void release_command_scratch(course_shell_t* shell) {
     if (shell != 0 && shell->command_scratch_depth > 0U) {
         shell->command_scratch_depth -= 1U;
@@ -343,6 +363,7 @@ void course_shell_init(course_shell_t* shell) {
     }
 
     course_fs_mkfs(&shell->fs);
+    /* 初始化一套自包含的课程 OS 状态，浏览器终端启动后无需外部 rootfs。 */
     (void)course_fs_mkdir(&shell->fs, "/home");
     (void)course_fs_mkdir(&shell->fs, "/home/user");
     (void)course_fs_mkdir(&shell->fs, "/tmp");
@@ -384,6 +405,7 @@ void course_shell_init(course_shell_t* shell) {
     shell->transcript_size = 0;
 }
 
+/* 把 fd 内容一次性读进 out（以 NUL 收尾）。 */
 static bool read_all_fd(course_fd_table_t* fds,
                         int fd,
                         char* out,
@@ -402,6 +424,7 @@ static bool read_all_fd(course_fd_table_t* fds,
     return true;
 }
 
+/* 判断脚本行是否应忽略（空行、注释、首行 shebang）。 */
 static bool line_ignored(const char* line, bool first_line) {
     const char* p = line;
 
@@ -420,6 +443,7 @@ static bool line_ignored(const char* line, bool first_line) {
     return *p == '#';
 }
 
+/* 执行一段脚本文件：按行 run_line，跳过注释/shebang，失败回报行号。 */
 static bool run_script(course_shell_t* shell,
                        const char* path,
                        char* out,
@@ -447,6 +471,7 @@ static bool run_script(course_shell_t* shell,
         return false;
     }
 
+    /* shell script 按行执行，支持 shebang/注释跳过；失败时回报出错行号。 */
     while (script[pos] != '\0') {
         size_t len = 0;
         size_t i = 0;
@@ -490,6 +515,7 @@ static bool run_script(course_shell_t* shell,
     return true;
 }
 
+/* 把内核侧 C 字符串拷进用户态缓冲（模拟用户指针写入）。 */
 static bool copy_cstr_to_user(char* out, size_t out_size, const char* value) {
     if (out == 0 || out_size == 0 || value == 0) {
         return false;
@@ -498,6 +524,7 @@ static bool copy_cstr_to_user(char* out, size_t out_size, const char* value) {
     return true;
 }
 
+/* 用 libc syscall effect 模拟课程用户程序（hello/echo/cat）的固定输出。 */
 static bool run_program_libc_effect(course_shell_t* shell,
                                     const course_shell_simple_command_t* command,
                                     const course_user_program_t* program,
@@ -572,6 +599,7 @@ static bool run_program_libc_effect(course_shell_t* shell,
     return true;
 }
 
+/* 程序执行失败时清理子进程：未退出则先 exit，再 waitpid 收尸。 */
 static void cleanup_failed_program_child(course_shell_t* shell,
                                          course_process_t* child) {
     int32_t ignored_status = 0;
@@ -589,6 +617,7 @@ static void cleanup_failed_program_child(course_shell_t* shell,
                                  &ignored_status);
 }
 
+/* 执行用户程序命令：fork 子进程、装载 ELF、跑 libc effect、wait 收尸并输出。 */
 static bool run_program_command(course_shell_t* shell,
                                 const course_shell_simple_command_t* command,
                                 char* out,
@@ -612,6 +641,7 @@ static bool run_program_command(course_shell_t* shell,
     if (!program_found && command->argv[0][0] != '/') {
         return false;
     }
+    /* 每次程序运行都 fork 一个课程子进程，便于 wait/crash/COW 证据落在进程表里。 */
     child = course_process_fork(&shell->processes,
                                 shell->shell_pid,
                                 command->argv[0]);
@@ -631,6 +661,7 @@ static bool run_program_command(course_shell_t* shell,
         int fd = 0;
         int read_size = 0;
 
+        /* 绝对路径程序从课程 FS 读取 ELF 镜像，复用 course_elf_loader 的保守子集。 */
         if (!course_fs_size(&shell->fs,
                             command->argv[0],
                             &external_elf_size) ||
@@ -748,6 +779,7 @@ static bool run_program_command(course_shell_t* shell,
            append_char(out, out_size, &used, '\n');
 }
 
+/* 打开并读取一个 /proc 节点到 out。 */
 static bool read_proc_file(course_shell_t* shell,
                            const char* path,
                            char* out,
@@ -767,6 +799,7 @@ static bool read_proc_file(course_shell_t* shell,
     return ok;
 }
 
+/* 拼接 /proc/<pid>/<suffix> 路径。 */
 static bool append_pid_path(char* path,
                             size_t path_size,
                             const char* suffix,
@@ -783,6 +816,7 @@ static bool append_pid_path(char* path,
            append_str(path, path_size, &used, suffix);
 }
 
+/* 把命令参数解析成 pid（纯数字）。 */
 static bool parse_pid_arg(const char* value, uint32_t* out_pid) {
     uint32_t pid = 0;
     size_t i = 0;
@@ -801,6 +835,7 @@ static bool parse_pid_arg(const char* value, uint32_t* out_pid) {
     return true;
 }
 
+/* 读取 /proc/<pid>/<suffix>，pid 缺省取 shell 自身 pid。 */
 static bool read_pid_proc_file(course_shell_t* shell,
                                const course_shell_simple_command_t* command,
                                const char* suffix,
@@ -820,6 +855,7 @@ static bool read_pid_proc_file(course_shell_t* shell,
            read_proc_file(shell, path, out, out_size);
 }
 
+/* cd 命令：先试课程 FS，失败再走 linux_compat chdir，输出新 cwd。 */
 static bool run_cd_command(course_shell_t* shell,
                            const course_shell_simple_command_t* command,
                            char* out,
@@ -857,6 +893,7 @@ static bool run_cd_command(course_shell_t* shell,
            append_char(out, out_size, used, '\n');
 }
 
+/* 把同步结果枚举转成展示字符串。 */
 static const char* sync_result_name(course_sync_result_t result) {
     switch (result) {
     case COURSE_SYNC_OK:
@@ -872,6 +909,7 @@ static const char* sync_result_name(course_sync_result_t result) {
     }
 }
 
+/* 输出信号量当前状态（value/waiters）。 */
 static bool append_semaphore_state(char* out,
                                    size_t out_size,
                                    size_t* used,
@@ -885,6 +923,7 @@ static bool append_semaphore_state(char* out,
            append_u32(out, out_size, used, semaphore->waiter_count);
 }
 
+/* 输出互斥锁当前状态（owner/waiters/misuse）。 */
 static bool append_mutex_state(char* out,
                                size_t out_size,
                                size_t* used,
@@ -900,6 +939,7 @@ static bool append_mutex_state(char* out,
            append_u32(out, out_size, used, mutex->misuse_guard_count);
 }
 
+/* 输出同步操作结果字符串。 */
 static bool append_sync_result(char* out,
                                size_t out_size,
                                size_t* used,
@@ -908,6 +948,7 @@ static bool append_sync_result(char* out,
            append_str(out, out_size, used, sync_result_name(result));
 }
 
+/* 输出命令错误信息并置命令成功标记为 false。 */
 static bool append_command_error(char* out,
                                  size_t out_size,
                                  size_t* used,
@@ -917,6 +958,7 @@ static bool append_command_error(char* out,
     return append_str(out, out_size, used, message);
 }
 
+/* sem 命令：signal/wait 信号量并输出状态与结果。 */
 static bool run_sem_command(course_shell_t* shell,
                             const course_shell_simple_command_t* command,
                             char* out,
@@ -995,6 +1037,7 @@ static bool run_sem_command(course_shell_t* shell,
                                 "sem: usage: sem init <value>|wait [pid]|post|status\n");
 }
 
+/* mutex 命令：lock/unlock 互斥锁并输出状态与结果。 */
 static bool run_mutex_command(course_shell_t* shell,
                               const course_shell_simple_command_t* command,
                               char* out,
@@ -1058,6 +1101,7 @@ static bool run_mutex_command(course_shell_t* shell,
                                 "mutex: usage: mutex init|lock [pid]|unlock [pid]|status\n");
 }
 
+/* concurrency_demo 命令：用信号量编排多进程同步并输出最终状态。 */
 static bool run_concurrency_demo(course_shell_t* shell,
                                  char* out,
                                  size_t out_size,
@@ -1189,6 +1233,7 @@ static bool run_concurrency_demo(course_shell_t* shell,
            append_char(out, out_size, used, '\n');
 }
 
+/* 执行单个简单命令：内建命令、procfs 快捷查看、用户程序、linux 旁路分发。 */
 static bool run_simple(course_shell_t* shell,
                        const course_shell_simple_command_t* command,
                        const char* stdin_text,
@@ -1432,6 +1477,7 @@ static bool run_simple(course_shell_t* shell,
                                                    command_success);
 }
 
+/* 执行单条命令行（已切好的 pipeline + 重定向），按 stage 串联管道与重定向。 */
 static bool run_single_command_line_internal(course_shell_t* shell,
                                              const char* line,
                                              char* out,
@@ -1544,6 +1590,7 @@ out:
     return result;
 }
 
+/* 执行一行命令：按 && 切分多段，逐段执行并短路失败；可选记 transcript。 */
 static bool course_shell_run_line_internal(course_shell_t* shell,
                                            const char* line,
                                            char* out,

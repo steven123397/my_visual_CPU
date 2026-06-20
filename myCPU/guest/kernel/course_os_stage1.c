@@ -1,5 +1,9 @@
 #include "course_os_stage1.h"
 
+/* Stage1 编排层：把调度、内存、文件系统和 procfs 的基础证据串成稳定 summary。
+   具体实现仍留在 course_scheduler/course_memory/course_fs/procfs 中。 */
+
+/* 向 out 追加一个字符并保持 NUL。 */
 static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     if (out == NULL || used == NULL || *used + 1U >= out_size) {
         return false;
@@ -11,6 +15,7 @@ static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     return true;
 }
 
+/* 向 out 追加字符串。 */
 static bool append_str(char* out,
                        size_t out_size,
                        size_t* used,
@@ -29,6 +34,7 @@ static bool append_str(char* out,
     return true;
 }
 
+/* 向 out 追加无符号 32 位十进制。 */
 static bool append_u32(char* out,
                        size_t out_size,
                        size_t* used,
@@ -82,6 +88,7 @@ bool course_os_stage1_run(course_os_stage1_t* stage) {
         return false;
     }
 
+    /* 访问 4 个页但只配置 3 个 frame，固定触发一次 Clock 回收。 */
     if (!course_memory_touch(&stage->memory, 0U, true) ||
         !course_memory_touch(&stage->memory, 1U, true) ||
         !course_memory_touch(&stage->memory, 2U, false) ||
@@ -97,6 +104,7 @@ bool course_os_stage1_run(course_os_stage1_t* stage) {
         if (first == NULL || second == NULL) {
             return false;
         }
+        /* 释放后再分配必须拿回同一块，形成 kmalloc_reuses 证据。 */
         course_kfree(&stage->memory, first);
         reused = course_kmalloc(&stage->memory, 12U);
         if (reused != first) {

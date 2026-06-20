@@ -12,24 +12,29 @@ static size_t managed_page_count = 0;
 static size_t free_page_count = 0;
 static size_t next_search_index = 0;
 
+/* 把 value 向上对齐到 alignment（必须为 2 的幂）。 */
 static uintptr_t align_up(uintptr_t value, size_t alignment) {
     const uintptr_t mask = (uintptr_t)alignment - 1U;
     return (value + mask) & ~mask;
 }
 
+/* 计算管理 page_count 页所需 bitmap 字节数。 */
 static size_t bitmap_bytes_for_pages(size_t page_count) {
     return (page_count + 7U) / 8U;
 }
 
+/* 读 page_index 对应的 bitmap 位。 */
 static bool page_bit_is_set(size_t page_index) {
     return (page_bitmap[page_index / 8U] &
             (uint8_t)(1U << (page_index & 7U))) != 0;
 }
 
+/* 置 page_index 对应的 bitmap 位（标记已分配）。 */
 static void page_bit_set(size_t page_index) {
     page_bitmap[page_index / 8U] |= (uint8_t)(1U << (page_index & 7U));
 }
 
+/* 清 page_index 对应的 bitmap 位（标记空闲）。 */
 static void page_bit_clear(size_t page_index) {
     page_bitmap[page_index / 8U] &= (uint8_t)~(1U << (page_index & 7U));
 }

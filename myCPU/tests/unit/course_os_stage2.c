@@ -1,3 +1,4 @@
+/* Course OS Stage2 汇总单测：确认固定 marker 和所有 guardrail 均已触发。 */
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

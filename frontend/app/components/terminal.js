@@ -1,5 +1,7 @@
+// 终端窗口渲染：把 UART 文本投影、会话状态和 Linux boot 进度组装成终端 HTML。
 import { projectTerminalText } from '../../shared/terminal_projection.mjs';
 
+// 转义 HTML 特殊字符，防止终端输出注入 HTML。
 function escapeHtml(text = '') {
   return text
     .replaceAll('&', '&amp;')
@@ -9,10 +11,12 @@ function escapeHtml(text = '') {
     .replaceAll("'", '&#39;');
 }
 
+// 把终端缓冲文本投影成可见文本（转发到 terminal_projection）。
 export function projectTerminalBuffer(text = '') {
   return projectTerminalText(text);
 }
 
+// 从 manifest 的 workload.terminal 取终端展示元数据（title/target）。
 function manifestTerminalPresentation(state, activeTest) {
   const entry = Array.isArray(state.tests)
     ? state.tests.find((item) => item.name === activeTest)
@@ -39,6 +43,7 @@ function manifestTerminalPresentation(state, activeTest) {
   };
 }
 
+// 决定终端展示元数据：优先 manifest，否则按 activeTest 给默认标题。
 function terminalPresentation(state, activeTest) {
   const manifestPresentation = manifestTerminalPresentation(state, activeTest);
   if (manifestPresentation) {
@@ -64,10 +69,12 @@ function terminalPresentation(state, activeTest) {
   };
 }
 
+// 是否处于 Linux proto console 的加载进度态。
 function isLinuxLoadProgress(state) {
   return state.runState === 'loading' && state.loadProgress?.test === 'linux_proto_console';
 }
 
+// 计算 Linux boot 已等待秒数（兼容缺失时间戳的回退）。
 function progressElapsedSeconds(progress) {
   const startedAt =
     typeof progress?.startedAt === 'number' && Number.isFinite(progress.startedAt)
@@ -80,6 +87,7 @@ function progressElapsedSeconds(progress) {
   return Math.max(0, Math.floor((now - startedAt) / 1000));
 }
 
+// 渲染 Linux boot 进度条 HTML（已等待秒数、backend、等待中的 prompt）。
 function renderLinuxBootProgress(progress) {
   if (!progress) {
     return '';
@@ -98,6 +106,7 @@ function renderLinuxBootProgress(progress) {
   `;
 }
 
+// 渲染整个终端窗口：标题栏、屏幕、缓冲投影、收起预览与底部 hint。
 export function renderTerminal(state) {
   const terminal = state.terminal;
   const summary = state.currentSnapshot?.summary ?? {};

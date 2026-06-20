@@ -1,5 +1,8 @@
 #include "linux_compat_loader.h"
 
+/* Linux compat ELF plan builder：只解析 RV64 little-endian EXEC/DYN 的保守子集。
+   输出 load_plan 和诊断文本，真正映射由 linux_compat_exec/vm 负责。 */
+
 #define ELF64_HEADER_SIZE 64U
 #define ELF64_PHENTSIZE 56U
 #define EM_RISCV 243U
@@ -9,6 +12,7 @@
 #define PT_INTERP 3U
 #define PT_PHDR 6U
 
+/* 安全拷贝字符串到定长缓冲并补 NUL。 */
 static void copy_str(char* out, size_t out_size, const char* value) {
     size_t i = 0;
 
@@ -24,11 +28,13 @@ static void copy_str(char* out, size_t out_size, const char* value) {
     out[i] = '\0';
 }
 
+/* 按小端读取 2 字节。 */
 static uint16_t read_u16_le(const uint8_t* image, size_t offset) {
     return (uint16_t)image[offset] |
            (uint16_t)((uint16_t)image[offset + 1U] << 8U);
 }
 
+/* 按小端读取 4 字节。 */
 static uint32_t read_u32_le(const uint8_t* image, size_t offset) {
     return (uint32_t)image[offset] |
            ((uint32_t)image[offset + 1U] << 8U) |
@@ -36,6 +42,7 @@ static uint32_t read_u32_le(const uint8_t* image, size_t offset) {
            ((uint32_t)image[offset + 3U] << 24U);
 }
 
+/* 按小端读取 8 字节。 */
 static uint64_t read_u64_le(const uint8_t* image, size_t offset) {
     uint64_t value = 0;
     size_t i = 0;
@@ -46,6 +53,7 @@ static uint64_t read_u64_le(const uint8_t* image, size_t offset) {
     return value;
 }
 
+/* 溢出安全的 64 位加法。 */
 static bool add_u64(uint64_t a, uint64_t b, uint64_t* out) {
     const uint64_t value = a + b;
 
@@ -58,6 +66,7 @@ static bool add_u64(uint64_t a, uint64_t b, uint64_t* out) {
     return true;
 }
 
+/* 区间 [offset, offset+size) 是否完全落在镜像内。 */
 static bool range_in_image(uint64_t offset, uint64_t size, size_t image_size) {
     uint64_t end = 0;
 
@@ -67,6 +76,7 @@ static bool range_in_image(uint64_t offset, uint64_t size, size_t image_size) {
     return offset <= (uint64_t)image_size && end <= (uint64_t)image_size;
 }
 
+/* 区间 outer 是否包含 inner。 */
 static bool range_contains(uint64_t outer_start,
                            uint64_t outer_size,
                            uint64_t inner_start,
@@ -80,6 +90,7 @@ static bool range_contains(uint64_t outer_start,
            inner_end <= outer_end;
 }
 
+/* 清空 trace 记录。 */
 static void clear_trace(linux_compat_trace_t* trace) {
     if (trace == 0) {
         return;
@@ -91,6 +102,7 @@ static void clear_trace(linux_compat_trace_t* trace) {
     trace->message[0] = '\0';
 }
 
+/* 设置 trace 为一次失败/边界记录。 */
 static void set_trace(linux_compat_trace_t* trace,
                       int32_t errno_value,
                       const char* message) {
@@ -102,6 +114,7 @@ static void set_trace(linux_compat_trace_t* trace,
     copy_str(trace->message, sizeof(trace->message), message);
 }
 
+/* 清空 load plan 到初始状态。 */
 static void clear_load_plan(linux_compat_load_plan_t* plan) {
     size_t i = 0;
 
@@ -132,6 +145,7 @@ static void clear_load_plan(linux_compat_load_plan_t* plan) {
     plan->diagnostic[0] = '\0';
 }
 
+/* 出错收尾：清 plan、写 trace、返回错误码。 */
 static linux_compat_result_t finish_error(linux_compat_load_plan_t* out_plan,
                                           linux_compat_load_plan_t* plan,
                                           linux_compat_trace_t* out_trace,
@@ -146,6 +160,7 @@ static linux_compat_result_t finish_error(linux_compat_load_plan_t* out_plan,
     return result;
 }
 
+/* 从镜像里拷贝 PT_INTERP 路径到 plan。 */
 static bool copy_interp_path(const uint8_t* image,
                              uint64_t offset,
                              uint64_t filesz,
@@ -193,6 +208,7 @@ linux_compat_result_t linux_compat_build_load_plan(
     clear_load_plan(out_plan);
     clear_load_plan(&plan);
 
+    /* 先做 header/program-header 的 fail-closed 检查，避免后续 offset 溢出。 */
     if (image == 0 || image_size < ELF64_HEADER_SIZE) {
         return finish_error(out_plan,
                             &plan,

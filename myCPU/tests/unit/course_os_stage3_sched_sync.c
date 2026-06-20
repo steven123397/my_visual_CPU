@@ -1,3 +1,4 @@
+/* Stage3 调度/同步单测：覆盖 FCFS/RR/CFS-lite 和 semaphore/mutex guardrail。 */
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

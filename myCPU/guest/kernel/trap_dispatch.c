@@ -12,18 +12,21 @@
 #include "timer.h"
 #include "vm.h"
 
+/* 判断 cause 是否为 page fault 类异常。 */
 static bool is_page_fault_cause(uint64_t cause) {
     return cause == RISCV_EXC_INSN_PAGE_FAULT ||
            cause == RISCV_EXC_LOAD_PAGE_FAULT ||
            cause == RISCV_EXC_STORE_PAGE_FAULT;
 }
 
+/* user runtime 基本字段是否有效。 */
 static bool user_runtime_valid(const trap_user_runtime_t* user_runtime) {
     return user_runtime != NULL &&
            user_runtime->trap_context != NULL &&
            user_runtime->process != NULL;
 }
 
+/* timer signal 装配是否可投递。 */
 static bool user_runtime_timer_signal_valid(
     const trap_user_runtime_t* user_runtime) {
     return user_runtime != NULL &&
@@ -32,6 +35,7 @@ static bool user_runtime_timer_signal_valid(
                (MEMORY_PAGE_SIZE / sizeof(uint32_t));
 }
 
+/* external signal 装配是否可投递。 */
 static bool user_runtime_external_signal_valid(
     const trap_user_runtime_t* user_runtime) {
     return user_runtime != NULL &&
@@ -40,6 +44,7 @@ static bool user_runtime_external_signal_valid(
                (MEMORY_PAGE_SIZE / sizeof(uint32_t));
 }
 
+/* 课程 syscall policy 是否可分发（syscalls 非空）。 */
 static bool user_syscall_policy_valid(const trap_context_t* trap_context,
                                       const trap_frame_t* frame,
                                       uint64_t cause,
@@ -55,6 +60,7 @@ static bool user_syscall_policy_valid(const trap_context_t* trap_context,
            (sstatus & RISCV_SSTATUS_SPIE) != 0;
 }
 
+/* Linux compat syscall policy 是否可分发（runtime 与 user_runtime 都非空）。 */
 static bool user_linux_compat_policy_valid(const trap_context_t* trap_context,
                                            const trap_frame_t* frame,
                                            uint64_t cause,
@@ -70,6 +76,7 @@ static bool user_linux_compat_policy_valid(const trap_context_t* trap_context,
            (sstatus & RISCV_SSTATUS_SPIE) != 0;
 }
 
+/* 当前异常是否来自 U-mode（sstatus.SPP=0）。 */
 static bool user_exception_from_u_mode(void) {
     const uint64_t sstatus = riscv_read_sstatus();
 
@@ -77,6 +84,7 @@ static bool user_exception_from_u_mode(void) {
            (sstatus & RISCV_SSTATUS_SPIE) != 0;
 }
 
+/* 处理课程 ecall：从寄存器取参数转交 course_syscall_dispatch 并设返回值。 */
 static bool handle_user_syscall_policy(const trap_context_t* trap_context,
                                        trap_frame_t* frame,
                                        uint64_t cause,
@@ -104,6 +112,7 @@ static bool handle_user_syscall_policy(const trap_context_t* trap_context,
     return true;
 }
 
+/* 从 trap frame 构造 linux_compat syscall 请求。 */
 static void build_linux_compat_request(const trap_frame_t* frame,
                                        uint64_t epc,
                                        linux_compat_syscall_request_t* request) {
@@ -351,6 +360,7 @@ static void build_linux_compat_request(const trap_frame_t* frame,
     }
 }
 
+/* 处理 Linux compat ecall：构造请求转交 linux_compat 并回写返回值。 */
 static bool handle_linux_compat_syscall_policy(const trap_context_t* trap_context,
                                                trap_frame_t* frame,
                                                uint64_t cause,
@@ -387,6 +397,7 @@ static bool handle_linux_compat_syscall_policy(const trap_context_t* trap_contex
     return true;
 }
 
+/* 处理 Linux compat 用户态缺页/异常（交给 vm_handle_page_fault 或崩溃 policy）。 */
 static bool handle_linux_compat_user_fault_policy(
     const trap_context_t* trap_context,
     uint64_t cause,
@@ -416,6 +427,7 @@ static bool handle_linux_compat_user_fault_policy(
     return true;
 }
 
+/* 处理用户态崩溃：回调 crash handler 并回到 supervisor。 */
 static bool handle_user_crash_policy(const trap_context_t* trap_context,
                                      uint64_t cause,
                                      uint64_t epc,
@@ -436,6 +448,7 @@ static bool handle_user_crash_policy(const trap_context_t* trap_context,
     return true;
 }
 
+/* user runtime 信号投递前置条件是否满足。 */
 static bool user_runtime_signal_delivery_ready(
     const trap_context_t* trap_context,
     const trap_user_runtime_t* user_runtime) {
@@ -459,6 +472,7 @@ static bool user_runtime_signal_delivery_ready(
            vm_address_space_is_enabled(address_space);
 }
 
+/* 投递 timer 信号：把 armed 的 value 写入目标字并标记 delivered。 */
 static bool handle_user_timer_signal(trap_context_t* trap_context) {
     trap_user_runtime_t* user_runtime = NULL;
 
@@ -483,6 +497,7 @@ static bool handle_user_timer_signal(trap_context_t* trap_context) {
     return true;
 }
 
+/* 投递 external 信号：把 armed 的 value 写入目标字并标记 delivered。 */
 static bool handle_user_external_signal(trap_context_t* trap_context) {
     trap_user_runtime_t* user_runtime = NULL;
 
@@ -507,6 +522,7 @@ static bool handle_user_external_signal(trap_context_t* trap_context) {
     return true;
 }
 
+/* 分发已安装的异常 handler（按 cause 查表调用）。 */
 static void dispatch_installed_exception(const trap_context_t* trap_context,
                                          uint64_t cause,
                                          uint64_t epc,
@@ -525,6 +541,7 @@ static void dispatch_installed_exception(const trap_context_t* trap_context,
     exception_entry->handler(cause, epc, tval, exception_entry->context);
 }
 
+/* 分发已安装的中断 handler（按 cause 查表调用）。 */
 static void dispatch_installed_interrupt(const trap_context_t* trap_context,
                                          uint64_t cause) {
     const trap_interrupt_handler_entry_t* entry = NULL;
@@ -541,6 +558,7 @@ static void dispatch_installed_interrupt(const trap_context_t* trap_context,
     entry->handler(cause, entry->context);
 }
 
+/* 默认 supervisor timer handler：重排下一次 timer 并跑 post-handler。 */
 static void default_supervisor_timer_handler(uint64_t cause, void* context) {
     trap_context_t* trap_context = (trap_context_t*)context;
 
@@ -558,6 +576,7 @@ static void default_supervisor_timer_handler(uint64_t cause, void* context) {
     }
 }
 
+/* 默认 supervisor external handler：读 PLIC claim 并跑 post-handler。 */
 static void default_supervisor_external_handler(uint64_t cause, void* context) {
     const uint32_t source_id = platform_plic_supervisor_claim();
     trap_context_t* trap_context = (trap_context_t*)context;
@@ -579,6 +598,7 @@ static void default_supervisor_external_handler(uint64_t cause, void* context) {
     platform_plic_supervisor_complete(source_id);
 }
 
+/* 默认 user ecall resume handler：校验 ecall PC 后回到预期 resume PC。 */
 static void default_user_ecall_resume_handler(uint64_t cause,
                                               uint64_t epc,
                                               uint64_t tval,

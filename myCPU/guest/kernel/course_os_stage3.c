@@ -4,6 +4,10 @@
 #include "course_sync.h"
 #include "course_user_programs.h"
 
+/* Stage3 编排层：补齐 ELF/libc、同步、COW、脚本化 shell 和扩展 procfs 证据。
+   它只串联已有课程模块，供 kernel_alpha_demo 和 course_os_shell 复用。 */
+
+/* 取 C 字符串长度。 */
 static size_t str_len(const char* value) {
     size_t i = 0;
 
@@ -16,6 +20,7 @@ static size_t str_len(const char* value) {
     return i;
 }
 
+/* 判断 haystack 是否包含 needle 子串。 */
 static bool str_contains(const char* haystack, const char* needle) {
     size_t i = 0;
     const size_t needle_len = str_len(needle);
@@ -41,6 +46,7 @@ static bool str_contains(const char* haystack, const char* needle) {
     return false;
 }
 
+/* 向 out 追加一个字符并保持 NUL。 */
 static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     if (out == 0 || used == 0 || *used + 1U >= out_size) {
         return false;
@@ -51,6 +57,7 @@ static bool append_char(char* out, size_t out_size, size_t* used, char ch) {
     return true;
 }
 
+/* 向 out 追加字符串。 */
 static bool append_str(char* out,
                        size_t out_size,
                        size_t* used,
@@ -69,6 +76,7 @@ static bool append_str(char* out,
     return true;
 }
 
+/* 在 shell FS 里预置 Stage3 demo 文件（脚本/文本）。 */
 static bool ensure_demo_files(course_shell_t* shell) {
     const char* input = "stage3-cat";
     const char* script =
@@ -86,6 +94,7 @@ static bool ensure_demo_files(course_shell_t* shell) {
         "cat /proc/1/fd\n"
         "cat /proc/1/maps\n";
 
+    /* 预置 demo 文件和脚本，让交互 shell 与一次性 smoke 共用同一套证据输入。 */
     return shell != 0 &&
            (course_fs_lookup(&shell->fs, "/demo") ||
             course_fs_mkdir(&shell->fs, "/demo")) &&
@@ -103,10 +112,12 @@ static bool ensure_demo_files(course_shell_t* shell) {
                            str_len(script));
 }
 
+/* 跑 ELF/libc demo：执行 5 个课程用户程序并校验输出。 */
 static bool run_elf_libc_demo(course_os_stage3_t* stage) {
     course_user_program_t program;
     char out[1024];
 
+    /* 固定五个课程用户程序，避免 host/guest 之间因为外部资产不同而漂移。 */
     return course_user_program_stage3_count() == 5U &&
            course_user_program_lookup("hello", &program) &&
            program.elf_image != 0 &&
@@ -133,6 +144,7 @@ static bool run_elf_libc_demo(course_os_stage3_t* stage) {
            str_contains(out, "stage3-cat");
 }
 
+/* 跑调度+同步 demo：FCFS/RR/CFS-lite 统计 + sem/mutex 展示。 */
 static bool run_sched_sync_demo(course_os_stage3_t* stage) {
     course_scheduler_summary_t summary;
     course_process_t* owner = 0;
@@ -140,6 +152,7 @@ static bool run_sched_sync_demo(course_os_stage3_t* stage) {
     course_semaphore_t semaphore;
     course_mutex_t mutex;
 
+    /* 先跑离线三策略统计，再用 semaphore/mutex 验证阻塞和 owner 检查。 */
     course_scheduler_init(&stage->shell.scheduler);
     if (!course_scheduler_add_task(&stage->shell.scheduler, 1U, 0U, 5U) ||
         !course_scheduler_add_task(&stage->shell.scheduler, 2U, 1U, 3U) ||
@@ -179,11 +192,13 @@ static bool run_sched_sync_demo(course_os_stage3_t* stage) {
            course_mutex_unlock(&mutex, owner->pid) == COURSE_SYNC_OK;
 }
 
+/* 跑 VM/COW demo：fork 后写共享页触发 COW 复制并校验。 */
 static bool run_vm_cow_demo(course_os_stage3_t* stage) {
     course_process_t* child = 0;
     course_process_cow_stats_t stats;
     uint8_t value = 0;
 
+    /* 这里直接触发 COW fault helper，证明 fault-driven COW 证据链可用。 */
     if (!course_process_map_user_page(&stage->shell.processes,
                                       stage->shell.shell_pid,
                                       0U,
@@ -215,6 +230,7 @@ static bool run_vm_cow_demo(course_os_stage3_t* stage) {
            stats.leak_free;
 }
 
+/* 跑 FS/shell/procfs demo：seek/mkfs、shell 脚本、扩展 /proc 节点。 */
 static bool run_fs_shell_proc_demo(course_os_stage3_t* stage) {
     char out[2048];
 
@@ -246,6 +262,7 @@ void course_os_stage3_init(course_os_stage3_t* stage) {
 }
 
 bool course_os_stage3_prepare_shell(course_os_stage3_t* stage) {
+    /* 独立函数供常驻 course-os> shell 在启动时预热 demo 文件。 */
     return stage != 0 && ensure_demo_files(&stage->shell);
 }
 
