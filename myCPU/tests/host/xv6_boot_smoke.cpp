@@ -71,8 +71,8 @@ int main() {
     const std::string board_text = read_text_file(board_profile);
     const std::string workload_text = read_text_file(workload_profile);
     if (!expect_contains(board_text,
-                         "BOARD_XV6_ARCH_MARCH := -march=rv64ima",
-                         "board profile should pin xv6 to rv64ima for current myCPU bring-up") ||
+                         "BOARD_XV6_ARCH_MARCH := -march=rv64ima_zicsr",
+                         "board profile should pin xv6 to rv64ima_zicsr for current myCPU bring-up") ||
         !expect_contains(board_text,
                          "BOARD_BLOCK_TRANSPORT := virtio-blk",
                          "board profile should record the current virtio-blk block transport") ||

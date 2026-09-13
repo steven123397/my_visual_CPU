@@ -291,7 +291,9 @@ PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 90s
 RV_CC   = riscv64-unknown-elf-gcc
 RV_OBJCOPY = riscv64-unknown-elf-objcopy
 DTC = dtc
-RV_FLAGS = -march=rv64im -mabi=lp64
+# GCC 14+ split Zicsr out of base I; guest CSR code (csrr/csrw) needs it.
+# Older GCC 10-13 accept the explicit _zicsr suffix.
+RV_FLAGS = -march=rv64im_zicsr -mabi=lp64
 RV_ELF_LDFLAGS = -nostdlib -Wl,-Ttext-segment=0x80000000
 GUEST_RV_CFLAGS = $(RV_FLAGS) -mcmodel=medany -mno-relax -msmall-data-limit=0 -ffreestanding -fno-builtin -fno-stack-protector -fno-pie -MMD -MP -g -O2 -Wall -Wextra
 GUEST_RV_LDFLAGS = -nostdlib -nostartfiles -static -no-pie -Wl,-T,guest/supervisor_demo/link.ld
