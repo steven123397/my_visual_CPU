@@ -1,10 +1,11 @@
 # 当前状态
 
 - 所在分支：`main`。
-- 核对基点：`3cdc8b9`；技术实现基点：公开提交 `27fb764`。
-- 工作范围：规划 GitHub Actions 日常 CI 与手动完整回归，减轻本机验证负担。
+- 核对基点：`9886a62`；技术实现基点：公开提交 `27fb764`。
+- 工作范围：删除过时的仓库审查 skill 与 Claude Code / Cursor 本地目录。
 - 已具备能力：项目是已可运行的 RISC-V 模拟器原型，包含 guest runtime、pipeline、AI 设备和浏览器 Lab；本轮没有改变实现能力。
 - 用户决定：采用 NexusKit，待办使用 GitHub Issues；只维护最小根 `AGENTS.md`，旧文档规则全部废除。
+- 已清理：`.agents/skills/mycpu-quality-review/`、`.claude/`、`.cursor/`；移除旧 Claude ignore 条目。用户不再用 Claude Code 或 Cursor 接手项目。
 - 用户决定：项目不再定位为课程项目，Course OS 仍是运行与验证资产；架构由 Wiki 承载，无主仓库副本。
 - 用户决定：接受接入 CI 的方向，先研究测试入口与实施方案。
 - 已规划：[GitHub Actions Plan](plans/2026-09-30-2214-chore-github-actions-ci-plan.md)，U1 测试入口、U2 两份 workflow、U3 云端运行验收与指引同步。
@@ -14,7 +15,8 @@
 - 已转换：28 份旧设计全部有处理去向；[迁移记录](https://github.com/steven123397/my_visual_CPU/wiki/Migration) 保留逐文件对照与公开 Git 历史入口。
 - 已清理：旧 background/showcase/status/plan/design、两份根规划、docs/index 和子目录 AGENTS；网页使用的 4 张截图在 frontend/app/assets。
 - 已同步：根 AGENTS 声明 Wiki 维护规则，README 与前端文档入口改为已发布页面。
-- 本轮规划证据：静态源码、Make 依赖、仓库 Actions 权限与官方文档调研；Plan 连贯性、可行性、范围、安全和失败传播自检通过，未运行构建或测试。
+- 本轮验证：已确认旧目录不存在、相关引用清除、`git diff --check` 通过；仅删除工具资产，没有运行产品测试。
+- CI 规划证据：静态源码、Make 依赖、仓库 Actions 权限与官方文档调研；Plan 自检通过，尚未实施。
 - 上轮迁移验证：前端 169 通过、1 外部 Linux 场景跳过；验证分层、链接及 diff 检查通过，范围见 [迁移审查](reviews/main-wiki-migration.md)。
 - 工作树：三个旧分线已移除，提交均被 main 包含，现在只有主工作树；主仓库本轮提交仅保存本地，Wiki 已独立推送。
 - 接手前的未提交文档已保存为 `f70b0d0`。

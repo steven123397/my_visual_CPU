@@ -69,8 +69,6 @@ __pycache__/
 .idea/
 .vscode/
 
-# Claude Code
-.claude/
 .superpowers/
 
 # Reasonix Code
