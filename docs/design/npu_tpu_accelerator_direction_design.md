@@ -1,5 +1,8 @@
 # `NPU / TPU-like` AI 加速器方向设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档用于说明未来 `NPU / TPU-like` AI 加速器方向的正式设计边界，重点回答下面 3 个问题：
@@ -13,17 +16,17 @@
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
+  - [历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md)
 - 相关设计：
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [phase4_preparation_design.md](phase4_preparation_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
 - 已完成计划：
-  - [../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
-  - [../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](../plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
-  - [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
-  - [../plan/history_plan.md#npu-tpu-accelerator-wave2-plan](../plan/history_plan.md#npu-tpu-accelerator-wave2-plan)
+  - [历史：../plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave4-ai-accelerator-slices-plan)
+  - [历史：../plan/history_plan.md#npu-tpu-accelerator-wave3-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#npu-tpu-accelerator-wave3-plan)
+  - [历史：../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#npu-tpu-accelerator-wave1-plan)
+  - [历史：../plan/history_plan.md#npu-tpu-accelerator-wave2-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#npu-tpu-accelerator-wave2-plan)
 
 ## 背景与问题
 
@@ -437,5 +440,5 @@ Wave 1 已经把本设计从纯方案推进到可执行 foundation。当前有�
 ## 当前有效性说明
 
 - 当前有效：本文档作为独立 `MMIO NPU / TPU-like` AI 加速器方向的正式设计来源。
-- 当前这条线已经进入 `Post-Wave 7` AI 新主线；当前优先级判断以 [../status/mainline_status.md](../status/mainline_status.md) 和 [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md) 为准。
-- 当前对应的专项状态见 [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)，Wave 1 完成态已归档到 [../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](../plan/history_plan.md#npu-tpu-accelerator-wave1-plan)；后续执行进度应回写到状态文档和新的活跃计划，而不是继续堆在本文档里。
+- 当前这条线已经进入 `Post-Wave 7` AI 新主线；当前优先级判断以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 和 [历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md) 为准。
+- 当前对应的专项状态见 [历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md)，Wave 1 完成态已归档到 [历史：../plan/history_plan.md#npu-tpu-accelerator-wave1-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#npu-tpu-accelerator-wave1-plan)；后续执行进度应回写到状态文档和新的活跃计划，而不是继续堆在本文档里。

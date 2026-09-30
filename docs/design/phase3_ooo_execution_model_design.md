@@ -1,5 +1,8 @@
 # Pipeline / Phase 3 执行模型统一设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档作为当前 `pipeline` 微架构的统一设计来源，集中描述当前已经落地的执行模型、关键边界和后续仍然成立的取舍判断。
@@ -17,15 +20,15 @@
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 相关设计：
   - [pipeline_speculation_contracts.md](pipeline_speculation_contracts.md)
 - 已完成计划归档：
-  - [../plan/history_plan.md#pipeline-core-integration-plan](../plan/history_plan.md#pipeline-core-integration-plan)
-  - [../plan/history_plan.md#phase3-branch-prediction-plan](../plan/history_plan.md#phase3-branch-prediction-plan)
-  - [../plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan)
-  - [../plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
-  - [../plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan](../plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan)
+  - [历史：../plan/history_plan.md#pipeline-core-integration-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#pipeline-core-integration-plan)
+  - [历史：../plan/history_plan.md#phase3-branch-prediction-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase3-branch-prediction-plan)
+  - [历史：../plan/history_plan.md#phase3-ooo-readiness-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase3-ooo-readiness-plan)
+  - [历史：../plan/history_plan.md#phase3-ooo-execution-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase3-ooo-execution-plan)
+  - [历史：../plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase3-blocked-by-unresolved-store-boundary-plan)
 
 ## 背景与问题
 
@@ -163,4 +166,4 @@
 ## 当前有效性说明
 
 - 当前有效：本文档作为当前 `pipeline / Phase 3` 微架构边界的统一设计来源。
-- 当前实时状态和近期风险，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前实时状态和近期风险，以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

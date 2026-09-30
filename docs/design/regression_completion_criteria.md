@@ -1,5 +1,8 @@
 # 回归收口标准（2026-03-26）
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档用于定义当前 `Phase 1` / `Phase 2` 主线任务中，回归相关工作做到什么程度可以认为“阶段性完善”。
@@ -9,17 +12,17 @@
 ## 关联文档
 
 - 相关状态：
-  - [status/mainline_status.md](../status/mainline_status.md)
-  - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
+  - [历史：status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
+  - [历史：status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
 - 当前活跃计划：
-  - [plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
+  - [历史：plan/project_evolution_priority_p1_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/project_evolution_priority_p1_plan.md)
 - 已完成计划：
-  - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
+  - [历史：plan/history_plan.md#phase1-hardening-regressions-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase1-hardening-regressions-plan)
 
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为当前 Phase 1 / Phase 2 回归是否达到阶段性收口的统一判断口径。
-- 具体执行进展、当前缺口和近期任务以 [status/mainline_status.md](../status/mainline_status.md) 与相关 `status` 文档为准。
+- 具体执行进展、当前缺口和近期任务以 [历史：status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 与相关 `status` 文档为准。
 
 ## 目标 / 主题
 

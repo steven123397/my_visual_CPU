@@ -20,7 +20,6 @@ const frontendRoot = path.join(repoRoot, 'frontend');
 const appRoot = path.join(repoRoot, 'frontend', 'app');
 const sharedRoot = path.join(repoRoot, 'frontend', 'shared');
 const docsRoot = path.join(repoRoot, 'docs');
-const showcaseRoot = path.join(repoRoot, 'docs', 'showcase');
 const customElfRootsEnv = 'MYCPU_FRONTEND_CUSTOM_ELF_ROOTS';
 const customElfMaxBytesEnv = 'MYCPU_FRONTEND_CUSTOM_ELF_MAX_BYTES';
 const defaultCustomElfMaxBytes = 16 * 1024 * 1024;
@@ -101,10 +100,6 @@ async function serveStatic(response, pathname, headers = {}) {
     await serveSourceDoc(response, relative);
     return;
   }
-  if (relative.startsWith('/source/showcase/')) {
-    await serveShowcaseAsset(response, relative);
-    return;
-  }
   const root = relative.startsWith('/shared/') ? sharedRoot : appRoot;
   const trimmed = relative.startsWith('/shared/')
     ? relative.replace(/^\/shared\/+/, '')
@@ -128,23 +123,6 @@ async function serveSourceDoc(response, pathname, headers = {}) {
   const trimmed = pathname.replace(/^\/source\/docs\/+/, '');
   const filePath = path.join(docsRoot, trimmed);
   if (!filePath.startsWith(docsRoot) || !filePath.endsWith('.md')) {
-    json(response, 403, { error: 'forbidden' });
-    return;
-  }
-  try {
-    const content = await fs.readFile(filePath);
-    response.writeHead(200, { 'content-type': contentTypeFor(filePath), ...headers });
-    response.end(content);
-  } catch {
-    json(response, 404, { error: 'not found' }, headers);
-  }
-}
-
-// 受限读取并返回 showcase 的 png 资源。
-async function serveShowcaseAsset(response, pathname, headers = {}) {
-  const trimmed = pathname.replace(/^\/source\/showcase\/+/, '');
-  const filePath = path.join(showcaseRoot, trimmed);
-  if (!filePath.startsWith(showcaseRoot) || !filePath.endsWith('.png')) {
     json(response, 403, { error: 'forbidden' });
     return;
   }

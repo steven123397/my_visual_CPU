@@ -1,5 +1,8 @@
 # Phase 4 准备性设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录当前仓库面向 `Phase 4` 的统一准备性边界，重点说明下面 3 件事：
@@ -13,23 +16,23 @@
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 相关设计：
   - [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
 - 已完成计划归档：
-  - [../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
-  - [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
-  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
-  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
-  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
-  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
-  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
-  - [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
-  - [../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
-  - [../plan/history_plan.md#phase4-prep1-bus-memory-region-plan](../plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
+  - [历史：../plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave6-jit-dbt-hot-path-evidence-slice-a-plan)
+  - [历史：../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
+  - [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
+  - [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
+  - [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
+  - [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
+  - [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
+  - [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
+  - [历史：../plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase4-prep2-memory-observation-shadow-cache-plan)
+  - [历史：../plan/history_plan.md#phase4-prep1-bus-memory-region-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase4-prep1-bus-memory-region-plan)
 
 ## 背景与问题
 
@@ -173,26 +176,26 @@ multicore / coherence 实施”的远期阶段。
 - 当前已完成的正式结果是 `P4-prep-1`、`P4-prep-2` 的 `C1 / memory observation / shadow cache` 第一刀及其首轮 workload baseline 收口，以及 AI accelerator Wave 1 消费的一条窄 `DMA-ready` contract。
 - 主线 `Wave 5` 已开始消费这些准备性边界，`Slice A / signal + contract` 已由
   [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md) 与
-  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
+  [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-a-signal-contract-plan)
   收口；它只证明 memory signal 与 cache contract 已进入后续最小 L1D 的入口条件，
   不代表完整 cache / DMA / multicore / coherence 已经实现。
 - `Slice B / minimal executable L1D` 已由
-  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
+  [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-b-minimal-l1d-plan)
   收口；它只落地默认关闭、RAM-only、write-through 的最小 data cache 模型，
   不代表完整 cache / DMA / multicore / coherence 已经实现。
 - `Slice C / L1D opt-in observation + guardrail` 已由
-  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
+  [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-c-l1d-observation-guardrail-plan)
   收口；它只补显式 opt-in 的 L1D debug/probe 观察面和行为等价 guardrail。
 - `Slice D / L1D hardening` 已由
-  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
+  [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-d-l1d-hardening-plan)
   收口；它只固定 L1D 边界合同，不扩成新大功能。
 - `Slice E / L1D frontend observation` 已由
-  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
+  [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-e-l1d-frontend-observation-plan)
   收口；它只把已有 L1D counters 接入 frontend 只读观察面，不扩 debug ABI 或
   cache 功能面。
 - `Slice F / L1D lifecycle guardrail` 已由
-  [../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
+  [历史：../plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-cache-memory-system-slice-f-l1d-lifecycle-guardrail-plan)
   收口；它只固定 L1D lifecycle guardrail，不扩成新大功能。
 - `Wave 5 closeout / Wave 6 readiness` 已由
-  [../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
+  [历史：../plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
   收口；`Wave 5` 首轮完成，主线 active wave 转入 `Wave 6`。

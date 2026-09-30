@@ -1,5 +1,8 @@
 # Wave 7 远端云服务器开发与验证环境设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录主线 `Wave 7` 在另一台云服务器上承接完整开发/验证环境的当前有效设计边界。
@@ -12,14 +15,14 @@
 - 哪些能力属于远端开发/验证环境，哪些仍不属于 Wave 7 的默认公网承诺。
 
 本文档不记录执行 checklist。具体实施步骤写入 `docs/plan/`，当前状态以
-[../status/mainline_status.md](../status/mainline_status.md) 为准。
+[历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 当前活跃计划：
-  - [../plan/wave7_remote_cloud_dev_environment_plan.md](../plan/wave7_remote_cloud_dev_environment_plan.md)
+  - [历史：../plan/wave7_remote_cloud_dev_environment_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/wave7_remote_cloud_dev_environment_plan.md)
 - 相关设计：
   - [wave7_productization_and_showcase_design.md](wave7_productization_and_showcase_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
@@ -253,4 +256,4 @@ Remote Cloud Server
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效。
-- 当前结果以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前结果以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

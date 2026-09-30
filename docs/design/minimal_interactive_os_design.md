@@ -1,5 +1,8 @@
 # `interactive_os` 最小可交互 Monitor 设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录当前 `interactive_os` 这条 guest 交互 demo 的正式边界，作为下列内容的统一参考资料：
@@ -13,8 +16,8 @@
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
-  - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
+  - [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
 - 相关设计：
   - [debug_frontend_integration.md](debug_frontend_integration.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
@@ -128,4 +131,4 @@ browser terminal
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `interactive_os` 当前设计边界的参考资料。
-- 当前实时状态与后续是否继续扩交互面，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前实时状态与后续是否继续扩交互面，以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

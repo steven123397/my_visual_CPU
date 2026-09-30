@@ -1,5 +1,8 @@
 # Post-Wave 7 用户 AI 任务与 NPU 性能模型设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录 `Wave 7` 阶段性收口之后，本地工作区重新打开的
@@ -12,18 +15,18 @@
 - 哪些能力属于这条新主线，哪些仍不应被误写成“已经开放任意模型上传或完整 NPU runtime”。
 
 本文档不记录执行 checklist。具体实施步骤写入 `docs/plan/`，当前状态以
-[../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
-和 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+[历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md)
+和 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 已完成计划：
-  - [../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
+  - [历史：../plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
 - 当前活跃计划：
-  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
+  - [历史：../plan/project_evolution_priority_p1_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/project_evolution_priority_p1_plan.md)
 - 相关设计：
   - [ai_accelerator_linux_facing_contract_design.md](ai_accelerator_linux_facing_contract_design.md)
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
@@ -479,5 +482,5 @@ KV-cache、multi-head attention、Linux-facing driver 或更真实的 overlap sc
 
 - 当前有效 / 历史语境：当前有效。
 - 当前结果以
-  [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
-  和 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+  [历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md)
+  和 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

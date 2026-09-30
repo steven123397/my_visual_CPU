@@ -1,17 +1,20 @@
 # 课程 OS 调度 timing 合同
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档定义课程 OS scheduler 当前可复验的 cycle 证据合同，对应已归档的
-[课程 OS 架构后续增强计划](../plan/history_plan.md#course-os-arch-followup-plan)
+[历史：课程 OS 架构后续增强计划](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-arch-followup-plan)
 中的 context switch cost 后续增强项。
 
 本文档不声明真实 wall-clock 时间、QEMU 耗时、host 耗时或完整在线抢占调度器已经完成。
 
 ## 关联文档
 
-- 状态文档：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 相关计划归档：[../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
+- 状态文档：[历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
+- 相关计划归档：[历史：../plan/history_plan.md#course-os-arch-followup-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-arch-followup-plan)
 - 边界设计：[course_os_gap_closure_boundary_design.md](course_os_gap_closure_boundary_design.md)
 - 课程 OS 基线设计：[course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)
 
@@ -84,4 +87,4 @@ smoke 中复验 FCFS、RR、CFS-lite 的等待时间、周转时间、preempt �
 ## 当前有效性说明
 
 - 当前有效。
-- 本文档对应的当前状态以 [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
+- 本文档对应的当前状态以 [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 为准。

@@ -1,52 +1,39 @@
-# myCPU — RISC-V 系统模拟器原型
+# myCPU：RISC-V 系统模拟器
 
-myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系统模拟器。当前仓库已经是可运行的模拟器原型，不是纯设计稿：它能运行 Course OS 教学内核、浏览器终端 shell、交互式 monitor、`xv6-riscv` shell 和 Linux-facing probe，并通过浏览器 Lab 工作台观察 terminal、pipeline、寄存器、CSR、设备和 AI profile。
+myCPU 是一个已可运行的 RISC-V 系统模拟器原型，采用模块化 C++17 架构。
+项目围绕指令语义、执行模型、系统 workload、设备与可观察性演进，不再以课程项目定性。
+浏览器 Lab、guest runtime 和 Course OS 等现有能力仍是模拟器的运行与验证资产。
 
-当前工作范围、验证证据、阻断和下一步看 [docs/current.md](docs/current.md)。项目已切换到 NexusKit，旧文档逐专题迁移，导航见 [docs/index.md](docs/index.md)。展示材料按 `course-os` / `simulator` 分目录放在 [docs/showcase](docs/showcase)。
+当前工作看 [docs/current.md](docs/current.md)，待办由
+[GitHub Issues](https://github.com/steven123397/my_visual_CPU/issues) 承载。
+开发流程采用 NexusKit，技术资料导航见 [docs/index.md](docs/index.md)。
 
-![myCPU Lab workbench](docs/showcase/simulator/ppt_screenshot_console_overview.png)
+![myCPU Lab workbench](frontend/app/assets/console-overview.png)
 
-## 当前定位
+## 能力与边界
 
-- **参考优先**：共享 `InstructionSemantics + functional backend` 是 ISA 语义真值来源，`pipeline`、JIT/DBT 原型和前端观察面都围绕它对齐。
-- **系统级 bring-up**：已覆盖 M / S / U 特权级、CSR、trap、Sv39、TLB、UART、CLINT、PLIC、块设备和 `virtio-blk` 路径，并在其上收口 Course OS 课程操作系统展示主线。
-- **多后端执行**：`functional` 是正确性基线；`pipeline` 已具备 rename、ROB、LSQ 和最小真实 OoO execute；JIT/DBT 保持 opt-in 原型和 guardrail。
-- **可观察实验台**：`mycpu --debug-cli`、Node debug server 和浏览器 `/console` 组成 Lab workbench。
-- **后续方向待重新定序**：标准 Linux 发行版平台、用户 AI 任务 / NPU 性能模型等旧方向保留为输入；恢复维护后的当前任务以 `docs/current.md` 为准。
-
-## 能力快照
-
-| 维度 | 当前状态 |
+| 维度 | 已有能力 |
 |---|---|
-| ISA / 语义 | RV64I / RV64M 为主体，按 workload 需求补齐 compressed、atomic、浮点子集、V-lite 与设备相关路径 |
-| 执行后端 | `functional` reference；`pipeline` 支持 rename / ROB / LSQ / OoO observation；JIT/DBT 为 opt-in harness |
-| 特权 / 内存 | M / S / U、trap delegation、`mret/sret`、Sv39、TLB、`sfence.vma`、page fault |
-| 平台设备 | UART、CLINT、PLIC、SimpleStorage、`virtio-blk`、MMIO AI accelerator |
-| Guest | Course OS 教学内核与 `course-os> ` 浏览器 shell、`interactive_os`、`xv6-riscv` shell、Linux-facing console/probe |
-| Linux 发行版线 | 外部 Alpine / Debian rootfs 走 opt-in runtime 合同；仓库默认不携带真实 `Image/rootfs` |
-| AI 线 | task spec importer、bounded dynamic GEMM/CNN/tiny model、guest bridge、timed-simple profile summary |
-| 前端 | `/` 产品首页、`/console` Lab workbench、`/docs` 产品文档入口 |
-| 验证 | asm、unit、host smoke、guest smoke、pipeline、frontend、Spike differential smoke |
+| 指令语义 | RV64I / M 为主体，含 workload 驱动的 compressed、atomic、浮点子集和 V-lite |
+| 执行后端 | `functional` 是共享 ISA 语义的 reference；`pipeline` 包含 rename、ROB、LSQ 和最小 OoO 执行 |
+| 特权与内存 | M / S / U、CSR、trap、Sv39、TLB、page fault |
+| 设备 | UART、CLINT、PLIC、storage、virtio-blk、MMIO AI accelerator |
+| 系统 workload | guest runtime、Course OS shell、interactive monitor、xv6 和受控 Linux 路径 |
+| AI | 受限 task spec、bounded dynamic workload、设备 timing / profile |
+| 调试 | debug CLI、Node 服务、浏览器 Lab 工作台 |
 
-## 快速开始
+以上是已有实现概览，不代表完整 ISA、通用 Linux 发行版或商用 NPU 支持。
+JIT / DBT 保持 opt-in 研究资产；真实 Linux / 发行版镜像与 Spike 需要外部资产。
+当前设计资料正在重新核对，历史验证不能替代本轮实跑证据。
 
-安装常用依赖：
+## 构建与运行
 
-```bash
-sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf nodejs npm
-```
-
+常用依赖包括 C++17 编译器、Make、Python 3、Node.js 和 RISC-V 裸机工具链。
 构建模拟器：
 
 ```bash
 cd myCPU
 make
-```
-
-运行 ELF 或 flat binary：
-
-```bash
-cd myCPU
 ./mycpu <program.elf>
 ./mycpu --backend pipeline <program.elf>
 ./mycpu -b 80000000 <program.bin>
@@ -55,106 +42,42 @@ cd myCPU
 启动浏览器 Lab：
 
 ```bash
-cd myCPU && make
-cd ..
 node frontend/server/debug_server.mjs --port=4173
 ```
 
-打开：
+入口为 `http://127.0.0.1:4173/`、`/console` 和 `/docs`。
+前端配置见 [frontend/README.md](frontend/README.md)，部署配置见 [deploy/README.md](deploy/README.md)。
 
-- `http://127.0.0.1:4173/`
-- `http://127.0.0.1:4173/console`
-- `http://127.0.0.1:4173/docs`
+## 验证入口
 
-## 常用验证
+按改动选择能覆盖行为与边界的门禁：
 
 ```bash
 cd myCPU
 make test-fast-smoke
 make test-standard-regression
-make test-slow-guest
-make test-opt-in-external
 make test
 make test-pipeline
-make test-host-debug_cli_smoke
-make test-host-run_debug_cli_probe
-make test-host-xv6_boot_smoke
-make test-host-xv6_shell_smoke
 ```
 
-前端验证：
+前端测试：
 
 ```bash
 cd frontend
 node --test
 ```
 
-AI demo v1：
+慢速 guest 与外部资产验证分别使用 `make test-slow-guest` 和
+`make test-opt-in-external`，运行前确认具体目标及资产要求。
 
-```bash
-cd myCPU
-python3 workloads/ai_proto/run_demo_v1.py --out-dir workloads/ai_proto/generated/demo_v1
-```
+## 仓库入口
 
-Spike 外部差分是 opt-in 能力，未安装 Spike 时不影响默认测试：
+- [AGENTS.md](AGENTS.md)：最小项目指引。
+- [myCPU/](myCPU)：模拟器、guest、workload 与测试。
+- [frontend/](frontend)：浏览器工作台与本地调试服务。
+- [docs/current.md](docs/current.md)：当前现场。
+- [docs/index.md](docs/index.md)：保留设计资料的分析与导航。
+- [deploy/](deploy)：部署支架。
 
-```bash
-cd myCPU
-make test-host-spike_differential_smoke
-SPIKE_PATH=/path/to/spike make test-host-spike_differential
-```
-
-真实 Linux / 发行版 runtime 需要外部资产，仓库默认保持 fail-closed。相关环境变量和路线见 [docs/status/linux_distribution_platform_status.md](docs/status/linux_distribution_platform_status.md) 与 [deploy/README.md](deploy/README.md)。
-
-## Course OS 口径
-
-Course OS 是当前操作系统课程设计的展示主线，建立在 `kernel_alpha` bring-up、guest supervisor runtime 和浏览器 `/console` 终端之上。它已经从一次性内核 smoke 扩展为可交互、可观察、可回归的教学 OS 原型：
-
-- `kernel_alpha_demo` 负责基础 `K/M/V/P/E/T` bring-up 和课程 OS 正向 smoke，覆盖进程、调度、内存、文件系统、syscall、FD、ELF、同步和 `/proc` 证据面。
-- `guest_course_os_shell_demo` 提供常驻 `course-os> ` shell，可在浏览器终端中执行 `cpuinfo`、`schedstat`、`fsstat`、`sem`、`mutex`、`exec` 和受控 `linux ...` 命令。
-- Linux compat Plus 作为旁路验证能力存在，只用于最小 Linux 用户态兼容和 opt-in 外部验证，不替代课程 OS 主体，也不声明完整 Linux。
-
-旧 Phase 1 `KMVPETDS` 只作为历史 guardrail 记录；storage readiness / signature 合同仍由负向 demo 和 `kernel_alpha_*` 单元门禁覆盖。历史工程记录见 [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)，当前任务见 [docs/current.md](docs/current.md)，展示材料见 [docs/showcase/course-os/README.md](docs/showcase/course-os/README.md)。
-
-## 仓库结构
-
-```text
-my_visual_CPU/
-├── AGENTS.md          # 仓库规则、开发工作流和验证基线
-├── myCPU/             # 模拟器主体、guest runtime、workloads、测试和 Makefile
-├── frontend/          # Node debug server、浏览器前端和 Node 测试
-├── docs/              # NexusKit 会话入口、知识与过程产物；旧资料渐进迁移
-├── deploy/            # 远端单机部署支架和 smoke 脚本
-└── README.md
-```
-
-## 文档入口
-
-- [docs/index.md](docs/index.md)：正式文档总入口。
-- [docs/current.md](docs/current.md)：唯一当前现场入口。
-- [GitHub Issues](https://github.com/steven123397/my_visual_CPU/issues)：待办承载。
-- [docs/AGENTS.md](docs/AGENTS.md)：NexusKit 文档职责与渐进迁移规则。
-- [docs/status/mainline_status.md](docs/status/mainline_status.md)：旧主线历史快照。
-- [docs/status/linux_distribution_platform_status.md](docs/status/linux_distribution_platform_status.md)：待迁移的发行版平台记录。
-- [docs/status/npu_tpu_accelerator_status.md](docs/status/npu_tpu_accelerator_status.md)：待迁移的 AI accelerator / NPU-like 记录。
-- [docs/design/post_wave7_frontend_lab_product_design.md](docs/design/post_wave7_frontend_lab_product_design.md)：当前 Lab workbench 设计边界。
-- [docs/showcase/README.md](docs/showcase/README.md)：展示材料总入口，按 `course-os` / `simulator` 分目录维护。
-- [docs/showcase/course-os/README.md](docs/showcase/course-os/README.md)：本轮操作系统课程最终总结与展示入口。
-- [docs/showcase/course-os/course_os_technical_report.md](docs/showcase/course-os/course_os_technical_report.md)：Course OS 技术报告。
-- [docs/showcase/course-os/course_os_presentation_work_split.md](docs/showcase/course-os/course_os_presentation_work_split.md)：三人汇报分工与源码对应关系。
-- [docs/showcase/simulator/README.md](docs/showcase/simulator/README.md)：原有模拟器结题展示入口。
-
-## 展示材料
-
-课程结题和对外展示材料已经统一收口到 [docs/showcase](docs/showcase)，并按主题拆分：
-
-- 操作系统课程最终总结与展示入口：`docs/showcase/course-os/README.md`
-- Course OS 技术报告：`docs/showcase/course-os/course_os_technical_report.md`
-- 三人汇报分工与源码对应关系：`docs/showcase/course-os/course_os_presentation_work_split.md`
-- 原有模拟器展示入口：`docs/showcase/simulator/README.md`
-- 结题 PPT：`docs/showcase/simulator/myCPU_结题汇报.pptx`
-- 十分钟演讲稿：`docs/showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md`
-- 结题报告：`docs/showcase/simulator/结题报告-梁家琦-20231071332-电计2304.md`
-- HTML 预览页：`docs/showcase/simulator/preview.html`
-
-这些材料只服务汇报与展示，不替代 `docs/current.md` 的当前现场摘要。
+旧课程展示、背景、状态和计划已清理，历史内容可通过 Git 查询。
+`docs/design/` 暂保留为待分析资料，后续逐专题核实与提炼。

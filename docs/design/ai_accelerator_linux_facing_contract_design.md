@@ -1,5 +1,8 @@
 # AI 加速器 Linux-facing 设备契约设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录独立 `MMIO NPU / TPU-like` AI accelerator 面向未来 Linux driver 的最小设备契约。
@@ -11,16 +14,16 @@
 - `PROJECT_EVOLUTION` P1 第一刀为什么选择 `host-facade`，而不是直接声明 Linux driver 已完成。
 
 本文档不记录执行 checklist。当前状态以
-[../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
-和 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+[历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md)
+和 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 当前活跃计划：
-  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
+  - [历史：../plan/project_evolution_priority_p1_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/project_evolution_priority_p1_plan.md)
 - 相关设计：
   - [post_wave7_ai_user_tasks_npu_performance_design.md](post_wave7_ai_user_tasks_npu_performance_design.md)
   - [npu_tpu_accelerator_direction_design.md](npu_tpu_accelerator_direction_design.md)
@@ -177,5 +180,5 @@ Image / rootfs 资产，且 AI 设备 Linux driver 还需要单独定义 kernel 
 
 - 当前有效 / 历史语境：当前有效。
 - 当前结果以
-  [../status/npu_tpu_accelerator_status.md](../status/npu_tpu_accelerator_status.md)
-  和 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+  [历史：../status/npu_tpu_accelerator_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/npu_tpu_accelerator_status.md)
+  和 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

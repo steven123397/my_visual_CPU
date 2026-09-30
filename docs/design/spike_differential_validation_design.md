@@ -1,5 +1,8 @@
 # Spike 外部差分验证设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档只说明 Spike 外部差分验证这条子线的长期有效设计边界：
@@ -8,14 +11,14 @@
 - 当前实现的结构拆分、输入输出契约和用户入口
 - 哪些限制是 V1 的有意识收窄
 
-本文档不承担实时进度更新。当前是否已经落地、跑通哪些门禁，统一以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+本文档不承担实时进度更新。当前是否已经落地、跑通哪些门禁，统一以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 已完成计划归档：
-  - [../plan/history_plan.md#spike-external-differential-validation-plan](../plan/history_plan.md#spike-external-differential-validation-plan)
+  - [历史：../plan/history_plan.md#spike-external-differential-validation-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#spike-external-differential-validation-plan)
 - 用户入口：
   - [../../README.md](../../README.md)
 - 相关设计：
@@ -200,5 +203,5 @@ trace-level differential。
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效。
-- 实时状态和已接入场景，请看 [../status/mainline_status.md](../status/mainline_status.md)。
-- 相关完成态计划已归档到 [../plan/history_plan.md#spike-external-differential-validation-plan](../plan/history_plan.md#spike-external-differential-validation-plan)。
+- 实时状态和已接入场景，请看 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)。
+- 相关完成态计划已归档到 [历史：../plan/history_plan.md#spike-external-differential-validation-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#spike-external-differential-validation-plan)。

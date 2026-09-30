@@ -1,5 +1,8 @@
 # Wave 7 产品化展示与在线控制台设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录主线 `Wave 7 / 产品化展示与在线调试平台收口` 的历史设计边界。
@@ -8,7 +11,7 @@
 
 - `Wave 7` 为什么不是继续堆核心执行功能，而是把已有能力整理成可访问、可体验、可解释的产品形态。
 - 面向用户时，首页、控制台和产品文档应如何分工。
-- 首页如何从 [../showcase/simulator/preview.html](../showcase/simulator/preview.html) 演化成真正产品官网。
+- 首页如何从 [历史：../showcase/simulator/preview.html](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/showcase/simulator/preview.html) 演化成真正产品官网。
 - `frontend/` 控制台为什么最初会按 demo workspace 重新组织展示内容。
 - `Wave 7` 和 Post-Wave 7 新主线之间的边界。
 
@@ -17,21 +20,21 @@
 本文档不再作为当前前端展示结构、导航分组、场景组织或 `/docs` 信息架构的权威来源。
 
 本文档不记录执行 checklist。具体实施步骤写入 `docs/plan/`，当前状态以
-[../status/mainline_status.md](../status/mainline_status.md) 为准。
+[历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。
 
 ## 当前有效性说明
 
 - 历史语境有效：本文档保留 `Wave 7` 首轮产品官网壳层、首页叙事和 demo workspace v1 的设计背景。
 - 当前前端现行设计入口：
   [post_wave7_frontend_lab_product_design.md](post_wave7_frontend_lab_product_design.md)
-- 当前状态以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前状态以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 已完成计划归档：
-  - [../plan/history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)
+  - [历史：../plan/history_plan.md#mainline-wave7-product-website-shell-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave7-product-website-shell-plan)
 - 相关设计：
   - [post_wave7_frontend_lab_product_design.md](post_wave7_frontend_lab_product_design.md)
   - [debug_frontend_integration.md](debug_frontend_integration.md)
@@ -44,7 +47,7 @@
 双后端、`interactive_os`、`xv6`、Linux checkpoint / probe、AI accelerator、向量 /
 ML workload、L1D / shadow cache、JIT / DBT opt-in 原型和完整回归门禁。技术能力已经足够支撑一次阶段性展示，但现有入口仍更像“开发者调试台 + 汇报预览页”。
 
-如果直接把当前 [../showcase/simulator/preview.html](../showcase/simulator/preview.html) 和 `frontend/`
+如果直接把当前 [历史：../showcase/simulator/preview.html](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/showcase/simulator/preview.html) 和 `frontend/`
 暴露到公网，用户需要自己理解 Makefile、workload、backend、marker、probe 和状态文档，体验成本偏高。`Wave 7` 的核心问题不是“再做一个功能”，而是把这些能力整理成一个通过域名可访问的产品化站点：
 
 ```text
@@ -104,7 +107,7 @@ Product Site
 
 #### 1. 首页
 
-首页从 [../showcase/simulator/preview.html](../showcase/simulator/preview.html) 演化，但不沿用“汇报 HTML 预览”的信息密度。推荐的叙事顺序是：
+首页从 [历史：../showcase/simulator/preview.html](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/showcase/simulator/preview.html) 演化，但不沿用“汇报 HTML 预览”的信息密度。推荐的叙事顺序是：
 
 1. **Hero / First View**
    - `myCPU`
@@ -250,4 +253,4 @@ Design References
 
 - `Wave 7` 首页壳层、产品文档 v1 和 `demo workspace v1` 已完成并归档。
 - 首轮计划归档：
-  [../plan/history_plan.md#mainline-wave7-product-website-shell-plan](../plan/history_plan.md#mainline-wave7-product-website-shell-plan)
+  [历史：../plan/history_plan.md#mainline-wave7-product-website-shell-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave7-product-website-shell-plan)

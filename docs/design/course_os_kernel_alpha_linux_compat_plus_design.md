@@ -1,5 +1,8 @@
 # kernel_alpha Linux 用户态兼容 Plus 设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录《操作系统课程设计》`kernel_alpha` 在 Stage 4 课程 OS shell 基线之后的 Linux
@@ -10,25 +13,25 @@
 `testsuits-for-oskernel` README 中涉及的 RISC-V64 Linux 用户态程序。
 
 本文档不记录实时进度 checklist。当前状态以
-[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准；具体执行步骤写入
-`docs/plan/`，完成后归档到 [../plan/history_plan.md](../plan/history_plan.md)。
+[历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 为准；具体执行步骤写入
+`docs/plan/`，完成后归档到 [历史：../plan/history_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md)。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
+  - [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
 - 已完成计划：
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
 - 课程 OS 基线设计：
   - [course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)
 - 背景文档：
-  - [../background/操作系统课程设计-A方案-OS内核实现.md](../background/操作系统课程设计-A方案-OS内核实现.md)
+  - [历史：../background/操作系统课程设计-A方案-OS内核实现.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/background/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E8%AF%BE%E7%A8%8B%E8%AE%BE%E8%AE%A1-A%E6%96%B9%E6%A1%88-OS%E5%86%85%E6%A0%B8%E5%AE%9E%E7%8E%B0.md)
 
 ## 设计边界
 

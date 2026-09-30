@@ -61,7 +61,7 @@ description: Use when reviewing or improving code quality in my_visual_CPU, incl
 
 按任务再补充：
 
-- 代码审查 / review finding 整改：当前任务对应的 Review；旧 `docs/status/code_reself_status.md` 仅供按需查阅历史。
+- 代码审查 / review finding 整改：当前任务对应的 Review。
 - 文档治理或状态口径：`docs/AGENTS.md`
 - guest runtime：`myCPU/guest/AGENTS.md`
 

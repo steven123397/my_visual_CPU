@@ -1,5 +1,8 @@
 # Course OS OSComp External Validation Design
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档定义 `kernel_alpha` 在 Stage 4 课程 OS shell 基线之后，如何把
@@ -8,17 +11,17 @@ OSComp / `testsuits-for-oskernel` 作为 Linux compat Plus 的 opt-in 外部验�
 它不改变 Stage 1-4 课程 OS 基线完成定义，不替代
 [course_os_kernel_alpha_linux_compat_plus_design.md](course_os_kernel_alpha_linux_compat_plus_design.md)
 的长期 plus 边界，也不承担实时进度记录。当前进展以
-[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
+[历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
+  - [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
 - 相关设计：
   - [course_os_gap_closure_boundary_design.md](course_os_gap_closure_boundary_design.md)
   - [course_os_kernel_alpha_linux_compat_plus_design.md](course_os_kernel_alpha_linux_compat_plus_design.md)
 - 已完成计划：
-  - [../plan/history_plan.md#course-os-plus-external-validation-plan](../plan/history_plan.md#course-os-plus-external-validation-plan)
+  - [历史：../plan/history_plan.md#course-os-plus-external-validation-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-plus-external-validation-plan)
 - 外部参考：
   - [testsuits-for-oskernel](https://github.com/oscomp/testsuits-for-oskernel)
 
@@ -199,6 +202,6 @@ MYCPU_OSCOMP_BASIC_COMMAND_MAX_STEPS=1200000000
 ## 当前有效性说明
 
 - 当前有效：本文档是 Course OS / Linux compat Plus 对接 OSComp 基础外部验证的长期边界。
-- 当前结果以 [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 和
-  [../plan/history_plan.md#course-os-plus-external-validation-plan](../plan/history_plan.md#course-os-plus-external-validation-plan)
+- 当前结果以 [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 和
+  [历史：../plan/history_plan.md#course-os-plus-external-validation-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-plus-external-validation-plan)
   为准。

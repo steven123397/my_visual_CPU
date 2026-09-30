@@ -1,5 +1,8 @@
 # simulator-evolution observability schema 设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档定义 `simulator-evolution` 分线的统一 observability schema 边界。
@@ -12,18 +15,18 @@
 - 哪些现有字段已经是稳定读侧合同，哪些只是人读诊断输出，哪些适合作为首批迁移候选。
 
 本文档不承担实时进度更新。当前状态以
-[../status/simulator_evolution_status.md](../status/simulator_evolution_status.md) 为准。
+[历史：../status/simulator_evolution_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/simulator_evolution_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/simulator_evolution_status.md](../status/simulator_evolution_status.md)
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/simulator_evolution_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/simulator_evolution_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 历史计划：
-  - [../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
-  - [../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
+  - [历史：../plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
+  - [历史：../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
 - 相关路线 / 设计：
-  - [../../PROJECT_EVOLUTION_PLAN.md](../../PROJECT_EVOLUTION_PLAN.md)
+  - [历史：../../PROJECT_EVOLUTION_PLAN.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/PROJECT_EVOLUTION_PLAN.md)
   - [wave6_jit_dbt_readiness_design.md](wave6_jit_dbt_readiness_design.md)
   - [wave5_cache_memory_system_design.md](wave5_cache_memory_system_design.md)
   - [phase3_ooo_execution_model_design.md](phase3_ooo_execution_model_design.md)
@@ -418,7 +421,7 @@ JSON response 中新增 `observation_event` 对象；`myCPU/workloads/run_debug_
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `simulator-evolution` observability schema 的第一版设计入口。
-- 当前结果以 [../status/simulator_evolution_status.md](../status/simulator_evolution_status.md) 为准。
+- 当前结果以 [历史：../status/simulator_evolution_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/simulator_evolution_status.md) 为准。
 - 本文档由
-  [../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
+  [历史：../plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
   对应切片建立；后续小型代码迁移可直接落地后回写状态和相关文档，跨模块或多阶段迁移仍需另开计划。

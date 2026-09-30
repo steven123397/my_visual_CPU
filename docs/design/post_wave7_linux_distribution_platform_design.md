@@ -1,5 +1,8 @@
 # Post-Wave 7 标准 Linux 发行版平台设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录 `Wave 7` 阶段性收口之后，本地工作区重新打开的
@@ -13,19 +16,19 @@
 - 哪些能力属于这条主线，哪些仍不能提前写成“已经支持标准发行版”。
 
 本文档不记录执行 checklist。执行步骤写入
-[../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)，
-当前状态以 [../status/linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)
-和 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+[历史：../plan/post_wave7_linux_distribution_platform_longterm_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/post_wave7_linux_distribution_platform_longterm_plan.md)，
+当前状态以 [历史：../status/linux_distribution_platform_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/linux_distribution_platform_status.md)
+和 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/linux_distribution_platform_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/linux_distribution_platform_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 当前计划：
-  - [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+  - [历史：../plan/post_wave7_linux_distribution_platform_longterm_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 - 已完成计划：
-  - [../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](../plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
+  - [历史：../plan/history_plan.md#post-wave7-linux-distribution-platform-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
 - 相关设计：
   - [wave7_productization_and_showcase_design.md](wave7_productization_and_showcase_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
@@ -154,7 +157,7 @@ init 管理的 getty、密码 login、完整 process control、跨 reboot 持久
 ## 能力分解
 
 标准发行版平台按 5 个长期能力面拆分，具体执行顺序和 checklist 由
-[../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+[历史：../plan/post_wave7_linux_distribution_platform_longterm_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/post_wave7_linux_distribution_platform_longterm_plan.md)
 维护：
 
 1. **TTY / login / console 语义**
@@ -395,8 +398,8 @@ init 管理的 getty、密码 login、完整 process control、跨 reboot 持久
 
 - 当前有效 / 历史语境：当前有效。
 - 当前执行计划以
-  [../plan/post_wave7_linux_distribution_platform_longterm_plan.md](../plan/post_wave7_linux_distribution_platform_longterm_plan.md)
+  [历史：../plan/post_wave7_linux_distribution_platform_longterm_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/post_wave7_linux_distribution_platform_longterm_plan.md)
   为准。
 - 当前状态以
-  [../status/linux_distribution_platform_status.md](../status/linux_distribution_platform_status.md)
-  和 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+  [历史：../status/linux_distribution_platform_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/linux_distribution_platform_status.md)
+  和 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

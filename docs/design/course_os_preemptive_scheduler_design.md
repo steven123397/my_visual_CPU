@@ -1,10 +1,13 @@
 # 课程 OS 在线抢占调度设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档定义课程 OS 在线抢占调度器的职责边界、timer tick 输入、进程状态转换、
 context switch 统计和 Stage marker 兼容策略，对应已归档的
-[课程 OS 架构后续增强计划](../plan/history_plan.md#course-os-arch-followup-plan)
+[历史：课程 OS 架构后续增强计划](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-arch-followup-plan)
 任务 1。
 
 本文档不替代 [course_os_scheduler_timing_contract.md](course_os_scheduler_timing_contract.md)
@@ -12,8 +15,8 @@ context switch 统计和 Stage marker 兼容策略，对应已归档的
 
 ## 关联文档
 
-- 状态文档：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 相关计划归档：[../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
+- 状态文档：[历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
+- 相关计划归档：[历史：../plan/history_plan.md#course-os-arch-followup-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-arch-followup-plan)
 - 边界设计：[course_os_gap_closure_boundary_design.md](course_os_gap_closure_boundary_design.md)
 - 调度 timing 合同：[course_os_scheduler_timing_contract.md](course_os_scheduler_timing_contract.md)
 - 课程 OS 基线设计：[course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)
@@ -124,4 +127,4 @@ marker。
 ## 当前有效性说明
 
 - 当前有效。
-- 本文档对应的当前状态以 [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
+- 本文档对应的当前状态以 [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 为准。

@@ -1,5 +1,8 @@
 # 课程 OS kernel_alpha Stage 1-4 基线设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档合并并替代原先分散的四份 Stage 1 / Stage 2 / Stage 3 / Stage 4 设计文档，记录
@@ -8,19 +11,19 @@
 Stage 1-3 定义 `kernel_alpha_demo` 的一次性课程 OS summary smoke；Stage 4 定义
 `guest_course_os_shell_demo` 的常驻 `course-os> ` 交互 shell 和浏览器 `/console` Lab 接入。
 本文档只说明长期有效的边界、取舍、公共合同和验证口径；实时状态以
-[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准，执行过程归档到
-[../plan/history_plan.md](../plan/history_plan.md)。
+[历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 为准，执行过程归档到
+[历史：../plan/history_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md)。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 已完成计划：
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage3-plan](../plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage2-plan](../plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
-  - [../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](../plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage3-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage2-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
+  - [历史：../plan/history_plan.md#course-os-kernel-alpha-stage1-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
 - 后续 plus 设计：
   - [course_os_kernel_alpha_linux_compat_plus_design.md](course_os_kernel_alpha_linux_compat_plus_design.md)
 - 前端 / 调试链路：
@@ -28,8 +31,8 @@ Stage 1-3 定义 `kernel_alpha_demo` 的一次性课程 OS summary smoke；Stage
   - [debug_frontend_integration.md](debug_frontend_integration.md)
   - [minimal_interactive_os_design.md](minimal_interactive_os_design.md)
 - 背景与创新来源：
-  - [../background/操作系统课程设计-A方案-OS内核实现.md](../background/操作系统课程设计-A方案-OS内核实现.md)
-  - [../showcase/course-os/course_os_technical_report.md](../showcase/course-os/course_os_technical_report.md)
+  - [历史：../background/操作系统课程设计-A方案-OS内核实现.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/background/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E8%AF%BE%E7%A8%8B%E8%AE%BE%E8%AE%A1-A%E6%96%B9%E6%A1%88-OS%E5%86%85%E6%A0%B8%E5%AE%9E%E7%8E%B0.md)
+  - [历史：../showcase/course-os/course_os_technical_report.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/showcase/course-os/course_os_technical_report.md)
 
 ## 总体边界
 
@@ -215,5 +218,5 @@ kernel runtime、VM、trap、user task / program 和旧 9 条 `kernel_alpha` 负
 - 当前有效：本文档是 Stage 1-4 课程 OS 基线的统一设计口径。
 - 原 Stage 1 / Stage 2 / Stage 3 / Stage 4 四份独立设计文档已合并到本文档，不再作为独立设计入口维护。
 - Stage 1 / Stage 2 / Stage 3 / Stage 4 均已完成，完成态以
-  [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 和
-  [../plan/history_plan.md](../plan/history_plan.md) 中对应归档为准。
+  [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 和
+  [历史：../plan/history_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md) 中对应归档为准。

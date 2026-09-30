@@ -1921,9 +1921,10 @@ test('GET /docs returns the readable Wave 7 product documentation v1 entry', asy
     assert.doesNotMatch(body, /<h2>Boundaries<\/h2>/);
     assert.match(body, /wave7_productization_and_showcase_design\.md/);
     assert.match(body, /debug_frontend_integration\.md/);
-    assert.match(body, /future_expansion_roadmap_design\.md/);
-    assert.match(body, /npu_tpu_accelerator_status\.md/);
-    assert.match(body, /mainline_status\.md/);
+    assert.match(body, /index\.md/);
+    assert.match(body, /GitHub Issues/);
+    assert.match(body, /current\.md/);
+    assert.doesNotMatch(body, /\/source\/docs\/(?:status|plan|showcase|background)\//);
   } finally {
     await server.close();
   }
@@ -2003,10 +2004,10 @@ test('GET / presents project-specific evidence instead of a generic landing page
     assert.doesNotMatch(body, /不开放任意 AI 模型上传/);
     assert.doesNotMatch(body, /技术评审/);
     assert.doesNotMatch(body, /招聘面试官/);
-    assert.match(body, /\/source\/showcase\/simulator\/ppt_screenshot_console_overview\.png/);
-    assert.match(body, /\/source\/showcase\/simulator\/ppt_screenshot_pipeline\.png/);
-    assert.match(body, /\/source\/showcase\/simulator\/ppt_screenshot_terminal\.png/);
-    assert.match(body, /\/source\/showcase\/simulator\/ppt_screenshot_ai_or_vecto\.png/);
+    assert.match(body, /\/assets\/console-overview\.png/);
+    assert.match(body, /\/assets\/pipeline\.png/);
+    assert.match(body, /\/assets\/terminal\.png/);
+    assert.match(body, /\/assets\/vector\.png/);
     assert.match(body, /src="\/home\.js"/);
   } finally {
     await server.close();
@@ -2072,18 +2073,25 @@ test('GET /source/docs serves curated evidence documents referenced by product d
   }
 });
 
-test('GET /source/showcase serves homepage screenshot assets', async () => {
+test('GET /assets serves homepage screenshots without legacy documentation', async () => {
   const server = await startServer({
     port: 0,
     createSession: createFakeSessionFactory(),
   });
 
   try {
-    const response = await fetch(`${server.baseUrl}/source/showcase/simulator/ppt_screenshot_console_overview.png`);
-    const body = await response.arrayBuffer();
-    assert.equal(response.status, 200);
-    assert.match(response.headers.get('content-type') ?? '', /image\/png/);
-    assert.ok(body.byteLength > 1024);
+    for (const asset of ['console-overview.png', 'pipeline.png', 'terminal.png', 'vector.png']) {
+      const response = await fetch(`${server.baseUrl}/assets/${asset}`);
+      const body = Buffer.from(await response.arrayBuffer());
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /image\/png/);
+      assert.ok(body.byteLength > 1024);
+      assert.deepEqual([...body.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    }
+    for (const removed of ['/source/showcase/simulator/ppt_screenshot_console_overview.png', '/source/docs/status/mainline_status.md']) {
+      const response = await fetch(`${server.baseUrl}${removed}`);
+      assert.equal(response.status, 404);
+    }
   } finally {
     await server.close();
   }

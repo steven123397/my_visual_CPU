@@ -1,5 +1,8 @@
 # 课程 OS 缺口收口边界设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档定义 Stage 1-4 课程 OS 基线与《操作系统课程设计》A 方案要求之间的缺口收口边界。
@@ -11,13 +14,13 @@
 
 ## 关联文档
 
-- 课程要求：[../background/操作系统课程设计-A方案-OS内核实现.md](../background/操作系统课程设计-A方案-OS内核实现.md)
+- 课程要求：[历史：../background/操作系统课程设计-A方案-OS内核实现.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/background/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E8%AF%BE%E7%A8%8B%E8%AE%BE%E8%AE%A1-A%E6%96%B9%E6%A1%88-OS%E5%86%85%E6%A0%B8%E5%AE%9E%E7%8E%B0.md)
 - 课程 OS 基线设计：[course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)
 - Linux compat Plus 设计：[course_os_kernel_alpha_linux_compat_plus_design.md](course_os_kernel_alpha_linux_compat_plus_design.md)
-- 当前状态：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
-- 展示前计划归档：[../plan/history_plan.md#course-os-display-gap-closure-plan](../plan/history_plan.md#course-os-display-gap-closure-plan)
-- 架构后续计划归档：[../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
-- Plus / 外部验证计划归档：[../plan/history_plan.md#course-os-plus-external-validation-plan](../plan/history_plan.md#course-os-plus-external-validation-plan)
+- 当前状态：[历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
+- 展示前计划归档：[历史：../plan/history_plan.md#course-os-display-gap-closure-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-display-gap-closure-plan)
+- 架构后续计划归档：[历史：../plan/history_plan.md#course-os-arch-followup-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-arch-followup-plan)
+- Plus / 外部验证计划归档：[历史：../plan/history_plan.md#course-os-plus-external-validation-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-plus-external-validation-plan)
 
 ## 分层原则
 

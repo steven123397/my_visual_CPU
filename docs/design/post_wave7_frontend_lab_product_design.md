@@ -1,5 +1,8 @@
 # Post-Wave 7 前端 Lab 产品设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录 `Wave 7` 首轮产品化站点完成之后，前端继续向 `Lab product` 方向重构时的当前有效设计边界。
@@ -12,14 +15,14 @@
 - Linux / AI / Machine / Runtime 几类场景如何在同一工作台内共存。
 
 本文档不记录执行 checklist。具体实施步骤写入 `docs/plan/`，当前状态以
-[../status/mainline_status.md](../status/mainline_status.md) 为准。
+[历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 相关计划：
-  - [../plan/history_plan.md#post-wave7-frontend-lab-product-plan](../plan/history_plan.md#post-wave7-frontend-lab-product-plan)
+  - [历史：../plan/history_plan.md#post-wave7-frontend-lab-product-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#post-wave7-frontend-lab-product-plan)
 - 相关设计：
   - [wave7_productization_and_showcase_design.md](wave7_productization_and_showcase_design.md)
   - [post_wave7_linux_distribution_platform_design.md](post_wave7_linux_distribution_platform_design.md)
@@ -267,4 +270,4 @@ AI lab 的重点不是做模型市场，而是让用户能把“任务入口、�
 
 - 当前有效：本文档作为 `Post-Wave 7` 前端从 `demo workspace v1` 走向 `Lab workbench`
   的设计入口。
-- 当前状态以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前状态以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

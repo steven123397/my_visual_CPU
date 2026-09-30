@@ -1,5 +1,8 @@
 # Debug / Frontend 统一设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录当前本地调试链路与浏览器前端的正式边界，作为读者理解以下内容的统一参考资料：
@@ -14,14 +17,14 @@
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 相关设计：
   - [minimal_interactive_os_design.md](minimal_interactive_os_design.md)
   - [vector_ml_workload_direction_design.md](vector_ml_workload_direction_design.md)
   - [platform_mmio_contract.md](platform_mmio_contract.md)
 - 已完成计划归档：
-  - [../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
-  - [../plan/history_plan.md#vector-frontend-visualization-plan](../plan/history_plan.md#vector-frontend-visualization-plan)
+  - [历史：../plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#p1-debug-frontend-boundary-refinement-plan)
+  - [历史：../plan/history_plan.md#vector-frontend-visualization-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#vector-frontend-visualization-plan)
 
 ## 背景与问题
 
@@ -221,4 +224,4 @@ browser
 ## 当前有效性说明
 
 - 当前有效：本文档作为 `debug_session / protocol + frontend` 的统一设计边界。
-- 当前实时状态与后续优先级，以 [../status/mainline_status.md](../status/mainline_status.md) 与 [../../README.md](../../README.md) 为准。
+- 当前实时状态与后续优先级，以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 与 [../../README.md](../../README.md) 为准。

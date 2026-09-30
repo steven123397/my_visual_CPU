@@ -1,5 +1,8 @@
 # 向量扩展与 ML workload 统一设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档是当前仓库关于 `向量扩展 + ML workload` 的统一设计来源，用于取代此前按 `V0 / V1`、`V2`、`V3`、`V4` 分拆维护的多份阶段文档。
@@ -16,16 +19,16 @@
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 相关设计：
   - [debug_frontend_integration.md](debug_frontend_integration.md)
   - [phase4_preparation_design.md](phase4_preparation_design.md)
 - 已完成计划归档：
-  - [../plan/history_plan.md#vector-v0-v1-plan](../plan/history_plan.md#vector-v0-v1-plan)
-  - [../plan/history_plan.md#vector-v2-plan](../plan/history_plan.md#vector-v2-plan)
-  - [../plan/history_plan.md#vector-v3-plan](../plan/history_plan.md#vector-v3-plan)
-  - [../plan/history_plan.md#vector-v3-hardening-v4-design-plan](../plan/history_plan.md#vector-v3-hardening-v4-design-plan)
-  - [../plan/history_plan.md#vector-v4-plan](../plan/history_plan.md#vector-v4-plan)
+  - [历史：../plan/history_plan.md#vector-v0-v1-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#vector-v0-v1-plan)
+  - [历史：../plan/history_plan.md#vector-v2-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#vector-v2-plan)
+  - [历史：../plan/history_plan.md#vector-v3-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#vector-v3-plan)
+  - [历史：../plan/history_plan.md#vector-v3-hardening-v4-design-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#vector-v3-hardening-v4-design-plan)
+  - [历史：../plan/history_plan.md#vector-v4-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#vector-v4-plan)
 
 ## 背景与问题
 
@@ -217,4 +220,4 @@ workload 信号。
 ## 当前有效性说明
 
 - 当前有效 / 历史语境：当前有效，作为 `向量扩展 + ML workload` 的统一设计边界。
-- 当前实现进度、当前优先级、后续是否重开更重向量子线或 `Phase 4`，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前实现进度、当前优先级、后续是否重开更重向量子线或 `Phase 4`，以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

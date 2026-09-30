@@ -1,5 +1,8 @@
 # Pipeline 投机执行与提交契约
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档只回答当前 `pipeline` 的一类核心问题：哪些结果可以在投机阶段产生，哪些动作必须等到 architected commit boundary 才能对外生效。
@@ -14,12 +17,12 @@
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 相关设计：
   - [phase3_ooo_execution_model_design.md](phase3_ooo_execution_model_design.md)
 - 已完成计划归档：
-  - [../plan/history_plan.md#phase3-ooo-execution-plan](../plan/history_plan.md#phase3-ooo-execution-plan)
-  - [../plan/history_plan.md#phase3-ooo-readiness-plan](../plan/history_plan.md#phase3-ooo-readiness-plan)
+  - [历史：../plan/history_plan.md#phase3-ooo-execution-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase3-ooo-execution-plan)
+  - [历史：../plan/history_plan.md#phase3-ooo-readiness-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase3-ooo-readiness-plan)
 
 ## 背景与问题
 
@@ -153,4 +156,4 @@
 ## 当前有效性说明
 
 - 当前有效：本文档作为当前 `pipeline` 投机执行、commit boundary 与 side effect 可见性的正式 contract。
-- 当前实现状态和后续取舍，以 [../status/mainline_status.md](../status/mainline_status.md) 为准。
+- 当前实现状态和后续取舍，以 [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准。

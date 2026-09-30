@@ -1,42 +1,75 @@
 # 文档入口
 
-先读 [项目概览](../README.md) 与 [当前状态](current.md)，再按任务定向查阅。
-本项目自 2026-09-30 起采用 NexusKit；下列旧资料保留用于渐进迁移。
+项目是 RISC-V 系统模拟器，不再以课程项目定性。
+当前工作看 [current.md](current.md)，待办由
+[GitHub Issues](https://github.com/steven123397/my_visual_CPU/issues) 承载。
+开发流程遵循 NexusKit，规则见根 [AGENTS.md](../AGENTS.md)。
 
-## NexusKit 入口
+## 当前文档结构
 
-- [current.md](current.md)：当前工作范围、证据、阻断和下一步。
-- [AGENTS.md](AGENTS.md)：文档职责与迁移规则。
-- [GitHub Issues](https://github.com/steven123397/my_visual_CPU/issues)：待办承载。
-- `plans/`、`reviews/`、`ideation/`：首个对应过程产物产生时建立。
-- `solutions/`：首条长期经验或架构决策沉淀时建立。
-- 根 `CONCEPTS.md`：首个合格领域词条产生时建立。
+- `current.md`：会话现场。
+- `design/`：28 份待分析的旧设计资料，本轮保留正文，修正历史引用。
+- `plans/`、`reviews/`、`ideation/`、`solutions/`：有对应新产物时再建立。
+- 根 `CONCEPTS.md`：有合格领域术语时再建立。
+- 使用说明：[README](../README.md)、[前端](../frontend/README.md)、[部署](../deploy/README.md)。
 
-## 使用与展示
+旧 showcase、background、status、plan 及根方向文档已移除，历史由 Git 保留。
+网页使用的 4 张截图归属 `frontend/app/assets/`。
 
-- [部署说明](../deploy/README.md)
-- [展示材料总入口](showcase/README.md)
-- [Course OS 展示](showcase/course-os/README.md)
-- [模拟器展示](showcase/simulator/README.md)
-- [AI demo 操作指南](showcase/simulator/post_wave7_ai_demo_v1_guide.md)
+## Design 初步分析
 
-## 待迁移技术资料
+以下是基于文档内容的处置建议，不是已确认的现行架构或开发优先级。
+本轮未逐项复验实现。旧维护规则失效，保留资料不会恢复旧任务。
 
-以下链接是旧体系资料导航，不表示恢复旧分线或沿用历史优先级。
-旧状态中的“当前”和“下一步”须对照实现及本轮证据重新核实。
+### 优先核对的技术契约：8 份
 
-| 专题 | 技术边界 | 历史状态 / 计划输入 |
-|---|---|---|
-| 验证与平台 | [回归标准](design/regression_completion_criteria.md)、[MMIO 契约](design/platform_mmio_contract.md)、[Spike 差分](design/spike_differential_validation_design.md) | [审查整改记录](status/code_reself_status.md) |
-| 执行与缓存 | [OoO 模型](design/phase3_ooo_execution_model_design.md)、[推测合同](design/pipeline_speculation_contracts.md)、[L1D](design/wave5_cache_memory_system_design.md)、[JIT 研究资产](design/wave6_jit_dbt_readiness_design.md) | [模拟器演进记录](status/simulator_evolution_status.md) |
-| 观测与 Lab | [观测 schema](design/simulator_evolution_observability_schema_design.md)、[Lab 工作台](design/post_wave7_frontend_lab_product_design.md)、[调试接线](design/debug_frontend_integration.md) | [旧主线快照](status/mainline_status.md) |
-| Course OS | [课程基线](design/course_os_kernel_alpha_course_os_baseline_design.md)、[Linux compat](design/course_os_kernel_alpha_linux_compat_plus_design.md)、[调度时序](design/course_os_scheduler_timing_contract.md) | [guest 状态记录](status/kernel_alpha_status.md) |
-| Linux 发行版 | [平台边界](design/post_wave7_linux_distribution_platform_design.md) | [发行版记录](status/linux_distribution_platform_status.md)、[长期计划](plan/post_wave7_linux_distribution_platform_longterm_plan.md) |
-| AI / NPU | [用户任务与性能模型](design/post_wave7_ai_user_tasks_npu_performance_design.md)、[Linux-facing 合同](design/ai_accelerator_linux_facing_contract_design.md) | [AI 记录](status/npu_tpu_accelerator_status.md) |
-| 远端部署 | [部署设计](design/wave7_remote_cloud_dev_environment_design.md) | [旧部署计划](plan/wave7_remote_cloud_dev_environment_plan.md) |
+具有明确接口、状态、边界或差分语义，建议核对实现后提炼；剥离 Wave / Phase 历史。
 
-其他旧设计文件继续保留在 `design/`，按具体任务读取。
-旧 [P1](plan/project_evolution_priority_p1_plan.md)、[P2](plan/project_evolution_priority_p2_plan.md)、
-[P3](plan/project_evolution_priority_p3_plan.md)、[演进规划](../PROJECT_EVOLUTION_PLAN.md)
-和 [方向评审](../PROJECT_DIRECTION_REVIEW.md) 只作为重新确定任务的输入。
-已完成过程见 [历史计划](plan/history_plan.md) 或 Git 历史，不再追加历史汇总。
+- [平台 MMIO](design/platform_mmio_contract.md)：地址、寄存器、中断与 guest 驱动约束。
+- [Pipeline 推测与提交](design/pipeline_speculation_contracts.md)：副作用、异常、rollback 和 commit boundary。
+- [Pipeline 执行模型](design/phase3_ooo_execution_model_design.md)：rename / ROB / LSQ 与共享语义职责。
+- [L1D 与 memory system](design/wave5_cache_memory_system_design.md)：cacheability、bypass、fault 和生命周期。
+- [V-lite](design/vector_ml_workload_direction_design.md)：编码、状态、访存和 vector commit。
+- [Spike 差分](design/spike_differential_validation_design.md)：外部 oracle 范围与 final-state 比较。
+- [观测 schema](design/simulator_evolution_observability_schema_design.md)：event wrapper 与 producer / consumer 边界。
+- [Debug / frontend](design/debug_frontend_integration.md)：会话、terminal、snapshot 与受控写能力。
+
+### 按运行模块合并提炼：10 份
+
+已有实现资产仍存在；课程叙事与验收阶段应移除，技术边界按模块收敛。
+
+- [Guest 基线](design/course_os_kernel_alpha_course_os_baseline_design.md)
+- [Linux compat](design/course_os_kernel_alpha_linux_compat_plus_design.md)
+- [在线调度](design/course_os_preemptive_scheduler_design.md)
+- [调度 timing](design/course_os_scheduler_timing_contract.md)
+- [UART 输入](design/course_os_uart_interrupt_input_design.md)
+- [ELF 加载](design/course_os_real_user_elf_design.md)
+- [Monitor](design/minimal_interactive_os_design.md)
+- [OSComp 外部验证](design/course_os_oscomp_external_validation_design.md)
+- [Lab 工作台](design/post_wave7_frontend_lab_product_design.md)
+- [远端环境](design/wave7_remote_cloud_dev_environment_design.md)
+
+重点核对：调度 timing 的旧“不实现在线调度”限定与后续在线调度设计之间的关系；
+远端环境实际部署状况本轮未验证。
+
+### 已实现合同与未来方向混合：5 份
+
+先区分已有接口、opt-in 资产和未实现提案，不直接沿用整篇规划。
+
+- [Linux 发行版](design/post_wave7_linux_distribution_platform_design.md)
+- [AI 设备方向](design/npu_tpu_accelerator_direction_design.md)
+- [AI 用户任务与 timing](design/post_wave7_ai_user_tasks_npu_performance_design.md)
+- [AI Linux-facing](design/ai_accelerator_linux_facing_contract_design.md)：host facade 与未来 driver / ioctl 必须分开。
+- [JIT / DBT](design/wave6_jit_dbt_readiness_design.md)：保留研究资产边界，不据此重启正式 backend 路线。
+
+### 淘汰或局部提炼候选：5 份
+
+本轮尚未删除；需要先判断是否含有其他文件未覆盖的技术价值。
+
+- [课程缺口收口](design/course_os_gap_closure_boundary_design.md)：课程验收失效，但目录枚举等窄接口合同可能值得提炼。
+- [Phase 4 准备](design/phase4_preparation_design.md)：memory region 合同有价值，未做真实 cache 的阶段叙事已被后续 L1D 设计超越。
+- [Wave 7 产品展示](design/wave7_productization_and_showcase_design.md)：文档自身已声明历史语境，由 Lab 设计接替。
+- [回归收口标准](design/regression_completion_criteria.md)：风险与合同驱动验证的经验可提炼，旧阶段门禁和教学定位失效。
+- [旧模板](design/template.md)：属于旧体系模板，不是技术设计，新产物不使用。
+
+后续建议从平台 MMIO 或 pipeline 提交边界选一个专题，逐项对照实现与门禁后确定去向。

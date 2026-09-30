@@ -1,22 +1,25 @@
 # 课程 OS 真实用户 ELF 来源设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档定义课程 OS Stage 3 用户程序和 `course_os_shell` 外部 ELF 加载的统一来源合同，对应
-[课程 OS 架构后续增强计划](../plan/history_plan.md#course-os-arch-followup-plan)
+[历史：课程 OS 架构后续增强计划](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-arch-followup-plan)
 中的真实课程 ELF 用户程序任务，以及
-[../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md) 的
+[历史：../plan/project_evolution_priority_p1_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/project_evolution_priority_p1_plan.md) 的
 `course_os_shell` 外部 ELF 加载任务。
 
 本文档不承担实时进度更新。当前完成范围以
-[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
+[历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 为准。
 
 ## 关联文档
 
-- 状态文档：[../status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
+- 状态文档：[历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
 - 相关计划：
-  - [../plan/history_plan.md#course-os-arch-followup-plan](../plan/history_plan.md#course-os-arch-followup-plan)
-  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
+  - [历史：../plan/history_plan.md#course-os-arch-followup-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#course-os-arch-followup-plan)
+  - [历史：../plan/project_evolution_priority_p1_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/project_evolution_priority_p1_plan.md)
 - 边界设计：[course_os_gap_closure_boundary_design.md](course_os_gap_closure_boundary_design.md)
 - 课程 OS 基线设计：[course_os_kernel_alpha_course_os_baseline_design.md](course_os_kernel_alpha_course_os_baseline_design.md)
 - Linux compat Plus 设计：[course_os_kernel_alpha_linux_compat_plus_design.md](course_os_kernel_alpha_linux_compat_plus_design.md)
@@ -111,4 +114,4 @@ ELF / process 路径，而不是倒灌到 `linux_compat_*`，也不应把 host �
 ## 当前有效性说明
 
 - 当前有效。
-- 本文档对应的当前结果以 [../status/kernel_alpha_status.md](../status/kernel_alpha_status.md) 为准。
+- 本文档对应的当前结果以 [历史：../status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md) 为准。

@@ -1,5 +1,8 @@
 # Platform MMIO Contract
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档用于定义当前模拟器对 guest / 内核代码暴露的最小平台 MMIO 契约，包括地址布局、寄存器窗口、访问宽度与非法访问口径。
@@ -9,10 +12,10 @@
 ## 关联文档
 
 - 状态文档：
-  - [status/mainline_status.md](../status/mainline_status.md)
-  - [status/kernel_alpha_status.md](../status/kernel_alpha_status.md)
+  - [历史：status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
+  - [历史：status/kernel_alpha_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/kernel_alpha_status.md)
 - 已完成计划：
-  - [plan/history_plan.md#phase1-hardening-regressions-plan](../plan/history_plan.md#phase1-hardening-regressions-plan)
+  - [历史：plan/history_plan.md#phase1-hardening-regressions-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#phase1-hardening-regressions-plan)
 
 ## 当前有效性说明
 

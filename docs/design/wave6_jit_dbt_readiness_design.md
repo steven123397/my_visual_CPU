@@ -1,5 +1,8 @@
 # Wave 6 JIT / DBT Readiness 设计
 
+> 迁移说明（2026-09-30）：本文是待核实的旧设计资料，原有路线、课程定位及文档维护规则已失效。
+> 当前现场见 [../current.md](../current.md)；历史链接仅供溯源，不代表当前任务或支持承诺。
+
 ## 文档定位
 
 本文档记录主线 `Wave 6 / JIT / DBT 与 multicore / coherence` 的当前有效入口边界。
@@ -11,18 +14,18 @@
 - 哪些能力仍未进入默认 backend 或长期 runtime。
 
 本文档不记录执行 checklist。当前进度以
-[../status/mainline_status.md](../status/mainline_status.md) 为准；已完成历史只保留在
-[../plan/history_plan.md](../plan/history_plan.md) 中。
+[历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md) 为准；已完成历史只保留在
+[历史：../plan/history_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md) 中。
 
 ## 关联文档
 
 - 状态文档：
-  - [../status/mainline_status.md](../status/mainline_status.md)
+  - [历史：../status/mainline_status.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/status/mainline_status.md)
 - 当前活跃计划：
-  - [../plan/project_evolution_priority_p1_plan.md](../plan/project_evolution_priority_p1_plan.md)
+  - [历史：../plan/project_evolution_priority_p1_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/project_evolution_priority_p1_plan.md)
 - 已完成计划归档：
-  - [../plan/history_plan.md](../plan/history_plan.md)
-  - [../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
+  - [历史：../plan/history_plan.md](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md)
+  - [历史：../plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave6-dbt-translator-ir-v0-plan)
 - 相关设计：
   - [phase3_ooo_execution_model_design.md](phase3_ooo_execution_model_design.md)
   - [pipeline_speculation_contracts.md](pipeline_speculation_contracts.md)
@@ -528,7 +531,7 @@ host-smoke-only guardrail 直接外推成默认运行能力。
 
 - 当前有效：本文档作为主线 `Wave 6 / JIT / DBT` 的证据链、translation contract、
   原型边界和 `DBT translator + IR v0 dry-run` 完成态入口。
-- 已完成计划：[../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan](../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)
+- 已完成计划：[历史：../plan/history_plan.md#mainline-wave6-jit-execution-layer-plan](https://github.com/steven123397/my_visual_CPU/blob/32596a6dbc6fb28d64dd073f5dcaae8ec036f998/docs/plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)
 - 当前已经完成 hot-path candidate、per-PC / branch-target 观察、translation contract、
   host-smoke-only prototype、preflight guardrail、opt-in translation-plan dry-run、functional
   fallback replay 等价性、first-boundary taxonomy、共享 `DbtBlockPlan` analyzer，以及
