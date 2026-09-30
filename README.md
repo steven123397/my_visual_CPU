@@ -54,6 +54,9 @@ node frontend/server/debug_server.mjs --port=4173
 
 ```bash
 cd myCPU
+make -j2 build-ci-core
+make -j1 test-ci-core
+make test-unit-all
 make test-fast-smoke
 make test-standard-regression
 make test
@@ -63,9 +66,29 @@ make test-pipeline
 前端测试：
 
 ```bash
+# 先在仓库根目录准备真实联调资产
+make -C myCPU -j2 mycpu tests/asm/hello.elf guest/interactive_os.elf guest/course_os_shell.elf
 cd frontend
 node --test
 ```
+
+仓库提供 [日常 CI 配置](.github/workflows/ci.yml)（PR、推送 main、手动）和
+[手动完整回归配置](.github/workflows/regression.yml)（标准 functional / pipeline 回归及 xv6 shell）。
+发布与首次云端验收状态见 [当前进度](docs/current.md)。首次手动运行需要 workflow 已进入默认分支。
+日常环境为 Ubuntu 24.04 x86-64，前端使用 Node 24；日志 artifact 保留 14 天。
+
+发布后可指定分支或 tag 运行，并取回精确 run 的结果：
+
+```bash
+gh workflow run regression.yml --ref <branch-or-tag>
+gh run list --workflow regression.yml --branch <branch> --limit 5
+gh run view <run-id> --attempt <attempt> --json headSha,event,status,conclusion,jobs,url
+gh run watch <run-id> --exit-status
+gh run download <run-id> --name 'Full regression-regression-<run-id>-<attempt>' --dir /tmp/mycpu-ci-evidence
+```
+
+核对实际 checkout SHA（PR 默认为合并提交）、run ID 和 attempt 后，广泛回归可复用该版本的云端证据；
+失败、取消、外部场景 skip 和尚未运行的任务不能计为通过。各任务摘要及下载日志包含环境版本和阶段结果。
 
 慢速 guest 与外部资产验证分别使用 `make test-slow-guest` 和
 `make test-opt-in-external`，运行前确认具体目标及资产要求。

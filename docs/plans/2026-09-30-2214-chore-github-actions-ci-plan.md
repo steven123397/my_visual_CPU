@@ -198,3 +198,9 @@ Opt-in external 不纳入默认 gate，本轮不提供 Linux Image、OSComp root
 U1 的默认 unit 不遗漏、失败传播有效；U2 的配置可由干净环境执行；U3 的真实云端证据对应交付 SHA 并可通过现有 CLI 取回。两份 workflow 不部署、不自动合并，也不依赖个人机器路径。
 
 清理隔离故障实验与放弃的实现，不提交构建产物。根指引、README、Wiki 和 current 准确反映验证范围；没有远端运行证据时保持“本地已准备、云端待验证”，不宣称整体完成。
+
+## 实施记录
+
+- U1：三个 Make 入口与 `ci_targets_test.py` 已实现；干净源码副本核心实跑通过，61 个默认 unit、20 个 host 执行项，元测试验证非零退出与超时传播。
+- U2：两份 workflow 已配置，actionlint 通过；相同前端入口在干净副本上为 169 通过、1 外部 Linux 场景跳过。真实托管 runner 行为仍待 U3 验收。
+- U3：本地指引与 Wiki Verification 草稿已同步，未发布、未取得云端运行证据。2026-09-30 核实远端 main 已为 `d18eb46`，规划时旧提交未推送的限制已解除；本轮 workflow 的发布仍是独立动作。

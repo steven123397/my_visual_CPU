@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  simulator-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        with:
+          persist-credentials: false
+      - name: Install toolchain
+        id: toolchain
+        run: |
+          mkdir -p ci-logs
+          {
+            sudo apt-get update
+            sudo apt-get install -y build-essential python3 gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf device-tree-compiler
+          } 2>&1 | tee ci-logs/toolchain.log
+      - name: Record environment
+        id: environment
+        run: |
+          {
+            echo "head_sha=$(git rev-parse HEAD)"
+            echo "event=$GITHUB_EVENT_NAME ref=$GITHUB_REF"
+            echo "run_id=$GITHUB_RUN_ID attempt=$GITHUB_RUN_ATTEMPT"
+            cat /etc/os-release
+            uname -m
+            gcc --version
+            g++ --version
+            make --version
+            python3 --version
+            riscv64-unknown-elf-gcc --version
+            riscv64-unknown-elf-ld --version
+            dtc --version
+            node --version
+          } 2>&1 | tee ci-logs/environment.log
+      - name: Build validation assets
+        id: build
+        run: |
+          make -C myCPU -j2 build-ci-core 2>&1 | tee ci-logs/build.log
+      - name: Run tests
+        id: test
+        run: |
+          python3 myCPU/tests/host/ci_targets_test.py 2>&1 | tee ci-logs/ci-targets.log
+          make -C myCPU test-verification-layers 2>&1 | tee ci-logs/verification-layers.log
+          make -C myCPU -j1 test-ci-core 2>&1 | tee ci-logs/tests.log
+      - name: Record results
+        if: always()
+        env:
+          CHECKOUT_RESULT: ${{ steps.checkout.outcome }}
+          TOOLCHAIN_RESULT: ${{ steps.toolchain.outcome }}
+          ENVIRONMENT_RESULT: ${{ steps.environment.outcome }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          TEST_RESULT: ${{ steps.test.outcome }}
+          JOB_RESULT: ${{ job.status }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p ci-logs
+          {
+            echo "## $GITHUB_JOB"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+            echo "Event SHA: $GITHUB_SHA"
+            echo "Checkout SHA: $(git rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "PR head SHA: ${PR_HEAD_SHA:-not-a-PR}"
+            echo "Job: $JOB_RESULT"
+            echo "Checkout: $CHECKOUT_RESULT"
+            echo "Toolchain: $TOOLCHAIN_RESULT"
+            echo "Environment: $ENVIRONMENT_RESULT"
+            echo "Build: $BUILD_RESULT"
+            echo "Tests: $TEST_RESULT"
+          } | tee ci-logs/results.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ github.workflow }}-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-logs/
+          if-no-files-found: error
+          retention-days: 14
+
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Install toolchain
+        id: toolchain
+        run: |
+          mkdir -p ci-logs
+          {
+            sudo apt-get update
+            sudo apt-get install -y build-essential python3 gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf device-tree-compiler
+          } 2>&1 | tee ci-logs/toolchain.log
+      - name: Record environment
+        id: environment
+        run: |
+          {
+            echo "head_sha=$(git rev-parse HEAD)"
+            echo "event=$GITHUB_EVENT_NAME ref=$GITHUB_REF"
+            echo "run_id=$GITHUB_RUN_ID attempt=$GITHUB_RUN_ATTEMPT"
+            cat /etc/os-release
+            uname -m
+            gcc --version
+            g++ --version
+            make --version
+            python3 --version
+            riscv64-unknown-elf-gcc --version
+            riscv64-unknown-elf-ld --version
+            dtc --version
+            node --version
+          } 2>&1 | tee ci-logs/environment.log
+      - name: Build validation assets
+        id: build
+        run: |
+          make -C myCPU -j2 mycpu tests/asm/hello.elf guest/interactive_os.elf guest/course_os_shell.elf 2>&1 | tee ci-logs/build.log
+      - name: Run tests
+        id: test
+        run: |
+          cd frontend
+          node --test 2>&1 | tee ../ci-logs/tests.log
+      - name: Record results
+        if: always()
+        env:
+          CHECKOUT_RESULT: ${{ steps.checkout.outcome }}
+          TOOLCHAIN_RESULT: ${{ steps.toolchain.outcome }}
+          ENVIRONMENT_RESULT: ${{ steps.environment.outcome }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          TEST_RESULT: ${{ steps.test.outcome }}
+          JOB_RESULT: ${{ job.status }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p ci-logs
+          {
+            echo "## $GITHUB_JOB"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+            echo "Event SHA: $GITHUB_SHA"
+            echo "Checkout SHA: $(git rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "PR head SHA: ${PR_HEAD_SHA:-not-a-PR}"
+            echo "Job: $JOB_RESULT"
+            echo "Checkout: $CHECKOUT_RESULT"
+            echo "Toolchain: $TOOLCHAIN_RESULT"
+            echo "Environment: $ENVIRONMENT_RESULT"
+            echo "Build: $BUILD_RESULT"
+            echo "Tests: $TEST_RESULT"
+          } | tee ci-logs/results.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ github.workflow }}-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-logs/
+          if-no-files-found: error
+          retention-days: 14

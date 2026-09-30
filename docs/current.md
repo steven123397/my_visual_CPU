@@ -1,32 +1,26 @@
 # 当前状态
 
-- 所在分支：`main`。
-- 核对基点：`9886a62`；技术实现基点：公开提交 `27fb764`。
-- 工作范围：删除过时的仓库审查 skill 与 Claude Code / Cursor 本地目录。
-- 已具备能力：项目是已可运行的 RISC-V 模拟器原型，包含 guest runtime、pipeline、AI 设备和浏览器 Lab；本轮没有改变实现能力。
-- 用户决定：采用 NexusKit，待办使用 GitHub Issues；只维护最小根 `AGENTS.md`，旧文档规则全部废除。
-- 已清理：`.agents/skills/mycpu-quality-review/`、`.claude/`、`.cursor/`；移除旧 Claude ignore 条目。用户不再用 Claude Code 或 Cursor 接手项目。
-- 用户决定：项目不再定位为课程项目，Course OS 仍是运行与验证资产；架构由 Wiki 承载，无主仓库副本。
-- 用户决定：接受接入 CI 的方向，先研究测试入口与实施方案。
-- 已规划：[GitHub Actions Plan](plans/2026-09-30-2214-chore-github-actions-ci-plan.md)，U1 测试入口、U2 两份 workflow、U3 云端运行验收与指引同步。
-- 已核实：GitHub Actions 已启用且默认 token 只读；xv6 已随仓库保存；前端默认 e2e 依赖真实 simulator 与 3 个 guest 映像。
-- 方案：日常验证全部默认 unit、核心 host 和前端；完整回归手动触发。首轮构建并行、测试串行，缓存与定时任务后续评估。
-- 已发布：[GitHub Wiki](https://github.com/steven123397/my_visual_CPU/wiki)，提交 `e75397b3845d70778061177c2e28c01132f52dd9`，16 个专题页、首页和迁移记录，共 18 页。
-- 已转换：28 份旧设计全部有处理去向；[迁移记录](https://github.com/steven123397/my_visual_CPU/wiki/Migration) 保留逐文件对照与公开 Git 历史入口。
-- 已清理：旧 background/showcase/status/plan/design、两份根规划、docs/index 和子目录 AGENTS；网页使用的 4 张截图在 frontend/app/assets。
-- 已同步：根 AGENTS 声明 Wiki 维护规则，README 与前端文档入口改为已发布页面。
-- 本轮验证：已确认旧目录不存在、相关引用清除、`git diff --check` 通过；仅删除工具资产，没有运行产品测试。
-- CI 规划证据：静态源码、Make 依赖、仓库 Actions 权限与官方文档调研；Plan 自检通过，尚未实施。
-- 上轮迁移验证：前端 169 通过、1 外部 Linux 场景跳过；验证分层、链接及 diff 检查通过，范围见 [迁移审查](reviews/main-wiki-migration.md)。
-- 工作树：三个旧分线已移除，提交均被 main 包含，现在只有主工作树；主仓库本轮提交仅保存本地，Wiki 已独立推送。
-- 接手前的未提交文档已保存为 `f70b0d0`。
+- 所在分支：`codex/github-actions-ci`；核对基点：`d18eb46`。
+- 工作范围：[GitHub Actions Plan](plans/2026-09-30-2214-chore-github-actions-ci-plan.md) 的 U1、U2、U3；用户要求全部本地变更完成后统一审查。
+- U1 已实现：`test-unit-all`、`build-ci-core`、`test-ci-core`，核心 host 名单只在 Makefile 维护，旧测试入口保留。
+- U2 已实现：日常 CI 的 simulator-core / frontend 两个 job 与手动完整回归配置；只读权限、Action 完整 SHA、PR 并发取消、环境与阶段结果摘要、14 天日志 artifact。
+- 本地验证：从 `git archive d18eb46` 创建无生成物副本，应用本轮 Makefile，`make -j2 build-ci-core` 后 `make -j1 test-ci-core` 通过（61 unit、20 host 执行项）。测试阶段 dry-run 无新增编译或链接。
+- 本地环境：Ubuntu 22.04.5 x86-64、GCC 11.4、RISC-V GCC 10.2、Python 3.10.12；不是计划中的 Ubuntu 24.04 托管 runner 验证。
+- 本地验证：同一副本准备前端所需 simulator 与 3 个 guest 映像后，Node 24.16.0 `node --test` 为 169 通过、1 个外部 Linux console 场景跳过、0 失败。
+- 本地验证：CI 元测试 3 项通过，覆盖执行名单、构建前置、外部 gate 排除与隔离非零退出 / 超时失败传播；`make test-verification-layers`、actionlint v1.7.12 与 `git diff --check` 通过。
+- 冷构建有原有的 pipeline optional 与 AI 未使用函数警告；本轮未改相关源码，不将警告写成零警告通过。
+- U3 本地指引已同步：AGENTS、README 和独立 Wiki Verification 草稿准确区分本地配置与云端结果。
+- 统一审查：[审查记录](reviews/github-actions-ci.md)；一个日志隐藏目录问题已查证并改为 `ci-logs/`，固定版本 Action glob 的三 job 路径实跑通过，actionlint 复验通过。
+- 已确认远端 main 为 `d18eb46`；规划时提到的旧本地提交已发布，本轮 workflow 尚未发布。
+- 用户决定：采用 NexusKit，待办使用 GitHub Issues；共享 InstructionSemantics / functional backend 是 ISA 真值来源，架构契约由 GitHub Wiki 承载。
+- Wiki 现行已发布基点：`e75397b3845d70778061177c2e28c01132f52dd9`；Verification 本轮修改在 `/home/liangjiaqi/projects/my_visual_CPU.wiki`，尚未提交或推送。
 
 ## 阻断与已知缺口
 
-当前 Plan 与本地实施无阻断；仍无 workflow 配置，不能声称云端验证已工作。
-U3 首次云端验收依赖主仓库发布授权和默认分支上的 workflow。干净 runner 兼容与冷构建耗时尚待实跑；不以本机旧产物或历史测试替代。
-真实 Linux / OSComp / Spike、远端部署、定时运行与 Codespaces 未纳入本轮实施范围。
+U3 远端验收尚未完成：需要授权发布 workflow 到默认分支，然后取得日常 core/frontend、手动完整回归和故障实验的 run ID / attempt / 实际 SHA、环境、耗时与日志下载证据。
+完整标准回归及 xv6 shell 本轮未在本地执行，计划使用托管 runner 完成。没有云端证据，不能宣称 CI 已启用或整个 Plan 完成。
+真实 Linux / OSComp / Spike、部署、定时任务、缓存和 branch protection 不在范围内。
 
 ## 下一步
 
-首个可实施单元为 Plan U1：建立全部默认 unit 与核心 CI 的 Make 入口。当前仅完成规划并本地保存，尚未实施或发布主仓库。
+主仓库发布授权后完成 Plan U3：取得日常、完整回归及故障实验的真实云端证据，记录耗时和跳过项，再同步交付记录并发布 Wiki Verification。
