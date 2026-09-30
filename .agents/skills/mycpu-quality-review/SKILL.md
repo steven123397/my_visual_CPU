@@ -7,14 +7,13 @@ description: Use when reviewing or improving code quality in my_visual_CPU, incl
 
 本 skill 是 `my_visual_CPU` 的项目专用代码质量审查 / 收敛重构护栏。
 
-它不是“看到乱就重写”的许可，也不是对全局 superpowers 的重复包装。
+它提供项目专用审查标准，工作流程由 NexusKit 承载。
 
 ## 与现有体系的关系
 
-- 先遵守根 `AGENTS.md`、最近子树 `AGENTS.md` 和 `docs/status/mainline_status.md`。
-- 如果本轮涉及代码、正式文档、review finding、Git / worktree / commit 或治理文件，先使用 `project-governance-workflow`；本 skill 只负责审查 / 收敛 rubric，不接管仓库治理。
-- 如果 `project-governance-workflow` 没有出现在当前可用 skills 列表，或其路径不可读，必须在报告中标出 skill 发现异常，并退回到根 `AGENTS.md`、最近子树 `AGENTS.md` 和 `docs/status/mainline_status.md` 的显式规则执行；不能假装已经应用治理 skill。
-- 如果 `systematic-debugging`、`verification-before-completion`、`requesting-code-review` 或 `receiving-code-review` 同时触发，保留它们的调查、验证和反馈处理纪律，但不要机械升级成 worktree、全量矩阵或子代理，除非用户明确要求。
+- 先遵守根 `AGENTS.md`、最近子树 `AGENTS.md` 和 `docs/current.md`。
+- 仓库治理、审查和提交遵循用户选择的 NexusKit 对应技能；本 skill 只提供项目审查 / 收敛 rubric，不接管治理。
+- 旧文档维护规则全部废除；历史文档只提供线索，不要求回写或归档。
 
 ## 何时使用
 
@@ -58,11 +57,11 @@ description: Use when reviewing or improving code quality in my_visual_CPU, incl
 
 1. 根 `AGENTS.md`
 2. 目标子树 `AGENTS.md`；如果目标子树没有局部 `AGENTS.md`，记录“无局部规则”并继续
-3. `docs/status/mainline_status.md`
+3. `docs/current.md`
 
 按任务再补充：
 
-- 代码审查 / review finding 整改：`docs/status/code_reself_status.md`
+- 代码审查 / review finding 整改：当前任务对应的 Review；旧 `docs/status/code_reself_status.md` 仅供按需查阅历史。
 - 文档治理或状态口径：`docs/AGENTS.md`
 - guest runtime：`myCPU/guest/AGENTS.md`
 
@@ -75,7 +74,7 @@ description: Use when reviewing or improving code quality in my_visual_CPU, incl
 - 共享 `InstructionSemantics + functional backend` 仍是 ISA 真值来源。
 - `pipeline`、未来 `JIT` 和其他执行形态只能消费共享语义，不能复制 ISA 解释。
 - `debug/frontend` 只能消费只读快照，不能反向变成执行语义来源。
-- `design / plan / status` 分工保持严格分离。
+- 当前现场、实施方案和长期经验遵循 NexusKit 文档职责；旧 `design / plan / status` 仅作为待迁移输入，不恢复旧状态维护流程。
 - 不新增并行事实来源，不把同一状态抄写到多个正式文档。
 - 不能为了“测试变绿”而弱化断言、降级 contract、放宽 fail-closed 行为或回避真实 regression。
 - 不把一次性 workload / smoke 需求固化成长期特判。
@@ -182,7 +181,7 @@ description: Use when reviewing or improving code quality in my_visual_CPU, incl
 - `stale_tests`
   - 只更新受影响测试，并明确说明旧期望为何过时
 - `unclear_contract`
-  - 先对照 `AGENTS.md`、相关 `design / status` 或用户意图澄清，再继续
+  - 先对照用户意图、当前任务契约和实现证据澄清，再继续
 
 绝不要因为着急收尾就放宽断言或降低测试门槛。
 
@@ -198,31 +197,11 @@ description: Use when reviewing or improving code quality in my_visual_CPU, incl
 - 如果改动横跨执行路径、debug、workload 或 frontend/backend 边界，再逐层扩门
 - 不拿旧日志、旧通过结果或“理论上应该通过”当完成证据
 
-## 与 superpowers 的配合方式
+## 与 NexusKit 的配合方式
 
-对于本仓库，推荐的叠加关系是：
-
-- `using-superpowers`
-  - 负责纪律，不决定 repo-specific 质量标准
-- `project-governance-workflow`
-  - 负责轻重分级和仓库治理边界
-- `mycpu-quality-review`
-  - 负责本项目的代码质量审查与收敛 rubric
-- `systematic-debugging`
-  - 只在真的遇到红灯或异常行为时升级
-- `requesting-code-review`
-  - 用于实现完成后的额外独立审查
-- `receiving-code-review`
-  - 用于处理外部 review feedback
-
-默认不要因为 superpowers 的通用话术就自动：
-
-- 开 worktree
-- 派子代理
-- 写大 plan
-- 跑全量矩阵
-
-除非用户明确要求，或仓库治理判断确有必要。
+- `nk-review` 承载审查流程，按需采用本项目 rubric。
+- `nk-work` / `nk-debug` 承载实施与排障，`nk-commit` 承载本地提交。
+- 本 skill 不额外要求工作树、子代理、全量矩阵或旧体系文档产物。
 
 ## 输出要求
 

@@ -1,189 +1,42 @@
-# docs 文档索引
+# 文档入口
 
-## 推荐读取顺序
+先读 [项目概览](../README.md) 与 [当前状态](current.md)，再按任务定向查阅。
+本项目自 2026-09-30 起采用 NexusKit；下列旧资料保留用于渐进迁移。
 
-建议先阅读仓库根 [README.md](../README.md)，再按下面顺序进入正式文档：
+## NexusKit 入口
 
-1. [status/mainline_status.md](status/mainline_status.md)
-   仓库唯一的主线实时状态、当前优先级和下一步。
-2. [plan/project_evolution_priority_p1_plan.md](plan/project_evolution_priority_p1_plan.md)
-   `PROJECT_EVOLUTION_PLAN.md` 中 P1 事项的路线决断和交互能力计划。
-3. [plan/project_evolution_priority_p2_plan.md](plan/project_evolution_priority_p2_plan.md)
-   `PROJECT_EVOLUTION_PLAN.md` 中 P2 事项的协议化和可配置性计划。
-4. [plan/project_evolution_priority_p3_plan.md](plan/project_evolution_priority_p3_plan.md)
-   `PROJECT_EVOLUTION_PLAN.md` 中 P3 事项的治理和远期占位计划。
-5. [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
-   `simulator-evolution` 模拟器架构、协议和可观察性升级分线状态。
-6. [design/simulator_evolution_observability_schema_design.md](design/simulator_evolution_observability_schema_design.md)
-   `simulator-evolution` 统一 observability schema 第一版设计入口。
-7. [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
-   `Post-Wave 7 标准 Linux 发行版平台` 的当前状态、风险和下一步。
-8. [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
-   `用户自定义 AI 任务 + NPU 性能模型` 与独立 AI accelerator 方向状态。
-9. [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
-   当前 `/console` 从 demo workspace 走向 Lab workbench 的设计边界。
-10. [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
-   标准 Linux 发行版平台设计入口。
-11. [plan/post_wave7_linux_distribution_platform_longterm_plan.md](plan/post_wave7_linux_distribution_platform_longterm_plan.md)
-   标准 Linux 发行版平台五阶段长线活跃计划。
-12. [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
-   用户 AI 任务与 NPU 性能模型设计入口。
-13. [design/ai_accelerator_linux_facing_contract_design.md](design/ai_accelerator_linux_facing_contract_design.md)
-   AI accelerator 面向未来 Linux driver 的最小设备契约。
-14. [design/course_os_real_user_elf_design.md](design/course_os_real_user_elf_design.md)
-   课程 OS 真实用户 ELF 来源与 `exec /path` 统一合同。
-15. [design/course_os_uart_interrupt_input_design.md](design/course_os_uart_interrupt_input_design.md)
-   课程 OS shell UART 中断驱动输入与轮询 fallback 设计。
-16. [showcase/README.md](showcase/README.md)
-   展示材料总入口，按 `course-os` / `simulator` 分目录维护。
+- [current.md](current.md)：当前工作范围、证据、阻断和下一步。
+- [AGENTS.md](AGENTS.md)：文档职责与迁移规则。
+- [GitHub Issues](https://github.com/steven123397/my_visual_CPU/issues)：待办承载。
+- `plans/`、`reviews/`、`ideation/`：首个对应过程产物产生时建立。
+- `solutions/`：首条长期经验或架构决策沉淀时建立。
+- 根 `CONCEPTS.md`：首个合格领域词条产生时建立。
 
-历史设计和专项资料按专题读取即可。
+## 使用与展示
 
-## 专题入口
+- [部署说明](../deploy/README.md)
+- [展示材料总入口](showcase/README.md)
+- [Course OS 展示](showcase/course-os/README.md)
+- [模拟器展示](showcase/simulator/README.md)
+- [AI demo 操作指南](showcase/simulator/post_wave7_ai_demo_v1_guide.md)
 
-- `主线状态`
-  - [status/mainline_status.md](status/mainline_status.md)
-  - [plan/project_evolution_priority_p1_plan.md](plan/project_evolution_priority_p1_plan.md)
-  - [plan/project_evolution_priority_p2_plan.md](plan/project_evolution_priority_p2_plan.md)
-  - [plan/project_evolution_priority_p3_plan.md](plan/project_evolution_priority_p3_plan.md)
-  - [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
-  - [design/simulator_evolution_observability_schema_design.md](design/simulator_evolution_observability_schema_design.md)
-  - [plan/history_plan.md#project-evolution-priority-p0-plan](plan/history_plan.md#project-evolution-priority-p0-plan)
-  - [plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
-  - [plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
-  - [status/code_reself_status.md](status/code_reself_status.md)
-  - [plan/history_plan.md#code-reself-remediation-plan](plan/history_plan.md#code-reself-remediation-plan)
-  - [plan/history_plan.md](plan/history_plan.md)
+## 待迁移技术资料
 
-- `PROJECT_EVOLUTION 优先级计划`
-  - [plan/project_evolution_priority_p1_plan.md](plan/project_evolution_priority_p1_plan.md)
-  - [plan/project_evolution_priority_p2_plan.md](plan/project_evolution_priority_p2_plan.md)
-  - [plan/project_evolution_priority_p3_plan.md](plan/project_evolution_priority_p3_plan.md)
-  - [plan/history_plan.md#project-evolution-priority-p0-plan](plan/history_plan.md#project-evolution-priority-p0-plan)
+以下链接是旧体系资料导航，不表示恢复旧分线或沿用历史优先级。
+旧状态中的“当前”和“下一步”须对照实现及本轮证据重新核实。
 
-- `simulator-evolution`
-  - [status/simulator_evolution_status.md](status/simulator_evolution_status.md)
-  - [design/simulator_evolution_observability_schema_design.md](design/simulator_evolution_observability_schema_design.md)
-  - [plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan](plan/history_plan.md#simulator-evolution-slice2-debug-probe-event-summary-plan)
-  - [plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan](plan/history_plan.md#simulator-evolution-slice1-observability-schema-plan)
-  - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
-  - [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
-  - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
-  - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
-  - [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
+| 专题 | 技术边界 | 历史状态 / 计划输入 |
+|---|---|---|
+| 验证与平台 | [回归标准](design/regression_completion_criteria.md)、[MMIO 契约](design/platform_mmio_contract.md)、[Spike 差分](design/spike_differential_validation_design.md) | [审查整改记录](status/code_reself_status.md) |
+| 执行与缓存 | [OoO 模型](design/phase3_ooo_execution_model_design.md)、[推测合同](design/pipeline_speculation_contracts.md)、[L1D](design/wave5_cache_memory_system_design.md)、[JIT 研究资产](design/wave6_jit_dbt_readiness_design.md) | [模拟器演进记录](status/simulator_evolution_status.md) |
+| 观测与 Lab | [观测 schema](design/simulator_evolution_observability_schema_design.md)、[Lab 工作台](design/post_wave7_frontend_lab_product_design.md)、[调试接线](design/debug_frontend_integration.md) | [旧主线快照](status/mainline_status.md) |
+| Course OS | [课程基线](design/course_os_kernel_alpha_course_os_baseline_design.md)、[Linux compat](design/course_os_kernel_alpha_linux_compat_plus_design.md)、[调度时序](design/course_os_scheduler_timing_contract.md) | [guest 状态记录](status/kernel_alpha_status.md) |
+| Linux 发行版 | [平台边界](design/post_wave7_linux_distribution_platform_design.md) | [发行版记录](status/linux_distribution_platform_status.md)、[长期计划](plan/post_wave7_linux_distribution_platform_longterm_plan.md) |
+| AI / NPU | [用户任务与性能模型](design/post_wave7_ai_user_tasks_npu_performance_design.md)、[Linux-facing 合同](design/ai_accelerator_linux_facing_contract_design.md) | [AI 记录](status/npu_tpu_accelerator_status.md) |
+| 远端部署 | [部署设计](design/wave7_remote_cloud_dev_environment_design.md) | [旧部署计划](plan/wave7_remote_cloud_dev_environment_plan.md) |
 
-- `Post-Wave 7 Linux`
-  - [status/linux_distribution_platform_status.md](status/linux_distribution_platform_status.md)
-  - [design/post_wave7_linux_distribution_platform_design.md](design/post_wave7_linux_distribution_platform_design.md)
-  - [plan/post_wave7_linux_distribution_platform_longterm_plan.md](plan/post_wave7_linux_distribution_platform_longterm_plan.md)
-  - [plan/history_plan.md#post-wave7-linux-distribution-platform-plan](plan/history_plan.md#post-wave7-linux-distribution-platform-plan)
-
-- `Post-Wave 7 AI / NPU`
-  - [status/npu_tpu_accelerator_status.md](status/npu_tpu_accelerator_status.md)
-  - [design/post_wave7_ai_user_tasks_npu_performance_design.md](design/post_wave7_ai_user_tasks_npu_performance_design.md)
-  - [design/ai_accelerator_linux_facing_contract_design.md](design/ai_accelerator_linux_facing_contract_design.md)
-  - [showcase/simulator/post_wave7_ai_demo_v1_guide.md](showcase/simulator/post_wave7_ai_demo_v1_guide.md)
-  - [plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan](plan/history_plan.md#post-wave7-ai-user-tasks-npu-performance-plan)
-  - [plan/history_plan.md#post-wave7-ai-demo-v1-plan](plan/history_plan.md#post-wave7-ai-demo-v1-plan)
-
-- `前端 / Lab workbench`
-  - [design/post_wave7_frontend_lab_product_design.md](design/post_wave7_frontend_lab_product_design.md)
-  - [design/course_os_kernel_alpha_course_os_baseline_design.md](design/course_os_kernel_alpha_course_os_baseline_design.md)
-  - [design/debug_frontend_integration.md](design/debug_frontend_integration.md)
-  - [design/minimal_interactive_os_design.md](design/minimal_interactive_os_design.md)
-  - [plan/history_plan.md#shell-terminal-unification-plan](plan/history_plan.md#shell-terminal-unification-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
-  - [plan/history_plan.md#post-wave7-frontend-lab-product-plan](plan/history_plan.md#post-wave7-frontend-lab-product-plan)
-  - [plan/history_plan.md#post-wave7-frontend-lab-completion-plan](plan/history_plan.md#post-wave7-frontend-lab-completion-plan)
-
-- `Wave 7 历史收口 / 远端部署`
-  - [design/wave7_productization_and_showcase_design.md](design/wave7_productization_and_showcase_design.md)
-  - [design/wave7_remote_cloud_dev_environment_design.md](design/wave7_remote_cloud_dev_environment_design.md)
-  - [plan/wave7_remote_cloud_dev_environment_plan.md](plan/wave7_remote_cloud_dev_environment_plan.md)
-  - [plan/history_plan.md#mainline-wave7-product-website-shell-plan](plan/history_plan.md#mainline-wave7-product-website-shell-plan)
-
-- `pipeline`
-  - [design/phase3_ooo_execution_model_design.md](design/phase3_ooo_execution_model_design.md)
-  - [design/pipeline_speculation_contracts.md](design/pipeline_speculation_contracts.md)
-  - [design/regression_completion_criteria.md](design/regression_completion_criteria.md)
-
-- `Wave 5 / cache / memory-system`
-  - [design/wave5_cache_memory_system_design.md](design/wave5_cache_memory_system_design.md)
-  - [design/phase4_preparation_design.md](design/phase4_preparation_design.md)
-  - [plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan](plan/history_plan.md#mainline-wave5-closeout-wave6-readiness-plan)
-
-- `Wave 6 / JIT / DBT`
-  - [design/wave6_jit_dbt_readiness_design.md](design/wave6_jit_dbt_readiness_design.md)
-  - [plan/history_plan.md#mainline-wave6-jit-execution-layer-plan](plan/history_plan.md#mainline-wave6-jit-execution-layer-plan)
-  - [plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan](plan/history_plan.md#mainline-wave6-closeout-runtime-guardrail-plan)
-
-- `kernel_alpha`
-  - [status/kernel_alpha_status.md](status/kernel_alpha_status.md)
-  - [design/course_os_kernel_alpha_course_os_baseline_design.md](design/course_os_kernel_alpha_course_os_baseline_design.md)
-  - [design/course_os_uart_interrupt_input_design.md](design/course_os_uart_interrupt_input_design.md)
-  - [design/course_os_kernel_alpha_linux_compat_plus_design.md](design/course_os_kernel_alpha_linux_compat_plus_design.md)
-  - [design/course_os_oscomp_external_validation_design.md](design/course_os_oscomp_external_validation_design.md)
-  - [design/course_os_gap_closure_boundary_design.md](design/course_os_gap_closure_boundary_design.md)
-  - [design/course_os_preemptive_scheduler_design.md](design/course_os_preemptive_scheduler_design.md)
-  - [design/course_os_scheduler_timing_contract.md](design/course_os_scheduler_timing_contract.md)
-  - [design/course_os_real_user_elf_design.md](design/course_os_real_user_elf_design.md)
-  - [showcase/course-os/README.md](showcase/course-os/README.md)
-  - [showcase/course-os/course_os_technical_report.md](showcase/course-os/course_os_technical_report.md)
-  - [showcase/course-os/course_os_presentation_work_split.md](showcase/course-os/course_os_presentation_work_split.md)
-  - [plan/history_plan.md#course-os-plus-external-validation-plan](plan/history_plan.md#course-os-plus-external-validation-plan)
-  - [plan/history_plan.md#course-os-arch-followup-plan](plan/history_plan.md#course-os-arch-followup-plan)
-  - [plan/history_plan.md#course-os-display-gap-closure-plan](plan/history_plan.md#course-os-display-gap-closure-plan)
-  - [plan/history_plan.md#shell-terminal-unification-plan](plan/history_plan.md#shell-terminal-unification-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan](plan/history_plan.md#course-os-kernel-alpha-stage11-post-v0-convergence-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan](plan/history_plan.md#course-os-kernel-alpha-review-remediation-and-linux-compat-convergence-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-quality-review-plan](plan/history_plan.md#course-os-kernel-alpha-quality-review-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan](plan/history_plan.md#course-os-kernel-alpha-stage11-writable-rootfs-process-file-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan](plan/history_plan.md#course-os-kernel-alpha-stage10-oscomp-help-run-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan](plan/history_plan.md#course-os-kernel-alpha-stage9-linux-compat-real-exec-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan](plan/history_plan.md#course-os-kernel-alpha-stage8-linux-compat-loader-trace-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan](plan/history_plan.md#course-os-kernel-alpha-stage7-linux-compat-external-rootfs-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan](plan/history_plan.md#course-os-kernel-alpha-stage6-linux-compat-rootfs-syscall-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan](plan/history_plan.md#course-os-kernel-alpha-stage5-linux-compat-plus-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan](plan/history_plan.md#course-os-kernel-alpha-stage4-frontend-shell-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage3-plan](plan/history_plan.md#course-os-kernel-alpha-stage3-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage2-plan](plan/history_plan.md#course-os-kernel-alpha-stage2-plan)
-  - [plan/history_plan.md#course-os-kernel-alpha-stage1-plan](plan/history_plan.md#course-os-kernel-alpha-stage1-plan)
-  - [design/platform_mmio_contract.md](design/platform_mmio_contract.md)
-  - [design/regression_completion_criteria.md](design/regression_completion_criteria.md)
-
-- `向量 / ML workload`
-  - [design/vector_ml_workload_direction_design.md](design/vector_ml_workload_direction_design.md)
-  - [design/npu_tpu_accelerator_direction_design.md](design/npu_tpu_accelerator_direction_design.md)
-
-- `Spike 外部差分验证`
-  - [design/spike_differential_validation_design.md](design/spike_differential_validation_design.md)
-  - [plan/history_plan.md#spike-external-differential-validation-plan](plan/history_plan.md#spike-external-differential-validation-plan)
-
-- `课程结题 / 展示`
-  - [showcase/README.md](showcase/README.md)
-  - [showcase/course-os/README.md](showcase/course-os/README.md)
-  - [showcase/course-os/course_os_technical_report.md](showcase/course-os/course_os_technical_report.md)
-  - [showcase/course-os/course_os_presentation_work_split.md](showcase/course-os/course_os_presentation_work_split.md)
-  - [showcase/simulator/README.md](showcase/simulator/README.md)
-  - [showcase/simulator/preview.html](showcase/simulator/preview.html)
-  - [showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md](showcase/simulator/myCPU_结题汇报_十分钟演讲稿.md)
-  - [showcase/simulator/结题报告-梁家琦-20231071332-电计2304.md](showcase/simulator/结题报告-梁家琦-20231071332-电计2304.md)
-
-## 目录说明
-
-- [background](background)
-  项目背景与原始目标。
-- [status](status)
-  当前状态、风险、优先级和下一步。
-- [design](design)
-  长期有效的设计边界、模块资料和阶段合同。
-- [plan](plan)
-  活跃计划、模板和已完成归档。
-- [showcase](showcase)
-  项目展示材料总入口，按 `course-os` / `simulator` 分目录维护。
-
-## 维护约束
-
-- `index.md` 只做导航，不重复维护状态正文。
-- 仓库级实时主线状态只保留 [status/mainline_status.md](status/mainline_status.md)。
-- 新增、重命名或删除正式文档后，必须同步更新本文件。
+其他旧设计文件继续保留在 `design/`，按具体任务读取。
+旧 [P1](plan/project_evolution_priority_p1_plan.md)、[P2](plan/project_evolution_priority_p2_plan.md)、
+[P3](plan/project_evolution_priority_p3_plan.md)、[演进规划](../PROJECT_EVOLUTION_PLAN.md)
+和 [方向评审](../PROJECT_DIRECTION_REVIEW.md) 只作为重新确定任务的输入。
+已完成过程见 [历史计划](plan/history_plan.md) 或 Git 历史，不再追加历史汇总。

@@ -2,7 +2,7 @@
 
 myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系统模拟器。当前仓库已经是可运行的模拟器原型，不是纯设计稿：它能运行 Course OS 教学内核、浏览器终端 shell、交互式 monitor、`xv6-riscv` shell 和 Linux-facing probe，并通过浏览器 Lab 工作台观察 terminal、pipeline、寄存器、CSR、设备和 AI profile。
 
-当前实时状态、active line、近端 blocker 和下一步只看 [docs/status/mainline_status.md](docs/status/mainline_status.md)。展示材料按 `course-os` / `simulator` 分目录放在 [docs/showcase](docs/showcase)。
+当前工作范围、验证证据、阻断和下一步看 [docs/current.md](docs/current.md)。项目已切换到 NexusKit，旧文档逐专题迁移，导航见 [docs/index.md](docs/index.md)。展示材料按 `course-os` / `simulator` 分目录放在 [docs/showcase](docs/showcase)。
 
 ![myCPU Lab workbench](docs/showcase/simulator/ppt_screenshot_console_overview.png)
 
@@ -12,7 +12,7 @@ myCPU 是一套从 C 原型持续演进到模块化 C++17 架构的 RISC-V 系�
 - **系统级 bring-up**：已覆盖 M / S / U 特权级、CSR、trap、Sv39、TLB、UART、CLINT、PLIC、块设备和 `virtio-blk` 路径，并在其上收口 Course OS 课程操作系统展示主线。
 - **多后端执行**：`functional` 是正确性基线；`pipeline` 已具备 rename、ROB、LSQ 和最小真实 OoO execute；JIT/DBT 保持 opt-in 原型和 guardrail。
 - **可观察实验台**：`mycpu --debug-cli`、Node debug server 和浏览器 `/console` 组成 Lab workbench。
-- **Post-Wave 7 继续开发**：本地工作区已进入两条新主线：标准 Linux 发行版平台，以及用户自定义 AI 任务 / NPU 性能模型。
+- **后续方向待重新定序**：标准 Linux 发行版平台、用户 AI 任务 / NPU 性能模型等旧方向保留为输入；恢复维护后的当前任务以 `docs/current.md` 为准。
 
 ## 能力快照
 
@@ -114,7 +114,7 @@ Course OS 是当前操作系统课程设计的展示主线，建立在 `kernel_a
 - `guest_course_os_shell_demo` 提供常驻 `course-os> ` shell，可在浏览器终端中执行 `cpuinfo`、`schedstat`、`fsstat`、`sem`、`mutex`、`exec` 和受控 `linux ...` 命令。
 - Linux compat Plus 作为旁路验证能力存在，只用于最小 Linux 用户态兼容和 opt-in 外部验证，不替代课程 OS 主体，也不声明完整 Linux。
 
-旧 Phase 1 `KMVPETDS` 只作为历史 guardrail 记录；storage readiness / signature 合同仍由负向 demo 和 `kernel_alpha_*` 单元门禁覆盖。实时工程状态见 [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)，展示材料见 [docs/showcase/course-os/README.md](docs/showcase/course-os/README.md)。
+旧 Phase 1 `KMVPETDS` 只作为历史 guardrail 记录；storage readiness / signature 合同仍由负向 demo 和 `kernel_alpha_*` 单元门禁覆盖。历史工程记录见 [docs/status/kernel_alpha_status.md](docs/status/kernel_alpha_status.md)，当前任务见 [docs/current.md](docs/current.md)，展示材料见 [docs/showcase/course-os/README.md](docs/showcase/course-os/README.md)。
 
 ## 仓库结构
 
@@ -123,7 +123,7 @@ my_visual_CPU/
 ├── AGENTS.md          # 仓库规则、开发工作流和验证基线
 ├── myCPU/             # 模拟器主体、guest runtime、workloads、测试和 Makefile
 ├── frontend/          # Node debug server、浏览器前端和 Node 测试
-├── docs/              # background / design / plan / status / showcase
+├── docs/              # NexusKit 会话入口、知识与过程产物；旧资料渐进迁移
 ├── deploy/            # 远端单机部署支架和 smoke 脚本
 └── README.md
 ```
@@ -131,9 +131,12 @@ my_visual_CPU/
 ## 文档入口
 
 - [docs/index.md](docs/index.md)：正式文档总入口。
-- [docs/status/mainline_status.md](docs/status/mainline_status.md)：仓库唯一主线实时状态。
-- [docs/status/linux_distribution_platform_status.md](docs/status/linux_distribution_platform_status.md)：Post-Wave 7 标准 Linux 发行版平台状态。
-- [docs/status/npu_tpu_accelerator_status.md](docs/status/npu_tpu_accelerator_status.md)：AI accelerator / NPU-like 方向状态。
+- [docs/current.md](docs/current.md)：唯一当前现场入口。
+- [GitHub Issues](https://github.com/steven123397/my_visual_CPU/issues)：待办承载。
+- [docs/AGENTS.md](docs/AGENTS.md)：NexusKit 文档职责与渐进迁移规则。
+- [docs/status/mainline_status.md](docs/status/mainline_status.md)：旧主线历史快照。
+- [docs/status/linux_distribution_platform_status.md](docs/status/linux_distribution_platform_status.md)：待迁移的发行版平台记录。
+- [docs/status/npu_tpu_accelerator_status.md](docs/status/npu_tpu_accelerator_status.md)：待迁移的 AI accelerator / NPU-like 记录。
 - [docs/design/post_wave7_frontend_lab_product_design.md](docs/design/post_wave7_frontend_lab_product_design.md)：当前 Lab workbench 设计边界。
 - [docs/showcase/README.md](docs/showcase/README.md)：展示材料总入口，按 `course-os` / `simulator` 分目录维护。
 - [docs/showcase/course-os/README.md](docs/showcase/course-os/README.md)：本轮操作系统课程最终总结与展示入口。
@@ -154,4 +157,4 @@ my_visual_CPU/
 - 结题报告：`docs/showcase/simulator/结题报告-梁家琦-20231071332-电计2304.md`
 - HTML 预览页：`docs/showcase/simulator/preview.html`
 
-这些材料只服务汇报与展示，不替代 `docs/status/mainline_status.md` 的实时工程事实。
+这些材料只服务汇报与展示，不替代 `docs/current.md` 的当前现场摘要。
