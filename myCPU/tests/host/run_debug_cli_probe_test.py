@@ -1617,18 +1617,25 @@ class RunDebugCliProbeTest(unittest.TestCase):
         )
 
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
-        self.assertIn(
-            "summary: cycle=5000 instret=5000 pc=0x800010dc privilege=S backend=functional",
-            proc.stdout,
+        # Match a whole audited GCC 10.2 or Ubuntu GCC 13.2 checkpoint, never mixed fields.
+        baselines = (
+            ("800010dc", 1570, 1515, 1495, 621, 894, 8562),
+            ("80001174", 1558, 1503, 1483, 618, 885, 8508),
         )
-        self.assertIn("profile: retirements=5000 traps=0 memory=1570", proc.stdout)
-        self.assertIn(
-            "shadow-cache: line_size=64 capacity_lines=64 resident_lines=20 line_accesses=1515 hits=1495 misses=20 evictions=0 bypasses=55",
-            proc.stdout,
-        )
-        self.assertIn(
-            "memory-top: label=ram kind=ram accesses=1515 reads=621 writes=894 faults=0 bytes=8562",
-            proc.stdout,
+        expected_profiles = [
+            (
+                f"summary: cycle=5000 instret=5000 pc=0x{pc} privilege=S backend=functional",
+                f"profile: retirements=5000 traps=0 memory={memory}",
+                "shadow-cache: line_size=64 capacity_lines=64 resident_lines=20 "
+                f"line_accesses={accesses} hits={hits} misses=20 evictions=0 bypasses=55",
+                f"memory-top: label=ram kind=ram accesses={accesses} "
+                f"reads={reads} writes={writes} faults=0 bytes={byte_count}",
+            )
+            for pc, memory, accesses, hits, reads, writes, byte_count in baselines
+        ]
+        self.assertTrue(
+            any(all(line in proc.stdout for line in profile) for profile in expected_profiles),
+            msg=proc.stdout,
         )
         self.assertIn("xv6 kernel is booting", proc.stdout)
 

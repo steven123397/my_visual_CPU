@@ -204,3 +204,4 @@ U1 的默认 unit 不遗漏、失败传播有效；U2 的配置可由干净环�
 - U1：三个 Make 入口与 `ci_targets_test.py` 已实现；干净源码副本核心实跑通过，61 个默认 unit、20 个 host 执行项，元测试验证非零退出与超时传播。
 - U2：两份 workflow 已配置，actionlint 通过；相同前端入口在干净副本上为 169 通过、1 外部 Linux 场景跳过。真实托管 runner 行为仍待 U3 验收。
 - U3：用户授权后将 `cd65827` 发布到 main，workflow 已激活；首次日常 `36735028119/1` 与完整 `36735075958/1` 暴露 GCC 13 将 CSR / fence 扩展从 I 拆分的构建兼容问题，失败日志已下载。旧 GCC 10 又拒绝新扩展名称，因此在 Makefile 能力探测并让 `myCPU/workloads/boards/mycpu_virt.mk` 的 xv6 参数复用，元测试补充实际 CSR / fence 汇编。该小范围前置修复属于干净 runner 验收，不修改产品语义或削弱门禁。
+- U3 后续：`e608911` 的日常两个 job 云端通过；完整回归到 xv6 的旧编译器 PC / profile 固定基线失败。将 `xv6_boot_smoke.cpp` 与 `run_debug_cli_probe_test.py` 的相关断言扩为两套经实跑审计的完整精确基线，保留旧值、未知布局拒绝、所有 trap / cache 断言；不是范围断言或跳过。新旧内核的 memset 指令字节相同，仅布局和启动路径计数变化；两代实跑与针对性审查通过。

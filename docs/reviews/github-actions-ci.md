@@ -43,3 +43,13 @@ U3 尚无托管 runner 的日常 core/frontend、完整标准回归、xv6 shell�
 主会话采用编译器能力探测：支持显式 `zicsr` / `zifencei` 名称时附加，旧编译器保留原 ISA 字符串；xv6 默认使用同一工具链并复用后缀。新增元测试实际用 guest 与 xv6 两组参数编译 CSR / fence.i。旧 GCC 10 上 4 项通过、分层检查通过；独立 correctness reviewer 聚焦复核无发现。现代工具链与后续云端回归待验收，不将此轮静态审查写成通过。
 
 覆盖边界：自定义 `XV6_TOOLPREFIX` 与 `RV_CC` 指向不同代际工具链的组合未验证；默认 CI 二者使用同一工具链。
+
+现代验证已补齐：Ubuntu 24.04 容器的 RISC-V GCC 13.2 实跑 4 项元测试通过，显式后缀实际生效；`e608911` 云端日常两个 job 成功，日志已下载。旧失败 run 不作为修复通过证据。
+
+## 第 3 轮：xv6 两代编译布局精确基线的针对性复核
+
+范围为 `e608911` 后 `xv6_boot_smoke.cpp` 与 `run_debug_cli_probe_test.py` 的 xv6 functional profile 方法。完整 run `36736639580/1` 实际在旧 PC 断言失败。相同 xv6 源码分别由 GCC 10.2 / Ubuntu GCC 13.2 编译，两份 memset 的逐条指令字节相同，5000 步均停在 `memset+0x24`，函数地址及启动路径计数不同。
+
+修复保留原整套精确基线，增加现代整套精确基线。C++ 从同一 kernel 构建规则生成的 `kernel.sym` 中读取 main / memset 双地址，选择固定基线后仍独立比较 CPU / profile 实测值；缺失或未知布局失败。Python 比较完整 checkpoint 四行，必须整组匹配，禁止新旧字段混用。
+
+主会话两代内核 boot smoke 与 functional / pipeline probe 实跑通过；将符号 main 地址故意改动 4 字节时实际拒绝（exit 1）。现代内核上的全部 debug probe 测试为 99 项、9 个外部 skip，无失败。新内核在旧 Python 断言上先 Red，修改后两代 Green。correctness、testing 叶子代理聚焦复核无发现；产品语义和超时没有调整。修复后的完整云端回归仍待取得，其他未审计编译布局明确不支持自动放行。
