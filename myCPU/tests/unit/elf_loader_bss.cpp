@@ -112,6 +112,8 @@ void assert_zero_filled(Ram& ram, uint64_t addr, uint64_t size) {
 }  // namespace
 
 int main() {
+    std::fprintf(stderr, "CI_FAILURE_PROBE: intentional unit exit 7\n");
+    return 7;
     try {
         const std::string path = create_test_elf();
 
