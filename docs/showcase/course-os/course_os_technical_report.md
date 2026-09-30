@@ -29,7 +29,8 @@ myCPU Course OS 是在自研 RISC-V64 系统模拟器 myCPU 之上实现的一�
 10. [OSComp 外部验证](#10-oscomp-外部验证)
 11. [验证体系](#11-验证体系)
 12. [遇到的问题和解决方案](#12-遇到的问题和解决方案)
-13. [总结与展望](#13-总结与展望)
+13. [创新点](#13-创新点)
+14. [总结与展望](#14-总结与展望)
 
 ---
 
@@ -43,7 +44,29 @@ Course OS 的定位正是这个教学级内核。它的目标不是追赶通用 
 
 与直接移植 xv6 或 Linux 不同，Course OS 选择复用 myCPU guest supervisor runtime 已经沉淀的 bring-up、PMM、Sv39、trap、user runtime 等基础设施，再在其上叠加课程 OS 模块。这样既避免重复造轮子，又能让学生把注意力集中在操作系统课程本身要回答的问题上：进程如何创建和调度、虚拟内存如何按需分配、文件系统如何组织、系统调用如何分发、用户程序如何加载和执行。
 
-### 1.2 整体架构
+### 1.2 项目目标
+
+Course OS 的总体目标是在自研 RISC-V64 模拟器上运行一套可交互、可观察、可回归的教学级操作系统内核。围绕这一目标，项目具体拆成五个层面：
+
+1. **运行目标**：完成从 myCPU 模拟器、guest supervisor runtime 到 Course OS shell 的端到端启动链路，形成稳定的 `course-os> ` 交互入口。
+2. **课程目标**：覆盖操作系统课程中的进程管理、内存管理、文件系统、系统调用、用户程序、调度、同步、中断与异常处理等核心知识点。
+3. **工程目标**：把入口编排、内核模块、Linux 用户态兼容旁路和前端终端分层组织，避免把所有能力堆在单个 demo 入口中。
+4. **验证目标**：通过 host 单元测试、guest smoke、pipeline guest、前端 Node 测试和 opt-in external smoke 固定关键行为。
+5. **展示目标**：让系统状态可以通过 shell 命令、`/proc` 节点、终端输出和浏览器 `/console` 直接观察，支撑课程答辩和后续复现。
+
+### 1.3 团队信息与分工方案
+
+本项目由三名成员协作完成，整体分工按照“运行底座 - 用户态交互 - 内核控制面与整合验证”的方式展开。
+
+| 成员 | 主要职责 | 关联模块 |
+|---|---|---|
+| 梁家琦 | 项目主线设计、系统整合、内核控制面、进程管理、调度、同步、中断 / trap、Linux 兼容旁路、演示与验证收口 | `course_process`、`course_scheduler`、`course_sync`、`trap_dispatch`、`linux_compat_*`、frontend console |
+| 杨皓宇 | 运行底座、内存管理、ELF 装载、文件系统、状态文件和底层验证 | `course_memory`、`pmm`、`vm*`、`course_elf_loader`、`course_fs`、`procfs` |
+| 余健超 | 用户态路径、系统调用、文件描述符、课程用户程序、shell 交互和前端接入 | `course_syscall`、`course_fd`、`course_user_programs`、`course_shell`、`console_input`、terminal projection |
+
+这种分工让每个成员都负责一条完整链路：运行底座负责承载程序和数据，用户态交互负责把功能暴露给使用者，内核控制面负责进程生命周期、调度、中断和整体验证。最终系统通过统一的 Course OS shell 和 `/proc` 证据面收口。
+
+### 1.4 整体架构
 
 Course OS 建在 myCPU 模拟器提供的 RISC-V64 平台之上。模拟器负责指令执行、CSR、MMU、外设 MMIO 和 debug session；guest 侧内核负责进程、内存、文件系统、系统调用和用户交互。
 
@@ -60,7 +83,19 @@ Course OS 建在 myCPU 模拟器提供的 RISC-V64 平台之上。模拟器负�
 
 核心设计思路是"课程 OS 模块"与"Linux compat 模块"分流。课程能力使用 `course_*` 模块，保持教学级 ABI 和合同；Linux 用户态兼容使用 `linux_compat_*` 模块，通过显式 `linux ...` launcher 或受控 PATH fallback 进入旁路，避免把课程模块直接膨胀成通用 Linux 兼容层。
 
-### 1.3 代码结构总览
+### 1.5 模块划分
+
+Course OS 按职责拆分为运行底座、课程内核、用户态交互、兼容扩展和展示验证五类模块。运行底座提供 S-mode bring-up、PMM、Sv39、trap、timer、UART 和 storage；课程内核负责进程、内存、调度、同步、文件系统、FD、syscall 和 procfs；用户态交互由课程用户程序、ELF loader、libc wrapper 和 `course-os> ` shell 组成；兼容扩展由 `linux_compat_*` 旁路承载；展示验证由 host / guest smoke、debug server、terminal projection 和浏览器 `/console` 共同完成。
+
+| 模块类别 | 主要文件 | 主要职责 |
+|---|---|---|
+| 运行底座 | `pmm.c`、`vm*.c`、`trap*.c`、`timer.c`、`storage.c`、`supervisor_runtime.c` | 提供页框、地址空间、中断、timer、UART、storage 和 bring-up 基础。 |
+| 课程内核模块 | `course_process.c`、`course_scheduler.c`、`course_memory.c`、`course_fs.c`、`course_fd.c`、`course_syscall.c`、`course_sync.c`、`procfs.c` | 实现课程 OS 的进程、调度、内存、文件系统、FD、系统调用、同步和状态观测能力。 |
+| 用户态与 shell | `course_elf_loader.c`、`course_libc.c`、`course_user_programs.c`、`course_shell.c`、`course_os_shell/main.c` | 提供 ELF 装载、用户程序、libc wrapper 和常驻交互 shell。 |
+| Linux 兼容旁路 | `linux_compat*.c`、`course_shell_linux.c` | 支持受控 Linux 用户态程序、rootfs、loader、VM、process 和 syscall trace。 |
+| 展示与验证 | `frontend/server/debug_server.mjs`、`frontend/app/components/terminal.js`、`tests/unit/*`、`tests/host/*` | 提供浏览器终端、debug session、终端投影、单元测试和端到端 smoke。 |
+
+### 1.6 代码结构总览
 
 Course OS 相关实现主要集中在 `myCPU/guest` 目录下，按"基础设施层 → 课程 OS 模块层 → 编排层 → 独立入口"四层组织：
 
@@ -103,7 +138,7 @@ myCPU/guest
 
 ## 2. 内核基础设施
 
-### 2.1 RISC-V64 模拟器平台
+### 2.1 RISC-V64 模拟器平台与技术选型
 
 myCPU 模拟器为 Course OS 提供了 RISC-V64 平台的最小可用集合：
 
@@ -884,9 +919,33 @@ cd myCPU && MYCPU_COURSE_OS_LINUX_COMPAT_ROOTFS=/path/to/rootfs \
 
 ---
 
-## 13. 总结与展望
+## 13. 创新点
 
-### 13.1 工作总结
+### 13.1 自研模拟器上的课程 OS 闭环
+
+Course OS 不是只在现成虚拟机或教学内核框架上补功能，而是运行在自研 myCPU RISC-V64 系统模拟器之上。模拟器提供 CPU、CSR、MMU、UART、CLINT、PLIC 和 Storage 等平台能力，guest runtime 完成 S-mode bring-up，Course OS 在其上实现进程、内存、文件系统、系统调用和 shell。这个闭环把“硬件平台模拟”和“操作系统内核实现”连接在同一套工程中，使课程设计不止停留在单个内核模块，而是覆盖从指令执行到浏览器终端交互的完整路径。
+
+### 13.2 课程 OS 模块与 Linux compat 旁路分流
+
+项目把课程 OS 能力集中在 `course_*` 模块中，包括课程 syscall、进程表、文件系统、FD、shell 和用户程序；同时把 Linux 用户态兼容扩展放在 `linux_compat_*` 旁路中。这样既能保持课程 ABI 的简洁性和可解释性，又能通过 BusyBox、git help-run、external rootfs 等真实资产验证 loader、VM、syscall trace 和 rootfs 接线能力。两条路径共享底层平台，但在 ABI、错误码和展示口径上保持分流，降低了模块耦合和答辩解释成本。
+
+### 13.3 `/proc` 可观察证据面
+
+Course OS 将 `/proc` 设计成只读证据面，而不是控制面。`/proc/ps`、`/proc/meminfo`、`/proc/schedstat`、`/proc/fsstat`、`/proc/syscalls`、`/proc/cow`、`/proc/crashlog`、`/proc/cpuinfo` 等节点都直接由内核数据结构动态生成。该设计让进程状态、页面统计、调度行为、文件系统计数、系统调用次数和用户态崩溃信息能够被 shell 与测试直接观察，避免只靠日志描述系统行为。
+
+### 13.4 浏览器终端与真实 UART 路径复用
+
+前端 `/console` 页面、debug server、terminal projection 和 guest UART terminal 复用同一条交互路径。浏览器里显示的 `course-os> ` prompt 和命令输出来自 guest shell，而不是前端伪造状态。该设计让课程展示具有可操作性，也让前端测试能够复用真实 workload、terminal reset、Load / Run / Pause / Reset / Terminate 等控制合同。
+
+### 13.5 分层验证体系
+
+项目将验证拆成默认回归、课程 OS 单元门禁、guest / pipeline 门禁和 opt-in external 门禁。默认测试保持自包含，外部 rootfs 与 OSComp basic 通过显式环境变量进入；缺少外部资产时给出清晰 skip 或诊断。该验证体系使课程 OS 在继续扩展 Linux compat、真实 ELF、UART interrupt、在线调度等能力时，仍能守住已有基线。
+
+---
+
+## 14. 总结与展望
+
+### 14.1 工作总结
 
 Course OS 当前已经从最小 bring-up demo 演进为一套可交互、可观察、可回归的 RISC-V64 教学操作系统。它覆盖了进程、内存、文件系统、syscall、ELF、libc、同步、shell、procfs、UART terminal、Linux compat 和 external rootfs 可选验证等多个层面。
 
@@ -898,15 +957,15 @@ Course OS 当前已经从最小 bring-up demo 演进为一套可交互、可观�
 - 失败路径尽量输出可诊断字段，而不是吞错或伪造成功。
 - 浏览器展示复用真实 UART terminal，不通过前端伪造 OS 状态。
 
-### 13.2 未来展望
+### 14.2 未来展望
 
-后续如果继续扩展，建议按以下方向拆分：
+后续工作按以下方向继续推进：
 
 1. 扩大 OSComp 子集时继续采用 trace-driven Plus 计划，不进入默认回归。
 2. 网络 git、socket、DNS、SSH / TLS 单独作为网络路径推进。
 3. 完整 toolchain 需要真实 `cc1/as/ld` 子进程、fd/env/cwd 继承、pipe、临时文件和 signal / futex。
 4. `rustc` 应作为更重的内存和工具链稳定性专项，不与当前 basic smoke 混在一起。
-5. 展示材料建议优先补充：整体架构分层图、shell 命令分发图、Linux compat rootfs / loader / syscall trace 图、运行截图。
+5. 展示材料继续完善整体架构分层图、shell 命令分发图、Linux compat rootfs / loader / syscall trace 图和运行截图。
 
 ---
 
