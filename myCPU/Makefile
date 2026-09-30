@@ -293,7 +293,9 @@ PIPELINE_SUPERVISOR_GUEST_TEST_TIMEOUT ?= 90s
 RV_CC   = riscv64-unknown-elf-gcc
 RV_OBJCOPY = riscv64-unknown-elf-objcopy
 DTC = dtc
-RV_FLAGS = -march=rv64im -mabi=lp64
+# New toolchains split CSR/fence.i out of I; GCC 10 rejects the named extensions.
+RV_Z_EXTENSIONS := $(shell $(RV_CC) -march=rv64im_zicsr_zifencei -mabi=lp64 -E -x c /dev/null >/dev/null 2>&1 && echo _zicsr_zifencei)
+RV_FLAGS = -march=rv64im$(RV_Z_EXTENSIONS) -mabi=lp64
 RV_ELF_LDFLAGS = -nostdlib -Wl,-Ttext-segment=0x80000000
 GUEST_RV_CFLAGS = $(RV_FLAGS) -mcmodel=medany -mno-relax -msmall-data-limit=0 -ffreestanding -fno-builtin -fno-stack-protector -fno-pie -MMD -MP -g -O2 -Wall -Wextra
 GUEST_RV_LDFLAGS = -nostdlib -nostartfiles -static -no-pie -Wl,-T,guest/supervisor_demo/link.ld

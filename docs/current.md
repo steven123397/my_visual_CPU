@@ -1,6 +1,6 @@
 # 当前状态
 
-- 所在分支：`codex/github-actions-ci`；核对基点：`d18eb46`。
+- 所在分支：`codex/github-actions-ci`；核对基点：`cd65827`。
 - 工作范围：[GitHub Actions Plan](plans/2026-09-30-2214-chore-github-actions-ci-plan.md) 的 U1、U2、U3；用户要求全部本地变更完成后统一审查。
 - U1 已实现：`test-unit-all`、`build-ci-core`、`test-ci-core`，核心 host 名单只在 Makefile 维护，旧测试入口保留。
 - U2 已实现：日常 CI 的 simulator-core / frontend 两个 job 与手动完整回归配置；只读权限、Action 完整 SHA、PR 并发取消、环境与阶段结果摘要、14 天日志 artifact。
@@ -11,16 +11,17 @@
 - 冷构建有原有的 pipeline optional 与 AI 未使用函数警告；本轮未改相关源码，不将警告写成零警告通过。
 - U3 本地指引已同步：AGENTS、README 和独立 Wiki Verification 草稿准确区分本地配置与云端结果。
 - 统一审查：[审查记录](reviews/github-actions-ci.md)；一个日志隐藏目录问题已查证并改为 `ci-logs/`，固定版本 Action glob 的三 job 路径实跑通过，actionlint 复验通过。
-- 已确认远端 main 为 `d18eb46`；规划时提到的旧本地提交已发布，本轮 workflow 尚未发布。
+- 用户已授权发布和验收；`cd65827` 已快进发布到 main，两份 workflow 已激活。首次日常 run `36735028119/1`、完整 run `36735075958/1` 均暴露新工具链的 CSR 架构声明问题，失败日志已下载。
+- 兼容修复已实现：新 RISC-V GCC 13 显式声明 `zicsr` / `zifencei`，旧 GCC 10 不接受这些名称；通过编译器能力探测统一 guest 与 xv6 的参数。含实际 CSR / fence 编译的 4 项元测试在旧工具链通过，聚焦正确性复核无发现；现代工具链与修复后云端运行尚待验证。
 - 用户决定：采用 NexusKit，待办使用 GitHub Issues；共享 InstructionSemantics / functional backend 是 ISA 真值来源，架构契约由 GitHub Wiki 承载。
 - Wiki 现行已发布基点：`e75397b3845d70778061177c2e28c01132f52dd9`；Verification 本轮修改在 `/home/liangjiaqi/projects/my_visual_CPU.wiki`，尚未提交或推送。
 
 ## 阻断与已知缺口
 
-U3 远端验收尚未完成：需要授权发布 workflow 到默认分支，然后取得日常 core/frontend、手动完整回归和故障实验的 run ID / attempt / 实际 SHA、环境、耗时与日志下载证据。
+U3 远端验收尚未完成：首次 runner 构建失败，修复后需重新取得日常 core/frontend、手动完整回归和故障实验的 run ID / attempt / 实际 SHA、环境、耗时与日志下载证据。
 完整标准回归及 xv6 shell 本轮未在本地执行，计划使用托管 runner 完成。没有云端证据，不能宣称 CI 已启用或整个 Plan 完成。
 真实 Linux / OSComp / Spike、部署、定时任务、缓存和 branch protection 不在范围内。
 
 ## 下一步
 
-主仓库发布授权后完成 Plan U3：取得日常、完整回归及故障实验的真实云端证据，记录耗时和跳过项，再同步交付记录并发布 Wiki Verification。
+完成工具链兼容修复并复核后发布，继续 Plan U3 的日常、完整回归及故障实验验收，再同步交付记录并发布 Wiki Verification。

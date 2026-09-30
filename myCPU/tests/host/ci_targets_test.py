@@ -71,6 +71,17 @@ class CiTargetsTest(unittest.TestCase):
                     self.assertIn("=== unit:ci_failure_probe ===", result.stdout)
                     self.assertIn(marker, result.stdout)
 
+    def test_guest_and_xv6_flags_compile_csr_and_fence(self):
+        with tempfile.TemporaryDirectory(prefix="mycpu-ci-isa-") as directory:
+            source = Path(directory) / "probe.S"
+            source.write_text(".text\n_start:\n csrr a0, mstatus\n fence.i\n")
+            for flags in ("$(RV_FLAGS)",
+                          "$(BOARD_XV6_ARCH_MARCH) $(BOARD_XV6_ARCH_MABI)"):
+                self.checked_make(
+                    f"--eval=ci-isa-probe:;$(RV_CC) {flags} -c {source} -o {source.with_suffix('.o')}",
+                    "ci-isa-probe",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

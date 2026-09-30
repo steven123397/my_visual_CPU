@@ -35,3 +35,11 @@
 U3 尚无托管 runner 的日常 core/frontend、完整标准回归、xv6 shell、云端故障实验与 artifact 下载证据，亦未验证 PR 连续提交取消行为、实际冷构建耗时或 fork PR 实跑。文档均保留这些未验证边界。取消或 runner 终止可能阻止 `always()` 上传，不能据此推断成功。
 
 没有修改产品 API、数据库、缓存、异步执行或模块职责边界，因此未选 API、迁移、性能、maintainability 及平台专属角色；无已有 PR 评论或 solutions 语料，未选对应角色。精简三个视角无发现。三个日志目录修复后的证据可复用，未机械重跑无关产品测试。
+
+## 第 2 轮：云端工具链兼容修复的针对性复核
+
+范围为 `cd65827` 后 `myCPU/Makefile`、board profile 与 `ci_targets_test.py` 的修复，不重新扫描已通过的无关配置。首次 Ubuntu 24.04 / RISC-V GCC 13 在 CSR 汇编上报 `extension zicsr required`，旧 GCC 10 实际拒绝新扩展名称与 GCC `-misa-spec` 参数。
+
+主会话采用编译器能力探测：支持显式 `zicsr` / `zifencei` 名称时附加，旧编译器保留原 ISA 字符串；xv6 默认使用同一工具链并复用后缀。新增元测试实际用 guest 与 xv6 两组参数编译 CSR / fence.i。旧 GCC 10 上 4 项通过、分层检查通过；独立 correctness reviewer 聚焦复核无发现。现代工具链与后续云端回归待验收，不将此轮静态审查写成通过。
+
+覆盖边界：自定义 `XV6_TOOLPREFIX` 与 `RV_CC` 指向不同代际工具链的组合未验证；默认 CI 二者使用同一工具链。
