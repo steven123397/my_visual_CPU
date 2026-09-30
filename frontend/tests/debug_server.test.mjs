@@ -1919,12 +1919,12 @@ test('GET /docs returns the readable Wave 7 product documentation v1 entry', asy
     assert.doesNotMatch(body, /面向技术评审 \/ 招聘面试官/);
     assert.doesNotMatch(body, /<a href="#boundaries">Boundaries<\/a>/);
     assert.doesNotMatch(body, /<h2>Boundaries<\/h2>/);
-    assert.match(body, /wave7_productization_and_showcase_design\.md/);
-    assert.match(body, /debug_frontend_integration\.md/);
+    assert.match(body, /https:\/\/github\.com\/steven123397\/my_visual_CPU\/wiki\/Debug-and-Lab/);
+    assert.match(body, /https:\/\/github\.com\/steven123397\/my_visual_CPU\/wiki\/Pipeline/);
     assert.match(body, /GitHub Wiki/);
     assert.match(body, /GitHub Issues/);
     assert.match(body, /current\.md/);
-    assert.doesNotMatch(body, /\/source\/docs\/(?:status|plan|showcase|background)\//);
+    assert.doesNotMatch(body, /\/source\/docs\/(?:design|status|plan|showcase|background)\//);
   } finally {
     await server.close();
   }
@@ -2063,11 +2063,11 @@ test('GET /source/docs serves curated evidence documents referenced by product d
   });
 
   try {
-    const response = await fetch(`${server.baseUrl}/source/docs/design/wave7_productization_and_showcase_design.md`);
+    const response = await fetch(`${server.baseUrl}/source/docs/current.md`);
     const body = await response.text();
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type') ?? '', /text\/markdown|text\/plain/);
-    assert.match(body, /Wave 7 产品化展示与在线控制台设计/);
+    assert.match(body, /当前状态/);
   } finally {
     await server.close();
   }
@@ -2088,7 +2088,7 @@ test('GET /assets serves homepage screenshots without legacy documentation', asy
       assert.ok(body.byteLength > 1024);
       assert.deepEqual([...body.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
     }
-    for (const removed of ['/source/showcase/simulator/ppt_screenshot_console_overview.png', '/source/docs/status/mainline_status.md']) {
+    for (const removed of ['/source/showcase/simulator/ppt_screenshot_console_overview.png', '/source/docs/status/mainline_status.md', '/source/docs/design/wave7_productization_and_showcase_design.md']) {
       const response = await fetch(`${server.baseUrl}${removed}`);
       assert.equal(response.status, 404);
     }

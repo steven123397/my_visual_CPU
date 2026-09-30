@@ -6,7 +6,7 @@ myCPU 是一个已可运行的 RISC-V 系统模拟器原型，采用模块化 C+
 
 当前工作看 [docs/current.md](docs/current.md)，待办由
 [GitHub Issues](https://github.com/steven123397/my_visual_CPU/issues) 承载。
-开发流程采用 NexusKit，架构资料将迁入 [GitHub Wiki](https://github.com/steven123397/my_visual_CPU/wiki)（尚未启用）。
+开发流程采用 NexusKit，架构与技术契约见 [GitHub Wiki](https://github.com/steven123397/my_visual_CPU/wiki)。
 
 ![myCPU Lab workbench](frontend/app/assets/console-overview.png)
 
@@ -24,7 +24,7 @@ myCPU 是一个已可运行的 RISC-V 系统模拟器原型，采用模块化 C+
 
 以上是已有实现概览，不代表完整 ISA、通用 Linux 发行版或商用 NPU 支持。
 JIT / DBT 保持 opt-in 研究资产；真实 Linux / 发行版镜像与 Spike 需要外部资产。
-当前设计资料正在重新核对，历史验证不能替代本轮实跑证据。
+Wiki 区分现行契约、历史验证与未验证能力，历史结果不能替代本轮实跑证据。
 
 ## 构建与运行
 
@@ -76,8 +76,8 @@ node --test
 - [myCPU/](myCPU)：模拟器、guest、workload 与测试。
 - [frontend/](frontend)：浏览器工作台与本地调试服务。
 - [docs/current.md](docs/current.md)：当前现场。
-- [GitHub Wiki](https://github.com/steven123397/my_visual_CPU/wiki)：架构与技术契约的迁移目标，尚未启用。
+- [GitHub Wiki](https://github.com/steven123397/my_visual_CPU/wiki)：架构与技术契约。
 - [deploy/](deploy)：部署支架。
 
 旧课程展示、背景、状态和计划已清理，历史内容可通过 Git 查询。
-`docs/design/` 暂保留为待分析资料，后续逐专题核实与提炼。
+旧设计已提炼为 Wiki 专题；逐文件去向见 [迁移记录](https://github.com/steven123397/my_visual_CPU/wiki/Migration)。
