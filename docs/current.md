@@ -1,7 +1,7 @@
 # 当前状态
 
 - 所在分支：`codex/ci-failure-probe`；核对基点：`e608911`。
-- 临时故障实验：默认 unit `elf_loader_bss` 输出 `CI_FAILURE_PROBE` 并返回 7；本地聚合入口已实际失败。不得合入 main；用于 U3 云端失败结论与日志下载，验收后删除临时分支。
+- 临时故障实验：默认 unit `elf_loader_bss` 输出 `CI_FAILURE_PROBE_V2` 并返回 7；本地聚合入口已实际失败。第二次提交用于验证 PR #3 取消旧 run `36736736172`。不得合入 main；验收后关闭 PR 并删除临时分支。
 - 工作范围：[GitHub Actions Plan](plans/2026-09-30-2214-chore-github-actions-ci-plan.md) 的 U1、U2、U3；用户要求全部本地变更完成后统一审查。
 - U1 已实现：`test-unit-all`、`build-ci-core`、`test-ci-core`，核心 host 名单只在 Makefile 维护，旧测试入口保留。
 - U2 已实现：日常 CI 的 simulator-core / frontend 两个 job 与手动完整回归配置；只读权限、Action 完整 SHA、PR 并发取消、环境与阶段结果摘要、14 天日志 artifact。
