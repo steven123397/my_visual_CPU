@@ -20,7 +20,7 @@
 
 ## 1. 核心 contract 基线
 
-只要触及 `myCPU/AGENTS.md` 中以下路径之一：
+触及 `myCPU/` 下以下路径时，按变更涉及的契约选择验证：
 
 - `src/cpu.cpp`
 - `src/trap.cpp`
@@ -132,9 +132,9 @@ cd frontend && node --test
 应验证的是：
 
 - 单一事实来源有没有被破坏
-- `design / plan / status` 分工有没有混
-- 新增正式文档时 `docs/index.md` 是否需要同步
-- skill / rule 有没有重复全局 superpowers 或制造并行流程
+- Wiki 契约、solutions 经验与 current 现场是否各有明确归属
+- 入口链接是否有效，未启用的 Wiki 是否如实标记
+- skill / rule 是否制造重复维护要求或并行流程
 
 ## 8. 收尾证据
 

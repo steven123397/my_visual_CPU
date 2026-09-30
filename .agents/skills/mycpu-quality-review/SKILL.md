@@ -56,14 +56,11 @@ description: Use when reviewing or improving code quality in my_visual_CPU, incl
 开始前至少读取：
 
 1. 根 `AGENTS.md`
-2. 目标子树 `AGENTS.md`；如果目标子树没有局部 `AGENTS.md`，记录“无局部规则”并继续
-3. `docs/current.md`
+2. `docs/current.md`
 
 按任务再补充：
 
 - 代码审查 / review finding 整改：当前任务对应的 Review。
-- 文档治理或状态口径：`docs/AGENTS.md`
-- guest runtime：`myCPU/guest/AGENTS.md`
 
 不要一次把整套 `design / plan / status` 灌进上下文，只读取直接相关文件。
 
@@ -193,7 +190,7 @@ description: Use when reviewing or improving code quality in my_visual_CPU, incl
 
 - `review-only` 默认不跑测试，只报告建议验证命令
 - `safe-fixes` 和 `fix-and-validate` 运行最窄能证明改动正确的 gate
-- 如果触及 `myCPU/AGENTS.md` 中定义的核心路径，至少守住对应基线
+- 如果触及 `references/validation-map.md` 中列出的核心路径，按风险选择相关基线
 - 如果改动横跨执行路径、debug、workload 或 frontend/backend 边界，再逐层扩门
 - 不拿旧日志、旧通过结果或“理论上应该通过”当完成证据
 

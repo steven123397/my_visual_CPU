@@ -6,7 +6,7 @@ myCPU 是一个已可运行的 RISC-V 系统模拟器原型，采用模块化 C+
 
 当前工作看 [docs/current.md](docs/current.md)，待办由
 [GitHub Issues](https://github.com/steven123397/my_visual_CPU/issues) 承载。
-开发流程采用 NexusKit，技术资料导航见 [docs/index.md](docs/index.md)。
+开发流程采用 NexusKit，架构资料将迁入 [GitHub Wiki](https://github.com/steven123397/my_visual_CPU/wiki)（尚未启用）。
 
 ![myCPU Lab workbench](frontend/app/assets/console-overview.png)
 
@@ -76,7 +76,7 @@ node --test
 - [myCPU/](myCPU)：模拟器、guest、workload 与测试。
 - [frontend/](frontend)：浏览器工作台与本地调试服务。
 - [docs/current.md](docs/current.md)：当前现场。
-- [docs/index.md](docs/index.md)：保留设计资料的分析与导航。
+- [GitHub Wiki](https://github.com/steven123397/my_visual_CPU/wiki)：架构与技术契约的迁移目标，尚未启用。
 - [deploy/](deploy)：部署支架。
 
 旧课程展示、背景、状态和计划已清理，历史内容可通过 Git 查询。

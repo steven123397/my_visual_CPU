@@ -1921,7 +1921,7 @@ test('GET /docs returns the readable Wave 7 product documentation v1 entry', asy
     assert.doesNotMatch(body, /<h2>Boundaries<\/h2>/);
     assert.match(body, /wave7_productization_and_showcase_design\.md/);
     assert.match(body, /debug_frontend_integration\.md/);
-    assert.match(body, /index\.md/);
+    assert.match(body, /GitHub Wiki/);
     assert.match(body, /GitHub Issues/);
     assert.match(body, /current\.md/);
     assert.doesNotMatch(body, /\/source\/docs\/(?:status|plan|showcase|background)\//);
