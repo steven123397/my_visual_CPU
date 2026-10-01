@@ -32,7 +32,7 @@
 
 ## 覆盖限制
 
-U3 尚无托管 runner 的日常 core/frontend、完整标准回归、xv6 shell、云端故障实验与 artifact 下载证据，亦未验证 PR 连续提交取消行为、实际冷构建耗时或 fork PR 实跑。文档均保留这些未验证边界。取消或 runner 终止可能阻止 `always()` 上传，不能据此推断成功。
+截至初审，U3 尚无托管 runner 的日常 core/frontend、完整标准回归、xv6 shell、云端故障实验与 artifact 下载证据，亦未验证 PR 连续提交取消行为、实际冷构建耗时或 fork PR 实跑。后续验收见下文；fork PR 未实跑。取消或 runner 终止可能阻止 `always()` 上传，不能据此推断成功。
 
 没有修改产品 API、数据库、缓存、异步执行或模块职责边界，因此未选 API、迁移、性能、maintainability 及平台专属角色；无已有 PR 评论或 solutions 语料，未选对应角色。精简三个视角无发现。三个日志目录修复后的证据可复用，未机械重跑无关产品测试。
 
@@ -59,3 +59,11 @@ U3 尚无托管 runner 的日常 core/frontend、完整标准回归、xv6 shell�
 范围为 `97fddea` 后 Makefile 的 shell 墙钟预算、超时输出与 `xv6_shell_smoke.cpp` 的阶段日志。完整 `36741288238/1` 在标准 functional / pipeline 回归完成后，shell 被原 300 秒预算终止。独立副本阶段探针确认启动约 4.3 亿步，内存填充地址连续前进；旧 GCC 10 / Ubuntu GCC 13 内核完整 16 条 shell 命令含 forktest、stressfs 均 exit 0，启动分别 296.048 / 259.818 秒，总阶段耗时 508.384 / 470.412 秒。
 
 默认预算改为有限的 1200 秒；不修改 guest 步数预算、断言、模拟器语义或 workflow job 的 120 分钟上限。steady_clock 日志写宿主 stderr，命令标签去掉行尾 CR；超时分支打印捕获的阶段输出后仍 exit 1。correctness 叶子复核和追加输出行的复核均无发现，主会话核对最终 diff；元测试 4 项通过，最终源码编译通过。真实 `XV6_SHELL_SMOKE_TIMEOUT=1s` 覆盖实验为 Make exit 2，日志含启动阶段与明确 timeout。诊断循环探针仅在 `/tmp` 副本，未进入交付文件；最终版本云端完整验收待运行。
+
+## 最终云端证据与结论（2026-10-01）
+
+`f69ea75b24deb6a2192452b8b970673b84a9ea8b` 的 [日常 36797856401/1](https://github.com/steven123397/my_visual_CPU/actions/runs/36797856401/attempts/1) 与 [完整 36797868411/1](https://github.com/steven123397/my_visual_CPU/actions/runs/36797868411/attempts/1) 均成功，三份 artifact 已下载并核对 checkout SHA。日常为 61 unit、20 host、4 项元测试，前端 169 通过、1 外部 skip；完整为标准 functional / pipeline 与实际 xv6 shell 全部 16 条命令，debug probe 99 项、9 外部 skip。完整 job 16 分 31 秒，shell 启动 304.651 秒，完整阶段 535.740 秒。
+
+[故障 36738372503/1](https://github.com/steven123397/my_visual_CPU/actions/runs/36738372503/attempts/1) 的下载日志包含 `CI_FAILURE_PROBE_V4: intentional unit exit 7` 与 Make Error 7，core / job 失败；checkout `e2e0df8fafa3cb014a50a8cdb98274813d75df02`，PR head `358135abdda0b60724762081caac427d6279e575`。前一 run `36738356921/1` 实际取消。实验 PR 已关闭，分支与 worktree 已清理，故障代码未进入交付版本。
+
+结论：统一审查发现已修复，随后三项兼容 / 预算修复的针对性复核无待修发现，U1 / U2 / U3 验收完成。文档收尾不改变代码或 workflow，复用上述证据；fork PR 与真实 Linux / OSComp / Spike 外部运行仍未验证，skip 不记为通过。主会话核对文档与证据，不将文档收尾称为新的独立审查。

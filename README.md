@@ -74,7 +74,7 @@ node --test
 
 仓库提供 [日常 CI 配置](.github/workflows/ci.yml)（PR、推送 main、手动）和
 [手动完整回归配置](.github/workflows/regression.yml)（标准 functional / pipeline 回归及 xv6 shell）。
-发布与首次云端验收状态见 [当前进度](docs/current.md)。首次手动运行需要 workflow 已进入默认分支。
+两份 workflow 已启用并通过云端验收，版本、run 与证据范围见 [当前进度](docs/current.md)。首次手动运行需要 workflow 已进入默认分支。
 日常环境为 Ubuntu 24.04 x86-64，前端使用 Node 24；日志 artifact 保留 14 天。
 
 发布后可指定分支或 tag 运行，并取回精确 run 的结果：

@@ -206,3 +206,18 @@ U1 的默认 unit 不遗漏、失败传播有效；U2 的配置可由干净环�
 - U3：用户授权后将 `cd65827` 发布到 main，workflow 已激活；首次日常 `36735028119/1` 与完整 `36735075958/1` 暴露 GCC 13 将 CSR / fence 扩展从 I 拆分的构建兼容问题，失败日志已下载。旧 GCC 10 又拒绝新扩展名称，因此在 Makefile 能力探测并让 `myCPU/workloads/boards/mycpu_virt.mk` 的 xv6 参数复用，元测试补充实际 CSR / fence 汇编。该小范围前置修复属于干净 runner 验收，不修改产品语义或削弱门禁。
 - U3 后续：`e608911` 的日常两个 job 云端通过；完整回归到 xv6 的旧编译器 PC / profile 固定基线失败。将 `xv6_boot_smoke.cpp` 与 `run_debug_cli_probe_test.py` 的相关断言扩为两套经实跑审计的完整精确基线，保留旧值、未知布局拒绝、所有 trap / cache 断言；不是范围断言或跳过。新旧内核的 memset 指令字节相同，仅布局和启动路径计数变化；两代实跑与针对性审查通过。
 - U3 第三次完整验收：`97fddea` 的日常成功，完整 `36741288238/1` 在 xv6 shell 300 秒墙钟预算失败。实跑两代内核完整 shell 序列分别约 508 / 470 秒，启动内存初始化即接近五分钟；仅调整该 host 默认墙钟预算为 1200 秒，保留所有 guest 步数和断言并补阶段 / 超时输出。1 秒覆盖仍实际失败，针对性审查无发现；需重跑同版本云端验收。
+
+## 最终验收（2026-10-01）
+
+U1、U2、U3 已完成。技术版本 `f69ea75b24deb6a2192452b8b970673b84a9ea8b` 已发布到 main，以下 run 均为 attempt 1，artifact 已用 gh 下载并核对实际 checkout SHA；后续收尾仅更新文档，复用该版本代码与 workflow 的证据。
+
+| 证据 | 实际结果 |
+|---|---|
+| [日常 36797856401](https://github.com/steven123397/my_visual_CPU/actions/runs/36797856401/attempts/1) | 成功；core 89 秒，61 unit / 20 host / 4 项元测试；frontend 48 秒，169 通过、1 外部 skip |
+| [完整 36797868411](https://github.com/steven123397/my_visual_CPU/actions/runs/36797868411/attempts/1) | 成功；16 分 31 秒，标准 functional / pipeline 与全部 xv6 shell；debug probe 99 项、9 外部 skip |
+| [故障 36738372503](https://github.com/steven123397/my_visual_CPU/actions/runs/36738372503/attempts/1) | unit 明确返回 7，core / job 失败，日志可下载；实验 checkout 与 PR head 见 current |
+| [取消 36738356921](https://github.com/steven123397/my_visual_CPU/actions/runs/36738356921/attempts/1) | 同 PR 后续提交触发后，旧 run 实际取消 |
+
+云端 shell 启动 304.651 秒，完整 16 条命令阶段总耗时 535.740 秒；forktest / stressfs 均通过，证明原 300 秒预算不足。环境为 Ubuntu 24.04.5 x86-64、host GCC 13.3、RISC-V GCC 13.2、Python 3.12.3、前端 Node 24.21.0。失败 / 取消 run 不计为通过；真实 Linux / OSComp / Spike 未验收、fork PR 未实跑。
+
+统一审查及后续修复的针对性复核无待修发现。隔离 PR #3 已关闭，故障分支 / worktree 已删除，实验代码未进入 main；Wiki Verification 的发布状态见 current。
