@@ -74,15 +74,25 @@ std::vector<float> golden_gemm_low_precision_to_fp32(const std::vector<uint16_t>
     }
     expect_size(lhs, static_cast<uint64_t>(m) * k, "GEMM lhs");
     expect_size(rhs, static_cast<uint64_t>(k) * n, "GEMM rhs");
+
+    std::vector<float> lhs_f(lhs.size());
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        lhs_f[i] = decode_low_precision(lhs[i], dtype);
+    }
+    std::vector<float> rhs_f(rhs.size());
+    for (size_t i = 0; i < rhs.size(); ++i) {
+        rhs_f[i] = decode_low_precision(rhs[i], dtype);
+    }
+
     std::vector<float> out(static_cast<size_t>(m) * n, 0.0f);
     for (uint32_t row = 0; row < m; ++row) {
-        for (uint32_t col = 0; col < n; ++col) {
-            float acc = 0.0f;
-            for (uint32_t depth = 0; depth < k; ++depth) {
-                acc += decode_low_precision(lhs[row * k + depth], dtype) *
-                       decode_low_precision(rhs[depth * n + col], dtype);
+        for (uint32_t depth = 0; depth < k; ++depth) {
+            const float lhs_val = lhs_f[static_cast<size_t>(row) * k + depth];
+            const float* rhs_ptr = &rhs_f[static_cast<size_t>(depth) * n];
+            float* out_ptr = &out[static_cast<size_t>(row) * n];
+            for (uint32_t col = 0; col < n; ++col) {
+                out_ptr[col] += lhs_val * rhs_ptr[col];
             }
-            out[row * n + col] = acc;
         }
     }
     return out;
