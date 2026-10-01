@@ -271,7 +271,8 @@ DEPS     += $(ASM_DEPS) $(ATOMIC_ASM_DEPS)
 DEPS     += $(LINUX_PROTO_SBI_SHIM_DEP) $(LINUX_PROTO_MININIT_DEP) $(LINUX_PROTO_POSTINIT_DEP) $(LINUX_PROTO_POSTINIT_EXEC_DEP)
 TEST_TIMEOUT ?= 3s
 AI_ACCEL_PROFILE_SMOKE_TIMEOUT ?= 10s
-XV6_SHELL_SMOKE_TIMEOUT ?= 300s
+# Cold xv6 memory initialization and the full shell sequence exceed five minutes.
+XV6_SHELL_SMOKE_TIMEOUT ?= 1200s
 SUPERVISOR_GUEST_TEST_TIMEOUT ?= 15s
 KERNEL_ALPHA_GUEST_TEST_TIMEOUT ?= 20s
 KERNEL_ALPHA_STORAGE_GUEST_TEST_TIMEOUT ?= 20s
@@ -826,6 +827,7 @@ test-host-xv6_shell_smoke: FORCE $(TARGET) build-workload-xv6 tests/host/xv6_she
 	output="$$(timeout $(XV6_SHELL_SMOKE_TIMEOUT) ./tests/host/xv6_shell_smoke 2>&1)"; \
 	status=$$?; \
 	if [ $$status -eq 124 ]; then \
+		printf '%s\n' "$$output" >&2; \
 		echo "Host test timed out: xv6_shell_smoke" >&2; \
 		exit 1; \
 	fi; \

@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <stdexcept>
@@ -89,6 +90,10 @@ bool run_shell_command_and_expect_prompt(DebugSession& session,
                                          std::uint64_t prompt_max_steps,
                                          const ExpectedText* expectations,
                                          size_t expectation_count) {
+    const auto started = std::chrono::steady_clock::now();
+    const std::string command_text(command);
+    const std::string command_label = command_text.substr(0, command_text.find_first_of("\r\n"));
+    std::fprintf(stderr, "xv6 shell: starting %s\n", command_label.c_str());
     session.uart_input(command);
     session.run_until_uart_contains(progress_needle, progress_max_steps);
 
@@ -102,6 +107,8 @@ bool run_shell_command_and_expect_prompt(DebugSession& session,
     }
 
     offset = chunk.next_offset;
+    std::fprintf(stderr, "xv6 shell: completed command in %.3fs\n",
+                 std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
     return true;
 }
 
@@ -125,7 +132,11 @@ int main() {
                      BlockTransport::VirtioBlk,
                      fs_image_text.c_str());
 
+    std::fprintf(stderr, "xv6 shell: waiting for boot prompt\n");
+    const auto boot_started = std::chrono::steady_clock::now();
     session.run_until_uart_contains("$ ", kXv6ShellBootMaxSteps);
+    std::fprintf(stderr, "xv6 shell: boot prompt in %.3fs\n",
+                 std::chrono::duration<double>(std::chrono::steady_clock::now() - boot_started).count());
     const DebugSession::UartOutputChunk boot_chunk = session.uart_output(0);
     if (!expect_contains(boot_chunk.text,
                          "xv6 kernel is booting",

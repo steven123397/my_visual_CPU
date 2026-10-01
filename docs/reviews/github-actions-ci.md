@@ -53,3 +53,9 @@ U3 尚无托管 runner 的日常 core/frontend、完整标准回归、xv6 shell�
 修复保留原整套精确基线，增加现代整套精确基线。C++ 从同一 kernel 构建规则生成的 `kernel.sym` 中读取 main / memset 双地址，选择固定基线后仍独立比较 CPU / profile 实测值；缺失或未知布局失败。Python 比较完整 checkpoint 四行，必须整组匹配，禁止新旧字段混用。
 
 主会话两代内核 boot smoke 与 functional / pipeline probe 实跑通过；将符号 main 地址故意改动 4 字节时实际拒绝（exit 1）。现代内核上的全部 debug probe 测试为 99 项、9 个外部 skip，无失败。新内核在旧 Python 断言上先 Red，修改后两代 Green。correctness、testing 叶子代理聚焦复核无发现；产品语义和超时没有调整。修复后的完整云端回归仍待取得，其他未审计编译布局明确不支持自动放行。
+
+## 第 4 轮：shell 墙钟预算与超时日志的针对性复核
+
+范围为 `97fddea` 后 Makefile 的 shell 墙钟预算、超时输出与 `xv6_shell_smoke.cpp` 的阶段日志。完整 `36741288238/1` 在标准 functional / pipeline 回归完成后，shell 被原 300 秒预算终止。独立副本阶段探针确认启动约 4.3 亿步，内存填充地址连续前进；旧 GCC 10 / Ubuntu GCC 13 内核完整 16 条 shell 命令含 forktest、stressfs 均 exit 0，启动分别 296.048 / 259.818 秒，总阶段耗时 508.384 / 470.412 秒。
+
+默认预算改为有限的 1200 秒；不修改 guest 步数预算、断言、模拟器语义或 workflow job 的 120 分钟上限。steady_clock 日志写宿主 stderr，命令标签去掉行尾 CR；超时分支打印捕获的阶段输出后仍 exit 1。correctness 叶子复核和追加输出行的复核均无发现，主会话核对最终 diff；元测试 4 项通过，最终源码编译通过。真实 `XV6_SHELL_SMOKE_TIMEOUT=1s` 覆盖实验为 Make exit 2，日志含启动阶段与明确 timeout。诊断循环探针仅在 `/tmp` 副本，未进入交付文件；最终版本云端完整验收待运行。
