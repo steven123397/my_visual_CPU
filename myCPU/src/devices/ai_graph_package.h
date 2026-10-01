@@ -12,6 +12,7 @@ inline constexpr uint16_t kAiInvalidTensorIndex = 0xFFFFU;
 inline constexpr uint8_t kAiMaxTensorRank = 4;
 inline constexpr size_t kAiRuntimeShapeEntryBytes = 20;
 
+/// Data element types supported by the AI accelerator tensor graphs.
 enum class AiDataType : uint8_t {
     Invalid = 0,
     Int8 = 1,
@@ -22,6 +23,7 @@ enum class AiDataType : uint8_t {
     Fp32 = 6,
 };
 
+/// Functional roles of tensors in a graph package.
 enum class AiTensorRole : uint8_t {
     Invalid = 0,
     Input = 1,
@@ -31,6 +33,7 @@ enum class AiTensorRole : uint8_t {
     Constant = 5,
 };
 
+/// Operation codes supported by the AI compute engine.
 enum class AiOpCode : uint8_t {
     Invalid = 0,
     Gemm = 1,
@@ -42,16 +45,19 @@ enum class AiOpCode : uint8_t {
     Softmax = 7,
 };
 
+/// Shape modes for AI graph execution.
 enum class AiShapeMode : uint8_t {
     Static = 0,
     DynamicBounded = 1,
 };
 
+/// Execution mode for inference or training.
 enum class AiTrainingMode : uint8_t {
     Inference = 0,
     TrainingReserved = 1,
 };
 
+/// Metadata describing a single tensor's element type, role, and dimensions.
 struct AiTensorMetadata {
     AiDataType dtype{AiDataType::Invalid};
     AiTensorRole role{AiTensorRole::Invalid};
@@ -60,6 +66,7 @@ struct AiTensorMetadata {
     std::array<uint32_t, kAiMaxTensorRank> tile_dims{};
 };
 
+/// Descriptor for a graph node/operation and its input/output tensor references.
 struct AiOpDescriptor {
     AiOpCode opcode{AiOpCode::Invalid};
     AiDataType input_dtype{AiDataType::Invalid};
@@ -71,11 +78,13 @@ struct AiOpDescriptor {
     std::array<int32_t, 4> attrs{};
 };
 
+/// Directed dependency edge between two operations.
 struct AiDependencyEdge {
     uint16_t source_op{0};
     uint16_t target_op{0};
 };
 
+/// Memory allocation plan entry mapping a tensor to system and scratchpad memory offsets.
 struct AiMemoryPlanEntry {
     uint16_t tensor_index{kAiInvalidTensorIndex};
     uint32_t system_offset{0};
@@ -84,17 +93,20 @@ struct AiMemoryPlanEntry {
     uint32_t scratchpad_bytes{0};
 };
 
+/// Bounded metadata for dynamic tensors in dynamic shape mode.
 struct AiDynamicTensorMetadata {
     uint16_t tensor_index{kAiInvalidTensorIndex};
     uint32_t max_tensor_bytes{0};
 };
 
+/// Runtime shape entry for dynamic tensor shape resolution.
 struct AiRuntimeShapeEntry {
     uint16_t tensor_index{kAiInvalidTensorIndex};
     uint8_t rank{0};
     std::array<uint32_t, kAiMaxTensorRank> dims{};
 };
 
+/// Container representing a complete compiled AI computational graph package.
 struct AiGraphPackage {
     AiShapeMode shape_mode{AiShapeMode::Static};
     AiTrainingMode training_mode{AiTrainingMode::Inference};

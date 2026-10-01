@@ -7,11 +7,13 @@
 
 #include "../mem/memory_region.h"
 
+/// Kind of load-store queue entry (Load or Store).
 enum class LsqEntryKind : uint8_t {
     Load,
     Store,
 };
 
+/// Hazard and forwarding classification state for speculative load instructions.
 enum class LsqLoadState : uint8_t {
     None,
     BlockedByUnresolvedStore,
@@ -19,10 +21,12 @@ enum class LsqLoadState : uint8_t {
     ReplayRequired,
 };
 
+/// Unique identifier for an entry in the LoadStoreQueue.
 struct LsqIndex {
     uint64_t value{0};
 };
 
+/// Classification result describing load dependencies or replay needs.
 struct LsqLoadStatus {
     LsqLoadState state{LsqLoadState::None};
     uint64_t load_sequence_id{0};
@@ -38,11 +42,13 @@ struct LsqLoadStatus {
     }
 };
 
+/// Result of store-to-load data forwarding.
 struct LsqForwardResult {
     uint64_t value{0};
     uint64_t store_sequence_id{0};
 };
 
+/// Physical address translation and memory region information for an LSQ entry.
 struct LsqAddressInfo {
     bool translation_fault{false};
     bool crosses_page{false};
@@ -52,6 +58,7 @@ struct LsqAddressInfo {
     PhysicalRegionInfo region{};
 };
 
+/// Enqueue request parameter for speculative load instructions.
 struct LsqLoadRequest {
     uint64_t sequence_id{0};
     uint8_t rd{0};
@@ -61,6 +68,7 @@ struct LsqLoadRequest {
     bool non_speculative{false};
 };
 
+/// Enqueue request parameter for speculative store instructions.
 struct LsqStoreRequest {
     uint64_t sequence_id{0};
     int size{0};
@@ -68,6 +76,7 @@ struct LsqStoreRequest {
     bool non_speculative{false};
 };
 
+/// Internal record for in-flight memory requests in the pipeline backend.
 struct LsqEntry {
     LsqIndex index{};
     LsqEntryKind kind{LsqEntryKind::Load};
@@ -89,6 +98,7 @@ struct LsqEntry {
 
 class Bus;
 
+/// Load-Store Queue (LSQ) managing speculative memory accesses and store-to-load forwarding.
 class LoadStoreQueue {
 public:
     LsqIndex enqueue_load(const LsqLoadRequest& req);

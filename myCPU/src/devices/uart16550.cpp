@@ -172,10 +172,6 @@ const std::string& Uart16550::output() const {
     return output_;
 }
 
-uint8_t Uart16550::mcr() const {
-    return mcr_;
-}
-
 void Uart16550::inject_input(std::string_view text) {
     for (const char ch : text) {
         input_.push_back(static_cast<uint8_t>(ch));

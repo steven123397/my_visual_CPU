@@ -47,11 +47,6 @@ bool is_load_slot(const StageSlot& slot) {
            InstructionSemantics::describe_memory(slot.insn).kind == MemoryRequest::Kind::Load;
 }
 
-bool is_store_slot(const StageSlot& slot) {
-    return slot.valid &&
-           InstructionSemantics::describe_memory(slot.insn).kind == MemoryRequest::Kind::Store;
-}
-
 uint32_t inflight_dest_phys(const StageSlot& slot) {
     if (!slot.valid) {
         return 0;

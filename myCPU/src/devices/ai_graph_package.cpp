@@ -225,17 +225,6 @@ uint64_t runtime_shape_element_count(const AiRuntimeShapeEntry& runtime_shape) {
     return count;
 }
 
-const AiMemoryPlanEntry* find_memory_plan_entry(
-    const AiGraphPackage& package,
-    uint16_t tensor_index) {
-    for (const AiMemoryPlanEntry& entry : package.memory_plan) {
-        if (entry.tensor_index == tensor_index) {
-            return &entry;
-        }
-    }
-    return nullptr;
-}
-
 AiMemoryPlanEntry* find_memory_plan_entry(
     AiGraphPackage& package,
     uint16_t tensor_index) {

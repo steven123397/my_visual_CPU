@@ -1,3 +1,8 @@
+/**
+ * 从 Error 或字符串中提取错误消息文本。
+ * @param {Error|string|unknown} error
+ * @returns {string} 提取后的错误消息
+ */
 function errorMessage(error) {
   if (error instanceof Error && typeof error.message === 'string') {
     return error.message;
@@ -8,10 +13,21 @@ function errorMessage(error) {
   return 'load failed';
 }
 
+/**
+ * 判断错误消息是否为 Linux 引导超时。
+ * @param {string} message
+ * @returns {boolean}
+ */
 function isLinuxBootTimeout(message) {
   return /run_until_uart_contains|timed out|mycpu-linux#|Linux boot/i.test(message);
 }
 
+/**
+ * 格式化工作负载加载失败错误消息。
+ * @param {Error|string|unknown} error - 捕获的异常或错误字符串
+ * @param {Object} [context] - 加载上下文（包含 test, backend 等）
+ * @returns {string} 可读的错误提示文本
+ */
 export function formatLoadErrorMessage(error, context = {}) {
   const message = errorMessage(error);
   if (context.test !== 'linux_proto_console' || !isLinuxBootTimeout(message)) {

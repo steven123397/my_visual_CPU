@@ -14,12 +14,6 @@ float bits_to_float(uint32_t bits) {
     return value;
 }
 
-uint32_t float_to_bits(float value) {
-    uint32_t bits = 0;
-    std::memcpy(&bits, &value, sizeof(bits));
-    return bits;
-}
-
 template <typename T>
 void expect_size(const std::vector<T>& values, uint64_t expected, const char* label) {
     if (values.size() != expected) {
@@ -149,45 +143,6 @@ float tensor_golden_decode_fp16(uint16_t bits) {
 
 float tensor_golden_decode_bf16(uint16_t bits) {
     return bits_to_float(static_cast<uint32_t>(bits) << 16);
-}
-
-uint16_t tensor_golden_encode_fp16(float value) {
-    const uint32_t bits = float_to_bits(value);
-    const uint32_t sign = (bits >> 16) & 0x8000U;
-    int32_t exponent = static_cast<int32_t>((bits >> 23) & 0xFFU) - 127 + 15;
-    uint32_t mantissa = bits & 0x007FFFFFU;
-
-    if (((bits >> 23) & 0xFFU) == 0xFFU) {
-        return static_cast<uint16_t>(sign | 0x7C00U | (mantissa ? 0x0200U : 0));
-    }
-    if (exponent <= 0) {
-        if (exponent < -10) {
-            return static_cast<uint16_t>(sign);
-        }
-        mantissa |= 0x00800000U;
-        const uint32_t shifted = mantissa >> static_cast<uint32_t>(1 - exponent + 13);
-        const uint32_t round_bit = (mantissa >> static_cast<uint32_t>(1 - exponent + 12)) & 1U;
-        return static_cast<uint16_t>(sign | (shifted + round_bit));
-    }
-    if (exponent >= 31) {
-        return static_cast<uint16_t>(sign | 0x7C00U);
-    }
-    mantissa += 0x00001000U;
-    if (mantissa & 0x00800000U) {
-        mantissa = 0;
-        ++exponent;
-    }
-    if (exponent >= 31) {
-        return static_cast<uint16_t>(sign | 0x7C00U);
-    }
-    return static_cast<uint16_t>(sign | (static_cast<uint32_t>(exponent) << 10) | (mantissa >> 13));
-}
-
-uint16_t tensor_golden_encode_bf16(float value) {
-    const uint32_t bits = float_to_bits(value);
-    const uint32_t lsb = (bits >> 16) & 1U;
-    const uint32_t rounded = bits + 0x7FFFU + lsb;
-    return static_cast<uint16_t>(rounded >> 16);
 }
 
 std::vector<int32_t> tensor_golden_gemm_i8_to_i32(const std::vector<int8_t>& lhs,

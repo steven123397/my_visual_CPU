@@ -10,7 +10,6 @@ bool reads_rs1(const Insn& insn);
 bool reads_rs2(const Insn& insn);
 bool writes_rd(const Insn& insn);
 bool is_load_slot(const StageSlot& slot);
-bool is_store_slot(const StageSlot& slot);
 uint8_t inflight_rd(const StageSlot& slot);
 uint32_t inflight_dest_phys(const StageSlot& slot);
 bool has_decode_hazard(const StageSlot& id_ex_slot, const Insn& insn);
