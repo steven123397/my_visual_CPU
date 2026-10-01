@@ -916,6 +916,25 @@ def extract_riscv_static_surface_mnemonics(binary_path: pathlib.Path) -> set[str
 
 
 class RunDebugCliProbeTest(unittest.TestCase):
+    def test_profile_int_helper(self) -> None:
+        self.assertEqual(PROBE.profile_int(42), 42)
+        self.assertEqual(PROBE.profile_int(-10), -10)
+        self.assertEqual(PROBE.profile_int(3.14), 3)
+        self.assertEqual(PROBE.profile_int("100"), 100)
+        self.assertEqual(PROBE.profile_int("-50"), -50)
+        self.assertEqual(PROBE.profile_int("0x1a"), 26)
+        self.assertEqual(PROBE.profile_int("0X1A"), 26)
+        self.assertEqual(PROBE.profile_int("0o12"), 10)
+        self.assertEqual(PROBE.profile_int("0b1010"), 10)
+        self.assertEqual(PROBE.profile_int("invalid"), 0)
+        self.assertEqual(PROBE.profile_int("invalid", default=-1), -1)
+        self.assertEqual(PROBE.profile_int("3.14"), 0)
+        self.assertEqual(PROBE.profile_int("3.14", default=-1), -1)
+        self.assertEqual(PROBE.profile_int(None), 0)
+        self.assertEqual(PROBE.profile_int(None, default=99), 99)
+        self.assertEqual(PROBE.profile_int([1, 2]), 0)
+        self.assertEqual(PROBE.profile_int({"a": 1}), 0)
+
     def test_profile_hex_helper(self) -> None:
         self.assertEqual(PROBE.profile_hex("0x80200000"), "0x80200000")
         self.assertEqual(PROBE.profile_hex("0x0"), "0x0")

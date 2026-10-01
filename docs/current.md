@@ -1,9 +1,9 @@
 # 当前状态
 
-- 所在分支：`main`；核对基点：`adbbdbf`，本次工作前已推送到远端 `main`。用户指定本次文档改动在本地 main 完成；CI 分支已快进发布并删除。
-- 工作范围：将根目录 AI 建议转为候选 Issues、添加 MIT 许可、更新仓库描述，补齐 AGENTS 中的分支与 CI 合并规则，并按用户指定的 `nk-handoff` 保存交接。本轮不进行后续产品规划或开发。
+- 所在分支：PR #17 的 `jules-13477484955571722239-266917ec`，本地整合分支 `codex/pr17-integration`；核对基点：main `a4e26d7c470999681838a67dcbfc52cc2eb54c3a`。
+- 工作范围：批量审查 Jules PR #14 至 #17。#14、#16 已合并；#17 已整合 main，保留 profile_int/profile_hex 两组测试，待更新 head 的必需 CI 通过后合并。审查记录见 [PR #14 至 #17](reviews/2026-10-01-pr14-17-pre-merge.md)。本地 security 测试 9 项、Python helper 测试 2 项通过；Python 新测试不在日常 CI 执行范围内。
 - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。
-- 用户选定 MIT；根目录 `LICENSE` 与 README 许可入口已添加，xv6 原版权与许可保留。本次文档交付已进入本地 main，尚未发布到远端 `main`。
+- 用户选定 MIT；根目录 `LICENSE` 与 README 许可入口已通过 PR #7 发布，xv6 原版权与许可保留。
 - GitHub 仓库描述已更新为“myCPU：可运行、可观察的 RISC-V 系统模拟器原型，包含共享指令语义、多执行后端、系统 workload、MMIO AI 加速器与浏览器调试工作台。”
 - [main 保护规则](https://github.com/steven123397/my_visual_CPU/rules/24284085) 已启用：PR 合并、`simulator-core` 与 `frontend` 检查、禁止强推及删除；审批人数为 0，无管理员绕过。已回读规则并确认适用于 main。
 - 重复 [PR #2](https://github.com/steven123397/my_visual_CPU/pull/2) 已关闭且未合并；[Issue #1](https://github.com/steven123397/my_visual_CPU/issues/1) 已按完成关闭。`e608911` 的工具链能力探测已在 main；本会话重跑 `python3 tests/host/ci_targets_test.py`，4 项通过。GCC 14.2 未直接验证。
@@ -18,12 +18,16 @@
 
 ## 阻断与已知缺口
 
-- 无代码交付阻断；本次许可、README、AGENTS、建议稿删除与交接记录尚未发布到 main。仓库描述与 Issues 已在 GitHub 生效。
+- PR #15 保持开放：firstForwardedIp 去掉字符串转换后，null、数字及数组输入抛出 TypeError；描述声称覆盖 null，但测试缺失，合并前需修正。正常 HTTP 字符串头未复现异常，不把此问题外推为已证实的远程漏洞。
 - fork PR、自定义 guest / xv6 工具链跨代组合、真实 Linux / OSComp / Spike 外部资产未验证。部署、定时、多平台与缓存仍未规划；本次未重新运行产品测试。
 - AI Issues 仅为后续方向讨论的材料，尚未认领、排期或形成实施 Plan。云端维护 agent（提交 PR / Issue、按 main 变化维护 Wiki）仅是用户构想，工具、权限、费用与审核边界均未决定，未安装或授权 bot。
 
 ## 下一步
 
-- 用户已授权通过 `codex/open-source-handoff` 发布分支推送本次文档并创建 PR；远端 main 尚未合入，PR 与 CI 状态以 GitHub 为准，不直接推送 main 或绕过保护。
-- 本对话到交接结束。新对话再以 `nk-brainstorm` 澄清项目演进与调整、部分重写的目标；可引用 #4、#5、#6，方向确认后才由 `nk-plan` 形成 `docs/plans/` 下的实施 Plan。
+- 用户已授权审核并合并合格 PR；#17 整合提交推送后检查新 head 的 CI，再合并并核对最终 main 的两项 CI，不绕过保护。
+- PR #15 的异常输入处理和相应测试修正后再复核；#4、#5、#6 仍为未排期方向，未形成实施 Plan。
 - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。
+
+## 工作区未提交改动
+
+- 主工作区保留上一批 PR 的本地报告 `docs/reviews/2026-10-01-remote-pr-pre-merge.md`，不纳入本次提交。临时验证 worktree 和复现脚本不提交；本次相关报告随 #17 的冲突整合一起提交。
