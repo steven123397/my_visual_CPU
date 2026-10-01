@@ -34,13 +34,13 @@ std::vector<int32_t> golden_gemm_integer_to_i32(const std::vector<T>& lhs,
     expect_size(rhs, static_cast<uint64_t>(k) * n, "GEMM rhs");
     std::vector<int32_t> out(static_cast<size_t>(m) * n, 0);
     for (uint32_t row = 0; row < m; ++row) {
-        for (uint32_t col = 0; col < n; ++col) {
-            int32_t acc = 0;
-            for (uint32_t depth = 0; depth < k; ++depth) {
-                acc += static_cast<int32_t>(lhs[row * k + depth]) *
-                       static_cast<int32_t>(rhs[depth * n + col]);
+        for (uint32_t depth = 0; depth < k; ++depth) {
+            const int32_t lhs_val = static_cast<int32_t>(lhs[static_cast<size_t>(row) * k + depth]);
+            const size_t out_offset = static_cast<size_t>(row) * n;
+            const size_t rhs_offset = static_cast<size_t>(depth) * n;
+            for (uint32_t col = 0; col < n; ++col) {
+                out[out_offset + col] += lhs_val * static_cast<int32_t>(rhs[rhs_offset + col]);
             }
-            out[row * n + col] = acc;
         }
     }
     return out;
