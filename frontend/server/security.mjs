@@ -18,7 +18,7 @@ function nowMs() {
   return Date.now();
 }
 
-function parseCookies(header = '') {
+export function parseCookies(header = '') {
   const cookies = {};
   for (const part of String(header).split(';')) {
     const index = part.indexOf('=');

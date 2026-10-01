@@ -6,6 +6,7 @@ import {
   cleanupSlidingWindow,
   createSecurityManagerFromEnv,
   createSecurityManager,
+  parseCookies,
   verifyPassword,
 } from '../server/security.mjs';
 
@@ -24,6 +25,45 @@ function makeRequest({
     socket: { remoteAddress },
   };
 }
+
+test('parseCookies parses standard, whitespace-trimmed, and URL-encoded cookies', () => {
+  assert.deepEqual(parseCookies(), {});
+  assert.deepEqual(parseCookies(''), {});
+  assert.deepEqual(parseCookies(null), {});
+  assert.deepEqual(parseCookies(12345), {});
+
+  assert.deepEqual(parseCookies('a=b'), { a: 'b' });
+  assert.deepEqual(parseCookies('a=b; c=d'), { a: 'b', c: 'd' });
+  assert.deepEqual(
+    parseCookies('  foo = bar  ;   baz = qux  '),
+    { foo: 'bar', baz: 'qux' },
+  );
+
+  assert.deepEqual(
+    parseCookies('theme=dark; user=%20John%20Doe%20; session=abc%2B123'),
+    { theme: 'dark', user: ' John Doe ', session: 'abc+123' },
+  );
+});
+
+test('parseCookies handles edge cases like multiple equals, empty values, and malformed cookies', () => {
+  // Multiple equal signs in value
+  assert.deepEqual(
+    parseCookies('session=abc=123=def; token=xyz==='),
+    { session: 'abc=123=def', token: 'xyz===' },
+  );
+
+  // Empty values vs missing keys vs no equals
+  assert.deepEqual(
+    parseCookies('noequals; =missingkey;   = ; emptyval=; valid=123'),
+    { emptyval: '', valid: '123' },
+  );
+
+  // Extra semicolons and empty parts
+  assert.deepEqual(
+    parseCookies('; ; foo=bar ;; baz=qux ;'),
+    { foo: 'bar', baz: 'qux' },
+  );
+});
 
 test('cleanupSlidingWindow removes timestamps less than or equal to cutoff in-place', () => {
   // Empty bucket
