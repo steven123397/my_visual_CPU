@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildPasswordHashForTests,
+  cleanupSlidingWindow,
   createSecurityManagerFromEnv,
   createSecurityManager,
   verifyPassword,
@@ -23,6 +24,33 @@ function makeRequest({
     socket: { remoteAddress },
   };
 }
+
+test('cleanupSlidingWindow removes timestamps less than or equal to cutoff in-place', () => {
+  // Empty bucket
+  const emptyBucket = [];
+  cleanupSlidingWindow(emptyBucket, 100);
+  assert.deepEqual(emptyBucket, []);
+
+  // All timestamps below cutoff
+  const allOldBucket = [100, 200, 300];
+  cleanupSlidingWindow(allOldBucket, 400);
+  assert.deepEqual(allOldBucket, []);
+
+  // All timestamps above cutoff
+  const allNewBucket = [500, 600, 700];
+  cleanupSlidingWindow(allNewBucket, 400);
+  assert.deepEqual(allNewBucket, [500, 600, 700]);
+
+  // Timestamps equal to cutoff (should be removed since bucket[0] <= cutoff)
+  const equalBucket = [400, 400, 401];
+  cleanupSlidingWindow(equalBucket, 400);
+  assert.deepEqual(equalBucket, [401]);
+
+  // Mixed timestamps
+  const mixedBucket = [100, 200, 300, 300, 301, 400];
+  cleanupSlidingWindow(mixedBucket, 300);
+  assert.deepEqual(mixedBucket, [301, 400]);
+});
 
 test('verifyPassword accepts the matching scrypt hash and rejects mismatches', () => {
   const passwordHash = buildPasswordHashForTests('secret-1');

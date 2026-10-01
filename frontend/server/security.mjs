@@ -137,7 +137,7 @@ function parseIntegerEnv(value, fallback) {
   return parsed;
 }
 
-function cleanupSlidingWindow(bucket, cutoff) {
+export function cleanupSlidingWindow(bucket, cutoff) {
   while (bucket.length > 0 && bucket[0] <= cutoff) {
     bucket.shift();
   }
