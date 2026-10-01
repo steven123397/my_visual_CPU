@@ -234,12 +234,14 @@ std::vector<float> tensor_golden_gemm_f32(const std::vector<float>& lhs,
     expect_size(rhs, static_cast<uint64_t>(k) * n, "GEMM rhs");
     std::vector<float> out(static_cast<size_t>(m) * n, 0.0f);
     for (uint32_t row = 0; row < m; ++row) {
-        for (uint32_t col = 0; col < n; ++col) {
-            float acc = 0.0f;
-            for (uint32_t depth = 0; depth < k; ++depth) {
-                acc += lhs[row * k + depth] * rhs[depth * n + col];
+        const size_t row_lhs_base = static_cast<size_t>(row) * k;
+        const size_t row_out_base = static_cast<size_t>(row) * n;
+        for (uint32_t depth = 0; depth < k; ++depth) {
+            const float lhs_val = lhs[row_lhs_base + depth];
+            const size_t depth_rhs_base = static_cast<size_t>(depth) * n;
+            for (uint32_t col = 0; col < n; ++col) {
+                out[row_out_base + col] += lhs_val * rhs[depth_rhs_base + col];
             }
-            out[row * n + col] = acc;
         }
     }
     return out;
