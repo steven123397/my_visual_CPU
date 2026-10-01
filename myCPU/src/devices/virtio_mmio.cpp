@@ -230,19 +230,6 @@ uint32_t VirtioMmio::read_driver_features() const {
     return static_cast<uint32_t>((driver_features_ >> shift) & UINT64_C(0xffffffff));
 }
 
-uint64_t VirtioMmio::read_queue_address(const VirtQueue& queue, uint32_t low_reg) const {
-    switch (low_reg) {
-    case VIRTIO_MMIO_REG_QUEUE_DESC_LOW:
-        return queue.desc_addr();
-    case VIRTIO_MMIO_REG_QUEUE_DRIVER_LOW:
-        return queue.avail_addr();
-    case VIRTIO_MMIO_REG_QUEUE_DEVICE_LOW:
-        return queue.used_addr();
-    default:
-        return 0;
-    }
-}
-
 void VirtioMmio::write_queue_address(VirtQueue& queue, uint32_t reg, uint32_t value) {
     uint64_t current = 0;
     bool high = false;

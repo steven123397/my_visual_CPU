@@ -66,7 +66,6 @@ private:
     const VirtQueue* selected_queue() const;
     uint32_t read_device_features() const;
     uint32_t read_driver_features() const;
-    uint64_t read_queue_address(const VirtQueue& queue, uint32_t low_reg) const;
     void write_queue_address(VirtQueue& queue, uint32_t low_reg, uint32_t value);
     void reset_transport();
     void update_interrupt_line();

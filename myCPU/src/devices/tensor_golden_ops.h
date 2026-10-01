@@ -7,8 +7,6 @@
 
 float tensor_golden_decode_fp16(uint16_t bits);
 float tensor_golden_decode_bf16(uint16_t bits);
-uint16_t tensor_golden_encode_fp16(float value);
-uint16_t tensor_golden_encode_bf16(float value);
 
 std::vector<int32_t> tensor_golden_gemm_i8_to_i32(
     const std::vector<int8_t>& lhs,

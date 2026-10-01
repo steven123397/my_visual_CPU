@@ -25,7 +25,6 @@ public:
     bool thre_interrupt_asserted() const;
     size_t output_size() const;
     const std::string& output() const;
-    uint8_t mcr() const;
     void inject_input(std::string_view text);
     void set_mirror_stdout(bool enabled);
 

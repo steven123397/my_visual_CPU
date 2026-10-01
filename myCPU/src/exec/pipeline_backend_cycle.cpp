@@ -226,10 +226,11 @@ bool PipelineBackend::step_wb() {
     if (atomic_observation.has_value()) {
         state_.record_memory(*atomic_observation);
     } else if (lsq_entry.has_value()) {
+        const LsqEntry scalar_entry = *lsq_entry;
         const std::optional<ExecutionMemoryObservation> observation =
             make_scalar_memory_observation(cpu_,
                                            bus_,
-                                           *lsq_entry,
+                                           scalar_entry,
                                            rob_head->pc,
                                            rob_head->raw,
                                            result.trap_taken);
