@@ -104,3 +104,9 @@ gh run download <run-id> --name 'Full regression-regression-<run-id>-<attempt>' 
 
 旧课程展示、背景、状态和计划已清理，历史内容可通过 Git 查询。
 旧设计已提炼为 Wiki 专题；逐文件去向见 [迁移记录](https://github.com/steven123397/my_visual_CPU/wiki/Migration)。
+
+## 开源许可
+
+主项目采用 [MIT License](LICENSE)。第三方代码保留其原有版权与许可声明；
+内置的 [xv6-riscv](myCPU/external/xv6-riscv/LICENSE) 同样采用 MIT 许可，版权归其原作者。
+另行下载的 OS 镜像、模型、权重与数据集应遵循各自许可，主项目许可不替代这些许可。
