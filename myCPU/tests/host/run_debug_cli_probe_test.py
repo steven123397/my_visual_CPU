@@ -916,6 +916,21 @@ def extract_riscv_static_surface_mnemonics(binary_path: pathlib.Path) -> set[str
 
 
 class RunDebugCliProbeTest(unittest.TestCase):
+    def test_profile_hex_helper(self) -> None:
+        self.assertEqual(PROBE.profile_hex("0x80200000"), "0x80200000")
+        self.assertEqual(PROBE.profile_hex("0x0"), "0x0")
+        self.assertEqual(PROBE.profile_hex("16"), "16")
+        self.assertEqual(PROBE.profile_hex("hello"), "hello")
+
+        self.assertEqual(PROBE.profile_hex(0), "0x0")
+        self.assertEqual(PROBE.profile_hex(16), "0x10")
+        self.assertEqual(PROBE.profile_hex(0x80200000), "0x80200000")
+        self.assertEqual(PROBE.profile_hex(-1), "-0x1")
+
+        self.assertEqual(PROBE.profile_hex(12.34), "0xc")
+        self.assertEqual(PROBE.profile_hex(None), "0x0")
+        self.assertEqual(PROBE.profile_hex([]), "0x0")
+
     def test_curated_linux_distro_runtime_matrix_declares_alpine_and_debian_shell_routes(self) -> None:
         self.assertEqual(
             tuple(sorted(CURATED_LINUX_DISTRO_RUNTIME_MATRIX)),
