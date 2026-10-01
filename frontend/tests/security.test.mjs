@@ -7,6 +7,7 @@ import {
   createSecurityManagerFromEnv,
   createSecurityManager,
   verifyPassword,
+  firstForwardedIp,
 } from '../server/security.mjs';
 
 function makeRequest({
@@ -56,6 +57,22 @@ test('verifyPassword accepts the matching scrypt hash and rejects mismatches', (
   const passwordHash = buildPasswordHashForTests('secret-1');
   assert.equal(verifyPassword('secret-1', passwordHash), true);
   assert.equal(verifyPassword('secret-2', passwordHash), false);
+});
+
+test('firstForwardedIp extracts the first valid IP from an x-forwarded-for header', () => {
+  assert.equal(firstForwardedIp(), null, 'returns null for no arguments');
+  assert.equal(firstForwardedIp(''), null, 'returns null for empty string');
+  assert.equal(firstForwardedIp('   '), null, 'returns null for whitespace only');
+
+  assert.equal(firstForwardedIp('192.168.1.1'), '192.168.1.1', 'extracts single IP');
+  assert.equal(firstForwardedIp(' 10.0.0.1 '), '10.0.0.1', 'trims single IP');
+
+  assert.equal(firstForwardedIp('1.1.1.1, 2.2.2.2'), '1.1.1.1', 'extracts first of multiple IPs');
+  assert.equal(firstForwardedIp(' 192.168.0.1 , 10.0.0.1'), '192.168.0.1', 'extracts and trims first of multiple IPs');
+
+  assert.equal(firstForwardedIp(',1.2.3.4'), '1.2.3.4', 'skips empty parts');
+  assert.equal(firstForwardedIp(' , 1.2.3.4'), '1.2.3.4', 'skips whitespace parts');
+  assert.equal(firstForwardedIp(',,1.2.3.4,5.6.7.8'), '1.2.3.4', 'skips multiple empty parts');
 });
 
 test('security manager enforces login before API access when enabled', async () => {

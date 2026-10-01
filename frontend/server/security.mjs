@@ -67,10 +67,15 @@ function formatCookie({
   return parts.join('; ');
 }
 
-function firstForwardedIp(value = '') {
-  return String(value)
-    .split(',')[0]
-    .trim();
+export function firstForwardedIp(value = '') {
+  const parts = value.split(',');
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return null;
 }
 
 export function clientIpForRequest(request) {
