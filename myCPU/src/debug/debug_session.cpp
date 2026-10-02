@@ -1,5 +1,9 @@
 #include "debug_session.h"
 
+void DebugSession::capture_start(const CaptureConfig& config) { ensure_loaded(); machine().capture_start(config); }
+void DebugSession::capture_stop() { ensure_loaded(); machine().capture_stop(); }
+void DebugSession::capture_clear() { capture_->clear(); }
+
 std::vector<uint8_t> DebugSession::inspect_memory(uint64_t addr, size_t size) const {
     ensure_loaded();
     return machine().inspect_memory(addr, size);
@@ -165,6 +169,7 @@ void DebugSession::load_elf(const std::string& path,
                             bool disk_ready,
                             bool disk_magic_valid,
                             bool l1d_enabled) {
+    capture_->require_mutable();
     config_.image_kind = ImageKind::Elf;
     config_.image_path = path;
     config_.binary_addr = MEM_BASE;
@@ -189,6 +194,7 @@ void DebugSession::load_binary(const std::string& path,
                                bool disk_ready,
                                bool disk_magic_valid,
                                bool l1d_enabled) {
+    capture_->require_mutable();
     config_.image_kind = ImageKind::Binary;
     config_.image_path = path;
     config_.binary_addr = addr;
@@ -226,6 +232,7 @@ void DebugSession::set_gpr(std::string_view reg_name, uint64_t value) {
 }
 
 void DebugSession::set_memory(uint64_t addr, uint64_t value, uint32_t size, bool virtual_address) {
+    capture_->require_mutable();
     ensure_loaded();
     validate_memory_size(size);
 
@@ -270,6 +277,7 @@ void DebugSession::set_memory(uint64_t addr, uint64_t value, uint32_t size, bool
 }
 
 void DebugSession::set_csr(std::string_view csr_name, uint64_t value) {
+    capture_->require_mutable();
     ensure_loaded();
     const uint32_t addr = parse_csr_addr(csr_name);
     if (!machine().cpu().csr().is_implemented(addr)) {
@@ -289,6 +297,7 @@ void DebugSession::break_at(uint64_t addr) {
 }
 
 void DebugSession::reset() {
+    capture_->require_mutable();
     ensure_loaded();
     recreate_machine();
     events_.clear();
@@ -414,6 +423,7 @@ void DebugSession::run_until_halt(uint64_t max_steps) {
 }
 
 void DebugSession::uart_input(std::string_view text) {
+    capture_->require_mutable();
     ensure_loaded();
     machine().uart().inject_input(text);
 }
@@ -443,11 +453,13 @@ bool DebugSession::debug_halted() const {
 bool DebugSession::debug_try_load_guest_memory(uint64_t addr,
                                                int size,
                                                uint64_t& value) {
+    capture_->require_mutable();
     ensure_loaded();
     return machine().bus().try_load(addr, size, value);
 }
 
 DebugSession::TranslationPlanSnapshot DebugSession::translation_plan() {
+    capture_->require_mutable();
     ensure_loaded();
     const BackendDebugSnapshot backend_snapshot = machine().backend().debug_snapshot();
     const InterpreterDbtPrototypePlan plan =
@@ -473,6 +485,7 @@ DebugSession::TranslationPlanSnapshot DebugSession::translation_plan() {
 }
 
 DbtJitDryRunSummary DebugSession::jit_dispatch() {
+    capture_->require_mutable();
     ensure_loaded();
     const BackendDebugSnapshot backend_snapshot = machine().backend().debug_snapshot();
 
@@ -494,7 +507,7 @@ size_t DebugSession::post_load_action_count() const {
 }
 
 void DebugSession::recreate_machine() {
-    machine_ = std::make_unique<Machine>();
+    machine_ = std::make_unique<Machine>(capture_);
     machine_->set_backend_kind(config_.backend_kind);
     machine_->set_block_transport(config_.block_transport);
     machine_->set_l1_data_cache_enabled(config_.l1d_enabled);

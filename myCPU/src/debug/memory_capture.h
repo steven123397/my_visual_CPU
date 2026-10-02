@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <vector>
 #include "../arch/core_state.h"
 #include "../isa/effects.h"
 
@@ -42,4 +43,49 @@ public:
     virtual ~MemoryRecordReceiver() = default;
     virtual void receive(MemoryRecord record) = 0;
     virtual void unsupported() = 0;
+};
+
+enum class CaptureState : uint8_t { Idle, Recording, Stopped };
+struct CaptureConfig {
+    size_t capacity{4096};
+    std::optional<MemoryOperation> operation{};
+    std::optional<PrivilegeMode> effective_privilege{};
+    std::optional<uint64_t> satp{};
+    std::optional<uint64_t> va_begin{}, va_end{};
+};
+struct CaptureMetadata {
+    CaptureState state{CaptureState::Idle};
+    uint64_t capture_id{0}, machine_generation{0};
+    uint64_t attempted{0}, filtered{0}, recorded{0}, dropped{0}, unsupported{0};
+    std::optional<uint64_t> first_id{}, last_id{};
+    CaptureConfig config{};
+};
+struct CaptureCursor {
+    uint64_t capture_id{0};
+    size_t position{0};
+    std::optional<size_t> upper{};
+};
+struct CapturePage {
+    CaptureMetadata metadata{};
+    CaptureCursor next{};
+    std::vector<MemoryRecord> records{};
+    bool done{false};
+};
+class MemoryCapture : public MemoryRecordReceiver {
+public:
+    void start(const CaptureConfig& config, uint64_t generation);
+    void stop();
+    void clear();
+    bool recording() const { return metadata_.state == CaptureState::Recording; }
+    void require_mutable() const;
+    CaptureMetadata metadata() const { return metadata_; }
+    CapturePage read(CaptureCursor cursor, size_t limit = 256) const;
+    void receive(MemoryRecord record) override;
+    void unsupported() override;
+    uint64_t advance_generation() { return ++generation_; }
+    uint64_t generation() const { return generation_; }
+private:
+    CaptureMetadata metadata_{};
+    std::vector<MemoryRecord> records_{};
+    uint64_t generation_{0};
 };

@@ -343,8 +343,8 @@ BlockTransport parse_block_transport(const std::string& name) {
     throw std::runtime_error("unknown block transport: " + name);
 }
 
-Machine::Machine()
-    : uart_(plic_),
+Machine::Machine(std::shared_ptr<MemoryCapture> capture)
+    : capture_(std::move(capture)), uart_(plic_),
       virtio_mmio_(plic_, VIRTIO_MMIO_PLIC_SOURCE, virtio_blk_),
       ai_accelerator_(plic_, AI_ACCEL_PLIC_SOURCE),
       bus_(ram_) {
@@ -358,6 +358,7 @@ Machine::Machine()
 }
 
 void Machine::set_backend_kind(BackendKind kind) {
+    require_mutable();
     backend_kind_ = kind;
     rebuild_backend();
 }
@@ -367,6 +368,7 @@ BackendKind Machine::backend_kind() const {
 }
 
 void Machine::set_l1_data_cache_enabled(bool enabled) {
+    require_mutable();
     cpu_.l1_data_cache().clear();
     cpu_.l1_data_cache().set_enabled(enabled);
 }
@@ -376,6 +378,7 @@ bool Machine::l1_data_cache_enabled() const {
 }
 
 void Machine::set_block_transport(BlockTransport transport) {
+    require_mutable();
     if (block_transport_bound_ && block_transport_ != transport) {
         throw std::runtime_error("block transport already bound");
     }
@@ -422,9 +425,11 @@ void Machine::finish_image_load(uint64_t entry, Ram& staged_ram) {
     cpu_init(cpu_, entry);
     rebuild_backend();
     loaded_ = true;
+    capture_->advance_generation();
 }
 
 void Machine::load_elf(const std::string& path) {
+    require_mutable();
     bind_block_transport();
     Ram staged_ram;
     const uint64_t entry = elf_loader_.load(staged_ram, path.c_str());
@@ -432,6 +437,7 @@ void Machine::load_elf(const std::string& path) {
 }
 
 void Machine::load_binary(const std::string& path, uint64_t addr) {
+    require_mutable();
     bind_block_transport();
     Ram staged_ram;
     binary_loader_.load(staged_ram, path.c_str(), addr);
@@ -439,6 +445,7 @@ void Machine::load_binary(const std::string& path, uint64_t addr) {
 }
 
 void Machine::load_binary_payload(const std::string& path, uint64_t addr) {
+    require_mutable();
     if (!loaded_) {
         throw std::runtime_error("machine image not loaded");
     }
@@ -448,6 +455,7 @@ void Machine::load_binary_payload(const std::string& path, uint64_t addr) {
 }
 
 void Machine::set_gpr(const std::string& reg_name, uint64_t value) {
+    require_mutable();
     if (!loaded_) {
         throw std::runtime_error("machine image not loaded");
     }
@@ -460,6 +468,7 @@ void Machine::set_gpr(const std::string& reg_name, uint64_t value) {
 void Machine::attach_storage_image(const std::string& path,
                                    bool ready,
                                    bool valid_magic) {
+    require_mutable();
     bind_block_transport();
     switch (block_transport_) {
     case BlockTransport::SimpleStorage:
@@ -477,6 +486,7 @@ void Machine::attach_storage_image(const std::string& path,
 }
 
 Machine::AiProfileRunResult Machine::run_ai_profile_manifest(const std::string& manifest_path) {
+    require_mutable();
     Ram cleared_ram;
     ram_.swap(cleared_ram);
     loaded_ = false;
@@ -730,6 +740,21 @@ void Machine::step() {
         backend_->step();
     }
 }
+
+void Machine::capture_start(const CaptureConfig& config) {
+    if (!loaded_) throw std::runtime_error("machine image not loaded");
+    if (backend_kind_ != BackendKind::Functional) throw std::runtime_error("memory capture requires functional backend");
+    capture_->start(config, capture_->generation());
+    static_cast<FunctionalBackend&>(*backend_).set_memory_receiver(capture_.get());
+}
+
+void Machine::capture_stop() {
+    capture_->stop();
+    if (backend_kind_ == BackendKind::Functional)
+        static_cast<FunctionalBackend&>(*backend_).set_memory_receiver(nullptr);
+}
+
+void Machine::capture_clear() { capture_->clear(); }
 
 void Machine::run() {
     if (!loaded_) {

@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../cpu.h"
+#include "../debug/memory_capture.h"
 
 #include "../devices/clint.h"
 #include "../devices/ai_accelerator.h"
@@ -62,7 +63,13 @@ public:
         bool completed{false};
     };
 
-    Machine();
+    explicit Machine(std::shared_ptr<MemoryCapture> capture = std::make_shared<MemoryCapture>());
+    void capture_start(const CaptureConfig& config = {});
+    void capture_stop();
+    void capture_clear();
+    CaptureMetadata capture_metadata() const { return capture_->metadata(); }
+    CapturePage capture_read(CaptureCursor cursor, size_t limit = 256) const { return capture_->read(cursor, limit); }
+    void require_mutable() const { capture_->require_mutable(); }
 
     void set_backend_kind(BackendKind kind);
     BackendKind backend_kind() const;
@@ -116,6 +123,7 @@ private:
     void finish_image_load(uint64_t entry, Ram& staged_ram);
 
     CPU cpu_{};
+    std::shared_ptr<MemoryCapture> capture_;
     Ram ram_;
     Plic plic_;
     Uart16550 uart_;

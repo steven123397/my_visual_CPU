@@ -1,5 +1,8 @@
 #include <cassert>
 #include <vector>
+#include <cstdio>
+#include <unistd.h>
+#include "../../src/debug/debug_session.h"
 #include "../../src/debug/memory_capture.h"
 #include "../../src/exec/functional_backend.h"
 #include "../../src/platform/machine.h"
@@ -11,7 +14,108 @@ struct Receiver : MemoryRecordReceiver {
     void unsupported() override { ++unsupported_count; }
 };
 
+template<class F> void rejected(F action) {
+    bool failed = false;
+    try { action(); } catch (const std::exception&) { failed = true; }
+    assert(failed);
+}
+
 int main() {
+    {
+        MemoryCapture capture;
+        CaptureConfig config;
+        config.capacity = 1;
+        config.operation = MemoryOperation::Store;
+        capture.start(config, 7);
+        MemoryRecord r;
+        r.operation = MemoryOperation::Load;
+        capture.receive(r);
+        r.operation = MemoryOperation::Store;
+        capture.receive(r);
+        capture.receive(r);
+        capture.unsupported();
+        capture.stop();
+        const auto meta = capture.metadata();
+        assert(meta.attempted == 3 && meta.filtered == 1 && meta.recorded == 1 && meta.dropped == 1 && meta.unsupported == 1);
+        auto page = capture.read({meta.capture_id, 0, {}}, 1);
+        assert(page.records[0].instruction_id == 2 && page.records[0].machine_generation == 7);
+        assert(capture.read({meta.capture_id, 0, {}}, 1).records[0].instruction_id == 2);
+        capture.clear();
+        bool stale = false;
+        try { capture.read(page.next, 1); } catch (const std::exception&) { stale = true; }
+        assert(stale);
+        capture.start({}, 8);
+        assert(capture.metadata().capture_id != meta.capture_id);
+        capture.stop();
+    }
+    {
+        MemoryCapture capture;
+        CaptureConfig cfg;
+        cfg.capacity = 0;
+        rejected([&] { capture.start(cfg, 1); });
+        cfg.capacity = 65537;
+        rejected([&] { capture.start(cfg, 1); });
+        cfg.capacity = 4;
+        cfg.va_begin = 4096;
+        cfg.va_end = 4097;
+        cfg.satp = 0x8000000000000123ULL;
+        cfg.effective_privilege = PrivilegeMode::User;
+        capture.start(cfg, 1);
+        rejected([&] { capture.clear(); });
+        MemoryRecord r;
+        r.vaddr = 4092; r.bytes = 8; r.satp = *cfg.satp; r.effective_privilege = PrivilegeMode::User;
+        capture.receive(r);
+        auto first = capture.read({capture.metadata().capture_id, 0, {}}, 1);
+        capture.receive(r);
+        assert(capture.read(first.next).records.empty());
+        assert(capture.read({first.next.capture_id, 1, {}}).records.size() == 1);
+        r.satp = 0;
+        capture.receive(r);
+        assert(capture.metadata().filtered == 1);
+        rejected([&] { capture.read({first.next.capture_id, 3, {}}); });
+        capture.stop();
+        capture.stop();
+        rejected([&] { capture.start({}, 2); });
+    }
+    {
+        char path[] = "/tmp/capture_smoke_XXXXXX";
+        int fd = mkstemp(path);
+        const uint32_t code[] = {0x0000b183, 0x0000b183, 0x0000006f};
+        assert(write(fd, code, sizeof(code)) == sizeof(code));
+        close(fd);
+        DebugSession s;
+        s.load_binary(path, MEM_BASE, BackendKind::Functional);
+        s.set_gpr("x1", MEM_BASE);
+        CaptureConfig cfg; cfg.capacity = 1;
+        s.capture_start(cfg);
+        const auto before = s.snapshot();
+        rejected([&] { s.set_gpr("x1", 1); });
+        rejected([&] { s.set_csr("satp", 1); });
+        rejected([&] { s.set_memory(MEM_BASE, 0, 4, false); });
+        rejected([&] { s.reset(); });
+        rejected([&] { s.load_binary(path, MEM_BASE, BackendKind::Pipeline); });
+        rejected([&] { s.load_binary_payload(path, MEM_BASE); });
+        rejected([&] { s.uart_input("A"); });
+        rejected([&] { s.translation_plan(); });
+        rejected([&] { s.jit_dispatch(); });
+        assert(s.snapshot().gpr == before.gpr && s.snapshot().summary.cycle == before.summary.cycle);
+        s.inspect_memory(MEM_BASE, 4);
+        s.inspect_page(MEM_BASE, AccessType::Load);
+        s.step_cycle(); s.step_cycle(); s.step_cycle();
+        s.capture_stop();
+        auto meta = s.capture_metadata();
+        assert(meta.recorded == 1 && meta.dropped == 1 && meta.attempted == 2);
+        s.reset();
+        assert(s.capture_read({meta.capture_id, 0, {}}).records[0].machine_generation == meta.machine_generation);
+        s.capture_clear();
+        s.capture_start();
+        assert(s.capture_metadata().machine_generation > meta.machine_generation);
+        s.capture_stop(); s.capture_clear();
+        s.load_binary(path, MEM_BASE, BackendKind::Pipeline);
+        rejected([&] { s.capture_start(); });
+        assert(s.capture_metadata().state == CaptureState::Idle);
+        unlink(path);
+    }
     for (bool cache : {false, true}) {
         Machine m;
         m.set_l1_data_cache_enabled(cache);
