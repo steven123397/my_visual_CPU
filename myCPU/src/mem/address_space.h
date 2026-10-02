@@ -3,6 +3,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "../isa/effects.h"
 
@@ -17,6 +19,28 @@ enum class AccessType : uint8_t {
     Instruction,
     Load,
     Store,
+};
+
+struct PageInspectionContext {
+    uint64_t satp{0};
+    PrivilegeMode effective_privilege{};
+    bool sum{false};
+    bool mxr{false};
+};
+struct PageInspectionEntry { uint64_t address; uint64_t value; int level; };
+struct PageInspection {
+    PageInspectionContext context{};
+    AccessType access{AccessType::Load};
+    uint64_t vaddr{0};
+    bool ok{false};
+    bool mapped{false};
+    bool permission_allowed{false};
+    bool ad_update_needed{false};
+    uint64_t paddr{0};
+    uint64_t page_size{0};
+    int leaf_level{-1};
+    std::string error{};
+    std::vector<PageInspectionEntry> entries{};
 };
 
 class AddressSpace {
@@ -51,6 +75,9 @@ public:
     bool store(Bus& bus, uint64_t addr, uint64_t value, int size);
     void flush_tlb();
     void bind_l1_data_cache(SimpleL1DataCache* cache);
+    PageInspectionContext inspection_context(AccessType type) const;
+    PageInspection inspect_page(const Bus& bus, uint64_t addr, AccessType type,
+                                const PageInspectionContext& context) const;
 
 private:
     struct TlbEntry {

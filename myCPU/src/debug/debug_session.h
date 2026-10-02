@@ -70,6 +70,8 @@ public:
     DbtJitDryRunSummary jit_dispatch();
     DebugSnapshot snapshot() const;
     std::vector<uint8_t> inspect_memory(uint64_t addr, size_t size) const;
+    PageInspection inspect_page(uint64_t addr, AccessType type) const;
+    PageInspection inspect_page(uint64_t addr, AccessType type, const PageInspectionContext& context) const;
     size_t post_load_action_count() const;
 
 private:

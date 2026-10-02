@@ -102,6 +102,13 @@ public:
     std::vector<uint8_t> inspect_memory(uint64_t addr, size_t size) const {
         return bus_.inspect_memory(addr, size);
     }
+    PageInspection inspect_page(uint64_t addr, AccessType type,
+                                 const PageInspectionContext& context) const {
+        return cpu_.address_space().inspect_page(bus_, addr, type, context);
+    }
+    PageInspection inspect_page(uint64_t addr, AccessType type) const {
+        return inspect_page(addr, type, cpu_.address_space().inspection_context(type));
+    }
 
 private:
     void bind_block_transport();

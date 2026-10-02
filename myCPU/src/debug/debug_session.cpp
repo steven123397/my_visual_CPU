@@ -4,6 +4,16 @@ std::vector<uint8_t> DebugSession::inspect_memory(uint64_t addr, size_t size) co
     ensure_loaded();
     return machine().inspect_memory(addr, size);
 }
+
+PageInspection DebugSession::inspect_page(uint64_t addr, AccessType type) const {
+    ensure_loaded();
+    return machine().inspect_page(addr, type);
+}
+
+PageInspection DebugSession::inspect_page(uint64_t addr, AccessType type, const PageInspectionContext& context) const {
+    ensure_loaded();
+    return machine().inspect_page(addr, type, context);
+}
 #include "debug_budget.h"
 
 #include <cerrno>

@@ -139,10 +139,73 @@ PrivilegeMode effective_privilege_mode(AccessType type, const CoreState& core, u
     return core.privilege_mode();
 }
 
+bool leaf_permission(uint64_t pte, AccessType type, PrivilegeMode mode, uint64_t mstatus) {
+    if ((pte & PTE_W) && !(pte & PTE_R)) return false;
+    if (mode == PrivilegeMode::User && !(pte & PTE_U)) return false;
+    if (mode != PrivilegeMode::User && (pte & PTE_U) && !can_access_user_page(type, mode, mstatus)) return false;
+    if (type == AccessType::Instruction) return (pte & PTE_X) != 0;
+    if (type == AccessType::Store) return (pte & PTE_W) != 0;
+    return (pte & PTE_R) || ((mstatus & MSTATUS_MXR) && (pte & PTE_X));
+}
+
 }  // namespace
 
 AddressSpace::AddressSpace(CoreState& core, CsrFile& csr, TrapController& trap)
     : core_(core), csr_(csr), trap_(trap) {}
+
+PageInspectionContext AddressSpace::inspection_context(AccessType type) const {
+    const uint64_t status = csr_.read(CSR_MSTATUS, core_);
+    return {csr_.read(CSR_SATP, core_), effective_privilege_mode(type, core_, status),
+            (status & MSTATUS_SUM) != 0, (status & MSTATUS_MXR) != 0};
+}
+
+PageInspection AddressSpace::inspect_page(const Bus& bus, uint64_t addr, AccessType type,
+                                          const PageInspectionContext& ctx) const {
+    PageInspection r;
+    r.context = ctx;
+    r.access = type;
+    r.vaddr = addr;
+    const uint64_t mode = ctx.satp >> 60;
+    if (mode == 0 || ctx.effective_privilege == PrivilegeMode::Machine) {
+        r.ok = r.mapped = r.permission_allowed = true;
+        r.paddr = addr;
+        return r;
+    }
+    if (mode != 8) { r.error = "unsupported-mode"; return r; }
+    if (!is_sv39_canonical(addr)) { r.error = "noncanonical-address"; return r; }
+    uint64_t table = (ctx.satp & SATP_PPN_MASK) << 12;
+    for (int level = 2; level >= 0; --level) {
+        const uint64_t location = table + (((addr >> (12 + level * 9)) & 511) * 8);
+        uint64_t pte = 0;
+        try {
+            const auto bytes = bus.inspect_memory(location, 8);
+            for (size_t i = 0; i < 8; ++i) pte |= uint64_t(bytes[i]) << (8 * i);
+        } catch (const std::exception&) { r.error = "non-ram-page-table"; return r; }
+        r.entries.push_back({location, pte, level});
+        if (!(pte & PTE_V) || (pte & PTE_SV39_RESERVED_MASK) || ((pte & PTE_W) && !(pte & PTE_R))) {
+            r.error = "invalid-pte"; return r;
+        }
+        const uint64_t ppn = (pte >> 10) & PTE_PPN_MASK;
+        if (pte & (PTE_R | PTE_W | PTE_X)) {
+            const uint64_t mask = (1ULL << (12 + level * 9)) - 1;
+            if ((ppn << 12) & mask) { r.error = "misaligned-superpage"; return r; }
+            r.mapped = true;
+            r.paddr = (ppn << 12) | (addr & mask);
+            r.page_size = mask + 1;
+            r.leaf_level = level;
+            r.ad_update_needed = !(pte & PTE_A) || (type == AccessType::Store && !(pte & PTE_D));
+            r.permission_allowed = leaf_permission(pte, type, ctx.effective_privilege,
+                                                  (ctx.sum ? MSTATUS_SUM : 0) | (ctx.mxr ? MSTATUS_MXR : 0));
+            r.ok = r.permission_allowed;
+            if (!r.ok) r.error = "permission-denied";
+            return r;
+        }
+        if (pte & (PTE_U | PTE_A | PTE_D)) { r.error = "invalid-nonleaf"; return r; }
+        table = ppn << 12;
+    }
+    r.error = "missing-leaf";
+    return r;
+}
 
 AddressSpace::AccessResult AddressSpace::fetch16_result(Bus& bus) {
     return fetch16_result(bus, core_.pc());
@@ -289,46 +352,10 @@ bool AddressSpace::check_leaf_permissions(
     PrivilegeMode effective_mode,
     uint64_t vaddr,
     TrapRequest& fault) {
-    const bool readable = pte & PTE_R;
-    const bool writable = pte & PTE_W;
-    const bool executable = pte & PTE_X;
-    const bool user_accessible = pte & PTE_U;
     const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
-
-    if (writable && !readable) {
+    if (!leaf_permission(pte, type, effective_mode, mstatus)) {
         fault = make_fault(page_fault_cause(type), vaddr);
         return false;
-    }
-
-    const bool is_user_mode = effective_mode == PrivilegeMode::User;
-    if (is_user_mode && !user_accessible) {
-        fault = make_fault(page_fault_cause(type), vaddr);
-        return false;
-    }
-    if (!is_user_mode && user_accessible && !can_access_user_page(type, effective_mode, mstatus)) {
-        fault = make_fault(page_fault_cause(type), vaddr);
-        return false;
-    }
-
-    switch (type) {
-    case AccessType::Instruction:
-        if (!executable) {
-            fault = make_fault(page_fault_cause(type), vaddr);
-            return false;
-        }
-        break;
-    case AccessType::Load:
-        if (!readable && !((mstatus & MSTATUS_MXR) && executable)) {
-            fault = make_fault(page_fault_cause(type), vaddr);
-            return false;
-        }
-        break;
-    case AccessType::Store:
-        if (!writable) {
-            fault = make_fault(page_fault_cause(type), vaddr);
-            return false;
-        }
-        break;
     }
 
     return true;

@@ -1,4 +1,5 @@
 # 当前状态
+- U2 已完成纯 RAM 页表解释、固定上下文与共享权限判定；查询及执行权限、A/D、TLB flush 回归通过。U3–U6 待实施。
 
 - 第三份计划实施：U1 已完成 const RAM 查询及 Machine/DebugSession 接口；`make -C myCPU test-host-debug_inspection_smoke` 通过，覆盖两后端、L1D 开关、边界与设备消费控制。后续按 U2–U6 顺序实施，统一审查尚未进行；本轮不推送或合并。
 
