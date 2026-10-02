@@ -334,7 +334,7 @@ bool AddressSpace::check_leaf_permissions(
     return true;
 }
 
-bool AddressSpace::update_pte_access_bits(
+AddressSpace::PteUpdateResult AddressSpace::update_pte_access_bits(
     Bus& bus, uint64_t pte_addr, uint64_t& pte, AccessType type, uint64_t vaddr, TrapRequest& fault) {
     uint64_t updated_pte = pte | PTE_A;
     if (type == AccessType::Store) {
@@ -342,16 +342,25 @@ bool AddressSpace::update_pte_access_bits(
     }
 
     if (updated_pte == pte) {
-        return true;
+        return PteUpdateResult::Updated;
     }
 
+    // Single-hart synchronous bus: no guest execution between compare and write.
+    uint64_t current_pte = 0;
+    if (!bus.try_load_observed(pte_addr, SV39_PTESIZE, current_pte, "page-walk", "pte-ad-check")) {
+        fault = make_fault(access_fault_cause(type), vaddr);
+        return PteUpdateResult::Fault;
+    }
+    if (current_pte != pte) {
+        return PteUpdateResult::Retry;
+    }
     if (!bus.try_store_observed(pte_addr, updated_pte, SV39_PTESIZE, "page-walk", "pte-ad-update")) {
         fault = make_fault(access_fault_cause(type), vaddr);
-        return false;
+        return PteUpdateResult::Fault;
     }
 
     pte = updated_pte;
-    return true;
+    return PteUpdateResult::Updated;
 }
 
 bool AddressSpace::translate(Bus& bus,
@@ -389,7 +398,10 @@ bool AddressSpace::translate(Bus& bus,
         if (!update_access_bits) {
             return true;
         }
-        return update_pte_access_bits(bus, entry->pte_addr, entry->pte, type, vaddr, fault);
+        const auto update = update_pte_access_bits(bus, entry->pte_addr, entry->pte, type, vaddr, fault);
+        if (update == PteUpdateResult::Updated) return true;
+        if (update == PteUpdateResult::Fault) return false;
+        entry->valid = false;
     }
 
     return walk_page_table(bus, vaddr, type, paddr, fault, update_access_bits);
@@ -457,6 +469,7 @@ bool AddressSpace::walk_page_table(Bus& bus,
                                    uint64_t& paddr,
                                    TrapRequest& fault,
                                    bool update_access_bits) {
+retry:
     const uint64_t satp = csr_.read(CSR_SATP, core_);
     const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
     const PrivilegeMode effective_mode = effective_privilege_mode(type, core_, mstatus);
@@ -514,9 +527,10 @@ bool AddressSpace::walk_page_table(Bus& bus,
             }
 
             uint64_t updated_pte = pte;
-            if (update_access_bits &&
-                !update_pte_access_bits(bus, pte_addr, updated_pte, type, vaddr, fault)) {
-                return false;
+            if (update_access_bits) {
+                const auto update = update_pte_access_bits(bus, pte_addr, updated_pte, type, vaddr, fault);
+                if (update == PteUpdateResult::Fault) return false;
+                if (update == PteUpdateResult::Retry) goto retry;
             }
 
             paddr = (pte_ppn << 12) | page_offset;

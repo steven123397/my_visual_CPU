@@ -1,7 +1,7 @@
 # 当前状态
 
 - 所在分支：`codex/system-software-evidence-plan`；核对基点：`b3831060b30a96d2dcd4f509154fb64166eeb3be`。
-- 当前交付：[可信度修复计划](plans/2026-10-02-1519-fix-system-software-trust-plan.md) 已完成规划自检，限定 MMU A/D 写回、暂停 GPR 修改同步和 Spike 退出夹具三项修复，另设组合验证与回传单元。本次仅文档，未运行产品测试，尚未实施修复。
+- 当前交付：[可信度修复计划](plans/2026-10-02-1519-fix-system-software-trust-plan.md) U1 已修复缓存 PTE 的 A/D 写回覆盖：比较当前 PTE，失配后重走页表及权限检查。原代码负向回归失败，修复后 V1 全部通过；新增映射替换、只更新 D、撤权/无效与读取失败回归。U2–U4 待完成，统一审查留在最后。Wiki Memory-System 本地契约待随组合验收整理，不发布。
 - 工作范围：[系统软件取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md) 的 U1–U5 均完成，逐单元审查并提交。[最终回传](reviews/system-software-evidence-c253dda-u5.md) 提供 Q1–Q6、问题分类和最小后续范围；[总索引](reviews/system-software-evidence-c253dda.md) 关联全部证据。完整 shell 16 条命令通过，独立普通 fork 确认父子两页隔离、exit/status37/wait 与局部回收，仅 functional/单 hart。未修改产品语义。
 - 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。
 - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。

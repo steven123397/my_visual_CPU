@@ -71,7 +71,8 @@ private:
         PrivilegeMode effective_mode,
         uint64_t vaddr,
         TrapRequest& fault);
-    bool update_pte_access_bits(Bus& bus, uint64_t pte_addr, uint64_t& pte, AccessType type, uint64_t vaddr, TrapRequest& fault);
+    enum class PteUpdateResult { Updated, Retry, Fault };
+    PteUpdateResult update_pte_access_bits(Bus& bus, uint64_t pte_addr, uint64_t& pte, AccessType type, uint64_t vaddr, TrapRequest& fault);
     bool translate(Bus& bus,
                    uint64_t vaddr,
                    AccessType type,
