@@ -1,0 +1,37 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "",
+  "argv": [
+    "timeout",
+    "120s",
+    "env",
+    "XV6_EVIDENCE_MARCH=rv64ima",
+    "bash",
+    "docs/reviews/system-software-evidence-c253dda/u4-build.sh",
+    "/tmp/mycpu-trust-fork"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+  "environment": {},
+  "started_unix": 1790928497.2169268,
+  "wall_seconds": 3.919,
+  "exit_code": 0,
+  "wall_budget_seconds": 120,
+  "source_manifest": "sources-8d6914053c45.json",
+  "source_manifest_sha256": "8d6914053c456ef423a3f5fce6a13ccc9c5dca9247411e77398bbf6956a82176",
+  "logs": {
+    "stdout": {
+      "path": "fork-build.stdout",
+      "sha256": "5a5d1407294efeda0c4f03f71adacfa78111a778164d8bff24b1d9f4a304dffa"
+    },
+    "stderr": {
+      "path": "fork-build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "input_files_before_sha256": {
+    "docs/reviews/system-software-evidence-c253dda/u4-build.sh": "9cc6662bd1c904cce7a7e4949c41e27731972c2d333fb5dedfeb4c215db0d7a2"
+  },
+  "input_files_after_sha256": {
+    "docs/reviews/system-software-evidence-c253dda/u4-build.sh": "9cc6662bd1c904cce7a7e4949c41e27731972c2d333fb5dedfeb4c215db0d7a2"
+  }
+}

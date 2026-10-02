@@ -1,0 +1,134 @@
+{
+  "captured_unix": 1790928290.8405502,
+  "tools": {
+    "g++": {
+      "path": "/usr/bin/g++",
+      "argv": [
+        "/usr/bin/g++",
+        "--version"
+      ],
+      "exit_code": 0,
+      "version_output": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "sha256": "2360901d864cf10bfd6296e261cb2c14053552a80377761ab07146ec9ec9a2c0"
+    },
+    "riscv64-unknown-elf-gcc": {
+      "path": "/usr/bin/riscv64-unknown-elf-gcc",
+      "argv": [
+        "/usr/bin/riscv64-unknown-elf-gcc",
+        "--version"
+      ],
+      "exit_code": 0,
+      "version_output": "riscv64-unknown-elf-gcc () 10.2.0\nCopyright (C) 2020 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "sha256": "eb3fc02d6cd7aa91e4aa56cabf52da83b453957c8ec7e0c54bb24a2c0b1ca501"
+    },
+    "riscv64-unknown-elf-ld": {
+      "path": "/usr/bin/riscv64-unknown-elf-ld",
+      "argv": [
+        "/usr/bin/riscv64-unknown-elf-ld",
+        "--version"
+      ],
+      "exit_code": 0,
+      "version_output": "GNU ld () 2.35.1\nCopyright (C) 2020 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) a later version.\nThis program has absolutely no warranty.\n",
+      "sha256": "2d88179cc4a657a54e91882830f84d83bc3f52ae914afbf580fa92496013e63f"
+    },
+    "riscv64-unknown-elf-nm": {
+      "path": "/usr/bin/riscv64-unknown-elf-nm",
+      "argv": [
+        "/usr/bin/riscv64-unknown-elf-nm",
+        "--version"
+      ],
+      "exit_code": 0,
+      "version_output": "GNU nm () 2.35.1\nCopyright (C) 2020 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) any later version.\nThis program has absolutely no warranty.\n",
+      "sha256": "0cce3946ebb44d297b275457e25f13adf9d80d08c6d92657b41a366c2cc46339"
+    },
+    "gdb": {
+      "path": "/usr/bin/gdb",
+      "argv": [
+        "/usr/bin/gdb",
+        "--version"
+      ],
+      "exit_code": 0,
+      "version_output": "GNU gdb (Ubuntu 12.1-0ubuntu1~22.04.2) 12.1\nCopyright (C) 2022 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n",
+      "sha256": "a6222ff0f450ca040e3479c04fdb7d0f1e0cabb099688270e720b7115d933c3d"
+    },
+    "python3": {
+      "path": "/usr/bin/python3",
+      "argv": [
+        "/usr/bin/python3",
+        "--version"
+      ],
+      "exit_code": 0,
+      "version_output": "Python 3.10.12\n",
+      "sha256": "a2f33a6e006989270f4340528eb61f8f97366e00a5d1b602ac8672ea44fc56ae"
+    },
+    "/home/liangjiaqi/.local/riscv-spike/bin/spike": {
+      "path": "/home/liangjiaqi/.local/riscv-spike/bin/spike",
+      "argv": [
+        "/home/liangjiaqi/.local/riscv-spike/bin/spike",
+        "--help"
+      ],
+      "exit_code": 0,
+      "version_output": "Spike RISC-V ISA Simulator 1.1.1-dev\n\nusage: spike [host options] <target program> [target options]\nHost Options:\n  -p<n>                 Simulate <n> processors [default 1]\n  -m<n>                 Provide <n> MiB of target memory [default 2048]\n  -m<a:m,b:n,...>       Provide memory regions of size m and n bytes\n                          at base addresses a and b (with 4 KiB alignment)\n  -d                    Interactive debug mode\n  -g                    Track histogram of PCs\n  -l                    Generate a log of execution\n  -s                    Command I/O via socket (use with -d)\n  -h, --help            Print this help message\n  --halted              Start halted, allowing a debugger to connect\n  --log=<name>          File name for option -l\n  --debug-cmd=<name>    Read commands from file (use with -d)\n  --isa=<name>          RISC-V ISA string [default rv64imafdc_zicntr_zihpm]\n  --pmpregions=<n>      Number of PMP regions [default 16]\n  --pmpgranularity=<n>  PMP Granularity in bytes [default 4]\n  --priv=<m|mu|msu>     RISC-V privilege modes supported [default MSU]\n  --pc=<address>        Override ELF entry point\n  --hartids=<a,b,...>   Explicitly specify hartids, default is 0,1,...\n  --ic=<S>:<W>:<B>      Instantiate a cache model with S sets,\n  --dc=<S>:<W>:<B>        W ways, and B-byte blocks (with S and\n  --l2=<S>:<W>:<B>        B both powers of 2).\n  --big-endian          Use a big-endian memory system.\n  --device=<name>       Attach MMIO plugin device from an --extlib library,\n                          specify --device=<name>,<args> to pass down extra args.\n  --dtb-discovery       Enable direct device discovery from device tree blob. Requires --dtb and usage of special \"spike_plugin_params\" dts field.\n  --log-cache-miss      Generate a log of cache miss\n  --log-commits         Generate a log of commits info\n  --extension=<name>    Specify RoCC Extension\n                          This flag can be used multiple times.\n  --extlib=<name>       Shared library to load\n                        This flag can be used multiple times.\n  --rbb-port=<port>     Listen on <port> for remote bitbang connection\n  --dump-dts            Print device tree string and exit\n  --dtb=<path>          Use specified device tree blob [default: auto-generate]\n  --disable-dtb         Don't write the device tree blob into memory\n  --kernel=<path>       Load kernel flat image into memory\n  --initrd=<path>       Load kernel initrd into memory\n  --bootargs=<args>     Provide custom bootargs for kernel [default: console=ttyS0 earlycon]\n  --real-time-clint     Increment clint time at real-time rate\n  --triggers=<n>        Number of supported triggers [default 4]\n  --dm-progsize=<words> Progsize for the debug module [default 2]\n  --dm-datacount=<n>    Number of data registers available for the debug module [default 2]\n  --dm-sba=<bits>       Debug system bus access supports up to <bits> wide accesses [default 0]\n  --dm-auth             Debug module requires debugger to authenticate\n  --dmi-rti=<n>         Number of Run-Test/Idle cycles required for a DMI access [default 0]\n  --dm-abstract-rti=<n> Number of Run-Test/Idle cycles required for an abstract command to execute [default 0]\n  --dm-no-hasel         Debug module won't support hasel\n  --dm-no-abstract-csr  Debug module won't support abstract CSR access\n  --dm-no-abstract-fpr  Debug module won't support abstract FPR access\n  --dm-no-halt-groups   Debug module won't support halt groups\n  --dm-no-impebreak     Debug module won't support implicit ebreak in program buffer\n  --dm-no-abstractauto  Debug module won't support the abstractauto register\n  --blocksz=<size>      Cache block size (B) for CMO operations(powers of 2) [default 64]\n  --instructions=<n>    Stop after n instructions\n",
+      "sha256": "24c0d01da6a0720e3a95bd2c2d2ae1d987381993e59a4f2362d7abaa72f2d085"
+    }
+  },
+  "assets": {
+    "myCPU/mycpu": {
+      "exists": true,
+      "sha256": "de4b9522514ae45c30d7b4127f272dbaf58721f903dde6d9526bd088dc1606f1"
+    },
+    "myCPU/tests/host/spike_differential_smoke": {
+      "exists": true,
+      "sha256": "b1dea6a51003d475af483d9597f737c3c4946b0024423b9744c6974a61bfecd8"
+    },
+    "myCPU/tests/host/xv6_boot_smoke": {
+      "exists": true,
+      "sha256": "dae4c5ed00f0d92d554fe04f9e000a26dacb1459bbe13f2e08e8a9528ad9f82e"
+    },
+    "myCPU/tests/host/xv6_shell_smoke": {
+      "exists": true,
+      "sha256": "d36f09f6738fc864d0de80dd9f608a3a354c5e8a962f5647be21f15bf8ed3a97"
+    },
+    "myCPU/tests/host/system_software_fork_evidence": {
+      "exists": true,
+      "sha256": "d779964d190e76cd59e1f99f59430fbe74c8fee3859ce2503760f99baf90b077"
+    },
+    "myCPU/external/xv6-riscv/kernel/kernel": {
+      "exists": true,
+      "sha256": "1a6cdfcaa2959b68fa64846669dbd80b43846bfcd825c4e8f9c65beb3a4d2eb2"
+    },
+    "myCPU/external/xv6-riscv/fs.img": {
+      "exists": true,
+      "sha256": "1f9315a0dcffa0e45bcce49649f4e467114b7134c9e35b0b3926a60719611c1c"
+    },
+    "myCPU/external/xv6-riscv/user/_init": {
+      "exists": true,
+      "sha256": "eb923f20d30252ade9209a48d976ea3d0a1337ac2a56c8579c22468088737905"
+    },
+    "myCPU/external/xv6-riscv/user/_sh": {
+      "exists": true,
+      "sha256": "2e80c665ec740395310482fadec74857bb6006d85c4fcf2ef41f71525561be88"
+    },
+    "myCPU/external/xv6-riscv/user/_forktest": {
+      "exists": true,
+      "sha256": "38038af99aa9263e90e873bccbc49e0e4e4870b421da0c1ad5c50ad2d88c6db4"
+    },
+    "/tmp/mycpu-trust-fork/_forkev": {
+      "exists": false
+    },
+    "/tmp/mycpu-trust-fork/fs.img": {
+      "exists": false
+    },
+    "/tmp/mycpu-trust-fork/layout.txt": {
+      "exists": false
+    },
+    "myCPU/tests/asm/sv39_tlb_ad_bits.elf": {
+      "exists": true,
+      "sha256": "e016cbdab6c311b8c05d8e36262e14ee469bac1d776aaea671a56dbdb4b32643"
+    },
+    "myCPU/tests/asm/sv39_tlb_flush.elf": {
+      "exists": true,
+      "sha256": "9c5d09bf96d8bc4efcf50f23683666c08b1d5f25d877cbd7f753c8177a63a288"
+    }
+  }
+}

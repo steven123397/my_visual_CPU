@@ -1,0 +1,16 @@
+make: Entering directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU'
+make WORKLOAD_NAME=xv6 WORKLOAD_BOARD=mycpu_virt build-workload
+make[1]: Entering directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU'
+make -C external/xv6-riscv TOOLPREFIX=riscv64-unknown-elf- ARCH_MARCH=-march=rv64ima ARCH_MABI=-mabi=lp64 CPUS=1 kernel/kernel fs.img
+make[2]: Entering directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU/external/xv6-riscv'
+make[2]: 'kernel/kernel' is up to date.
+make[2]: 'fs.img' is up to date.
+make[2]: Leaving directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU/external/xv6-riscv'
+make[1]: Leaving directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU'
+=== host:run_debug_cli_probe ===
+................s.sssssss.........s..................................................................
+----------------------------------------------------------------------
+Ran 101 tests in 12.614s
+
+OK (skipped=9)
+make: Leaving directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU'

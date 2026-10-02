@@ -1,0 +1,47 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "diff --git a/myCPU/Makefile b/myCPU/Makefile\nindex 4cf5ebc..6a04da2 100644\n--- a/myCPU/Makefile\n+++ b/myCPU/Makefile\n@@ -1746,5 +1746,7 @@ tests/host/interactive_terminal_smoke \\\n tests/host/course_os_shell_terminal_smoke \\\n tests/host/course_os_linux_compat_terminal_smoke: tests/host/terminal_smoke_harness.h\n \n+tests/host/spike_differential_smoke: $(wildcard tests/host/spike_differential/*.h)\n+\n tests/host/%: tests/host/%.cpp $(CORE_OBJS)\n \t$(CXX) $(CXXFLAGS) -o $@ $< $(CORE_OBJS)\n",
+  "argv": [
+    "timeout",
+    "12s",
+    "./tests/host/spike_differential_smoke",
+    "--run-differential",
+    "sv39_load_page_fault",
+    "--evidence"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+  "environment": {
+    "SPIKE_PATH": "/home/liangjiaqi/.local/riscv-spike/bin/spike"
+  },
+  "started_unix": 1790929239.9608953,
+  "wall_seconds": 0.036,
+  "exit_code": 0,
+  "wall_budget_seconds": 12,
+  "source_manifest": "sources-51a76cc203ef.json",
+  "source_manifest_sha256": "51a76cc203ef80dd0311c0a30eaaf59073a594cc0f00b7faeaa920ad51de5a58",
+  "logs": {
+    "stdout": {
+      "path": "spike-rebuild-sv39_load_page_fault.stdout",
+      "sha256": "9a93b7f189db9d4e53a6444947bc806d7ccc0388637ab0eba78ba29016172b74"
+    },
+    "stderr": {
+      "path": "spike-rebuild-sv39_load_page_fault.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "input_files_before_sha256": {
+    "./tests/host/spike_differential_smoke": "5023285f912942172859b85e75c80fd3b6584c072df0627a562a08264976071e"
+  },
+  "input_files_after_sha256": {
+    "./tests/host/spike_differential_smoke": "5023285f912942172859b85e75c80fd3b6584c072df0627a562a08264976071e"
+  },
+  "spike_generated_files": {
+    "/tmp/spike_diff_cmd_Ud1k3S": {
+      "sha256": "e9487225df5b3e7197693031eefaa3d97cea88ca20f35ad5c8cd94e66b4ac19e",
+      "script": "until pc 0 0x80000080\npc 0\npriv 0\nreg 0 instret\nreg 0 0\nreg 0 1\nreg 0 2\nreg 0 3\nreg 0 4\nreg 0 5\nreg 0 6\nreg 0 7\nreg 0 8\nreg 0 9\nreg 0 10\nreg 0 11\nreg 0 12\nreg 0 13\nreg 0 14\nreg 0 15\nreg 0 16\nreg 0 17\nreg 0 18\nreg 0 19\nreg 0 20\nreg 0 21\nreg 0 22\nreg 0 23\nreg 0 24\nreg 0 25\nreg 0 26\nreg 0 27\nreg 0 28\nreg 0 29\nreg 0 30\nreg 0 31\nreg 0 sstatus\nreg 0 sie\nreg 0 stvec\nreg 0 scounteren\nreg 0 sscratch\nreg 0 sepc\nreg 0 scause\nreg 0 stval\nreg 0 satp\nreg 0 mstatus\nreg 0 misa\nreg 0 medeleg\nreg 0 mideleg\nreg 0 mie\nreg 0 mtvec\nreg 0 mcounteren\nreg 0 mscratch\nreg 0 mepc\nreg 0 mcause\nreg 0 mtval\nuntil pc 0 0x800000c8\npc 0\npriv 0\nreg 0 instret\nreg 0 0\nreg 0 1\nreg 0 2\nreg 0 3\nreg 0 4\nreg 0 5\nreg 0 6\nreg 0 7\nreg 0 8\nreg 0 9\nreg 0 10\nreg 0 11\nreg 0 12\nreg 0 13\nreg 0 14\nreg 0 15\nreg 0 16\nreg 0 17\nreg 0 18\nreg 0 19\nreg 0 20\nreg 0 21\nreg 0 22\nreg 0 23\nreg 0 24\nreg 0 25\nreg 0 26\nreg 0 27\nreg 0 28\nreg 0 29\nreg 0 30\nreg 0 31\nreg 0 sstatus\nreg 0 sie\nreg 0 stvec\nreg 0 scounteren\nreg 0 sscratch\nreg 0 sepc\nreg 0 scause\nreg 0 stval\nreg 0 satp\nreg 0 mstatus\nreg 0 misa\nreg 0 medeleg\nreg 0 mideleg\nreg 0 mie\nreg 0 mtvec\nreg 0 mcounteren\nreg 0 mscratch\nreg 0 mepc\nreg 0 mcause\nreg 0 mtval\nquit\n"
+    },
+    "/tmp/spike_diff_elf_9NvAwH": {
+      "sha256": "3917133a3a9ac91279fc96d6f94992e82bd3af79bffa58c5e132207ee2b73ccb"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "diff --git a/myCPU/Makefile b/myCPU/Makefile\nindex 4cf5ebc..6a04da2 100644\n--- a/myCPU/Makefile\n+++ b/myCPU/Makefile\n@@ -1746,5 +1746,7 @@ tests/host/interactive_terminal_smoke \\\n tests/host/course_os_shell_terminal_smoke \\\n tests/host/course_os_linux_compat_terminal_smoke: tests/host/terminal_smoke_harness.h\n \n+tests/host/spike_differential_smoke: $(wildcard tests/host/spike_differential/*.h)\n+\n tests/host/%: tests/host/%.cpp $(CORE_OBJS)\n \t$(CXX) $(CXXFLAGS) -o $@ $< $(CORE_OBJS)\n",
+  "argv": [
+    "timeout",
+    "10s",
+    "python3",
+    "-c",
+    "from pathlib import Path; import subprocess; headers=sorted(Path(\"myCPU/tests/host/spike_differential\").glob(\"*.h\")); assert headers; [(print(str(p)), print(r.stdout), (r.returncode == 0 and \"g++\" in r.stdout) or (_ for _ in ()).throw(AssertionError(str(p)))) for p in headers for r in [subprocess.run([\"make\", \"-C\", \"myCPU\", \"-n\", \"-W\", str(p.relative_to(\"myCPU\")), \"tests/host/spike_differential_smoke\"], text=True, capture_output=True)]]"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+  "environment": {},
+  "started_unix": 1790929197.8374178,
+  "wall_seconds": 0.753,
+  "exit_code": 0,
+  "wall_budget_seconds": 10,
+  "source_manifest": "sources-51a76cc203ef.json",
+  "source_manifest_sha256": "51a76cc203ef80dd0311c0a30eaaf59073a594cc0f00b7faeaa920ad51de5a58",
+  "logs": {
+    "stdout": {
+      "path": "build-dependency-green.stdout",
+      "sha256": "aaa7735e24b269de6afa170ab89d77f4aba10ccfab383bced81cf68307236db3"
+    },
+    "stderr": {
+      "path": "build-dependency-green.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "input_files_before_sha256": {},
+  "input_files_after_sha256": {}
+}

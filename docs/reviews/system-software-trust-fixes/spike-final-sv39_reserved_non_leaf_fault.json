@@ -1,0 +1,47 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "",
+  "argv": [
+    "timeout",
+    "12s",
+    "./tests/host/spike_differential_smoke",
+    "--run-differential",
+    "sv39_reserved_non_leaf_fault",
+    "--evidence"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+  "environment": {
+    "SPIKE_PATH": "/home/liangjiaqi/.local/riscv-spike/bin/spike"
+  },
+  "started_unix": 1790927826.9771564,
+  "wall_seconds": 0.019,
+  "exit_code": 0,
+  "wall_budget_seconds": 12,
+  "source_manifest": "sources-8d6914053c45.json",
+  "source_manifest_sha256": "8d6914053c456ef423a3f5fce6a13ccc9c5dca9247411e77398bbf6956a82176",
+  "logs": {
+    "stdout": {
+      "path": "spike-final-sv39_reserved_non_leaf_fault.stdout",
+      "sha256": "3e70598cc6d5fa57795d77d6ab2c6c3cecd0bbfff9eb7be02470f015df013d14"
+    },
+    "stderr": {
+      "path": "spike-final-sv39_reserved_non_leaf_fault.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "input_files_before_sha256": {
+    "./tests/host/spike_differential_smoke": "b1dea6a51003d475af483d9597f737c3c4946b0024423b9744c6974a61bfecd8"
+  },
+  "input_files_after_sha256": {
+    "./tests/host/spike_differential_smoke": "b1dea6a51003d475af483d9597f737c3c4946b0024423b9744c6974a61bfecd8"
+  },
+  "spike_generated_files": {
+    "/tmp/spike_diff_cmd_UlZ4j6": {
+      "sha256": "e9487225df5b3e7197693031eefaa3d97cea88ca20f35ad5c8cd94e66b4ac19e",
+      "script": "until pc 0 0x80000080\npc 0\npriv 0\nreg 0 instret\nreg 0 0\nreg 0 1\nreg 0 2\nreg 0 3\nreg 0 4\nreg 0 5\nreg 0 6\nreg 0 7\nreg 0 8\nreg 0 9\nreg 0 10\nreg 0 11\nreg 0 12\nreg 0 13\nreg 0 14\nreg 0 15\nreg 0 16\nreg 0 17\nreg 0 18\nreg 0 19\nreg 0 20\nreg 0 21\nreg 0 22\nreg 0 23\nreg 0 24\nreg 0 25\nreg 0 26\nreg 0 27\nreg 0 28\nreg 0 29\nreg 0 30\nreg 0 31\nreg 0 sstatus\nreg 0 sie\nreg 0 stvec\nreg 0 scounteren\nreg 0 sscratch\nreg 0 sepc\nreg 0 scause\nreg 0 stval\nreg 0 satp\nreg 0 mstatus\nreg 0 misa\nreg 0 medeleg\nreg 0 mideleg\nreg 0 mie\nreg 0 mtvec\nreg 0 mcounteren\nreg 0 mscratch\nreg 0 mepc\nreg 0 mcause\nreg 0 mtval\nuntil pc 0 0x800000c8\npc 0\npriv 0\nreg 0 instret\nreg 0 0\nreg 0 1\nreg 0 2\nreg 0 3\nreg 0 4\nreg 0 5\nreg 0 6\nreg 0 7\nreg 0 8\nreg 0 9\nreg 0 10\nreg 0 11\nreg 0 12\nreg 0 13\nreg 0 14\nreg 0 15\nreg 0 16\nreg 0 17\nreg 0 18\nreg 0 19\nreg 0 20\nreg 0 21\nreg 0 22\nreg 0 23\nreg 0 24\nreg 0 25\nreg 0 26\nreg 0 27\nreg 0 28\nreg 0 29\nreg 0 30\nreg 0 31\nreg 0 sstatus\nreg 0 sie\nreg 0 stvec\nreg 0 scounteren\nreg 0 sscratch\nreg 0 sepc\nreg 0 scause\nreg 0 stval\nreg 0 satp\nreg 0 mstatus\nreg 0 misa\nreg 0 medeleg\nreg 0 mideleg\nreg 0 mie\nreg 0 mtvec\nreg 0 mcounteren\nreg 0 mscratch\nreg 0 mepc\nreg 0 mcause\nreg 0 mtval\nquit\n"
+    },
+    "/tmp/spike_diff_elf_rEK4tf": {
+      "sha256": "59961f40df2fe97303f62fc8b0f57aa45a89aa5e0063bc2238284b5f45ba5acc"
+    }
+  }
+}
