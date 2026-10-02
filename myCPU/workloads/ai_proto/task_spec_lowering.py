@@ -250,10 +250,7 @@ def fail(message: str) -> None:
 
 
 def product(values: tuple[int, int, int, int], rank: int) -> int:
-    count = 1
-    for index in range(rank):
-        count *= values[index]
-    return count
+    return math.prod(values[:rank])
 
 
 def tensor_byte_size(tensor: Tensor) -> int:
