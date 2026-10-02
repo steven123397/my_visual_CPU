@@ -1,6 +1,13 @@
 #include "ram.h"
 
 #include <utility>
+#include <cstring>
+
+bool Ram::read_bytes(uint64_t addr, void* data, size_t size) const {
+    if (!data || !contains(addr, size) || size == 0) return false;
+    std::memcpy(data, mem_.data + (addr - base()), size);
+    return true;
+}
 
 Ram::Ram() : Device(MEM_BASE, MEM_SIZE) {
     mem_init(&mem_);

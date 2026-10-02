@@ -99,6 +99,9 @@ public:
     ExecutionBackend& backend();
     const ExecutionBackend& backend() const;
     bool loaded() const;
+    std::vector<uint8_t> inspect_memory(uint64_t addr, size_t size) const {
+        return bus_.inspect_memory(addr, size);
+    }
 
 private:
     void bind_block_transport();

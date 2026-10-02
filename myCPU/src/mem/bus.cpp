@@ -78,8 +78,19 @@ const char* observed_kind_for_device(const Device& device, const char* source, c
 
 }  // namespace
 
-Bus::Bus(Ram& ram) {
+Bus::Bus(Ram& ram) : ram_(ram) {
     attach(ram);
+}
+
+std::vector<uint8_t> Bus::inspect_memory(uint64_t addr, size_t size) const {
+    if (size == 0 || size > 4096 || !ram_.contains(addr, size)) {
+        throw std::runtime_error("inspection requires 1..4096 bytes entirely in RAM");
+    }
+    std::vector<uint8_t> bytes(size);
+    if (!ram_.read_bytes(addr, bytes.data(), size)) {
+        throw std::runtime_error("RAM inspection failed");
+    }
+    return bytes;
 }
 
 void Bus::attach(Device& device) {

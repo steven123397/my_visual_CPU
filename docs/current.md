@@ -1,5 +1,7 @@
 # 当前状态
 
+- 第三份计划实施：U1 已完成 const RAM 查询及 Machine/DebugSession 接口；`make -C myCPU test-host-debug_inspection_smoke` 通过，覆盖两后端、L1D 开关、边界与设备消费控制。后续按 U2–U6 顺序实施，统一审查尚未进行；本轮不推送或合并。
+
 - 所在分支：`codex/system-software-evidence-plan`；核对基点：`3c9785732f757bc32490cca62375cbf7280a576d`。
 - 当前交付：[可信观察与最小访存采集计划](plans/2026-10-02-1632-feat-trusted-observation-capture-plan.md) 已完成规划自检，尚未实施。U1–U6 覆盖无副作用 RAM/页表查询、functional 实际访存记录、有界采集、CLI/JSON 接口及 fork 探针迁移；pipeline 仅支持本轮纯查询，采集明确拒绝。本次仅文档，未运行产品测试。
 - 上轮交付：[可信度修复计划](plans/2026-10-02-1519-fix-system-software-trust-plan.md) U1（`36f41f5`）、U2（`999832c`）、U3（`111c3ef`）、U4 均完成，逐单元提交。[回传与统一审查](reviews/system-software-trust-fixes.md)：A/D 失配重查、暂停 GPR 同步、独立 M 退出夹具已验证；默认 CI 61 unit/22 host、Python 92 通过/9 外部 skip、真实 Spike 十项、xv6 完整 shell 16 命令及独立两页普通 fork 通过。统一审查唯一 P2（Spike 头文件构建依赖）已修复并独立复核，重建后十项真实 Spike 再通过，无待修发现。Wiki 本地提交 `d1244c7`，未发布；主仓库未推送或合并。

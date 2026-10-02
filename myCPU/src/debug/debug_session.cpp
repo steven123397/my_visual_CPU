@@ -1,4 +1,9 @@
 #include "debug_session.h"
+
+std::vector<uint8_t> DebugSession::inspect_memory(uint64_t addr, size_t size) const {
+    ensure_loaded();
+    return machine().inspect_memory(addr, size);
+}
 #include "debug_budget.h"
 
 #include <cerrno>
