@@ -2,7 +2,11 @@
 
 ## 范围与现场
 
-本报告承接 [系统软件取证计划](../plans/2026-10-02-1038-system-software-evidence-plan.md)，作为回传入口。U1 固定版本、环境及资产；[U2](system-software-evidence-c253dda-u2.md) 补局部一致性与权限/fence、真实 Spike 证据；[U3](system-software-evidence-c253dda-u3.md) 补观察配对、事件/时间口径及两项产品缺陷；[U4](system-software-evidence-c253dda-u4.md) 已验证本次 functional 普通 fork、父子两页隔离和 exit/wait/局部回收。U5 回传整理尚未交付，不能据局部测试宣称全 ISA 正确。以下 U1 内容保留其当时范围与未验证边界。
+本报告承接 [系统软件取证计划](../plans/2026-10-02-1038-system-software-evidence-plan.md)，U1–U5 已完成。优先阅读 [最终回传](system-software-evidence-c253dda-u5.md)：含 Q1–Q6 矩阵、问题分类、普通 fork 映射/时间线、最小后续范围和复现限制。
+
+[U2](system-software-evidence-c253dda-u2.md) 提供局部一致性与权限/fence、五项真实 Spike 匹配；[U3](system-software-evidence-c253dda-u3.md) 提供观察配对、事件/时间口径及 setter/MMU 两项产品缺陷；[U4](system-software-evidence-c253dda-u4.md) 验证本次 functional 普通 fork、父子两页隔离和 exit/wait/局部回收。原参考夹具另有一项缺陷。未修改产品语义，不宣称全 ISA、pipeline xv6 或 COW 正确。各单元审查见 [U1](system-software-evidence-u1-review.md)、[U2](system-software-evidence-u2-review.md)、[U3](system-software-evidence-u3-review.md)、[U4](system-software-evidence-u4-review.md)、[U5](system-software-evidence-u5-review.md)。
+
+以下为 U1 当时的现场与覆盖清单，保留历史范围和未验证边界；其中“未运行”“Spike 默认不可用”等不代表最终状态。
 
 - 日期：2026-10-02；取证分支：`codex/system-software-evidence-plan`（用户指定沿用本分支）。
 - 实际 checkout：`c253ddad1862a8e222c74d633f9269390e418624`；规划基点：`fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c`。

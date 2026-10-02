@@ -1,7 +1,7 @@
 # 当前状态
 
 - 所在分支：`codex/system-software-evidence-plan`；核对基点：`c253ddad1862a8e222c74d633f9269390e418624`。
-- 工作范围：按用户要求在本分支逐个完成 [系统软件模拟器取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md)。[取证报告](reviews/system-software-evidence-c253dda.md) 为入口；U1–U4 已取证、审查交付。完整 xv6 shell 16 条命令通过，独立普通 fork 确认父子两页隔离、exit/status37/wait 与局部回收；仅 functional/单 hart。未修改产品语义，U5 正在整理。
+- 工作范围：[系统软件取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md) 的 U1–U5 均完成，逐单元审查并提交。[最终回传](reviews/system-software-evidence-c253dda-u5.md) 提供 Q1–Q6、问题分类和最小后续范围；[总索引](reviews/system-software-evidence-c253dda.md) 关联全部证据。完整 shell 16 条命令通过，独立普通 fork 确认父子两页隔离、exit/status37/wait 与局部回收，仅 functional/单 hart。未修改产品语义。
 - 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。
 - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。
 - 用户选定 MIT；根目录 `LICENSE` 与 README 许可入口已通过 PR #7 发布，xv6 原版权与许可保留。
@@ -22,15 +22,15 @@
 - 取证环境：RISC-V GCC 10.2、host GCC 11.4；真实 Spike 位于 `/home/liangjiaqi/.local/riscv-spike/bin/spike`。五项真实匹配，另五项 myCPU 预算失败。U3 复现 F-U3-001 pipeline setter 执行视图不同步、F-U3-002 缓存 PTE 的 A/D 写回覆盖新 PPN；尚未证明普通 xv6 fork 触发。snapshot 配对成立，helper/翻译/planner 有各自副作用；关联窗口/丢失信号不足。debug CLI 超时、默认 Python 未运行和历史探针源码缺口已披露，旧 CI 不替代本轮证据。
 
 - 历史 PR #15 的边界输入发现及后续处置由原审查会话承接，本轮未核对远端状态，不作为当前 main 的已证实缺陷。
-- fork PR、自定义 guest / xv6 工具链跨代组合、真实 Linux / OSComp / Spike 外部资产未验证。部署、定时、多平台与缓存仍未规划；本次未重新运行产品测试。
+- 历史未验范围仍包括 fork PR、跨代工具链组合、真实 Linux/OSComp 和部署/多平台；不代表本次 Spike/xv6 取证未运行。本轮真实 Spike 五项匹配，另五项参考前阻断；未做全回归或云端验收。
 - AI Issues 仅为后续方向讨论的材料，尚未认领、排期或形成实施 Plan。云端维护 agent（提交 PR / Issue、按 main 变化维护 Wiki）仅是用户构想，工具、权限、费用与审核边界均未决定，未安装或授权 bot。
 
 ## 下一步
 
-- 下一单元为上述 Plan 的 U5：整合 Q1–Q6、问题分类、普通 fork 时间线及最小后续建议，独立复查回传证据。用户已授权连续完成全部单元；不自动执行产品修复、COW 或观察平台建设。
+- 本 Plan 已完成，回传原讨论会话决定后续范围。建议先独立修 MMU A/D 当前 PTE 检查、pipeline setter 与 reference fixture，再规划目标场景的纯查询/关联/采集和固定 xv6 解释；建议不构成新实施授权。不自动修产品、实现 COW、创建 Issue、推送、PR 或 Wiki 发布。
 - #4、#5、#6 不由本 Plan 认领；既有 PR/Issue 后续仍由原审查会话承接。
 - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。
 
 ## 工作区未提交改动
 
-- 本次 U4 提交报告、文本证据、独立 host/guest、构建脚本、审查及本单元 current 更新；U5 草稿暂留。既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本单元接管。
+- 本次 U5 提交最终回传、入口、文本校验、审查及本单元 current 更新；本 Plan 无研究草稿残留。既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本 Plan 接管。
