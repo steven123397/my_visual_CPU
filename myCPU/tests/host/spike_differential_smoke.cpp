@@ -35,6 +35,9 @@ struct DifferentialRunResult {
     DifferentialErrorKind error_kind{DifferentialErrorKind::None};
     DiffReport diff_report{};
     std::string message{};
+    FinalState mycpu_state{};
+    FinalState spike_state{};
+    std::string raw_spike_output{};
 };
 
 bool expect(bool condition, const char* message) {
@@ -222,9 +225,11 @@ std::vector<Scenario> build_smoke_scenarios() {
             {},
             Scenario::PlatformFixture::None,
             make_initial_gprs({{7, kEntry + 8}}),
-            make_initial_csrs({{CSR_MEDELEG, 1ULL << 8}, {CSR_STVEC, kTrapVector}}),
+            make_initial_csrs({{CSR_MEDELEG, 1ULL << 8}, {CSR_STVEC, kTrapVector}, {CSR_MTVEC, kMachineExitVector}}),
             {},
             PrivilegeMode::User,
+            {kAddiA7Exit, kEcall},
+            8,
         },
         {
             "sv39_instruction_page_fault",
@@ -247,6 +252,7 @@ std::vector<Scenario> build_smoke_scenarios() {
                 {CSR_SATP, kSatpSv39 | (kRootPageTable >> 12)},
                 {CSR_MEDELEG, 1ULL << 12},
                 {CSR_STVEC, kTrapVector},
+                {CSR_MTVEC, kMachineExitVector},
             }),
             make_initial_memory({
                 init64(kRootPageTable + 16, make_sv39_pte(kLevel1PageTable, kPteNonLeaf)),
@@ -257,6 +263,8 @@ std::vector<Scenario> build_smoke_scenarios() {
                 init32(kUserExecBackingPage, kAddiX1WrongPath),
             }),
             PrivilegeMode::Supervisor,
+            {kAddiA7Exit, kEcall},
+            12,
         },
         {
             "sv39_load_page_fault",
@@ -279,11 +287,14 @@ std::vector<Scenario> build_smoke_scenarios() {
                 {CSR_SATP, kSatpSv39 | (kRootPageTable >> 12)},
                 {CSR_MEDELEG, 1ULL << 13},
                 {CSR_STVEC, kTrapVector},
+                {CSR_MTVEC, kMachineExitVector},
             }),
             make_initial_memory({
                 init64(kRootPageTable + 16, make_sv39_pte(kEntry, kPteSupervisorCode)),
             }),
             PrivilegeMode::Supervisor,
+            {kAddiA7Exit, kEcall},
+            13,
         },
         {
             "sv39_store_page_fault",
@@ -306,11 +317,14 @@ std::vector<Scenario> build_smoke_scenarios() {
                 {CSR_SATP, kSatpSv39 | (kRootPageTable >> 12)},
                 {CSR_MEDELEG, 1ULL << 15},
                 {CSR_STVEC, kTrapVector},
+                {CSR_MTVEC, kMachineExitVector},
             }),
             make_initial_memory({
                 init64(kRootPageTable + 16, make_sv39_pte(kEntry, kPteSupervisorCode)),
             }),
             PrivilegeMode::Supervisor,
+            {kAddiA7Exit, kEcall},
+            15,
         },
         {
             "sv39_reserved_non_leaf_fault",
@@ -333,6 +347,7 @@ std::vector<Scenario> build_smoke_scenarios() {
                 {CSR_SATP, kSatpSv39 | (kRootPageTable >> 12)},
                 {CSR_MEDELEG, 1ULL << 13},
                 {CSR_STVEC, kTrapVector},
+                {CSR_MTVEC, kMachineExitVector},
             }),
             make_initial_memory({
                 init64(kRootPageTable + 16, make_sv39_pte(kLevel1PageTable, kPteNonLeaf)),
@@ -345,6 +360,8 @@ std::vector<Scenario> build_smoke_scenarios() {
                 init32(kReservedFaultBackingPage, 0xCAFEBABEU),
             }),
             PrivilegeMode::Supervisor,
+            {kAddiA7Exit, kEcall},
+            13,
         },
     };
 }
@@ -504,8 +521,12 @@ DifferentialRunResult run_differential_scenario(const Scenario& scenario,
         return result;
     }
 
+    result.mycpu_state = mycpu;
+    result.spike_state = spike.final_state;
+    result.raw_spike_output = spike.raw_output;
+
     FinalState spike_state = spike.final_state;
-    if (scenario.initial_privilege != PrivilegeMode::Machine) {
+    if (scenario.initial_privilege != PrivilegeMode::Machine && scenario.machine_exit_program.empty()) {
         const size_t mstatus_index = tracked_csr_index(CSR_MSTATUS);
         if (mstatus_index < mycpu.csrs.size()) {
             mycpu.csrs[mstatus_index] &= ~MSTATUS_MPIE;
@@ -1100,8 +1121,8 @@ bool test_mycpu_runner_supervisor_trap_summary() {
                   "expected delegated user ecall trap privilege") &&
            expect(state.first_trap_summary.privilege_at_trap == PrivilegeMode::Supervisor,
                   "expected delegated user first trap privilege") &&
-           expect(state.privilege == PrivilegeMode::Supervisor,
-                  "expected delegated scenario to remain in supervisor before exit") &&
+           expect(state.privilege == PrivilegeMode::Machine,
+                  "expected delegated scenario to reach separate machine exit") &&
            expect(state.exit_reason == "controlled_exit",
                   "expected delegated scenario controlled exit reason");
 }
@@ -1116,9 +1137,9 @@ bool test_mycpu_runner_sv39_instruction_page_fault_final_state() {
     const FinalState state = run_mycpu_final_state(scenario);
     return expect(state.halted, "expected sv39_instruction_page_fault to halt") &&
            expect(!state.timed_out, "expected sv39_instruction_page_fault not to time out") &&
-           expect(state.privilege == PrivilegeMode::Supervisor,
-                  "expected sv39_instruction_page_fault to return to supervisor mode") &&
-           expect(state.pc == kEntry + 16,
+           expect(state.privilege == PrivilegeMode::Machine,
+                  "expected sv39_instruction_page_fault to reach machine exit") &&
+           expect(state.pc == kMachineExitVector + 8,
                   "expected sv39_instruction_page_fault final pc after controlled exit") &&
            expect(state.gprs[1] == 0,
                   "expected sv39_instruction_page_fault wrong path not to execute") &&
@@ -1230,6 +1251,48 @@ bool test_differential_reports_mycpu_timeout() {
                   "expected differential timeout error kind");
 }
 
+bool test_supervisor_exit_boundaries() {
+    struct Expected { const char* name; uint64_t cause; uint64_t epc; uint64_t tval; unsigned wrong_reg; };
+    for (const auto& expected : {
+             Expected{"delegated_user_ecall_to_supervisor", 8, kEntry, 0, 1},
+             Expected{"sv39_instruction_page_fault", 12, kUserExecVirtualPage, kUserExecVirtualPage, 1},
+             Expected{"sv39_load_page_fault", 13, kEntry, kLoadPageFaultVirtualAddr, 2},
+             Expected{"sv39_store_page_fault", 15, kEntry, kStorePageFaultVirtualAddr, 3},
+             Expected{"sv39_reserved_non_leaf_fault", 13, kEntry, kReservedNonLeafFaultVirtualAddr, 4}}) {
+        const auto scenario = find_scenario(expected.name);
+        const auto state = run_mycpu_final_state(scenario);
+        const auto& first = state.first_trap_summary;
+        if (!expect(state.halted && !state.timed_out && state.pc == kMachineExitVector + 8 &&
+                    state.privilege == PrivilegeMode::Machine && state.gprs[expected.wrong_reg] == 0 &&
+                    first.trapped && first.cause == expected.cause && first.epc == expected.epc &&
+                    first.tval == expected.tval && first.privilege_at_trap == PrivilegeMode::Supervisor &&
+                    tracked_csr_value(state, CSR_SCAUSE) == expected.cause &&
+                    tracked_csr_value(state, CSR_SEPC) == kEntry + 8 &&
+                    tracked_csr_value(state, CSR_STVAL) == expected.tval &&
+                    tracked_csr_value(state, CSR_MCAUSE) == 9 &&
+                    tracked_csr_value(state, CSR_MEPC) == kEntry + 12 && tracked_csr_value(state, CSR_MTVAL) == 0,
+                    expected.name)) return false;
+        SpikeScenarioPlan plan;
+        std::vector<uint8_t> image;
+        uint64_t memory_size = 0;
+        std::string error;
+        if (!expect(build_spike_scenario_plan(scenario, plan, error) &&
+                    plan.capture_first_trap_summary && plan.first_trap_capture_pc == kTrapVector &&
+                    plan.capture_region == SpikeCaptureRegion::MachineExitProgram &&
+                    plan.capture_pc == kMachineExitVector + 8 &&
+                    materialize_spike_image(scenario, plan, image, memory_size, error),
+                    "separate machine exit and supervisor checkpoint plan")) return false;
+        auto word = [&image](uint64_t addr) {
+            const size_t offset = static_cast<size_t>(addr - kEntry);
+            return uint32_t(image[offset]) | (uint32_t(image[offset + 1]) << 8) |
+                   (uint32_t(image[offset + 2]) << 16) | (uint32_t(image[offset + 3]) << 24);
+        };
+        if (!expect(word(kEntry + 12) == kEcall && word(kMachineExitVector + 4) == 0x0040006fU,
+                    "Spike must preserve tested S ECALL and replace only M exit")) return false;
+    }
+    return true;
+}
+
 bool run_self_tests() {
     return test_match_report() && test_gpr_mismatch_report() && test_instret_mismatch_report() &&
            test_csr_mismatch_report() && test_watched_memory_mismatch_report() &&
@@ -1248,7 +1311,7 @@ bool run_self_tests() {
            test_spike_runner_multistage_output_captures_first_trap_checkpoint() &&
            test_spike_runner_ambiguous_trap_state_does_not_infer_trap() &&
            test_mycpu_runner_supervisor_trap_summary() &&
-           test_mycpu_runner_sv39_instruction_page_fault_final_state() &&
+           test_mycpu_runner_sv39_instruction_page_fault_final_state() && test_supervisor_exit_boundaries() &&
            test_scripted_positive_differential_supports_privilege_scenario() &&
            test_scripted_positive_differential_supports_returning_trap_checkpoint() &&
            test_scripted_positive_differential_supports_sv39_instruction_page_fault() &&
@@ -1269,7 +1332,7 @@ std::string default_spike_path() {
     return "spike";
 }
 
-int run_real_differential_mode(const char* selected_scenario) {
+int run_real_differential_mode(const char* selected_scenario, bool evidence) {
     std::vector<const char*> scenario_names;
     if (selected_scenario != nullptr) {
         scenario_names.push_back(selected_scenario);
@@ -1291,6 +1354,15 @@ int run_real_differential_mode(const char* selected_scenario) {
             return 1;
         }
         std::printf("[%s] matched\n", scenario_name);
+        if (evidence) {
+            const auto& state = result.mycpu_state;
+            std::printf("myCPU completed; Spike launched and exited 0; pc=0x%llx privilege=%u first_cause=%llu first_epc=0x%llx first_tval=0x%llx\n",
+                        static_cast<unsigned long long>(state.pc), static_cast<unsigned>(state.privilege),
+                        static_cast<unsigned long long>(state.first_trap_summary.cause),
+                        static_cast<unsigned long long>(state.first_trap_summary.epc),
+                        static_cast<unsigned long long>(state.first_trap_summary.tval));
+            std::printf("Spike raw snapshots:\n%s\n", result.raw_spike_output.c_str());
+        }
     }
     return 0;
 }
@@ -1300,7 +1372,8 @@ int run_real_differential_mode(const char* selected_scenario) {
 int main(int argc, char** argv) {
     if (argc > 1 && std::string_view(argv[1]) == "--run-differential") {
         const char* scenario_name = argc > 2 ? argv[2] : nullptr;
-        return run_real_differential_mode(scenario_name);
+        const bool evidence = argc > 3 && std::string_view(argv[3]) == "--evidence";
+        return run_real_differential_mode(scenario_name, evidence);
     }
     return run_self_tests() ? 0 : 1;
 }

@@ -1,7 +1,7 @@
 # 当前状态
 
 - 所在分支：`codex/system-software-evidence-plan`；核对基点：`b3831060b30a96d2dcd4f509154fb64166eeb3be`。
-- 当前交付：[可信度修复计划](plans/2026-10-02-1519-fix-system-software-trust-plan.md) U1（`36f41f5`）与 U2 已完成：MMU A/D 更新失配后重走页表；有效非 x0 GPR setter 同步两后端提交视图，丢弃在途工作而保留历史与设备。负向回归在原代码失败，V1/V2 全部通过（debug CLI 使用原 30 秒预算）。U3–U4 待完成，统一审查留在最后。Wiki Memory-System、Debug-and-Lab、Pipeline 本地契约待随组合验收整理，不发布。
+- 当前交付：[可信度修复计划](plans/2026-10-02-1519-fix-system-software-trust-plan.md) U1（`36f41f5`）、U2（`999832c`）、U3 已完成。MMU A/D 更新失配重走页表；GPR setter 同步提交视图；独立 M 退出夹具保留 S ECALL/返回与首异常。V1/V2/V3 通过，十项真实 Spike 分别启动、退出 0 并匹配，夹具自测与 A/D 回归纳入默认 CI。U4 组合验证及统一审查待完成，证据入口为 `docs/reviews/system-software-trust-fixes/`。Wiki 契约待随组合验收整理，不发布。
 - 工作范围：[系统软件取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md) 的 U1–U5 均完成，逐单元审查并提交。[最终回传](reviews/system-software-evidence-c253dda-u5.md) 提供 Q1–Q6、问题分类和最小后续范围；[总索引](reviews/system-software-evidence-c253dda.md) 关联全部证据。完整 shell 16 条命令通过，独立普通 fork 确认父子两页隔离、exit/status37/wait 与局部回收，仅 functional/单 hart。未修改产品语义。
 - 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。
 - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。

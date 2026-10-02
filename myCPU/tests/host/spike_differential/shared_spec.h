@@ -15,6 +15,7 @@ namespace spike_differential {
 constexpr uint64_t kEntry = 0x80000000ULL;
 constexpr uint64_t kTrapVector = kEntry + 0x80;
 constexpr uint64_t kDataAddr = kEntry + 0x100;
+constexpr uint64_t kMachineExitVector = kEntry + 0xc0;
 
 constexpr uint32_t kInvalidInsn = 0xffffffffU;
 constexpr uint32_t kAddiX1FromX0Plus5 = 0x00500093U;      // addi x1, x0, 5
@@ -104,6 +105,8 @@ struct Scenario {
     std::array<uint64_t, kTrackedCsrs.size()> initial_csrs{};
     std::vector<MemoryInit> initial_memory{};
     PrivilegeMode initial_privilege{PrivilegeMode::Machine};
+    std::vector<uint32_t> machine_exit_program{};
+    uint64_t expected_first_trap_cause{UINT64_MAX};
 };
 
 inline size_t tracked_csr_index(uint32_t csr) {

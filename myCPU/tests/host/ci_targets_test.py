@@ -48,7 +48,10 @@ class CiTargetsTest(unittest.TestCase):
             "tests/host/pipeline_backend_smoke_fp_convert_tail",
         ):
             self.assertIn(binary, outputs(build))
-        for forbidden in ("external/xv6", "run_debug_cli_probe", "spike_differential",
+        for binary in ("tests/host/address_space_faults_smoke", "tests/host/spike_differential_smoke"):
+            self.assertIn(binary, outputs(build))
+            self.assertIn(f"=== host:{Path(binary).name} ===", tests)
+        for forbidden in ("external/xv6", "run_debug_cli_probe", "--run-differential",
                           "MYCPU_LINUX_DISTRO_RUNTIME=1", "run-workload-xv6"):
             self.assertNotIn(forbidden, build + tests)
         self.assertNotRegex(build, r"=== (unit|host):")
