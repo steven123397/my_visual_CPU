@@ -2,7 +2,7 @@
 
 ## 范围与现场
 
-本报告承接 [系统软件取证计划](../plans/2026-10-02-1038-system-software-evidence-plan.md)。本次仅执行 U1：固定版本、核对工具及资产、建立覆盖清单。U2–U5 尚未执行；没有客体运行结果，不能据此判断 fork 是否成立或 ISA 是否正确。
+本报告承接 [系统软件取证计划](../plans/2026-10-02-1038-system-software-evidence-plan.md)，作为回传入口。U1 固定版本、环境及资产；[U2](system-software-evidence-c253dda-u2.md) 已补局部一致性与权限/fence 证据，并记录原 Spike 自测夹具缺陷。U3–U5 尚未完成；普通 fork 结论待 U4，不能据局部测试宣称全 ISA 正确。以下 U1 内容保留其当时范围与未验证边界。
 
 - 日期：2026-10-02；取证分支：`codex/system-software-evidence-plan`（用户指定沿用本分支）。
 - 实际 checkout：`c253ddad1862a8e222c74d633f9269390e418624`；规划基点：`fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c`。

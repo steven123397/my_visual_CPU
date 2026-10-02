@@ -1,0 +1,155 @@
+{
+  "unit": "U2",
+  "checkout_sha": "1b54928fc0f1d2c7e39d2c9c781be4e9a43babc7",
+  "dirty_patch": "diff --git a/docs/current.md b/docs/current.md\nindex eb387dc..4a9d39c 100644\n--- a/docs/current.md\n+++ b/docs/current.md\n@@ -2,7 +2,7 @@\n \n - 所在分支：`codex/system-software-evidence-plan`；核对基点：`c253ddad1862a8e222c74d633f9269390e418624`。\n - 工作范围：按用户要求在本分支执行 [系统软件模拟器取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md)。U1 报告与证据入口见 [取证报告](reviews/system-software-evidence-c253dda.md)：版本、环境、资产、测试目标与 Q1–Q6 覆盖清单已建立；构建结果见 E-U1-003。未运行产品测试或修改产品语义；U2–U5 尚未执行。\n-- 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。\n+- 原审查会话保留记录：批量审查 Jules PR #14 至 #17。#14、#16、#17 已合并；#17 保留 profile_int/profile_hex 两组测试。审查记录见 [PR #14 至 #17](reviews/2026-10-01-pr14-17-pre-merge.md)。本地 security 测试 9 项、Python helper 测试 2 项通过；Python 新测试不在日常 CI 执行范围内。#17 整合 head `95616ec` 的 CI 36882931461/2 成功，原前端 attempt 1 取消不计通过；最终 main CI 36884322845/1 的 simulator-core 与 frontend 均成功，已回读精确 SHA。\n - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。\n - 用户选定 MIT；根目录 `LICENSE` 与 README 许可入口已通过 PR #7 发布，xv6 原版权与许可保留。\n - GitHub 仓库描述已更新为“myCPU：可运行、可观察的 RISC-V 系统模拟器原型，包含共享指令语义、多执行后端、系统 workload、MMIO AI 加速器与浏览器调试工作台。”\n@@ -21,16 +21,18 @@\n \n - U1 环境查询完成：RISC-V GCC 10.2、host GCC 11.4；默认 Spike 不在 PATH 且未设置替代入口，真实差分为环境阻断。观察副作用、完整 xv6 事件关联尚待 U2–U4 取证；历史完整 CI 后有 UART/virtio/pipeline 变化，旧 run 不作为本次场景通过证据。\n \n-- 历史 PR #15 的边界输入发现及后续处置由原审查会话承接，本轮未核对远端状态，不作为当前 main 的已证实缺陷。\n+- PR #15 已按用户要求关闭且未合并，由 [Issue #18](https://github.com/steven123397/my_visual_CPU/issues/18) 承接 firstForwardedIp 的边界测试与异常输入契约。null、数字及数组的 TypeError 是原 PR 分支引入的回归，未进入 main；正常 HTTP 字符串头未复现异常，不作为已证实的远程漏洞。Issue 尚未认领或实施。\n - fork PR、自定义 guest / xv6 工具链跨代组合、真实 Linux / OSComp / Spike 外部资产未验证。部署、定时、多平台与缓存仍未规划；本次未重新运行产品测试。\n - AI Issues 仅为后续方向讨论的材料，尚未认领、排期或形成实施 Plan。云端维护 agent（提交 PR / Issue、按 main 变化维护 Wiki）仅是用户构想，工具、权限、费用与审核边界均未决定，未安装或授权 bot。\n \n ## 下一步\n \n - 下一单元为上述 Plan 的 U2：核查行为一致性与副作用边界，使用 E-U1-003 重建资产并逐次记录配置/哈希；随后按依赖进入 U3–U5。不自动执行产品修复、COW 或观察平台建设。\n-- #4、#5、#6 不由本 Plan 认领；既有 PR/Issue 后续仍由原审查会话承接。\n+- Issue #18 明确异常输入及回退契约并补测试后，通过新 PR 交付与复核；#4、#5、#6 仍为未排期方向，未形成实施 Plan。 本取证计划不认领这些 Issue。\n - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。\n \n ## 工作区未提交改动\n \n - 本次 U1 仅提交取证报告、文本证据、审查记录及本单元 current 更新；既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本单元接管。\n+\n+- 本目录已切到 `codex/system-software-evidence-plan`。原审查会话对 `docs/current.md` 与 `docs/reviews/2026-10-01-pr14-17-pre-merge.md` 的补记，以及未跟踪的 `docs/reviews/2026-10-01-remote-pr-pre-merge.md` 均保留为未提交改动；current 已合并计划入口与原审查结果。\ndiff --git a/docs/reviews/2026-10-01-pr14-17-pre-merge.md b/docs/reviews/2026-10-01-pr14-17-pre-merge.md\nindex 020d0fc..8eb071a 100644\n--- a/docs/reviews/2026-10-01-pr14-17-pre-merge.md\n+++ b/docs/reviews/2026-10-01-pr14-17-pre-merge.md\n@@ -5,7 +5,7 @@\n - **路径**：NexusKit pre-merge，主会话检查，零专项代理；不宣称独立全面审查。\n - **覆盖**：完整 diff、helper 与消费者、测试接线、CI 实际 checkout、组合验证及异常输入复现。\n - **审查轮次**：第 1 轮，2026-10-01。\n-- **概要**：待修 1 / 已修复 0 / 遗留-转 Issue 0。#14、#16、#17 范围内未发现需处理的产品问题，#15 暂不合并。\n+- **概要**：待修 0 / 已修复 0 / 遗留-转 Issue 1。#14、#16、#17 范围内未发现需处理的产品问题；#15 已关闭且未合并，由 Issue #18 承接。\n \n ## 快照与证据\n \n@@ -20,13 +20,14 @@\n \n ## 发现\n \n-### [R1-F01] P2 · 待修 · firstForwardedIp 丢失非字符串输入容错\n+### [R1-F01] P2 · 遗留-转 Issue · firstForwardedIp 丢失非字符串输入容错\n \n - **位置**：PR #15 的 `frontend/server/security.mjs:71`。\n - **来源**：主会话（置信度 100）。\n - **问题**：`const parts = value.split(',');` 去掉原有 `String(value)` 后，null、数字和数组会抛出 TypeError。通过 `clientIpForRequest` 传入 null 转发头也会抛错。PR 描述声称处理 null，但新增测试只覆盖 undefined 和字符串。正常 Node HTTP 字符串头未复现异常，此发现是 helper/请求适配层的容错回归，不宣称已证实远程漏洞。\n - **建议**：明确 null 的空值语义并保留其他既有输入的字符串归一化，例如 `String(value ?? '')`，补 null、数字和数组案例；跳过空字段的行为需有测试。函数仍未校验 IP 格式，描述应使用“首个非空字段”，避免宣称首个合法 IP。\n - **证据**：新 head 原文 `frontend/server/security.mjs:71 -- const parts = value.split(',');`。从该 head 提取模块后分别调用 `firstForwardedIp(null)`、`firstForwardedIp(42)`、`firstForwardedIp(['1.2.3.4','5.6.7.8'])`，均复现 TypeError；null 请求头经消费者也复现。\n+- **去向**：用户要求创建 [Issue #18](https://github.com/steven123397/my_visual_CPU/issues/18) 后关闭 PR #15，已执行并回读确认。Issue 同时承接 main 的真实边界测试缺口和输入契约澄清；分支回归未进入 main，不记为已修复，尚未开始实施。\n \n ## 合格项与组合验证\n \n@@ -41,3 +42,13 @@\n 日常 `test-ci-core` 未执行 run_debug_cli_probe_test.py，test-verification-layers 仅检查目标结构，所以其绿色结果不能证明 #16/#17 的新增测试实际运行；本次用上述本地命令补齐。完整回归会运行该 probe 测试文件，本次未重跑完整回归和外部 Linux/OSComp/Spike 资产。\n \n 四项聚焦检查已完成：目标闭环、接口一致、后续改动影响、组合遗漏。无已记录架构契约变化，无需同步 Wiki。未跟踪文件仅作临时复现和记录，不纳入产品快照；主工作区上一批未提交报告保留。后续 #17 head/最终 main 的 CI 状态将在本地报告中补记，不把尚未运行记为通过。\n+\n+## 整合复核与合并结果\n+\n+#17 通过 `95616ec844a6fdff29523914f416c49ad2182c51` 合并 main，冲突仅保留两个测试方法，没有修改生产逻辑。相对于新 main 的 Python 差异仍为原 #17 的 19 行断言；另外提交了本报告和必要的 current 更新。重新执行两个 helper 测试通过。\n+\n+[36882931461/2](https://github.com/steven123397/my_visual_CPU/actions/runs/36882931461/attempts/2) SUCCESS：simulator-core 复用 attempt 1 成功结果，frontend 在 attempt 2 成功。两项实际 checkout 均为 `4c990a735098c1eee9d5c6de9685256791b61a17`，已读取日志核对；前端 172 项通过、1 项外部 skip。原 frontend attempt 1 安装工具链期间 Ubuntu 镜像下载重试并长时间等待，取消后仅重跑该 job；该取消结果不计为通过。未变的审查内容继续复用，无新增发现。\n+\n+#14 合并提交 `7800dfe07db9a51eb1fea5bee80e94f90dfd003a`，#16 为 `a4e26d7c470999681838a67dcbfc52cc2eb54c3a`，#17 为 `fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c`。#15 后续按用户要求关闭且未合并，承接位置为 Issue #18；本地 main 已同步，临时验证 worktree 已移除。本节后续证据为本地补记，尚未另行提交。\n+\n+最终 main `fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c` 的 [36884322845/1](https://github.com/steven123397/my_visual_CPU/actions/runs/36884322845/attempts/1) 为 SUCCESS，已回读 run 的 head SHA、attempt 和 simulator-core/frontend 两项成功结果。完整回归未重跑。\n",
+  "dirty_patch_sha256": "3ee32e628a39e0813281ca7eca6c29675d8a579168bd5205e3b501c907d43ffe",
+  "product_source_changes_since_u1": [],
+  "collector_argv": [
+    "/home/liangjiaqi/.nvm/versions/node/v24.16.0/bin/node",
+    "--input-type=module",
+    "-e",
+    "\nimport {spawnSync} from \"node:child_process\";import {readFileSync,existsSync} from \"node:fs\";import {createHash} from \"node:crypto\";\nconst root=process.cwd(),cwd=root+\"/myCPU\",sha=b=>createHash(\"sha256\").update(b).digest(\"hex\");\nconst inv=JSON.parse(readFileSync(\"docs/reviews/system-software-evidence-c253dda/u1-inventory.json\"));\nconst run=(id,argv,budget,metadata={})=>{const t=Date.now();const r=spawnSync(\"timeout\",[budget+\"s\",...argv],{cwd,encoding:\"utf8\",timeout:(budget+2)*1000,maxBuffer:8*1024*1024});return {evidence_id:id,argv:[\"timeout\",budget+\"s\",...argv],cwd,wall_budget_seconds:budget,wall_seconds:(Date.now()-t)/1000,exit_code:r.status,signal:r.signal,error:r.error?.message??null,stdout:r.stdout??\"\",stderr:r.stderr??\"\",...metadata};};\nconst entries=[];for(const [i,name] of [\"backend_differential_smoke\",\"address_space_faults_smoke\",\"atomic_semantics_smoke\",\"pipeline_commit_trace_smoke\",\"pipeline_speculation_contracts_smoke\",\"spike_differential_smoke\"].entries())entries.push(run(\"E-U2-\"+String(i+1).padStart(3,\"0\"),[\"./tests/host/\"+name],3,{backend:\"fixture-defined\",input:\"deterministic C++ fixtures; initialization and stop budgets in source\",expectation_source:\"myCPU/tests/host/\"+name+\".cpp\",binary_sha256:sha(readFileSync(\"myCPU/tests/host/\"+name))}));\nentries.push(run(\"E-U2-007\",[\"make\",\"tests/host/system_software_permissions_evidence\",\"tests/asm/sv39_tlb_flush.elf\"],60,{category:\"build\",backend:\"not applicable\"}));\nif(entries.at(-1).exit_code===0){entries.push(run(\"E-U2-008\",[\"./tests/host/system_software_permissions_evidence\"],3,{backend:\"functional/pipeline plus direct AddressSpace\",guest_cpus:1,ram_bytes:128*1024*1024,input:\"embedded SD/ADDI/ECALL, pre-set page A/D; mapped RW/readonly/unmapped\",step_budget_per_backend_scenario:128,stop:\"halt via M ecall a7=93; cross-page direct API fault\",binary_sha256:sha(readFileSync(\"myCPU/tests/host/system_software_permissions_evidence\")),probe_source_sha256:sha(readFileSync(\"myCPU/tests/host/system_software_permissions_evidence.cpp\"))}));for(const backend of [\"functional\",\"pipeline\"])entries.push(run(\"E-U2-\"+(backend===\"functional\"?\"009\":\"010\"),[\"make\",backend===\"functional\"?\"test-sv39_tlb_flush\":\"test-pipeline-sv39_tlb_flush\"],15,{backend,guest_cpus:1,input:\"fixed assembly guest, UART output TLB\",expectation_source:\"myCPU/tests/asm/sv39_tlb_flush.S\",guest_elf_sha256:sha(readFileSync(\"myCPU/tests/asm/sv39_tlb_flush.elf\"))}));}\nconst git=argv=>spawnSync(\"git\",argv,{encoding:\"utf8\"}).stdout;\nconst patch=git([\"diff\",\"--binary\",\"HEAD\"]);const changes=inv.sources.filter(s=>sha(readFileSync(s.path))!==s.sha256);\nconsole.log(JSON.stringify({unit:\"U2\",checkout_sha:git([\"rev-parse\",\"HEAD\"]).trim(),dirty_patch:patch,dirty_patch_sha256:sha(patch),product_source_changes_since_u1:changes,collector_argv:[process.execPath,...process.execArgv],entries},null,2));\n"
+  ],
+  "entries": [
+    {
+      "evidence_id": "E-U2-001",
+      "argv": [
+        "timeout",
+        "3s",
+        "./tests/host/backend_differential_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 3,
+      "wall_seconds": 0.015,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "",
+      "stderr": "",
+      "backend": "fixture-defined",
+      "input": "deterministic C++ fixtures; initialization and stop budgets in source",
+      "expectation_source": "myCPU/tests/host/backend_differential_smoke.cpp",
+      "binary_sha256": "4990c36cfd2b56eb318f99b7cfdb6b7b32757161869015804322891d6221b038"
+    },
+    {
+      "evidence_id": "E-U2-002",
+      "argv": [
+        "timeout",
+        "3s",
+        "./tests/host/address_space_faults_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 3,
+      "wall_seconds": 0.006,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "",
+      "stderr": "",
+      "backend": "fixture-defined",
+      "input": "deterministic C++ fixtures; initialization and stop budgets in source",
+      "expectation_source": "myCPU/tests/host/address_space_faults_smoke.cpp",
+      "binary_sha256": "420d069afa6d8fe53adee787bcaaee9e4cb2ea39d183098a375943be736daf2a"
+    },
+    {
+      "evidence_id": "E-U2-003",
+      "argv": [
+        "timeout",
+        "3s",
+        "./tests/host/atomic_semantics_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 3,
+      "wall_seconds": 0.007,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "",
+      "stderr": "",
+      "backend": "fixture-defined",
+      "input": "deterministic C++ fixtures; initialization and stop budgets in source",
+      "expectation_source": "myCPU/tests/host/atomic_semantics_smoke.cpp",
+      "binary_sha256": "48825a2659d6d6ad287e387965ae20455e2d5a3882c3566bf5cdeaa2e1620a6c"
+    },
+    {
+      "evidence_id": "E-U2-004",
+      "argv": [
+        "timeout",
+        "3s",
+        "./tests/host/pipeline_commit_trace_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 3,
+      "wall_seconds": 0.009,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "",
+      "stderr": "",
+      "backend": "fixture-defined",
+      "input": "deterministic C++ fixtures; initialization and stop budgets in source",
+      "expectation_source": "myCPU/tests/host/pipeline_commit_trace_smoke.cpp",
+      "binary_sha256": "80de99997f9837ee053ca0fabe3523bc395eabf7688a337b1c44a7455427d5d3"
+    },
+    {
+      "evidence_id": "E-U2-005",
+      "argv": [
+        "timeout",
+        "3s",
+        "./tests/host/pipeline_speculation_contracts_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 3,
+      "wall_seconds": 0.01,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "",
+      "stderr": "",
+      "backend": "fixture-defined",
+      "input": "deterministic C++ fixtures; initialization and stop budgets in source",
+      "expectation_source": "myCPU/tests/host/pipeline_speculation_contracts_smoke.cpp",
+      "binary_sha256": "292f0cb2b4b617843846bce0cc226d19b1f62a504e5e538c12cf26bde940f5c1"
+    },
+    {
+      "evidence_id": "E-U2-006",
+      "argv": [
+        "timeout",
+        "3s",
+        "./tests/host/spike_differential_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 3,
+      "wall_seconds": 0.068,
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "stdout": "",
+      "stderr": "expected delegated_user_ecall_to_supervisor to halt\n",
+      "backend": "fixture-defined",
+      "input": "deterministic C++ fixtures; initialization and stop budgets in source",
+      "expectation_source": "myCPU/tests/host/spike_differential_smoke.cpp",
+      "binary_sha256": "46dc8260151e917fbb0ade845b588e73b77ca948230c5e42653501ab52bd3f54"
+    },
+    {
+      "evidence_id": "E-U2-007",
+      "argv": [
+        "timeout",
+        "60s",
+        "make",
+        "tests/host/system_software_permissions_evidence",
+        "tests/asm/sv39_tlb_flush.elf"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 60,
+      "wall_seconds": 0.951,
+      "exit_code": 2,
+      "signal": null,
+      "error": null,
+      "stdout": "g++ -O2 -Wall -Wextra -g -std=c++17 -o tests/host/system_software_permissions_evidence tests/host/system_software_permissions_evidence.cpp src/memory.o src/decode.o src/cpu.o src/trap.o src/arch/core_state.o src/arch/csr_file.o src/arch/vector_state.o src/debug/debug_session.o src/debug/debug_protocol.o src/debug/debug_protocol_command.o src/debug/debug_protocol_response.o src/exec/system_ops.o src/exec/memory_ops.o src/exec/control_flow_ops.o src/exec/integer_ops.o src/exec/floating_ops.o src/exec/vector_ops.o src/exec/branch_predictor.o src/exec/execution_profile.o src/exec/dbt_block_plan.o src/exec/dbt_ir.o src/exec/dbt_ir_eval.o src/exec/dbt_ir_lowering.o src/exec/dbt_block_cache.o src/exec/dbt_executable_cache.o src/exec/dbt_executable_memory.o src/exec/dbt_helper_execution_bridge.o src/exec/dbt_helper_replay.o src/exec/dbt_host_emitter.o src/exec/dbt_jit_engine.o src/exec/dbt_reference_fallback.o src/exec/dbt_reference_fallback_execution.o src/exec/dbt_runtime_dispatch.o src/exec/dbt_runtime_harness.o src/exec/dbt_runtime_invalidation.o src/exec/dbt_translator.o src/exec/interpreter_dbt_prototype.o src/exec/pipeline_sequence.o src/exec/pipeline_commit_boundary.o src/exec/pipeline_core_state.o src/exec/pipeline_hazards.o src/exec/physical_register_file.o src/exec/rename_map.o src/exec/reorder_buffer.o src/exec/load_store_queue.o src/exec/functional_backend.o src/exec/pipeline_backend.o src/exec/pipeline_backend_cycle.o src/exec/pipeline_backend_execute.o src/exec/pipeline_backend_frontend.o src/isa/atomic_contract.o src/isa/execution_context.o src/isa/instruction_semantics.o src/mem/ram.o src/mem/bus.o src/mem/dma_transaction.o src/mem/simple_l1_cache.o src/mem/address_space.o src/devices/ai_graph_package.o src/devices/tensor_golden_ops.o src/devices/ai_submission_queue.o src/devices/ai_scratchpad.o src/devices/ai_dma_engine.o src/devices/ai_graph_scheduler.o src/devices/ai_compute_gemm.o src/devices/ai_compute_conv.o src/devices/ai_compute_elementwise.o src/devices/ai_accelerator.o src/devices/uart16550.o src/devices/clint.o src/devices/plic.o src/devices/simple_storage.o src/devices/virtqueue.o src/devices/virtio_device.o src/devices/virtio_blk.o src/devices/virtio_mmio.o src/loader/elf_loader.o src/loader/binary_loader.o src/platform/machine.o\n",
+      "stderr": "tests/host/system_software_permissions_evidence.cpp: In function ‘void {anonymous}::run(const char*, bool, const char*, uint64_t, uint64_t, bool)’:\ntests/host/system_software_permissions_evidence.cpp:36:16: error: variable ‘Bus bus’ has initializer but incomplete type\n   36 |     Bus bus(ram);\n      |                ^\ntests/host/system_software_permissions_evidence.cpp: In function ‘int main()’:\ntests/host/system_software_permissions_evidence.cpp:85:20: error: variable ‘Bus bus’ has initializer but incomplete type\n   85 |         Bus bus(ram);\n      |                    ^\nmake: *** [Makefile:1750: tests/host/system_software_permissions_evidence] Error 1\n",
+      "category": "build",
+      "backend": "not applicable"
+    }
+  ]
+}
