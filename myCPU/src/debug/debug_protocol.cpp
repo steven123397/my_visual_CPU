@@ -49,6 +49,27 @@ int run_debug_cli(std::istream& in, std::ostream& out, std::ostream& err) {
             }
 
             const DebugCliCommand command = parse_debug_cli_command(line);
+            if (command.kind == DebugCliCommandKind::InspectMemory) {
+                out << debug_inspect_memory_json(command.addr, session.inspect_memory(command.addr, command.count)) << '\n';
+                continue;
+            }
+            if (command.kind == DebugCliCommandKind::InspectPage) {
+                out << debug_inspect_page_json(command.page_context
+                    ? session.inspect_page(command.addr, command.access, *command.page_context)
+                    : session.inspect_page(command.addr, command.access)) << '\n';
+                continue;
+            }
+            if (command.kind == DebugCliCommandKind::CaptureStart || command.kind == DebugCliCommandKind::CaptureStop || command.kind == DebugCliCommandKind::CaptureClear) {
+                if (command.kind == DebugCliCommandKind::CaptureStart) session.capture_start(command.capture_config);
+                if (command.kind == DebugCliCommandKind::CaptureStop) session.capture_stop();
+                if (command.kind == DebugCliCommandKind::CaptureClear) session.capture_clear();
+                out << debug_capture_metadata_json(session.capture_metadata()) << '\n';
+                continue;
+            }
+            if (command.kind == DebugCliCommandKind::CaptureRead) {
+                out << debug_capture_page_json(session.capture_read(command.cursor, command.limit)) << '\n';
+                continue;
+            }
             if (command.kind == DebugCliCommandKind::Load) {
                 const BackendKind backend_kind =
                     parse_backend_kind(command.backend.empty() ? std::string("pipeline") : command.backend);

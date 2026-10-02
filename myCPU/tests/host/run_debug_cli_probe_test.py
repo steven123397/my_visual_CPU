@@ -5138,5 +5138,80 @@ class RunDebugCliProbeTest(unittest.TestCase):
         self.assertNotIn("No rule to make target", combined_output)
 
 
+class TrustedObservationProtocolTest(unittest.TestCase):
+    def session(self, commands, backend="functional"):
+        with tempfile.TemporaryDirectory() as directory:
+            image = pathlib.Path(directory) / "program.bin"
+            image.write_bytes(bytes.fromhex("83b1000023b020006f000000"))
+            initial = [
+                {"cmd": "load", "image": str(image), "flat": True, "backend": backend},
+                {"cmd": "set_gpr", "reg": "x1", "value": "0x80001000"},
+                {"cmd": "set_gpr", "reg": "x2", "value": "0xfedcba9876543210"},
+                {"cmd": "set_memory", "addr": "0x80001000", "value": "0x8877665544332211"},
+            ]
+            result = subprocess.run(
+                [str(MYCPU_DIR / "mycpu"), "--debug-cli"],
+                input="".join(json.dumps(c) + "\n" for c in initial + commands),
+                text=True, capture_output=True, timeout=30,
+            )
+            return result, [json.loads(line) for line in result.stdout.splitlines()]
+
+    def test_capture_lossless_and_repeat_export(self):
+        result, outputs = self.session([
+            {"cmd": "capture-start", "capacity": 1, "operation": "store"},
+            {"cmd": "inspect-page", "addr": "0xffffffffffffffff", "access": "load",
+             "satp": "0xfedcba9876543210", "privilege": "M"},
+            {"cmd": "inspect-memory", "addr": "0x80001000", "size": 8},
+            {"cmd": "step_cycle", "count": 2},
+            {"cmd": "capture-stop"},
+            {"cmd": "capture-read", "capture_id": "0x1", "limit": 1},
+            {"cmd": "capture-read", "capture_id": "0x1", "limit": 1},
+            {"cmd": "snapshot"},
+        ])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        page = outputs[5]
+        self.assertEqual(int(page["satp"], 0), 0xfedcba9876543210)
+        self.assertEqual(int(page["pa"], 0), 2**64 - 1)
+        self.assertEqual(outputs[6]["bytes"], "1122334455667788")
+        self.assertEqual(outputs[9], outputs[10])
+        record = outputs[9]["records"][0]
+        self.assertEqual(int(record["store_value"], 0), 0xfedcba9876543210)
+        self.assertEqual(int(record["segments"][0]["value"], 0), 0xfedcba9876543210)
+        self.assertEqual(int(record["instruction_id"], 0), 2)
+        self.assertEqual(int(outputs[8]["filtered"], 0), 1)
+        self.assertEqual(outputs[8]["capabilities"]["capture_backends"], ["functional"])
+        baseline, baseline_outputs = self.session([{"cmd": "step_cycle", "count": 2}, {"cmd": "snapshot"}])
+        self.assertEqual(baseline.returncode, 0)
+        self.assertEqual(outputs[-1], baseline_outputs[-1])
+        with tempfile.TemporaryFile(mode="w+") as export:
+            export.write(json.dumps(outputs[8]) + "\n" + json.dumps(record) + "\n")
+            export.seek(0)
+            self.assertEqual([json.loads(line) for line in export], [outputs[8], record])
+
+    def test_queries_both_backends_and_rejected_requests(self):
+        for backend in ("functional", "pipeline"):
+            result, outputs = self.session([
+                {"cmd": "snapshot"},
+                {"cmd": "inspect-memory", "addr": "0x80000000", "size": 4},
+                {"cmd": "inspect-page", "addr": "0x80000000", "access": "load"},
+                {"cmd": "snapshot"},
+            ], backend)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(outputs[4], outputs[7])
+        for request in (
+            {"cmd": "inspect-memory", "addr": "0x10000000", "size": 1},
+            {"cmd": "inspect-memory", "addr": "0x80000000", "size": 4097},
+            {"cmd": "inspect-page", "addr": 0, "access": "invalid"},
+            {"cmd": "capture-start", "capacity": "18446744073709551616"},
+            {"cmd": "capture-read", "capture_id": 1},
+        ):
+            result, outputs = self.session([request])
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(outputs[-1]["type"], "error")
+        result, outputs = self.session([{"cmd": "capture-start"}], "pipeline")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("functional", outputs[-1]["message"])
+
+
 if __name__ == "__main__":
     unittest.main()

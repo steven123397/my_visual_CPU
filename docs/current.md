@@ -1,4 +1,5 @@
 # 当前状态
+- U5 已完成正式 JSON 命令与无损分页导出；CLI/parser、Python 94 通过/9 外部 skip、前端 172 通过/1 外部 skip。U6 组合验收及统一审查待完成。
 - U4 已完成有界缓冲、过滤、生命周期与分页；memory_capture_smoke、debug_cli_smoke 通过，采集中修改拒绝和停止后旧代次保留已验证。U5–U6 待实施。
 - U3 已完成 functional 实际标量、LR/SC/AMO 分段记录；定向采集、atomic、后端差分、profile 和 pipeline speculation 回归通过。U4–U6 待实施。
 - U2 已完成纯 RAM 页表解释、固定上下文与共享权限判定；查询及执行权限、A/D、TLB flush 回归通过。U3–U6 待实施。
