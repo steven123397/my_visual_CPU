@@ -1,7 +1,8 @@
 # 当前状态
 
-- 所在分支：`codex/system-software-evidence-plan`；核对基点：`b3831060b30a96d2dcd4f509154fb64166eeb3be`。
-- 当前交付：[可信度修复计划](plans/2026-10-02-1519-fix-system-software-trust-plan.md) U1（`36f41f5`）、U2（`999832c`）、U3（`111c3ef`）、U4 均完成，逐单元提交。[回传与统一审查](reviews/system-software-trust-fixes.md)：A/D 失配重查、暂停 GPR 同步、独立 M 退出夹具已验证；默认 CI 61 unit/22 host、Python 92 通过/9 外部 skip、真实 Spike 十项、xv6 完整 shell 16 命令及独立两页普通 fork 通过。统一审查唯一 P2（Spike 头文件构建依赖）已修复并独立复核，重建后十项真实 Spike 再通过，无待修发现。Wiki 本地提交 `d1244c7`，未发布；主仓库未推送或合并。
+- 所在分支：`codex/system-software-evidence-plan`；核对基点：`3c9785732f757bc32490cca62375cbf7280a576d`。
+- 当前交付：[可信观察与最小访存采集计划](plans/2026-10-02-1632-feat-trusted-observation-capture-plan.md) 已完成规划自检，尚未实施。U1–U6 覆盖无副作用 RAM/页表查询、functional 实际访存记录、有界采集、CLI/JSON 接口及 fork 探针迁移；pipeline 仅支持本轮纯查询，采集明确拒绝。本次仅文档，未运行产品测试。
+- 上轮交付：[可信度修复计划](plans/2026-10-02-1519-fix-system-software-trust-plan.md) U1（`36f41f5`）、U2（`999832c`）、U3（`111c3ef`）、U4 均完成，逐单元提交。[回传与统一审查](reviews/system-software-trust-fixes.md)：A/D 失配重查、暂停 GPR 同步、独立 M 退出夹具已验证；默认 CI 61 unit/22 host、Python 92 通过/9 外部 skip、真实 Spike 十项、xv6 完整 shell 16 命令及独立两页普通 fork 通过。统一审查唯一 P2（Spike 头文件构建依赖）已修复并独立复核，重建后十项真实 Spike 再通过，无待修发现。Wiki 本地提交 `d1244c7`，未发布；主仓库未推送或合并。
 - 工作范围：[系统软件取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md) 的 U1–U5 均完成，逐单元审查并提交。[最终回传](reviews/system-software-evidence-c253dda-u5.md) 提供 Q1–Q6、问题分类和最小后续范围；[总索引](reviews/system-software-evidence-c253dda.md) 关联全部证据。完整 shell 16 条命令通过，独立普通 fork 确认父子两页隔离、exit/status37/wait 与局部回收，仅 functional/单 hart。未修改产品语义。
 - 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。
 - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。
@@ -15,7 +16,7 @@
 - 文档基点的 [日常 36799850023/1](https://github.com/steven123397/my_visual_CPU/actions/runs/36799850023/attempts/1) 成功；`f69ea75` 后只有文档变化，完整代码证据仍适用。云端环境为 Ubuntu 24.04.5 x86-64、host GCC 13.3、RISC-V GCC 13.2、Python 3.12.3、前端 Node 24.21.0。
 - [故障 36738372503/1](https://github.com/steven123397/my_visual_CPU/actions/runs/36738372503/attempts/1) 实际 Error 7 且日志可下载；checkout `e2e0df8fafa3cb014a50a8cdb98274813d75df02`、PR head `358135abdda0b60724762081caac427d6279e575`。旧 run `36738356921/1` 已取消；PR #3、故障分支与 worktree 已清理，实验代码未进入 main。失败、取消和 skip 不计为通过，既有编译警告保留。
 - CI 累计审查范围 `d18eb46..cbd9ee8`，Plan 来源 `9886a62`；统一审查与三个修复复核、主会话 pre-merge 核对已完成，无待修或阻断发现。已完成 Plan 和 CI 审查报告在知识承接后删除，历史提交可追溯。Wiki 迁移审查报告也经用户授权删除：有效去向与验证边界已由 [Migration](https://github.com/steven123397/my_visual_CPU/wiki/Migration) 承接，无新增 solution 或遗留 Issue。
-- 长期经验：[xv6 工具链、精确基线与预算](solutions/build-errors/xv6-ci-toolchain-baselines-and-budget.md)、[隐藏 artifact 日志目录](solutions/workflow-issues/github-actions-hidden-artifact-logs.md)。尚无新增合格领域术语。
+- 长期经验：[xv6 工具链、精确基线与预算](solutions/build-errors/xv6-ci-toolchain-baselines-and-budget.md)、[隐藏 artifact 日志目录](solutions/workflow-issues/github-actions-hidden-artifact-logs.md)。领域术语“页表解释”和“执行访存记录”见 [CONCEPTS.md](../CONCEPTS.md)。
 - 用户决定：采用 NexusKit 与 GitHub Issues，共享 InstructionSemantics / functional backend 为 ISA 真值，架构契约由独立 Wiki 承载；安全扫描及 Dependabot 暂不接入。Codespaces 暂不推进，本地开发配合云端 CI，未创建云端实例。
 
 ## 阻断与已知缺口
@@ -28,10 +29,10 @@
 
 ## 下一步
 
-- 可信度修复 U1–U4 已交付并统一审查；观察能力建设另行规划。后续获准推送并提出 PR 时，在对应实际 checkout SHA 验证 simulator-core/frontend；本轮不推送、创建 PR、合并或发布 Wiki。
+- 新会话在当前分支按 [第三份计划](plans/2026-10-02-1632-feat-trusted-observation-capture-plan.md) 从 U1 开始，顺序完成 U1–U6，最后组合验收与统一审查；无规划期开工阻断。回传入口为 `docs/reviews/trusted-observation-capture.md`。PID 自动解释和前端时间线后续另行规划；本轮不推送、创建 PR、合并或发布 Wiki。
 - #4、#5、#6 不由本 Plan 认领；既有 PR/Issue 后续仍由原审查会话承接。
 - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。
 
 ## 工作区未提交改动
 
-- 本轮 U1–U4 交付仅提交自身修改。既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本计划接管。
+- 本次交付第三份计划、两条领域术语、AGENTS 导航及对应 current 更新，无规划草稿残留。既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本计划接管。
