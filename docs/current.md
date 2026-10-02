@@ -1,13 +1,7 @@
 # 当前状态
-- U5 已完成正式 JSON 命令与无损分页导出；CLI/parser、Python 94 通过/9 外部 skip、前端 172 通过/1 外部 skip。U6 组合验收及统一审查待完成。
-- U4 已完成有界缓冲、过滤、生命周期与分页；memory_capture_smoke、debug_cli_smoke 通过，采集中修改拒绝和停止后旧代次保留已验证。U5–U6 待实施。
-- U3 已完成 functional 实际标量、LR/SC/AMO 分段记录；定向采集、atomic、后端差分、profile 和 pipeline speculation 回归通过。U4–U6 待实施。
-- U2 已完成纯 RAM 页表解释、固定上下文与共享权限判定；查询及执行权限、A/D、TLB flush 回归通过。U3–U6 待实施。
 
-- 第三份计划实施：U1 已完成 const RAM 查询及 Machine/DebugSession 接口；`make -C myCPU test-host-debug_inspection_smoke` 通过，覆盖两后端、L1D 开关、边界与设备消费控制。后续按 U2–U6 顺序实施，统一审查尚未进行；本轮不推送或合并。
-
-- 所在分支：`codex/system-software-evidence-plan`；核对基点：`3c9785732f757bc32490cca62375cbf7280a576d`。
-- 当前交付：[可信观察与最小访存采集计划](plans/2026-10-02-1632-feat-trusted-observation-capture-plan.md) 已完成规划自检，尚未实施。U1–U6 覆盖无副作用 RAM/页表查询、functional 实际访存记录、有界采集、CLI/JSON 接口及 fork 探针迁移；pipeline 仅支持本轮纯查询，采集明确拒绝。本次仅文档，未运行产品测试。
+- 所在分支：`codex/system-software-evidence-plan`；核对基点：`9f6bd7389c44abc45edd5a474402c3bfc2d49097` 加 U6 最终产品差异 `f20a8b7fe937`。
+- 当前交付：[第三份计划](plans/2026-10-02-1632-feat-trusted-observation-capture-plan.md) U1–U6 顺序完成、逐单元本地提交。[回传与统一审查](reviews/trusted-observation-capture.md)：两后端纯 RAM/页表查询、functional 实际整数及 LR/SC/AMO 记录、有界采集与正式 CLI/无损导出、fork 探针迁移。最终 61 unit/24 host、4 项元测试、Python 94 通过/9 外部 skip、前端 172 通过/1 外部 skip、十项真实 Spike、完整 xv6 shell 16 命令均通过；fork 关闭/开启与自动配对通过，两条实际 store 无 dropped/unsupported。统一审查五项发现已修复并独立复核，无待修发现。Wiki 本地提交 `a83dadf`，未发布；主仓库未推送、创建 PR 或合并。
 - 上轮交付：[可信度修复计划](plans/2026-10-02-1519-fix-system-software-trust-plan.md) U1（`36f41f5`）、U2（`999832c`）、U3（`111c3ef`）、U4 均完成，逐单元提交。[回传与统一审查](reviews/system-software-trust-fixes.md)：A/D 失配重查、暂停 GPR 同步、独立 M 退出夹具已验证；默认 CI 61 unit/22 host、Python 92 通过/9 外部 skip、真实 Spike 十项、xv6 完整 shell 16 命令及独立两页普通 fork 通过。统一审查唯一 P2（Spike 头文件构建依赖）已修复并独立复核，重建后十项真实 Spike 再通过，无待修发现。Wiki 本地提交 `d1244c7`，未发布；主仓库未推送或合并。
 - 工作范围：[系统软件取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md) 的 U1–U5 均完成，逐单元审查并提交。[最终回传](reviews/system-software-evidence-c253dda-u5.md) 提供 Q1–Q6、问题分类和最小后续范围；[总索引](reviews/system-software-evidence-c253dda.md) 关联全部证据。完整 shell 16 条命令通过，独立普通 fork 确认父子两页隔离、exit/status37/wait 与局部回收，仅 functional/单 hart。未修改产品语义。
 - 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。
@@ -27,18 +21,18 @@
 
 ## 阻断与已知缺口
 
-- 可信度修复环境：RISC-V GCC 10.2、host GCC 11.4；真实 Spike 位于 `/home/liangjiaqi/.local/riscv-spike/bin/spike`。F-U3-001/F-U3-002 与五项夹具阻断已修复并负向验证；没有证明原缺陷阻断普通 fork。fresh walk 的动态 PTE 失配仅经审查，未做设备注入回归。snapshot 配对成立，helper/翻译/planner 的观察副作用与关联窗口/丢失信号仍属后续范围。当前 debug CLI 原预算通过，Python 已运行；历史失败证据仍保留，旧 CI 不替代本轮验收。
+- 可信度修复环境：RISC-V GCC 10.2、host GCC 11.4；真实 Spike 位于 `/home/liangjiaqi/.local/riscv-spike/bin/spike`。F-U3-001/F-U3-002 与五项夹具阻断已修复并负向验证；没有证明原缺陷阻断普通 fork。fresh walk 的动态 PTE 失配仅经审查，未做设备注入回归。本轮新增纯查询与采集的关联/丢失契约；旧 helper/翻译/planner 仍不承诺纯观察。历史失败证据保留，旧 CI 不替代本轮验收。
 
 - 历史 PR #15 的边界输入发现及后续处置由原审查会话承接，本轮未核对远端状态，不作为当前 main 的已证实缺陷。
-- 历史未验范围仍包括 fork PR、跨代工具链组合、真实 Linux/OSComp 和部署/多平台；不代表本次 Spike/xv6 未运行。本轮十项真实 Spike、默认核心回归、完整 xv6 shell 与独立 fork 已通过；9 个外部 Linux Python 场景 skip，云端及前端新版本验证未运行。
+- 历史未验范围仍包括 fork PR、跨代工具链组合、真实 Linux/OSComp 和部署/多平台；不代表本次 Spike/xv6 未运行。本轮十项真实 Spike、默认核心回归、前端、完整 xv6 shell 与独立 fork 配对已通过；9 个外部 Linux Python 场景、1 个前端外部场景 skip，本轮云端 CI 未运行。
 - AI Issues 仅为后续方向讨论的材料，尚未认领、排期或形成实施 Plan。云端维护 agent（提交 PR / Issue、按 main 变化维护 Wiki）仅是用户构想，工具、权限、费用与审核边界均未决定，未安装或授权 bot。
 
 ## 下一步
 
-- 新会话在当前分支按 [第三份计划](plans/2026-10-02-1632-feat-trusted-observation-capture-plan.md) 从 U1 开始，顺序完成 U1–U6，最后组合验收与统一审查；无规划期开工阻断。回传入口为 `docs/reviews/trusted-observation-capture.md`。PID 自动解释和前端时间线后续另行规划；本轮不推送、创建 PR、合并或发布 Wiki。
+- 第三份计划已完成，无剩余实施单元。正式事实接口与配对证据可作为 PID 自动解释、前端时间线后续规划的基础；后续范围与验收另定，尚未开工。本轮不推送、创建 PR、合并或发布 Wiki。
 - #4、#5、#6 不由本 Plan 认领；既有 PR/Issue 后续仍由原审查会话承接。
 - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。
 
 ## 工作区未提交改动
 
-- 本次交付第三份计划、两条领域术语、AGENTS 导航及对应 current 更新，无规划草稿残留。既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本计划接管。
+- 本计划代码、测试、报告与证据已随 U1–U6 提交。既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本计划接管；构建产物未提交。

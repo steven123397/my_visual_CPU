@@ -215,7 +215,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
                                    ? CAUSE_LOAD_ACCESS_FAULT
                                    : CAUSE_STORE_ACCESS_FAULT;
         result.trap = trap_request(cause, request.addr);
-        cpu.address_space().record_segment({request.addr, {}, static_cast<uint32_t>(request.size),
+        if (cpu.address_space().memory_record_enabled()) cpu.address_space().record_segment({request.addr, {}, static_cast<uint32_t>(request.size),
             request.kind != AtomicRequest::Kind::LoadReserved, {}, MemoryOutcome::Fault});
         return result;
     }
@@ -226,7 +226,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
     const AddressSpace::TranslateResult translated =
         cpu.address_space().translate_result(bus, request.addr, access_type, true);
     if (!translated.ok) {
-        cpu.address_space().record_segment({request.addr, {}, static_cast<uint32_t>(request.size),
+        if (cpu.address_space().memory_record_enabled()) cpu.address_space().record_segment({request.addr, {}, static_cast<uint32_t>(request.size),
             request.kind != AtomicRequest::Kind::LoadReserved, {}, MemoryOutcome::Fault});
         result.trap = translated.fault;
         return result;
@@ -236,14 +236,14 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
 
     const auto load = [&](uint64_t& value, const char* kind) {
         const bool ok = bus.try_load_observed(translated.paddr, request.size, value, "guest-data", kind);
-        cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size),
+        if (cpu.address_space().memory_record_enabled()) cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size),
             false, ok ? std::optional<uint64_t>(value) : std::nullopt, ok ? MemoryOutcome::Success : MemoryOutcome::Fault});
         return ok;
     };
     const auto store = [&](uint64_t value, const char* kind) {
         value = store_masked_value(value, request.size);
         const bool ok = bus.try_store_observed(translated.paddr, value, request.size, "guest-data", kind);
-        cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size),
+        if (cpu.address_space().memory_record_enabled()) cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size),
             true, ok ? std::optional<uint64_t>(value) : std::nullopt, ok ? MemoryOutcome::Success : MemoryOutcome::Fault});
         return ok;
     };
@@ -271,8 +271,10 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
         const bool matched = cpu.trap().reservation_matches(translated.paddr, request.size);
         cpu.trap().clear_reservation();
         if (!matched) {
-            cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size), true, {}, MemoryOutcome::NoAccess});
-            cpu.address_space().record_sc_result(1);
+            if (cpu.address_space().memory_record_enabled()) {
+                cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size), true, {}, MemoryOutcome::NoAccess});
+                cpu.address_space().record_sc_result(1);
+            }
             result.rd_write = rd_write(request.rd, 1);
             result.ok = true;
             return result;
@@ -285,7 +287,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
         result.memory_observed = true;
         result.write_observed = true;
         result.rd_write = rd_write(request.rd, 0);
-        cpu.address_space().record_sc_result(0);
+        if (cpu.address_space().memory_record_enabled()) cpu.address_space().record_sc_result(0);
         result.ok = true;
         return result;
     }

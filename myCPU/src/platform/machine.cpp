@@ -343,8 +343,8 @@ BlockTransport parse_block_transport(const std::string& name) {
     throw std::runtime_error("unknown block transport: " + name);
 }
 
-Machine::Machine(std::shared_ptr<MemoryCapture> capture)
-    : capture_(std::move(capture)), uart_(plic_),
+Machine::Machine()
+    : uart_(plic_),
       virtio_mmio_(plic_, VIRTIO_MMIO_PLIC_SOURCE, virtio_blk_),
       ai_accelerator_(plic_, AI_ACCEL_PLIC_SOURCE),
       bus_(ram_) {

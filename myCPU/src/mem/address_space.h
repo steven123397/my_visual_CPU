@@ -78,6 +78,7 @@ public:
     void flush_tlb();
     void bind_l1_data_cache(SimpleL1DataCache* cache);
     void bind_memory_record(MemoryRecord* record) { memory_record_ = record; }
+    bool memory_record_enabled() const { return memory_record_ != nullptr; }
     void record_segment(const MemorySegment& segment);
     void record_sc_result(uint64_t value);
     PageInspectionContext inspection_context(AccessType type) const;

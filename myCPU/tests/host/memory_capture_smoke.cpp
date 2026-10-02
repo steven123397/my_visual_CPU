@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <unistd.h>
 #include "../../src/debug/debug_session.h"
+#include "../../src/debug/debug_protocol.h"
 #include "../../src/debug/memory_capture.h"
 #include "../../src/exec/functional_backend.h"
 #include "../../src/platform/machine.h"
@@ -21,6 +22,27 @@ template<class F> void rejected(F action) {
 }
 
 int main() {
+    {
+        Machine m;
+        auto& c = m.cpu();
+        cpu_init(c, MEM_BASE);
+        // c.ld x9,0(x8); c.sd x9,0(x8); vector byte load/store.
+        m.bus().try_store(MEM_BASE, 0x6004, 2);
+        m.bus().try_store(MEM_BASE + 2, 0xe004, 2);
+        m.bus().try_store(MEM_BASE + 4, 0x00040087, 4);
+        m.bus().try_store(MEM_BASE + 8, 0x00140027, 4);
+        m.bus().try_store(MEM_BASE + 4096, 42, 8);
+        c.core().write_gpr(8, MEM_BASE + 4096);
+        c.core().vector().set_config(1, 1);
+        Receiver r;
+        FunctionalBackend backend(c, m.bus());
+        backend.set_memory_receiver(&r);
+        for (int i = 0; i < 4; ++i) backend.step();
+        assert(r.records.size() == 2 && r.unsupported_count == 2);
+        assert(r.records[0].instruction_bytes == 2 && r.records[0].raw == 0x6004);
+        assert(r.records[1].instruction_bytes == 2 && r.records[1].raw == 0xe004);
+        assert(r.records[0].segments[0].value == 42 && r.records[1].segments[0].value == 42);
+    }
     {
         MemoryCapture capture;
         CaptureConfig config;
@@ -47,6 +69,86 @@ int main() {
         capture.start({}, 8);
         assert(capture.metadata().capture_id != meta.capture_id);
         capture.stop();
+    }
+    {
+        char image[] = "/tmp/capture_reset_XXXXXX", payload[] = "/tmp/capture_payload_XXXXXX";
+        const uint32_t word = 0x00000013;
+        for (char* name : {image, payload}) {
+            const int fd = mkstemp(name);
+            assert(write(fd, &word, sizeof(word)) == sizeof(word));
+            close(fd);
+        }
+        DebugSession s;
+        s.load_binary(image, MEM_BASE, BackendKind::Functional);
+        s.load_binary_payload(payload, MEM_BASE + 4096);
+        s.set_gpr("x5", 123);
+        s.step_cycle();
+        s.capture_start(); s.capture_stop();
+        const auto generation = s.capture_metadata().machine_generation;
+        const auto before = debug_snapshot_json(s.snapshot());
+        unlink(payload);
+        rejected([&] { s.reset(); });
+        assert(debug_snapshot_json(s.snapshot()) == before);
+        s.capture_clear(); s.capture_start();
+        assert(s.capture_metadata().machine_generation == generation);
+        s.capture_stop(); s.capture_clear();
+        rejected([&] { s.load_binary("/missing/capture-image", MEM_BASE, BackendKind::Pipeline); });
+        assert(debug_snapshot_json(s.snapshot()) == before);
+        s.capture_start();
+        assert(s.capture_metadata().machine_generation == generation);
+        s.capture_stop();
+        unlink(image);
+    }
+    {
+        std::vector<uint64_t> baseline;
+        for (bool enabled : {false, true}) {
+            Machine m;
+            auto& c = m.cpu();
+            cpu_init(c, 0x1000);
+            const uint64_t root = MEM_BASE + 4096, l1 = root + 4096, l0 = l1 + 4096;
+            const uint64_t code = MEM_BASE + 0x4000, handler = code + 4096, data = handler + 4096;
+            const uint64_t satp = (8ULL << 60) | (root >> 12);
+            m.bus().try_store(root, (l1 >> 12 << 10) | 1, 8);
+            m.bus().try_store(l1, (l0 >> 12 << 10) | 1, 8);
+            m.bus().try_store(l0 + 8, (code >> 12 << 10) | 0x5b, 8);
+            m.bus().try_store(l0 + 16, (handler >> 12 << 10) | 0x4b, 8);
+            m.bus().try_store(l0 + 24, (data >> 12 << 10) | 0xc7, 8);
+            m.bus().try_store(code, 0x0000b183, 4);
+            m.bus().try_store(handler, 0x00013283, 4);
+            m.bus().try_store(data, 0x12345678, 8);
+            c.csr().write(CSR_SATP, satp, c.core());
+            c.csr().write(CSR_MEDELEG, 1ULL << 13, c.core());
+            c.csr().write(CSR_STVEC, 0x2000, c.core());
+            c.core().set_privilege_mode(PrivilegeMode::User);
+            c.core().write_gpr(1, 0x6000);
+            c.core().write_gpr(2, 0x3000);
+            Receiver r;
+            FunctionalBackend backend(c, m.bus());
+            if (enabled) backend.set_memory_receiver(&r);
+            backend.step(); backend.step();
+            assert(c.core().read_gpr(5) == 0x12345678);
+            assert(c.core().pc() == 0x2004 && c.core().cycle() == 2 && c.core().instret() == 1);
+            std::vector<uint64_t> state;
+            for (uint32_t i = 0; i < 32; ++i) state.push_back(c.core().read_gpr(i));
+            for (uint32_t csr : {CSR_SATP, CSR_MSTATUS, CSR_SCAUSE, CSR_STVAL, CSR_SEPC}) state.push_back(c.csr().read(csr, c.core()));
+            state.insert(state.end(), {c.core().pc(), c.core().cycle(), c.core().instret(), m.clint().mtime(),
+                m.bus().last_access().addr, m.bus().last_access().value,
+                backend.debug_snapshot().profile.total_memory_observations, backend.debug_snapshot().profile.total_traps});
+            if (!enabled) baseline = state; else assert(state == baseline);
+            if (enabled) {
+                assert(r.records.size() == 2);
+                const auto& fault = r.records[0];
+                assert(fault.pc == 0x1000 && fault.raw == 0x0000b183 && fault.satp == satp);
+                assert(fault.privilege == PrivilegeMode::User && fault.effective_privilege == PrivilegeMode::User);
+                assert(!fault.retired && fault.trap.cause == 13 && fault.trap.tval == 0x6000);
+                assert(fault.segment_count == 1 && !fault.segments[0].paddr && fault.segments[0].outcome == MemoryOutcome::Fault);
+                const auto& next = r.records[1];
+                assert(next.pc == 0x2000 && next.raw == 0x00013283 && next.satp == satp);
+                assert(next.privilege == PrivilegeMode::Supervisor && next.effective_privilege == PrivilegeMode::Supervisor);
+                assert(next.retired && !next.trap.valid && next.segment_count == 1);
+                assert(next.segments[0].paddr == data && next.segments[0].value == 0x12345678);
+            }
+        }
     }
     {
         MemoryCapture capture;

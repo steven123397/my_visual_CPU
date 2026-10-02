@@ -9,6 +9,7 @@
 #include <string>
 
 #include "../../src/platform/machine.h"
+#include "../../src/debug/debug_protocol_response.h"
 
 namespace {
 using U64 = uint64_t;
@@ -23,17 +24,15 @@ struct Probe {
     std::array<unsigned, 2> stores{};
     U64 child_slot = 0, parent_pid = 0, child_pid = 0, va = 0, child_root = 0;
     bool zombie = false;
+    bool capture_enabled = true;
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 
     U64 at(const char* key) const { return layout.at(key); }
     U64 current_proc() { return read(at("cpus") + at("cpu_proc")); }
     U64 read(U64 addr, int size = 8) {
-        const auto region = machine.bus().describe_region(addr, size);
-        require(region.kind == PhysicalRegionKind::Ram && !region.has_side_effect,
-                "probe refuses non-RAM memory");
+        const auto bytes = machine.inspect_memory(addr, size);
         U64 result = 0;
-        require(machine.bus().try_load_observed(addr, size, result, "evidence", "ram-inspect"),
-                "RAM inspection failed");
+        for (size_t i = 0; i < bytes.size(); ++i) result |= U64(bytes[i]) << (8 * i);
         return result;
     }
     U64 find_proc(U64 pid) {
@@ -44,22 +43,14 @@ struct Probe {
         throw std::runtime_error("PID not found in proc array");
     }
     std::pair<U64, U64> translate(U64 root, U64 address) {
-        U64 table = root;
-        for (int level = 2; level >= 0; --level) {
-            const U64 pte = read(table + ((address >> (12 + 9 * level)) & 511) * 8);
-            require(pte & 1, "invalid PTE");
-            if (pte & 14) {
-                require(level == 0 && (pte & 23) == 23, "expected user R/W level-zero leaf");
-                return {(pte >> 10) << 12, pte};
-            }
-            table = (pte >> 10) << 12;
-        }
-        throw std::runtime_error("missing leaf PTE");
+        const auto page = machine.inspect_page(address, AccessType::Store,
+            {(8ULL << 60) | (root >> 12), PrivilegeMode::User, false, false});
+        require(page.ok && page.leaf_level == 0, "expected user R/W level-zero leaf");
+        return {page.paddr, page.entries.back().value};
     }
-    void step(bool watch) {
+    void step() {
         const auto& core = machine.cpu().core();
         const U64 pc = core.pc();
-        const bool user = core.privilege_mode() == PrivilegeMode::User;
         if (child_slot && !zombie && pc == at("sched") && current_proc() == child_slot &&
             read(child_slot + at("state"), 4) == at("zombie")) {
             require(read(child_slot + at("xstate"), 4) == 37, "zombie exit status mismatch");
@@ -69,31 +60,48 @@ struct Probe {
                         (unsigned long long)core.cycle());
         }
         machine.step();
-        if (watch && user) {
-            // last_access is refreshed by instruction fetch even when no data access occurs.
-            const auto& access = machine.bus().last_access();
-            if (access.valid && access.success && access.write && access.source == "guest-data") {
-                for (unsigned i = 0; i < 2; ++i) {
-                    if (access.addr != child_pa[i]) continue;
-                    require(access.size == 8 && access.value == changed[i], "unexpected child store");
-                    require(((csr_read(machine.cpu(), CSR_SATP) & ((1ULL << 44) - 1)) << 12) == child_root,
-                            "user store SATP differs from child root");
-                    require(current_proc() == child_slot, "store is not from child");
-                    ++stores[i];
-                    std::printf("{\"event\":\"user_store\",\"pid\":%llu,\"va\":%llu,"
-                                "\"pa\":%llu,\"pc\":%llu,\"satp\":%llu,\"cycle\":%llu,\"instret\":%llu}\n",
-                                (unsigned long long)child_pid, (unsigned long long)(va + i * 4096),
-                                (unsigned long long)child_pa[i], (unsigned long long)pc,
-                                (unsigned long long)csr_read(machine.cpu(), CSR_SATP),
-                                (unsigned long long)core.cycle(), (unsigned long long)core.instret());
-                }
-            }
-        }
     }
-    size_t until(size_t offset, const std::string& marker, U64 budget, bool watch = false) {
+    void start_window() {
+        if (!capture_enabled) return;
+        CaptureConfig cfg;
+        cfg.capacity = 16;
+        cfg.operation = MemoryOperation::Store;
+        cfg.effective_privilege = PrivilegeMode::User;
+        cfg.satp = (8ULL << 60) | (child_root >> 12);
+        cfg.va_begin = va;
+        cfg.va_end = va + 4096 + 8;
+        machine.capture_start(cfg);
+    }
+    void stop_window() {
+        if (!capture_enabled) return;
+        const U64 cycle = machine.cpu().core().cycle();
+        machine.capture_stop();
+        const auto meta = machine.capture_metadata();
+        require(!meta.dropped && !meta.unsupported && meta.recorded == 2, "incomplete child store capture");
+        const auto page = machine.capture_read({meta.capture_id, 0, {}});
+        require(page.done, "unexpected capture pagination");
+        require(machine.capture_read({meta.capture_id, 0, {}}).records.size() == page.records.size(), "export consumed records");
+        std::puts(debug_capture_metadata_json(meta).c_str());
+        for (const auto& record : page.records) {
+            require(record.retired && !record.trap.valid && record.privilege == PrivilegeMode::User &&
+                    record.satp == ((8ULL << 60) | (child_root >> 12)) && record.segment_count == 1,
+                    "incorrect store association");
+            for (unsigned i = 0; i < 2; ++i) {
+                if (record.vaddr != va + i*4096) continue;
+                const auto& segment = record.segments[0];
+                require(segment.paddr == child_pa[i] && segment.bytes == 8 && segment.write &&
+                        segment.outcome == MemoryOutcome::Success && segment.value == changed[i], "incorrect child store facts");
+                ++stores[i];
+            }
+            std::puts(debug_memory_record_json(record).c_str());
+        }
+        require(stores[0] == 1 && stores[1] == 1, "missing child store");
+        require(machine.cpu().core().cycle() == cycle, "export advanced guest time");
+    }
+    size_t until(size_t offset, const std::string& marker, U64 budget) {
         size_t last_size = 0;
         for (U64 i = 0; i < budget; ++i) {
-            step(watch);
+            step();
             const auto& output = machine.uart().output();
             if (output.size() != last_size) {
                 last_size = output.size();
@@ -109,10 +117,10 @@ struct Probe {
         }
         throw std::runtime_error("guest step budget exhausted waiting for " + marker);
     }
-    size_t marker(size_t offset, const char* stage, bool watch = false) {
+    size_t marker(size_t offset, const char* stage) {
         const std::string prefix = std::string("EVIDENCE ") + stage + " ";
-        size_t pos = until(offset, prefix, 100000000, watch);
-        until(pos, "\n", 1000000, watch);
+        size_t pos = until(offset, prefix, 100000000);
+        until(pos, "\n", 1000000);
         std::istringstream line(machine.uart().output().substr(pos));
         std::string tag, phase, address;
         U64 parent, child;
@@ -135,6 +143,10 @@ struct Probe {
         for (unsigned i = 0; i < 2; ++i) {
             const auto p = translate(parent_root, va + i * 4096);
             const auto c = translate(child_root, va + i * 4096);
+            if (capture_enabled) {
+                require(translate(child_root, va + i*4096) == c, "repeated page query changed mapping");
+                require(read(c.first) == read(c.first), "repeated memory query changed data");
+            }
             require(p.first != c.first, "parent and child share physical data page");
             require(read(p.first) == initial[i], "parent data changed");
             require(read(c.first) == (modified ? changed[i] : initial[i]), "child data mismatch");
@@ -168,7 +180,7 @@ struct Probe {
             next = read(next + at("run_next"));
         }
         for (unsigned i = 0; i < 2; ++i) {
-            require(stores[i] == 1, "missing or repeated observed child store");
+            if (capture_enabled) require(stores[i] == 1, "missing or repeated observed child store");
             require(free_pages.count(child_pa[i]), "child data page absent from freelist");
             std::printf("{\"event\":\"reclaimed\",\"pa\":%llu,\"freelist_member\":true,\"proc_unused\":true}\n",
                         (unsigned long long)child_pa[i]);
@@ -179,8 +191,10 @@ struct Probe {
 
 int main(int argc, char** argv) {
     try {
-        require(argc == 4, "usage: fork-evidence kernel fs.img layout.txt");
+        require(argc == 5, "usage: fork-evidence kernel fs.img layout.txt capture|off");
         Probe p;
+        require(std::string(argv[4]) == "capture" || std::string(argv[4]) == "off", "invalid capture mode");
+        p.capture_enabled = std::string(argv[4]) == "capture";
         std::ifstream file(argv[3]);
         std::string key;
         U64 value;
@@ -196,11 +210,14 @@ int main(int argc, char** argv) {
         p.machine.uart().inject_input("forkev\r");
         offset = p.marker(offset, "BEFORE");
         p.capture("before", false);
-        offset = p.marker(offset, "AFTER", true);
+        p.start_window();
+        offset = p.marker(offset, "AFTER");
+        p.stop_window();
         p.capture("after", true);
         offset = p.marker(offset, "REAP");
         p.reclaimed();
         p.until(offset, "$ ", 20000000);
+        std::puts(debug_protocol_uart_output_json({0, p.machine.uart().output_size(), p.machine.uart().output()}).c_str());
         offset = p.machine.uart().output_size();
         p.machine.uart().inject_input("forktest\r");
         p.until(offset, "fork test OK", 50000000);

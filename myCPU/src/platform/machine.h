@@ -63,7 +63,7 @@ public:
         bool completed{false};
     };
 
-    explicit Machine(std::shared_ptr<MemoryCapture> capture = std::make_shared<MemoryCapture>());
+    Machine();
     void capture_start(const CaptureConfig& config = {});
     void capture_stop();
     void capture_clear();
@@ -118,12 +118,13 @@ public:
     }
 
 private:
+    friend class DebugSession;
     void bind_block_transport();
     void rebuild_backend();
     void finish_image_load(uint64_t entry, Ram& staged_ram);
 
     CPU cpu_{};
-    std::shared_ptr<MemoryCapture> capture_;
+    std::shared_ptr<MemoryCapture> capture_{std::make_shared<MemoryCapture>()};
     Ram ram_;
     Plic plic_;
     Uart16550 uart_;

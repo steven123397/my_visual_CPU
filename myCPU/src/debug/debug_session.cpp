@@ -170,6 +170,7 @@ void DebugSession::load_elf(const std::string& path,
                             bool disk_magic_valid,
                             bool l1d_enabled) {
     capture_->require_mutable();
+    const LoadConfig previous = config_;
     config_.image_kind = ImageKind::Elf;
     config_.image_path = path;
     config_.binary_addr = MEM_BASE;
@@ -181,7 +182,8 @@ void DebugSession::load_elf(const std::string& path,
     config_.disk_magic_valid = disk_magic_valid;
     config_.l1d_enabled = l1d_enabled;
     config_.post_load_actions.clear();
-    recreate_machine();
+    try { recreate_machine(); }
+    catch (...) { config_ = previous; throw; }
     events_.clear();
     breakpoints_.clear();
 }
@@ -195,6 +197,7 @@ void DebugSession::load_binary(const std::string& path,
                                bool disk_magic_valid,
                                bool l1d_enabled) {
     capture_->require_mutable();
+    const LoadConfig previous = config_;
     config_.image_kind = ImageKind::Binary;
     config_.image_path = path;
     config_.binary_addr = addr;
@@ -206,7 +209,8 @@ void DebugSession::load_binary(const std::string& path,
     config_.disk_magic_valid = disk_magic_valid;
     config_.l1d_enabled = l1d_enabled;
     config_.post_load_actions.clear();
-    recreate_machine();
+    try { recreate_machine(); }
+    catch (...) { config_ = previous; throw; }
     events_.clear();
     breakpoints_.clear();
 }
@@ -507,21 +511,21 @@ size_t DebugSession::post_load_action_count() const {
 }
 
 void DebugSession::recreate_machine() {
-    machine_ = std::make_unique<Machine>(capture_);
-    machine_->set_backend_kind(config_.backend_kind);
-    machine_->set_block_transport(config_.block_transport);
-    machine_->set_l1_data_cache_enabled(config_.l1d_enabled);
+    auto candidate = std::make_unique<Machine>();
+    candidate->set_backend_kind(config_.backend_kind);
+    candidate->set_block_transport(config_.block_transport);
+    candidate->set_l1_data_cache_enabled(config_.l1d_enabled);
     if (config_.disk_attached) {
-        machine_->attach_storage_image(config_.disk_image, config_.disk_ready, config_.disk_magic_valid);
+        candidate->attach_storage_image(config_.disk_image, config_.disk_ready, config_.disk_magic_valid);
     }
-    machine_->uart().set_mirror_stdout(false);
+    candidate->uart().set_mirror_stdout(false);
 
     switch (config_.image_kind) {
     case ImageKind::Elf:
-        machine_->load_elf(config_.image_path);
+        candidate->load_elf(config_.image_path);
         break;
     case ImageKind::Binary:
-        machine_->load_binary(config_.image_path, config_.binary_addr);
+        candidate->load_binary(config_.image_path, config_.binary_addr);
         break;
     case ImageKind::None:
         throw std::runtime_error("debug session image not configured");
@@ -530,13 +534,16 @@ void DebugSession::recreate_machine() {
     for (const PostLoadAction& action : config_.post_load_actions) {
         switch (action.kind) {
         case PostLoadAction::Kind::Payload:
-            machine_->load_binary_payload(action.text, action.value);
+            candidate->load_binary_payload(action.text, action.value);
             break;
         case PostLoadAction::Kind::SetGpr:
-            machine_->set_gpr(action.text, action.value);
+            candidate->set_gpr(action.text, action.value);
             break;
         }
     }
+    candidate->capture_ = capture_;
+    capture_->advance_generation();
+    machine_ = std::move(candidate);
 }
 
 DebugSnapshot DebugSession::collect_snapshot() const {

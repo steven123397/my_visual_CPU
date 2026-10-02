@@ -265,18 +265,18 @@ AddressSpace::AccessResult AddressSpace::store_result(Bus& bus, uint64_t addr, u
         const int chunk = page_chunk_size(current_addr, remaining);
         uint64_t paddr = 0;
         if (!translate(bus, current_addr, AccessType::Store, paddr, result.fault, true)) {
-            record_segment({current_addr, {}, static_cast<uint32_t>(chunk), true, {}, MemoryOutcome::Fault});
+            if (memory_record_enabled()) record_segment({current_addr, {}, static_cast<uint32_t>(chunk), true, {}, MemoryOutcome::Fault});
             return result;
         }
 
         const uint64_t chunk_value = remaining_value & size_mask(chunk);
         if (!try_data_store(bus, paddr, chunk_value, chunk)) {
-            record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), true, {}, MemoryOutcome::Fault});
+            if (memory_record_enabled()) record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), true, {}, MemoryOutcome::Fault});
             result.fault = make_fault(access_fault_cause(AccessType::Store), current_addr);
             return result;
         }
 
-        record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), true, chunk_value, MemoryOutcome::Success});
+        if (memory_record_enabled()) record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), true, chunk_value, MemoryOutcome::Success});
 
         current_addr += static_cast<uint64_t>(chunk);
         remaining_value = chunk == 8 ? 0 : remaining_value >> (chunk * 8);
@@ -456,7 +456,7 @@ AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr,
         const int chunk = page_chunk_size(current_addr, remaining);
         uint64_t paddr = 0;
         if (!translate(bus, current_addr, type, paddr, result.fault, true)) {
-            if (type == AccessType::Load)
+            if (type == AccessType::Load && memory_record_enabled())
                 record_segment({current_addr, {}, static_cast<uint32_t>(chunk), false, {}, MemoryOutcome::Fault});
             return result;
         }
@@ -471,13 +471,13 @@ AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr,
                                         access_source(type),
                                         access_kind(type));
         if (!loaded) {
-            if (type == AccessType::Load)
+            if (type == AccessType::Load && memory_record_enabled())
                 record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), false, {}, MemoryOutcome::Fault});
             result.fault = make_fault(access_fault_cause(type), current_addr);
             return result;
         }
 
-        if (type == AccessType::Load)
+        if (type == AccessType::Load && memory_record_enabled())
             record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), false,
                             chunk_value & size_mask(chunk), MemoryOutcome::Success});
 

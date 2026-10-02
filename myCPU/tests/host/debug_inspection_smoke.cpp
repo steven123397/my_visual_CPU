@@ -8,6 +8,18 @@ int main() {
         auto& c = m.cpu();
         const uint64_t root = MEM_BASE + 0x1000;
         const uint64_t satp = (8ULL << 60) | (root >> 12);
+        c.core().set_privilege_mode(PrivilegeMode::Supervisor);
+        c.csr().write(CSR_SATP, satp, c.core());
+        m.bus().try_store(root, (MEM_BASE >> 12 << 10) | 0xc7, 8);
+        assert(m.inspect_page(0x123, AccessType::Load).paddr == MEM_BASE + 0x123);
+        m.bus().try_store(root, (0x40000000ULL >> 12 << 10) | 0xc7, 8);
+        assert(c.address_space().translate_result(m.bus(), 0x123, AccessType::Load).paddr == 0x40000123);
+    }
+    {
+        Machine m;
+        auto& c = m.cpu();
+        const uint64_t root = MEM_BASE + 0x1000;
+        const uint64_t satp = (8ULL << 60) | (root >> 12);
         m.bus().try_store(root, (MEM_BASE >> 12 << 10) | 0x7, 8);
         PageInspectionContext ctx{satp, PrivilegeMode::Supervisor, false, false};
         auto page = m.inspect_page(0x123, AccessType::Store, ctx);

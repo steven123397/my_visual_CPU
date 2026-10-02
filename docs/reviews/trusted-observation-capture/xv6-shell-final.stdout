@@ -1,0 +1,48 @@
+make WORKLOAD_NAME=xv6 WORKLOAD_BOARD=mycpu_virt build-workload
+make[1]: Entering directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU'
+make -C external/xv6-riscv TOOLPREFIX=riscv64-unknown-elf- ARCH_MARCH=-march=rv64ima ARCH_MABI=-mabi=lp64 CPUS=1 kernel/kernel fs.img
+make[2]: Entering directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU/external/xv6-riscv'
+make[2]: 'kernel/kernel' is up to date.
+make[2]: 'fs.img' is up to date.
+make[2]: Leaving directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU/external/xv6-riscv'
+make[1]: Leaving directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU'
+g++ -O2 -Wall -Wextra -g -std=c++17 -o tests/host/xv6_boot_smoke tests/host/xv6_boot_smoke.cpp src/memory.o src/decode.o src/cpu.o src/trap.o src/arch/core_state.o src/arch/csr_file.o src/arch/vector_state.o src/debug/debug_session.o src/debug/debug_protocol.o src/debug/debug_protocol_command.o src/debug/debug_protocol_response.o src/exec/system_ops.o src/exec/memory_ops.o src/exec/control_flow_ops.o src/exec/integer_ops.o src/exec/floating_ops.o src/exec/vector_ops.o src/exec/branch_predictor.o src/exec/execution_profile.o src/exec/dbt_block_plan.o src/exec/dbt_ir.o src/exec/dbt_ir_eval.o src/exec/dbt_ir_lowering.o src/exec/dbt_block_cache.o src/exec/dbt_executable_cache.o src/exec/dbt_executable_memory.o src/exec/dbt_helper_execution_bridge.o src/exec/dbt_helper_replay.o src/exec/dbt_host_emitter.o src/exec/dbt_jit_engine.o src/exec/dbt_reference_fallback.o src/exec/dbt_reference_fallback_execution.o src/exec/dbt_runtime_dispatch.o src/exec/dbt_runtime_harness.o src/exec/dbt_runtime_invalidation.o src/exec/dbt_translator.o src/exec/interpreter_dbt_prototype.o src/exec/pipeline_sequence.o src/exec/pipeline_commit_boundary.o src/exec/pipeline_core_state.o src/exec/pipeline_hazards.o src/exec/physical_register_file.o src/exec/rename_map.o src/exec/reorder_buffer.o src/exec/load_store_queue.o src/exec/functional_backend.o src/exec/pipeline_backend.o src/exec/pipeline_backend_cycle.o src/exec/pipeline_backend_execute.o src/exec/pipeline_backend_frontend.o src/isa/atomic_contract.o src/isa/execution_context.o src/isa/instruction_semantics.o src/mem/ram.o src/mem/bus.o src/mem/dma_transaction.o src/mem/simple_l1_cache.o src/mem/address_space.o src/devices/ai_graph_package.o src/devices/tensor_golden_ops.o src/devices/ai_submission_queue.o src/devices/ai_scratchpad.o src/devices/ai_dma_engine.o src/devices/ai_graph_scheduler.o src/devices/ai_compute_gemm.o src/devices/ai_compute_conv.o src/devices/ai_compute_elementwise.o src/devices/ai_accelerator.o src/devices/uart16550.o src/devices/clint.o src/devices/plic.o src/devices/simple_storage.o src/devices/virtqueue.o src/devices/virtio_device.o src/devices/virtio_blk.o src/devices/virtio_mmio.o src/loader/elf_loader.o src/loader/binary_loader.o src/platform/machine.o src/debug/memory_capture.o
+=== host:xv6_boot_smoke ===
+
+xv6 kernel is booting
+g++ -O2 -Wall -Wextra -g -std=c++17 -o tests/host/xv6_shell_smoke tests/host/xv6_shell_smoke.cpp src/memory.o src/decode.o src/cpu.o src/trap.o src/arch/core_state.o src/arch/csr_file.o src/arch/vector_state.o src/debug/debug_session.o src/debug/debug_protocol.o src/debug/debug_protocol_command.o src/debug/debug_protocol_response.o src/exec/system_ops.o src/exec/memory_ops.o src/exec/control_flow_ops.o src/exec/integer_ops.o src/exec/floating_ops.o src/exec/vector_ops.o src/exec/branch_predictor.o src/exec/execution_profile.o src/exec/dbt_block_plan.o src/exec/dbt_ir.o src/exec/dbt_ir_eval.o src/exec/dbt_ir_lowering.o src/exec/dbt_block_cache.o src/exec/dbt_executable_cache.o src/exec/dbt_executable_memory.o src/exec/dbt_helper_execution_bridge.o src/exec/dbt_helper_replay.o src/exec/dbt_host_emitter.o src/exec/dbt_jit_engine.o src/exec/dbt_reference_fallback.o src/exec/dbt_reference_fallback_execution.o src/exec/dbt_runtime_dispatch.o src/exec/dbt_runtime_harness.o src/exec/dbt_runtime_invalidation.o src/exec/dbt_translator.o src/exec/interpreter_dbt_prototype.o src/exec/pipeline_sequence.o src/exec/pipeline_commit_boundary.o src/exec/pipeline_core_state.o src/exec/pipeline_hazards.o src/exec/physical_register_file.o src/exec/rename_map.o src/exec/reorder_buffer.o src/exec/load_store_queue.o src/exec/functional_backend.o src/exec/pipeline_backend.o src/exec/pipeline_backend_cycle.o src/exec/pipeline_backend_execute.o src/exec/pipeline_backend_frontend.o src/isa/atomic_contract.o src/isa/execution_context.o src/isa/instruction_semantics.o src/mem/ram.o src/mem/bus.o src/mem/dma_transaction.o src/mem/simple_l1_cache.o src/mem/address_space.o src/devices/ai_graph_package.o src/devices/tensor_golden_ops.o src/devices/ai_submission_queue.o src/devices/ai_scratchpad.o src/devices/ai_dma_engine.o src/devices/ai_graph_scheduler.o src/devices/ai_compute_gemm.o src/devices/ai_compute_conv.o src/devices/ai_compute_elementwise.o src/devices/ai_accelerator.o src/devices/uart16550.o src/devices/clint.o src/devices/plic.o src/devices/simple_storage.o src/devices/virtqueue.o src/devices/virtio_device.o src/devices/virtio_blk.o src/devices/virtio_mmio.o src/loader/elf_loader.o src/loader/binary_loader.o src/platform/machine.o src/debug/memory_capture.o
+=== host:xv6_shell_smoke ===
+xv6 shell: waiting for boot prompt
+xv6 shell: boot prompt in 347.808s
+xv6 shell: starting ls
+xv6 shell: completed command in 23.560s
+xv6 shell: starting cat README
+xv6 shell: completed command in 72.009s
+xv6 shell: starting wc README
+xv6 shell: completed command in 3.299s
+xv6 shell: starting grep qemu README | wc
+xv6 shell: completed command in 6.445s
+xv6 shell: starting echo SHELL_OK > xv6smoke.txt
+xv6 shell: completed command in 10.088s
+xv6 shell: starting cat xv6smoke.txt
+xv6 shell: completed command in 3.145s
+xv6 shell: starting rm xv6smoke.txt
+xv6 shell: completed command in 4.354s
+xv6 shell: starting cat xv6smoke.txt
+xv6 shell: completed command in 3.774s
+xv6 shell: starting mkdir smdir
+xv6 shell: completed command in 7.578s
+xv6 shell: starting echo DIR_OK > smdir/note
+xv6 shell: completed command in 6.089s
+xv6 shell: starting cat smdir/note
+xv6 shell: completed command in 2.595s
+xv6 shell: starting rm smdir/note
+xv6 shell: completed command in 3.925s
+xv6 shell: starting rm smdir
+xv6 shell: completed command in 3.862s
+xv6 shell: starting cat smdir/note
+xv6 shell: completed command in 3.279s
+xv6 shell: starting forktest
+xv6 shell: completed command in 25.675s
+xv6 shell: starting stressfs
+xv6 shell: completed command in 86.489s
