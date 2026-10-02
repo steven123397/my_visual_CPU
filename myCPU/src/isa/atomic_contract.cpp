@@ -4,6 +4,7 @@
 #include "../mem/address_space.h"
 #include "../mem/bus.h"
 #include "../trap.h"
+#include "../debug/memory_capture.h"
 
 namespace {
 
@@ -214,6 +215,8 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
                                    ? CAUSE_LOAD_ACCESS_FAULT
                                    : CAUSE_STORE_ACCESS_FAULT;
         result.trap = trap_request(cause, request.addr);
+        cpu.address_space().record_segment({request.addr, {}, static_cast<uint32_t>(request.size),
+            request.kind != AtomicRequest::Kind::LoadReserved, {}, MemoryOutcome::Fault});
         return result;
     }
 
@@ -223,11 +226,27 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
     const AddressSpace::TranslateResult translated =
         cpu.address_space().translate_result(bus, request.addr, access_type, true);
     if (!translated.ok) {
+        cpu.address_space().record_segment({request.addr, {}, static_cast<uint32_t>(request.size),
+            request.kind != AtomicRequest::Kind::LoadReserved, {}, MemoryOutcome::Fault});
         result.trap = translated.fault;
         return result;
     }
     result.paddr_valid = true;
     result.paddr = translated.paddr;
+
+    const auto load = [&](uint64_t& value, const char* kind) {
+        const bool ok = bus.try_load_observed(translated.paddr, request.size, value, "guest-data", kind);
+        cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size),
+            false, ok ? std::optional<uint64_t>(value) : std::nullopt, ok ? MemoryOutcome::Success : MemoryOutcome::Fault});
+        return ok;
+    };
+    const auto store = [&](uint64_t value, const char* kind) {
+        value = store_masked_value(value, request.size);
+        const bool ok = bus.try_store_observed(translated.paddr, value, request.size, "guest-data", kind);
+        cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size),
+            true, ok ? std::optional<uint64_t>(value) : std::nullopt, ok ? MemoryOutcome::Success : MemoryOutcome::Fault});
+        return ok;
+    };
 
     const auto note_platform_state = [&]() {
         result.platform_state_changed |= bus.last_access().valid && bus.last_access().mmio;
@@ -236,7 +255,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
     switch (request.kind) {
     case AtomicRequest::Kind::LoadReserved: {
         uint64_t loaded = 0;
-        if (!bus.try_load_observed(translated.paddr, request.size, loaded, "guest-data", "atomic-load-reserved")) {
+        if (!load(loaded, "atomic-load-reserved")) {
             result.trap = trap_request(CAUSE_LOAD_ACCESS_FAULT, request.addr);
             return result;
         }
@@ -252,15 +271,13 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
         const bool matched = cpu.trap().reservation_matches(translated.paddr, request.size);
         cpu.trap().clear_reservation();
         if (!matched) {
+            cpu.address_space().record_segment({request.addr, translated.paddr, static_cast<uint32_t>(request.size), true, {}, MemoryOutcome::NoAccess});
+            cpu.address_space().record_sc_result(1);
             result.rd_write = rd_write(request.rd, 1);
             result.ok = true;
             return result;
         }
-        if (!bus.try_store_observed(translated.paddr,
-                                    store_masked_value(request.store_value, request.size),
-                                    request.size,
-                                    "guest-data",
-                                    "atomic-store-conditional")) {
+        if (!store(request.store_value, "atomic-store-conditional")) {
             result.trap = trap_request(CAUSE_STORE_ACCESS_FAULT, request.addr);
             return result;
         }
@@ -268,6 +285,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
         result.memory_observed = true;
         result.write_observed = true;
         result.rd_write = rd_write(request.rd, 0);
+        cpu.address_space().record_sc_result(0);
         result.ok = true;
         return result;
     }
@@ -281,7 +299,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
     case AtomicRequest::Kind::MinUnsigned:
     case AtomicRequest::Kind::MaxUnsigned: {
         uint64_t loaded = 0;
-        if (!bus.try_load_observed(translated.paddr, request.size, loaded, "guest-data", "atomic-load")) {
+        if (!load(loaded, "atomic-load")) {
             result.trap = trap_request(CAUSE_STORE_ACCESS_FAULT, request.addr);
             return result;
         }
@@ -290,11 +308,7 @@ AtomicApplyResult apply_atomic_request(CPU& cpu, Bus& bus, const AtomicRequest& 
                                                    loaded,
                                                    request.store_value,
                                                    request.size);
-        if (!bus.try_store_observed(translated.paddr,
-                                    store_masked_value(stored, request.size),
-                                    request.size,
-                                    "guest-data",
-                                    "atomic-store")) {
+        if (!store(stored, "atomic-store")) {
             result.trap = trap_request(CAUSE_STORE_ACCESS_FAULT, request.addr);
             return result;
         }

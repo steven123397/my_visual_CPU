@@ -13,6 +13,8 @@ class CoreState;
 class CsrFile;
 class SimpleL1DataCache;
 class TrapController;
+struct MemoryRecord;
+struct MemorySegment;
 enum class PrivilegeMode : uint8_t;
 
 enum class AccessType : uint8_t {
@@ -75,6 +77,9 @@ public:
     bool store(Bus& bus, uint64_t addr, uint64_t value, int size);
     void flush_tlb();
     void bind_l1_data_cache(SimpleL1DataCache* cache);
+    void bind_memory_record(MemoryRecord* record) { memory_record_ = record; }
+    void record_segment(const MemorySegment& segment);
+    void record_sc_result(uint64_t value);
     PageInspectionContext inspection_context(AccessType type) const;
     PageInspection inspect_page(const Bus& bus, uint64_t addr, AccessType type,
                                 const PageInspectionContext& context) const;
@@ -123,4 +128,5 @@ private:
     SimpleL1DataCache* l1_data_cache_{nullptr};
     std::array<TlbEntry, 32> tlb_{};
     size_t next_tlb_victim_{0};
+    MemoryRecord* memory_record_{nullptr};
 };

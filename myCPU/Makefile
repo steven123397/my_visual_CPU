@@ -12,6 +12,7 @@ INDEPENDENT_HOST_TEST_BINS = tests/host/spike_differential_smoke
 HOST_TEST_SPLIT_BINS = tests/host/instruction_semantics_smoke_fp_compare_convert tests/host/instruction_semantics_smoke_fp_fma_flags tests/host/pipeline_backend_smoke_fp_arith_fma tests/host/pipeline_backend_smoke_fp_convert_tail
 HOST_TEST_BINS += $(HOST_TEST_SPLIT_BINS)
 HOST_TEST_BINS += tests/host/debug_inspection_smoke
+HOST_TEST_BINS += tests/host/memory_capture_smoke
 ASM_TESTS = hello sum control_flow csr_trap timer_interrupt mtvec_modes trap_state exception_traps access_faults mmio_access_faults loads_signed_unsigned alu_word branches_signed_unsigned muldiv muldiv_edge_cases illegal_integer_encodings fence_noop privilege_transitions sret_transitions supervisor_exception_delegation supervisor_timer_interrupt csr_access_control csr_illegal_matrix counteren_access_control instret_counting machine_counter_csrs interrupt_csr_views delegation_edge_cases plic_machine_external_interrupt plic_supervisor_external_interrupt storage_device_basic supervisor_platform_smoke sv39_basic sv39_page_fault sv39_edge_faults sv39_sum_mxr sv39_mprv sv39_pagewalk_contracts sv39_exec_privilege sv39_tlb_flush sv39_tlb_ad_bits csr_semantic_consistency clint_split_access
 ASM_ELFS  = $(ASM_TESTS:%=tests/asm/%.elf)
 ASM_DEPS  = $(ASM_ELFS:.elf=.d)
@@ -23,6 +24,7 @@ UNIT_TEST_NAMES = elf_loader_bss elf_loader_segments elf_loader_rejects elf_load
 UNIT_TEST_BINS = $(UNIT_TEST_NAMES:%=tests/unit/%)
 CI_HOST_TEST_NAMES = instruction_semantics_smoke rvc_semantics_smoke atomic_semantics_smoke address_space_faults_smoke predictor_smoke pipeline_backend_smoke pipeline_core_state_smoke pipeline_forwarding_smoke pipeline_commit_trace_smoke pipeline_rename_commit_smoke pipeline_speculation_contracts_smoke backend_differential_smoke debug_protocol_command_smoke debug_cli_smoke execution_profile_smoke vector_pipeline_smoke ai_tensor_golden_ops_smoke spike_differential_smoke
 CI_HOST_TEST_NAMES += debug_inspection_smoke
+CI_HOST_TEST_NAMES += memory_capture_smoke
 CI_HOST_TEST_BINS = $(CI_HOST_TEST_NAMES:%=tests/host/%) $(HOST_TEST_SPLIT_BINS)
 LINUX_COMPAT_ROOTFS_BUILTIN_UNIT_OBJS = tests/unit/linux_compat_rootfs_guest.o tests/unit/linux_compat_minimal_elf_asset_guest.o
 LINUX_COMPAT_CORE_UNIT_OBJS = tests/unit/linux_compat_guest.o tests/unit/linux_compat_debug_guest.o tests/unit/linux_compat_process_guest.o
