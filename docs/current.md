@@ -1,7 +1,7 @@
 # 当前状态
 
-- 所在分支：`codex/system-software-evidence-plan`；核对基点：`fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c`。
-- 工作范围：交付 [系统软件模拟器取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md)，供用户另开分支取证并回传，再决定后续调整。计划已做范围、依赖、证据与回传完整性自检；本轮仅文档检查，没有运行产品测试或修改产品代码。
+- 所在分支：`codex/system-software-evidence-plan`；核对基点：`c253ddad1862a8e222c74d633f9269390e418624`。
+- 工作范围：按用户要求在本分支执行 [系统软件模拟器取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md)。U1 报告与证据入口见 [取证报告](reviews/system-software-evidence-c253dda.md)：版本、环境、资产、测试目标与 Q1–Q6 覆盖清单已建立；构建结果见 E-U1-003。未运行产品测试或修改产品语义；U2–U5 尚未执行。
 - 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。
 - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。
 - 用户选定 MIT；根目录 `LICENSE` 与 README 许可入口已通过 PR #7 发布，xv6 原版权与许可保留。
@@ -19,7 +19,7 @@
 
 ## 阻断与已知缺口
 
-- 规划与 U1 无阻断。真实 Spike 可用性、观察副作用、完整 xv6 事件关联等尚待取证；独立参考不可用只阻断对应实验，不视为通过。
+- U1 环境查询完成：RISC-V GCC 10.2、host GCC 11.4；默认 Spike 不在 PATH 且未设置替代入口，真实差分为环境阻断。观察副作用、完整 xv6 事件关联尚待 U2–U4 取证；历史完整 CI 后有 UART/virtio/pipeline 变化，旧 run 不作为本次场景通过证据。
 
 - 历史 PR #15 的边界输入发现及后续处置由原审查会话承接，本轮未核对远端状态，不作为当前 main 的已证实缺陷。
 - fork PR、自定义 guest / xv6 工具链跨代组合、真实 Linux / OSComp / Spike 外部资产未验证。部署、定时、多平台与缓存仍未规划；本次未重新运行产品测试。
@@ -27,10 +27,10 @@
 
 ## 下一步
 
-- 用户另开取证分支，按上述 Plan 的 U1 固定版本和环境，随后完成 U2–U5，返回报告、证据入口与提交；不自动执行产品修复、COW 或观察平台建设。
+- 下一单元为上述 Plan 的 U2：核查行为一致性与副作用边界，使用 E-U1-003 重建资产并逐次记录配置/哈希；随后按依赖进入 U3–U5。不自动执行产品修复、COW 或观察平台建设。
 - #4、#5、#6 不由本 Plan 认领；既有 PR/Issue 后续仍由原审查会话承接。
 - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。
 
 ## 工作区未提交改动
 
-- 本计划 worktree 的交付范围仅为 Plan 与本文件，提交后预期无残留。原主工作区的 `docs/current.md`、`docs/reviews/2026-10-01-pr14-17-pre-merge.md` 和未跟踪的 `docs/reviews/2026-10-01-remote-pr-pre-merge.md` 属于其他会话，保持不动。
+- 本次 U1 仅提交取证报告、文本证据、审查记录及本单元 current 更新；既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本单元接管。
