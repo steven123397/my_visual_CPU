@@ -13,6 +13,7 @@ public:
     void step() override;
     const char* name() const override;
     BackendDebugSnapshot debug_snapshot() const override;
+    void synchronize_debug_gpr_write() override {}
 
 private:
     CPU& cpu_;

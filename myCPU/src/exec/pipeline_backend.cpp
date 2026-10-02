@@ -119,6 +119,16 @@ const char* PipelineBackend::name() const {
     return "pipeline";
 }
 
+void PipelineBackend::synchronize_debug_gpr_write() {
+    state_.flush(cpu_.core().pc());
+    state_.rollback_to_committed_state(cpu_.core());
+    state_.stalled = false;
+    state_.trap_flush = false;
+    state_.replay_flush = false;
+    state_.committed = false;
+    state_.interrupt_serviceable_at_cycle_start = false;
+}
+
 PipelineCoreState& PipelineBackend::testing_state() {
     return state_;
 }

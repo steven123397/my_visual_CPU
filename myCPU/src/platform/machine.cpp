@@ -451,7 +451,10 @@ void Machine::set_gpr(const std::string& reg_name, uint64_t value) {
     if (!loaded_) {
         throw std::runtime_error("machine image not loaded");
     }
-    cpu_.core().write_gpr(parse_gpr_index(reg_name), value);
+    const uint32_t index = parse_gpr_index(reg_name);
+    if (index == 0) return;
+    cpu_.core().write_gpr(index, value);
+    backend_->synchronize_debug_gpr_write();
 }
 
 void Machine::attach_storage_image(const std::string& path,

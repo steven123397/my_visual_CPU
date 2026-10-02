@@ -13,6 +13,8 @@
 #include "../../src/platform/machine.h"
 #include "../../src/platform/address_map.h"
 #include "../../src/isa/atomic_contract.h"
+#include "../../src/debug/debug_protocol.h"
+#include <sstream>
 
 namespace {
 
@@ -283,10 +285,119 @@ bool trigger_no_media_storage_error(Machine& machine) {
                   "storage error setup should raise no-media before reload");
 }
 
+bool test_paused_gpr_sync() {
+    const std::array<uint32_t, 9> code = {
+        0x00128313, // addi x6,x5,1
+        0x0063a023, // sw x6,0(x7)
+        0x00640023, // sb x6,0(x8)
+        0x00228313, // addi x6,x5,2
+        0x0063a223, // sw x6,4(x7)
+        0x00640023, // sb x6,0(x8)
+        0x00000513, 0x05d00893, 0x00000073,
+    };
+    const std::string path = create_temp_path("mycpu_gpr_sync");
+    {
+        std::ofstream file(path, std::ios::binary);
+        file.write(reinterpret_cast<const char*>(code.data()), sizeof(code));
+        if (!file) throw std::runtime_error("write GPR sync program failed");
+    }
+    struct Cleanup { std::string path; ~Cleanup() { std::remove(path.c_str()); } } cleanup{path};
+    constexpr uint64_t data = kBinaryAddr + 0x1000;
+    for (BackendKind kind : {BackendKind::Functional, BackendKind::Pipeline}) {
+        Machine unloaded;
+        unloaded.set_backend_kind(kind);
+        try { unloaded.set_gpr("x5", 41); return false; } catch (const std::runtime_error&) {}
+        for (unsigned cut = 0; cut < 24; ++cut) {
+            Machine machine;
+            machine.set_backend_kind(kind);
+            machine.load_binary(path, kBinaryAddr);
+            machine.uart().set_mirror_stdout(false);
+            machine.set_gpr("x5", 1);
+            machine.set_gpr("x7", data);
+            machine.set_gpr("x8", UART_BASE);
+            for (unsigned i = 0; i < cut && !machine.cpu().core().halted(); ++i) machine.step();
+            if (machine.cpu().core().halted()) continue;
+            const auto before = machine.backend().debug_snapshot();
+            const auto pc = machine.cpu().core().pc();
+            const auto cycle = machine.cpu().core().cycle();
+            const auto instret = machine.cpu().core().instret();
+            const auto mtime = machine.clint().mtime();
+            const auto output = machine.uart().output();
+            const auto old6 = machine.cpu().core().read_gpr(6);
+            uint64_t ram0 = 0, ram1 = 0;
+            machine.bus().try_load(data, 4, ram0);
+            machine.bus().try_load(data + 4, 4, ram1);
+            const auto bus_at_set = machine.bus().last_access();
+            for (const char* invalid : {"x32", "bogus"}) {
+                try { machine.set_gpr(invalid, 41); return false; } catch (const std::runtime_error&) {}
+            }
+            machine.set_gpr("zero", 99);
+            const auto unchanged = machine.backend().debug_snapshot();
+            if (!expect(unchanged.pipeline.ooo.rob_depth == before.pipeline.ooo.rob_depth &&
+                        unchanged.pipeline.last_sequence_id == before.pipeline.last_sequence_id,
+                        "invalid/x0 setters must preserve in-flight work")) return false;
+            machine.set_gpr("t0", 51);
+            machine.set_gpr("X5", 41);
+            const auto after = machine.backend().debug_snapshot();
+            if (!expect(machine.cpu().core().cycle() == cycle && machine.cpu().core().instret() == instret &&
+                        machine.cpu().core().pc() == pc && machine.clint().mtime() == mtime &&
+                        machine.uart().output() == output && machine.cpu().core().read_gpr(5) == 41 &&
+                        machine.cpu().core().read_gpr(0) == 0,
+                        "setter must change only GPR and uncommitted backend work")) return false;
+            if (!expect(after.profile.total_retirements == before.profile.total_retirements &&
+                        after.profile.total_memory_observations == before.profile.total_memory_observations &&
+                        after.profile.total_traps == before.profile.total_traps &&
+                        after.pipeline.last_sequence_id == before.pipeline.last_sequence_id &&
+                        after.pipeline.retire_trace.size() == before.pipeline.retire_trace.size() &&
+                        machine.bus().last_access().addr == bus_at_set.addr &&
+                        machine.bus().last_access().kind == bus_at_set.kind,
+                        "setter must retain history/profile and perform no bus access")) return false;
+            if (!expect(after.pipeline.empty && after.pipeline.ooo.rob_depth == 0 && after.pipeline.ooo.lsq_depth == 0 &&
+                        !after.pipeline.id_stage.valid && !after.pipeline.ex_stage.valid &&
+                        !after.pipeline.mem_stage.valid && !after.pipeline.wb_stage.valid,
+                        "setter must discard uncommitted slots/ROB/LSQ")) return false;
+            uint64_t check0 = 0, check1 = 0;
+            machine.bus().try_load(data, 4, check0);
+            machine.bus().try_load(data + 4, 4, check1);
+            if (!expect(check0 == ram0 && check1 == ram1, "setter must preserve committed RAM")) return false;
+            const uint64_t expected0 = pc > kBinaryAddr + 4 ? ram0 : pc > kBinaryAddr ? old6 : 42;
+            const uint64_t expected1 = pc > kBinaryAddr + 16 ? ram1 : pc > kBinaryAddr + 12 ? old6 : 43;
+            for (unsigned i = 0; i < 100 && !machine.cpu().core().halted(); ++i) machine.step();
+            machine.bus().try_load(data, 4, check0);
+            machine.bus().try_load(data + 4, 4, check1);
+            if (!expect(machine.cpu().core().halted() && check0 == expected0 && check1 == expected1,
+                        "resumed execution must use edited GPR at committed PC")) return false;
+            const std::string expected_output{static_cast<char>(expected0), static_cast<char>(expected1)};
+            if (!expect(machine.uart().output() == expected_output, "MMIO stores must commit exactly once")) return false;
+            const auto final = machine.backend().debug_snapshot();
+            uint64_t last = 0;
+            for (const auto& entry : final.pipeline.retire_trace) {
+                if (!expect(entry.sequence_id > last, "retirement sequence must remain monotonic")) return false;
+                last = entry.sequence_id;
+            }
+            if (!expect(machine.cpu().core().instret() == 9 && final.profile.total_retirements == 9,
+                        "resume must not duplicate or skip retirements")) return false;
+        }
+        std::ostringstream commands;
+        commands << "{\"cmd\":\"load\",\"image\":\"" << path << "\",\"flat\":true,\"addr\":\"0x80004000\",\"backend\":\""
+                 << (kind == BackendKind::Pipeline ? "pipeline" : "functional") << "\"}\n"
+                 << "{\"cmd\":\"set_gpr\",\"reg\":\"x5\",\"value\":41}\n"
+                 << "{\"cmd\":\"set_gpr\",\"reg\":\"x7\",\"value\":\"0x80005000\"}\n"
+                 << "{\"cmd\":\"set_gpr\",\"reg\":\"x8\",\"value\":\"0x10000000\"}\n"
+                 << "{\"cmd\":\"run_until_halt\",\"max_steps\":100}\n{\"cmd\":\"snapshot\"}\n{\"cmd\":\"quit\"}\n";
+        std::istringstream in(commands.str());
+        std::ostringstream out, err;
+        if (!expect(run_debug_cli(in, out, err) == 0 && out.str().find("\"0x2b\"") != std::string::npos,
+                    "protocol setter must reach resumed execution")) return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 int main() {
     try {
+        if (!test_paused_gpr_sync()) return 1;
         const std::array<uint8_t, 4> first_bytes = {0xAA, 0xBB, 0xCC, 0xDD};
         const std::array<uint8_t, 4> second_bytes = {0x11, 0x22, 0x00, 0x00};
 
