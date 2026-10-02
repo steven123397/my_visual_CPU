@@ -1,7 +1,8 @@
 # 当前状态
 
-- 所在分支：PR #17 的 `jules-13477484955571722239-266917ec`，本地整合分支 `codex/pr17-integration`；核对基点：main `a4e26d7c470999681838a67dcbfc52cc2eb54c3a`。
-- 工作范围：批量审查 Jules PR #14 至 #17。#14、#16 已合并；#17 已整合 main，保留 profile_int/profile_hex 两组测试，待更新 head 的必需 CI 通过后合并。审查记录见 [PR #14 至 #17](reviews/2026-10-01-pr14-17-pre-merge.md)。本地 security 测试 9 项、Python helper 测试 2 项通过；Python 新测试不在日常 CI 执行范围内。
+- 所在分支：`codex/system-software-evidence-plan`；核对基点：`fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c`。
+- 工作范围：交付 [系统软件模拟器取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md)，供用户另开分支取证并回传，再决定后续调整。计划已做范围、依赖、证据与回传完整性自检；本轮仅文档检查，没有运行产品测试或修改产品代码。
+- 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。
 - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。
 - 用户选定 MIT；根目录 `LICENSE` 与 README 许可入口已通过 PR #7 发布，xv6 原版权与许可保留。
 - GitHub 仓库描述已更新为“myCPU：可运行、可观察的 RISC-V 系统模拟器原型，包含共享指令语义、多执行后端、系统 workload、MMIO AI 加速器与浏览器调试工作台。”
@@ -18,16 +19,18 @@
 
 ## 阻断与已知缺口
 
-- PR #15 保持开放：firstForwardedIp 去掉字符串转换后，null、数字及数组输入抛出 TypeError；描述声称覆盖 null，但测试缺失，合并前需修正。正常 HTTP 字符串头未复现异常，不把此问题外推为已证实的远程漏洞。
+- 规划与 U1 无阻断。真实 Spike 可用性、观察副作用、完整 xv6 事件关联等尚待取证；独立参考不可用只阻断对应实验，不视为通过。
+
+- 历史 PR #15 的边界输入发现及后续处置由原审查会话承接，本轮未核对远端状态，不作为当前 main 的已证实缺陷。
 - fork PR、自定义 guest / xv6 工具链跨代组合、真实 Linux / OSComp / Spike 外部资产未验证。部署、定时、多平台与缓存仍未规划；本次未重新运行产品测试。
 - AI Issues 仅为后续方向讨论的材料，尚未认领、排期或形成实施 Plan。云端维护 agent（提交 PR / Issue、按 main 变化维护 Wiki）仅是用户构想，工具、权限、费用与审核边界均未决定，未安装或授权 bot。
 
 ## 下一步
 
-- 用户已授权审核并合并合格 PR；#17 整合提交推送后检查新 head 的 CI，再合并并核对最终 main 的两项 CI，不绕过保护。
-- PR #15 的异常输入处理和相应测试修正后再复核；#4、#5、#6 仍为未排期方向，未形成实施 Plan。
+- 用户另开取证分支，按上述 Plan 的 U1 固定版本和环境，随后完成 U2–U5，返回报告、证据入口与提交；不自动执行产品修复、COW 或观察平台建设。
+- #4、#5、#6 不由本 Plan 认领；既有 PR/Issue 后续仍由原审查会话承接。
 - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。
 
 ## 工作区未提交改动
 
-- 主工作区保留上一批 PR 的本地报告 `docs/reviews/2026-10-01-remote-pr-pre-merge.md`，不纳入本次提交。临时验证 worktree 和复现脚本不提交；本次相关报告随 #17 的冲突整合一起提交。
+- 本计划 worktree 的交付范围仅为 Plan 与本文件，提交后预期无残留。原主工作区的 `docs/current.md`、`docs/reviews/2026-10-01-pr14-17-pre-merge.md` 和未跟踪的 `docs/reviews/2026-10-01-remote-pr-pre-merge.md` 属于其他会话，保持不动。
