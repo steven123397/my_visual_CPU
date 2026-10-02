@@ -1,0 +1,20 @@
+/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/guest/system_software_fork_evidence.c: In function 'main':
+/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/guest/system_software_fork_evidence.c:24:36: error: format '%p' expects argument of type 'void *', but argument 4 has type 'long unsigned int' [-Werror=format=]
+   24 |     printf("EVIDENCE BEFORE %d %d %p\n", parent, getpid(), (uint64)cells);
+      |                                   ~^                       ~~~~~~~~~~~~~
+      |                                    |                       |
+      |                                    void *                  long unsigned int
+      |                                   %ld
+/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/guest/system_software_fork_evidence.c:27:35: error: format '%p' expects argument of type 'void *', but argument 4 has type 'long unsigned int' [-Werror=format=]
+   27 |     printf("EVIDENCE AFTER %d %d %p\n", parent, getpid(), (uint64)cells);
+      |                                  ~^                       ~~~~~~~~~~~~~
+      |                                   |                       |
+      |                                   void *                  long unsigned int
+      |                                  %ld
+/home/liangjiaqi/projects/my_visual_CPU/myCPU/tests/guest/system_software_fork_evidence.c:37:32: error: format '%p' expects argument of type 'void *', but argument 4 has type 'long unsigned int' [-Werror=format=]
+   37 |   printf("EVIDENCE REAP %d %d %p\n", parent, child, (uint64)cells);
+      |                               ~^                    ~~~~~~~~~~~~~
+      |                                |                    |
+      |                                void *               long unsigned int
+      |                               %ld
+cc1: all warnings being treated as errors

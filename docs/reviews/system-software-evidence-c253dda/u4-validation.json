@@ -1,0 +1,20 @@
+{
+  "event_counts": {
+    "mapping": 4,
+    "user_store": 2,
+    "zombie": 1,
+    "reclaimed": 2,
+    "result": 1
+  },
+  "expected_counts": {
+    "mapping": 4,
+    "user_store": 2,
+    "zombie": 1,
+    "reclaimed": 2,
+    "result": 1
+  },
+  "consistent_success": true,
+  "all_exits_zero": true,
+  "source_hashes_unchanged": true,
+  "asset_hashes_unchanged": true
+}

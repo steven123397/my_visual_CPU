@@ -2,7 +2,7 @@
 
 ## 范围与现场
 
-本报告承接 [系统软件取证计划](../plans/2026-10-02-1038-system-software-evidence-plan.md)，作为回传入口。U1 固定版本、环境及资产；[U2](system-software-evidence-c253dda-u2.md) 补局部一致性与权限/fence、真实 Spike 证据；[U3](system-software-evidence-c253dda-u3.md) 补观察配对、事件/时间口径，并记录 pipeline setter 与 MMU A/D 写回两项缺陷。U4/U5 尚未交付；普通 fork 结论待 U4，不能据局部测试宣称全 ISA 正确。以下 U1 内容保留其当时范围与未验证边界。
+本报告承接 [系统软件取证计划](../plans/2026-10-02-1038-system-software-evidence-plan.md)，作为回传入口。U1 固定版本、环境及资产；[U2](system-software-evidence-c253dda-u2.md) 补局部一致性与权限/fence、真实 Spike 证据；[U3](system-software-evidence-c253dda-u3.md) 补观察配对、事件/时间口径及两项产品缺陷；[U4](system-software-evidence-c253dda-u4.md) 已验证本次 functional 普通 fork、父子两页隔离和 exit/wait/局部回收。U5 回传整理尚未交付，不能据局部测试宣称全 ISA 正确。以下 U1 内容保留其当时范围与未验证边界。
 
 - 日期：2026-10-02；取证分支：`codex/system-software-evidence-plan`（用户指定沿用本分支）。
 - 实际 checkout：`c253ddad1862a8e222c74d633f9269390e418624`；规划基点：`fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c`。
