@@ -1,0 +1,37 @@
+{
+  "collector_argv": [
+    "/home/liangjiaqi/.nvm/versions/node/v24.16.0/bin/node",
+    "--input-type=module",
+    "-e",
+    "import{readFileSync,existsSync,readdirSync}from\"node:fs\";import{createHash}from\"node:crypto\";import{dirname,resolve}from\"node:path\";const dir=\"docs/reviews/system-software-evidence-c253dda\",sha=b=>createHash(\"sha256\").update(b).digest(\"hex\"),manifest=JSON.parse(readFileSync(dir+\"/u1-inventory.json\")),checks=[];for(const s of manifest.sources)if(sha(readFileSync(s.path))!==s.sha256)throw Error(\"changed product source \"+s.path);checks.push({check:\"unchanged product source manifest\",files:manifest.sources.length,passed:true});const files=readdirSync(dir).filter(n=>n.startsWith(\"u3\")&&n.endsWith(\".json\")&&n!==\"u3-validation.json\");for(const f of files)JSON.parse(readFileSync(dir+\"/\"+f));checks.push({check:\"U3 JSON parse\",files,passed:true});const p=\"docs/reviews/system-software-evidence-c253dda-u3.md\",md=readFileSync(p,\"utf8\");let links=0;for(const m of md.matchAll(/\\]\\(([^)]+)\\)/g)){if(m[1].startsWith(\"https:\"))continue;if(!existsSync(resolve(dirname(p),m[1])))throw Error(\"missing link \"+m[1]);links++}checks.push({check:\"local report links\",links,passed:true});const x=JSON.parse(readFileSync(dir+\"/u3-probe-final-runs.json\"));if(sha(readFileSync(x.source))!==x.source_sha256)throw Error(\"source mismatch\");checks.push({check:\"final source fingerprint\",sha256:x.source_sha256,passed:true});console.log(JSON.stringify({collector_argv:[process.execPath,...process.execArgv],initial_validation_error:\"First checker attempted to parse its own empty redirection output; corrected by excluding u3-validation.json. No product test result changed.\",checks},null,2));"
+  ],
+  "initial_validation_error": "First checker attempted to parse its own empty redirection output; corrected by excluding u3-validation.json. No product test result changed.",
+  "checks": [
+    {
+      "check": "unchanged product source manifest",
+      "files": 651,
+      "passed": true
+    },
+    {
+      "check": "U3 JSON parse",
+      "files": [
+        "u3-existing-runs.json",
+        "u3-guest-images.json",
+        "u3-probe-final-runs.json",
+        "u3-probe-retry-runs.json",
+        "u3-probe-runs.json"
+      ],
+      "passed": true
+    },
+    {
+      "check": "local report links",
+      "links": 7,
+      "passed": true
+    },
+    {
+      "check": "final source fingerprint",
+      "sha256": "743d534132d56bfc5dcd452743146043f03da888f696dd8f4ecdef58967c9f2e",
+      "passed": true
+    }
+  ]
+}

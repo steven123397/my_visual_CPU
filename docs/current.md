@@ -1,7 +1,7 @@
 # 当前状态
 
 - 所在分支：`codex/system-software-evidence-plan`；核对基点：`c253ddad1862a8e222c74d633f9269390e418624`。
-- 工作范围：按用户要求在本分支逐个完成 [系统软件模拟器取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md)。[取证报告](reviews/system-software-evidence-c253dda.md) 为入口；U1 固定现场，U2 已完成局部一致性、权限/fence 与真实 Spike 取证及审查。仅新增独立证据夹具，未修改产品语义；U3–U5 正在执行，尚未交付。
+- 工作范围：按用户要求在本分支逐个完成 [系统软件模拟器取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md)。[取证报告](reviews/system-software-evidence-c253dda.md) 为入口；U1–U3 已取证、审查交付，新增独立夹具及观察/时间/关联报告，未修改产品语义。U4 xv6 正在运行，U5 尚未交付。
 - 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。
 - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。
 - 用户选定 MIT；根目录 `LICENSE` 与 README 许可入口已通过 PR #7 发布，xv6 原版权与许可保留。
@@ -19,7 +19,7 @@
 
 ## 阻断与已知缺口
 
-- 取证环境：RISC-V GCC 10.2、host GCC 11.4；真实 Spike 位于 `/home/liangjiaqi/.local/riscv-spike/bin/spike`，使用显式 SPIKE_PATH。E-U2-020–024 五项 matched；E-U2-025–029 在 myCPU 内步数耗尽，未调用参考。F-U2-001 已复现原退出夹具缺陷。观察副作用、xv6 关联尚待 U3/U4 交付；旧 CI 不作为本次场景证据。
+- 取证环境：RISC-V GCC 10.2、host GCC 11.4；真实 Spike 位于 `/home/liangjiaqi/.local/riscv-spike/bin/spike`。五项真实匹配，另五项 myCPU 预算失败。U3 复现 F-U3-001 pipeline setter 执行视图不同步、F-U3-002 缓存 PTE 的 A/D 写回覆盖新 PPN；尚未证明普通 xv6 fork 触发。snapshot 配对成立，helper/翻译/planner 有各自副作用；关联窗口/丢失信号不足。debug CLI 超时、默认 Python 未运行和历史探针源码缺口已披露，旧 CI 不替代本轮证据。
 
 - 历史 PR #15 的边界输入发现及后续处置由原审查会话承接，本轮未核对远端状态，不作为当前 main 的已证实缺陷。
 - fork PR、自定义 guest / xv6 工具链跨代组合、真实 Linux / OSComp / Spike 外部资产未验证。部署、定时、多平台与缓存仍未规划；本次未重新运行产品测试。
@@ -27,10 +27,10 @@
 
 ## 下一步
 
-- 下一单元为上述 Plan 的 U3：核查观察副作用、事件关联和时间口径；随后继续 U4 普通 fork、U5 回传整理。用户已授权连续完成全部单元；不自动执行产品修复、COW 或观察平台建设。
+- 下一单元为上述 Plan 的 U4：完成普通 fork、父子页隔离与 exit/wait 取证，再进入 U5 回传整理。用户已授权连续完成全部单元；不自动执行产品修复、COW 或观察平台建设。
 - #4、#5、#6 不由本 Plan 认领；既有 PR/Issue 后续仍由原审查会话承接。
 - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。
 
 ## 工作区未提交改动
 
-- 本次 U2 提交报告、文本证据、独立夹具、审查及本单元 current 更新；U3/U4 工作草稿暂留。既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本单元接管。
+- 本次 U3 提交报告、文本证据、独立夹具、审查及本单元 current 更新；U4 工作草稿暂留。既有 current 审查补记、两个 PR 审查文件仍为外来未提交修改，未由本单元接管。
