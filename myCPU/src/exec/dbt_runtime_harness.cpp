@@ -345,6 +345,7 @@ DbtRuntimeLoopResult run_dbt_runtime_harness_loop(
     loop.default_backend_enabled = dbt_runtime_harness_is_default_enabled();
 
     for (uint64_t step = 0; step < request.max_steps; ++step) {
+        (void)step;
         const uint64_t pc = cpu.core().pc();
         const uint64_t block_end = pc;
         DbtJitEngineDryRun engine;

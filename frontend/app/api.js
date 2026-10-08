@@ -1,3 +1,14 @@
+/**
+ * @file api.js
+ * @brief Frontend API client for communication with backend server and WebSocket snapshot stream.
+ */
+
+/**
+ * Sends a POST request with JSON body to the specified endpoint.
+ * @param {string} pathname
+ * @param {Object} payload
+ * @returns {Promise<Object>}
+ */
 async function postJson(pathname, payload = {}) {
   const response = await fetch(pathname, {
     method: 'POST',

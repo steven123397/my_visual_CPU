@@ -1,3 +1,8 @@
+/**
+ * @file trap.h
+ * @brief Trap and exception management controller for RISC-V.
+ */
+
 #pragma once
 
 #include <cstdint>

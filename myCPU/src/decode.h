@@ -1,3 +1,8 @@
+/**
+ * @file decode.h
+ * @brief RISC-V instruction decoder definitions and decode structures.
+ */
+
 #pragma once
 #include <stdint.h>
 

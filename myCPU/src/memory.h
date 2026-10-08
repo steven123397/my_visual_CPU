@@ -1,3 +1,8 @@
+/**
+ * @file memory.h
+ * @brief RAM memory interface and byte-level read/write helpers.
+ */
+
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
