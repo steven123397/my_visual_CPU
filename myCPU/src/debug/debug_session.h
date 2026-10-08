@@ -1,3 +1,8 @@
+/**
+ * @file debug_session.h
+ * @brief High-level CPU simulation and interactive debugging session manager.
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -12,6 +17,10 @@
 #include "../platform/address_map.h"
 #include "../platform/machine.h"
 
+/**
+ * @class DebugSession
+ * @brief Manages machine lifecycle, breakpoints, step execution, and state snapshots for debugging.
+ */
 class DebugSession {
 public:
     struct UartOutputChunk {

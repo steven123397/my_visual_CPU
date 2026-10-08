@@ -1,3 +1,8 @@
+/**
+ * @file cpu.h
+ * @brief CPU execution context and register state container.
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -10,6 +15,10 @@
 
 class Bus;
 
+/**
+ * @class CPU
+ * @brief Encapsulates architectural core state, CSR file, trap controller, address space, and L1 cache.
+ */
 class CPU {
 public:
     CPU();
