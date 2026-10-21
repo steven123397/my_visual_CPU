@@ -3,6 +3,12 @@ import { spawn } from 'node:child_process';
 
 import { DEBUG_CLI_SESSION_BUDGET } from './debug_budget.mjs';
 
+/**
+ * Normalizes CLI response object or throws on error response type.
+ * @param {Object} response
+ * @param {string} [context='debug cli request']
+ * @returns {Object}
+ */
 export function normalizeCliResponse(response, context = 'debug cli request') {
   if (response && typeof response === 'object' && response.type === 'error') {
     const message = typeof response.message === 'string' && response.message.length > 0
@@ -13,7 +19,17 @@ export function normalizeCliResponse(response, context = 'debug cli request') {
   return response;
 }
 
+/**
+ * Manages a subprocess CLI debug session attached to `mycpu --debug-cli`.
+ */
 export class DebugCliSession {
+  /**
+   * @param {Object} options
+   * @param {string} options.binaryPath
+   * @param {Function} [options.spawnImpl=spawn]
+   * @param {number} [options.requestTimeoutMs]
+   * @param {number} [options.closeWaitTimeoutMs]
+   */
   constructor({
     binaryPath,
     spawnImpl = spawn,
