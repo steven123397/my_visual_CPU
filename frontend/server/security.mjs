@@ -18,6 +18,11 @@ function nowMs() {
   return Date.now();
 }
 
+/**
+ * Parses HTTP Cookie header into key-value map.
+ * @param {string} [header='']
+ * @returns {Object<string, string>}
+ */
 export function parseCookies(header = '') {
   const cookies = {};
   for (const part of String(header).split(';')) {
@@ -73,6 +78,11 @@ function firstForwardedIp(value = '') {
     .trim();
 }
 
+/**
+ * Extracts client IP address from request headers or socket.
+ * @param {Object} request
+ * @returns {string}
+ */
 export function clientIpForRequest(request) {
   const forwarded = firstForwardedIp(request.headers['x-forwarded-for']);
   if (forwarded) {
@@ -88,6 +98,16 @@ async function appendAuditLine(path, payload) {
   await fs.appendFile(path, `${JSON.stringify(payload)}\n`, 'utf8');
 }
 
+/**
+ * Helper function to generate scrypt password hash string for test suits.
+ * @param {string} password
+ * @param {Object} [options]
+ * @param {Buffer} [options.salt]
+ * @param {number} [options.N=16384]
+ * @param {number} [options.r=8]
+ * @param {number} [options.p=1]
+ * @returns {string}
+ */
 export function buildPasswordHashForTests(password, {
   salt = crypto.randomBytes(16),
   N = 16384,
@@ -98,6 +118,12 @@ export function buildPasswordHashForTests(password, {
   return `scrypt$${N}$${r}$${p}$${salt.toString('base64url')}$${hash.toString('base64url')}`;
 }
 
+/**
+ * Verifies password against encoded scrypt hash format using timing-safe comparison.
+ * @param {string} password
+ * @param {string} encodedHash
+ * @returns {boolean}
+ */
 export function verifyPassword(password, encodedHash) {
   if (typeof encodedHash !== 'string' || !encodedHash.startsWith('scrypt$')) {
     return false;
@@ -137,6 +163,11 @@ function parseIntegerEnv(value, fallback) {
   return parsed;
 }
 
+/**
+ * Cleans expired timestamps from a rate-limiting sliding window array in-place.
+ * @param {number[]} bucket
+ * @param {number} cutoff
+ */
 export function cleanupSlidingWindow(bucket, cutoff) {
   while (bucket.length > 0 && bucket[0] <= cutoff) {
     bucket.shift();
@@ -165,6 +196,11 @@ class SlidingWindowRateLimiter {
   }
 }
 
+/**
+ * Creates security manager for session authentication, rate limiting and controller locks.
+ * @param {Object} [options]
+ * @returns {Object}
+ */
 export function createSecurityManager({
   enabled = false,
   users = [],
@@ -459,6 +495,11 @@ export function createSecurityManager({
   };
 }
 
+/**
+ * Creates security manager initialized from environment variables.
+ * @param {Object} [env=process.env]
+ * @returns {Object}
+ */
 export function createSecurityManagerFromEnv(env = process.env) {
   const enabled = parseBooleanEnv(env.MYCPU_AUTH_ENABLED, false);
   const publicUnauthOk = parseBooleanEnv(env.MYCPU_PUBLIC_UNAUTH_OK, false);
