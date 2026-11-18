@@ -1,0 +1,100 @@
+{
+  "unit": "U2",
+  "checkout_sha": "1b54928fc0f1d2c7e39d2c9c781be4e9a43babc7",
+  "collector_argv": [
+    "/home/liangjiaqi/.nvm/versions/node/v24.16.0/bin/node",
+    "--input-type=module",
+    "-e",
+    "\nimport {spawnSync} from \"node:child_process\";import {readFileSync} from \"node:fs\";import {createHash} from \"node:crypto\";\nconst root=process.cwd(),cwd=root+\"/myCPU\",sha=b=>createHash(\"sha256\").update(b).digest(\"hex\"),entries=[];\nconst run=(id,argv,budget,metadata={})=>{const t=Date.now();const r=spawnSync(\"timeout\",[budget+\"s\",...argv],{cwd,encoding:\"utf8\",timeout:(budget+2)*1000,maxBuffer:8*1024*1024});return {evidence_id:id,argv:[\"timeout\",budget+\"s\",...argv],cwd,wall_budget_seconds:budget,wall_seconds:(Date.now()-t)/1000,exit_code:r.status,signal:r.signal,error:r.error?.message??null,stdout:r.stdout??\"\",stderr:r.stderr??\"\",...metadata};};\nentries.push(run(\"E-U2-011\",[\"make\",\"tests/host/system_software_permissions_evidence\",\"tests/asm/sv39_tlb_flush.elf\"],60,{category:\"build\",supersedes_build_failure:\"E-U2-007\"}));\nif(entries.at(-1).exit_code===0){entries.push(run(\"E-U2-012\",[\"./tests/host/system_software_permissions_evidence\"],3,{backend:\"functional/pipeline plus direct AddressSpace\",guest_cpus:1,ram_bytes:128*1024*1024,input:\"embedded SD/ADDI/ECALL, pre-set A/D, RW/readonly/unmapped\",step_budget:128,stop:\"halt via M ecall a7=93; cross-page direct API returns fault\",binary_sha256:sha(readFileSync(\"myCPU/tests/host/system_software_permissions_evidence\")),probe_source_sha256:sha(readFileSync(\"myCPU/tests/host/system_software_permissions_evidence.cpp\"))}));for(const [i,backend] of [\"functional\",\"pipeline\"].entries()) entries.push(run(\"E-U2-\"+String(13+i).padStart(3,\"0\"),[\"make\",backend===\"functional\"?\"test-sv39_tlb_flush\":\"test-pipeline-sv39_tlb_flush\"],15,{backend,guest_cpus:1,input:\"fixed assembly guest; expected UART TLB\",guest_elf_sha256:sha(readFileSync(\"myCPU/tests/asm/sv39_tlb_flush.elf\")),expectation_source:\"myCPU/tests/asm/sv39_tlb_flush.S\"}));}\nconsole.log(JSON.stringify({unit:\"U2\",checkout_sha:spawnSync(\"git\",[\"rev-parse\",\"HEAD\"],{encoding:\"utf8\"}).stdout.trim(),collector_argv:[process.execPath,...process.execArgv],entries},null,2));\n"
+  ],
+  "entries": [
+    {
+      "evidence_id": "E-U2-011",
+      "argv": [
+        "timeout",
+        "60s",
+        "make",
+        "tests/host/system_software_permissions_evidence",
+        "tests/asm/sv39_tlb_flush.elf"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 60,
+      "wall_seconds": 2.55,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "g++ -O2 -Wall -Wextra -g -std=c++17 -o tests/host/system_software_permissions_evidence tests/host/system_software_permissions_evidence.cpp src/memory.o src/decode.o src/cpu.o src/trap.o src/arch/core_state.o src/arch/csr_file.o src/arch/vector_state.o src/debug/debug_session.o src/debug/debug_protocol.o src/debug/debug_protocol_command.o src/debug/debug_protocol_response.o src/exec/system_ops.o src/exec/memory_ops.o src/exec/control_flow_ops.o src/exec/integer_ops.o src/exec/floating_ops.o src/exec/vector_ops.o src/exec/branch_predictor.o src/exec/execution_profile.o src/exec/dbt_block_plan.o src/exec/dbt_ir.o src/exec/dbt_ir_eval.o src/exec/dbt_ir_lowering.o src/exec/dbt_block_cache.o src/exec/dbt_executable_cache.o src/exec/dbt_executable_memory.o src/exec/dbt_helper_execution_bridge.o src/exec/dbt_helper_replay.o src/exec/dbt_host_emitter.o src/exec/dbt_jit_engine.o src/exec/dbt_reference_fallback.o src/exec/dbt_reference_fallback_execution.o src/exec/dbt_runtime_dispatch.o src/exec/dbt_runtime_harness.o src/exec/dbt_runtime_invalidation.o src/exec/dbt_translator.o src/exec/interpreter_dbt_prototype.o src/exec/pipeline_sequence.o src/exec/pipeline_commit_boundary.o src/exec/pipeline_core_state.o src/exec/pipeline_hazards.o src/exec/physical_register_file.o src/exec/rename_map.o src/exec/reorder_buffer.o src/exec/load_store_queue.o src/exec/functional_backend.o src/exec/pipeline_backend.o src/exec/pipeline_backend_cycle.o src/exec/pipeline_backend_execute.o src/exec/pipeline_backend_frontend.o src/isa/atomic_contract.o src/isa/execution_context.o src/isa/instruction_semantics.o src/mem/ram.o src/mem/bus.o src/mem/dma_transaction.o src/mem/simple_l1_cache.o src/mem/address_space.o src/devices/ai_graph_package.o src/devices/tensor_golden_ops.o src/devices/ai_submission_queue.o src/devices/ai_scratchpad.o src/devices/ai_dma_engine.o src/devices/ai_graph_scheduler.o src/devices/ai_compute_gemm.o src/devices/ai_compute_conv.o src/devices/ai_compute_elementwise.o src/devices/ai_accelerator.o src/devices/uart16550.o src/devices/clint.o src/devices/plic.o src/devices/simple_storage.o src/devices/virtqueue.o src/devices/virtio_device.o src/devices/virtio_blk.o src/devices/virtio_mmio.o src/loader/elf_loader.o src/loader/binary_loader.o src/platform/machine.o\n",
+      "stderr": "",
+      "category": "build",
+      "supersedes_build_failure": "E-U2-007"
+    },
+    {
+      "evidence_id": "E-U2-012",
+      "argv": [
+        "timeout",
+        "3s",
+        "./tests/host/system_software_permissions_evidence"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 3,
+      "wall_seconds": 0.006,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "{\"scenario\":\"user-rw-store\",\"backend\":\"functional\",\"steps\":5,\"cycle\":5,\"instret\":4,\"mcause\":8,\"mtval\":0,\"va\":24576,\"pa\":2147565568,\"memory\":1234605616436508552,\"x6\":6}\n{\"scenario\":\"user-readonly-store\",\"backend\":\"functional\",\"steps\":3,\"cycle\":3,\"instret\":2,\"mcause\":15,\"mtval\":24576,\"va\":24576,\"pa\":2147565568,\"memory\":0,\"x6\":0}\n{\"scenario\":\"user-unmapped-store\",\"backend\":\"functional\",\"steps\":3,\"cycle\":3,\"instret\":2,\"mcause\":15,\"mtval\":24576,\"va\":24576,\"pa\":2147565568,\"memory\":0,\"x6\":0}\n{\"scenario\":\"user-rw-store\",\"backend\":\"pipeline\",\"steps\":12,\"cycle\":12,\"instret\":4,\"mcause\":8,\"mtval\":0,\"va\":24576,\"pa\":2147565568,\"memory\":1234605616436508552,\"x6\":6}\n{\"scenario\":\"user-readonly-store\",\"backend\":\"pipeline\",\"steps\":10,\"cycle\":10,\"instret\":2,\"mcause\":15,\"mtval\":24576,\"va\":24576,\"pa\":2147565568,\"memory\":0,\"x6\":0}\n{\"scenario\":\"user-unmapped-store\",\"backend\":\"pipeline\",\"steps\":10,\"cycle\":10,\"instret\":2,\"mcause\":15,\"mtval\":24576,\"va\":24576,\"pa\":2147565568,\"memory\":0,\"x6\":0}\n{\"scenario\":\"cross-page-result-api\",\"backend\":\"direct-address-space\",\"ok\":false,\"cause\":15,\"tval\":28672,\"written_prefix\":1432778632}\n",
+      "stderr": "",
+      "backend": "functional/pipeline plus direct AddressSpace",
+      "guest_cpus": 1,
+      "ram_bytes": 134217728,
+      "input": "embedded SD/ADDI/ECALL, pre-set A/D, RW/readonly/unmapped",
+      "step_budget": 128,
+      "stop": "halt via M ecall a7=93; cross-page direct API returns fault",
+      "binary_sha256": "a369386597ea46b5f49f225f5636af0db534a2bbad457d6f5d99e699422b018a",
+      "probe_source_sha256": "2787ded7cfefc2439373efd287a16912b40f6ae44c8af1fabedd2771a183a7c1"
+    },
+    {
+      "evidence_id": "E-U2-013",
+      "argv": [
+        "timeout",
+        "15s",
+        "make",
+        "test-sv39_tlb_flush"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 15,
+      "wall_seconds": 0.129,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "=== sv39_tlb_flush ===\nTLB\n",
+      "stderr": "",
+      "backend": "functional",
+      "guest_cpus": 1,
+      "input": "fixed assembly guest; expected UART TLB",
+      "guest_elf_sha256": "9c5d09bf96d8bc4efcf50f23683666c08b1d5f25d877cbd7f753c8177a63a288",
+      "expectation_source": "myCPU/tests/asm/sv39_tlb_flush.S"
+    },
+    {
+      "evidence_id": "E-U2-014",
+      "argv": [
+        "timeout",
+        "15s",
+        "make",
+        "test-pipeline-sv39_tlb_flush"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 15,
+      "wall_seconds": 0.126,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "=== sv39_tlb_flush (pipeline) ===\nTLB\n",
+      "stderr": "",
+      "backend": "pipeline",
+      "guest_cpus": 1,
+      "input": "fixed assembly guest; expected UART TLB",
+      "guest_elf_sha256": "9c5d09bf96d8bc4efcf50f23683666c08b1d5f25d877cbd7f753c8177a63a288",
+      "expectation_source": "myCPU/tests/asm/sv39_tlb_flush.S"
+    }
+  ]
+}

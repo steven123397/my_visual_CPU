@@ -1,0 +1,32 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "diff --git a/myCPU/Makefile b/myCPU/Makefile\nindex 4cf5ebc..6a04da2 100644\n--- a/myCPU/Makefile\n+++ b/myCPU/Makefile\n@@ -1746,5 +1746,7 @@ tests/host/interactive_terminal_smoke \\\n tests/host/course_os_shell_terminal_smoke \\\n tests/host/course_os_linux_compat_terminal_smoke: tests/host/terminal_smoke_harness.h\n \n+tests/host/spike_differential_smoke: $(wildcard tests/host/spike_differential/*.h)\n+\n tests/host/%: tests/host/%.cpp $(CORE_OBJS)\n \t$(CXX) $(CXXFLAGS) -o $@ $< $(CORE_OBJS)\n",
+  "argv": [
+    "timeout",
+    "120s",
+    "make",
+    "-C",
+    "myCPU",
+    "test-host-spike_differential_smoke"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+  "environment": {},
+  "started_unix": 1790929177.420679,
+  "wall_seconds": 10.528,
+  "exit_code": 0,
+  "wall_budget_seconds": 120,
+  "source_manifest": "sources-51a76cc203ef.json",
+  "source_manifest_sha256": "51a76cc203ef80dd0311c0a30eaaf59073a594cc0f00b7faeaa920ad51de5a58",
+  "logs": {
+    "stdout": {
+      "path": "dependency-fix-self-test.stdout",
+      "sha256": "33ca3ad532dc0321f83ac2e5b8de330840f078d433a78624ad8ed81bbded2bfc"
+    },
+    "stderr": {
+      "path": "dependency-fix-self-test.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "input_files_before_sha256": {},
+  "input_files_after_sha256": {}
+}

@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../cpu.h"
+#include "../debug/memory_capture.h"
 
 #include "../devices/clint.h"
 #include "../devices/ai_accelerator.h"
@@ -63,6 +64,12 @@ public:
     };
 
     Machine();
+    void capture_start(const CaptureConfig& config = {});
+    void capture_stop();
+    void capture_clear();
+    CaptureMetadata capture_metadata() const { return capture_->metadata(); }
+    CapturePage capture_read(CaptureCursor cursor, size_t limit = 256) const { return capture_->read(cursor, limit); }
+    void require_mutable() const { capture_->require_mutable(); }
 
     void set_backend_kind(BackendKind kind);
     BackendKind backend_kind() const;
@@ -99,13 +106,25 @@ public:
     ExecutionBackend& backend();
     const ExecutionBackend& backend() const;
     bool loaded() const;
+    std::vector<uint8_t> inspect_memory(uint64_t addr, size_t size) const {
+        return bus_.inspect_memory(addr, size);
+    }
+    PageInspection inspect_page(uint64_t addr, AccessType type,
+                                 const PageInspectionContext& context) const {
+        return cpu_.address_space().inspect_page(bus_, addr, type, context);
+    }
+    PageInspection inspect_page(uint64_t addr, AccessType type) const {
+        return inspect_page(addr, type, cpu_.address_space().inspection_context(type));
+    }
 
 private:
+    friend class DebugSession;
     void bind_block_transport();
     void rebuild_backend();
     void finish_image_load(uint64_t entry, Ram& staged_ram);
 
     CPU cpu_{};
+    std::shared_ptr<MemoryCapture> capture_{std::make_shared<MemoryCapture>()};
     Ram ram_;
     Plic plic_;
     Uart16550 uart_;

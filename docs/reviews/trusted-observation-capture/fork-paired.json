@@ -1,0 +1,139 @@
+{
+  "passed": true,
+  "off_stdout_sha256": "f9e59c6f5ff19993b31e106640262bbf4d58a2fbc30d006aa00ec9dba6f2dc73",
+  "capture_stdout_sha256": "11d32530f01a5a0074b88fdc6492990e60121730ef216c9ee29e224ee09208ae",
+  "identical_mapping_os_events": 7,
+  "identical_uart_bytes_through_reap": 167,
+  "existing_forktest_passed_both": true,
+  "captured_actual_child_stores": 2,
+  "metadata": {
+    "type": "capture-metadata",
+    "schema_version": 1,
+    "capabilities": {
+      "inspection_backends": [
+        "functional",
+        "pipeline"
+      ],
+      "capture_backends": [
+        "functional"
+      ],
+      "harts": [
+        0
+      ],
+      "supported": [
+        "scalar-integer",
+        "compressed-integer",
+        "lr",
+        "sc",
+        "amo"
+      ],
+      "excluded": [
+        "fetch",
+        "page-walk",
+        "dma",
+        "fp",
+        "vector",
+        "pipeline-speculation"
+      ],
+      "counts": "model-cycle-instret",
+      "max_segments": 4,
+      "max_page_records": 256
+    },
+    "state": "stopped",
+    "capture_id": "0x1",
+    "machine_generation": "0x1",
+    "attempted": "0x3a436",
+    "filtered": "0x3a434",
+    "recorded": "0x2",
+    "dropped": "0x0",
+    "unsupported": "0x0",
+    "first_id": "0x1509",
+    "last_id": "0x150a",
+    "supported_window_complete": true,
+    "config": {
+      "capacity": "0x10",
+      "operation": "store",
+      "effective_privilege": "U",
+      "satp": "0x8000000000087f54",
+      "va_begin": "0x2000",
+      "va_end": "0x3008"
+    }
+  },
+  "records": [
+    {
+      "type": "memory-record",
+      "schema_version": 1,
+      "backend": "functional",
+      "hart": 0,
+      "capture_id": "0x1",
+      "machine_generation": "0x1",
+      "instruction_id": "0x1509",
+      "pc": "0xe8",
+      "raw": "0xf4b023",
+      "instruction_bytes": 4,
+      "privilege": "U",
+      "effective_privilege": "U",
+      "satp": "0x8000000000087f54",
+      "start_cycle": "0x19e6fd23",
+      "start_instret": "0x19e6fcd0",
+      "end_cycle": "0x19e6fd24",
+      "end_instret": "0x19e6fcd1",
+      "operation": "store",
+      "atomic_kind": 0,
+      "va": "0x2000",
+      "bytes": 8,
+      "store_value": "0xaabbccdd",
+      "retired": true,
+      "sc_result": null,
+      "trap": null,
+      "segments": [
+        {
+          "va": "0x2000",
+          "pa": "0x87f29000",
+          "bytes": 8,
+          "write": true,
+          "value": "0xaabbccdd",
+          "outcome": "success"
+        }
+      ]
+    },
+    {
+      "type": "memory-record",
+      "schema_version": 1,
+      "backend": "functional",
+      "hart": 0,
+      "capture_id": "0x1",
+      "machine_generation": "0x1",
+      "instruction_id": "0x150a",
+      "pc": "0xfc",
+      "raw": "0xf0f73423",
+      "instruction_bytes": 4,
+      "privilege": "U",
+      "effective_privilege": "U",
+      "satp": "0x8000000000087f54",
+      "start_cycle": "0x19e6fd28",
+      "start_instret": "0x19e6fcd5",
+      "end_cycle": "0x19e6fd29",
+      "end_instret": "0x19e6fcd6",
+      "operation": "store",
+      "atomic_kind": 0,
+      "va": "0x3000",
+      "bytes": 8,
+      "store_value": "0xeeff0011",
+      "retired": true,
+      "sc_result": null,
+      "trap": null,
+      "segments": [
+        {
+          "va": "0x3000",
+          "pa": "0x87f2a000",
+          "bytes": 8,
+          "write": true,
+          "value": "0xeeff0011",
+          "outcome": "success"
+        }
+      ]
+    }
+  ],
+  "scope": "functional/single hart; two user pages; UART comparison ends before existing forktest"
+}

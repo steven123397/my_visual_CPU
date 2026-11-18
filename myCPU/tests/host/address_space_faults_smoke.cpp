@@ -49,6 +49,7 @@ public:
         : Device(base, size) {}
 
     uint64_t load(uint64_t addr, int size) override {
+        if (fail_reads) throw std::runtime_error("page table read failure");
         if (size != 8) {
             invalid_access(addr, size);
         }
@@ -75,6 +76,8 @@ public:
     void set_pte(uint64_t addr, uint64_t pte) {
         ptes_[addr] = pte;
     }
+
+    bool fail_reads{false};
 
 private:
     std::unordered_map<uint64_t, uint64_t> ptes_;
@@ -106,9 +109,55 @@ bool expect(bool condition, const char* message) {
     return true;
 }
 
+bool test_cached_ad_updates() {
+    Ram ram;
+    Bus bus(ram);
+    CPU cpu;
+    constexpr uint64_t leaf = LEVEL0_PAGE_TABLE + 16;
+    const uint64_t pte_b = ((DATA_BACKING_PAGE_B >> 12) << 10) | 0x7ULL;
+    // Include a cached A=1,D=0 entry: only the store needs an update.
+    for (bool dirty_only : {false, true}) {
+        for (uint64_t replacement : {pte_b, pte_b & ~uint64_t{4}, uint64_t{0}}) {
+            cpu_init(cpu, MEM_BASE);
+            map_sv39_data_page(ram, DATA_BACKING_PAGE_A);
+            ram.store(DATA_BACKING_PAGE_A, 0x11111111, 4);
+            ram.store(DATA_BACKING_PAGE_B, 0x22222222, 4);
+            cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+            cpu.csr().write(CSR_SATP, SATP_MODE_SV39 | (ROOT_PAGE_TABLE >> 12), cpu.core());
+            const auto cached = cpu.address_space().translate_result(bus, DATA_VADDR, AccessType::Load, dirty_only);
+            if (!expect(cached.ok && cached.paddr == DATA_BACKING_PAGE_A, "cache initial mapping")) return false;
+            write64(ram, leaf, replacement);
+            const auto result = cpu.address_space().store_result(bus, DATA_VADDR, 0x33333333, 4);
+            if (replacement == pte_b) {
+                if (!expect(result.ok && ram.load(leaf, 8) == (pte_b | 0xC0), "A/D update must preserve replacement PPN")) return false;
+                if (!expect(ram.load(DATA_BACKING_PAGE_B, 4) == 0x33333333, "store must use replacement mapping")) return false;
+                cpu.address_space().flush_tlb();
+                const auto after = cpu.address_space().load_result(bus, DATA_VADDR, 4);
+                if (!expect(after.ok && after.value == 0x33333333, "replacement must survive flush")) return false;
+            } else {
+                if (!expect(!result.ok && result.fault.cause == 15 && result.fault.tval == DATA_VADDR,
+                            "changed invalid/readonly PTE must produce store page fault")) return false;
+                if (!expect(ram.load(leaf, 8) == replacement && ram.load(DATA_BACKING_PAGE_B, 4) == 0x22222222,
+                            "fault must preserve PTE and data")) return false;
+            }
+            if (!expect(ram.load(DATA_BACKING_PAGE_A, 4) == 0x11111111, "must not store to cached old page")) return false;
+        }
+    }
+    cpu_init(cpu, MEM_BASE);
+    map_sv39_data_page(ram, DATA_BACKING_PAGE_A);
+    cpu.core().set_privilege_mode(PrivilegeMode::Supervisor);
+    cpu.csr().write(CSR_SATP, SATP_MODE_SV39 | (ROOT_PAGE_TABLE >> 12), cpu.core());
+    if (!expect(cpu.address_space().translate_result(bus, DATA_VADDR, AccessType::Load, false).ok, "cache without A update")) return false;
+    write64(ram, leaf, pte_b);
+    const auto load = cpu.address_space().load_result(bus, DATA_VADDR, 4);
+    return expect(load.ok && load.value == 0x22222222 && ram.load(leaf, 8) == (pte_b | 0x40),
+                  "load A update must rewalk changed mapping");
+}
+
 }  // namespace
 
 int main() {
+    if (!test_cached_ad_updates()) return 1;
     Ram ram;
     Bus bus(ram);
     CPU cpu;
@@ -367,5 +416,17 @@ int main() {
         return 1;
     }
 
+    // A cached translation must still surface failure of the mandatory A/D check.
+    for (AccessType type : {AccessType::Instruction, AccessType::Load, AccessType::Store}) {
+        cpu.address_space().flush_tlb();
+        const auto cached = cpu.address_space().translate_result(bus, AD_UPDATE_BUS_FAULT_VADDR, type, false);
+        if (!expect(cached.ok, "readonly PTE should cache without updating A/D")) return 1;
+        readonly_page_table.fail_reads = true;
+        const auto failed = cpu.address_space().translate_result(bus, AD_UPDATE_BUS_FAULT_VADDR, type);
+        readonly_page_table.fail_reads = false;
+        const uint64_t cause = type == AccessType::Instruction ? 1 : type == AccessType::Load ? 5 : 7;
+        if (!expect(!failed.ok && failed.fault.cause == cause && failed.fault.tval == AD_UPDATE_BUS_FAULT_VADDR,
+                    "cached A/D check read failure must return original access fault")) return 1;
+    }
     return 0;
 }

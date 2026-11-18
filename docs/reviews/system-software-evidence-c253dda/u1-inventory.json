@@ -1,0 +1,3027 @@
+{
+  "evidence_id": "E-U1-001",
+  "captured_at": "2026-10-02T03:00:53.930Z",
+  "root": "/home/liangjiaqi/projects/my_visual_CPU",
+  "scope": "U1 inventory; no guest execution",
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.006,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "c253ddad1862a8e222c74d633f9269390e418624\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "status",
+        "--short",
+        "--untracked-files=all"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.009,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": " M docs/current.md\n M docs/reviews/2026-10-01-pr14-17-pre-merge.md\n?? docs/reviews/2026-10-01-remote-pr-pre-merge.md\n?? docs/reviews/system-software-evidence-c253dda/u1-inventory.json\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--binary",
+        "HEAD"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.007,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "diff --git a/docs/current.md b/docs/current.md\nindex 5940153..79c0800 100644\n--- a/docs/current.md\n+++ b/docs/current.md\n@@ -2,7 +2,7 @@\n \n - 所在分支：`codex/system-software-evidence-plan`；核对基点：`fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c`。\n - 工作范围：交付 [系统软件模拟器取证计划](plans/2026-10-02-1038-system-software-evidence-plan.md)，供用户另开分支取证并回传，再决定后续调整。计划已做范围、依赖、证据与回传完整性自检；本轮仅文档检查，没有运行产品测试或修改产品代码。\n-- 本分支基点已包含 PR #17 合并提交；此前 PR #14 至 #17 审查记录见 [报告](reviews/2026-10-01-pr14-17-pre-merge.md)。其云端状态与主工作区其他会话的补记，本轮不重新审查或代为提交。\n+- 原审查会话保留记录：批量审查 Jules PR #14 至 #17。#14、#16、#17 已合并；#17 保留 profile_int/profile_hex 两组测试。审查记录见 [PR #14 至 #17](reviews/2026-10-01-pr14-17-pre-merge.md)。本地 security 测试 9 项、Python helper 测试 2 项通过；Python 新测试不在日常 CI 执行范围内。#17 整合 head `95616ec` 的 CI 36882931461/2 成功，原前端 attempt 1 取消不计通过；最终 main CI 36884322845/1 的 simulator-core 与 frontend 均成功，已回读精确 SHA。\n - 新建未排期的 enhancement：[#4 模型与数值精度](https://github.com/steven123397/my_visual_CPU/issues/4)、[#5 计算与时序模型](https://github.com/steven123397/my_visual_CPU/issues/5)、[#6 AI 可观察性](https://github.com/steven123397/my_visual_CPU/issues/6)。已查重并对照当前实现，原建议的过时缺口及未经验证的性能数字未作为现行事实；原稿随本次提交删除，可从核对基点追溯。\n - 用户选定 MIT；根目录 `LICENSE` 与 README 许可入口已通过 PR #7 发布，xv6 原版权与许可保留。\n - GitHub 仓库描述已更新为“myCPU：可运行、可观察的 RISC-V 系统模拟器原型，包含共享指令语义、多执行后端、系统 workload、MMIO AI 加速器与浏览器调试工作台。”\n@@ -21,16 +21,16 @@\n \n - 规划与 U1 无阻断。真实 Spike 可用性、观察副作用、完整 xv6 事件关联等尚待取证；独立参考不可用只阻断对应实验，不视为通过。\n \n-- 历史 PR #15 的边界输入发现及后续处置由原审查会话承接，本轮未核对远端状态，不作为当前 main 的已证实缺陷。\n+- PR #15 已按用户要求关闭且未合并，由 [Issue #18](https://github.com/steven123397/my_visual_CPU/issues/18) 承接 firstForwardedIp 的边界测试与异常输入契约。null、数字及数组的 TypeError 是原 PR 分支引入的回归，未进入 main；正常 HTTP 字符串头未复现异常，不作为已证实的远程漏洞。Issue 尚未认领或实施。\n - fork PR、自定义 guest / xv6 工具链跨代组合、真实 Linux / OSComp / Spike 外部资产未验证。部署、定时、多平台与缓存仍未规划；本次未重新运行产品测试。\n - AI Issues 仅为后续方向讨论的材料，尚未认领、排期或形成实施 Plan。云端维护 agent（提交 PR / Issue、按 main 变化维护 Wiki）仅是用户构想，工具、权限、费用与审核边界均未决定，未安装或授权 bot。\n \n ## 下一步\n \n - 用户另开取证分支，按上述 Plan 的 U1 固定版本和环境，随后完成 U2–U5，返回报告、证据入口与提交；不自动执行产品修复、COW 或观察平台建设。\n-- #4、#5、#6 不由本 Plan 认领；既有 PR/Issue 后续仍由原审查会话承接。\n+- Issue #18 明确异常输入及回退契约并补测试后，通过新 PR 交付与复核；#4、#5、#6 仍为未排期方向，未形成实施 Plan。 本取证计划不认领这些 Issue。\n - 云端维护 agent 留待新对话独立评估，不默认采用 Grok bot，也不自动创建相关 Issue 或 workflow。\n \n ## 工作区未提交改动\n \n-- 本计划 worktree 的交付范围仅为 Plan 与本文件，提交后预期无残留。原主工作区的 `docs/current.md`、`docs/reviews/2026-10-01-pr14-17-pre-merge.md` 和未跟踪的 `docs/reviews/2026-10-01-remote-pr-pre-merge.md` 属于其他会话，保持不动。\n+- 本目录已切到 `codex/system-software-evidence-plan`。原审查会话对 `docs/current.md` 与 `docs/reviews/2026-10-01-pr14-17-pre-merge.md` 的补记，以及未跟踪的 `docs/reviews/2026-10-01-remote-pr-pre-merge.md` 均保留为未提交改动；current 已合并计划入口与原审查结果。\ndiff --git a/docs/reviews/2026-10-01-pr14-17-pre-merge.md b/docs/reviews/2026-10-01-pr14-17-pre-merge.md\nindex 020d0fc..8eb071a 100644\n--- a/docs/reviews/2026-10-01-pr14-17-pre-merge.md\n+++ b/docs/reviews/2026-10-01-pr14-17-pre-merge.md\n@@ -5,7 +5,7 @@\n - **路径**：NexusKit pre-merge，主会话检查，零专项代理；不宣称独立全面审查。\n - **覆盖**：完整 diff、helper 与消费者、测试接线、CI 实际 checkout、组合验证及异常输入复现。\n - **审查轮次**：第 1 轮，2026-10-01。\n-- **概要**：待修 1 / 已修复 0 / 遗留-转 Issue 0。#14、#16、#17 范围内未发现需处理的产品问题，#15 暂不合并。\n+- **概要**：待修 0 / 已修复 0 / 遗留-转 Issue 1。#14、#16、#17 范围内未发现需处理的产品问题；#15 已关闭且未合并，由 Issue #18 承接。\n \n ## 快照与证据\n \n@@ -20,13 +20,14 @@\n \n ## 发现\n \n-### [R1-F01] P2 · 待修 · firstForwardedIp 丢失非字符串输入容错\n+### [R1-F01] P2 · 遗留-转 Issue · firstForwardedIp 丢失非字符串输入容错\n \n - **位置**：PR #15 的 `frontend/server/security.mjs:71`。\n - **来源**：主会话（置信度 100）。\n - **问题**：`const parts = value.split(',');` 去掉原有 `String(value)` 后，null、数字和数组会抛出 TypeError。通过 `clientIpForRequest` 传入 null 转发头也会抛错。PR 描述声称处理 null，但新增测试只覆盖 undefined 和字符串。正常 Node HTTP 字符串头未复现异常，此发现是 helper/请求适配层的容错回归，不宣称已证实远程漏洞。\n - **建议**：明确 null 的空值语义并保留其他既有输入的字符串归一化，例如 `String(value ?? '')`，补 null、数字和数组案例；跳过空字段的行为需有测试。函数仍未校验 IP 格式，描述应使用“首个非空字段”，避免宣称首个合法 IP。\n - **证据**：新 head 原文 `frontend/server/security.mjs:71 -- const parts = value.split(',');`。从该 head 提取模块后分别调用 `firstForwardedIp(null)`、`firstForwardedIp(42)`、`firstForwardedIp(['1.2.3.4','5.6.7.8'])`，均复现 TypeError；null 请求头经消费者也复现。\n+- **去向**：用户要求创建 [Issue #18](https://github.com/steven123397/my_visual_CPU/issues/18) 后关闭 PR #15，已执行并回读确认。Issue 同时承接 main 的真实边界测试缺口和输入契约澄清；分支回归未进入 main，不记为已修复，尚未开始实施。\n \n ## 合格项与组合验证\n \n@@ -41,3 +42,13 @@\n 日常 `test-ci-core` 未执行 run_debug_cli_probe_test.py，test-verification-layers 仅检查目标结构，所以其绿色结果不能证明 #16/#17 的新增测试实际运行；本次用上述本地命令补齐。完整回归会运行该 probe 测试文件，本次未重跑完整回归和外部 Linux/OSComp/Spike 资产。\n \n 四项聚焦检查已完成：目标闭环、接口一致、后续改动影响、组合遗漏。无已记录架构契约变化，无需同步 Wiki。未跟踪文件仅作临时复现和记录，不纳入产品快照；主工作区上一批未提交报告保留。后续 #17 head/最终 main 的 CI 状态将在本地报告中补记，不把尚未运行记为通过。\n+\n+## 整合复核与合并结果\n+\n+#17 通过 `95616ec844a6fdff29523914f416c49ad2182c51` 合并 main，冲突仅保留两个测试方法，没有修改生产逻辑。相对于新 main 的 Python 差异仍为原 #17 的 19 行断言；另外提交了本报告和必要的 current 更新。重新执行两个 helper 测试通过。\n+\n+[36882931461/2](https://github.com/steven123397/my_visual_CPU/actions/runs/36882931461/attempts/2) SUCCESS：simulator-core 复用 attempt 1 成功结果，frontend 在 attempt 2 成功。两项实际 checkout 均为 `4c990a735098c1eee9d5c6de9685256791b61a17`，已读取日志核对；前端 172 项通过、1 项外部 skip。原 frontend attempt 1 安装工具链期间 Ubuntu 镜像下载重试并长时间等待，取消后仅重跑该 job；该取消结果不计为通过。未变的审查内容继续复用，无新增发现。\n+\n+#14 合并提交 `7800dfe07db9a51eb1fea5bee80e94f90dfd003a`，#16 为 `a4e26d7c470999681838a67dcbfc52cc2eb54c3a`，#17 为 `fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c`。#15 后续按用户要求关闭且未合并，承接位置为 Issue #18；本地 main 已同步，临时验证 worktree 已移除。本节后续证据为本地补记，尚未另行提交。\n+\n+最终 main `fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c` 的 [36884322845/1](https://github.com/steven123397/my_visual_CPU/actions/runs/36884322845/attempts/1) 为 SUCCESS，已回读 run 的 head SHA、attempt 和 simulator-core/frontend 两项成功结果。完整回归未重跑。\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--name-status",
+        "fa5dfeac584863b0a0c98ac2747b99f1aa1ae90c",
+        "HEAD"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.012,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "M\tdocs/current.md\nA\tdocs/plans/2026-10-02-1038-system-software-evidence-plan.md\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--name-status",
+        "f69ea75b24deb6a2192452b8b970673b84a9ea8b",
+        "HEAD",
+        "--",
+        "myCPU",
+        "frontend",
+        ".github"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.005,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "M\tfrontend/app/load_error_message.js\nM\tfrontend/app/terminal_input_pump.js\nM\tfrontend/server/security.mjs\nM\tfrontend/shared/terminal_projection.mjs\nM\tfrontend/tests/security.test.mjs\nM\tmyCPU/src/devices/ai_graph_package.cpp\nM\tmyCPU/src/devices/ai_graph_package.h\nM\tmyCPU/src/devices/tensor_golden_ops.cpp\nM\tmyCPU/src/devices/tensor_golden_ops.h\nM\tmyCPU/src/devices/uart16550.cpp\nM\tmyCPU/src/devices/uart16550.h\nM\tmyCPU/src/devices/virtio_mmio.cpp\nM\tmyCPU/src/devices/virtio_mmio.h\nM\tmyCPU/src/exec/load_store_queue.h\nM\tmyCPU/src/exec/pipeline_backend_cycle.cpp\nM\tmyCPU/src/exec/pipeline_hazards.cpp\nM\tmyCPU/src/exec/pipeline_hazards.h\nM\tmyCPU/tests/host/run_debug_cli_probe_test.py\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "uname",
+        "-a"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.003,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "Linux MAGICBOOK14 6.18.40.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Fri Jul 31 22:12:15 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "make",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.004,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "GNU Make 4.3\nBuilt for x86_64-pc-linux-gnu\nCopyright (C) 1988-2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "gcc",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.006,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "g++",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.007,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "python3",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.004,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "Python 3.10.12\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "node",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.007,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "v24.16.0\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "npm",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.256,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "11.13.0\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "riscv64-unknown-elf-gcc",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.01,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "riscv64-unknown-elf-gcc () 10.2.0\nCopyright (C) 2020 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "riscv64-unknown-elf-objcopy",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.006,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "GNU objcopy () 2.35.1\nCopyright (C) 2020 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) any later version.\nThis program has absolutely no warranty.\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "timeout",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.004,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "timeout (GNU coreutils) 8.32\nCopyright (C) 2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Padraig Brady.\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "codegraph",
+        "--version"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.185,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "1.6.1\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "bash",
+        "-c",
+        "command -v spike"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.203,
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "make",
+        "-C",
+        "myCPU",
+        "check-riscv-toolchain"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.244,
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "make: Entering directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU'\nmake: Leaving directory '/home/liangjiaqi/projects/my_visual_CPU/myCPU'\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "riscv64-unknown-elf-gcc",
+        "-march=rv64im_zicsr_zifencei",
+        "-mabi=lp64",
+        "-E",
+        "-x",
+        "c",
+        "/dev/null"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+      "wall_budget_seconds": 30,
+      "wall_seconds": 0.01,
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "stdout": "# 1 \"/dev/null\"\n",
+      "stderr": "cc1: error: '-march=rv64im_zicsr_zifencei': unsupported ISA subset 'z'\ncc1: error: ABI requires '-march=rv64'\n"
+    }
+  ],
+  "overrides": {
+    "SPIKE_PATH": null,
+    "SPIKE_BIN": null,
+    "MAKEFLAGS": null,
+    "CC": null,
+    "CXX": null,
+    "CFLAGS": null,
+    "CXXFLAGS": null,
+    "RV_CC": null,
+    "XV6_TOOLPREFIX": null
+  },
+  "dirty_patch_sha256": "da2d72b5c7402b637f46614644c8766e329ae263cbf67a717f3843f38bc7f8da",
+  "source_manifest_algorithm": "SHA-256 of JSON.stringify(sorted [{path,sha256}]); tracked myCPU/frontend/.github working-tree contents",
+  "source_manifest_sha256": "df561a7560a7c661002784dee668cd1e2b248bb3e6c36b6610dd8709724247f2",
+  "sources": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "1d3a932c69e1b676fcca6967eb173211ec50d9367de9978a42a0242aebe48b1a"
+    },
+    {
+      "path": ".github/workflows/regression.yml",
+      "sha256": "8c41a7b3d6e2aede96f53da13c4e22d8724fa33336e38a545a6e24f4fcba651a"
+    },
+    {
+      "path": "frontend/README.md",
+      "sha256": "4cd86c57f4223954214c3e751b9d747949077b7a626cdde3ff3f5ed90928687b"
+    },
+    {
+      "path": "frontend/app/api.js",
+      "sha256": "348ed4c0263da91dd90d7a090390720e059f8ab668522eb06d332b7107ff60ce"
+    },
+    {
+      "path": "frontend/app/app.js",
+      "sha256": "b3344601847e35fcb7b5bf25d81cd623978bcc7ae2ccabe19c0e25dd9b994371"
+    },
+    {
+      "path": "frontend/app/assets/console-overview.png",
+      "sha256": "46901aa2868db0ce378fa231316ae91a1608c36ab2c004e3b7f5a412b6595fd5"
+    },
+    {
+      "path": "frontend/app/assets/pipeline.png",
+      "sha256": "1cdced51710d3cafdb4dc48be91616ea8204b4737f797fafa915afa53348549d"
+    },
+    {
+      "path": "frontend/app/assets/terminal.png",
+      "sha256": "15f765335a62f2466ac0c3c8be645a6ca7be9aee786b0319ddf9d051d0bebe5d"
+    },
+    {
+      "path": "frontend/app/assets/vector.png",
+      "sha256": "d22bbc353d302e09723ebf267fe4ddf4e3cf2133d74f9d45838a9ed06f6b5334"
+    },
+    {
+      "path": "frontend/app/components/panels.js",
+      "sha256": "e3484214a28980952b642e4db40f35cae58215c5e1d1c047eb63cd3a2486ace0"
+    },
+    {
+      "path": "frontend/app/components/panels/platform_arch.js",
+      "sha256": "c7bb5431de8ee6cba947e0510be473439b2067aa02bb6b8ec405f0ce82d69989"
+    },
+    {
+      "path": "frontend/app/components/panels/predictor_ooo.js",
+      "sha256": "749b8b4b2ce4ac496fcad5472bf5e33907a7713b31651acc5d86aff31ca63fb3"
+    },
+    {
+      "path": "frontend/app/components/panels/shared.js",
+      "sha256": "8ef727140f46b7ad32b3f20eddcc1506f3152687cf458dbf698b5fb60e74b13d"
+    },
+    {
+      "path": "frontend/app/components/panels/vector.js",
+      "sha256": "7cb4be0af9912d3db2be68f354c03dd6080c04951fda09252297eca9eb48de63"
+    },
+    {
+      "path": "frontend/app/components/panels/workload.js",
+      "sha256": "97f8a046a4afa2fbe166e5da36b60932de77c3e397cf0346624251435fba09d7"
+    },
+    {
+      "path": "frontend/app/components/pipeline.js",
+      "sha256": "185896624a0a964c6abc3def8fe5620f459d15ee75dde0fef6655fb829140ca7"
+    },
+    {
+      "path": "frontend/app/components/terminal.js",
+      "sha256": "9938bf43587f7e294b8e2bd97c12132c78d222f290c766e7af624651b40a11f0"
+    },
+    {
+      "path": "frontend/app/docs.css",
+      "sha256": "4affe0526b35019dbffe1a1406b3345c556f8a712e2dc30c8568383adaad7ff7"
+    },
+    {
+      "path": "frontend/app/docs.html",
+      "sha256": "10d899fe98411dbbd4c8f91c25988d2e113fcee643c76c0c9a36bc64e9ba0fe7"
+    },
+    {
+      "path": "frontend/app/home.css",
+      "sha256": "0b1aa249e554e08b68a469abe3ea147ae44a4b16e3d8df5fe76b74c9c1f73676"
+    },
+    {
+      "path": "frontend/app/home.html",
+      "sha256": "924a2c9bfbcf9bc4a1639fdb516bdf0b07192ce840cfa4b6c8fa6673a7a6a9da"
+    },
+    {
+      "path": "frontend/app/home.js",
+      "sha256": "cdfe7b674e93edb2cd980173a9d85baea3811f19c98a159c46b258d3ea270068"
+    },
+    {
+      "path": "frontend/app/index.html",
+      "sha256": "a75b492deecaf523730e1219c4d928b78f0fd418fbaef06b8759f045ffc7150c"
+    },
+    {
+      "path": "frontend/app/load_error_message.js",
+      "sha256": "3b1e68b2ebf1175eae9ce1addedd39bea5005c4c67d13cef9f08b95264bb670d"
+    },
+    {
+      "path": "frontend/app/render.js",
+      "sha256": "015b45d54fad87170217b169195cfabee890fffa5b9fc89b8f0341bb985e55e4"
+    },
+    {
+      "path": "frontend/app/state.js",
+      "sha256": "5785f141de10fa3cafa6dc45e2389f6b9f1ae0d82d8cc47146c0c6e29559e5b7"
+    },
+    {
+      "path": "frontend/app/styles.css",
+      "sha256": "8ee9371732d4a4ff97ea0d59b8944e12ddcdcac7937bd4ca848023c1176aab52"
+    },
+    {
+      "path": "frontend/app/terminal_input_pump.js",
+      "sha256": "ab664f9525baa2eae0fc059abf8f73d2bccdc867823894d94493987149be4822"
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "95aaa678f8a35804f83fb3d28ac632a89851000c8d02d6b88e2cf0db9f4aa37c"
+    },
+    {
+      "path": "frontend/server/ai_tiny_model_service.mjs",
+      "sha256": "31336f8167b17decb062b63ac3c1b412cf1129761f457820428a0bce10730d01"
+    },
+    {
+      "path": "frontend/server/debug_budget.mjs",
+      "sha256": "ed2f49957f4727f2059d5abb32b585ddb8a09f318c7c63311aee7ecf90f028da"
+    },
+    {
+      "path": "frontend/server/debug_cli_session.mjs",
+      "sha256": "a46803840f96e50ef4d159219df4159547da0f84ef3075e95a9e8328d825d1b6"
+    },
+    {
+      "path": "frontend/server/debug_server.mjs",
+      "sha256": "863db9c5cd1bfb4997b940bc95a2b96058187bfda865913fd97159e5f261c22f"
+    },
+    {
+      "path": "frontend/server/debug_server_runtime.mjs",
+      "sha256": "a6d95c6fd6b845b549f6f3ab523ff2532407932ad317f97a33075ca3c96e2833"
+    },
+    {
+      "path": "frontend/server/security.mjs",
+      "sha256": "9e870395f7e861e8a25e1f2798bc1c33b178a3080bb95c54277414c21378ecfb"
+    },
+    {
+      "path": "frontend/server/tests_manifest.mjs",
+      "sha256": "2bf964cec6cc4ab7ac488e36cf79d977c39f97c6eaee21fff0adc8a7d6aeb489"
+    },
+    {
+      "path": "frontend/server/ws.mjs",
+      "sha256": "c12233cb0f0bc0de87125e045235f5dfecd815cad5546269bc5e2c253e7ad35d"
+    },
+    {
+      "path": "frontend/shared/terminal_projection.mjs",
+      "sha256": "9297820b00615880b4a30842e6884a8be1003cc517f0a9359a374ef7401d4a7c"
+    },
+    {
+      "path": "frontend/tests/api.test.mjs",
+      "sha256": "ddc8bbf754b5032612d2296122c81706786afe4789fc3bb3f6e6ccc411d26363"
+    },
+    {
+      "path": "frontend/tests/debug_cli_session.test.mjs",
+      "sha256": "7cc36246122c32035c642291ab6048c8c3022220f7d5088af6b708b0bc6ee0ff"
+    },
+    {
+      "path": "frontend/tests/debug_server.test.mjs",
+      "sha256": "c3a34596ac51ccd3004fee5851ccc1e3a0ed5496a5fe7375c678afd5d5ececd9"
+    },
+    {
+      "path": "frontend/tests/debug_server_e2e.test.mjs",
+      "sha256": "ee28b7029a825e21ca85d35200dec166430d4b45180cc8a359c9510ebf989f53"
+    },
+    {
+      "path": "frontend/tests/debug_server_runtime.test.mjs",
+      "sha256": "38399c6f2698d2baaeef1c53de0d5c57bb815350d03c1d5746e14113ba7f44d7"
+    },
+    {
+      "path": "frontend/tests/load_error_message.test.mjs",
+      "sha256": "b1167bb73a629054dedb2c4fb9817c9b64f5258b70ded49e112ef6d1c0dce557"
+    },
+    {
+      "path": "frontend/tests/panels.test.mjs",
+      "sha256": "23524144a9b99d4f4cee92aaec0afbe5b57e07d3907202219f4ff37a360913fe"
+    },
+    {
+      "path": "frontend/tests/render.test.mjs",
+      "sha256": "cbbddeb512e360ac1e4703b2a6127ca430e3d59ace68adb4452655b64fe608ce"
+    },
+    {
+      "path": "frontend/tests/security.test.mjs",
+      "sha256": "1de49d7fb6d6e89ab0f72233c129aa23473200679c9f6239618e27da4ac156e1"
+    },
+    {
+      "path": "frontend/tests/terminal_input_pump.test.mjs",
+      "sha256": "54220ff51f1ddcde047374752b40ee1c327f6503ed0b25216dba5622d27146a3"
+    },
+    {
+      "path": "frontend/tests/terminal_projection.test.mjs",
+      "sha256": "cecdff89a025b44123ada2d68f3f2a77d094f74018e2c2e71c9b34e9ee3cfa01"
+    },
+    {
+      "path": "frontend/tests/terminal_render.test.mjs",
+      "sha256": "55721268ca981db1ce0726d5ad8c528d47a1693979d91c5824f8ba5e52056262"
+    },
+    {
+      "path": "frontend/tests/terminal_state.test.mjs",
+      "sha256": "a6bb8f3224288d408730ae8f8c95b2d48561c8f4a7f718cd55dacc0f2c16686a"
+    },
+    {
+      "path": "frontend/tests/ui_state.test.mjs",
+      "sha256": "fe422f88f9517e437ffb23606d946dff3c592db2f249c83eef598f7456dc49f5"
+    },
+    {
+      "path": "myCPU/Makefile",
+      "sha256": "006e365ffba09c6e540613f90a918d5eeee50fa2d75b9cd46d686193879711e7"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/.dir-locals.el",
+      "sha256": "f003e2e21b904bb06f9540e8ae4245ea170e4b031aea8db891b257ab3c46fd0b"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/.editorconfig",
+      "sha256": "149245fa90a4f6d46eb1bb15ff96b397949c9d09d0dfa83e8284da67f30af2f0"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/.gdbinit.tmpl-riscv",
+      "sha256": "dd007a5de2a4375dfff173cae7f3049a00d3a6cd562ae99e4ffa689210e0160f"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/.gitignore",
+      "sha256": "507075b6b2d5770b05634b53d32be2f79e5e19f2eea5fa3a0176acda47915556"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/LICENSE",
+      "sha256": "677302f30c9882c1f81b9be8ceda6efd4edff5576b9e02963b6114cf70c3162c"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/Makefile",
+      "sha256": "2fc7d2146dafc2fbad9a3fdec21f8a1989fc341af90a58838a30cd2515fecda8"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/README",
+      "sha256": "05342be05e75f9a75e70fc0bfabd223e7c755e373b6ac584b0918331ea5ae9a2"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/bio.c",
+      "sha256": "cbfa559c16367b61dea19c50262d3559b1e4a2a724de07ad8d1eee69dc625fe2"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/buf.h",
+      "sha256": "4e9c7abfd6a9b623ee3f3909163693c525fb9885140d0e308ee792c3193793ec"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/console.c",
+      "sha256": "48c6f99bf164b7ee67c2ea051d053f76292594d419cc1747c4192fa97dc991a4"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/defs.h",
+      "sha256": "49f07d7b706acd1d0860bf1e72c8c90c2d27ba63b799ac3d8eeff401da121591"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/elf.h",
+      "sha256": "8ecb92068254c090ad2f9f4895c0d3f2e8421b944a7d94b8e0b6c95b3a73d764"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/entry.S",
+      "sha256": "bc064b802759060414c3ce9ae94cd8b609d6a7adf42e8bf857899de81da10b2f"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/exec.c",
+      "sha256": "ab7c822428ad163729f4994e35e5f911125d4ec6b451b9ff30b319bd252c28b7"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/fcntl.h",
+      "sha256": "6afd692e739ab8f2c7705a54dfbf58f2306ceea8dff53c382d5e0d73934e402f"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/file.c",
+      "sha256": "2adfc2f00a90468f9c940ede319291ff8728f1b75435890ee32650445b79f44e"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/file.h",
+      "sha256": "c0f00dd2f6f79a7f5c2b46588ef376cd715e84c2c4c22b1d70c0d14444acdb30"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/fs.c",
+      "sha256": "55ba9872a4b0076ee174775fe67ed7a0330afaa4294435f70cba5b7af24a6103"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/fs.h",
+      "sha256": "6f8b61fdfab2e51bcf780648c099aed34623b1343c005936a58d62b81b7964cc"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/kalloc.c",
+      "sha256": "0a81a05a229b2b757f9195ad007d4ea529b21f0dcfe99f013479a30fdb8053ad"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/kernel.ld",
+      "sha256": "5bfb4cc2da14087b472181653b7e0de6639c34222d78f2c1f1f84aa68c7304a8"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/kernelvec.S",
+      "sha256": "e901ab7a062acc2c30b6552a5ff6225da28f1b2efcbc19f6f6af66e00e4cbd83"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/log.c",
+      "sha256": "6708d7ab85344bdea9827215eba831be653e84e6f75a97f1f75d35bc421cbbf0"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/main.c",
+      "sha256": "b2aa9b5e5b37377bc92b5b00b08e3854bfd729af8489d5137f0859a07d6c0bbc"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/memlayout.h",
+      "sha256": "3bbd9bcc367434c1a5e45b3077c28d884328e8706be702cc01b0910246830714"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/param.h",
+      "sha256": "34ea4290f71cbf0ba68cd938a3d4825f64b4468d5e50fc99fed610fe2dcf85c4"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/pipe.c",
+      "sha256": "9f540b86893e12e9dadd219eb5c6a7d8b3283f38f7cb0f53d480a795dfd7c90c"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/plic.c",
+      "sha256": "1ec82b9fdd67ce1bc7aff95d67ae57a98ebcb3a305756d7e1a29f0e39b7bdf1c"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/printf.c",
+      "sha256": "35e0e13d7642a233a880cce56a163787febdeaf5692593fb679b4d498f273b4a"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/proc.c",
+      "sha256": "8603c9963145ed56804f581efdf4cad7c54f72a62b2751e2e5ad9d9d8f57a8c2"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/proc.h",
+      "sha256": "31a1610a91304613742e4040c3e9ef328a7af56ba16132ea5093b98c77323e58"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/riscv.h",
+      "sha256": "3f5c06e49b422644d4889baccbed4d672d78416d8b2648e324dea460f7811f4d"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/sleeplock.c",
+      "sha256": "868203655972523d87ad382bb604a5682ed12f0f59b1d5c09d9c701272aab0c6"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/sleeplock.h",
+      "sha256": "af20b33a94835cd40ba18bd516f31b6897b3662815914d51e509c836cdb629a6"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/spinlock.c",
+      "sha256": "712142ce3fa38694acf9082e56b45c8b689ca9af3ce02df6af0573ae86d46985"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/spinlock.h",
+      "sha256": "1a6f31ca0fb432c7c2d43cd88cc9bfb403bfac330616e1f6a09017f5090efbc3"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/start.c",
+      "sha256": "24e94b906f2384a9869d04bf12dc2b380b7b3c5f71ae9dfae7ea95771270cb35"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/stat.h",
+      "sha256": "0a88d9c2db490de10f89c70bfbc5007e8c0f0486660739f04239330e7c782b53"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/string.c",
+      "sha256": "58a49903eff5988db25b958e11f7ba1aeb78dbf070b91baf1aa86fb13b0ea75d"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/swtch.S",
+      "sha256": "baff65e42b8f80e3b2ec5e1f67e2033b0b9bd7b35564db998573f576bc816088"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/syscall.c",
+      "sha256": "9096fdab292f255fc98d0ccbcbd3b30d97fa961058ae21f074b0e75fa8b0737a"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/syscall.h",
+      "sha256": "dba477e09623670219a41a6931cfeaf6f00968315cbc8b97f0642cfedcd06450"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/sysfile.c",
+      "sha256": "b4309a84299a1275ebcb13e79b78bde037797f5d55997ff9a6694031e32dc163"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/sysproc.c",
+      "sha256": "cbe0a9a5d04cacc1b84c508586fe90b14584513af372dd33ec328cee6787c8a1"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/trampoline.S",
+      "sha256": "a34234f2aeaf40bb2e8c7a42734f7ab384373982a1c5a253703575cadeb3b620"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/trap.c",
+      "sha256": "ac23e32e4cb6f6e4cb4a6438e034160b84f352fedac1d60d81b1d56c79a154a3"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/types.h",
+      "sha256": "d92d61118414aa5a2174d7a528bd844f9d2b0c9fa5b9fc4c4d36f36e9fd5fd61"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/uart.c",
+      "sha256": "8c95d70538af85eafd3a39abdcfa2f8610775169b1b58957c91ebccb95d82570"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/virtio.h",
+      "sha256": "389346064f5e0434c7d87277780e54e905fbd451988089eaa1c3b2238ecbf545"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/virtio_disk.c",
+      "sha256": "fb9e2dabf6825f95653c8da6053fd97611abace9227333ddafe7db2020d12350"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/vm.c",
+      "sha256": "358845ddf7179c68c8e4f5e012c4aed7bf2e1c578f90c2fc07ef48b019105d1a"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/vm.h",
+      "sha256": "ebd5dfc1a2d28cb16a15dea12ac9467bded6ca4bf652f44b580e4c5bef3fb1a3"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/mkfs/mkfs.c",
+      "sha256": "842ae13a1490d20baf111c3c9dccca44e443e269a2c65fdce31ed4dba9054f92"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/test-xv6.py",
+      "sha256": "5dea40363747402a93d8dc92a4f89e287c3d9f798185bdd487c6c96656278802"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/cat.c",
+      "sha256": "b38995395930f8ba95e22dfbf66ed35d24abd3b5adc2997eaa8f5a3c07c38d9b"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/dorphan.c",
+      "sha256": "986dc2c4afe6c93e61e3c21c7358792186430247ee39797f3461073547c875a2"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/echo.c",
+      "sha256": "0c665739a8c29c6bc95e56775be62097489e67e5d1d0f5eb01b0d4894bb957f4"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/forktest.c",
+      "sha256": "b5f9c6a9e6ebfbd3907be1887942a972195863589f6a83d42bcb7ea4296d11ad"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/forphan.c",
+      "sha256": "a502b34baa14cac54a18efc67e337b5721cc389cd8c5e625c55d7340e4ff724f"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/grep.c",
+      "sha256": "fd995f78f0da967d8eea6fd99fec7fc711e4e792df75f93872dc1b6df900b97c"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/grind.c",
+      "sha256": "3e1aaf17992186e1d85bd3a4171048a28fa25305c6ce14e26698ccba2919502a"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/init.c",
+      "sha256": "48ba1680e2fd54585f91f284cdf1f4bdd7e637771f420919aee116e7b003c18b"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/kill.c",
+      "sha256": "6ed54103ad81b9559c73fc09877b374d98b228ceb9409cb6d824b351bd38998f"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/ln.c",
+      "sha256": "e9cc8665a04202aa1adc9506b8bc59d44971f935ef3f30fe46bcfae3233e9cb9"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/logstress.c",
+      "sha256": "3311b92a65f05113ac9d70a721af522711cd48d1f1fe038a3891a1d6f1d002dc"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/ls.c",
+      "sha256": "784d92f21d37150bd6aefe19d546bf44c17a8cbeca873a2e00bebb6cc3a0900f"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/mkdir.c",
+      "sha256": "6132ff41e1834411a485b600e195aa0a3fcebca7b968b8120add3c7f3b06bc4d"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/printf.c",
+      "sha256": "c2bf6d37065c27d7bd43acd32151ae5e28829e2bb06abe9bb7592fe2f3e67a34"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/rm.c",
+      "sha256": "93de8d7ec35ae367ac3b897c3cca1f97b9e8bd22f035e8238775059ab51a140e"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/sh.c",
+      "sha256": "6894966ff82999b674c17142900a718b54d120beaa1f50c2f3c803043bfe41b5"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/stressfs.c",
+      "sha256": "a808290e51ca94583102d4534f0e0a28027b57817490c5531907d5e7f753cbd6"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/ulib.c",
+      "sha256": "4183aa2a1329675f8214fea0b833e658e6e844eef44d28e8a33b0d6592616ec0"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/umalloc.c",
+      "sha256": "21e194e04369660d505a09b5c10684bbf20c5397490156c247e8381c22689c06"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/user.h",
+      "sha256": "a61322d2aaecf2e3b0c004b9adaf0a8fe9c5deb892b8e3d0e0585e72d7e5a659"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/user.ld",
+      "sha256": "33cf919389b25afe2f6ce8d74eebe5687c42037f9be3453f09ba5f6da158c488"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/usertests.c",
+      "sha256": "d4e52e642bd569229a43563f35a092fb6328b0081989b49589f33b6f1d58f96a"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/usys.pl",
+      "sha256": "a23a8cd12c850b8c8205d4157d7c135b56ef7455dc43c8a561ef97f25454097d"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/wc.c",
+      "sha256": "0c8b41e009d23e5a19ccc29f82736894f049169c4ac7d7476aa7f6cc90819720"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/user/zombie.c",
+      "sha256": "73eef0cc3fb17727a1f681e46a105d1c06df0f474c0ecf6101f65231c5724077"
+    },
+    {
+      "path": "myCPU/guest/ai_accel_demo/main.c",
+      "sha256": "8da48c180bd21d935fd65d2293c6ee0b50878b9e710139b158221b2ceed87efb"
+    },
+    {
+      "path": "myCPU/guest/ai_accel_demo/start.S",
+      "sha256": "c1515956e3ff8fb09fde464db5768b7f4f013e471071dc90488505e0bf55f515"
+    },
+    {
+      "path": "myCPU/guest/course_os_shell/main.c",
+      "sha256": "8a62adb5513e3ca19a5531900cbd38535b44305d07bf5a345dd063b2dc63a880"
+    },
+    {
+      "path": "myCPU/guest/include/ai_accel.h",
+      "sha256": "ddb46f97f90db0d814a265cb5f191ac666be8eb78a3470bdffe503eaa251fb66"
+    },
+    {
+      "path": "myCPU/guest/include/console.h",
+      "sha256": "d6a6ce2f53b8e0827f91836e7056efa27605958ec1fc89325bfde1f8e45f8460"
+    },
+    {
+      "path": "myCPU/guest/include/console_input.h",
+      "sha256": "559fc2c9301ee7f5a2b0bafce368de8e8ab650b35b3b7cd38375e1b8f944dbfa"
+    },
+    {
+      "path": "myCPU/guest/include/course_elf_loader.h",
+      "sha256": "0b78fadfa0aba52e41fb907e7dec55d6f50bc3db778820423e3caa4825cc8c99"
+    },
+    {
+      "path": "myCPU/guest/include/course_fd.h",
+      "sha256": "475e36e66cfde28d6e22ea757f75071d4be9e59d53537a2c1c31fa9f31b50096"
+    },
+    {
+      "path": "myCPU/guest/include/course_fs.h",
+      "sha256": "b72f4a2ddace40949cae0afda4f9b7873c69eef3dd7daec9fecda0522a91d029"
+    },
+    {
+      "path": "myCPU/guest/include/course_libc.h",
+      "sha256": "01317c73b1efe33aeb314f00d4a5b4f4634d7d3e96cec2479f847cc3c4961e50"
+    },
+    {
+      "path": "myCPU/guest/include/course_memory.h",
+      "sha256": "a4b017a7150d7b3c042548262157cf3cddc92578a42e90e02f2d5195797800a9"
+    },
+    {
+      "path": "myCPU/guest/include/course_os_stage1.h",
+      "sha256": "2483e40ae10ec18e11b5c7b1038c71fadf7e66b29d6d9bf19880af36c5b174ca"
+    },
+    {
+      "path": "myCPU/guest/include/course_os_stage2.h",
+      "sha256": "a52e43d3089cd04efe48124f1197f265415bacbcd5f157e35b718b598b41cda1"
+    },
+    {
+      "path": "myCPU/guest/include/course_os_stage3.h",
+      "sha256": "3fff5783a9f3ba2a1d68f78c318333a5d4ca4a356dbd18fa7a0fac39560b5ef8"
+    },
+    {
+      "path": "myCPU/guest/include/course_process.h",
+      "sha256": "a8f6ed147f9e4c973ef19c195265870b9e5b531417331092594b4aaba7fafc48"
+    },
+    {
+      "path": "myCPU/guest/include/course_scheduler.h",
+      "sha256": "79ead0c2e842662f344a4ca4494bb1533560134b55bf70f5535f2ad90b27871d"
+    },
+    {
+      "path": "myCPU/guest/include/course_shell.h",
+      "sha256": "c402e3a53dfff76fb696d35b6b3ce89e729cb423d47a65b813ad0e2c45baf18b"
+    },
+    {
+      "path": "myCPU/guest/include/course_shell_linux.h",
+      "sha256": "7d15f569a2b824044e12da67ec1b5a879fd8027987df39937c79e6b484167b32"
+    },
+    {
+      "path": "myCPU/guest/include/course_sync.h",
+      "sha256": "e0aed71460cfaaaaf9063b8dc44b049738eaea155754582c8e2ac013e52a68ee"
+    },
+    {
+      "path": "myCPU/guest/include/course_syscall.h",
+      "sha256": "9432368f09e7de25f0a46df2c834a45ea9fa34e32430f62bb46d68429bffaaeb"
+    },
+    {
+      "path": "myCPU/guest/include/course_user_programs.h",
+      "sha256": "b024543233a0a52546b08a2b0a051953f1d2a98ccd3515fc7294d5c7c4e24801"
+    },
+    {
+      "path": "myCPU/guest/include/kernel_alpha.h",
+      "sha256": "4206f86cdbbed026fe6db3071ab17c8aca66f4ba365def6241e4f77a76349d98"
+    },
+    {
+      "path": "myCPU/guest/include/kernel_bringup.h",
+      "sha256": "34ca1896d9ac7292423dcc38204c710cf7daed44b1349878ab36f77bd8354367"
+    },
+    {
+      "path": "myCPU/guest/include/kernel_runtime.h",
+      "sha256": "f87db543a76d87b46e8eae9407084bf1d351362f3c4775d9aef105ecb90a77b3"
+    },
+    {
+      "path": "myCPU/guest/include/linux_compat.h",
+      "sha256": "af117bf0a3505cd33d7cdf2c82a60fe9a6be2bcbf5fd3ae4ca6934c88e82e5cf"
+    },
+    {
+      "path": "myCPU/guest/include/linux_compat_debug.h",
+      "sha256": "d16093eb32087a089dd154cd19071a450e519cbd47f85cfb74d581bf4bf506f6"
+    },
+    {
+      "path": "myCPU/guest/include/linux_compat_exec.h",
+      "sha256": "5a9b1a1a4defe048963a40ba0f579466af0a14360c5ed61cd32e5953b77adfb5"
+    },
+    {
+      "path": "myCPU/guest/include/linux_compat_loader.h",
+      "sha256": "8453e15f818f30e6ee7f726966b58487ab1ce7c1739a7c91035f62c6a2973cd2"
+    },
+    {
+      "path": "myCPU/guest/include/linux_compat_minimal_elf_asset.h",
+      "sha256": "28d59f4e405bd410dd02b1229391503aa07f1c0f8d7ce12d966f6374c06ef381"
+    },
+    {
+      "path": "myCPU/guest/include/linux_compat_process.h",
+      "sha256": "fd0832b75f356a42ecc8fc77ff934bac46a7f5e515bae30f7569c58adea45732"
+    },
+    {
+      "path": "myCPU/guest/include/linux_compat_rootfs.h",
+      "sha256": "6c6213f208bc19bdd42f0267db113eb688040e5aea4072a0b621f70d6144f493"
+    },
+    {
+      "path": "myCPU/guest/include/linux_compat_vm.h",
+      "sha256": "543cbfae47fe8e2660e1914c324a880c1ed1d75a5f4a3d77f3ad64d3684e1dd1"
+    },
+    {
+      "path": "myCPU/guest/include/memory.h",
+      "sha256": "393df6309fdf20fe59106c269ec1c3eec4307966bc30c4e77741008c6eee635f"
+    },
+    {
+      "path": "myCPU/guest/include/monitor.h",
+      "sha256": "a76d38e29fdf5b102982c540fe843f22e0898a8046227958a9509daa4c5f3f77"
+    },
+    {
+      "path": "myCPU/guest/include/monitor_commands.h",
+      "sha256": "e6e321377a4330f30c2d074dc473d6cc70a6047b55a165541e2565a8dfb7d49d"
+    },
+    {
+      "path": "myCPU/guest/include/panic.h",
+      "sha256": "a334563194ec6f73d5ff55e14c361b92ff239ec57b2422f10d4a2f1b559c55b4"
+    },
+    {
+      "path": "myCPU/guest/include/platform.h",
+      "sha256": "7aa3c40886bdb457836aeeeacbb867ceac29278b39fc34017a7c3d6475fa18d0"
+    },
+    {
+      "path": "myCPU/guest/include/platform_drivers.inc",
+      "sha256": "bb7533d17e7f472bbd08a804e989cd6aec7896725e61cdfc4bfee185327b90d7"
+    },
+    {
+      "path": "myCPU/guest/include/pmm.h",
+      "sha256": "797df2deed9817e6ab0f7717653ae8d1c7c8a2fa7f8231bb3180bac3739cf9be"
+    },
+    {
+      "path": "myCPU/guest/include/procfs.h",
+      "sha256": "0401285109fadc3a304f1b549fb37977a7602998455b10e2d6e89bb02fb901ce"
+    },
+    {
+      "path": "myCPU/guest/include/riscv.h",
+      "sha256": "cff93a79238c0962073abc9607e8d518aefc43b4374d1ad649d9fec84d96aade"
+    },
+    {
+      "path": "myCPU/guest/include/runtime_context.h",
+      "sha256": "7d957ecdd40255eaf4bb9a75d691d90cf2581d3c1822d45c40d85ab531f8945a"
+    },
+    {
+      "path": "myCPU/guest/include/storage.h",
+      "sha256": "c62b4a4d36218fd88b078eb8a99d781b05e0d0b5eee5c7d91bb80b617316c03b"
+    },
+    {
+      "path": "myCPU/guest/include/supervisor_demo_smoke.h",
+      "sha256": "e65207898f8fd88c09d6133bcc9577e926391d604688d01c2b9da34f9d4d0ac9"
+    },
+    {
+      "path": "myCPU/guest/include/supervisor_runtime.h",
+      "sha256": "46ebbe4b80b12b04157afbed7aaad52dd51cef76588f7d972b0022cd252d1b50"
+    },
+    {
+      "path": "myCPU/guest/include/timer.h",
+      "sha256": "15198eb2ff56d38c9add125aa9ecdd13e0d71da99d3789c8993ce020e07f0363"
+    },
+    {
+      "path": "myCPU/guest/include/trap.h",
+      "sha256": "e006bb103484293cba6f8d42568ce56e029fde11d5e81a6cf4e87ea4cfb4f42f"
+    },
+    {
+      "path": "myCPU/guest/include/user_program.h",
+      "sha256": "06e775e84fb629a58b8977cc32f9b8f9c9a117c5dcbff05396e87560aa333fbc"
+    },
+    {
+      "path": "myCPU/guest/include/user_program_smoke.h",
+      "sha256": "89105b98f4ba994161f72a76cc442ead659a2896f286b9fbc793e081231b0688"
+    },
+    {
+      "path": "myCPU/guest/include/user_task.h",
+      "sha256": "44a0b79e57b0a6c333f15e855d99b6d5acb1905e7e9886d2887722fabe487a74"
+    },
+    {
+      "path": "myCPU/guest/include/user_task_bootstrap.h",
+      "sha256": "5c23b1535e0a6edb16fea41c1ed8a8cea80231067b2ffba190863f9349a39f18"
+    },
+    {
+      "path": "myCPU/guest/include/vm.h",
+      "sha256": "d65b7acf25e1c76e5b5c11104271df8e94094ee9d9ba9745b9b95dc46c20d816"
+    },
+    {
+      "path": "myCPU/guest/include/vm_debug.h",
+      "sha256": "d4b4b8ae2445812dedbdd6d32ace22f4f4d83dde500088dd5e6b369b7fa12f7f"
+    },
+    {
+      "path": "myCPU/guest/interactive_os/main.c",
+      "sha256": "63f7e536f61cf1f7882f8599eee9d749bb07f02b3a8100ddc677ba06aca91a79"
+    },
+    {
+      "path": "myCPU/guest/kernel/ai_accel.c",
+      "sha256": "48421ad2a207962ee0103beeb22b2e95e421152655e1e0c2966f45417435b142"
+    },
+    {
+      "path": "myCPU/guest/kernel/console.c",
+      "sha256": "6319e7c4f6918ff5bb7e626506cf97a68badd66d09f3cd950971340260ec1a5a"
+    },
+    {
+      "path": "myCPU/guest/kernel/console_input.c",
+      "sha256": "36a175ebbd6576f03baf960a227fc5bac30db017ae9e0812530be9839425e3ca"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_elf_loader.c",
+      "sha256": "52ad1ca20a5098eb946b433dbe04159e9df89a62cc410759e250a1fdbb0fb7d2"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_fd.c",
+      "sha256": "0959cd08d2770f9083b5a32014d79e712b3ec1e64867ec66dcfca1c345695570"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_fs.c",
+      "sha256": "8b29ca61ab8a20f3dbe614aec87f076832c94e55203c9534b80b7663bcbfed8e"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_libc.c",
+      "sha256": "c4b551d598a4105bfa17935e6b778af3ed3065d377458ba9bfb8b9744411c0d9"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_memory.c",
+      "sha256": "d6ef226285581b0987cf674dab029f2d70089399805e8c2df66dd6ec8ddcadd4"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_os_stage1.c",
+      "sha256": "145da75d1b143c865c86d8e3bbbe479f2bba7be4a4f1dfe2c7b9a9455c7a7d30"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_os_stage2.c",
+      "sha256": "24044cb365100cd3bd1e0237c2a04dd67132fcea500f944195c033debd144d0d"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_os_stage3.c",
+      "sha256": "f4815f4e73c1da86d5f85824f2d1b77eeacb88da45d8ed85bfae355bd90375ab"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_process.c",
+      "sha256": "6783e9e85748a981872a719823538456e3442106889fc5a9f23266f5d9b2a718"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_scheduler.c",
+      "sha256": "d95a79b90c5c6804a2245d2f2f09d3e12462184cc18a4375a5055115847074d4"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_shell.c",
+      "sha256": "530fe665bfe56d7710a92c1ef4d6c29298ad75e81953d27b385ff682ceb5396f"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_shell_linux.c",
+      "sha256": "ea208f8d675255ad3e711e8eca33322cdafa617936ba3ec3264c6cba04e7f824"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_sync.c",
+      "sha256": "34244237366d22e6655facc0261e4c12c947091de86f2208a20629bc70f5d5b9"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_syscall.c",
+      "sha256": "99179fad6021af1761121fc4b86fc43bfda6551595640312339b5c91005fdcb4"
+    },
+    {
+      "path": "myCPU/guest/kernel/course_user_programs.c",
+      "sha256": "458509a4608e685c09da67195e7a143b115d72df423976f416cb56f43238ea63"
+    },
+    {
+      "path": "myCPU/guest/kernel/kernel_bringup.c",
+      "sha256": "dafb560cd6b56174f7b687de627300ae805e820ba1d601a3c95ab098f6fb5570"
+    },
+    {
+      "path": "myCPU/guest/kernel/kernel_runtime.c",
+      "sha256": "19a9c555647edc0e06c007dc37ce9c35cb6d904f22f2d443b31b5d2d9e97ab5e"
+    },
+    {
+      "path": "myCPU/guest/kernel/linux_compat.c",
+      "sha256": "f4a5bd811e42944a1a34852a0b676f5ce44ab1299e06d60d0ab548f661a66980"
+    },
+    {
+      "path": "myCPU/guest/kernel/linux_compat_debug.c",
+      "sha256": "ae0077b4cfe6c4b4bf73e1cfdd558b703ad4aaa8e7b563d4fe72805888cd41ac"
+    },
+    {
+      "path": "myCPU/guest/kernel/linux_compat_exec.c",
+      "sha256": "1b2cf1f035245c2d1f97d298707bb810fe8fe9817ce74ffdbf1c05b96751cf1f"
+    },
+    {
+      "path": "myCPU/guest/kernel/linux_compat_loader.c",
+      "sha256": "c54ea8825d555c637c1f48d44a2cdeb875ce37af8f360e9734de73edba7d3e02"
+    },
+    {
+      "path": "myCPU/guest/kernel/linux_compat_minimal_elf_asset.c",
+      "sha256": "63bbd6e5b8276a2fb9570b06ea2940a5e9bca74d144c58cd8c2114656a4fc49a"
+    },
+    {
+      "path": "myCPU/guest/kernel/linux_compat_process.c",
+      "sha256": "cfaf65aeab088cca6097d58378fbe51df2816c4c45d5f1ab64c3754ce7ef19e7"
+    },
+    {
+      "path": "myCPU/guest/kernel/linux_compat_rootfs_builtin.c",
+      "sha256": "0fb522a7d96a5ee2a0752addc1358ea48ddb2252d3698172003c1bca431a2eb5"
+    },
+    {
+      "path": "myCPU/guest/kernel/linux_compat_vm.c",
+      "sha256": "b85f29bda3dc4fa94e82b2ee1a282cafd51e3bad793fd4be24dfaf64f05d2449"
+    },
+    {
+      "path": "myCPU/guest/kernel/memory.c",
+      "sha256": "14c8550800f5b9ce6295cdd64115214c6a96e5fc9b3ca7c48d41ed0785775803"
+    },
+    {
+      "path": "myCPU/guest/kernel/monitor.c",
+      "sha256": "371f8941e72eb9b81a63819f6bca77b80a948f1ed1152863cae096926a0160b3"
+    },
+    {
+      "path": "myCPU/guest/kernel/monitor_commands.c",
+      "sha256": "7c2fd2eb4ea2857fd7523486ba2d545f0553435b30af1767834302fbb16d7f31"
+    },
+    {
+      "path": "myCPU/guest/kernel/monitor_format.c",
+      "sha256": "c453190b6ea5881334eed62313e99863a4599699626dc3bf23912abd44c3e62a"
+    },
+    {
+      "path": "myCPU/guest/kernel/panic.c",
+      "sha256": "e42ed9cc9dc198f40e5bad6bcae926852561886bfb581dcb788631998f0a0273"
+    },
+    {
+      "path": "myCPU/guest/kernel/pmm.c",
+      "sha256": "8af0c27cbdae7c6336173fe69a53efec308aa846ee2b7dd6bf24bb8f64b8a31b"
+    },
+    {
+      "path": "myCPU/guest/kernel/procfs.c",
+      "sha256": "344fe7d2e057ca9842cfeb9e2cfeef5d2cb17fa2a768d65cd53b9209c26f4c73"
+    },
+    {
+      "path": "myCPU/guest/kernel/runtime_context.c",
+      "sha256": "a96635825ec894fbb0751655cea51fa413918b10e626e705cf33d25dca866779"
+    },
+    {
+      "path": "myCPU/guest/kernel/storage.c",
+      "sha256": "e647a028cd9d946d9b2a5dac4702d9b2993f8dbf7b75033e12e6b2933ae5677b"
+    },
+    {
+      "path": "myCPU/guest/kernel/supervisor_demo_smoke.c",
+      "sha256": "20493b22e682d039f7e842b12260a6c4de187bd29a6c44267e96cb13ba64a281"
+    },
+    {
+      "path": "myCPU/guest/kernel/supervisor_runtime.c",
+      "sha256": "7a606d9ef713b7a463091260a0a400ab3d036db9be1167f41d028768a4310145"
+    },
+    {
+      "path": "myCPU/guest/kernel/timer.c",
+      "sha256": "47019c9e1513205d5141cb3ddbdef6b7f87c65beddc684476603a477ad15fc55"
+    },
+    {
+      "path": "myCPU/guest/kernel/trap.c",
+      "sha256": "c949579f81e1c3ccadd38aba86326c975d6eaebe540c108a6ff50635cc26d626"
+    },
+    {
+      "path": "myCPU/guest/kernel/trap_dispatch.c",
+      "sha256": "1d13808ad226994f00fc9ccfc9aa5f161601ecd99f9a1b86ea40586bdd6685b7"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_program.c",
+      "sha256": "111e5e4c84816b2483f2ea01c79b97fdf8072c3f801e9a68f1191cdc6631a936"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_program_smoke.c",
+      "sha256": "8c373ca53f9109335fea0f3a94ff1eaca290ebe9f0f08b718382918b51705d6f"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_program_smoke_active_memory.inc",
+      "sha256": "50fba91adfbe465228722a96186583d41e68e49478b98541e74649e0075c34e0"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_program_smoke_lifecycle.inc",
+      "sha256": "9ac9e083bc998b711752060b1825dd9ffb852950c501828e68164aeab81cac2b"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_program_smoke_prepare.inc",
+      "sha256": "3239bc8b3ba807f9c08a611efc25feaebf540dde2131815326cbe176adb3e112"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_program_smoke_prepare_runtime.inc",
+      "sha256": "c289be8710eefa561ab9cbf8d736fd1e937a9a960b4c4e25f0dbc7d6895b1848"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_program_smoke_round.inc",
+      "sha256": "fdc357ce8a0c325448fb5f474e9b0450be5dbfd7497e21d70686c55442e9316a"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_task.c",
+      "sha256": "6ad4b019fa22646a1d53d19b36cb541c1498ad35859b7788075ff1427b781398"
+    },
+    {
+      "path": "myCPU/guest/kernel/user_task_bootstrap.c",
+      "sha256": "3dc8992d12e5968095b98ae81868ab5bfed870cfb0c8fa5b0bd40455c5d0c987"
+    },
+    {
+      "path": "myCPU/guest/kernel/vm.c",
+      "sha256": "44a69785a602ec519365e3160f96fd62e0e1d1d123d9b5846c3e9ef90ea25aba"
+    },
+    {
+      "path": "myCPU/guest/kernel/vm_address_space.c",
+      "sha256": "76584529154c299b99737cb78bd782d0817979d05dd9fd772b8950a9a6a60bfe"
+    },
+    {
+      "path": "myCPU/guest/kernel/vm_debug.c",
+      "sha256": "de04e43a30670c84eb2de02183e3d6a12c55811d38fc846f3eef438a1fd78e21"
+    },
+    {
+      "path": "myCPU/guest/kernel/vm_fault.c",
+      "sha256": "da2c2025ed77be04032378fbb16f7e63359bafc673b05a721f3f8b94de656365"
+    },
+    {
+      "path": "myCPU/guest/kernel/vm_object.c",
+      "sha256": "d7a7d4aa2a52e31cbc66d3f1cfadfe287a64ea346ae1a8c5b44a68a4c45f5494"
+    },
+    {
+      "path": "myCPU/guest/kernel/vm_private.h",
+      "sha256": "03c89ed7855d5745406c8e339f4f9bcea5eaece316090fc59ecf96e9e19b09a8"
+    },
+    {
+      "path": "myCPU/guest/kernel/vm_process.c",
+      "sha256": "7ba53d35266b28450c564d5b0894375546994f1d30e1455daa108c796852e67c"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/common.c",
+      "sha256": "3a4ee603ed7ea77cf56d93154338081fea3f385e5e955bea645172f5a480f8d1"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/fault_main.c",
+      "sha256": "88c85ff765ffbf371dfa5747bac2c464928dfb24ee4ed6b97864a6b9112d3777"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/interrupt_contract.c",
+      "sha256": "6c2728ebc6a02c37f855e847ac74dad5e40fc1896462b819c5fd9eecc233100f"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/main.c",
+      "sha256": "b2c6287e04d658802e99bf93fbeea2c4d303274a032f89598227307eec7c94c7"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/plic_not_ready_main.c",
+      "sha256": "1db51767b01d99203ed9c065efb8f5c3a87c2c5c9924de10ae2f7681a974ab23"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/storage_bad_block_count_main.c",
+      "sha256": "2e552bc4d1f5c6281040a352f7adbc647306baa780174079824a96aab9878865"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/storage_bad_command_main.c",
+      "sha256": "a053fb8209d19d9c2fe5cf990750c0207849ea4714823016eb7416eefac727d0"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/storage_bad_magic_main.c",
+      "sha256": "daf9600c70d73088202302445a06beacb7c6d8c06dd315d289ad83695380eba2"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/storage_contract.c",
+      "sha256": "95cd4fd0e2197f803488065263a25ea9093cdeb6a5d2f6600dfe85e29b88430c"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/storage_lba_range_main.c",
+      "sha256": "3461e4f342cc9371874e66d7e536211791cfa0299932d2686629b19bb031d20a"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/storage_no_media_main.c",
+      "sha256": "275e50d9adc6a10bc92c37aecf62f60b89bbacc153ad296355f9d8de881d806a"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/storage_not_ready_main.c",
+      "sha256": "cb544f0f8ade9a2703c8542c794143e67ead3bbd28751c8ac2dda906b29eddbf"
+    },
+    {
+      "path": "myCPU/guest/kernel_alpha/timer_not_ready_main.c",
+      "sha256": "b6a92234b4a38b3abd0f51f48548a2aa81b15422bb09c38c7f1c78b06080f956"
+    },
+    {
+      "path": "myCPU/guest/lib/platform.S",
+      "sha256": "5f296845d6e4c04aa71e01a185355c39bb48c2f9e4b53ea8dc4eb22df5bf3967"
+    },
+    {
+      "path": "myCPU/guest/lib/trap_runtime.S",
+      "sha256": "ed975ae9a27dd6c7d080c87e523248675560b6ee9aaebb5db851445a23efcd8e"
+    },
+    {
+      "path": "myCPU/guest/supervisor_demo/link.ld",
+      "sha256": "530ca1a6fc26a53f5e744240dc87ff3d1fe008027994ccef8fb3b82664b784ba"
+    },
+    {
+      "path": "myCPU/guest/supervisor_demo/main.c",
+      "sha256": "0f69859f219fda36b9774da6960e9ecddcf801479257ac5bde654add5cc72b62"
+    },
+    {
+      "path": "myCPU/guest/supervisor_demo/start.S",
+      "sha256": "a08053e47345478ae268bc98459ac786cdc41b41e737966e792396fa746af00c"
+    },
+    {
+      "path": "myCPU/guest/vector_cnn_demo/link.ld",
+      "sha256": "4e5c9582091c444b6bf8fdcb70c1b526e616d96fc6ddb7b9c4de13428b74f432"
+    },
+    {
+      "path": "myCPU/guest/vector_cnn_demo/main.S",
+      "sha256": "9241cedbcde17e1d532e4d966d2cc031991c04eb119ccd852480592e38b67545"
+    },
+    {
+      "path": "myCPU/guest/vector_cnn_demo/start.S",
+      "sha256": "d7e0d20d9a3a7062bf0bd30c5f8ab1ae87f9221226152fcfc41bf9a88c35f37a"
+    },
+    {
+      "path": "myCPU/guest/vector_demo/link.ld",
+      "sha256": "4e5c9582091c444b6bf8fdcb70c1b526e616d96fc6ddb7b9c4de13428b74f432"
+    },
+    {
+      "path": "myCPU/guest/vector_demo/main.S",
+      "sha256": "e4f5a35d115c17a411091b3b7913cb2ba695310293b7928726220e927d3737b0"
+    },
+    {
+      "path": "myCPU/guest/vector_demo/start.S",
+      "sha256": "bbce898343c141e5fb08c34bd9453aa7c026843cd2ad5103702bbb43a5d485fc"
+    },
+    {
+      "path": "myCPU/include/platform_mmio.h",
+      "sha256": "6a65925914c6a20b8da5635d9549f73cae0fbc5ac3a5fe0a914a803c4be7ca75"
+    },
+    {
+      "path": "myCPU/src/arch/core_state.cpp",
+      "sha256": "3b682e18b20d9975f38e054a4901584a0df760ef11f8a56686d23a715d9e2766"
+    },
+    {
+      "path": "myCPU/src/arch/core_state.h",
+      "sha256": "eea6e75c57087ec8b5e91c671ec9c5b6384dec12ef093708b3ebc8e2772aa955"
+    },
+    {
+      "path": "myCPU/src/arch/csr_file.cpp",
+      "sha256": "59635fda6f19f63be62062bd3a18d3b888b40f81836e6f31a140e1d8453778af"
+    },
+    {
+      "path": "myCPU/src/arch/csr_file.h",
+      "sha256": "9fec34801e6b972c68b20cc37ebd96436ae9cabc4f0c2bea54ef9815892aaaf2"
+    },
+    {
+      "path": "myCPU/src/arch/vector_state.cpp",
+      "sha256": "fd6417a05e5e53538310a7ebd7614a560ddc59bcd6b27f6ca96bb1126943bcaa"
+    },
+    {
+      "path": "myCPU/src/arch/vector_state.h",
+      "sha256": "1fb9d4f2b7d233522f8eda05b1704d709db44b927cb0a2f3f4bf4a50f84932b8"
+    },
+    {
+      "path": "myCPU/src/cpu.cpp",
+      "sha256": "7d11b10c0733997a4a49e042328ff1bd54cd3aab2871c190e5f8861667ebc09b"
+    },
+    {
+      "path": "myCPU/src/cpu.h",
+      "sha256": "a8da697853811eecaa93fa55871f9c8f6d411afbcb3f8fc8635f175f9ecfec2a"
+    },
+    {
+      "path": "myCPU/src/debug/debug_budget.h",
+      "sha256": "6f3eb79fe565c933161c474d7b72d00ff63536b19b1d9ed5b183520341f704a9"
+    },
+    {
+      "path": "myCPU/src/debug/debug_protocol.cpp",
+      "sha256": "f4cd018dc4e9d2372f826d0ced2aa4af857ea704fb9e77c207f61a0e6c01e14c"
+    },
+    {
+      "path": "myCPU/src/debug/debug_protocol.h",
+      "sha256": "d214984dfd14ab4617d48ad8822a8f0bf8f663c5e7574ba59a99561513d47be3"
+    },
+    {
+      "path": "myCPU/src/debug/debug_protocol_command.cpp",
+      "sha256": "8414f9d48076e963dcbab4b8691459df50f4e1666474028d1fed595dc198542c"
+    },
+    {
+      "path": "myCPU/src/debug/debug_protocol_command.h",
+      "sha256": "3774e5897baef63e4e5cb46864814efe62d5755e567d216c5badd316d8875926"
+    },
+    {
+      "path": "myCPU/src/debug/debug_protocol_response.cpp",
+      "sha256": "370157ff6e5f76c7395b9c799de8f1a4ad6295ad6eb05b14af6c047f4dfbb983"
+    },
+    {
+      "path": "myCPU/src/debug/debug_protocol_response.h",
+      "sha256": "de2394df65edcfdc96853d2dc3baf86a25cd806832aee42622c9f543b8687e61"
+    },
+    {
+      "path": "myCPU/src/debug/debug_session.cpp",
+      "sha256": "714513e77c93e2072028b9bc7e8d4cc60d8df63c219320d1a1101d0c3bdb7c83"
+    },
+    {
+      "path": "myCPU/src/debug/debug_session.h",
+      "sha256": "58ee0ec27f7bcfc17b5af8c532151711466c037f4da1f37b817c0e572817f3ef"
+    },
+    {
+      "path": "myCPU/src/debug/debug_snapshot.h",
+      "sha256": "141272bf996f6465b429bc7fc3f04a7bdcfca5678bd8a356a95273cef6f7a823"
+    },
+    {
+      "path": "myCPU/src/decode.c",
+      "sha256": "57622795a381850797b28fc486caf160d85dbcc5c88b5b182774490d35e75a82"
+    },
+    {
+      "path": "myCPU/src/decode.h",
+      "sha256": "33d222b13323fe6e1d4baf969fcd01ee1b2ce4115b9e6858b13bbfe426399289"
+    },
+    {
+      "path": "myCPU/src/devices/ai_accelerator.cpp",
+      "sha256": "e880c447278fde14dd05c50814be7a6b2693625490fc71df66d3bd781797aede"
+    },
+    {
+      "path": "myCPU/src/devices/ai_accelerator.h",
+      "sha256": "416baf650926ea930d94a137107615d9b6e054a27adeb8b9347b5bf78832fad9"
+    },
+    {
+      "path": "myCPU/src/devices/ai_compute_conv.cpp",
+      "sha256": "097012cc102cb8f5284f27e8f88026668857ff05b61ae8c39d2ddf65b15affd3"
+    },
+    {
+      "path": "myCPU/src/devices/ai_compute_conv.h",
+      "sha256": "dd9da742f0cd3be50b9dc2b6969324e3c0bc72142d09e2bd8ba270e4f51b6665"
+    },
+    {
+      "path": "myCPU/src/devices/ai_compute_elementwise.cpp",
+      "sha256": "ba4d06e79055a60313660b91d4c23bbbf40b7cbf2ab081cb442c6bdd6ab383ac"
+    },
+    {
+      "path": "myCPU/src/devices/ai_compute_elementwise.h",
+      "sha256": "836c7b03f7f9fd077bdb027c45208a50c46863e840e36c4c52338d9bda230a65"
+    },
+    {
+      "path": "myCPU/src/devices/ai_compute_gemm.cpp",
+      "sha256": "e49b7f629977fda0a9a33f2dafb440f462af48f9df703d6a8fa89bd4f4df3a9e"
+    },
+    {
+      "path": "myCPU/src/devices/ai_compute_gemm.h",
+      "sha256": "796b815f5a0df0dd118582c4021937ed1800671bc613b8b67fc26f6944051e4f"
+    },
+    {
+      "path": "myCPU/src/devices/ai_dma_engine.cpp",
+      "sha256": "22de61e6c733a8908ec0df99258eab7b148f575b47c212bf28773cba58b5dbc8"
+    },
+    {
+      "path": "myCPU/src/devices/ai_dma_engine.h",
+      "sha256": "99f3ac6599addeebebe72472e0fa889c6af4566e47224dc558321178365de498"
+    },
+    {
+      "path": "myCPU/src/devices/ai_graph_package.cpp",
+      "sha256": "32643e61f15929a82642da3e405fe94d1fa5a6aac2cb762b53496296df168e98"
+    },
+    {
+      "path": "myCPU/src/devices/ai_graph_package.h",
+      "sha256": "699d419b32200d1f15c5c045105c8701ab6f05fb29361f58b6a33d128eb758fb"
+    },
+    {
+      "path": "myCPU/src/devices/ai_graph_scheduler.cpp",
+      "sha256": "ec645532a21f8ca4e183c510e3feae839c0a3889fa8fcc96ca23bff8b3263605"
+    },
+    {
+      "path": "myCPU/src/devices/ai_graph_scheduler.h",
+      "sha256": "bbacabc23dbce9e005dc5655195441831abd7126a06a9933c6f4ca6afb76249a"
+    },
+    {
+      "path": "myCPU/src/devices/ai_scratchpad.cpp",
+      "sha256": "36d594f8721577892ecda20852c0bae37f9db340d1bc69dcd36df3102ffff4e2"
+    },
+    {
+      "path": "myCPU/src/devices/ai_scratchpad.h",
+      "sha256": "de73c2177bd6c7c57dd0fa80e6bfec410217df34e3d4b2063bdb4d7b22403864"
+    },
+    {
+      "path": "myCPU/src/devices/ai_submission_queue.cpp",
+      "sha256": "0d5ef6c8fba8f97169906c58444c2e1f97a594241bfabb36685ad2836add522c"
+    },
+    {
+      "path": "myCPU/src/devices/ai_submission_queue.h",
+      "sha256": "fd49a78bcb74d6a4778004cd62ec37294c582a53e8c64187a606e07403540aaf"
+    },
+    {
+      "path": "myCPU/src/devices/clint.cpp",
+      "sha256": "48234e98b6129be2010da1e7b4f748cb2eaf577714d852341e60fbd98e2d07d5"
+    },
+    {
+      "path": "myCPU/src/devices/clint.h",
+      "sha256": "d7a45d822a341b4caaced133b20f47e1694d87052146e1d0c76e690291159047"
+    },
+    {
+      "path": "myCPU/src/devices/device.h",
+      "sha256": "a0c7b4781e86da6f079223d89cc728c3038f88a470f464036f0e1c4359ef8910"
+    },
+    {
+      "path": "myCPU/src/devices/plic.cpp",
+      "sha256": "8dfb10a541040de723c53033280de0a547692c1655b31e72fc979b322c1308c1"
+    },
+    {
+      "path": "myCPU/src/devices/plic.h",
+      "sha256": "31144655c41ccc0d139f84332702207fda9e2ecb494c1cde43fefa07bc087f20"
+    },
+    {
+      "path": "myCPU/src/devices/simple_storage.cpp",
+      "sha256": "d7181c3f236d2dd4f817b29a0ebfa04ad0184c109af72b80a53fb779a34c0755"
+    },
+    {
+      "path": "myCPU/src/devices/simple_storage.h",
+      "sha256": "56c7fd267fc8d4b1e22bf88ff8385dd17aa36d30725e3c488bab48a088bd4ded"
+    },
+    {
+      "path": "myCPU/src/devices/tensor_golden_ops.cpp",
+      "sha256": "32137f9abc665fe02379a20b022d42e69876d0936ab968afc2d2165a0ef45d35"
+    },
+    {
+      "path": "myCPU/src/devices/tensor_golden_ops.h",
+      "sha256": "21c6cf59363c786ea2d3046b2f297ea277df148a69538c045108e59d69b52548"
+    },
+    {
+      "path": "myCPU/src/devices/uart16550.cpp",
+      "sha256": "9126be9b77df566ac50ae796c1027cfcc3727e92875d2b44726d0bdc65366bd4"
+    },
+    {
+      "path": "myCPU/src/devices/uart16550.h",
+      "sha256": "2b72810ee99e4058e39b13f173c3392248fba20ab782b01965999b085d3f8845"
+    },
+    {
+      "path": "myCPU/src/devices/virtio_blk.cpp",
+      "sha256": "a7865201ea6a9709fd80913b4ee845468c53aa9c729f7548d40f882c02d6e36a"
+    },
+    {
+      "path": "myCPU/src/devices/virtio_blk.h",
+      "sha256": "d39ed2b5965106b6c0914865d24132220664aee2555f7d23917d4370adc0756d"
+    },
+    {
+      "path": "myCPU/src/devices/virtio_device.cpp",
+      "sha256": "c05a6e939db6ebf003be215bff805c6c19d664a785225f9390adf05d6295afad"
+    },
+    {
+      "path": "myCPU/src/devices/virtio_device.h",
+      "sha256": "badfc9b3ea950b919ee385de52bd41d149ffb0554cea11f48e43a4a972b9a35c"
+    },
+    {
+      "path": "myCPU/src/devices/virtio_mmio.cpp",
+      "sha256": "119c54f0f78d261ba3bf54268d3440c422114cd4501736169028ed1c323aa302"
+    },
+    {
+      "path": "myCPU/src/devices/virtio_mmio.h",
+      "sha256": "0706708ab227d3a2fe7d45729f1d790802f294f58b7d9fd173d3f9729f220b62"
+    },
+    {
+      "path": "myCPU/src/devices/virtqueue.cpp",
+      "sha256": "6d9042b6d47f7704a17eb8af7d01cffcad992e4fddb465a2b83686c294b637bc"
+    },
+    {
+      "path": "myCPU/src/devices/virtqueue.h",
+      "sha256": "15cc334dea8e2c639e02fdff5b3989c50686e094ff48e3f16c85f947dc6f599d"
+    },
+    {
+      "path": "myCPU/src/exec/backend.h",
+      "sha256": "595883ee86429ca58717211e65f5f010c2c99a104dae55012dc6ac30479e2ecc"
+    },
+    {
+      "path": "myCPU/src/exec/branch_predictor.cpp",
+      "sha256": "f31169c25b5ece90f0b27b2007fbc355610960f93ceb260c22736499ade92946"
+    },
+    {
+      "path": "myCPU/src/exec/branch_predictor.h",
+      "sha256": "499ac87f43086b6097eb0312d6d69b593e94d87bbe34f1537e5ec53ac069da8b"
+    },
+    {
+      "path": "myCPU/src/exec/control_flow_ops.cpp",
+      "sha256": "bfdf15cf6108edbcb42cd09342af3ad356e8e850df276f6ca22fad9bd391b399"
+    },
+    {
+      "path": "myCPU/src/exec/control_flow_ops.h",
+      "sha256": "af63bba6d553e466fe9984c0586ad48c474e06dde61f325334860abe9ea56835"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_block_cache.cpp",
+      "sha256": "81d0ee3cd040cef98dca5406c338a3d145f173ad4e2c62adbeaf71ed0571a233"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_block_cache.h",
+      "sha256": "d7d4a6d30ea8f07a4ad76afa551bcf779d8c0a9c48e5d6ea1a45465149d614c6"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_block_plan.cpp",
+      "sha256": "aff964889a576df1737473a06b7aec71a5dcbc23b53c35f034f1da9bc9587aeb"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_block_plan.h",
+      "sha256": "8a378a8275e1390bf6823c17241723efc6ec0bbd410cd4f0316234cab78aef1e"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_executable_cache.cpp",
+      "sha256": "1b3781c51e6c661a35ea5ead0200160428223d42b7a3b294317a5fcfd86f4984"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_executable_cache.h",
+      "sha256": "76fc8f08ae6979bbc54f10ee18fed02564bc1140695d7924898e68b83768dccf"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_executable_memory.cpp",
+      "sha256": "3b8f7b508bdec263b80374310c92a9df704613b9595576e33756af2239f794c1"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_executable_memory.h",
+      "sha256": "96975cf49943904ec582419b67748cd43d6ce3cac6d5d9b67302880d0e6fbc7c"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_helper_execution_bridge.cpp",
+      "sha256": "8983441ae396b2be9fe0dd9a9b7d5e7f9dda6665d56c51e8c4a82848ba36b071"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_helper_execution_bridge.h",
+      "sha256": "03ac5fdb69b3cedca970009f03dbef1380b812220785fa49307b961cff25ca25"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_helper_replay.cpp",
+      "sha256": "a9ec4d09ea50ef85533f76805f571350c3d590ac39b50d64d5bad29653aee687"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_helper_replay.h",
+      "sha256": "0780956f5b922ff0ce1da7a16836632710a4cf5dccd84897cbecfac2818c0424"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_host_emitter.cpp",
+      "sha256": "4f5a623717db614e6bd2a8d4f3a8fa299d2856431bb62aeadc9b523e15e83c8d"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_host_emitter.h",
+      "sha256": "93a55da912ad8b3f9f9a89e5574185a1df566c85968ca6cc9ea460a0611172e8"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_ir.cpp",
+      "sha256": "e7eaeb58c74c4ae12051310d02ba3e6f778824a029682b0522cb2ebcab593c2f"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_ir.h",
+      "sha256": "4d254bf48249d72abd1927fe0f001703d642a030c755140a4603ebb99e4ec5cd"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_ir_eval.cpp",
+      "sha256": "53f9e81c58468af380315a65d706960de1c96d66099ee06cda42e3f8b223bf8a"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_ir_eval.h",
+      "sha256": "0fc4a9dcd8e89bc297e38b178c4d33cc48dfe84d08aee08bd873d07605042e34"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_ir_lowering.cpp",
+      "sha256": "248704dd678631d393d88cc997d1b7ad4e8a0f86760a9e220fb6735a2a2aa6a8"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_ir_lowering.h",
+      "sha256": "f12cebfc421a8416a31d0cf943b50c4c937a0d82258b2a63801860c113a2e1ba"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_jit_engine.cpp",
+      "sha256": "b7ea22396b07337a08e549611b051a044d8ddf135b4a1332cdae40b996a3f721"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_jit_engine.h",
+      "sha256": "c295fa169495b1d8092efda1f368982f3eff536bd59b2928226935339426ab3e"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_reference_fallback.cpp",
+      "sha256": "04cc0f77db283bf5f8f248553df314afc2d56c70a94ad4765f92f071aa04bc00"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_reference_fallback.h",
+      "sha256": "1dafbd4f8d9e60ca67d48d7e35f2f87f6dac10f8239f6f84f29e399b352a7ca6"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_reference_fallback_execution.cpp",
+      "sha256": "6df7fc2661a143d6b5476cbed05891afb5b85acc42440fd64216587fe28f8965"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_reference_fallback_execution.h",
+      "sha256": "050e13795fd449c470e60ea6365c84b4939f69e7b55bf7661cd731ec937f2976"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_runtime_dispatch.cpp",
+      "sha256": "e3bb55983b7b7c06565883b3f20633d0ac5687d0592c1dd698ebb1c2e7863c73"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_runtime_dispatch.h",
+      "sha256": "2f3205bb43df7a49f30741c7ba9445736d74d67bae64f7128f148fb8c5aa749b"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_runtime_harness.cpp",
+      "sha256": "05fd34754953f9b1c991c1ba126045f1217895741ce03314e09736e7a799807d"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_runtime_harness.h",
+      "sha256": "01ee622e3525ad798e24dbb9fdbdd064858fd1c5450c38a797f3bd03e44f6b62"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_runtime_invalidation.cpp",
+      "sha256": "882ae71bbf1e665ffbd028b994fc2861a4bff58debc9fb52ff960672649c4ca8"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_runtime_invalidation.h",
+      "sha256": "df94a315aeb17ac78b5d37cd739fe6b7968c64c1d5f3d0d29acf1b2696573f7f"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_translator.cpp",
+      "sha256": "fdace0f5c589931c1c0525e1beac04daab145ef12c4dd465e40dabf3bbb32832"
+    },
+    {
+      "path": "myCPU/src/exec/dbt_translator.h",
+      "sha256": "f41341fb656fe008f3e65bf8a5299a40dc3d58e432f7d108e3e5a74b80cf7121"
+    },
+    {
+      "path": "myCPU/src/exec/execution_profile.cpp",
+      "sha256": "8551aa717cd312fb02812eb7bacbe8e65d88c954525b219cb28960bd01cb1992"
+    },
+    {
+      "path": "myCPU/src/exec/execution_profile.h",
+      "sha256": "d661818d347467a0376e6c625b8d33c9e487c9b50d5ac251e09d6e01a79f17f0"
+    },
+    {
+      "path": "myCPU/src/exec/floating_ops.cpp",
+      "sha256": "bca08e56a8817f0177e39b4d78dd661e91137223f63c1888f0c94fbf54487b4f"
+    },
+    {
+      "path": "myCPU/src/exec/floating_ops.h",
+      "sha256": "199aa926e68dd6d692ae0c141cdc21f7e585a34a6bb2da77d84ec9dc98931447"
+    },
+    {
+      "path": "myCPU/src/exec/functional_backend.cpp",
+      "sha256": "a0dd39639b177265b3637dfc15ed7232e6d4e8d994ec4ef5745dc001571d2f41"
+    },
+    {
+      "path": "myCPU/src/exec/functional_backend.h",
+      "sha256": "d5125966753e38092ef60cf9005691864ff62b9f6603061b70b1073e94673eea"
+    },
+    {
+      "path": "myCPU/src/exec/integer_ops.cpp",
+      "sha256": "e0b41e4bb66437eec990821ae6cc6868402984f4c1e881a39defe668de3d32b3"
+    },
+    {
+      "path": "myCPU/src/exec/integer_ops.h",
+      "sha256": "61d736ded20004e3706abc4e24eab232b34534b6f000a104d0a6cf1f80c05cd0"
+    },
+    {
+      "path": "myCPU/src/exec/interpreter_dbt_prototype.cpp",
+      "sha256": "e902f7ccd0893bc712f67a8239a753ab366c04acd4c55052e48887e62daa5f3d"
+    },
+    {
+      "path": "myCPU/src/exec/interpreter_dbt_prototype.h",
+      "sha256": "7f7ac1d4b7034516236940706f91a0216aa35acdb941848a5d87a4b1aab7787e"
+    },
+    {
+      "path": "myCPU/src/exec/load_store_queue.cpp",
+      "sha256": "159d0f9ed96ae66e155764c59badee00ee5a2ee2b01bb4ab6f44b616efbeca87"
+    },
+    {
+      "path": "myCPU/src/exec/load_store_queue.h",
+      "sha256": "b1b2ad7cbc7878b51f8e16cd20b7925428b409c4dc7aa392e8f0e4991feda321"
+    },
+    {
+      "path": "myCPU/src/exec/memory_ops.cpp",
+      "sha256": "8c7c541a75cce78c5d84913253595d1fb73b01e46769a35b10e42b268b972c3c"
+    },
+    {
+      "path": "myCPU/src/exec/memory_ops.h",
+      "sha256": "aee21b55db625b0f511ab3734d7214f29a1a6f5dda040915276353ad159852e5"
+    },
+    {
+      "path": "myCPU/src/exec/physical_register_file.cpp",
+      "sha256": "6723f6b80ad8f175215be75bc11894f1ece171fa8578a7ae216ffd16caf7bf8f"
+    },
+    {
+      "path": "myCPU/src/exec/physical_register_file.h",
+      "sha256": "bd814b242d4c442c55998cbb26552216821bbefde8aafdacdbdd035ab74b6c3b"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_backend.cpp",
+      "sha256": "9b011828735c0fc6e3d86d55548d75c03ae6214c673f64a717974a70df1a73cf"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_backend.h",
+      "sha256": "6d0ae4bf27e49eff228c16cd9da10e5b467cc737f42a3baa8e62d4ed083134a4"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_backend_cycle.cpp",
+      "sha256": "48c1f0eefb7802aee7272cfe54439fc443a2850f6e642a04f2899bd82b290deb"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_backend_execute.cpp",
+      "sha256": "5495f949f7326d9697da8cd93dd97697aedfeba26d6217b3e50e648a29ccf44d"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_backend_frontend.cpp",
+      "sha256": "e806a41fff11431f7b14b86d502e073ab0ed48a26bc65376b01e1c3d56568543"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_commit_boundary.cpp",
+      "sha256": "e6ba3db5b1f35dbabbf9b394d595ddaf48be4dde32e542e2d9d9102942758f2d"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_commit_boundary.h",
+      "sha256": "9e981c417709eabaed59c1997b0693b6a8087b6b06c198acb0682b3fda7e7e3c"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_core_state.cpp",
+      "sha256": "a66c2ef951be70a8823e9e03d6efaf7592c9724ddfd21047b8e780305a1f2a8d"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_core_state.h",
+      "sha256": "00f4645a72f5974a45476c0f67b2e004f314deb549759b0306d440b9a626123a"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_hazards.cpp",
+      "sha256": "69ca0ec79a6301329b82fa4ac232345b490ed5e562a92bccef0fa0a4e179aba2"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_hazards.h",
+      "sha256": "f7e6a77031f98b28f050dba405ff41a03e0321dedf350721495c512fc2e51982"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_sequence.cpp",
+      "sha256": "6597dd9585205b1e7c25277c582ab5670b6e0a6adf60126876ec5e0b9ce3a776"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_sequence.h",
+      "sha256": "d777e5bb0218d42b45b2b924f2bfd13c2ec7a6bccdd16e1e29a1504593d2721a"
+    },
+    {
+      "path": "myCPU/src/exec/pipeline_types.h",
+      "sha256": "75bccadeedd655ed081245c8121acdd3069b2eafa3eceb5898c6efd927f32e33"
+    },
+    {
+      "path": "myCPU/src/exec/rename_map.cpp",
+      "sha256": "ecf351fa7c0c7f0e5c7c43ab1aaebf1035248be6653656cafe5d13d026809ca4"
+    },
+    {
+      "path": "myCPU/src/exec/rename_map.h",
+      "sha256": "93199e8ceb36ca6eafe9545536eb5a36bf1dd2de9ef2acf88748a71e7cb4e355"
+    },
+    {
+      "path": "myCPU/src/exec/reorder_buffer.cpp",
+      "sha256": "649f77ab0e93cec9871652b8652180826fad3bc4cbe9e701d0439ecb599c0b7e"
+    },
+    {
+      "path": "myCPU/src/exec/reorder_buffer.h",
+      "sha256": "59ce1cd2ef50dff01a624369ed4310b5f0b9d77660dea4b582c4fd4a0e766666"
+    },
+    {
+      "path": "myCPU/src/exec/system_ops.cpp",
+      "sha256": "ca69681ff4afa5c8fdd23cfd5610fd78489d1810900d0a3febfa9cf2b25af5aa"
+    },
+    {
+      "path": "myCPU/src/exec/system_ops.h",
+      "sha256": "995a8e8d602aa5089347c973f84d2db2483c07e3ed34be85ffdfb7a219126fce"
+    },
+    {
+      "path": "myCPU/src/exec/vector_ops.cpp",
+      "sha256": "a2a7d3a431df1f337bcc05d6b5fdbeacf2da49223abfd4c7fe04d9a8a68ec64a"
+    },
+    {
+      "path": "myCPU/src/exec/vector_ops.h",
+      "sha256": "402afcd447614d099ece36f55c1f7a5eb4c5ceff44e22e4df98511dc56f593b1"
+    },
+    {
+      "path": "myCPU/src/isa/atomic_contract.cpp",
+      "sha256": "73689ed3965995fb585c80c27e158fe0ad7108a845cd7e61ab4468c81344d950"
+    },
+    {
+      "path": "myCPU/src/isa/atomic_contract.h",
+      "sha256": "007f44948edf56adbb5764102a3da2f1bed3d191068abf5b3978378a2c3fcd07"
+    },
+    {
+      "path": "myCPU/src/isa/effects.h",
+      "sha256": "2843913f9ebc7b779f9a9c1aa1c1d62809d97b0910598ad2c39ce8007fae57a9"
+    },
+    {
+      "path": "myCPU/src/isa/execution_context.cpp",
+      "sha256": "de8117665ad27b32945f50896a5772c55094406e9c08335c2fdb34ab8c4aecb8"
+    },
+    {
+      "path": "myCPU/src/isa/execution_context.h",
+      "sha256": "032ceed1e8b884e557cf4ea9d90eec6198dee88bf8186f61eb476a4fd7ddc55e"
+    },
+    {
+      "path": "myCPU/src/isa/instruction_semantics.cpp",
+      "sha256": "2aae6069bd9ad5bea279132bbd0e75014a3af57adee735e58502a27ddbdb252a"
+    },
+    {
+      "path": "myCPU/src/isa/instruction_semantics.h",
+      "sha256": "8d73acc429586b2e5045febc7ead387d61c5bc96f6d1bd8c5c850277fd78a569"
+    },
+    {
+      "path": "myCPU/src/loader/binary_loader.cpp",
+      "sha256": "6179958347a331435c679419c32f15dcc21d821844abf1c44d5b78184861e419"
+    },
+    {
+      "path": "myCPU/src/loader/binary_loader.h",
+      "sha256": "0b85296aa299d232264e39088df19a426b9e2a47b9e244661f3b6d3e549d1dc0"
+    },
+    {
+      "path": "myCPU/src/loader/elf_loader.cpp",
+      "sha256": "5ed9b5a92cc4e8707f96a26ccc3ce374999564e9d51d272f1be976aa5bd738a5"
+    },
+    {
+      "path": "myCPU/src/loader/elf_loader.h",
+      "sha256": "fb34941c7afa82cef591f0f24c379f0e0748bca7bd67a4129beed5e35dafdbdd"
+    },
+    {
+      "path": "myCPU/src/main.cpp",
+      "sha256": "7b83747a4c36504062a215a52ebd43984726f84be342c961e74322a5fc2bea57"
+    },
+    {
+      "path": "myCPU/src/mem/address_space.cpp",
+      "sha256": "5ef8d56f9237667ff0d872c628d5e183ef4292bedac0d2a0e0212745154a01e6"
+    },
+    {
+      "path": "myCPU/src/mem/address_space.h",
+      "sha256": "2725be0189b43b6b7f94c4f59365cdc29d949e5c9fd88baba6bdd34269e97453"
+    },
+    {
+      "path": "myCPU/src/mem/bus.cpp",
+      "sha256": "8e5699c61f18b36af12a0d6c34241e67661e00511ae0347ff5725829a0a3753a"
+    },
+    {
+      "path": "myCPU/src/mem/bus.h",
+      "sha256": "a6e282fc4a0939335b0000cbd620e9775c91d655d7dd6e46b15bb2f65a0e5e66"
+    },
+    {
+      "path": "myCPU/src/mem/dma_transaction.cpp",
+      "sha256": "1dc0d0962f5571ed98de1b3eb93083b44a2b8c25cade18dcfdcc7631ab2ab66e"
+    },
+    {
+      "path": "myCPU/src/mem/dma_transaction.h",
+      "sha256": "484e58ff3a0cf8dbffd4af5c7657559181f3331afb815299fcf71f735b2baecf"
+    },
+    {
+      "path": "myCPU/src/mem/memory_region.h",
+      "sha256": "f2feff6e51f2328a03cc8d98c69a96051d5c5888ee9b0f931b382e0d0a7e2536"
+    },
+    {
+      "path": "myCPU/src/mem/ram.cpp",
+      "sha256": "92b96cf3bfc4d251fbb3be1d58278e125dd07a6c771ecdb84579d72f85e6d9c1"
+    },
+    {
+      "path": "myCPU/src/mem/ram.h",
+      "sha256": "a2da508f6e5159bcb13b0c738b1f47c051fe49bdddbfbcaee25ca22c53e96814"
+    },
+    {
+      "path": "myCPU/src/mem/simple_l1_cache.cpp",
+      "sha256": "9562a7ddf96e401c58468b10fc3423604c3c600c57a07bde345df456f83c7a00"
+    },
+    {
+      "path": "myCPU/src/mem/simple_l1_cache.h",
+      "sha256": "7702a5a870a0508e2bb5c9b7fdb27e64252a5ae4d8bc841a851087757faf197e"
+    },
+    {
+      "path": "myCPU/src/memory.c",
+      "sha256": "d656f905100176f482d16559cfd5f6b420004d3f97463cfc707ba19357703f15"
+    },
+    {
+      "path": "myCPU/src/memory.h",
+      "sha256": "d58bf17bf5be7e3b0e0f772426f8e43d4bbd9d64c64898b19d1230b125fc1827"
+    },
+    {
+      "path": "myCPU/src/platform/address_map.h",
+      "sha256": "b273f0e0b81d9680f0b112006540e887a8401c0ca03b9a8cb9a9dc6c62b2e697"
+    },
+    {
+      "path": "myCPU/src/platform/machine.cpp",
+      "sha256": "9bd9838ecc63fb00a2cfbf11e6a03d98c9170d1ba8b982681e06a8e2a00a2c32"
+    },
+    {
+      "path": "myCPU/src/platform/machine.h",
+      "sha256": "08a2b0d67a59e3ff9620443d18591cd4fe7d91496eb2bf08ee5c30bb5e7cf19b"
+    },
+    {
+      "path": "myCPU/src/platform/platform_events.h",
+      "sha256": "8680b188368e30027b3c55546813cd55b24efa6768c81a5e85e6d02b3bf653de"
+    },
+    {
+      "path": "myCPU/src/trap.cpp",
+      "sha256": "7e595f5ea2efe33b14f88dfc55c3bbb8e1449d7e8f0473d115f721791f1cd237"
+    },
+    {
+      "path": "myCPU/src/trap.h",
+      "sha256": "d3a580df458a7e03510439de964a6624d87fb2478bb2e37fb5be7b71c9cb5322"
+    },
+    {
+      "path": "myCPU/tests/asm/access_faults.S",
+      "sha256": "1612fcb8a294e4cace0a3296108df73adf9a619902df87a96406e16fbfda8487"
+    },
+    {
+      "path": "myCPU/tests/asm/alu_word.S",
+      "sha256": "56993a5fdb6a0ca643bad810c21e694517d7eb5d2e2c3a80e6c4ffdce35fb0ec"
+    },
+    {
+      "path": "myCPU/tests/asm/atomic_basic.S",
+      "sha256": "8b142c89ff94eecfe9b235fe92e34cd091201aec384f0f40d684cfeb1e959fa9"
+    },
+    {
+      "path": "myCPU/tests/asm/atomic_ordering_smoke.S",
+      "sha256": "b33e22bf3b5e0c98132d046f00950958644d77a64b34ec7d76e4ba61ea8da7fc"
+    },
+    {
+      "path": "myCPU/tests/asm/branches_signed_unsigned.S",
+      "sha256": "1a6207526ed9b27a502d080743127a9cd5c96b8f8742e45469d99954235a5fea"
+    },
+    {
+      "path": "myCPU/tests/asm/clint_split_access.S",
+      "sha256": "9fe1f033bbef5e9c79bb9bf3e647397e636aad79b0efa5625468d77ce1c68181"
+    },
+    {
+      "path": "myCPU/tests/asm/control_flow.S",
+      "sha256": "835f827e5d335d297ef32f6d6c60b117d375121c7aa37d151ef32f4edc00aeff"
+    },
+    {
+      "path": "myCPU/tests/asm/counteren_access_control.S",
+      "sha256": "bcef28c98a9e42ce50d61098cc7c8cbd7593b70192ae4c9d64d2315169c3d231"
+    },
+    {
+      "path": "myCPU/tests/asm/csr_access_control.S",
+      "sha256": "269bd3d371f23bcf9da40327de77562162aba7248200a0ac1828817a6af5ac5a"
+    },
+    {
+      "path": "myCPU/tests/asm/csr_illegal_matrix.S",
+      "sha256": "e9df9cf07865c4719216b3358f93c782e23978aa97eb5cf15e788c1ce9552b0b"
+    },
+    {
+      "path": "myCPU/tests/asm/csr_semantic_consistency.S",
+      "sha256": "622c6430553e05ecbf77e8c2233f56dda875fb8dc662b646b2492ccbc7e2b151"
+    },
+    {
+      "path": "myCPU/tests/asm/csr_trap.S",
+      "sha256": "271335ec9248c6115bbfab361f14132a7d5fb068793a0688dd3378d12842ea63"
+    },
+    {
+      "path": "myCPU/tests/asm/delegation_edge_cases.S",
+      "sha256": "619a719c1998adc7d7570ec56d06ad414ad1a3a3669cd3cfa2ba14f67108fe79"
+    },
+    {
+      "path": "myCPU/tests/asm/exception_traps.S",
+      "sha256": "b9737073bfa071491a58f07cc905d64f40fffb64e22a4b253dfab2774a07115e"
+    },
+    {
+      "path": "myCPU/tests/asm/fence_noop.S",
+      "sha256": "4ec2fb1180b7e59d8ec590ff718e892edc7669ff02016f8af9ae69616677659c"
+    },
+    {
+      "path": "myCPU/tests/asm/hello.S",
+      "sha256": "11124031c0273a17172de80378fd5b1cc91bfe76bb7f9285523d9b7e38daf0ae"
+    },
+    {
+      "path": "myCPU/tests/asm/illegal_integer_encodings.S",
+      "sha256": "4576d9f3eb3592944d373730abafaf5df04ca3105b9817ffd808d0f5680dced4"
+    },
+    {
+      "path": "myCPU/tests/asm/include/platform_drivers.inc",
+      "sha256": "8296a16128e13914f9ea76705da0e0d4846373b841bcdbd95d6afbfb29943a63"
+    },
+    {
+      "path": "myCPU/tests/asm/instret_counting.S",
+      "sha256": "1ffa913f636c9a7151e139d3bda37b12c1d3185955f6dc5bc0bbcaf7e90362cd"
+    },
+    {
+      "path": "myCPU/tests/asm/interrupt_csr_views.S",
+      "sha256": "b9f6852aeb6487585bf218c4d0a7affb6cb13f8d149766546defdfdecb35dbbf"
+    },
+    {
+      "path": "myCPU/tests/asm/loads_signed_unsigned.S",
+      "sha256": "f41bdc117a7944139d0a479892b022c38a528a910f5e0127f835d570642a05dd"
+    },
+    {
+      "path": "myCPU/tests/asm/machine_counter_csrs.S",
+      "sha256": "d85f2e65978997763043e1d590acb837513ae9ac2729b7be0ecff9a006271a60"
+    },
+    {
+      "path": "myCPU/tests/asm/mmio_access_faults.S",
+      "sha256": "22630580d359d6753f7221a70ca4d04ce307ef03de7a985cd1eb94da44792e4d"
+    },
+    {
+      "path": "myCPU/tests/asm/mtvec_modes.S",
+      "sha256": "c3ee3c88a86684a58172c45324d342d9bb0d58fe87e3b8d0ec3a2860a414008f"
+    },
+    {
+      "path": "myCPU/tests/asm/muldiv.S",
+      "sha256": "2f5a3df1783d7f59e0270bb33a77d702cb460939995843faa79a3ab1d52acad2"
+    },
+    {
+      "path": "myCPU/tests/asm/muldiv_edge_cases.S",
+      "sha256": "83d972ac955ea471d7d5116abcc3dab352e998c43b113e0b5e48e69830287a7b"
+    },
+    {
+      "path": "myCPU/tests/asm/plic_machine_external_interrupt.S",
+      "sha256": "b5e7b777b30d9b86990903ceb4c4d0aeecb1b271bfe6c934f3e05422b285f177"
+    },
+    {
+      "path": "myCPU/tests/asm/plic_supervisor_external_interrupt.S",
+      "sha256": "9bcd84286ac3be08effc7feb4e8aa3a267bb40aaacb12fd459c7fb0bd3710045"
+    },
+    {
+      "path": "myCPU/tests/asm/privilege_transitions.S",
+      "sha256": "6eb687e38c2854c30bc6bc3c91065783b323c40ef5cde388b1f1fbd63885c5f7"
+    },
+    {
+      "path": "myCPU/tests/asm/sret_transitions.S",
+      "sha256": "fc7cf8e8763932474be930d780ee3f8585a5e4fae15b45b22c62c3b4e88c4a48"
+    },
+    {
+      "path": "myCPU/tests/asm/storage_device_basic.S",
+      "sha256": "028f4afa5b6e822a556bfb0435fd1efe824abdaf2b3f7eeecd334d87fbb5d54c"
+    },
+    {
+      "path": "myCPU/tests/asm/sum.S",
+      "sha256": "78c5e1e2c2b5d9333f3ec694d02943ad693fca77bd0c8bb5f953e31a49f519c5"
+    },
+    {
+      "path": "myCPU/tests/asm/supervisor_exception_delegation.S",
+      "sha256": "787a41a9d9c074115a44ec2f3b183989042c22858fcd6ffdd22c78bf229cfc41"
+    },
+    {
+      "path": "myCPU/tests/asm/supervisor_platform_smoke.S",
+      "sha256": "0757d33154403750ecc28c007a4e093248fd6dd26af3bb9235d5531808e1559c"
+    },
+    {
+      "path": "myCPU/tests/asm/supervisor_timer_interrupt.S",
+      "sha256": "f4706c0fd4442745fa882b0fb50c2550a018008001134407f16e0264f8bffcea"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_basic.S",
+      "sha256": "ea92ef870e8a05bd8d01b3c75a4974981d66596ccdad8d2c3fecbcad4ef8cba7"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_edge_faults.S",
+      "sha256": "1ea5e7145c4fa84b16f60d19cb21a37690a2151fbe6acdd6b5ff67dc4204fe86"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_exec_privilege.S",
+      "sha256": "2ae20e31d2c7d89f815822502065acecb4dfa1ef1d511233b453b63f53b2175f"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_mprv.S",
+      "sha256": "9aba02bf5d76fe1febe7a8450950ccd68b6f403bb04174d01e37684395001105"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_page_fault.S",
+      "sha256": "7d219cae9cc3c78f39e9eacb73d0feb38a9ae697326a7d169797584bd79a485d"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_pagewalk_contracts.S",
+      "sha256": "1e1133d7445e321cf9431f40d6083bea9506bf1fb8809db39da362a047c67e8d"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_sum_mxr.S",
+      "sha256": "eefedd24ae94f53c0f3861d2aadc459f5bf7e458c46b32c3ce7e3d95f9fd9128"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_tlb_ad_bits.S",
+      "sha256": "911e1d619ff453366e3b95fe42ab64c40df88c0c38879d759c1b30409b128ba3"
+    },
+    {
+      "path": "myCPU/tests/asm/sv39_tlb_flush.S",
+      "sha256": "8cb56eeb80abdedfedcac2c381fc5842cfbfee2251df811cf0eb437460e5fea1"
+    },
+    {
+      "path": "myCPU/tests/asm/timer_interrupt.S",
+      "sha256": "e47e909b99eec816ea21c3353e52e37269aa326ee95318f492befec57b4e33c5"
+    },
+    {
+      "path": "myCPU/tests/asm/trap_state.S",
+      "sha256": "a5be1d3d48c03eb880973ac06a4058161c8f6b153bf0e2724824660d00d27ead"
+    },
+    {
+      "path": "myCPU/tests/data/ai_accel/README.md",
+      "sha256": "be038029334be8bd402f7a05f7512ae3b27e2dd7d7cb103cf3a14a6edc66ef45"
+    },
+    {
+      "path": "myCPU/tests/data/linux_compat_minimal_elf.S",
+      "sha256": "a4735c615bf8ffbd9451f38e3d68d3265a0b377842c7a8a180bd92297628cc39"
+    },
+    {
+      "path": "myCPU/tests/data/storage_basic.txt",
+      "sha256": "4d08b76b7899ebd684f66a8dc183b260cd8bae517e1b6784c7ef2049b229263c"
+    },
+    {
+      "path": "myCPU/tests/host/address_space_faults_smoke.cpp",
+      "sha256": "517df84ab1b7acbaf8a6cadf505b87c99afc00511eee9f9a1b2d71fa91831441"
+    },
+    {
+      "path": "myCPU/tests/host/ai_accel_guest_smoke.cpp",
+      "sha256": "9cc727d2f21f135a8418b3907a5b97ddfdfc430476ea8537034bc27a89809a08"
+    },
+    {
+      "path": "myCPU/tests/host/ai_accelerator_cnn_smoke.cpp",
+      "sha256": "9224a742d89c16aad2612715fd06d8f8584ec5dca9b80827795939ae5e6ed46e"
+    },
+    {
+      "path": "myCPU/tests/host/ai_accelerator_dma_smoke.cpp",
+      "sha256": "ac52fbf13cb7fb44075cc32c4c41581fe805225d1aee3ca3933f07b958d00df7"
+    },
+    {
+      "path": "myCPU/tests/host/ai_accelerator_gemm_smoke.cpp",
+      "sha256": "82904fa0cbb66d044831a352102e6b90cf15ec8198b3d056b240b4149b51176f"
+    },
+    {
+      "path": "myCPU/tests/host/ai_accelerator_profile_smoke.cpp",
+      "sha256": "b98a4b9ec54da5d839c00c1d9d9d5a930e40be5186d149d6bb9933b3e73187e5"
+    },
+    {
+      "path": "myCPU/tests/host/ai_accelerator_submit_smoke.cpp",
+      "sha256": "b96e97321a8f8d21bb3363dbe18a22658c642329298ff83eb5c84a6bdf1a40d1"
+    },
+    {
+      "path": "myCPU/tests/host/ai_tensor_golden_ops_smoke.cpp",
+      "sha256": "2a90d440d2958c7eedfb2d1170bc1b136871f75e5ec459760a61b8b2b14388cc"
+    },
+    {
+      "path": "myCPU/tests/host/atomic_semantics_smoke.cpp",
+      "sha256": "0e4877974ef55d3316fe2e3544389499dfc928118aecb5977a0695e015c854df"
+    },
+    {
+      "path": "myCPU/tests/host/backend_cli.sh",
+      "sha256": "4311d6346faddf7eb6c67d2e167e407a4acd8d4315e2b43cb3b41316e50fc306"
+    },
+    {
+      "path": "myCPU/tests/host/backend_differential_smoke.cpp",
+      "sha256": "8729ee769663dce3e20dfb37a67c8903d014f2c5f9936228b47d18908e098553"
+    },
+    {
+      "path": "myCPU/tests/host/ci_targets_test.py",
+      "sha256": "e6b8e5420dc9315119b3b1fc82fd131e440dfba3cd85a6795840a647228d6e19"
+    },
+    {
+      "path": "myCPU/tests/host/course_os_linux_compat_external_rootfs_smoke.cpp",
+      "sha256": "4274080b59ede2b6d2fa3c5e720a83a712a7fa66a61e2f2c5c674402bdc2a3c2"
+    },
+    {
+      "path": "myCPU/tests/host/course_os_linux_compat_external_workflow_smoke.cpp",
+      "sha256": "77f085b1c735885e04390b5705839dcba8622cdcf6061a3c9a375e6c65edf3d7"
+    },
+    {
+      "path": "myCPU/tests/host/course_os_linux_compat_minimal_elf_smoke.cpp",
+      "sha256": "975f462c7ffefc1dd3e1b6ea45cbb10c67d820cb219a7a8ab95864e99677ad62"
+    },
+    {
+      "path": "myCPU/tests/host/course_os_linux_compat_oscomp_help_smoke.cpp",
+      "sha256": "6cd81ac3f010e0fc5c2a881460c4d6b3752ff9b58f3d1e01e0e24e9221f951b2"
+    },
+    {
+      "path": "myCPU/tests/host/course_os_linux_compat_terminal_smoke.cpp",
+      "sha256": "9b72eea9f53c75f8d6fcda9069b6d878c673c996f196846e7a63989a8e3b3689"
+    },
+    {
+      "path": "myCPU/tests/host/course_os_linux_compat_trace_debug.h",
+      "sha256": "5ac223a446fca6f536b108c5dd1355a3a571f0c1605ed7ddb3529d21f7f5bc43"
+    },
+    {
+      "path": "myCPU/tests/host/course_os_oscomp_basic_smoke.cpp",
+      "sha256": "addb46b088649e4e0ec33c44fac64333c97f199c18a7bf25cc0e820d6af35d07"
+    },
+    {
+      "path": "myCPU/tests/host/course_os_shell_terminal_smoke.cpp",
+      "sha256": "53b6a33c708f955e9d1f2368946f7e5798c93b2c439965cb87b30e2aa8778eef"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_block_cache_smoke.cpp",
+      "sha256": "baeaacbc3573a84f843158befecb5a955bde25eab3a54957e2d5bb49dc15e9f3"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_block_plan_smoke.cpp",
+      "sha256": "7dd54111f475bb724b069c3cc2ca61aa43c7718842d244846774a7a276bcd135"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_executable_cache_smoke.cpp",
+      "sha256": "b19f895b552f003c062205ae0f11d622b4ed98e8b9c6c9f17c848bba471cf2bf"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_executable_memory_smoke.cpp",
+      "sha256": "a4614817638f1bc2faf949f8b16157d9ce099f8323b73c0002ef7202f88d5616"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_helper_execution_bridge_smoke.cpp",
+      "sha256": "b7b184628b28f560542406ee2b2f9e21e439533f4a3eb2dda8a3e1c4ad3dcb75"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_helper_replay_smoke.cpp",
+      "sha256": "a3a056a9153e07647c8294b6a9bec5f3da2ee79ef26935430f8788d3eef0ad8d"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_host_emitter_smoke.cpp",
+      "sha256": "993dd36c6b11652157b68d29042af9f12973be965d87b807b88f7ba62b77192c"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_ir_eval_smoke.cpp",
+      "sha256": "a0984fcbd5e20b1aae53a083d76272d6cdea81fda9c3bf4ad42d4f8a2990ce29"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_ir_lowering_smoke.cpp",
+      "sha256": "f9179bb511e9a3d989bec2644f51b6e94f1c01c3d4ba857b6799d7089c05d2ff"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_jit_engine_smoke.cpp",
+      "sha256": "e086d7d745c4fd4fba188e464ea87f4a4d15a305bfa5e1a93975daf85e5c0332"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_reference_fallback_execution_smoke.cpp",
+      "sha256": "6d85deffffbc658ff169f62e0d9438193928121b81c9ef0285f09139c27c4df6"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_reference_fallback_smoke.cpp",
+      "sha256": "d57e163038cd6dbc8570cb62e82aab276494f6726fd2dc74e876cfab8afae5bb"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_runtime_dispatch_smoke.cpp",
+      "sha256": "3b9475ed882f124ae4406b204384a4b973c0784779ae54b0eeb354b6fbb15365"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_runtime_harness_smoke.cpp",
+      "sha256": "d62a913833f82f77e2ce4606222e427f72fe6d2d419d1a482f33dae2f8b854a9"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_runtime_invalidation_smoke.cpp",
+      "sha256": "7e4e874cc28ae693c9ac8c6968a74d9e50ebb2c53df6fb3bbddc8fed9601383a"
+    },
+    {
+      "path": "myCPU/tests/host/dbt_translator_smoke.cpp",
+      "sha256": "ac9cf1759a1438eccd58b13d4fed2781199c70ec44833ecd15133c9ccda1a8c5"
+    },
+    {
+      "path": "myCPU/tests/host/debug_cli_smoke.cpp",
+      "sha256": "06dd88b5b33ca0b96c512e2ce3d44d5f29cd9e1f2d2ebd90f64de21d1e1515b6"
+    },
+    {
+      "path": "myCPU/tests/host/debug_protocol_command_smoke.cpp",
+      "sha256": "180f7f4e03de1caf657a4eae82ee6a7a915b6e31b8bb2d40b219a67c1ece6481"
+    },
+    {
+      "path": "myCPU/tests/host/execution_profile_smoke.cpp",
+      "sha256": "e9adcb4f10a16509b7c9aa7bb0c9bb188458eed3f312a6d6ae2eef1b7b7dd29e"
+    },
+    {
+      "path": "myCPU/tests/host/instruction_semantics_smoke.cpp",
+      "sha256": "6773a5e90e7c8bc7ff6ef68747d7ca0813f4a8fbf33fabd593b1ff588018274f"
+    },
+    {
+      "path": "myCPU/tests/host/instruction_semantics_smoke_common.inc",
+      "sha256": "6d53df5e262b756cf1d49791aee52d7dbd17b2499cbcd0a351b63cd4fcc93b3b"
+    },
+    {
+      "path": "myCPU/tests/host/instruction_semantics_smoke_core.inc",
+      "sha256": "b9daf0c252bb6530e1c875b7820508a0aa11794874a4fcb9908a0e18fc65e5a2"
+    },
+    {
+      "path": "myCPU/tests/host/instruction_semantics_smoke_fp_compare_convert.cpp",
+      "sha256": "bb13d5d2daf53665b52bf0c1d5feb1805a1ee43d0796af6ec51d345a88a7d51d"
+    },
+    {
+      "path": "myCPU/tests/host/instruction_semantics_smoke_fp_compare_convert.inc",
+      "sha256": "2ec84b5eb44650e74d2a13ab0430a9d60ced54669f986f7fd8e3d3759e2f3258"
+    },
+    {
+      "path": "myCPU/tests/host/instruction_semantics_smoke_fp_fma_flags.cpp",
+      "sha256": "c330b1b604f1bc3cf13b052b87383c584a4c95d00b02422b1d4ffb64a0e4d7d0"
+    },
+    {
+      "path": "myCPU/tests/host/instruction_semantics_smoke_fp_fma_flags.inc",
+      "sha256": "cbc3bfff9abd5ab04682be0fc488df0648749a9762dbec68e8efe9d417114469"
+    },
+    {
+      "path": "myCPU/tests/host/interactive_terminal_smoke.cpp",
+      "sha256": "9aee2815c84f3c402a9fa3d1a60ab5a082f8b216ad4e85eea08cfd735452b582"
+    },
+    {
+      "path": "myCPU/tests/host/interpreter_dbt_prototype_smoke.cpp",
+      "sha256": "70940d5b1ded002fefa97d6e53be8af2d22bd8ea8c2f7dd7d80cf57244ed7e8b"
+    },
+    {
+      "path": "myCPU/tests/host/linux_compat_rootfs_asset_test.py",
+      "sha256": "f8920f444f6fc042e0ef7719ad1259ec30f99eaeaa0915fdbf502a57dcb946ab"
+    },
+    {
+      "path": "myCPU/tests/host/load_store_queue_smoke.cpp",
+      "sha256": "7b040d9ca8584c2a64ec6f7759fda55f061ff6f28cbb1034424f0dd3ff872d45"
+    },
+    {
+      "path": "myCPU/tests/host/physical_register_file_smoke.cpp",
+      "sha256": "43da34827ff482b7f2b77248ce0eeaaa86496417f86f57be22c4c3ada041cfd1"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_backend_smoke.cpp",
+      "sha256": "d79d9eeb863ec7f2850bde098ba6fb695fc71442be1103e3f6b05461a5feb241"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_backend_smoke_common.inc",
+      "sha256": "6f31ad5bab421c514699fbb30b0b89f9a26b435936ae6a9abbc07fe3c92b705b"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_backend_smoke_core.inc",
+      "sha256": "107142b3e4dd7f38c890aa85ca806491bc30634def41ca2ebb586421152b8932"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_backend_smoke_fp_arith_fma.cpp",
+      "sha256": "a17a84455a27f693aa47cbb39ccac4628a76c8b1400b381a05a759f7c931a4d8"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_backend_smoke_fp_arith_fma.inc",
+      "sha256": "36a6dab51022da2139575c0dfe2855e308409a73b5175217aa297b134cb87edf"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_backend_smoke_fp_convert_tail.cpp",
+      "sha256": "a3990f52cb5e4e8042c40cf238b2d0798dec0173021fc94362ba24d8af8ec373"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_backend_smoke_fp_convert_tail.inc",
+      "sha256": "81f32055ab59ef1d5d6b4882ef27a390c505db3bcb4d00156cbde40c44cddc11"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_commit_trace_smoke.cpp",
+      "sha256": "75e208e202ef8fd031146e08932f9574da0c0605664e0a93ab5f87bbbd5e5f50"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_core_state_smoke.cpp",
+      "sha256": "3a98ac6d3d8b797808de0b0dccfad98abaeed8232d96a03e4cff2f60c66eea29"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_forwarding_smoke.cpp",
+      "sha256": "762c6132b2273ae8d37a7d0a92c5a7091891d7c95c71dad54d2769079de11b8c"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_rename_commit_smoke.cpp",
+      "sha256": "fa69e1d53bd3999333689466d41655505ead713dae8ea9bcbc984da5833d3cf7"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_smoke_common.h",
+      "sha256": "a39651de1cafbaeaf87dbb5b8cdf41cbd720b276697cd829410e173a306338a1"
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_speculation_contracts_smoke.cpp",
+      "sha256": "d87c72ea4cc2da5fe81556944f2e484825f70b9f2d83ba9c2b5902d91dcb637c"
+    },
+    {
+      "path": "myCPU/tests/host/predictor_smoke.cpp",
+      "sha256": "34921c43a7d2c3acb5dc5a056b5f44484e08a8cadce0894ebb1fbef6129ee18f"
+    },
+    {
+      "path": "myCPU/tests/host/rename_map_smoke.cpp",
+      "sha256": "c8d29182700cfe4668c0afea5d148e361b2550e73421a691834aeeb602e5cf08"
+    },
+    {
+      "path": "myCPU/tests/host/reorder_buffer_smoke.cpp",
+      "sha256": "d560b13829d2365cc224600c7a4f078bb4687f074db3dea085cdaae004409523"
+    },
+    {
+      "path": "myCPU/tests/host/run_debug_cli_probe_test.py",
+      "sha256": "f576b8229ab8901fa874962cc63c7636eee30a7339d57261464ebbd90012faed"
+    },
+    {
+      "path": "myCPU/tests/host/rvc_semantics_smoke.cpp",
+      "sha256": "5aea6c3c59d5d120c29336df206f23c37fc3fa8a9d177d93d01654ee0cf77dba"
+    },
+    {
+      "path": "myCPU/tests/host/spike_differential/final_state.h",
+      "sha256": "78a3fa95c4680b1ecdbe36c562448f5501f72283beaa2aa0cc409324c59fb0f4"
+    },
+    {
+      "path": "myCPU/tests/host/spike_differential/mycpu_runner.h",
+      "sha256": "4d69b0fc78f4334e3860698b328dc50c086868e286192d2fb87219da26836765"
+    },
+    {
+      "path": "myCPU/tests/host/spike_differential/shared_spec.h",
+      "sha256": "11f3d8b0f9ff1a35832bec04794f7cdb7847efc0b9fe2e739c6dd7f65a328fa6"
+    },
+    {
+      "path": "myCPU/tests/host/spike_differential/spike_runner.h",
+      "sha256": "20cbbd9015189b48aa367e82f5f2377fe7061e567841baed75c7e0b1b2890997"
+    },
+    {
+      "path": "myCPU/tests/host/spike_differential/state_compare.h",
+      "sha256": "697079c6f11d7f37cded661d55765bc78f52c12dcc86147df0ef640a4036aa3c"
+    },
+    {
+      "path": "myCPU/tests/host/spike_differential_smoke.cpp",
+      "sha256": "1d348c19e643bf30bae854b24da8bc3a6083bd547af85a6fe9358ec263b21264"
+    },
+    {
+      "path": "myCPU/tests/host/terminal_smoke_harness.h",
+      "sha256": "396461275377607f27cdc5d1f4d5c0fc99e024c752bf87028eff3aa71e6c96a9"
+    },
+    {
+      "path": "myCPU/tests/host/vector_backend_smoke.cpp",
+      "sha256": "a6f965ba0df8306386121c73d1477a97211447e0488237ad69e6d4eb510c89c3"
+    },
+    {
+      "path": "myCPU/tests/host/vector_cnn_smoke.cpp",
+      "sha256": "fadc5002b6c8ed2b87fda6715344d2ca40fc1535b4ddffb6106119debf6d1aaa"
+    },
+    {
+      "path": "myCPU/tests/host/vector_operator_smoke.cpp",
+      "sha256": "91a6f84b35279e58e84f7aa3701dbbfd3a65607abf952bc43620cd4f81691988"
+    },
+    {
+      "path": "myCPU/tests/host/vector_pipeline_smoke.cpp",
+      "sha256": "c721da92eb6b3985d325b42bada82f0d70f3c309d81cb979dc706659ca16c43e"
+    },
+    {
+      "path": "myCPU/tests/host/vector_vlite_smoke.cpp",
+      "sha256": "61d15c7ddcc1f88704dd7b522b7c35995e8bbde8b714963afd556eaf73cc1906"
+    },
+    {
+      "path": "myCPU/tests/host/virtio_blk_smoke.cpp",
+      "sha256": "49c6fff14ae14ff5f9a5c64f331f48a2329ff15b06018352e675257d2051508d"
+    },
+    {
+      "path": "myCPU/tests/host/xv6_boot_smoke.cpp",
+      "sha256": "21f7dc5fa42779726b6c68289365d8cffa66fdc8e4a78dc4aa82906f6a191cda"
+    },
+    {
+      "path": "myCPU/tests/host/xv6_shell_smoke.cpp",
+      "sha256": "34cc040edd3aca58ee8ce131b168899b4bbe60d2f9e9e16efdfeb5cbacaa2aff"
+    },
+    {
+      "path": "myCPU/tests/unit/ai_accel_queue.c",
+      "sha256": "6461b8be15064dd293a768ee50a3ba19320f40a8f58115074d7f685337d85a3e"
+    },
+    {
+      "path": "myCPU/tests/unit/ai_accelerator_mmio_contract.cpp",
+      "sha256": "4984b19fac11ca86b9a7d4b77377425f24cfa1eacab520bb51dd696870a139bf"
+    },
+    {
+      "path": "myCPU/tests/unit/ai_dma_engine.cpp",
+      "sha256": "dbba05370a20c62b61f2230d40931bd18db79d1db92fb74d6a96455320132d91"
+    },
+    {
+      "path": "myCPU/tests/unit/ai_graph_package.cpp",
+      "sha256": "7558c5a503a3f8e3683807b193134b0e9cdd8f06e6d61a4b8698ef5eb006fa22"
+    },
+    {
+      "path": "myCPU/tests/unit/ai_scratchpad.cpp",
+      "sha256": "128f7fde9f307169cd12f15d39a5101b6b434bcb478554ac4cf7700a6be79123"
+    },
+    {
+      "path": "myCPU/tests/unit/binary_loader.cpp",
+      "sha256": "ec3621a87af5e0c07579dfb7e4d5203cddb9d54fe82ba892afa2913642949abf"
+    },
+    {
+      "path": "myCPU/tests/unit/bus_device_guards.cpp",
+      "sha256": "6b59035bc374b431504cb45fa5b37e4918af11da04379309a466b662451748de"
+    },
+    {
+      "path": "myCPU/tests/unit/bus_region_contract.cpp",
+      "sha256": "cbae4c45abdb1d752166fe794e4d7a07405c67e25d7661dbde95a724d58f164c"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_console_input.c",
+      "sha256": "4c64cd02f6da7503adc7eb520d4400fe89756414d0fa504a47f930a08094203e"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_preemptive_sched.c",
+      "sha256": "786ddef629b53822237286b3d60d4b5ded212529c937ccc0c9215bcd0b016b35"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage1.c",
+      "sha256": "fb78950b08934e373d7a80c08246940cb942159ed0c2d587256905aa270844a0"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage10_linux_compat.c",
+      "sha256": "d844876cce8292e39f98649f3532ab9c40de392700337c3f4a4e2f19ef2d9e34"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage11_linux_compat.c",
+      "sha256": "f5bfe42ed657d2976cf9b2c42c70a8c537a840a241fc5cec8ce22ce800f22759"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage2.c",
+      "sha256": "b8a923c38006ea0f89a86bf7aa77de2d39bb7fcf19db2e52663fa146b53fd299"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage2_cow_crash.c",
+      "sha256": "c6781fcbd54c29f2dedccabfa5dc41e3a4abffe4d4d3cf28c9793469a10053c9"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage2_fd_fs.c",
+      "sha256": "1ba4952568132a533c55b6286eb98ef784f096ba2ba3d6d9cb689074359dda79"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage2_process.c",
+      "sha256": "7cd02af9aeb6f86c8a2885af9c528a1aa915eede2d36de7dac143180e2cec471"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage2_shell.c",
+      "sha256": "84fed83336a5055a568c39e8e173502d03d5885cf8117b9f18b7cf1d59abf9c3"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage2_syscall.c",
+      "sha256": "bf3d05f98493f2f87e33ba382f9d95cd06636059ebd200e25b45955ad321c40c"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage3.c",
+      "sha256": "3b5b823346920503f06e425caab29a3d03879a506df845a42c498a76d5adc545"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage3_elf.c",
+      "sha256": "dfdd5eda8703cb300171322bb045babff006dca25a1691e47664d2091d26fda5"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage3_fs_shell.c",
+      "sha256": "7a4932e4c9f7ca15c987836d3f760053e423331df5d37f340fdc5f1e02cae199"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage3_proc.c",
+      "sha256": "a03fff10b93eb7d352fa8db2e855fb219ed5f77decf37fe08fc1f51006a7d3c5"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage3_sched_sync.c",
+      "sha256": "f379c4077f59280771237b043927d9d0532386225cb40bc450cd6a27a69f51a1"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage3_vm.c",
+      "sha256": "a3a1f6039f1a83f356445fe89f1f6a7ea6f99ceb8bfb1f8aade4bcf6725d7893"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage5_linux_compat.c",
+      "sha256": "dd3bc2b8e266259227c8f80852d56fb6c01d3cc3650fa75ffe78fbc42f89636e"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage6_linux_compat.c",
+      "sha256": "a7ee691a119f872accf95098dbb4c215f15a7a24541f27248ef62e9ceaf8edb7"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage7_linux_compat.c",
+      "sha256": "452768a7b30d4d33116d442c4adcfe170ae9e27089fb471f4f221b7de02136b6"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage8_linux_compat_loader.c",
+      "sha256": "fe0996b87929deb83a42c51940518dba18b250e396e4cd79da40236a6a03b726"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage9_linux_compat_exec.c",
+      "sha256": "58a75405a4a149d5b1c3c5d05beff09f3573b735da77a12b0252f7078fbc722c"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage9_linux_compat_syscall.c",
+      "sha256": "7977aa3ed29519eaa751b6ad35feb2fa6b8246e79067b3cb24e6e26843b78f8a"
+    },
+    {
+      "path": "myCPU/tests/unit/course_os_stage9_linux_compat_vm.c",
+      "sha256": "42b8979ce8ec8b2b215e7967d12229d9674f03ffcc506f6d036cc950447a3e79"
+    },
+    {
+      "path": "myCPU/tests/unit/dma_transaction_contract.cpp",
+      "sha256": "f5b573b44c48f61ee1e33f42db0780c301e71439eeb851247e8022f5605b9142"
+    },
+    {
+      "path": "myCPU/tests/unit/elf_loader_bss.cpp",
+      "sha256": "4fcf254478198811c5a2e01e3be476e0272100d97c856e2460e831a782555a5d"
+    },
+    {
+      "path": "myCPU/tests/unit/elf_loader_header_rejects.cpp",
+      "sha256": "1173c7c2e4a35e245d8def30ddba3c01e2f1387e083cc295413f10a1d1bb373e"
+    },
+    {
+      "path": "myCPU/tests/unit/elf_loader_rejects.cpp",
+      "sha256": "451fb21766086223e009f9a4093973eac65d29cb4bbe5fbf15a986a8264da207"
+    },
+    {
+      "path": "myCPU/tests/unit/elf_loader_segments.cpp",
+      "sha256": "b0ab9fdd4a71da4dfacca2d1b5b1c4df429a49cf644feb1cc09f02bdbb289714"
+    },
+    {
+      "path": "myCPU/tests/unit/include/riscv.h",
+      "sha256": "11d09152a1ce512c0eb2fb86474e4bb28135c5414b199b365c0c16ad14e37b07"
+    },
+    {
+      "path": "myCPU/tests/unit/kernel_alpha_common.c",
+      "sha256": "4fcf2480f5c473bfb7b258179e87854c4b641698288ec08deb5d6303fb4fb122"
+    },
+    {
+      "path": "myCPU/tests/unit/kernel_alpha_interrupt.c",
+      "sha256": "0e6b335d4907b1b263811e1570c65d5fc11e57a47f63bb6e569dbb0ae2434d36"
+    },
+    {
+      "path": "myCPU/tests/unit/kernel_alpha_storage.c",
+      "sha256": "c303026127fef7999d1544ee0f95bb11306d86360b2e9f1a9ecc287aa4945db9"
+    },
+    {
+      "path": "myCPU/tests/unit/kernel_bringup.c",
+      "sha256": "d8547ad00b1571c75e563c9492f06438ae5c5cb714d3103273d715f5a33b0399"
+    },
+    {
+      "path": "myCPU/tests/unit/kernel_runtime.c",
+      "sha256": "a10a2315e3ffd5261888477ad6c29d8bd45b66f3464f9f637fc85532a9f133e2"
+    },
+    {
+      "path": "myCPU/tests/unit/linux_compat_loader_guest.c",
+      "sha256": "e09fc38ee5dcffa645f30b6a6dd980833031038bc34715b03f553ec17d0cf3f7"
+    },
+    {
+      "path": "myCPU/tests/unit/linux_compat_vm_stub.c",
+      "sha256": "7f29b62a333eca0d225588af012cbb4e6a5de6b59b6f375551f91e301224f443"
+    },
+    {
+      "path": "myCPU/tests/unit/machine_loader_reset.cpp",
+      "sha256": "07a3c692cd59c7f9d00f81d2fc4166b56ff53e364db10d5bd1202f231e67a3e6"
+    },
+    {
+      "path": "myCPU/tests/unit/mmio_contract_matrix.cpp",
+      "sha256": "d4cc35c494222a8cc28eba4827cdff22521bd2b6c04f350e071ad70751f4823f"
+    },
+    {
+      "path": "myCPU/tests/unit/monitor_commands.c",
+      "sha256": "9c45315fe981f3296d11f167867c7c8757e8c1986982a82f227738969eba965f"
+    },
+    {
+      "path": "myCPU/tests/unit/simple_l1_cache.cpp",
+      "sha256": "5cd9bb24c359cd58ca76399ed5239b3de2691ac11177b34d7daa9fbb65c4ca08"
+    },
+    {
+      "path": "myCPU/tests/unit/storage_readiness.cpp",
+      "sha256": "7962e6874c2366df40c2f0b8c9e24dbc2b1bed3f1cb88f25344d2d47d04b368c"
+    },
+    {
+      "path": "myCPU/tests/unit/supervisor_demo_smoke.c",
+      "sha256": "ad69b2c77e1c4449f6548c2dcdcca0d68e99be6da2c94017d8b754a14546bf2b"
+    },
+    {
+      "path": "myCPU/tests/unit/supervisor_runtime.c",
+      "sha256": "667e54489aa7db9f3bfad3bab5149bc05b3fef80acc7a828b94c95a395004069"
+    },
+    {
+      "path": "myCPU/tests/unit/trap_dispatch.c",
+      "sha256": "b5a9f6ca8544cc0e8e221b2bb218be94cf830d8cfa395f7979ff4cf0c5686b79"
+    },
+    {
+      "path": "myCPU/tests/unit/trap_runtime.c",
+      "sha256": "a9a491f8e5374196d46706bb44dff20b0be62909e3079393254334616292f3c7"
+    },
+    {
+      "path": "myCPU/tests/unit/uart_rx_contract.cpp",
+      "sha256": "5b2c5855bde47c1f954e103eefaf40ce5dc53ebb83f26a9a7c0d30f5ef01329e"
+    },
+    {
+      "path": "myCPU/tests/unit/user_program.c",
+      "sha256": "5346f74e6d0483a7cb7b30b6e2451325c41ea87eacc8f56479c7b470da8503a3"
+    },
+    {
+      "path": "myCPU/tests/unit/user_program_smoke.c",
+      "sha256": "7677fbd8a9960de4b957b74048ba7f03241feabd4ea396e6244b1f6fd0ea773e"
+    },
+    {
+      "path": "myCPU/tests/unit/user_task.c",
+      "sha256": "c62a33193b3eaa44a6b29d6a9a771fb2a3eaf9c11d7163ddc9dae09feaae7075"
+    },
+    {
+      "path": "myCPU/tests/unit/user_task_bootstrap.c",
+      "sha256": "8ebb881f73255845ead04e1e72d183aa13b4becc6ea4f2b7a544b6b11210e8c2"
+    },
+    {
+      "path": "myCPU/tests/unit/virtio_mmio_contract.cpp",
+      "sha256": "3888787c2efb12168660a09f6245aaf3491ecaf6130f386c639ca6fbe01c6da0"
+    },
+    {
+      "path": "myCPU/tests/unit/virtqueue_smoke.cpp",
+      "sha256": "c77a1d93f723ed4fd72c1c5630b381fd73537c7f00e62e06a25e4a76b78a94de"
+    },
+    {
+      "path": "myCPU/tests/unit/vm_address_space.c",
+      "sha256": "ddb559e67d4adb48c36796a3af0476f577a3aef2d06929ab45151c9ea0b4da5e"
+    },
+    {
+      "path": "myCPU/tests/unit/vm_fault.c",
+      "sha256": "f0fed4cfbea39f5944dd8207df6e712a6a37d54f35955609d22d05d3a6e34ea8"
+    },
+    {
+      "path": "myCPU/tests/unit/vm_object.c",
+      "sha256": "e178bf670eb5bd04306e5394941884c9f3207a1fec0154b026c6d7df6e160c4e"
+    },
+    {
+      "path": "myCPU/tests/unit/vm_process.c",
+      "sha256": "15b3af168dc1af28823e615587667b601c04f7103ca0f9f7b2c0f0285f0a915b"
+    },
+    {
+      "path": "myCPU/tools/linux_compat_rootfs_asset.py",
+      "sha256": "9cb0f4d0edbfe0eed748869bc999a1c45f76647408eda9fd288a47d573e24ef0"
+    },
+    {
+      "path": "myCPU/workloads/ai_proto/README.md",
+      "sha256": "f73ed170cc4e661503f718addc20d325d25d92c754307be7093121ea759a97c1"
+    },
+    {
+      "path": "myCPU/workloads/ai_proto/pack_graph.py",
+      "sha256": "2ac442112ea07d4956fcdbeff5f97868f1db4b0185bccf14e78df46172de1f6f"
+    },
+    {
+      "path": "myCPU/workloads/ai_proto/profile.mk",
+      "sha256": "0b76f8412b34aa1a3510cbea862548518a21ca0bcc0844b52a8747d9eec7ba9b"
+    },
+    {
+      "path": "myCPU/workloads/ai_proto/run_demo_v1.py",
+      "sha256": "d221c6257491abc10350560c6f9b95841434042697e61d1a5b59d56706661589"
+    },
+    {
+      "path": "myCPU/workloads/ai_proto/task_spec_lowering.py",
+      "sha256": "04e5ff1f99e776d3410a612e623ba9a03dbef9f2ad543e4c0c9f181fae79ce3d"
+    },
+    {
+      "path": "myCPU/workloads/boards/mycpu_virt.mk",
+      "sha256": "ebb950956c6c6a03adfe2caa2b96072f76a86db48f094c281e6ccf3a5d5f54f1"
+    },
+    {
+      "path": "myCPU/workloads/common.mk",
+      "sha256": "550613e2cf7a2e04782487afaf2f4324c204378888d638c2fe54feb28ed42526"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/linux_mininit.S",
+      "sha256": "26f93fd07ea959673350a49cb12164f965fbae5ced1cb449e9a1320bdf0592bb"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/linux_postinit_cleanup_smoke.S",
+      "sha256": "75a450588edd340ea93d82e4d6a1ba40b10befa94af06d0e2f7cca6e637c201e"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/linux_postinit_exec_smoke.S",
+      "sha256": "218a9125cecb70023b139dcfbca0370e8d51b271bcc0a92935948bc703b6d201"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/linux_postinit_smoke.S",
+      "sha256": "509e125b7c59df1d6d23137a72a4d18ee7ef2eecb9a14948b9c87a1bd61f6c9a"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/linux_sbi_shim.S",
+      "sha256": "133678be5f87aa775d0e481add33a943e0bd92a5be1b290ae52ed1b3803ba47b"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/linux_sbi_shim.ld",
+      "sha256": "aa18abfe1cdfbba70475c548c05c8583b7b0aaccba0a48688521bfa12f19c82d"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/mycpu_virt.dts.in",
+      "sha256": "1c52898f8af0d6a535693cf11ffce7bbc63bbc288337019659d82abdc279c422"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/post_init_data.txt",
+      "sha256": "056cc8a4f0bbbda317ada2f37ad55d00eb18eafbda70323192bda5e5f0be170b"
+    },
+    {
+      "path": "myCPU/workloads/linux_proto/profile.mk",
+      "sha256": "1b4cc91bf2fd2b7887775d5cf7c710b536d4d4e836a95dcc8973e8e09f3eaaf4"
+    },
+    {
+      "path": "myCPU/workloads/run_debug_cli_probe.py",
+      "sha256": "66e5b880e0d6faf751636a7e5427a76cdda049c906f94aec4f7bfdc19adee87b"
+    },
+    {
+      "path": "myCPU/workloads/xv6/profile.mk",
+      "sha256": "0ba89237177c3e68283c42d74f288d8e70b3304e212086aa5a50e4d431f088f2"
+    }
+  ],
+  "assets": [
+    {
+      "path": "myCPU/mycpu",
+      "present": true,
+      "bytes": 16568680,
+      "sha256": "cd4f69ceb8d368557fa6819aa32efbc711be54d29e9c4b814a352a8635203211",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/kernel",
+      "present": true,
+      "bytes": 274248,
+      "sha256": "1a6cdfcaa2959b68fa64846669dbd80b43846bfcd825c4e8f9c65beb3a4d2eb2",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/kernel/kernel.sym",
+      "present": true,
+      "bytes": 6711,
+      "sha256": "ef24a00c4f99274e97b6cf53fc26a6dc87f5987820e821fe38fdfcb27e783586",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "myCPU/external/xv6-riscv/fs.img",
+      "present": true,
+      "bytes": 2048000,
+      "sha256": "1f9315a0dcffa0e45bcce49649f4e467114b7134c9e35b0b3926a60719611c1c",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "myCPU/tests/host/backend_differential_smoke",
+      "present": false
+    },
+    {
+      "path": "myCPU/tests/host/address_space_faults_smoke",
+      "present": false
+    },
+    {
+      "path": "myCPU/tests/host/atomic_semantics_smoke",
+      "present": false
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_commit_trace_smoke",
+      "present": false
+    },
+    {
+      "path": "myCPU/tests/host/pipeline_speculation_contracts_smoke",
+      "present": false
+    },
+    {
+      "path": "myCPU/tests/host/spike_differential_smoke",
+      "present": true,
+      "bytes": 5321440,
+      "sha256": "e3e263b6070162c627d92549b5d37ef188d10e46531ec97145f5c4d831b67867",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "myCPU/tests/host/debug_cli_smoke",
+      "present": true,
+      "bytes": 17310944,
+      "sha256": "ad9678f157ed3c5eee996c1815ddc19ceab50766c77c14aa3de1b82433c3694b",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "myCPU/tests/host/debug_protocol_command_smoke",
+      "present": true,
+      "bytes": 16231888,
+      "sha256": "e68256dc0d24017c8818042bdc1d082f2bfe336fb8a897d3a8f2e5aebcbb0868",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "myCPU/tests/host/execution_profile_smoke",
+      "present": false
+    },
+    {
+      "path": "myCPU/tests/host/xv6_boot_smoke",
+      "present": true,
+      "bytes": 16567624,
+      "sha256": "443a9bce0d3b198f0e5d6e1b8cfd5a14cbe1477b2f794b85d8bbcfbae2484666",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "myCPU/tests/host/xv6_shell_smoke",
+      "present": true,
+      "bytes": 16543304,
+      "sha256": "dac68bf822fde1dc2093f1b5fd9ee24da6c7e6e008c63b03192b927ef92b0cf1",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "docs/current.md",
+      "present": true,
+      "bytes": 6956,
+      "sha256": "46950ddb937481008c11059b9292deda426e2e657b236f6dbc8f7fa90f76255f",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "docs/reviews/2026-10-01-pr14-17-pre-merge.md",
+      "present": true,
+      "bytes": 6837,
+      "sha256": "09a2aa6601704bc64a65a178d43416202a5e4769e5839f5f22580e7c45d056d2",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    },
+    {
+      "path": "docs/reviews/2026-10-01-remote-pr-pre-merge.md",
+      "present": true,
+      "bytes": 7416,
+      "sha256": "4508212971494414a454574c119544be4be012058068c28f44f88b86c650839b",
+      "provenance": "inventory only; build-to-source correspondence not verified"
+    }
+  ]
+}

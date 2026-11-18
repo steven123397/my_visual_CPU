@@ -8,7 +8,7 @@ myCPU 是一个已可运行的 RISC-V 系统模拟器原型。
 - 先读 [docs/current.md](docs/current.md)；开发指引只维护本文件。
 - 设计取舍、非琐碎实现或排障时，按主题定向检索 `docs/solutions/`；
   复用适用结果。目录不存在或无匹配时照常推进。
-- `CONCEPTS.md` 在首个合格术语产生时建立，届时补齐导航。
+- 领域术语见 [CONCEPTS.md](CONCEPTS.md)；能力与验证状态仍以 current 和实现为准。
 - 待办使用 GitHub Issues：`steven123397/my_visual_CPU`。
 
 ## 项目边界

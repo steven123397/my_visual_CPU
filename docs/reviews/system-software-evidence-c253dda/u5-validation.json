@@ -1,0 +1,71 @@
+{
+  "evidence_id": "E-U5-001",
+  "checkout_sha": "d59e551d241aa4d275943416262e2f4201faf006",
+  "collector_argv": [
+    "/home/liangjiaqi/.nvm/versions/node/v24.16.0/bin/node",
+    "--input-type=module",
+    "-e",
+    "\nimport{readFileSync,readdirSync,existsSync}from\"node:fs\";import{createHash}from\"node:crypto\";import{resolve,dirname}from\"node:path\";import{spawnSync}from\"node:child_process\";\nconst dir=\"docs/reviews/system-software-evidence-c253dda\",hash=p=>createHash(\"sha256\").update(readFileSync(p)).digest(\"hex\"),checks=[];\nconst names=readdirSync(dir).filter(n=>n.endsWith(\".json\")&&n!==\"u5-validation.json\");for(const n of names)JSON.parse(readFileSync(dir+\"/\"+n));checks.push({check:\"all evidence JSON parse\",count:names.length,passed:true});\nconst inv=JSON.parse(readFileSync(dir+\"/u1-inventory.json\"));for(const s of inv.sources)if(hash(s.path)!==s.sha256)throw Error(\"product changed \"+s.path);checks.push({check:\"unchanged U1 product manifest\",count:inv.sources.length,passed:true});\nconst u4=JSON.parse(readFileSync(dir+\"/u4-runs.json\"));let assets=0;for(const r of u4.runs){if(r.exit_code!==0)throw Error(\"U4 exit\");for(const[p,h]of Object.entries(r.after_sha256)){if(hash(p)!==h||h!==r.before_sha256[p])throw Error(\"asset changed \"+p);assets++}}checks.push({check:\"U4 current/before/after assets\",count:assets,passed:true});\nconst raw=readFileSync(dir+\"/u4-fork.stdout\",\"utf8\").trim().split(\"\\n\"),events=raw.map(JSON.parse),counts={};for(const e of events)counts[e.event]=(counts[e.event]??0)+1;const root=BigInt(events.find(e=>e.event===\"mapping\").child_root);for(const line of raw.filter(l=>l.includes(\"user_store\"))){const satp=BigInt(line.match(/\"satp\":([0-9]+)/)[1]);if(((satp&((1n<<44n)-1n))<<12n)!==root)throw Error(\"SATP root mismatch\")}if(events.at(-1).passed!==true||events.at(-1).existing_forktest!==true)throw Error(\"fork failed\");checks.push({check:\"fork events and exact 64-bit SATP root\",counts,passed:true});\nconst reports=[\"system-software-evidence-c253dda.md\",...Array.from({length:4},(_,i)=>\"system-software-evidence-c253dda-u\"+(i+2)+\".md\"),...Array.from({length:5},(_,i)=>\"system-software-evidence-u\"+(i+1)+\"-review.md\")];let links=0;for(const n of reports){const p=\"docs/reviews/\"+n;for(const m of readFileSync(p,\"utf8\").matchAll(/\\]\\(([^)]+)\\)/g)){if(m[1].startsWith(\"https:\"))continue;if(!existsSync(resolve(dirname(p),m[1])))throw Error(\"missing link \"+m[1]);links++}}checks.push({check:\"local report links\",reports:reports.length,links,passed:true});\nconst foreign=[\"docs/reviews/2026-10-01-pr14-17-pre-merge.md\",\"docs/reviews/2026-10-01-remote-pr-pre-merge.md\"];for(const p of foreign){const s=inv.assets.find(a=>a.path===p);if(hash(p)!==s.sha256)throw Error(\"foreign changed \"+p)}checks.push({check:\"foreign PR reviews preserved\",paths:foreign,passed:true});\nconst argv=[\"diff\",\"--check\",\"c253dda\",\"HEAD\",\"--\",\".\",\":(exclude)docs/reviews/system-software-evidence-c253dda/u4-boot.stdout\"],r=spawnSync(\"git\",argv,{encoding:\"utf8\"});if(r.status!==0)throw Error(r.stdout+r.stderr);checks.push({check:\"cumulative diff whitespace excluding byte-preserved raw boot stdout\",argv:[\"git\",...argv],exit_code:r.status,stdout:r.stdout,stderr:r.stderr,passed:true});\nconsole.log(JSON.stringify({evidence_id:\"E-U5-001\",checkout_sha:spawnSync(\"git\",[\"rev-parse\",\"HEAD\"],{encoding:\"utf8\"}).stdout.trim(),collector_argv:[process.execPath,...process.execArgv],checks,report_sha256:hash(\"docs/reviews/system-software-evidence-c253dda-u5.md\"),limits:\"No long tests rerun. Original raw boot stdout retains its trailing blank line; default whitespace check warning is recorded in U4 review.\"},null,2));\n"
+  ],
+  "checks": [
+    {
+      "check": "all evidence JSON parse",
+      "count": 15,
+      "passed": true
+    },
+    {
+      "check": "unchanged U1 product manifest",
+      "count": 651,
+      "passed": true
+    },
+    {
+      "check": "U4 current/before/after assets",
+      "count": 14,
+      "passed": true
+    },
+    {
+      "check": "fork events and exact 64-bit SATP root",
+      "counts": {
+        "mapping": 4,
+        "user_store": 2,
+        "zombie": 1,
+        "reclaimed": 2,
+        "result": 1
+      },
+      "passed": true
+    },
+    {
+      "check": "local report links",
+      "reports": 10,
+      "links": 48,
+      "passed": true
+    },
+    {
+      "check": "foreign PR reviews preserved",
+      "paths": [
+        "docs/reviews/2026-10-01-pr14-17-pre-merge.md",
+        "docs/reviews/2026-10-01-remote-pr-pre-merge.md"
+      ],
+      "passed": true
+    },
+    {
+      "check": "cumulative diff whitespace excluding byte-preserved raw boot stdout",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "c253dda",
+        "HEAD",
+        "--",
+        ".",
+        ":(exclude)docs/reviews/system-software-evidence-c253dda/u4-boot.stdout"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "passed": true
+    }
+  ],
+  "report_sha256": "b38e182de2822d5cc281b01a8eb1642ee077d93eb128be43174543f5d4661548",
+  "limits": "No long tests rerun. Original raw boot stdout retains its trailing blank line; default whitespace check warning is recorded in U4 review."
+}

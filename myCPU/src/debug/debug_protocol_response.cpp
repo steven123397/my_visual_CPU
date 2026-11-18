@@ -714,3 +714,120 @@ std::string debug_protocol_error_json(const std::string& message) {
     out << "}";
     return out.str();
 }
+
+namespace {
+std::string lossless(uint64_t value) { return "\"" + hex_u64(value) + "\""; }
+std::string lossless(std::optional<uint64_t> value) { return value ? lossless(*value) : "null"; }
+const char* boolean(bool value) { return value ? "true" : "false"; }
+const char* operation_name(MemoryOperation op) {
+    switch (op) {
+    case MemoryOperation::Load: return "load";
+    case MemoryOperation::Store: return "store";
+    case MemoryOperation::LR: return "lr";
+    case MemoryOperation::SC: return "sc";
+    case MemoryOperation::AMO: return "amo";
+    }
+    return "unsupported";
+}
+const char* observation_capabilities =
+    "\"schema_version\":1,\"capabilities\":{\"inspection_backends\":[\"functional\",\"pipeline\"],"
+    "\"capture_backends\":[\"functional\"],\"harts\":[0],"
+    "\"supported\":[\"scalar-integer\",\"compressed-integer\",\"lr\",\"sc\",\"amo\"],"
+    "\"excluded\":[\"fetch\",\"page-walk\",\"dma\",\"fp\",\"vector\",\"pipeline-speculation\"],"
+    "\"counts\":\"model-cycle-instret\",\"max_segments\":4,\"max_page_records\":256}";
+}
+
+std::string debug_inspect_memory_json(uint64_t address, const std::vector<uint8_t>& bytes) {
+    static const char digits[] = "0123456789abcdef";
+    std::string hex;
+    for (auto byte : bytes) { hex += digits[byte >> 4]; hex += digits[byte & 15]; }
+    std::ostringstream out;
+    out << "{\"type\":\"inspect-memory\"," << observation_capabilities
+        << ",\"addr\":" << lossless(address) << ",\"size\":" << lossless(bytes.size())
+        << ",\"bytes\":\"" << hex << "\"}";
+    return out.str();
+}
+
+std::string debug_inspect_page_json(const PageInspection& p) {
+    std::ostringstream out;
+    out << "{\"type\":\"inspect-page\"," << observation_capabilities
+        << ",\"va\":" << lossless(p.vaddr) << ",\"satp\":" << lossless(p.context.satp)
+        << ",\"effective_privilege\":\"" << privilege_name(p.context.effective_privilege)
+        << "\",\"sum\":" << boolean(p.context.sum) << ",\"mxr\":" << boolean(p.context.mxr)
+        << ",\"access\":\"" << (p.access == AccessType::Load ? "load" : p.access == AccessType::Store ? "store" : "instruction")
+        << "\",\"ok\":" << boolean(p.ok) << ",\"mapped\":" << boolean(p.mapped)
+        << ",\"permission_allowed\":" << boolean(p.permission_allowed)
+        << ",\"ad_update_needed\":" << boolean(p.ad_update_needed)
+        << ",\"pa\":" << (p.mapped ? lossless(p.paddr) : "null")
+        << ",\"page_size\":" << lossless(p.page_size) << ",\"leaf_level\":" << p.leaf_level
+        << ",\"error\":";
+    append_json_string(out, p.error);
+    out << ",\"entries\":[";
+    for (size_t i = 0; i < p.entries.size(); ++i) {
+        if (i) out << ',';
+        out << "{\"level\":" << p.entries[i].level << ",\"address\":" << lossless(p.entries[i].address)
+            << ",\"value\":" << lossless(p.entries[i].value) << '}';
+    }
+    out << "]}";
+    return out.str();
+}
+
+std::string debug_capture_metadata_json(const CaptureMetadata& m) {
+    std::ostringstream out;
+    out << "{\"type\":\"capture-metadata\"," << observation_capabilities
+        << ",\"state\":\"" << (m.state == CaptureState::Idle ? "idle" : m.state == CaptureState::Recording ? "recording" : "stopped")
+        << "\",\"capture_id\":" << lossless(m.capture_id) << ",\"machine_generation\":" << lossless(m.machine_generation)
+        << ",\"attempted\":" << lossless(m.attempted) << ",\"filtered\":" << lossless(m.filtered)
+        << ",\"recorded\":" << lossless(m.recorded) << ",\"dropped\":" << lossless(m.dropped)
+        << ",\"unsupported\":" << lossless(m.unsupported) << ",\"first_id\":" << lossless(m.first_id)
+        << ",\"last_id\":" << lossless(m.last_id)
+        << ",\"supported_window_complete\":" << boolean(!m.dropped && !m.unsupported)
+        << ",\"config\":{\"capacity\":" << lossless(m.config.capacity) << ",\"operation\":";
+    if (m.config.operation) append_json_string(out, operation_name(*m.config.operation)); else out << "null";
+    out << ",\"effective_privilege\":";
+    if (m.config.effective_privilege) append_json_string(out, privilege_name(*m.config.effective_privilege)); else out << "null";
+    out << ",\"satp\":" << lossless(m.config.satp) << ",\"va_begin\":" << lossless(m.config.va_begin)
+        << ",\"va_end\":" << lossless(m.config.va_end) << "}}";
+    return out.str();
+}
+
+std::string debug_memory_record_json(const MemoryRecord& r) {
+    std::ostringstream out;
+    out << "{\"type\":\"memory-record\",\"schema_version\":1,\"backend\":\"functional\",\"hart\":0"
+        << ",\"capture_id\":" << lossless(r.capture_id) << ",\"machine_generation\":" << lossless(r.machine_generation)
+        << ",\"instruction_id\":" << lossless(r.instruction_id) << ",\"pc\":" << lossless(r.pc)
+        << ",\"raw\":" << lossless(r.raw) << ",\"instruction_bytes\":" << unsigned(r.instruction_bytes)
+        << ",\"privilege\":\"" << privilege_name(r.privilege) << "\",\"effective_privilege\":\"" << privilege_name(r.effective_privilege)
+        << "\",\"satp\":" << lossless(r.satp) << ",\"start_cycle\":" << lossless(r.start_cycle)
+        << ",\"start_instret\":" << lossless(r.start_instret) << ",\"end_cycle\":" << lossless(r.end_cycle)
+        << ",\"end_instret\":" << lossless(r.end_instret) << ",\"operation\":\"" << operation_name(r.operation)
+        << "\",\"atomic_kind\":" << unsigned(r.atomic_kind) << ",\"va\":" << lossless(r.vaddr)
+        << ",\"bytes\":" << r.bytes << ",\"store_value\":" << lossless(r.store_value)
+        << ",\"retired\":" << boolean(r.retired) << ",\"sc_result\":" << lossless(r.sc_result)
+        << ",\"trap\":";
+    if (r.trap.valid) out << "{\"cause\":" << lossless(r.trap.cause) << ",\"tval\":" << lossless(r.trap.tval) << '}';
+    else out << "null";
+    out << ",\"segments\":[";
+    for (size_t i = 0; i < r.segment_count; ++i) {
+        const auto& s = r.segments[i];
+        if (i) out << ',';
+        out << "{\"va\":" << lossless(s.vaddr) << ",\"pa\":" << lossless(s.paddr) << ",\"bytes\":" << s.bytes
+            << ",\"write\":" << boolean(s.write) << ",\"value\":" << lossless(s.value)
+            << ",\"outcome\":\"" << (s.outcome == MemoryOutcome::Success ? "success" : s.outcome == MemoryOutcome::Fault ? "fault" : "no-access") << "\"}";
+    }
+    out << "]}";
+    return out.str();
+}
+
+std::string debug_capture_page_json(const CapturePage& p) {
+    std::ostringstream out;
+    out << "{\"type\":\"capture-page\",\"schema_version\":1,\"metadata\":" << debug_capture_metadata_json(p.metadata)
+        << ",\"next\":{\"capture_id\":" << lossless(p.next.capture_id) << ",\"position\":" << lossless(p.next.position)
+        << ",\"upper\":" << lossless(p.next.upper) << "},\"done\":" << boolean(p.done) << ",\"records\":[";
+    for (size_t i = 0; i < p.records.size(); ++i) {
+        if (i) out << ',';
+        out << debug_memory_record_json(p.records[i]);
+    }
+    out << "]}";
+    return out.str();
+}

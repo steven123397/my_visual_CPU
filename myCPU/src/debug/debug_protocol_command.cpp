@@ -328,6 +328,22 @@ uint32_t extract_memory_size(const JsonObject& object) {
     return static_cast<uint32_t>(size);
 }
 
+PrivilegeMode parse_privilege(const std::string& text) {
+    if (text == "U") return PrivilegeMode::User;
+    if (text == "S") return PrivilegeMode::Supervisor;
+    if (text == "M") return PrivilegeMode::Machine;
+    throw std::runtime_error("privilege must be U, S or M");
+}
+
+MemoryOperation parse_operation(const std::string& text) {
+    if (text == "load") return MemoryOperation::Load;
+    if (text == "store") return MemoryOperation::Store;
+    if (text == "lr") return MemoryOperation::LR;
+    if (text == "sc") return MemoryOperation::SC;
+    if (text == "amo") return MemoryOperation::AMO;
+    throw std::runtime_error("invalid capture operation");
+}
+
 }  // namespace
 
 DebugCliCommand parse_debug_cli_command(const std::string& line) {
@@ -335,6 +351,58 @@ DebugCliCommand parse_debug_cli_command(const std::string& line) {
     const std::string command = extract_string(object, "cmd");
 
     DebugCliCommand parsed;
+    if (command == "inspect-memory") {
+        parsed.kind = DebugCliCommandKind::InspectMemory;
+        parsed.addr = extract_u64(object, "addr");
+        parsed.count = extract_u64(object, "size");
+        if (!parsed.count || parsed.count > 4096) throw std::runtime_error("inspection size must be 1..4096");
+        return parsed;
+    }
+    if (command == "inspect-page") {
+        parsed.kind = DebugCliCommandKind::InspectPage;
+        parsed.addr = extract_u64(object, "addr");
+        const auto access = extract_string(object, "access");
+        if (access == "load") parsed.access = AccessType::Load;
+        else if (access == "store") parsed.access = AccessType::Store;
+        else if (access == "instruction") parsed.access = AccessType::Instruction;
+        else throw std::runtime_error("invalid page inspection access");
+        if (try_find_value(object, "satp")) {
+            parsed.page_context = PageInspectionContext{extract_u64(object, "satp"),
+                parse_privilege(extract_string(object, "privilege")),
+                try_extract_bool(object, "sum", false), try_extract_bool(object, "mxr", false)};
+        } else if (try_find_value(object, "privilege") || try_find_value(object, "sum") || try_find_value(object, "mxr")) {
+            throw std::runtime_error("explicit page context requires satp and privilege");
+        }
+        return parsed;
+    }
+    if (command == "capture-start") {
+        parsed.kind = DebugCliCommandKind::CaptureStart;
+        auto& cfg = parsed.capture_config;
+        const auto capacity = try_extract_u64(object, "capacity", 4096);
+        if (!capacity || capacity > 65536) throw std::runtime_error("capture capacity must be 1..65536");
+        cfg.capacity = capacity;
+        if (try_find_value(object, "operation")) cfg.operation = parse_operation(extract_string(object, "operation"));
+        if (try_find_value(object, "privilege")) cfg.effective_privilege = parse_privilege(extract_string(object, "privilege"));
+        if (try_find_value(object, "satp")) cfg.satp = extract_u64(object, "satp");
+        if (try_find_value(object, "va_begin") || try_find_value(object, "va_end")) {
+            cfg.va_begin = extract_u64(object, "va_begin");
+            cfg.va_end = extract_u64(object, "va_end");
+            if (*cfg.va_begin >= *cfg.va_end) throw std::runtime_error("invalid capture VA interval");
+        }
+        return parsed;
+    }
+    if (command == "capture-stop") { parsed.kind = DebugCliCommandKind::CaptureStop; return parsed; }
+    if (command == "capture-clear") { parsed.kind = DebugCliCommandKind::CaptureClear; return parsed; }
+    if (command == "capture-read") {
+        parsed.kind = DebugCliCommandKind::CaptureRead;
+        parsed.cursor.capture_id = extract_u64(object, "capture_id");
+        parsed.cursor.position = try_extract_u64(object, "position", 0);
+        if (try_find_value(object, "upper")) parsed.cursor.upper = extract_u64(object, "upper");
+        const auto limit = try_extract_u64(object, "limit", 256);
+        if (!limit || limit > 256) throw std::runtime_error("capture page size must be 1..256");
+        parsed.limit = limit;
+        return parsed;
+    }
     if (command == "load") {
         parsed.kind = DebugCliCommandKind::Load;
         parsed.image = extract_string(object, "image");

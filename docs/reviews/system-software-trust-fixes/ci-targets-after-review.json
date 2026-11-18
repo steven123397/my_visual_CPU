@@ -1,0 +1,34 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "diff --git a/myCPU/Makefile b/myCPU/Makefile\nindex 4cf5ebc..6a04da2 100644\n--- a/myCPU/Makefile\n+++ b/myCPU/Makefile\n@@ -1746,5 +1746,7 @@ tests/host/interactive_terminal_smoke \\\n tests/host/course_os_shell_terminal_smoke \\\n tests/host/course_os_linux_compat_terminal_smoke: tests/host/terminal_smoke_harness.h\n \n+tests/host/spike_differential_smoke: $(wildcard tests/host/spike_differential/*.h)\n+\n tests/host/%: tests/host/%.cpp $(CORE_OBJS)\n \t$(CXX) $(CXXFLAGS) -o $@ $< $(CORE_OBJS)\n",
+  "argv": [
+    "timeout",
+    "20s",
+    "python3",
+    "tests/host/ci_targets_test.py"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+  "environment": {},
+  "started_unix": 1790929451.4033897,
+  "wall_seconds": 3.431,
+  "exit_code": 0,
+  "wall_budget_seconds": 20,
+  "source_manifest": "sources-51a76cc203ef.json",
+  "source_manifest_sha256": "51a76cc203ef80dd0311c0a30eaaf59073a594cc0f00b7faeaa920ad51de5a58",
+  "logs": {
+    "stdout": {
+      "path": "ci-targets-after-review.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "ci-targets-after-review.stderr",
+      "sha256": "7d8b59a66dcf33491c519c0e1ce63119747519fb08bb541d92e02ccb9f66377b"
+    }
+  },
+  "input_files_before_sha256": {
+    "tests/host/ci_targets_test.py": "b816ec133046cb61e0259594eec05fae8485971b739491eb8ebddb01b5487946"
+  },
+  "input_files_after_sha256": {
+    "tests/host/ci_targets_test.py": "b816ec133046cb61e0259594eec05fae8485971b739491eb8ebddb01b5487946"
+  }
+}

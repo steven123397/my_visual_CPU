@@ -69,6 +69,14 @@ public:
     TranslationPlanSnapshot translation_plan();
     DbtJitDryRunSummary jit_dispatch();
     DebugSnapshot snapshot() const;
+    void capture_start(const CaptureConfig& config = {});
+    void capture_stop();
+    void capture_clear();
+    CaptureMetadata capture_metadata() const { return capture_->metadata(); }
+    CapturePage capture_read(CaptureCursor cursor, size_t limit = 256) const { return capture_->read(cursor, limit); }
+    std::vector<uint8_t> inspect_memory(uint64_t addr, size_t size) const;
+    PageInspection inspect_page(uint64_t addr, AccessType type) const;
+    PageInspection inspect_page(uint64_t addr, AccessType type, const PageInspectionContext& context) const;
     size_t post_load_action_count() const;
 
 private:
@@ -115,6 +123,7 @@ private:
     const Machine& machine() const;
 
     std::unique_ptr<Machine> machine_{};
+    std::shared_ptr<MemoryCapture> capture_{std::make_shared<MemoryCapture>()};
     LoadConfig config_{};
     std::vector<DebugEvent> events_{};
     std::vector<uint64_t> breakpoints_{};

@@ -1,0 +1,35 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "",
+  "argv": [
+    "timeout",
+    "10s",
+    "make",
+    "-C",
+    "myCPU",
+    "-n",
+    "-W",
+    "tests/host/spike_differential/shared_spec.h",
+    "tests/host/spike_differential_smoke"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+  "environment": {},
+  "started_unix": 1790929024.8488536,
+  "wall_seconds": 0.148,
+  "exit_code": 0,
+  "wall_budget_seconds": 10,
+  "source_manifest": "sources-8d6914053c45.json",
+  "source_manifest_sha256": "8d6914053c456ef423a3f5fce6a13ccc9c5dca9247411e77398bbf6956a82176",
+  "logs": {
+    "stdout": {
+      "path": "build-dependency-red.stdout",
+      "sha256": "afc278c27d49829969c386bda7607acae3fbc2c7faa99ab2bffad2757ec797f9"
+    },
+    "stderr": {
+      "path": "build-dependency-red.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "input_files_before_sha256": {},
+  "input_files_after_sha256": {}
+}

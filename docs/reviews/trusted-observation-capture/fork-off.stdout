@@ -1,0 +1,9 @@
+{"event":"mapping","phase":"before","parent_pid":3,"child_pid":4,"va":8192,"parent_root":2280804352,"child_root":2280996864,"parent_pa":2280775680,"child_pa":2280820736,"parent_pte":570194135,"child_pte":570205399,"parent_value":287454020,"child_value":287454020,"cycle":434550710,"instret":434550627}
+{"event":"mapping","phase":"before","parent_pid":3,"child_pid":4,"va":12288,"parent_root":2280804352,"child_root":2280996864,"parent_pa":2280771584,"child_pa":2280824832,"parent_pte":570193111,"child_pte":570206423,"parent_value":1432778632,"child_value":1432778632,"cycle":434550710,"instret":434550627}
+{"event":"mapping","phase":"after","parent_pid":3,"child_pid":4,"va":8192,"parent_root":2280804352,"child_root":2280996864,"parent_pa":2280775680,"child_pa":2280820736,"parent_pte":570194135,"child_pte":570205399,"parent_value":287454020,"child_value":2864434397,"cycle":435337009,"instret":435336887}
+{"event":"mapping","phase":"after","parent_pid":3,"child_pid":4,"va":12288,"parent_root":2280804352,"child_root":2280996864,"parent_pa":2280771584,"child_pa":2280824832,"parent_pte":570193111,"child_pte":570206423,"parent_value":1432778632,"child_value":4009689105,"cycle":435337009,"instret":435336887}
+{"event":"zombie","pid":4,"xstate":37,"pc":2147494592,"cycle":435391372}
+{"event":"reclaimed","pa":2280820736,"freelist_member":true,"proc_unused":true}
+{"event":"reclaimed","pa":2280824832,"freelist_member":true,"proc_unused":true}
+{"type":"uart_output","offset":0,"next_offset":167,"text":"\nxv6 kernel is booting\n\ninit: starting sh\n$ forkev\nEVIDENCE BEFORE 3 4 0x0000000000002000\nEVIDENCE AFTER 3 4 0x0000000000002000\nEVIDENCE REAP 3 4 0x0000000000002000\n$ "}
+{"event":"result","passed":true,"backend":"functional","existing_forktest":true,"wall_seconds":378.152,"manual_checks":[],"scope":"standalone test probe; two touched user pages; ordinary fork"}

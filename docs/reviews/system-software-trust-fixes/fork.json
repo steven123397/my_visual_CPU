@@ -1,0 +1,42 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "",
+  "argv": [
+    "timeout",
+    "1200s",
+    "myCPU/tests/host/system_software_fork_evidence",
+    "myCPU/external/xv6-riscv/kernel/kernel",
+    "/tmp/mycpu-trust-fork/fs.img",
+    "/tmp/mycpu-trust-fork/layout.txt"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+  "environment": {},
+  "started_unix": 1790928501.255049,
+  "wall_seconds": 492.737,
+  "exit_code": 0,
+  "wall_budget_seconds": 1200,
+  "source_manifest": "sources-8d6914053c45.json",
+  "source_manifest_sha256": "8d6914053c456ef423a3f5fce6a13ccc9c5dca9247411e77398bbf6956a82176",
+  "logs": {
+    "stdout": {
+      "path": "fork.stdout",
+      "sha256": "753353014624989dd9bd8ce05e2e4e1f944bfa1c0c05b87d89a120ae63000960"
+    },
+    "stderr": {
+      "path": "fork.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "input_files_before_sha256": {
+    "myCPU/tests/host/system_software_fork_evidence": "1c6d3b04204332381d9e9cd18e7a689ef1b688174419226fd5a1a77219aab866",
+    "myCPU/external/xv6-riscv/kernel/kernel": "1a6cdfcaa2959b68fa64846669dbd80b43846bfcd825c4e8f9c65beb3a4d2eb2",
+    "/tmp/mycpu-trust-fork/fs.img": "459cb48a1e217b201551fd1f7c9c8d064a3489271f67a7672fac0d25693c1220",
+    "/tmp/mycpu-trust-fork/layout.txt": "f4ce32ab80131d7b952711ef664bdbcadd16cd2ffd95d63c3eeb1137debb266a"
+  },
+  "input_files_after_sha256": {
+    "myCPU/tests/host/system_software_fork_evidence": "1c6d3b04204332381d9e9cd18e7a689ef1b688174419226fd5a1a77219aab866",
+    "myCPU/external/xv6-riscv/kernel/kernel": "1a6cdfcaa2959b68fa64846669dbd80b43846bfcd825c4e8f9c65beb3a4d2eb2",
+    "/tmp/mycpu-trust-fork/fs.img": "459cb48a1e217b201551fd1f7c9c8d064a3489271f67a7672fac0d25693c1220",
+    "/tmp/mycpu-trust-fork/layout.txt": "f4ce32ab80131d7b952711ef664bdbcadd16cd2ffd95d63c3eeb1137debb266a"
+  }
+}

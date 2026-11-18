@@ -1,0 +1,170 @@
+=== unit:elf_loader_bss ===
+
+=== unit:elf_loader_segments ===
+
+=== unit:elf_loader_rejects ===
+
+=== unit:elf_loader_header_rejects ===
+
+=== unit:binary_loader ===
+
+=== unit:machine_loader_reset ===
+
+=== unit:bus_device_guards ===
+
+=== unit:bus_region_contract ===
+
+=== unit:dma_transaction_contract ===
+
+=== unit:simple_l1_cache ===
+simple_l1_cache: PASS
+=== unit:ai_graph_package ===
+
+=== unit:ai_scratchpad ===
+ai_scratchpad: PASS
+=== unit:ai_dma_engine ===
+ai_dma_engine: PASS
+=== unit:ai_accelerator_mmio_contract ===
+
+=== unit:mmio_contract_matrix ===
+
+=== unit:uart_rx_contract ===
+
+=== unit:storage_readiness ===
+
+=== unit:virtio_mmio_contract ===
+
+=== unit:virtqueue_smoke ===
+
+=== unit:ai_accel_queue ===
+
+=== unit:supervisor_runtime ===
+
+=== unit:kernel_runtime ===
+
+=== unit:kernel_bringup ===
+
+=== unit:vm_address_space ===
+
+=== unit:vm_process ===
+
+=== unit:vm_object ===
+
+=== unit:vm_fault ===
+
+=== unit:trap_runtime ===
+
+=== unit:trap_dispatch ===
+
+=== unit:user_task ===
+
+=== unit:user_task_bootstrap ===
+
+=== unit:user_program ===
+
+=== unit:user_program_smoke ===
+
+=== unit:supervisor_demo_smoke ===
+
+=== unit:monitor_commands ===
+
+=== unit:course_os_console_input ===
+
+=== unit:course_os_stage1 ===
+
+=== unit:course_os_stage2_syscall ===
+
+=== unit:course_os_stage2_process ===
+
+=== unit:course_os_stage2_fd_fs ===
+
+=== unit:course_os_stage2_shell ===
+
+=== unit:course_os_stage2_cow_crash ===
+
+=== unit:course_os_stage2 ===
+
+=== unit:course_os_stage3_elf ===
+
+=== unit:course_os_stage3_sched_sync ===
+
+=== unit:course_os_preemptive_sched ===
+
+=== unit:course_os_stage3_vm ===
+
+=== unit:course_os_stage3_fs_shell ===
+
+=== unit:course_os_stage3_proc ===
+
+=== unit:course_os_stage3 ===
+
+=== unit:course_os_stage5_linux_compat ===
+
+=== unit:course_os_stage6_linux_compat ===
+
+=== unit:course_os_stage8_linux_compat_loader ===
+
+=== unit:course_os_stage9_linux_compat_vm ===
+
+=== unit:course_os_stage9_linux_compat_exec ===
+
+=== unit:course_os_stage9_linux_compat_syscall ===
+
+=== unit:course_os_stage10_linux_compat ===
+
+=== unit:course_os_stage11_linux_compat ===
+
+=== unit:kernel_alpha_common ===
+
+=== unit:kernel_alpha_storage ===
+
+=== unit:kernel_alpha_interrupt ===
+
+=== host:instruction_semantics_smoke ===
+
+=== host:instruction_semantics_smoke_fp_compare_convert ===
+
+=== host:instruction_semantics_smoke_fp_fma_flags ===
+
+=== host:rvc_semantics_smoke ===
+
+=== host:atomic_semantics_smoke ===
+
+=== host:address_space_faults_smoke ===
+
+=== host:predictor_smoke ===
+
+=== host:pipeline_backend_smoke ===
+
+=== host:pipeline_backend_smoke_fp_arith_fma ===
+
+=== host:pipeline_backend_smoke_fp_convert_tail ===
+
+=== host:pipeline_core_state_smoke ===
+
+=== host:pipeline_forwarding_smoke ===
+
+=== host:pipeline_commit_trace_smoke ===
+
+=== host:pipeline_rename_commit_smoke ===
+
+=== host:pipeline_speculation_contracts_smoke ===
+
+=== host:backend_differential_smoke ===
+
+=== host:debug_protocol_command_smoke ===
+
+=== host:debug_cli_smoke ===
+
+=== host:execution_profile_smoke ===
+execution_profile_smoke: PASS
+=== host:vector_pipeline_smoke ===
+vector_pipeline_smoke: PASS
+=== host:ai_tensor_golden_ops_smoke ===
+ai_tensor_golden_ops_smoke: PASS
+=== host:spike_differential_smoke ===
+
+=== host:debug_inspection_smoke ===
+
+=== host:memory_capture_smoke ===
+

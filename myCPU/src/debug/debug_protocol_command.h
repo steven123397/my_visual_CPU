@@ -5,6 +5,8 @@
 #include <string>
 
 #include "../platform/address_map.h"
+#include "../mem/address_space.h"
+#include "memory_capture.h"
 
 enum class DebugCliCommandKind {
     Load,
@@ -25,6 +27,12 @@ enum class DebugCliCommandKind {
     TranslationPlan,
     JitDispatch,
     Quit,
+    InspectMemory,
+    InspectPage,
+    CaptureStart,
+    CaptureStop,
+    CaptureClear,
+    CaptureRead,
 };
 
 struct DebugCliCommand {
@@ -47,6 +55,11 @@ struct DebugCliCommand {
     uint64_t max_steps{0};
     uint32_t memory_size{8};
     size_t offset{0};
+    CaptureConfig capture_config{};
+    CaptureCursor cursor{};
+    size_t limit{256};
+    AccessType access{AccessType::Load};
+    std::optional<PageInspectionContext> page_context{};
 };
 
 DebugCliCommand parse_debug_cli_command(const std::string& line);

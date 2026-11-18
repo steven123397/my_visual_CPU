@@ -74,6 +74,9 @@ __pycache__/
 # Reasonix Code
 .reasonix/
 
+# Qoder local metadata
+.qoder/
+
 # CodeGraph local index
 .codegraph/
 

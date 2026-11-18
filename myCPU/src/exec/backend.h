@@ -9,4 +9,5 @@ public:
     virtual void step() = 0;
     virtual const char* name() const = 0;
     virtual BackendDebugSnapshot debug_snapshot() const = 0;
+    virtual void synchronize_debug_gpr_write() = 0;
 };

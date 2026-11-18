@@ -134,6 +134,9 @@ inline FinalState run_mycpu_final_state(const Scenario& scenario) {
     for (size_t i = 0; i < scenario.trap_program.size(); ++i) {
         write32(ram, kTrapVector + static_cast<uint64_t>(i * 4), scenario.trap_program[i]);
     }
+    for (size_t i = 0; i < scenario.machine_exit_program.size(); ++i) {
+        write32(ram, kMachineExitVector + static_cast<uint64_t>(i * 4), scenario.machine_exit_program[i]);
+    }
     apply_initial_state(cpu, ram, scenario);
     if (scenario.configure) {
         scenario.configure(cpu, ram, bus);

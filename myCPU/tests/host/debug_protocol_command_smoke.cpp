@@ -26,6 +26,13 @@ bool expect_parse_error(const char* line) {
 }  // namespace
 
 int main() {
+    const auto inspect = parse_debug_cli_command("{\"cmd\":\"inspect-page\",\"addr\":\"0xffffffffffffffff\",\"access\":\"load\",\"satp\":\"0x8000000000000001\",\"privilege\":\"U\"}");
+    if (!expect(inspect.kind == DebugCliCommandKind::InspectPage && inspect.page_context->satp == 0x8000000000000001ULL, "inspect page context mismatch")) return 1;
+    for (const char* bad : {"{\"cmd\":\"inspect-page\",\"addr\":0,\"access\":\"bad\"}",
+                           "{\"cmd\":\"capture-start\",\"capacity\":65537}",
+                           "{\"cmd\":\"capture-start\",\"va_begin\":10,\"va_end\":10}",
+                           "{\"cmd\":\"capture-read\",\"capture_id\":1,\"limit\":257}"})
+        if (!expect_parse_error(bad)) return 1;
     const DebugCliCommand load = parse_debug_cli_command(
         "{\"cmd\":\"load\",\"image\":\"guest\\/interactive_os.elf\",\"backend\":\"pipeline\","
         "\"block_transport\":\"virtio-blk\","

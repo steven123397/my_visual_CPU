@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cctype>
@@ -43,6 +44,7 @@ enum class SpikeCaptureMode : uint8_t {
 enum class SpikeCaptureRegion : uint8_t {
     Program,
     TrapProgram,
+    MachineExitProgram,
 };
 
 struct SpikeScenarioPlan {
@@ -470,6 +472,11 @@ inline bool first_trap_delegates_to_supervisor(const Scenario& scenario, uint64_
         return false;
     }
 
+    if (scenario.expected_first_trap_cause != UINT64_MAX) {
+        delegated_cause = scenario.expected_first_trap_cause;
+        return scenario.initial_privilege != PrivilegeMode::Machine &&
+               (scenario_initial_csr_value(scenario, CSR_MEDELEG) & (UINT64_C(1) << delegated_cause)) != 0;
+    }
     uint64_t cause = 0;
     switch (scenario.program.front()) {
     case kEcall:
@@ -517,6 +524,20 @@ inline bool build_spike_scenario_plan(const Scenario& scenario,
         }
         plan.capture_first_trap_summary = true;
         plan.first_trap_capture_pc = tvec & ~0x3ULL;
+    }
+    if (!scenario.machine_exit_program.empty()) {
+        if (!ends_with_controlled_exit(scenario.machine_exit_program)) {
+            error = "machine exit program must have a controlled exit";
+            return false;
+        }
+        plan.capture_mode = SpikeCaptureMode::ControlledExit;
+        plan.capture_region = SpikeCaptureRegion::MachineExitProgram;
+        plan.capture_pc = kMachineExitVector + static_cast<uint64_t>(scenario.machine_exit_program.size() * 4);
+        plan.final_pc = plan.capture_pc;
+        plan.halted = true;
+        plan.timed_out = false;
+        plan.exit_reason = "controlled_exit";
+        return true;
     }
     if (ends_with_controlled_exit(scenario.program)) {
         plan.capture_mode = SpikeCaptureMode::ControlledExit;
@@ -658,6 +679,9 @@ inline bool materialize_spike_image(const Scenario& scenario,
             image_end = trap_end;
         }
     }
+    if (!scenario.machine_exit_program.empty()) {
+        image_end = std::max(image_end, kMachineExitVector + scenario.machine_exit_program.size() * 4 + 4);
+    }
     for (const MemoryInit& init : scenario.initial_memory) {
         if (init.size <= 0 || init.size > 8) {
             error = "unsupported initial_memory size in spike image materialization";
@@ -711,6 +735,11 @@ inline bool materialize_spike_image(const Scenario& scenario,
             image[offset + static_cast<size_t>(byte)] =
                 static_cast<uint8_t>((init.value >> (8 * byte)) & 0xffU);
         }
+    }
+    for (size_t i = 0; i < scenario.machine_exit_program.size(); ++i) {
+        const uint64_t addr = kMachineExitVector + static_cast<uint64_t>(i * 4);
+        const uint32_t word = i + 1 == scenario.machine_exit_program.size() ? 0x0040006fU : scenario.machine_exit_program[i];
+        write_u32_le(image, static_cast<size_t>(addr - kEntry), word);
     }
     bootstrap.append_to_image(image, kEntry, kSpikeBootBase);
     memory_size = align_up(static_cast<uint64_t>(image.size()), kSpikeImageAlign);

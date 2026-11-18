@@ -15,6 +15,7 @@ class Ram;
 class Bus {
 public:
     explicit Bus(Ram& ram);
+    std::vector<uint8_t> inspect_memory(uint64_t addr, size_t size) const;
 
     void attach(Device& device);
 
@@ -59,6 +60,7 @@ private:
         const char* kind);
 
     std::vector<Device*> devices_;
+    const Ram& ram_;
     DebugBusAccess last_access_{};
     DebugBusAccess last_guest_access_{};
 };

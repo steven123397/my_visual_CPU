@@ -1,0 +1,16 @@
+proc 2147556744
+cpus 2147555720
+cpu_proc 0
+kmem 2147555640
+sched 2147494592
+proc_size 360
+nproc 64
+pid 48
+state 24
+parent 56
+pagetable 80
+xstate 44
+freelist 24
+run_next 0
+unused 0
+zombie 5

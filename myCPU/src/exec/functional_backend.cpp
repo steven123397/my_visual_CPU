@@ -204,6 +204,37 @@ void FunctionalBackend::step() {
     decode(raw, &insn);
     insn.raw = raw;
     const InsnEffects effects = build_effects(cpu_, bus_, insn);
+    std::optional<MemoryRecord> record;
+    const bool scalar = effects.mem.kind != MemoryRequest::Kind::None;
+    const bool atomic = effects.atomic.kind != AtomicRequest::Kind::None;
+    const bool vector_memory = effects.vector.kind == VectorRequest::Kind::Load || effects.vector.kind == VectorRequest::Kind::Store;
+    if (memory_receiver_) {
+        if ((scalar && effects.mem.target == MemoryRequest::Target::Float) || vector_memory) {
+            memory_receiver_->unsupported();
+        } else if (scalar || atomic) {
+            record.emplace();
+            auto& r = *record;
+            r.pc = pc;
+            r.raw = raw;
+            r.instruction_bytes = instruction_size(insn);
+            r.privilege = cpu_.core().privilege_mode();
+            r.start_cycle = cpu_.core().cycle();
+            r.start_instret = cpu_.core().instret();
+            r.operation = scalar ? (effects.mem.kind == MemoryRequest::Kind::Load ? MemoryOperation::Load : MemoryOperation::Store)
+                                 : effects.atomic.kind == AtomicRequest::Kind::LoadReserved ? MemoryOperation::LR
+                                 : effects.atomic.kind == AtomicRequest::Kind::StoreConditional ? MemoryOperation::SC : MemoryOperation::AMO;
+            const auto context = cpu_.address_space().inspection_context(
+                r.operation == MemoryOperation::Load || r.operation == MemoryOperation::LR ? AccessType::Load : AccessType::Store);
+            r.satp = context.satp;
+            r.effective_privilege = context.effective_privilege;
+            r.vaddr = scalar ? effects.mem.addr : effects.atomic.addr;
+            r.bytes = scalar ? effects.mem.size : effects.atomic.size;
+            r.atomic_kind = effects.atomic.kind;
+            if (r.operation != MemoryOperation::Load && r.operation != MemoryOperation::LR)
+                r.store_value = scalar ? effects.mem.store_value : effects.atomic.store_value;
+            cpu_.address_space().bind_memory_record(&r);
+        }
+    }
     const uint64_t next_pc = pc + instruction_size(insn);
     const CommitBoundaryResult result = apply_commit_boundary(
         cpu_,
@@ -213,6 +244,15 @@ void FunctionalBackend::step() {
             .next_pc = next_pc,
             .effects = effects,
         });
+
+    cpu_.address_space().bind_memory_record(nullptr);
+    if (record) {
+        record->retired = result.retired;
+        if (result.trap_taken) {
+            const bool supervisor = cpu_.core().privilege_mode() == PrivilegeMode::Supervisor;
+            record->trap = {true, active_trap_cause(cpu_), cpu_.csr().read(supervisor ? CSR_STVAL : CSR_MTVAL, cpu_.core())};
+        }
+    }
 
     if (const std::optional<ExecutionMemoryObservation> memory =
             make_atomic_memory_observation(bus_, effects.atomic, pc, raw, result);
@@ -245,6 +285,12 @@ void FunctionalBackend::step() {
     }
 
     cpu_.core().advance_cycle();
+    if (record) {
+        record->end_cycle = cpu_.core().cycle();
+        record->end_instret = cpu_.core().instret();
+        if (record->representable) memory_receiver_->receive(*record);
+        else memory_receiver_->unsupported();
+    }
 }
 
 const char* FunctionalBackend::name() const {

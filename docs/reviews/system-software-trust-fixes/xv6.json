@@ -1,0 +1,33 @@
+{
+  "checkout_sha": "111c3efc3aa18cfbc7f86b8c21795226eb58f809",
+  "product_diff": "",
+  "argv": [
+    "timeout",
+    "1320s",
+    "make",
+    "-C",
+    "myCPU",
+    "test-host-xv6_boot_smoke",
+    "test-host-xv6_shell_smoke"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+  "environment": {},
+  "started_unix": 1790927654.1556249,
+  "wall_seconds": 842.965,
+  "exit_code": 0,
+  "wall_budget_seconds": 1320,
+  "source_manifest": "sources-8d6914053c45.json",
+  "source_manifest_sha256": "8d6914053c456ef423a3f5fce6a13ccc9c5dca9247411e77398bbf6956a82176",
+  "logs": {
+    "stdout": {
+      "path": "xv6.stdout",
+      "sha256": "bf15d98d66e2f18614fd08f4a88103aa230db74c9792e2c4d4a027dbea27d18b"
+    },
+    "stderr": {
+      "path": "xv6.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "input_files_before_sha256": {},
+  "input_files_after_sha256": {}
+}

@@ -1,4 +1,23 @@
 #include "debug_session.h"
+
+void DebugSession::capture_start(const CaptureConfig& config) { ensure_loaded(); machine().capture_start(config); }
+void DebugSession::capture_stop() { ensure_loaded(); machine().capture_stop(); }
+void DebugSession::capture_clear() { capture_->clear(); }
+
+std::vector<uint8_t> DebugSession::inspect_memory(uint64_t addr, size_t size) const {
+    ensure_loaded();
+    return machine().inspect_memory(addr, size);
+}
+
+PageInspection DebugSession::inspect_page(uint64_t addr, AccessType type) const {
+    ensure_loaded();
+    return machine().inspect_page(addr, type);
+}
+
+PageInspection DebugSession::inspect_page(uint64_t addr, AccessType type, const PageInspectionContext& context) const {
+    ensure_loaded();
+    return machine().inspect_page(addr, type, context);
+}
 #include "debug_budget.h"
 
 #include <cerrno>
@@ -150,6 +169,8 @@ void DebugSession::load_elf(const std::string& path,
                             bool disk_ready,
                             bool disk_magic_valid,
                             bool l1d_enabled) {
+    capture_->require_mutable();
+    const LoadConfig previous = config_;
     config_.image_kind = ImageKind::Elf;
     config_.image_path = path;
     config_.binary_addr = MEM_BASE;
@@ -161,7 +182,8 @@ void DebugSession::load_elf(const std::string& path,
     config_.disk_magic_valid = disk_magic_valid;
     config_.l1d_enabled = l1d_enabled;
     config_.post_load_actions.clear();
-    recreate_machine();
+    try { recreate_machine(); }
+    catch (...) { config_ = previous; throw; }
     events_.clear();
     breakpoints_.clear();
 }
@@ -174,6 +196,8 @@ void DebugSession::load_binary(const std::string& path,
                                bool disk_ready,
                                bool disk_magic_valid,
                                bool l1d_enabled) {
+    capture_->require_mutable();
+    const LoadConfig previous = config_;
     config_.image_kind = ImageKind::Binary;
     config_.image_path = path;
     config_.binary_addr = addr;
@@ -185,7 +209,8 @@ void DebugSession::load_binary(const std::string& path,
     config_.disk_magic_valid = disk_magic_valid;
     config_.l1d_enabled = l1d_enabled;
     config_.post_load_actions.clear();
-    recreate_machine();
+    try { recreate_machine(); }
+    catch (...) { config_ = previous; throw; }
     events_.clear();
     breakpoints_.clear();
 }
@@ -211,6 +236,7 @@ void DebugSession::set_gpr(std::string_view reg_name, uint64_t value) {
 }
 
 void DebugSession::set_memory(uint64_t addr, uint64_t value, uint32_t size, bool virtual_address) {
+    capture_->require_mutable();
     ensure_loaded();
     validate_memory_size(size);
 
@@ -255,6 +281,7 @@ void DebugSession::set_memory(uint64_t addr, uint64_t value, uint32_t size, bool
 }
 
 void DebugSession::set_csr(std::string_view csr_name, uint64_t value) {
+    capture_->require_mutable();
     ensure_loaded();
     const uint32_t addr = parse_csr_addr(csr_name);
     if (!machine().cpu().csr().is_implemented(addr)) {
@@ -274,6 +301,7 @@ void DebugSession::break_at(uint64_t addr) {
 }
 
 void DebugSession::reset() {
+    capture_->require_mutable();
     ensure_loaded();
     recreate_machine();
     events_.clear();
@@ -399,6 +427,7 @@ void DebugSession::run_until_halt(uint64_t max_steps) {
 }
 
 void DebugSession::uart_input(std::string_view text) {
+    capture_->require_mutable();
     ensure_loaded();
     machine().uart().inject_input(text);
 }
@@ -428,11 +457,13 @@ bool DebugSession::debug_halted() const {
 bool DebugSession::debug_try_load_guest_memory(uint64_t addr,
                                                int size,
                                                uint64_t& value) {
+    capture_->require_mutable();
     ensure_loaded();
     return machine().bus().try_load(addr, size, value);
 }
 
 DebugSession::TranslationPlanSnapshot DebugSession::translation_plan() {
+    capture_->require_mutable();
     ensure_loaded();
     const BackendDebugSnapshot backend_snapshot = machine().backend().debug_snapshot();
     const InterpreterDbtPrototypePlan plan =
@@ -458,6 +489,7 @@ DebugSession::TranslationPlanSnapshot DebugSession::translation_plan() {
 }
 
 DbtJitDryRunSummary DebugSession::jit_dispatch() {
+    capture_->require_mutable();
     ensure_loaded();
     const BackendDebugSnapshot backend_snapshot = machine().backend().debug_snapshot();
 
@@ -479,21 +511,21 @@ size_t DebugSession::post_load_action_count() const {
 }
 
 void DebugSession::recreate_machine() {
-    machine_ = std::make_unique<Machine>();
-    machine_->set_backend_kind(config_.backend_kind);
-    machine_->set_block_transport(config_.block_transport);
-    machine_->set_l1_data_cache_enabled(config_.l1d_enabled);
+    auto candidate = std::make_unique<Machine>();
+    candidate->set_backend_kind(config_.backend_kind);
+    candidate->set_block_transport(config_.block_transport);
+    candidate->set_l1_data_cache_enabled(config_.l1d_enabled);
     if (config_.disk_attached) {
-        machine_->attach_storage_image(config_.disk_image, config_.disk_ready, config_.disk_magic_valid);
+        candidate->attach_storage_image(config_.disk_image, config_.disk_ready, config_.disk_magic_valid);
     }
-    machine_->uart().set_mirror_stdout(false);
+    candidate->uart().set_mirror_stdout(false);
 
     switch (config_.image_kind) {
     case ImageKind::Elf:
-        machine_->load_elf(config_.image_path);
+        candidate->load_elf(config_.image_path);
         break;
     case ImageKind::Binary:
-        machine_->load_binary(config_.image_path, config_.binary_addr);
+        candidate->load_binary(config_.image_path, config_.binary_addr);
         break;
     case ImageKind::None:
         throw std::runtime_error("debug session image not configured");
@@ -502,13 +534,16 @@ void DebugSession::recreate_machine() {
     for (const PostLoadAction& action : config_.post_load_actions) {
         switch (action.kind) {
         case PostLoadAction::Kind::Payload:
-            machine_->load_binary_payload(action.text, action.value);
+            candidate->load_binary_payload(action.text, action.value);
             break;
         case PostLoadAction::Kind::SetGpr:
-            machine_->set_gpr(action.text, action.value);
+            candidate->set_gpr(action.text, action.value);
             break;
         }
     }
+    candidate->capture_ = capture_;
+    capture_->advance_generation();
+    machine_ = std::move(candidate);
 }
 
 DebugSnapshot DebugSession::collect_snapshot() const {

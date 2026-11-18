@@ -1,0 +1,82 @@
+{
+  "unit": "U3",
+  "checkout_sha": "1b54928fc0f1d2c7e39d2c9c781be4e9a43babc7",
+  "collector_source": "import { spawnSync } from 'node:child_process';\nimport { readFileSync, writeFileSync } from 'node:fs';\nimport { createHash } from 'node:crypto';\nconst root = '/home/liangjiaqi/projects/my_visual_CPU';\nconst cwd = `${root}/myCPU`;\nconst hash = p => createHash('sha256').update(readFileSync(p)).digest('hex');\nconst entries = [];\nfor (const [i, name] of ['debug_cli_smoke', 'debug_protocol_command_smoke', 'execution_profile_smoke'].entries()) {\n  const argv = ['timeout', '15s', `./tests/host/${name}`];\n  const started = Date.now();\n  const result = spawnSync(argv[0], argv.slice(1), { cwd, encoding: 'utf8', timeout: 17000, maxBuffer: 8 * 1024 * 1024 });\n  entries.push({ evidence_id: `E-U3-01${i + 1}`, argv, cwd, wall_budget_seconds: 15,\n    wall_seconds: (Date.now() - started) / 1000, exit_code: result.status, signal: result.signal,\n    stdout: result.stdout, stderr: result.stderr, error: result.error?.message ?? null,\n    source: `myCPU/tests/host/${name}.cpp`, source_sha256: hash(`${cwd}/tests/host/${name}.cpp`),\n    binary_sha256: hash(`${cwd}/tests/host/${name}`), config: 'deterministic embedded fixtures; no xv6 or shared fs image' });\n}\nentries.push({ evidence_id: 'E-U3-014', argv: ['python3', 'tests/host/run_debug_cli_probe_test.py'], cwd,\n  status: 'not-run', reason: 'Default tests include actual xv6 kernel/fs.img probes at lines 1630 and 1676; U4 owns the shared image during this collection.',\n  source_sha256: hash(`${cwd}/tests/host/run_debug_cli_probe_test.py`) });\nconst output = { unit: 'U3', checkout_sha: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim(),\n  collector_source: readFileSync('/tmp/u3-existing-collector.mjs', 'utf8'), collector_argv: [process.execPath, ...process.argv.slice(1)], entries };\nwriteFileSync(`${root}/docs/reviews/system-software-evidence-c253dda/u3-existing-runs.json`, JSON.stringify(output, null, 2) + '\\n');\nconsole.log(JSON.stringify(entries.map(({ evidence_id, exit_code, status, stderr }) => ({ evidence_id, exit_code, status, stderr }))));\n",
+  "collector_argv": [
+    "/home/liangjiaqi/.nvm/versions/node/v24.16.0/bin/node",
+    "/tmp/u3-existing-collector.mjs"
+  ],
+  "entries": [
+    {
+      "evidence_id": "E-U3-011",
+      "argv": [
+        "timeout",
+        "15s",
+        "./tests/host/debug_cli_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 15,
+      "wall_seconds": 15.008,
+      "exit_code": 124,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "error": null,
+      "source": "myCPU/tests/host/debug_cli_smoke.cpp",
+      "source_sha256": "06dd88b5b33ca0b96c512e2ce3d44d5f29cd9e1f2d2ebd90f64de21d1e1515b6",
+      "binary_sha256": "d9c1af6d01ad5bff6f4998ef021c61962d013e0dd01540dc3865016455ae0909",
+      "config": "deterministic embedded fixtures; no xv6 or shared fs image"
+    },
+    {
+      "evidence_id": "E-U3-012",
+      "argv": [
+        "timeout",
+        "15s",
+        "./tests/host/debug_protocol_command_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 15,
+      "wall_seconds": 0.009,
+      "exit_code": 0,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "error": null,
+      "source": "myCPU/tests/host/debug_protocol_command_smoke.cpp",
+      "source_sha256": "180f7f4e03de1caf657a4eae82ee6a7a915b6e31b8bb2d40b219a67c1ece6481",
+      "binary_sha256": "4b257a7ec170b8397a8567168fc1bf60d5dd76157d40d6d7e1b69e23dc9f2690",
+      "config": "deterministic embedded fixtures; no xv6 or shared fs image"
+    },
+    {
+      "evidence_id": "E-U3-013",
+      "argv": [
+        "timeout",
+        "15s",
+        "./tests/host/execution_profile_smoke"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "wall_budget_seconds": 15,
+      "wall_seconds": 0.011,
+      "exit_code": 0,
+      "signal": null,
+      "stdout": "execution_profile_smoke: PASS\n",
+      "stderr": "",
+      "error": null,
+      "source": "myCPU/tests/host/execution_profile_smoke.cpp",
+      "source_sha256": "e9adcb4f10a16509b7c9aa7bb0c9bb188458eed3f312a6d6ae2eef1b7b7dd29e",
+      "binary_sha256": "b6c0c26649059b1579b2ca063182b999eebd3617e22d7863c78ec9faa98c33c9",
+      "config": "deterministic embedded fixtures; no xv6 or shared fs image"
+    },
+    {
+      "evidence_id": "E-U3-014",
+      "argv": [
+        "python3",
+        "tests/host/run_debug_cli_probe_test.py"
+      ],
+      "cwd": "/home/liangjiaqi/projects/my_visual_CPU/myCPU",
+      "status": "not-run",
+      "reason": "Default tests include actual xv6 kernel/fs.img probes at lines 1630 and 1676; U4 owns the shared image during this collection.",
+      "source_sha256": "f576b8229ab8901fa874962cc63c7636eee30a7339d57261464ebbd90012faed"
+    }
+  ]
+}

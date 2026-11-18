@@ -15,6 +15,7 @@ public:
     void step() override;
     const char* name() const override;
     BackendDebugSnapshot debug_snapshot() const override;
+    void synchronize_debug_gpr_write() override;
     PipelineCoreState& testing_state();
     const PipelineCoreState& testing_state() const;
 

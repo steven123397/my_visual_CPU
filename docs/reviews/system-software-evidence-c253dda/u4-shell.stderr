@@ -1,0 +1,34 @@
+xv6 shell: waiting for boot prompt
+xv6 shell: boot prompt in 503.516s
+xv6 shell: starting ls
+xv6 shell: completed command in 31.984s
+xv6 shell: starting cat README
+xv6 shell: completed command in 95.208s
+xv6 shell: starting wc README
+xv6 shell: completed command in 4.066s
+xv6 shell: starting grep qemu README | wc
+xv6 shell: completed command in 8.088s
+xv6 shell: starting echo SHELL_OK > xv6smoke.txt
+xv6 shell: completed command in 11.981s
+xv6 shell: starting cat xv6smoke.txt
+xv6 shell: completed command in 4.142s
+xv6 shell: starting rm xv6smoke.txt
+xv6 shell: completed command in 5.681s
+xv6 shell: starting cat xv6smoke.txt
+xv6 shell: completed command in 4.746s
+xv6 shell: starting mkdir smdir
+xv6 shell: completed command in 10.804s
+xv6 shell: starting echo DIR_OK > smdir/note
+xv6 shell: completed command in 7.929s
+xv6 shell: starting cat smdir/note
+xv6 shell: completed command in 3.466s
+xv6 shell: starting rm smdir/note
+xv6 shell: completed command in 5.253s
+xv6 shell: starting rm smdir
+xv6 shell: completed command in 5.363s
+xv6 shell: starting cat smdir/note
+xv6 shell: completed command in 5.097s
+xv6 shell: starting forktest
+xv6 shell: completed command in 33.649s
+xv6 shell: starting stressfs
+xv6 shell: completed command in 112.965s

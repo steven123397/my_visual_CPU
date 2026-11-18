@@ -22,6 +22,7 @@ public:
     void write_bytes(uint64_t addr, const void* data, size_t size);
     void fill(uint64_t addr, uint8_t value, size_t size);
     void swap(Ram& other);
+    bool read_bytes(uint64_t addr, void* data, size_t size) const;
     const char* debug_name() const override {
         return "ram";
     }

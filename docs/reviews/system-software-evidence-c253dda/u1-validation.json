@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/home/liangjiaqi/.nvm/versions/node/v24.16.0/bin/node",
+    "--input-type=module",
+    "-e",
+    "\nimport {readFileSync,existsSync} from \"node:fs\";\nimport {resolve,dirname} from \"node:path\";\nimport {createHash} from \"node:crypto\";\nimport assert from \"node:assert/strict\";\nconst sha=x=>createHash(\"sha256\").update(x).digest(\"hex\");\nconst files=[\"docs/reviews/system-software-evidence-c253dda.md\",\"docs/current.md\"];\nlet links=0;\nfor(const file of files) {\n const text=readFileSync(file,\"utf8\");\n for(const match of text.matchAll(/\\[[^\\]]*\\]\\(([^)]+)\\)/g)) {\n  const target=match[1];\n  if(/^(https?:|#)/.test(target)) continue;\n  assert(existsSync(resolve(dirname(file),target.split(\"#\")[0])),file+\": \"+target); links++;\n }\n}\nconst inventory=JSON.parse(readFileSync(\"docs/reviews/system-software-evidence-c253dda/u1-inventory.json\"));\nconst build=JSON.parse(readFileSync(\"docs/reviews/system-software-evidence-c253dda/u1-build.json\"));\nassert.equal(build.checkout_sha,inventory.commands[0].stdout.trim());\nassert.equal(build.host.exit_code,0); assert.equal(build.guest.exit_code,0);\nassert.deepEqual(build.source_changes_since_inventory,[]);\nfor(const a of inventory.sources) assert.equal(sha(readFileSync(a.path)),a.sha256,a.path);\nfor(const a of build.assets) {assert(a.present,a.path);assert.equal(sha(readFileSync(a.path)),a.sha256,a.path);}\nassert.equal(sha(JSON.stringify(inventory.sources)),inventory.source_manifest_sha256);\nconst patch=inventory.commands.find(c=>c.argv[1]===\"diff\"&&c.argv[2]===\"--binary\").stdout;\nassert.equal(sha(patch),inventory.dirty_patch_sha256);\nconsole.log(JSON.stringify({argv:[process.execPath,...process.execArgv],cwd:process.cwd(),exit_code:0,result:\"PASS\",relative_links_checked:links,source_hashes_checked:inventory.sources.length,asset_hashes_checked:build.assets.length,remote_links:\"not checked\",product_tests:\"not run\"},null,2));\n"
+  ],
+  "cwd": "/home/liangjiaqi/projects/my_visual_CPU",
+  "exit_code": 0,
+  "result": "PASS",
+  "relative_links_checked": 10,
+  "source_hashes_checked": 651,
+  "asset_hashes_checked": 15,
+  "remote_links": "not checked",
+  "product_tests": "not run"
+}

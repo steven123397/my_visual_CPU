@@ -5,6 +5,14 @@
 #include "../trap.h"
 #include "bus.h"
 #include "simple_l1_cache.h"
+#include "../debug/memory_capture.h"
+
+void AddressSpace::record_segment(const MemorySegment& segment) {
+    if (memory_record_) memory_record_->append(segment);
+}
+void AddressSpace::record_sc_result(uint64_t value) {
+    if (memory_record_) memory_record_->sc_result = value;
+}
 
 namespace {
 
@@ -139,10 +147,73 @@ PrivilegeMode effective_privilege_mode(AccessType type, const CoreState& core, u
     return core.privilege_mode();
 }
 
+bool leaf_permission(uint64_t pte, AccessType type, PrivilegeMode mode, uint64_t mstatus) {
+    if ((pte & PTE_W) && !(pte & PTE_R)) return false;
+    if (mode == PrivilegeMode::User && !(pte & PTE_U)) return false;
+    if (mode != PrivilegeMode::User && (pte & PTE_U) && !can_access_user_page(type, mode, mstatus)) return false;
+    if (type == AccessType::Instruction) return (pte & PTE_X) != 0;
+    if (type == AccessType::Store) return (pte & PTE_W) != 0;
+    return (pte & PTE_R) || ((mstatus & MSTATUS_MXR) && (pte & PTE_X));
+}
+
 }  // namespace
 
 AddressSpace::AddressSpace(CoreState& core, CsrFile& csr, TrapController& trap)
     : core_(core), csr_(csr), trap_(trap) {}
+
+PageInspectionContext AddressSpace::inspection_context(AccessType type) const {
+    const uint64_t status = csr_.read(CSR_MSTATUS, core_);
+    return {csr_.read(CSR_SATP, core_), effective_privilege_mode(type, core_, status),
+            (status & MSTATUS_SUM) != 0, (status & MSTATUS_MXR) != 0};
+}
+
+PageInspection AddressSpace::inspect_page(const Bus& bus, uint64_t addr, AccessType type,
+                                          const PageInspectionContext& ctx) const {
+    PageInspection r;
+    r.context = ctx;
+    r.access = type;
+    r.vaddr = addr;
+    const uint64_t mode = ctx.satp >> 60;
+    if (mode == 0 || ctx.effective_privilege == PrivilegeMode::Machine) {
+        r.ok = r.mapped = r.permission_allowed = true;
+        r.paddr = addr;
+        return r;
+    }
+    if (mode != 8) { r.error = "unsupported-mode"; return r; }
+    if (!is_sv39_canonical(addr)) { r.error = "noncanonical-address"; return r; }
+    uint64_t table = (ctx.satp & SATP_PPN_MASK) << 12;
+    for (int level = 2; level >= 0; --level) {
+        const uint64_t location = table + (((addr >> (12 + level * 9)) & 511) * 8);
+        uint64_t pte = 0;
+        try {
+            const auto bytes = bus.inspect_memory(location, 8);
+            for (size_t i = 0; i < 8; ++i) pte |= uint64_t(bytes[i]) << (8 * i);
+        } catch (const std::exception&) { r.error = "non-ram-page-table"; return r; }
+        r.entries.push_back({location, pte, level});
+        if (!(pte & PTE_V) || (pte & PTE_SV39_RESERVED_MASK) || ((pte & PTE_W) && !(pte & PTE_R))) {
+            r.error = "invalid-pte"; return r;
+        }
+        const uint64_t ppn = (pte >> 10) & PTE_PPN_MASK;
+        if (pte & (PTE_R | PTE_W | PTE_X)) {
+            const uint64_t mask = (1ULL << (12 + level * 9)) - 1;
+            if ((ppn << 12) & mask) { r.error = "misaligned-superpage"; return r; }
+            r.mapped = true;
+            r.paddr = (ppn << 12) | (addr & mask);
+            r.page_size = mask + 1;
+            r.leaf_level = level;
+            r.ad_update_needed = !(pte & PTE_A) || (type == AccessType::Store && !(pte & PTE_D));
+            r.permission_allowed = leaf_permission(pte, type, ctx.effective_privilege,
+                                                  (ctx.sum ? MSTATUS_SUM : 0) | (ctx.mxr ? MSTATUS_MXR : 0));
+            r.ok = r.permission_allowed;
+            if (!r.ok) r.error = "permission-denied";
+            return r;
+        }
+        if (pte & (PTE_U | PTE_A | PTE_D)) { r.error = "invalid-nonleaf"; return r; }
+        table = ppn << 12;
+    }
+    r.error = "missing-leaf";
+    return r;
+}
 
 AddressSpace::AccessResult AddressSpace::fetch16_result(Bus& bus) {
     return fetch16_result(bus, core_.pc());
@@ -194,17 +265,21 @@ AddressSpace::AccessResult AddressSpace::store_result(Bus& bus, uint64_t addr, u
         const int chunk = page_chunk_size(current_addr, remaining);
         uint64_t paddr = 0;
         if (!translate(bus, current_addr, AccessType::Store, paddr, result.fault, true)) {
+            if (memory_record_enabled()) record_segment({current_addr, {}, static_cast<uint32_t>(chunk), true, {}, MemoryOutcome::Fault});
             return result;
         }
 
         const uint64_t chunk_value = remaining_value & size_mask(chunk);
         if (!try_data_store(bus, paddr, chunk_value, chunk)) {
+            if (memory_record_enabled()) record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), true, {}, MemoryOutcome::Fault});
             result.fault = make_fault(access_fault_cause(AccessType::Store), current_addr);
             return result;
         }
 
+        if (memory_record_enabled()) record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), true, chunk_value, MemoryOutcome::Success});
+
         current_addr += static_cast<uint64_t>(chunk);
-        remaining_value >>= chunk * 8;
+        remaining_value = chunk == 8 ? 0 : remaining_value >> (chunk * 8);
         remaining -= chunk;
     }
 
@@ -289,52 +364,16 @@ bool AddressSpace::check_leaf_permissions(
     PrivilegeMode effective_mode,
     uint64_t vaddr,
     TrapRequest& fault) {
-    const bool readable = pte & PTE_R;
-    const bool writable = pte & PTE_W;
-    const bool executable = pte & PTE_X;
-    const bool user_accessible = pte & PTE_U;
     const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
-
-    if (writable && !readable) {
+    if (!leaf_permission(pte, type, effective_mode, mstatus)) {
         fault = make_fault(page_fault_cause(type), vaddr);
         return false;
-    }
-
-    const bool is_user_mode = effective_mode == PrivilegeMode::User;
-    if (is_user_mode && !user_accessible) {
-        fault = make_fault(page_fault_cause(type), vaddr);
-        return false;
-    }
-    if (!is_user_mode && user_accessible && !can_access_user_page(type, effective_mode, mstatus)) {
-        fault = make_fault(page_fault_cause(type), vaddr);
-        return false;
-    }
-
-    switch (type) {
-    case AccessType::Instruction:
-        if (!executable) {
-            fault = make_fault(page_fault_cause(type), vaddr);
-            return false;
-        }
-        break;
-    case AccessType::Load:
-        if (!readable && !((mstatus & MSTATUS_MXR) && executable)) {
-            fault = make_fault(page_fault_cause(type), vaddr);
-            return false;
-        }
-        break;
-    case AccessType::Store:
-        if (!writable) {
-            fault = make_fault(page_fault_cause(type), vaddr);
-            return false;
-        }
-        break;
     }
 
     return true;
 }
 
-bool AddressSpace::update_pte_access_bits(
+AddressSpace::PteUpdateResult AddressSpace::update_pte_access_bits(
     Bus& bus, uint64_t pte_addr, uint64_t& pte, AccessType type, uint64_t vaddr, TrapRequest& fault) {
     uint64_t updated_pte = pte | PTE_A;
     if (type == AccessType::Store) {
@@ -342,16 +381,25 @@ bool AddressSpace::update_pte_access_bits(
     }
 
     if (updated_pte == pte) {
-        return true;
+        return PteUpdateResult::Updated;
     }
 
+    // Single-hart synchronous bus: no guest execution between compare and write.
+    uint64_t current_pte = 0;
+    if (!bus.try_load_observed(pte_addr, SV39_PTESIZE, current_pte, "page-walk", "pte-ad-check")) {
+        fault = make_fault(access_fault_cause(type), vaddr);
+        return PteUpdateResult::Fault;
+    }
+    if (current_pte != pte) {
+        return PteUpdateResult::Retry;
+    }
     if (!bus.try_store_observed(pte_addr, updated_pte, SV39_PTESIZE, "page-walk", "pte-ad-update")) {
         fault = make_fault(access_fault_cause(type), vaddr);
-        return false;
+        return PteUpdateResult::Fault;
     }
 
     pte = updated_pte;
-    return true;
+    return PteUpdateResult::Updated;
 }
 
 bool AddressSpace::translate(Bus& bus,
@@ -389,7 +437,10 @@ bool AddressSpace::translate(Bus& bus,
         if (!update_access_bits) {
             return true;
         }
-        return update_pte_access_bits(bus, entry->pte_addr, entry->pte, type, vaddr, fault);
+        const auto update = update_pte_access_bits(bus, entry->pte_addr, entry->pte, type, vaddr, fault);
+        if (update == PteUpdateResult::Updated) return true;
+        if (update == PteUpdateResult::Fault) return false;
+        entry->valid = false;
     }
 
     return walk_page_table(bus, vaddr, type, paddr, fault, update_access_bits);
@@ -405,6 +456,8 @@ AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr,
         const int chunk = page_chunk_size(current_addr, remaining);
         uint64_t paddr = 0;
         if (!translate(bus, current_addr, type, paddr, result.fault, true)) {
+            if (type == AccessType::Load && memory_record_enabled())
+                record_segment({current_addr, {}, static_cast<uint32_t>(chunk), false, {}, MemoryOutcome::Fault});
             return result;
         }
 
@@ -418,9 +471,15 @@ AddressSpace::AccessResult AddressSpace::access_result(Bus& bus, uint64_t vaddr,
                                         access_source(type),
                                         access_kind(type));
         if (!loaded) {
+            if (type == AccessType::Load && memory_record_enabled())
+                record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), false, {}, MemoryOutcome::Fault});
             result.fault = make_fault(access_fault_cause(type), current_addr);
             return result;
         }
+
+        if (type == AccessType::Load && memory_record_enabled())
+            record_segment({current_addr, paddr, static_cast<uint32_t>(chunk), false,
+                            chunk_value & size_mask(chunk), MemoryOutcome::Success});
 
         result.value |= (chunk_value & size_mask(chunk)) << shift;
         current_addr += static_cast<uint64_t>(chunk);
@@ -457,6 +516,7 @@ bool AddressSpace::walk_page_table(Bus& bus,
                                    uint64_t& paddr,
                                    TrapRequest& fault,
                                    bool update_access_bits) {
+retry:
     const uint64_t satp = csr_.read(CSR_SATP, core_);
     const uint64_t mstatus = csr_.read(CSR_MSTATUS, core_);
     const PrivilegeMode effective_mode = effective_privilege_mode(type, core_, mstatus);
@@ -514,9 +574,10 @@ bool AddressSpace::walk_page_table(Bus& bus,
             }
 
             uint64_t updated_pte = pte;
-            if (update_access_bits &&
-                !update_pte_access_bits(bus, pte_addr, updated_pte, type, vaddr, fault)) {
-                return false;
+            if (update_access_bits) {
+                const auto update = update_pte_access_bits(bus, pte_addr, updated_pte, type, vaddr, fault);
+                if (update == PteUpdateResult::Fault) return false;
+                if (update == PteUpdateResult::Retry) goto retry;
             }
 
             paddr = (pte_ppn << 12) | page_offset;
